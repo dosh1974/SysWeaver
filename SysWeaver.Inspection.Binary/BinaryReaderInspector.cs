@@ -43,6 +43,7 @@ namespace SysWeaver.Inspection
         {
             Reader = reader;
             LeaveOpen = leaveOpen;
+            Strings.Add(null);
             Objects.Add(null);
             Encoding = Encoding.Unicode;
         }
@@ -53,10 +54,11 @@ namespace SysWeaver.Inspection
         {
             get
             {
-                return InternalContext;
+                //  Created on first use (rarely used)
+                return InternalContext ??= new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             }
         }
-        readonly Dictionary<String, Object> InternalContext = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<String, Object> InternalContext;
         readonly BinaryReader Reader;
         readonly bool LeaveOpen;
 
@@ -64,6 +66,12 @@ namespace SysWeaver.Inspection
         {
             if (!LeaveOpen)
                 Reader.Dispose();
+            var s = State;
+            if (s != null)
+            {
+                State = null;
+                ReaderState.Return(s);
+            }
         }
 
 
@@ -185,7 +193,25 @@ namespace SysWeaver.Inspection
 
         public void Field(ref Guid value)
         {
-            value = new Guid(Reader.ReadBytes(16));
+            value = ReadGuid();
+        }
+
+        /// <summary>
+        /// Same as new Guid(Reader.ReadBytes(16)) without allocating (throws the same ArgumentException if the stream ends before 16 bytes are read)
+        /// </summary>
+        Guid ReadGuid()
+        {
+            Span<Byte> b = stackalloc Byte[16];
+            var r = Reader;
+            int o = 0;
+            while (o < 16)
+            {
+                var n = r.Read(b.Slice(o));
+                if (n <= 0)
+                    break;
+                o += n;
+            }
+            return new Guid(b.Slice(0, o));
         }
 
         public void Field<T>(ref T value)
@@ -345,7 +371,7 @@ namespace SysWeaver.Inspection
 
         public void Prop(Guid value, SetProp<Guid> onSet)
         {
-            var v = new Guid(Reader.ReadBytes(16));
+            var v = ReadGuid();
             if (v != value)
                 onSet(v);
         }
@@ -410,9 +436,68 @@ namespace SysWeaver.Inspection
 
         #region IInspectorHandler
 
-        readonly List<String> Strings = new List<string>(1024) { null };
-        readonly List<Object> Objects = new List<Object>(1024); 
-        readonly List<Type> Types = new List<Type>(1024);
+        /// <summary>
+        /// The look ups of a reader, reused by the next reader on the same thread when the reader is disposed (cleared, and only if they aren't too big)
+        /// </summary>
+        sealed class ReaderState
+        {
+            public readonly List<String> Strings = new List<string>();
+            public readonly List<Object> Objects = new List<Object>();
+            public readonly List<Type> Types = new List<Type>();
+            public readonly Stack<Object> Stack = new Stack<object>();
+            public Byte[] StringBuf;
+
+            /// <summary>
+            /// Look ups with more entries than this are not reused (they hold a lot of memory)
+            /// </summary>
+            const int MaxReusedCount = 1 << 16;
+
+            /// <summary>
+            /// String buffers larger than this are not reused
+            /// </summary>
+            const int MaxReusedBuffer = 1 << 16;
+
+            [ThreadStatic]
+            static ReaderState Cached;
+
+            /// <summary>
+            /// Get the state cached by this thread (no allocation), or a new one
+            /// </summary>
+            public static ReaderState Rent()
+            {
+                var s = Cached;
+                if (s == null)
+                    return new ReaderState();
+                Cached = null;
+                return s;
+            }
+
+            /// <summary>
+            /// Clear the state and cache it for the next reader on this thread (unless it's too big)
+            /// </summary>
+            public static void Return(ReaderState s)
+            {
+                if ((s.Strings.Count > MaxReusedCount) || (s.Objects.Count > MaxReusedCount) || (s.Types.Count > MaxReusedCount))
+                    return;
+                s.Strings.Clear();
+                s.Objects.Clear();
+                s.Types.Clear();
+                s.Stack.Clear();
+                var b = s.StringBuf;
+                if ((b != null) && (b.Length > MaxReusedBuffer))
+                    s.StringBuf = null;
+                Cached = s;
+            }
+        }
+
+        /// <summary>
+        /// The look ups (null after the reader is disposed)
+        /// </summary>
+        ReaderState State = ReaderState.Rent();
+
+        List<String> Strings => State.Strings;
+        List<Object> Objects => State.Objects;
+        List<Type> Types => State.Types;
 
         String ReadNonNullString()
         {
@@ -420,16 +505,14 @@ namespace SysWeaver.Inspection
             return ReadNonNullString(l);
         }
 
-
-        Byte[] StringBuf;
-
         String ReadNonNullString(int l)
         {
-            var buf = StringBuf;
+            var s = State;
+            var buf = s.StringBuf;
             if ((buf == null) || (buf.Length < l))
             {
                 buf = GC.AllocateUninitializedArray<Byte>(l + 1024);
-                StringBuf = buf;
+                s.StringBuf = buf;
             }
             ReadFully(buf, l);
             return Encoding.GetString(buf, 0, l);
@@ -650,7 +733,7 @@ namespace SysWeaver.Inspection
             }
         }
         
-        readonly Stack<Object> InternalStack = new Stack<object>();
+        Stack<Object> InternalStack => State.Stack;
 
         #region Array
 

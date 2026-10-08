@@ -146,7 +146,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Parse [-]digits[.digits] (no exponent, max 19 digits) into a mantissa and the number of decimals
         /// </summary>
-        static bool TryParseSimpleDecimal(ReadOnlySpan<Byte> d, out ulong mantissa, out int decimals, out bool negative)
+        internal static bool TryParseSimpleDecimal(ReadOnlySpan<Byte> d, out ulong mantissa, out int decimals, out bool negative)
         {
             mantissa = 0;
             decimals = 0;
@@ -335,20 +335,34 @@ namespace SysWeaver.Serialization.SwJson.Reader
         const int MaxStackChars = 256;
 
         /// <summary>
+        /// Parse "yyyy-MM-ddTHH:mm:ss[.fffffff][Z]", the same result as <see cref="DateTime.TryParse(ReadOnlySpan{char}, IFormatProvider, DateTimeStyles, out DateTime)"/> with the invariant culture and <see cref="DateTimeStyles.RoundtripKind"/>
+        /// (no suffix is Unspecified, Z is Utc), false for anything else (an offset is converted to local time, left to the .NET parsing).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool TryDateTimeFast(ReadOnlySpan<Byte> d, out DateTime value)
+        {
+            if (TryDateTimeCore(d, out value, out var end))
+            {
+                if (end == d.Length)
+                    return true;
+                if ((end == d.Length - 1) && (d[end] == 'Z'))
+                {
+                    value = DateTime.SpecifyKind(value, DateTimeKind.Utc);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Parse a <see cref="DateTime"/> like <see cref="DateTime.Parse(string, IFormatProvider, DateTimeStyles)"/> with the invariant culture and <see cref="DateTimeStyles.RoundtripKind"/>.
         /// "yyyy-MM-ddTHH:mm:ss[.fffffff][Z]" is parsed directly.
         /// </summary>
         /// <exception cref="FormatException">The text isn't a valid date and time</exception>
         public static DateTime ToDateTime(ReadOnlySpan<Byte> d)
         {
-            //  Like DateTime.Parse with RoundtripKind: no suffix is Unspecified, Z is Utc (an offset is converted to local time, left to DateTime.Parse)
-            if (TryDateTimeCore(d, out var dt, out var end))
-            {
-                if (end == d.Length)
-                    return dt;
-                if ((end == d.Length - 1) && (d[end] == 'Z'))
-                    return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-            }
+            if (TryDateTimeFast(d, out var dt))
+                return dt;
             var l = d.Length;
             Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)

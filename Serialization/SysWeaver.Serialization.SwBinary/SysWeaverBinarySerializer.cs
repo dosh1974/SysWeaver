@@ -82,10 +82,11 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
-            using var ms = new MemoryStream();
+            //  Written to pooled buffers, only the result (of the exact size) is allocated
+            using var ms = new ArrayPoolStream();
             using (var w = new BinaryWriterInspector(ms, true))
                 w.Write(obj, false);
-            return new ReadOnlyMemory<Byte>(ms.GetBuffer(), 0, (int)ms.Length);
+            return ms.ToArray();
         }
     }
 

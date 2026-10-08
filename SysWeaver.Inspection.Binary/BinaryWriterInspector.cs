@@ -40,10 +40,11 @@ namespace SysWeaver.Inspection
         {
             get
             {
-                return InternalContext;
+                //  Created on first use (rarely used)
+                return InternalContext ??= new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             }
         }
-        readonly Dictionary<String, Object> InternalContext = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<String, Object> InternalContext;
 
         public TypenameQualifications TypenameQualification = TypenameQualifications.Assembly;
 
@@ -51,6 +52,12 @@ namespace SysWeaver.Inspection
         {
             if (!LeaveOpen)
                 Writer.Dispose();
+            var s = State;
+            if (s != null)
+            {
+                State = null;
+                WriterState.Return(s);
+            }
         }
 
         #endregion//Life time
@@ -178,7 +185,10 @@ namespace SysWeaver.Inspection
 
         public void Field(ref Guid value)
         {
-            Writer.Write(value.ToByteArray());
+            //  The same bytes as ToByteArray
+            Span<Byte> b = stackalloc Byte[16];
+            value.TryWriteBytes(b);
+            Writer.Write(b);
         }
 
         public void Field<T>(ref T value)
@@ -299,7 +309,10 @@ namespace SysWeaver.Inspection
 
         public void Prop(Guid value, SetProp<Guid> onSet)
         {
-            Writer.Write(value.ToByteArray());
+            //  The same bytes as ToByteArray
+            Span<Byte> b = stackalloc Byte[16];
+            value.TryWriteBytes(b);
+            Writer.Write(b);
         }
 
         public void Prop<T>(T value, SetProp<T> setValue)
@@ -330,9 +343,68 @@ namespace SysWeaver.Inspection
 
         #region IInspectorHandler
 
-        readonly Dictionary<Object, int> Objects = new Dictionary<Object, int>(1024);
-        readonly Dictionary<Type, int> Types = new Dictionary<Type, int>(1024);
-        readonly Dictionary<String, int> StringPool = new Dictionary<string, int>(StringComparer.Ordinal);
+        /// <summary>
+        /// The look ups of a writer, reused by the next writer on the same thread when the writer is disposed (cleared, and only if they aren't too big)
+        /// </summary>
+        sealed class WriterState
+        {
+            public readonly Dictionary<Object, int> Objects = new Dictionary<Object, int>();
+            public readonly Dictionary<Type, int> Types = new Dictionary<Type, int>();
+            public readonly Dictionary<String, int> StringPool = new Dictionary<string, int>(StringComparer.Ordinal);
+            public readonly Stack<Object> Stack = new Stack<object>();
+            public Byte[] StringBuffer;
+
+            /// <summary>
+            /// Look ups with more entries than this are not reused (clearing them is slow and they hold a lot of memory)
+            /// </summary>
+            const int MaxReusedCount = 4096;
+
+            /// <summary>
+            /// String buffers larger than this are not reused
+            /// </summary>
+            const int MaxReusedBuffer = 1 << 16;
+
+            [ThreadStatic]
+            static WriterState Cached;
+
+            /// <summary>
+            /// Get the state cached by this thread (no allocation), or a new one
+            /// </summary>
+            public static WriterState Rent()
+            {
+                var s = Cached;
+                if (s == null)
+                    return new WriterState();
+                Cached = null;
+                return s;
+            }
+
+            /// <summary>
+            /// Clear the state and cache it for the next writer on this thread (unless it's too big)
+            /// </summary>
+            public static void Return(WriterState s)
+            {
+                if ((s.Objects.Count > MaxReusedCount) || (s.Types.Count > MaxReusedCount) || (s.StringPool.Count > MaxReusedCount))
+                    return;
+                s.Objects.Clear();
+                s.Types.Clear();
+                s.StringPool.Clear();
+                s.Stack.Clear();
+                var b = s.StringBuffer;
+                if ((b != null) && (b.Length > MaxReusedBuffer))
+                    s.StringBuffer = null;
+                Cached = s;
+            }
+        }
+
+        /// <summary>
+        /// The look ups (null after the writer is disposed)
+        /// </summary>
+        WriterState State = WriterState.Rent();
+
+        Dictionary<Object, int> Objects => State.Objects;
+        Dictionary<Type, int> Types => State.Types;
+        Dictionary<String, int> StringPool => State.StringPool;
 
         public void Field_Object<T>(TypeHandler<T> context, ref T value)
         {
@@ -378,12 +450,11 @@ namespace SysWeaver.Inspection
         }
 
 
-        Byte[] StringBuffer;
-
         void WriteNonNullString(String v)
         {
             var l = v.Length;
-            var buf = StringBuffer;
+            var s = State;
+            var buf = s.StringBuffer;
             //  The worst case size for the encoding (any encoding can be passed to the constructor)
             var bl = Encoding.GetMaxByteCount(l);
             var w = Writer;
@@ -391,7 +462,7 @@ namespace SysWeaver.Inspection
             {
                 //  Some slack, so that slightly longer strings don't allocate again
                 buf = GC.AllocateUninitializedArray<Byte>(bl + 512);
-                StringBuffer = buf;
+                s.StringBuffer = buf;
             }
             int count = Encoding.GetBytes(v, 0, l, buf, 0);
             w.Write(count);
@@ -504,7 +575,7 @@ namespace SysWeaver.Inspection
             }
         }
         
-        readonly Stack<Object> InternalStack = new Stack<object>();
+        Stack<Object> InternalStack => State.Stack;
 
         #region Array
 

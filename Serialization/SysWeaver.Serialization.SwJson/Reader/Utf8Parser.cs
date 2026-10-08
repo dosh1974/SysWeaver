@@ -129,7 +129,25 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <remarks>All ASCII control chars and space (0-32) are white space.</remarks>
         /// <returns>True if the end was reached</returns>
         /// <exception cref="Exception">A block comment isn't terminated</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool SkipWhite(ref Byte* d, Byte* e)
+        {
+            //  The common case (compact json): the position is already at a non white space ASCII char that doesn't start a comment
+            var p = d;
+            if (p < e)
+            {
+                uint t = *p;
+                if (((t - 33u) < 95u) && (t != '/'))
+                    return false;
+            }
+            return SkipWhiteSlow(ref d, e);
+        }
+
+        /// <summary>
+        /// See <see cref="SkipWhite(ref byte*, byte*)"/>
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static bool SkipWhiteSlow(ref Byte* d, Byte* e)
         {
             //  A local copy of the position, so that it can be kept in a register (d usually points to a field)
             var p = d;

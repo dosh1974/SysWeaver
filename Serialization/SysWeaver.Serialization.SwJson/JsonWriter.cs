@@ -133,7 +133,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     //  Primitives are written without an Ensure (the caller ensures the bounded size)
                     w.Ensure(64);
-                    InternalMaybeBoxed(ref w, value);
+                    InternalRoot(ref w, value);
                     dest = w.DetachBuffer();
                     return w.Position;
                 }
@@ -161,11 +161,12 @@ namespace SysWeaver.Serialization.SwJson
         {
             //  Without a destination (or if it's too small), the writer uses (and grows with) rented buffers, the result is then copied to an array of the exact size
             var rented = dest == null;
-            var b = rented ? ArrayPoolStream.Rent(InitialRentSize) : dest;
+            var size = rented ? SizeHint<T>.RentSize : 0;
+            var b = rented ? ArrayPoolStream.Rent(size) : dest;
             //  Pinning with fixed is cheaper than a GCHandle
             fixed (Byte* p = b)
             {
-                var w = new BufferWriter(b, p, 0, rented, rented ? InitialRentSize : b.Length)
+                var w = new BufferWriter(b, p, 0, rented, rented ? size : b.Length)
                 {
                     TypeIsOptional = typeIsOptional,
                 };
@@ -173,8 +174,10 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     //  Primitives are written without an Ensure (the caller ensures the bounded size)
                     w.Ensure(64);
-                    InternalMaybeBoxed(ref w, value);
+                    InternalRoot(ref w, value);
                     var l = w.Offset;
+                    if (rented)
+                        SizeHint<T>.Set(l);
                     if (!w.Rented)
                         return new Memory<byte>(w.Data, 0, l);
                     var d = GC.AllocateUninitializedArray<Byte>(l);
@@ -202,11 +205,12 @@ namespace SysWeaver.Serialization.SwJson
         public static String ToJsonString<T>(T value, bool typeIsOptional = true)
         {
             //  The writer uses (and grows with) rented buffers, only the string is allocated
-            var temp = ArrayPoolStream.Rent(InitialRentSize);
+            var size = SizeHint<T>.RentSize;
+            var temp = ArrayPoolStream.Rent(size);
             //  Pinning with fixed is cheaper than a GCHandle
             fixed (Byte* p = temp)
             {
-                var w = new BufferWriter(temp, p, 0, true, InitialRentSize)
+                var w = new BufferWriter(temp, p, 0, true, size)
                 {
                     TypeIsOptional = typeIsOptional
                 };
@@ -214,8 +218,10 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     //  Primitives are written without an Ensure (the caller ensures the bounded size)
                     w.Ensure(64);
-                    InternalMaybeBoxed(ref w, value);
-                    return Encoding.UTF8.GetString(w.DataPtr, w.Offset);
+                    InternalRoot(ref w, value);
+                    var l = w.Offset;
+                    SizeHint<T>.Set(l);
+                    return Encoding.UTF8.GetString(w.DataPtr, l);
                 }
                 finally
                 {
@@ -231,6 +237,46 @@ namespace SysWeaver.Serialization.SwJson
         const int InitialRentSize = 4096;
 
         /// <summary>
+        /// The max size of the buffer that is rented up front (see <see cref="SizeHint{T}"/>)
+        /// </summary>
+        const int MaxRentSizeHint = 1 << 20;
+
+        /// <summary>
+        /// The size of the json written for the last value of a type (by the entry points that rent their buffer), so that a buffer that is big enough can be rented up front (no growing and copying)
+        /// </summary>
+        /// <remarks>
+        /// Updated without synchronization (an int is written atomically, any value is just a hint).
+        /// </remarks>
+        static class SizeHint<T>
+        {
+            static int Last;
+
+            /// <summary>
+            /// The size of the buffer to rent: the size of the last json of the type plus a margin (at least <see cref="InitialRentSize"/>, at most <see cref="MaxRentSizeHint"/>)
+            /// </summary>
+            public static int RentSize
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get
+                {
+                    var l = Last;
+                    l += (l >> 4) + 256;
+                    return l <= InitialRentSize ? InitialRentSize : (l >= MaxRentSizeHint ? MaxRentSizeHint : l);
+                }
+            }
+
+            /// <summary>
+            /// Remember the size of the json written for a value of the type
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static void Set(int size)
+            {
+                if (Last != size)
+                    Last = size;
+            }
+        }
+
+        /// <summary>
         /// The initial capacity of a rented buffer that is copied to the caller (ToJsonBytes with a null dest), the size of the copy is the capacity (it grows in small steps)
         /// </summary>
         const int InitialCapacity = 256;
@@ -241,9 +287,31 @@ namespace SysWeaver.Serialization.SwJson
         #region Build
 
         /// <summary>
-        /// Write a value that is known to be non null and of exactly the type <typeparamref name="T"/> (used for value types)
+        /// Write a value that is known to be non null and of exactly the type <typeparamref name="T"/> (used for value types, they are written without boxing)
         /// </summary>
-        static void Internal<T>(ref BufferWriter w, T value) => CacheT<T>.Writer(ref w, value);
+        static void Internal<T>(ref BufferWriter w, T value)
+        {
+            if (typeof(T).IsValueType)
+            {
+                CacheT<T>.TypedWriter(ref w, value);
+                return;
+            }
+            CacheT<T>.Writer(ref w, value);
+        }
+
+        /// <summary>
+        /// Write the root value: a (non nullable) value type is always of exactly the type <typeparamref name="T"/> (written without boxing), other types using <see cref="InternalMaybeBoxed{T}"/>
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void InternalRoot<T>(ref BufferWriter w, T value)
+        {
+            if (default(T) != null)
+            {
+                Internal(ref w, value);
+                return;
+            }
+            InternalMaybeBoxed(ref w, value);
+        }
 
         /// <summary>
         /// Write a value of exactly the type <typeparamref name="T"/> or null (used for sealed types)
@@ -271,15 +339,62 @@ namespace SysWeaver.Serialization.SwJson
             {
                 if ((actualType != null) && (actualType == CreatedType<T>.Type))
                 {
-                    if (!Writers.TryGetValue(actualType, out var writer))
-                        writer = AddWriter(actualType);
-                    writer.Write(ref w, value);
+                    GetWriter(actualType).Write(ref w, value);
                     return;
                 }
                 InternalBoxed<T>(ref w, value, actualType);
                 return;
             }
             CacheT<T>.Writer(ref w, value);
+        }
+
+        /// <summary>
+        /// The number of entries in <see cref="WriterCache"/> (a power of 2)
+        /// </summary>
+        const int WriterCacheSize = 256;
+
+        /// <summary>
+        /// A direct mapped cache of the writers of the runtime types of boxed values (by the identity hash code of the type), in front of the <see cref="Writers"/>.
+        /// An entry is immutable and replaced as a whole (lock free, a collision just costs a look up).
+        /// </summary>
+        static readonly WriterCacheEntry[] WriterCache = new WriterCacheEntry[WriterCacheSize];
+
+        sealed class WriterCacheEntry
+        {
+            public WriterCacheEntry(Type type, TypeInfo info)
+            {
+                Type = type;
+                Info = info;
+            }
+
+            public readonly Type Type;
+            public readonly TypeInfo Info;
+        }
+
+        /// <summary>
+        /// Get the writer of a (runtime) type, build it if needed
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static TypeInfo GetWriter(Type type)
+        {
+            var e = WriterCache[RuntimeHelpers.GetHashCode(type) & (WriterCacheSize - 1)];
+            if ((e != null) && ReferenceEquals(e.Type, type))
+                return e.Info;
+            return GetWriterSlow(type);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static TypeInfo GetWriterSlow(Type type)
+        {
+            if (!Writers.TryGetValue(type, out var writer))
+            {
+                writer = AddWriter(type);
+                //  Only completed writers are cached
+                if (writer == InProgressTypeInfo)
+                    return writer;
+            }
+            WriterCache[RuntimeHelpers.GetHashCode(type) & (WriterCacheSize - 1)] = new WriterCacheEntry(type, writer);
+            return writer;
         }
 
         /// <summary>
@@ -303,8 +418,7 @@ namespace SysWeaver.Serialization.SwJson
                 WriteNull(ref w);
                 return;
             }
-            if (!Writers.TryGetValue(actualType, out var writer))
-                writer = AddWriter(actualType);
+            var writer = GetWriter(actualType);
             if (w.TypeIsOptional)
                 writer.WriteOptionalTyped(ref w, value);
             else
@@ -353,6 +467,31 @@ namespace SysWeaver.Serialization.SwJson
                 if (ti != InProgressTypeInfo)
                     Volatile.Write(ref W, w);
                 return w;
+            }
+
+            static WriterDelT WT;
+
+            /// <summary>
+            /// The writer for a value of exactly the type <typeparamref name="T"/>, without boxing (for value types, a writer that boxes the value if the type has no typed writer)
+            /// </summary>
+            public static WriterDelT TypedWriter
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get => WT ?? InitTyped();
+            }
+
+            static WriterDelT InitTyped()
+            {
+                var ti = CacheWriter(typeof(T));
+                var wt = ti.WriteT as WriterDelT;
+                if (wt == null)
+                {
+                    var w = ti.Write;
+                    wt = (ref BufferWriter bw, T o) => w(ref bw, o);
+                }
+                if (ti != InProgressTypeInfo)
+                    Volatile.Write(ref WT, wt);
+                return wt;
             }
         }
 
@@ -1043,8 +1182,8 @@ namespace SysWeaver.Serialization.SwJson
                         var exp =
                             Expression.IfThenElse(
                                 Expression.Property(p, nameof(Nullable<int>.HasValue)),
-                                    //  A recursive struct (being built by this thread) is written using its writer at runtime
-                                    propWriter == InProgressTypeInfo ? GetWriteUnboundedExp(ttype, pv) : propWriter.WriteExp(pv),
+                                    //  An unbounded struct is written by its (typed) writer at runtime (no boxing), also a recursive struct (being built by this thread)
+                                    (propWriter == InProgressTypeInfo) || (propWriter.BoundedSize <= 0) ? GetWriteUnboundedExp(ttype, pv) : propWriter.WriteExp(pv),
                                     GetWriteConstantBufferExp(NullData)
                                     );
                         var pa = p.AsEnumerable();
@@ -1070,7 +1209,7 @@ namespace SysWeaver.Serialization.SwJson
 
                         var cbUnyped = Expression.Lambda<WriterDel>(c, writer, op).Compile();
                         var cbTyped = Expression.Lambda<WriterDel>(c2, writer, op).Compile();
-                        ti = new TypeInfo(cbUnyped, cbTyped);
+                        ti = new TypeInfo(cbUnyped, cbTyped, false, type, c);
                     }
                 }
 
@@ -1169,7 +1308,7 @@ namespace SysWeaver.Serialization.SwJson
                             var finalTyped = CreateProgramBlock(program, aobj, canOpt ? ReadDataExp : null);
                             var cbTyped = Expression.Lambda<WriterDel>(finalTyped, writer, WriterObject).Compile();
                             //                        ti = new TypeInfo(simpleSize, cbUntyped, cbTyped);
-                            ti = new TypeInfo(cbUntyped, cbTyped);
+                            ti = new TypeInfo(cbUntyped, cbTyped, false, type, finalUntyped);
                         }
                     }
                 }
@@ -2212,12 +2351,64 @@ namespace SysWeaver.Serialization.SwJson
             /// <param name="write">Writes the value without type information</param>
             /// <param name="writeTyped">Writes the value with type information</param>
             /// <param name="typeIsOptional">If true, <see cref="WriteOptionalTyped"/> is <paramref name="write"/> (no type information), else <paramref name="writeTyped"/></param>
-            public TypeInfo(WriterDel write, WriterDel writeTyped, bool typeIsOptional = false)
+            /// <param name="valueType">The type of the values (used with <paramref name="untypedBody"/>)</param>
+            /// <param name="untypedBody">The body of <paramref name="write"/>, for a value type it's used to build <see cref="WriteT"/> (the boxed value must only be used as Convert(value, <paramref name="valueType"/>))</param>
+            public TypeInfo(WriterDel write, WriterDel writeTyped, bool typeIsOptional = false, Type valueType = null, Expression untypedBody = null)
             {
                 Write = write;
                 WriteTyped = writeTyped;
                 WriteOptionalTyped = typeIsOptional ? write : writeTyped;
                 WriteExp = exp => Expression.Invoke(Expression.Constant(write), WriterExp, exp.Type == typeof(Object) ? exp : Expression.Convert(exp, typeof(Object)));
+                if ((untypedBody != null) && valueType.IsValueType)
+                    WriteT = CompileTyped(valueType, untypedBody);
+            }
+
+            /// <summary>
+            /// Compile a <see cref="CacheT{T}.WriterDelT"/> from the body of a <see cref="WriterDel"/>, the unboxing of the value is replaced by the (typed) value
+            /// </summary>
+            /// <returns>The writer, null if the body uses the boxed value in some other way</returns>
+            static Delegate CompileTyped(Type valueType, Expression untypedBody)
+            {
+                var value = Expression.Parameter(valueType, "value");
+                var r = new UnboxReplacer(valueType, value);
+                var body = r.Visit(untypedBody);
+                if (r.Failed)
+                    return null;
+                return Expression.Lambda(typeof(CacheT<>.WriterDelT).MakeGenericType(valueType), body, WriterExp, value).Compile();
+            }
+
+            /// <summary>
+            /// Replaces Convert(<see cref="WriterObject"/>, type) with a typed value, fails if <see cref="WriterObject"/> is used in any other way
+            /// </summary>
+            sealed class UnboxReplacer : ExpressionVisitor
+            {
+                public UnboxReplacer(Type valueType, ParameterExpression value)
+                {
+                    ValueType = valueType;
+                    Value = value;
+                }
+
+                readonly Type ValueType;
+                readonly ParameterExpression Value;
+
+                /// <summary>
+                /// True if the boxed value is used in another way than unboxing it to the value type
+                /// </summary>
+                public bool Failed;
+
+                protected override Expression VisitUnary(UnaryExpression node)
+                {
+                    if ((node.NodeType == ExpressionType.Convert) && (node.Operand == WriterObject) && (node.Type == ValueType))
+                        return Value;
+                    return base.VisitUnary(node);
+                }
+
+                protected override Expression VisitParameter(ParameterExpression node)
+                {
+                    if (node == WriterObject)
+                        Failed = true;
+                    return base.VisitParameter(node);
+                }
             }
 
             static readonly ParameterExpression ParamObj = Expression.Parameter(typeof(Object), "o");
@@ -2235,6 +2426,7 @@ namespace SysWeaver.Serialization.SwJson
             /// <param name="boundedSize">The max number of bytes written (the space that callers ensure)</param>
             public TypeInfo(Type t, bool typeIsOptional = false, Type convertTo = null, int boundedSize = 64)
             {
+                var valueType = t;
                 //  The "$type" is the name of the actual type (not the type it's converted to for writing)
                 var buffer = Append(Append(GetTypeJson(t), TextSepComma), TextValue);
                 Expression p;
@@ -2271,6 +2463,9 @@ namespace SysWeaver.Serialization.SwJson
                 Write = wl;
                 WriteTyped = wtl;
                 WriteOptionalTyped = typeIsOptional ? wl : wtl;
+                //  Writes the value without boxing (the bounded types are value types)
+                var value = Expression.Parameter(valueType, "value");
+                WriteT = Expression.Lambda(typeof(CacheT<>.WriterDelT).MakeGenericType(valueType), WriteExp(value), w, value).Compile();
             }
             /// <summary>
             /// Builds an expression that writes a value (given as an expression), without an Ensure for bounded types
@@ -2293,6 +2488,10 @@ namespace SysWeaver.Serialization.SwJson
             /// The writer used for a boxed value when <see cref="BufferWriter.TypeIsOptional"/> is true (<see cref="Write"/> for primitive like types, else <see cref="WriteTyped"/>)
             /// </summary>
             public readonly WriterDel WriteOptionalTyped;
+            /// <summary>
+            /// Writes the value without type information, without boxing: a <see cref="CacheT{T}.WriterDelT"/> (null for reference types and value types without a typed writer)
+            /// </summary>
+            public readonly Delegate WriteT;
         }
 
         #endregion//Internal

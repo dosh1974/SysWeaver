@@ -87,15 +87,29 @@ namespace SysWeaver.Serialization.SwJson.Reader
         static readonly Object PoolLock = new Object();
 
         /// <summary>
+        /// An instance cached per thread, used before the (locked) pool, null while it's in use (or not created yet)
+        /// </summary>
+        [ThreadStatic]
+        static JsonParserState Local;
+
+        /// <summary>
         /// Get a pooled (or new) state for parsing the data.
         /// </summary>
         /// <param name="d">The start of the (pinned) UTF8 data</param>
         /// <param name="l">The length of the data in bytes</param>
         /// <returns>A state positioned at the start of the data, dispose to return it to the pool</returns>
-        /// <remarks>Thread safe, an instance is never returned to more than one caller (until it's disposed).</remarks>
+        /// <remarks>Thread safe, an instance is never returned to more than one caller (until it's disposed).
+        /// The instance cached by the current thread is used first (no locking), else one from the pool.</remarks>
         public static JsonParserState Get(Byte* d, int l)
         {
-            JsonParserState t = null;
+            //  The instance cached by this thread (no lock), taken so that a nested parse on the same thread gets another one
+            var t = Local;
+            if (t != null)
+            {
+                Local = null;
+                t.Set(d, l);
+                return t;
+            }
             lock (PoolLock)
             {
                 var c = PoolCount;
@@ -127,6 +141,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
             S = null;
             D = null;
             E = null;
+            if (Local == null)
+            {
+                Local = this;
+                return;
+            }
             lock (PoolLock)
             {
                 var c = PoolCount;

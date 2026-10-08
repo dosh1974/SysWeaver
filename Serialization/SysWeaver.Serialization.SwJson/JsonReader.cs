@@ -244,32 +244,73 @@ namespace SysWeaver.Serialization.SwJson
             }
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedArray();
-            //  The items are read into a pooled buffer, only the final array is allocated
-            var pool = ArrayPool<T>.Shared;
-            var buf = pool.Rent(16);
+            //  The items are read into a stack or pooled buffer, only the final array is allocated
+            Unsafe.SkipInit(out InlineItems<T> inline);
+            var items = InlineItems<T>.Use ? inline : default(Span<T>);
+            T[] rented = null;
+            int count = -1;
             try
             {
-                var count = ReadItems(state, ref buf);
+                count = ReadItems(state, ref items, ref rented);
                 if (count <= 0)
                     return [];
                 var a = GC.AllocateUninitializedArray<T>(count);
-                buf.AsSpan(0, count).CopyTo(a);
+                items.Slice(0, count).CopyTo(a);
                 return a;
             }
             finally
             {
-                pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+                if (rented != null)
+                    ReturnRented(rented, count);
             }
         }
 
         /// <summary>
-        /// Read the items of an array (after the '[' and any white space), into a pooled buffer that is replaced by a larger one as needed.
+        /// Room for the first items of an array on the stack (for item types up to 8 bytes, so at most 128 bytes per nesting level)
+        /// </summary>
+        [InlineArray(Length)]
+        struct InlineItems<T>
+        {
+            public const int Length = 16;
+
+            /// <summary>
+            /// True if the item type is small enough to use the stack buffer
+            /// </summary>
+            public static bool Use
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get => Unsafe.SizeOf<T>() <= 8;
+            }
+
+            T E;
+        }
+
+        /// <summary>
+        /// Return a buffer rented by <see cref="ReadItems{T}(JsonParserState, ref Span{T}, ref T[])"/>, references in the used part are cleared
+        /// </summary>
+        /// <param name="rented">The buffer</param>
+        /// <param name="count">The number of items in the buffer, negative if unknown (an exception was thrown, the whole buffer is cleared)</param>
+        static void ReturnRented<T>(T[] rented, int count)
+        {
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                if (count >= 0)
+                    rented.AsSpan(0, count).Clear();
+                else
+                    Array.Clear(rented);
+            }
+            ArrayPool<T>.Shared.Return(rented);
+        }
+
+        /// <summary>
+        /// Read the items of an array (after the '[' and any white space) into a buffer that is replaced by a larger one (rented from <see cref="ArrayPool{T}.Shared"/>) as needed.
         /// The position is set to after the closing ']' (a trailing comma before the ']' is accepted).
         /// </summary>
         /// <param name="state">The parser state</param>
-        /// <param name="buf">A buffer rented from <see cref="ArrayPool{T}.Shared"/>, can be replaced (the old one is returned to the pool)</param>
+        /// <param name="items">The buffer, can be empty (a buffer is rented for the first item)</param>
+        /// <param name="rented">The rented buffer (that <paramref name="items"/> is), the caller must return it to the pool (see <see cref="ReturnRented{T}(T[], int)"/>), also on an exception</param>
         /// <returns>The number of items read</returns>
-        static int ReadItems<T>(JsonParserState state, ref T[] buf)
+        static int ReadItems<T>(JsonParserState state, ref Span<T> items, ref T[] rented)
         {
             ref var d = ref state.D;
             var e = state.E;
@@ -282,9 +323,9 @@ namespace SysWeaver.Serialization.SwJson
                     ++d;
                     break;
                 }
-                if (count == buf.Length)
-                    buf = GrowRented(buf, count);
-                buf[count] = ReadItem(state, createTyped);
+                if (count == items.Length)
+                    items = GrowItems(items, ref rented, count);
+                items[count] = ReadItem(state, createTyped);
                 ++count;
                 if (Utf8Parser.SkipWhite(ref d, e))
                     ReadException.ThrowExpectedEndOfArray();
@@ -314,19 +355,19 @@ namespace SysWeaver.Serialization.SwJson
             if (typeof(T) == typeof(Int32))
             {
                 if (Is64BitProcess)
-                    return (T)(Object)checked((Int32)SpanParsers.ToInt64(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn)));
+                    return (T)(Object)checked((Int32)FusedParsers.ReadInt64(state, endOn));
             }
             else if (typeof(T) == typeof(Int64))
             {
-                return (T)(Object)SpanParsers.ToInt64(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+                return (T)(Object)FusedParsers.ReadInt64(state, endOn);
             }
             else if (typeof(T) == typeof(Double))
             {
-                return (T)(Object)SpanParsers.ToDouble(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+                return (T)(Object)FusedParsers.ReadDouble(state, endOn);
             }
             else if (typeof(T) == typeof(Boolean))
             {
-                return (T)(Object)SpanParsers.ToBoolean(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+                return (T)(Object)FusedParsers.ReadBoolean(state, endOn);
             }
             else if (typeof(T) == typeof(String))
             {
@@ -336,14 +377,17 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Rent a buffer twice the size, copy the first <paramref name="count"/> items and return the old buffer to the pool.
+        /// Rent a buffer twice the size (at least 16 items), copy the first <paramref name="count"/> items and return the old rented buffer (if any) to the pool.
         /// </summary>
-        static T[] GrowRented<T>(T[] buf, int count)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static T[] GrowItems<T>(Span<T> items, ref T[] rented, int count)
         {
-            var pool = ArrayPool<T>.Shared;
-            var nb = pool.Rent(count << 1);
-            buf.AsSpan(0, count).CopyTo(nb);
-            pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            var nb = ArrayPool<T>.Shared.Rent(Math.Max(InlineItems<T>.Length, count << 1));
+            items.Slice(0, count).CopyTo(nb);
+            var old = rented;
+            rented = nb;
+            if (old != null)
+                ReturnRented(old, count);
             return nb;
         }
 
@@ -370,17 +414,20 @@ namespace SysWeaver.Serialization.SwJson
             }
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedArray();
-            //  The items are read into a pooled buffer, then the collection is created with the exact size
-            var pool = ArrayPool<T>.Shared;
-            var buf = pool.Rent(16);
+            //  The items are read into a stack or pooled buffer, then the collection is created with the exact size
+            Unsafe.SkipInit(out InlineItems<T> inline);
+            var items = InlineItems<T>.Use ? inline : default(Span<T>);
+            T[] rented = null;
+            int count = -1;
             try
             {
-                var count = ReadItems(state, ref buf);
-                return CollectionFactory<T, C>.Create(buf, count);
+                count = ReadItems(state, ref items, ref rented);
+                return CollectionFactory<T, C>.Create(items.Slice(0, count));
             }
             finally
             {
-                pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+                if (rented != null)
+                    ReturnRented(rented, count);
             }
         }
 
@@ -391,26 +438,20 @@ namespace SysWeaver.Serialization.SwJson
         /// </summary>
         static class CollectionFactory<T, C>
         {
-            public static readonly Func<T[], int, ICollection<T>> Create = GetCreate();
+            public static readonly ItemsCreator<T, ICollection<T>> Create = GetCreate();
 
-            static ICollection<T> CreateList(T[] items, int count)
-            {
-                var l = new List<T>(count);
-                CollectionsMarshal.SetCount(l, count);
-                items.AsSpan(0, count).CopyTo(CollectionsMarshal.AsSpan(l));
-                return l;
-            }
+            static ICollection<T> CreateList(ReadOnlySpan<T> items) => ItemsToList(items);
 
-            static ICollection<T> CreateHashSet(T[] items, int count)
+            static ICollection<T> CreateHashSet(ReadOnlySpan<T> items)
             {
                 //  Same as new HashSet<T>(list) (that sizes the set to the number of items and adds them in order)
-                var h = new HashSet<T>(count);
-                for (int i = 0; i < count; ++i)
-                    h.Add(items[i]);
+                var h = new HashSet<T>(items.Length);
+                foreach (var x in items)
+                    h.Add(x);
                 return h;
             }
 
-            static Func<T[], int, ICollection<T>> GetCreate()
+            static ItemsCreator<T, ICollection<T>> GetCreate()
             {
                 var ct = typeof(C);
                 if (ct == typeof(List<T>))
@@ -429,11 +470,11 @@ namespace SysWeaver.Serialization.SwJson
                 var lt = typeof(List<T>);
                 var ctor = ct.GetConstructor(BindingFlags.Instance | BindingFlags.Public, Type.DefaultBinder, [lt], null);
                 if (ctor == null)
-                    return (items, count) => (ICollection<T>)Activator.CreateInstance(ct, CreateList(items, count));
+                    return items => (ICollection<T>)Activator.CreateInstance(ct, ItemsToList(items));
                 var p = Expression.Parameter(lt, "l");
                 var ctorParam = ctor.GetParameters()[0].ParameterType;
                 var create = Expression.Lambda<Func<List<T>, ICollection<T>>>(Expression.Convert(Expression.New(ctor, ctorParam == lt ? p : Expression.Convert(p, ctorParam)), typeof(ICollection<T>)), p).Compile();
-                return (items, count) => create((List<T>)CreateList(items, count));
+                return items => create(ItemsToList(items));
             }
         }
 
@@ -458,17 +499,20 @@ namespace SysWeaver.Serialization.SwJson
             ++d;
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedArray();
-            //  The items are read into a pooled buffer, then the value is created
-            var pool = ArrayPool<T>.Shared;
-            var buf = pool.Rent(16);
+            //  The items are read into a stack or pooled buffer, then the value is created
+            Unsafe.SkipInit(out InlineItems<T> inline);
+            var items = InlineItems<T>.Use ? inline : default(Span<T>);
+            T[] rented = null;
+            int count = -1;
             try
             {
-                var count = ReadItems(state, ref buf);
-                return EnumerableFactory<T, C>.Create(buf, count);
+                count = ReadItems(state, ref items, ref rented);
+                return EnumerableFactory<T, C>.Create(items.Slice(0, count));
             }
             finally
             {
-                pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+                if (rented != null)
+                    ReturnRented(rented, count);
             }
         }
 
@@ -482,38 +526,47 @@ namespace SysWeaver.Serialization.SwJson
         /// </summary>
         static class EnumerableFactory<T, C> where C : class
         {
-            public static readonly Func<T[], int, C> Create = GetCreate();
+            public static readonly ItemsCreator<T, C> Create = GetCreate();
 
-            static List<T> CreateList(T[] items, int count)
-            {
-                var l = new List<T>(count);
-                CollectionsMarshal.SetCount(l, count);
-                items.AsSpan(0, count).CopyTo(CollectionsMarshal.AsSpan(l));
-                return l;
-            }
-
-            static Func<T[], int, C> GetCreate()
+            static ItemsCreator<T, C> GetCreate()
             {
                 var ct = typeof(C);
                 var lt = typeof(List<T>);
                 if (ct.IsAssignableFrom(lt))
-                    return (items, count) => (C)(Object)CreateList(items, count);
+                    return items => (C)(Object)ItemsToList(items);
                 var ctor = ct.IsAbstract ? null : ct.GetConstructor(BindingFlags.Instance | BindingFlags.Public, Type.DefaultBinder, [lt], null);
                 if (ctor == null)
-                    return (items, count) => throw new NotSupportedException("Can't create a \"" + ct.CleanTypename() + "\" from a json array, a public constructor taking an IEnumerable<" + typeof(T).CleanTypename() + "> is required");
+                    return items => throw new NotSupportedException("Can't create a \"" + ct.CleanTypename() + "\" from a json array, a public constructor taking an IEnumerable<" + typeof(T).CleanTypename() + "> is required");
                 var p = Expression.Parameter(lt, "l");
                 var ctorParam = ctor.GetParameters()[0].ParameterType;
                 var create = Expression.Lambda<Func<List<T>, C>>(Expression.New(ctor, ctorParam == lt ? p : Expression.Convert(p, ctorParam)), p).Compile();
                 var reverse = ct.IsGenericType && ((ct.GetGenericTypeDefinition() == typeof(Stack<>)) || (ct.GetGenericTypeDefinition() == typeof(ConcurrentStack<>)));
                 if (reverse)
-                    return (items, count) =>
+                    return items =>
                     {
-                        var l = CreateList(items, count);
+                        var l = ItemsToList(items);
                         l.Reverse();
                         return create(l);
                     };
-                return (items, count) => create(CreateList(items, count));
+                return items => create(ItemsToList(items));
             }
+        }
+
+        /// <summary>
+        /// Create a collection (or another value) from the items read
+        /// </summary>
+        delegate R ItemsCreator<T, R>(ReadOnlySpan<T> items);
+
+        /// <summary>
+        /// Create a <see cref="List{T}"/> with the items (the capacity is the number of items)
+        /// </summary>
+        static List<T> ItemsToList<T>(ReadOnlySpan<T> items)
+        {
+            var count = items.Length;
+            var l = new List<T>(count);
+            CollectionsMarshal.SetCount(l, count);
+            items.CopyTo(CollectionsMarshal.AsSpan(l));
+            return l;
         }
 
         #endregion//Arrays
@@ -558,26 +611,189 @@ namespace SysWeaver.Serialization.SwJson
             {
                 //  Boxed hacks for Newtonsoft JSON compatibility
                 if (c == '"')
-                {
-                    var v = Utf8JsonParser.ReadQuotedString(state);
-                    //  Use the invariant culture so that the result doesn't depend on the culture of the current thread
-                    if (DateTime.TryParse(v, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dts))
-                        return dts;
-                    return v;
-                }
-                var vv = Utf8Parser.ReadAsciiStringNoLast(ref d, e, Utf8JsonParser.EndOnObject);
-                if (Boolean.TryParse(vv, out var br))
-                    return br;
-                //  Numbers with an exponent can't be parsed as a Decimal (and may be out of its range)
-                //  The tokens NaN, Infinity and -Infinity are written by older versions (NaN and infinities are now written as null)
-                if ((vv.AsSpan().IndexOfAny('e', 'E') >= 0) || (vv is "NaN" or "Infinity" or "-Infinity"))
-                    return Double.Parse(vv, NumberStyles.Float, CultureInfo.InvariantCulture);
-                var val = Decimal.Parse(vv, CultureInfo.InvariantCulture);
-                if ((Math.Round(val) == val) && (val >= Int64.MinValue) && (val <= Int64.MaxValue))
-                    return (Int64)val;
-                return (Double)val;
+                    return CreateBoxedString(state);
+                //  The value ends where the enclosing container's values end (a value that ends an array is followed by a ']')
+                ReadOnlySpan<Byte> token = default;
+                Utf8Parser.GetAsciiRangeNoLast(ref token, ref d, e, endOn);
+                return CreateBoxedScalar(token);
             }
             return CreateObject<Object>(state, endOn);
+        }
+
+        /// <summary>
+        /// Read a boxed json string (positioned at the opening quote): a <see cref="DateTime"/> if <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts it
+        /// (invariant culture, <see cref="DateTimeStyles.RoundtripKind"/>), else the string.
+        /// </summary>
+        /// <remarks>
+        /// "yyyy-MM-ddTHH:mm:ss[.fffffff][Z]" (as written by the <see cref="JsonWriter"/>) is parsed directly from the UTF8 (no string is created).
+        /// Strings without an ASCII digit are never parsed as a date (DateTime.TryParse needs a number for a date or time, verified for all month / day names, designators and non ASCII digits).
+        /// </remarks>
+        static Object CreateBoxedString(JsonParserState state)
+        {
+            ref var d = ref state.D;
+            var p = d + 1;
+            var rem = new ReadOnlySpan<Byte>(p, (int)(state.E - p));
+            var end = rem.IndexOf((Byte)'"');
+            if ((end >= 19) && SpanParsers.TryDateTimeFast(rem.Slice(0, end), out var fdt))
+            {
+                d = p + end + 1;
+                return fdt;
+            }
+            var v = Utf8JsonParser.ReadQuotedString(state);
+            //  Use the invariant culture so that the result doesn't depend on the culture of the current thread
+            if (MayBeDateTime(v) && DateTime.TryParse(v, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dts))
+                return dts;
+            return v;
+        }
+
+        /// <summary>
+        /// False if <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> (invariant culture) can't accept the string, so that most strings are never parsed (that is slow):
+        /// strings without an ASCII digit (a date or time needs a number), and ASCII strings with a word (a run of ASCII letters) that isn't one of the words of a date (see <see cref="DateWords"/>).
+        /// </summary>
+        /// <remarks>
+        /// Verified against DateTime.TryParse with about 45 million strings: all chars, all 1 - 3 letter words, random longer words and all date words (with variations) in many date contexts.
+        /// Strings with non ASCII chars (the parser knows some, like 年 and 午前) are always parsed if they have a digit.
+        /// </remarks>
+        static bool MayBeDateTime(String s)
+        {
+            var span = s.AsSpan();
+            if (span.IndexOfAnyInRange('0', '9') < 0)
+                return false;
+            if (!System.Text.Ascii.IsValid(span))
+                return true;
+            var words = DateWords;
+            var letters = AsciiLetters;
+            for (; ; )
+            {
+                var start = span.IndexOfAny(letters);
+                if (start < 0)
+                    return true;
+                span = span.Slice(start);
+                var len = span.IndexOfAnyExcept(letters);
+                if (len < 0)
+                    len = span.Length;
+                if (len >= words.Length)
+                    return false;
+                var word = span.Slice(0, len);
+                var found = false;
+                foreach (var w in words[len])
+                {
+                    if (word.Equals(w, StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+                span = span.Slice(len);
+            }
+        }
+
+        static readonly SearchValues<Char> AsciiLetters = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+
+        /// <summary>
+        /// The ASCII words that can be part of a date (indexed by the length of the word): the words of the month and day names (all forms), the AM / PM designators and the era names of the invariant culture, "T", "Z" and "GMT"
+        /// </summary>
+        static readonly String[][] DateWords = GetDateWords();
+
+        static String[][] GetDateWords()
+        {
+            var f = CultureInfo.InvariantCulture.DateTimeFormat;
+            var words = new HashSet<String>(StringComparer.OrdinalIgnoreCase);
+            IEnumerable<String>[] all =
+            [
+                f.MonthNames, f.AbbreviatedMonthNames, f.MonthGenitiveNames, f.AbbreviatedMonthGenitiveNames, f.DayNames, f.AbbreviatedDayNames, f.ShortestDayNames,
+                [f.AMDesignator, f.PMDesignator, f.GetEraName(1), f.GetAbbreviatedEraName(1), "T", "Z", "GMT"],
+            ];
+            foreach (var x in all)
+            {
+                foreach (var n in x)
+                {
+                    foreach (var w in n.Split([' ', '.', ','], StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (w.AsSpan().IndexOfAnyExcept(AsciiLetters) < 0)
+                            words.Add(w);
+                    }
+                }
+            }
+            var maxLen = 0;
+            foreach (var w in words)
+                maxLen = Math.Max(maxLen, w.Length);
+            var byLength = new String[maxLen + 1][];
+            for (int i = 0; i <= maxLen; ++i)
+            {
+                var l = new List<String>();
+                foreach (var w in words)
+                {
+                    if (w.Length == i)
+                        l.Add(w);
+                }
+                byLength[i] = l.ToArray();
+            }
+            return byLength;
+        }
+
+        /// <summary>
+        /// The boxed booleans (a boxed bool is immutable, so all reads can share them)
+        /// </summary>
+        static readonly Object BoxedTrue = true;
+        static readonly Object BoxedFalse = false;
+
+        /// <summary>
+        /// 10^0 .. 10^19 (all powers of 10 that fit in an ulong)
+        /// </summary>
+        static readonly ulong[] PowersOf10 = [1UL, 10UL, 100UL, 1000UL, 10000UL, 100000UL, 1000000UL, 10000000UL, 100000000UL, 1000000000UL, 10000000000UL, 100000000000UL, 1000000000000UL,
+            10000000000000UL, 100000000000000UL, 1000000000000000UL, 10000000000000000UL, 100000000000000000UL, 1000000000000000000UL, 10000000000000000000UL];
+
+        /// <summary>
+        /// Convert an unquoted boxed json value: <c>true</c> / <c>false</c> (case insensitive, like <see cref="Boolean.TryParse(string, out bool)"/>) to a <see cref="Boolean"/>,
+        /// integral numbers (that <see cref="Decimal.Parse(string, IFormatProvider)"/> accepts, in the <see cref="Int64"/> range) to an <see cref="Int64"/> and other numbers to a <see cref="Double"/>
+        /// (numbers with an exponent and the NaN, Infinity and -Infinity tokens of older versions are parsed as a double).
+        /// </summary>
+        /// <remarks>
+        /// [-]digits[.digits] with at most 19 digits (the common case) is converted directly from the UTF8, to the same value as the decimal that Decimal.Parse returns (no string is created).
+        /// </remarks>
+        static Object CreateBoxedScalar(ReadOnlySpan<Byte> token)
+        {
+            if (SpanParsers.TryParseSimpleDecimal(token, out var n, out var k, out var neg))
+            {
+                //  Integral (all decimals are zero) and in the Int64 range: an Int64 (-0 is 0)
+                var pow = PowersOf10[k];
+                var q = n / pow;
+                if ((q * pow) == n)
+                {
+                    if (!neg)
+                    {
+                        if (q <= (ulong)Int64.MaxValue)
+                            return (Int64)q;
+                    }
+                    else
+                    {
+                        if (q <= (1UL << 63))
+                            return unchecked(-(Int64)q);
+                    }
+                }
+                //  The same decimal as Decimal.Parse (the mantissa and the scale, trailing zeros are kept)
+                return (Double)new Decimal((int)(uint)n, (int)(uint)(n >> 32), 0, neg, (Byte)k);
+            }
+            var l = token.Length;
+            if ((l == 4) && System.Text.Ascii.EqualsIgnoreCase(token, "true"u8))
+                return BoxedTrue;
+            if ((l == 5) && System.Text.Ascii.EqualsIgnoreCase(token, "false"u8))
+                return BoxedFalse;
+            //  One char per byte (like Utf8Parser.ReadAsciiStringNoLast)
+            var vv = System.Text.Encoding.Latin1.GetString(token);
+            if (Boolean.TryParse(vv, out var br))
+                return br ? BoxedTrue : BoxedFalse;
+            //  Numbers with an exponent can't be parsed as a Decimal (and may be out of its range)
+            //  The tokens NaN, Infinity and -Infinity are written by older versions (NaN and infinities are now written as null)
+            if ((vv.AsSpan().IndexOfAny('e', 'E') >= 0) || (vv is "NaN" or "Infinity" or "-Infinity"))
+                return Double.Parse(vv, NumberStyles.Float, CultureInfo.InvariantCulture);
+            var val = Decimal.Parse(vv, CultureInfo.InvariantCulture);
+            if ((Math.Round(val) == val) && (val >= Int64.MinValue) && (val <= Int64.MaxValue))
+                return (Int64)val;
+            return (Double)val;
         }
 
         /// <summary>
@@ -593,10 +809,41 @@ namespace SysWeaver.Serialization.SwJson
                 ReadException.ThrowObjectOpener();
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedObject();
+            var first = MatchFirstMember<T>(ref d, e);
+            if (first >= 0)
+                return NewAndPopulateMembers<T>(default, first, state);
             ReadOnlySpan<Byte> header = default;
             if (!Utf8JsonParser.ReadKey(state, ref header, ref d, e, Utf8JsonParser.EndOnColon))
                 return ReturnEmpty<T>(ref d);
             return NewAndPopulate<T>(header, state, endOn);
+        }
+
+        /// <summary>
+        /// Match the expected first member in place (its quoted name, at the position), the position is moved to after the name if matched
+        /// </summary>
+        /// <returns>The index of the member, -1 if not matched (the key must be read)</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int MatchFirstMember<T>(ref Byte* d, Byte* e)
+        {
+            //  Dictionaries are populated with their entries
+            if ((DictionaryInterface<T>.Created != null) || DictionaryCheck<T>.IsDictionary)
+                return -1;
+            var o = ReadTyped<T>.Order;
+            if ((o == null) || (*d != '"'))
+                return -1;
+            var keys = o.Keys;
+            var mi = o.Next[keys.Length];
+            if ((uint)mi >= (uint)keys.Length)
+                return -1;
+            var k = keys[mi];
+            var kl = k.Length;
+            var p = d + 1;
+            if (((e - p) > kl) && (p[kl] == '"') && new ReadOnlySpan<Byte>(p, kl).SequenceEqual(k))
+            {
+                d = p + kl + 1;
+                return mi;
+            }
+            return -1;
         }
 
         /// <summary>
@@ -612,6 +859,9 @@ namespace SysWeaver.Serialization.SwJson
                 ReadException.ThrowObjectOpener();
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedObject();
+            var first = MatchFirstMember<T>(ref d, e);
+            if (first >= 0)
+                return NewAndPopulateMembers<T>(default, first, state);
             ReadOnlySpan<Byte> header = default;
             if (!Utf8JsonParser.ReadKey(state, ref header, ref d, e, Utf8JsonParser.EndOnColon))
                 return ReturnEmpty<T>(ref d);
@@ -635,6 +885,10 @@ namespace SysWeaver.Serialization.SwJson
                 ReadException.ThrowObjectOpener();
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedObject();
+            //  A member name is never "$type"
+            var first = MatchFirstMember<T>(ref d, e);
+            if (first >= 0)
+                return NewAndPopulateMembers<T>(default, first, state);
             ReadOnlySpan<Byte> spanVal = default;
             if (!Utf8JsonParser.ReadKey(state, ref spanVal, ref d, e, Utf8JsonParser.EndOnColon))
                 return ReturnEmpty<T>(ref d);
@@ -687,6 +941,10 @@ namespace SysWeaver.Serialization.SwJson
         /// <remarks>Uses the dictionary's Add method, so a duplicated key throws.</remarks>
         internal static T NewAndPopulateDictionary<T>(ReadOnlySpan<Byte> key, JsonParserState state, Func<Char, bool> endOn)
         {
+            //  A Dictionary<K, V> is created with the exact capacity (after all entries are read)
+            var read = DictionaryReader<T>.Read;
+            if (read != null)
+                return read(key, state);
             ref var d = ref state.D;
             var e = state.E;
             var add = ReadTyped<T>.GetDictionary(out var v);
@@ -726,24 +984,64 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The populated object</returns>
         internal static T NewAndPopulate<T>(ReadOnlySpan<Byte> key, JsonParserState state, Func<Char, bool> endOn)
         {
-            ref var d = ref state.D;
-            var e = state.E;
             var di = DictionaryInterface<T>.Created;
             if (di != null)
                 return (T)di.Cp(key, state, endOn);
             if (DictionaryCheck<T>.IsDictionary)
                 return NewAndPopulateDictionary<T>(key, state, endOn);
-            var members = ReadTyped<T>.GetMembers(out var v);
+            return NewAndPopulateMembers<T>(key, -1, state);
+        }
+
+        /// <summary>
+        /// Create an object (not a dictionary) and populate it, starting with the first member (the position is after its key).
+        /// Unknown members are skipped. The position is set to after the closing '}'.
+        /// </summary>
+        /// <typeparam name="T">The type to create</typeparam>
+        /// <param name="key">The UTF8 name of the first member (unescaped), not used if <paramref name="first"/> is the member</param>
+        /// <param name="first">The index of the first member (if its key was matched in place, see <see cref="MatchFirstMember{T}(ref byte*, byte*)"/>), else -1</param>
+        /// <param name="state">The parser state</param>
+        /// <returns>The populated object</returns>
+        static T NewAndPopulateMembers<T>(ReadOnlySpan<Byte> key, int first, JsonParserState state)
+        {
+            ref var d = ref state.D;
+            var e = state.E;
+            var members = ReadTyped<T>.GetMemberOrder(out var v);
+            var keys = members.Keys;
+            var assigners = members.Assigners;
+            var next = members.Next;
+            var count = keys.Length;
+            //  The index of the previous member (count before the first member)
+            var prev = count;
+            //  The member (index) when the key was matched in place, else the key is in "key"
+            int mi = first;
+            bool matched = first >= 0;
             for (; ; )
             {
                 if (Utf8Parser.SkipWhite(ref d, e) || (Utf8Parser.ReadAsciiChar(ref d, e) != ':'))
                     ReadException.ThrowExpectedKeyValueSeparator();
                 if (Utf8Parser.SkipWhite(ref d, e))
                     ReadException.ThrowExpectedValue();
-                if (members.TryGetValue(state, key, out var m))
-                    m(ref v, state, Utf8JsonParser.EndOnObject);
+                if (!matched)
+                {
+                    //  Usually the member that followed the previous member the last time, else a look up (and remember the order)
+                    mi = next[prev];
+                    if (!(((uint)mi < (uint)count) && key.SequenceEqual(keys[mi])))
+                    {
+                        if (members.Lookup.TryGetValue(state, key, out mi))
+                            next[prev] = mi;
+                        else
+                            mi = -1;
+                    }
+                }
+                if (mi >= 0)
+                {
+                    assigners[mi](ref v, state, Utf8JsonParser.EndOnObject);
+                    prev = mi;
+                }
                 else
+                {
                     Utf8JsonParser.SkipUnknown(ref d, e, Utf8JsonParser.EndOnObject);
+                }
                 if (Utf8Parser.SkipWhite(ref d, e))
                     ReadException.ThrowExpectedEndOfObject();
                 var c = Utf8Parser.ReadAsciiChar(ref d, e);
@@ -753,6 +1051,21 @@ namespace SysWeaver.Serialization.SwJson
                     ReadException.ThrowExpectedValueSeparator();
                 if (Utf8Parser.SkipWhite(ref d, e))
                     ReadException.ThrowExpectedEndOfObject();
+                //  The expected member is matched in place: its quoted name (a member name has no quotes or escapes, so it's the same key that ReadKey would read)
+                mi = next[prev];
+                if (((uint)mi < (uint)count) && (*d == '"'))
+                {
+                    var k = keys[mi];
+                    var kl = k.Length;
+                    var p = d + 1;
+                    if (((e - p) > kl) && (p[kl] == '"') && new ReadOnlySpan<Byte>(p, kl).SequenceEqual(k))
+                    {
+                        d = p + kl + 1;
+                        matched = true;
+                        continue;
+                    }
+                }
+                matched = false;
                 if (!Utf8JsonParser.ReadKey(state, ref key, ref d, e, Utf8JsonParser.EndOnColon))
                 {
                     ++d;

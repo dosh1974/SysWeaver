@@ -355,7 +355,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
             var quoted = Expression.Call(Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ReadAsciiReadOnlyMemoryQuoted), BindingFlags.Static | BindingFlags.Public), TempCall);
             foreach (var t in SpanParsers.SupportedTypes)
             {
-                var prog = SpanParsers.GetExpression(t, requiresQuote.Contains(t) ? quoted : maybeQuoted);
+                //  Numbers and booleans are found and parsed in one pass (same result)
+                var prog = FusedParsers.GetExpression(t) ?? SpanParsers.GetExpression(t, requiresQuote.Contains(t) ? quoted : maybeQuoted);
                 c.TryAdd(t, new ReadTypeCache(t, prog));
             }
             //  Add special types

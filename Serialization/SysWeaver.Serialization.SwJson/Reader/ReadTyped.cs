@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace SysWeaver.Serialization.SwJson.Reader
 {
@@ -109,10 +111,91 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 }
                 //i = new Utf8RangeLookup<TypedAssigner>(ti);
                 i = MemberLookUp<TypedAssigner>.Create(ti);
-                I = i;
+                O = new MemberOrder(ti);
+                Volatile.Write(ref I, i);
                 obj = New();
                 return i;
             }
+        }
+
+        /// <summary>
+        /// Get the members (built on first use) and create a new instance to populate, see <see cref="GetMembers(out T)"/>.
+        /// </summary>
+        /// <param name="obj">A new instance</param>
+        /// <returns>The member assigners, with the order they are expected in</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MemberOrder GetMemberOrder(out T obj)
+        {
+            var o = O;
+            if (o != null)
+            {
+                obj = New();
+                return o;
+            }
+            GetMembers(out obj);
+            return O;
+        }
+
+        static MemberOrder O;
+
+        /// <summary>
+        /// The members, null until <see cref="GetMembers(out T)"/> (or <see cref="GetMemberOrder(out T)"/>) has been called
+        /// </summary>
+        public static MemberOrder Order
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => O;
+        }
+
+        /// <summary>
+        /// The member assigners (in no particular order) and the order the members are expected in (learned from the data):
+        /// a member is first compared to the member that followed the previous member the last time (one compare for json written in the same member order, like all json written by the <see cref="JsonWriter"/>),
+        /// the look up is only used when that fails.
+        /// </summary>
+        /// <remarks>
+        /// Thread safe, the learned order (<see cref="Next"/>) is updated without synchronization (an int is written atomically, a stale value just costs a look up).
+        /// </remarks>
+        public sealed class MemberOrder
+        {
+            public MemberOrder(Dictionary<Utf8Range, TypedAssigner> members)
+            {
+                var n = members.Count;
+                var keys = new Byte[n][];
+                var assigners = new TypedAssigner[n];
+                var index = new Dictionary<Utf8Range, int>(n);
+                int i = 0;
+                foreach (var kv in members)
+                {
+                    keys[i] = kv.Key.Mem.ToArray();
+                    assigners[i] = kv.Value;
+                    index.Add(kv.Key, i);
+                    ++i;
+                }
+                var next = new int[n + 1];
+                for (i = 0; i < n; ++i)
+                    next[i] = i + 1;
+                Keys = keys;
+                Assigners = assigners;
+                Lookup = MemberLookUp<int>.Create(index);
+                Next = next;
+            }
+
+            /// <summary>
+            /// The UTF8 names of the members
+            /// </summary>
+            public readonly Byte[][] Keys;
+            /// <summary>
+            /// The assigners of the members (same index as the <see cref="Keys"/>)
+            /// </summary>
+            public readonly TypedAssigner[] Assigners;
+            /// <summary>
+            /// The index of a member by its UTF8 name
+            /// </summary>
+            public readonly IMemberLookUp<int> Lookup;
+            /// <summary>
+            /// The index of the member expected after a member (the index of the previous member, the number of members for the first member), may be out of range (no expectation)
+            /// </summary>
+            public readonly int[] Next;
         }
 
         /// <summary>
@@ -170,17 +253,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 var keyType = types[0];
                 var valueType = types[1];
 
-                var keyValueExp = SpanParsers.GetExpression(keyType, keyExp);
-                if (keyValueExp == null)
-                {
-                    if (ReadTypeCache.JsonSpanReaders.TryGetValue(keyType, out var keyBuild))
-                        keyValueExp = keyBuild(keyExp);
-                }
-                //  Enum keys (written as quoted numbers, names are accepted too)
-                if ((keyValueExp == null) && keyType.IsEnum)
-                    keyValueExp = Expression.Call(Helper.SafeGetMethod(typeof(EnumReader<>).MakeGenericType(keyType), nameof(EnumReader<DayOfWeek>.Parse), BindingFlags.Public | BindingFlags.Static), keyExp);
-                if (keyValueExp == null)
-                    throw new Exception("Unsupported key type \"" + keyType + "\"");
+                var keyValueExp = DictionaryKey.GetExpression(keyType, keyExp);
 
                 var valueExp = ReadTypeCache.Get(valueType).CreateExp;
                 var addExp = Expression.Call(dictExp, Helper.SafeGetMethod(t, nameof(Dictionary<int, int>.Add), BindingFlags.Public | BindingFlags.Instance), keyValueExp, valueExp);
