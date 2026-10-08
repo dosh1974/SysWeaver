@@ -61,15 +61,17 @@ namespace SysWeaver.Inspection.Implementation
         private static ConcurrentDictionary<Type, MethodInfo> GetProps()
         {
             var r = new ConcurrentDictionary<Type, MethodInfo>();
+            //  Prop(T value, SetProp<T> setValue), the value is passed by value, the generic method is the fallback (see GetRegPropMethod)
             foreach (var mi in AllPropMethods)
             {
+                if (mi.IsGenericMethodDefinition)
+                    continue;
                 var p = mi.GetParameters();
-                if (p.Length != 1)
+                if (p.Length != 2)
                     continue;
                 var type = p[0].ParameterType;
-                if (!type.IsByRef)
+                if (type.IsByRef)
                     continue;
-                type = type.GetElementType();
                 r[type] = mi;
             }
             return r;

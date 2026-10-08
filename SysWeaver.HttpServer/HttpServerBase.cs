@@ -1801,7 +1801,8 @@ namespace SysWeaver.Net
                         cacheKey = MakeCacheKey(key, data.GetType().Name, data.AcceptEncoding, data.Method, (useLanguageCache && haveTranslator) ? lang : null);
                         if (cache.TryGetValue(cacheKey, out var ce))
                         {
-                            if (nowT < ce.Expires)
+                            //  The cache key doesn't include the etag, so an entry created from an older version of the source must not be served (it's replaced below)
+                            if ((nowT < ce.Expires) && ce.ETag.FastEquals(etag))
                             {
                                 Interlocked.Exchange(ref ce.LastUsed, nowT);
                                 using (PerfMon.Track(nameof(HttpCacheEntry.SendCached)))
@@ -2070,7 +2071,7 @@ namespace SysWeaver.Net
 
                     //  Cache
                     if (rcd > 0)
-                        await SaveToCache(cache, cacheKey, now.AddSeconds(rcd), nowT, i, data, data.LocalUrl).ConfigureAwait(false);
+                        await SaveToCache(cache, cacheKey, now.AddSeconds(rcd), nowT, etag, i, data, data.LocalUrl).ConfigureAwait(false);
 
                     //  Get length
                     var s = i.Stream;
@@ -3264,7 +3265,7 @@ namespace SysWeaver.Net
             return t;
         }
 
-        async Task SaveToCache(LowAllocConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, HttpRequestData i, HttpServerRequest req, String localUrl)
+        async Task SaveToCache(LowAllocConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, String etag, HttpRequestData i, HttpServerRequest req, String localUrl)
         {
             using (PerfMon.Track(nameof(SaveToCache)))
             {
@@ -3274,19 +3275,19 @@ namespace SysWeaver.Net
                 {
                     var nd = await s.ReadAllMemoryAsync().ConfigureAwait(false);
                     i.ChangeMem(nd);
-                    cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, nd, localUrl);
+                    cache[cacheKey] = new HttpCacheEntry(nowT, exp, etag, req, nd, localUrl);
                     return;
                 }
                 var mem = i.Mem;
                 if (!i.IsMapped)
                 {
-                    cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, i.Mem, localUrl);
+                    cache[cacheKey] = new HttpCacheEntry(nowT, exp, etag, req, i.Mem, localUrl);
                     return;
                 }
                 //  Really save?
                 //var t = CloneMemory(mem);
                 //i.ChangeMem(t);
-                //cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, t, localUrl);
+                //cache[cacheKey] = new HttpCacheEntry(nowT, exp, etag, req, t, localUrl);
             }
         }
 

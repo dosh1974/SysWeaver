@@ -340,7 +340,8 @@ namespace SysWeaver.Inspection
             var ticks = Reader.ReadInt64();
             var kind = Reader.ReadByte();
             var v = new DateTime(ticks, (DateTimeKind)kind);
-            if (v != value)
+            //  != ignores the kind
+            if ((v != value) || (v.Kind != value.Kind))
                 onSet(v);
         }
 
@@ -363,9 +364,10 @@ namespace SysWeaver.Inspection
 
         public void Prop(DateTimeOffset value, SetProp<DateTimeOffset> onSet)
         {
-            var ticks = Reader.ReadInt64();
-            var v = new DateTimeOffset(ticks, TimeSpan.Zero);
-            if (v != value)
+            //  Same as the field (ticks and offset), != ignores the offset
+            DateTimeOffset v = default;
+            Field(ref v);
+            if (!v.EqualsExact(value))
                 onSet(v);
         }
 
@@ -769,54 +771,54 @@ namespace SysWeaver.Inspection
             return t;
         }
 
-        public static T Read<T>(Stream s, Encoding encoding, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static T Read<T>(Stream s, Encoding encoding, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryReaderInspector(s, encoding, disposeWhenDone))
+            using (var insp = new BinaryReaderInspector(s, encoding, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 return insp.Read<T>();
             }
         }
 
-        public static T Read<T>(Stream s, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static T Read<T>(Stream s, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryReaderInspector(s, disposeWhenDone))
+            using (var insp = new BinaryReaderInspector(s, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 return insp.Read<T>();
             }
         }
 
-        public static T Read<T>(BinaryReader reader, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static T Read<T>(BinaryReader reader, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryReaderInspector(reader, disposeWhenDone))
+            using (var insp = new BinaryReaderInspector(reader, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 return insp.Read<T>();
             }
         }
 
-        public static Object Read(Stream s, Encoding encoding, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static Object Read(Stream s, Encoding encoding, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryReaderInspector(s, encoding, disposeWhenDone))
+            using (var insp = new BinaryReaderInspector(s, encoding, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 return insp.Read<Object>();
             }
         }
 
-        public static Object Read(Stream s, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static Object Read(Stream s, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryReaderInspector(s, disposeWhenDone))
+            using (var insp = new BinaryReaderInspector(s, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 return insp.Read<Object>();
             }
         }
 
-        public static Object Read(BinaryReader reader, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static Object Read(BinaryReader reader, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryReaderInspector(reader, disposeWhenDone))
+            using (var insp = new BinaryReaderInspector(reader, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 return insp.Read<Object>();

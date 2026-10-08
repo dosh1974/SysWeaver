@@ -304,7 +304,8 @@ namespace SysWeaver.Inspection
 
         public void Prop(DateTimeOffset value, SetProp<DateTimeOffset> onSet)
         {
-            Writer.Write(value.Ticks);
+            //  Same as the field (ticks and offset)
+            Field(ref value);
         }
 
         public void Prop(Guid value, SetProp<Guid> onSet)
@@ -605,36 +606,48 @@ namespace SysWeaver.Inspection
 
         #region Helpers
 
-        public void Write<T>(T obj, bool saveAsObject = true)
+        /// <summary>
+        /// Write a value, read it using <see cref="BinaryReaderInspector.Read{T}()"/> with the same T, or with T = Object if saved as an object.
+        /// </summary>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="obj">The value</param>
+        /// <param name="saveAsObject">If true the value is written as an Object (with type information), the same as writing it with T = Object</param>
+        public void Write<T>(T obj, bool saveAsObject = false)
         {
+            //  Field, as BinaryReaderInspector.Read, the typed Prop and Field overloads doesn't write the same data for all types (ex: DateTimeOffset)
             if (saveAsObject)
-                Prop((Object)obj, null);
+            {
+                Object o = obj;
+                Field(ref o);
+            }
             else
-                Prop(obj, null);
+            {
+                Field(ref obj);
+            }
         }
 
 
-        public static void Write<T>(T obj, Stream s, Encoding encoding, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static void Write<T>(T obj, Stream s, Encoding encoding, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryWriterInspector(s, encoding, disposeWhenDone))
+            using (var insp = new BinaryWriterInspector(s, encoding, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 insp.Write(obj);
             }
         }
 
-        public static void Write<T>(T obj, Stream s, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static void Write<T>(T obj, Stream s, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryWriterInspector(s, disposeWhenDone))
+            using (var insp = new BinaryWriterInspector(s, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 insp.Write(obj);
             }
         }
 
-        public static void Write<T>(T obj, BinaryWriter writer, bool disposeWhenDone = true, params KeyValuePair<String, Object>[] context)
+        public static void Write<T>(T obj, BinaryWriter writer, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
-            using (var insp = new BinaryWriterInspector(writer, disposeWhenDone))
+            using (var insp = new BinaryWriterInspector(writer, leaveOpen))
             {
                 StaticTypeHandler.AddContexts(insp, context);
                 insp.Write(obj);

@@ -42,20 +42,26 @@ namespace SysWeaver.Net
         /// A snapshot of the response headers when the entry was created (Set-Cookie headers are ignored when the entry is sent, see <see cref="HttpServerRequest.SetResHeaders"/>).
         /// </summary>
         public readonly IReadOnlyList<KeyValuePair<String, IReadOnlyList<String>>> Headers;
-        //public readonly String ETag;
+        /// <summary>
+        /// The etag of the source when the entry was created (null if the handler has no etag).
+        /// An entry is only served while the source still has the same etag, so a changed source (ex: a file saved on disc) is never served stale from the cache.
+        /// </summary>
+        public readonly String ETag;
 
         /// <summary>
         /// Create a cache entry from a response that is being produced.
         /// </summary>
         /// <param name="lastUsed">UTC ticks of the creation time</param>
-        /// <param name="etag">UTC ticks when the entry expires (despite the name)</param>
+        /// <param name="expires">UTC ticks when the entry expires</param>
+        /// <param name="etag">The etag of the source (null if none)</param>
         /// <param name="res">The request whose response headers and status code are captured</param>
         /// <param name="data">The response body, must not be modified or released after this call</param>
         /// <param name="localUrl">The local url of the request</param>
-        public HttpCacheEntry(long lastUsed, long etag, HttpServerRequest res, ReadOnlyMemory<byte> data, String localUrl)
+        public HttpCacheEntry(long lastUsed, long expires, String etag, HttpServerRequest res, ReadOnlyMemory<byte> data, String localUrl)
         {
             LastUsed = lastUsed;
-            Expires = etag;
+            Expires = expires;
+            ETag = etag;
             Headers = res.AllResHeaders.ToList();
             Data = data;
             LocalUrl = localUrl;

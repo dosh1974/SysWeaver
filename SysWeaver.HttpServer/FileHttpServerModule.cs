@@ -128,10 +128,39 @@ namespace SysWeaver.Net
             foreach (var x in ordered)
                 foreach (var y in x.Value.DiscFolders)
                     discToWeb.TryAdd(y.Path + Path.DirectorySeparatorChar, x.Value.Url);
+            HavePreCompressed = ordered.Any(x => x.Value.DiscFolders.Any(y => y.AssumePreCompressed));
             OrderedFolders = ordered;
             DiscToWeb = discToWeb;
             DiscToWebPrefix = StringTree.Build(discToWeb.Keys);
             Cache?.Clear();
+        }
+
+        /// <summary>
+        /// True if any disc folder have <see cref="DiscFolder.AssumePreCompressed"/> set, the cached handler lookups then depends on the encodings accepted by the client.
+        /// </summary>
+        volatile bool HavePreCompressed;
+
+        /// <summary>
+        /// Get a key for the encodings accepted by the client, only the supported encodings are included (the others doesn't affect the selection in <see cref="GetSmallestPreComp"/>).
+        /// </summary>
+        /// <param name="acceptedEncoders">The encodings accepted by the client</param>
+        /// <returns>The key (a bit mask of the accepted supported encodings in hex)</returns>
+        static String GetAcceptedKey(IReadOnlySet<String> acceptedEncoders)
+        {
+            if ((acceptedEncoders == null) || (acceptedEncoders.Count <= 0))
+                return "0";
+            ulong mask = 0;
+            int bit = 0;
+            foreach (var code in CompManager.HttpCodes)
+            {
+                //  More than 64 supported encodings isn't realistic, any more are ignored
+                if (bit >= 64)
+                    break;
+                if (acceptedEncoders.Contains(code))
+                    mask |= 1UL << bit;
+                ++bit;
+            }
+            return mask.ToString("x");
         }
 
         /// <summary>
@@ -279,7 +308,27 @@ namespace SysWeaver.Net
         public IHttpRequestHandler Handler(HttpServerRequest context)
             => throw new NotImplementedException();
 
-        readonly FastMemCache<String, IHttpRequestHandler> Cache;
+        /// <summary>
+        /// A cached handler lookup: the file that a local url resolved to (null if not found).
+        /// </summary>
+        sealed class CachedFile
+        {
+            public CachedFile(String path, Tuple<String, bool> mime, DiscFolder folder, bool isAccepted, ICompDecoder decoder)
+            {
+                Path = path;
+                Mime = mime;
+                Folder = folder;
+                IsAccepted = isAccepted;
+                Decoder = decoder;
+            }
+            public readonly String Path;
+            public readonly Tuple<String, bool> Mime;
+            public readonly DiscFolder Folder;
+            public readonly bool IsAccepted;
+            public readonly ICompDecoder Decoder;
+        }
+
+        readonly FastMemCache<String, CachedFile> Cache;
 
 
         async Task<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
@@ -300,48 +349,63 @@ namespace SysWeaver.Net
                     cacheKey = String.Concat(url, "?", ftKey);
             }
             fileTransformer = fileTransformer ?? NoFT;
-            return await Cache.GetOrUpdateAsync(cacheKey, async _ =>
-            {
-                var f = OrderedFolders;
-                if (f == null)
-                    return null;
-                var toDiscPath = ToDiscPath;
-                foreach (var webFolder in f)
-                {
-                    var rootFolder = webFolder.Key;
-                    if (!url.FastStartsWith(rootFolder))
-                        continue;
-                    var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
-                    foreach (var discFolder in webFolder.Value.DiscFolders)
-                    {
-                        var absPath = SafeCombine(discFolder.Path, localDiscPath);
-                        if (absPath == null)
-                            continue;
-                        var fi = new FileInfo(absPath);
-                        var ext = fi.Extension;
-                        ICompDecoder decoder = null;
-                        bool isAccepted = true;
-                        if (discFolder.AssumePreCompressed)
-                        {
-                            var ti = GetSmallestPreComp(out decoder, out isAccepted, absPath, context.AcceptedEncoders, fi.Exists ? fi.LastWriteTimeUtc : null);
-                            if ((ti != null) && ((!fi.Exists) || (ti.Length < fi.Length)))
-                            {
-                                fi = ti;
-                            }
-                            else
-                            {
-                                decoder = null;
-                                isAccepted = ti == null;
-                            }
-                        }
-                        if (!fi.Exists)
-                            continue;
-                        var mime = MimeTypeMap.GetMimeType(ext.FastToLower());
-                        return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime, discFolder.IsDynamic).ConfigureAwait(false);
-                    }
-                }
+            //  The pre-compressed file to serve is selected using the encodings accepted by the client
+            if (HavePreCompressed)
+                cacheKey = String.Concat(cacheKey, "\n", GetAcceptedKey(context.AcceptedEncoders));
+            //  Only the location of the file is cached, the handler is created per request, since a FileInfo only reads the file state (time and size, used for the etag) once
+            var cf = await Cache.GetOrUpdateAsync(cacheKey, _ => Task.FromResult(FindFile(url, context))).ConfigureAwait(false);
+            if (cf == null)
                 return null;
-            }).ConfigureAwait(false);
+            var df = cf.Folder;
+            return await fileTransformer(ftKey, cf.Mime, new FileInfo(cf.Path), df, cf.IsAccepted, cf.Decoder, df.UpdateAccessTime, df.IsDynamic).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Find the file (or pre-compressed variant) that a local url maps to.
+        /// </summary>
+        /// <param name="url">The local url</param>
+        /// <param name="context">The request</param>
+        /// <returns>The file location, null if not found</returns>
+        CachedFile FindFile(String url, HttpServerRequest context)
+        {
+            var f = OrderedFolders;
+            if (f == null)
+                return null;
+            var toDiscPath = ToDiscPath;
+            foreach (var webFolder in f)
+            {
+                var rootFolder = webFolder.Key;
+                if (!url.FastStartsWith(rootFolder))
+                    continue;
+                var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
+                foreach (var discFolder in webFolder.Value.DiscFolders)
+                {
+                    var absPath = SafeCombine(discFolder.Path, localDiscPath);
+                    if (absPath == null)
+                        continue;
+                    var fi = new FileInfo(absPath);
+                    var ext = fi.Extension;
+                    ICompDecoder decoder = null;
+                    bool isAccepted = true;
+                    if (discFolder.AssumePreCompressed)
+                    {
+                        var ti = GetSmallestPreComp(out decoder, out isAccepted, absPath, context.AcceptedEncoders, fi.Exists ? fi.LastWriteTimeUtc : null);
+                        if ((ti != null) && ((!fi.Exists) || (ti.Length < fi.Length)))
+                        {
+                            fi = ti;
+                        }
+                        else
+                        {
+                            decoder = null;
+                            isAccepted = ti == null;
+                        }
+                    }
+                    if (!fi.Exists)
+                        continue;
+                    return new CachedFile(fi.FullName, MimeTypeMap.GetMimeType(ext.FastToLower()), discFolder, isAccepted, decoder);
+                }
+            }
+            return null;
         }
 
         async Task<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
