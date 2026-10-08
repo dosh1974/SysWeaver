@@ -73,7 +73,17 @@ async function loginMain() {
         const info = AuthError(target, "", "error");
         const br = AuthButtonRow(target);
 
-        async function setStatus(uText, pwText) {
+        //  setStatus is async (the password policy may be fetched) and is called by several events (input, change, autofill), only the latest call may update the status
+        let statusSeq = 0;
+        let statusPromise = null;
+        function setStatus(uText, pwText) {
+            const seq = ++statusSeq;
+            const p = updateStatus(uText, pwText, seq);
+            statusPromise = p;
+            return p;
+        }
+
+        async function updateStatus(uText, pwText, seq) {
             uText = AuthTrim(uText);
             pwText = AuthTrim(pwText);
             const p = await ValidatePassword(uText, pwText, target, newPolicy => {
@@ -81,6 +91,16 @@ async function loginMain() {
                 pwdLabel.title = policyText;
                 info.title = policyText;
             });
+            if (seq !== statusSeq)
+                return await statusPromise;
+            //  Some browsers (Chrome) doesn't expose autofilled values until the user interacts with the page (the values are available when the sign in button is clicked)
+            if ((!pwText) && IsAutoFilled(pwd) && (uText || IsAutoFilled(uname))) {
+                AuthSetError(uname, false);
+                AuthSetError(pwd, false);
+                AuthSetText(info, "");
+                setButton.SetEnabled(true);
+                return true;
+            }
             if ((!uText) || (uText.length < 1)) {
                 AuthSetError(uname, true);
                 AuthSetError(pwd, false);
@@ -104,6 +124,14 @@ async function loginMain() {
             _TF("Sign in", "Text of a button that when pressed will attempt to sign in a user using their entered credentials"),
             _TF("Click to sign in using the entered credentials", "Tool tip description on a button that when pressed will attempt to sign in a user using their entered credentials"),
             "IconAuthPassword", async button => {
+            if ((!AuthTrim(uname.value)) || (!AuthTrim(pwd.value))) {
+                //  An autofilled value that the browser still doesn't expose (should be exposed after the click)
+                await setStatus(uname.value, pwd.value);
+                if ((!AuthTrim(uname.value)) || (!AuthTrim(pwd.value))) {
+                    (AuthTrim(uname.value) ? pwd : uname).focus();
+                    return;
+                }
+            }
             button.StartWorking();
             pwd.readOnly = true;
             uname.readOnly = true;
@@ -137,16 +165,34 @@ async function loginMain() {
             pwd.focus();
         }, true);
         if (havePasskey) {
+            //  Passkey autofill: passkeys of this site are listed in the user id autofill drop down (if there are any)
+            let autofill = null;
+            uname.autocomplete = "username webauthn";
+            PassKey.IsAutofillSupported().then(ok => {
+                if (!ok)
+                    return;
+                autofill = PassKey.Autofill(async res => {
+                    if (res.Error == 0) {
+                        AuthSetText(info, _TF("User signed in.", "Text displayed when a user have successfully signed in"));
+                        setButton.SetEnabled(false);
+                        passKeyButton.SetEnabled(false);
+                        await AuthStartPage();
+                        return;
+                    }
+                    Fail(PassKey.ErrorText(res) + (res.Message ? "\n\n" + res.Message : ""));
+                });
+            });
+
             //  Get a challenge for any passkey before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
             const anyPassKey = PassKey.SignIn();
             anyPassKey.Fetch().then(c => {
                 if (c.error == PassKey.Errors.NotSupported)
                     passKeyButton.Element.classList.add("Hide");
             }).catch(() => { });
-            passKeyButton = AuthButton(br,
-                _TF("Use passkey", "Text on a button that when pressed will attempt to sign in using a passkey"),
-                _TF("Click to sign in using a passkey (if a user id is entered, only passkeys of that user are shown)", "Tool tip description of a button that when pressed will attempt to sign in using a passkey"),
-                "IconUsePasskey", async button => {
+
+            async function usePassKey(button) {
+                //  Only one passkey request can be active
+                autofill?.Stop();
                 button.StartWorking();
                 uname.readOnly = true;
                 pwd.readOnly = true;
@@ -172,15 +218,42 @@ async function loginMain() {
                     button.StopWorking();
                 }
                 anyPassKey.Fetch().catch(() => { });
+                autofill?.Start();
                 await setStatus(uname.value, pwd.value);
                 if (res?.Error != PassKey.Errors.Cancelled)
                     SetTemporaryInnerText(info, _TF("Failed to login, try again!?", "Message displayed when a sign in failed"), 5000);
                 uname.readOnly = false;
                 pwd.readOnly = false;
-            }, false);
+            }
+
+            if (PassKey.HaveHint()) {
+                //  A passkey was used or created on this device before, show the passkey button
+                passKeyButton = AuthButton(br,
+                    _TF("Use passkey", "Text on a button that when pressed will attempt to sign in using a passkey"),
+                    _TF("Click to sign in using a passkey (if a user id is entered, only passkeys of that user are shown)", "Tool tip description of a button that when pressed will attempt to sign in using a passkey"),
+                    "IconUsePasskey", usePassKey, false);
+            } else {
+                //  No passkey is known to be on this device, show a small icon (passkeys on a phone or a security key can still be used, passkeys on this device are shown by the autofill)
+                passKeyButton = new ColorIcon("IconPasskeyKey", "IconColorThemeMain", 32, 32,
+                    _TF("Sign in with a passkey, ex: on a phone or a security key (if a user id is entered, only passkeys of that user can be used)", "Tool tip description of a small icon button that when pressed will attempt to sign in using a passkey"),
+                    async () => await usePassKey(passKeyButton));
+                passKeyButton.Element.classList.add("PasskeyIconButton");
+                br.appendChild(passKeyButton.Element);
+            }
         }
         setStatus(uname.value, pwd.value);
         uname.focus();
+        //  Browsers may autofill the inputs after the page is loaded without any event (or without exposing the values), check for a while
+        let lastAutoFill = "";
+        for (const ms of [100, 250, 500, 1000, 2000, 3500, 5000]) {
+            setTimeout(() => {
+                const state = String(IsAutoFilled(uname)) + IsAutoFilled(pwd) + uname.value.length + "," + pwd.value.length;
+                if (state === lastAutoFill)
+                    return;
+                lastAutoFill = state;
+                setStatus(uname.value, pwd.value);
+            }, ms);
+        }
 
     });
 
@@ -839,11 +912,15 @@ function AuthButton(target, name, title, icon, onClick, disabled) {
 }
 
 function AuthHr(target) {
-    target.appendChild(document.createElement("hr"));
+    const e = document.createElement("hr");
+    target.appendChild(e);
+    return e;
 }
 
 function AuthBr(target) {
-    target.appendChild(document.createElement("br"));
+    const e = document.createElement("br");
+    target.appendChild(e);
+    return e;
 }
 
 async function AuthStartPage() {
@@ -861,14 +938,22 @@ async function AuthStartPage() {
     location.reload(true);
 }
 
+/**
+ * Check if an input element was filled by the browser (some browsers doesn't expose the value until the user interacts with the page)
+ * @param {HTMLInputElement} inputElement The input element
+ * @returns {boolean} True if the browser autofilled the input
+ */
 function IsAutoFilled(inputElement) {
+    if (!inputElement)
+        return false;
     try {
-        return inputElement.current.matches(':autofill');
+        if (inputElement.matches(':autofill'))
+            return true;
     } catch (err) {
-        try {
-            return inputElement.current.matches(':-webkit-autofill');
-        } catch (er) {
-        }
+    }
+    try {
+        return inputElement.matches(':-webkit-autofill');
+    } catch (er) {
     }
     return false;
 }

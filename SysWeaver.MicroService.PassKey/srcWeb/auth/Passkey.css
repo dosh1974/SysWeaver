@@ -8,3 +8,34 @@
     mask-image: url("../icons/passkey_use.svg");
 }
 
+.IconPasskeyKey {
+    mask-image: url("../icons/passkey_key.svg");
+}
+
+.IconPasskeyRename {
+    mask-image: url("../icons/passkey_rename.svg");
+}
+
+/* An auth box inside a pop up (the rename passkey dialog) */
+form.SysWeaver-AuthBox.SysWeaver-PassKeyPopUp {
+    background: initial;
+    width: initial;
+    height: initial;
+    display: initial;
+    position: initial;
+    left: initial;
+    top: initial;
+    transform: initial;
+    border-radius: initial;
+    box-shadow: initial;
+    border: initial;
+    padding: initial;
+    margin: initial;
+    box-sizing: initial;
+}
+
+/* The small passkey icon button (used instead of a text button when no passkey is known to be on the device) */
+.PasskeyIconButton {
+    align-self: center;
+}
+

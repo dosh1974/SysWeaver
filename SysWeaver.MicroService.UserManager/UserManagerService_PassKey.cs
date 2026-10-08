@@ -217,6 +217,19 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
+        /// Check if a user have any passkeys
+        /// </summary>
+        /// <param name="userId">The user id</param>
+        /// <returns>True if the user have at least one passkey</returns>
+        public async Task<bool> HaveAnyPassKeys(long userId)
+        {
+            if (userId == 0)
+                return false;
+            using var c = await Db.GetAsync().ConfigureAwait(false);
+            return (await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.UserId == userId).ConfigureAwait(false)) != null;
+        }
+
+        /// <summary>
         /// Get all passkeys of a user
         /// </summary>
         /// <param name="auth">The user</param>

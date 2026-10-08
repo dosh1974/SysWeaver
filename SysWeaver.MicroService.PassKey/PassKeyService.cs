@@ -22,6 +22,7 @@ namespace SysWeaver.MicroService
     [WebApiUrl("auth/passkey")]
     [WebMenuEmbedded("User", "User/AddPassKey", "Add passkey", "auth/AddPassKey.html", "Click to add a passkey for this device", "IconAddPasskey", 31, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanCreateLocalPassKey))]
     [WebMenuEmbedded("User", "User/AddPassKeyOther", "Add passkey (other device)", "auth/AddPassKeyOnOtherDevice.html", "Click to show a QR code that can be used to add a passkey on some other device", "IconAddPasskeyOther", 32, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanCreateRemotePassKey))]
+    [WebMenuEmbedded("User", "User/MyPassKeys", "My passkeys", "auth/MyPassKeys.html", "Click to see and manage your passkeys", "IconUsePasskey", 33, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanManagePassKeys))]
     [WebMenuEmbedded("User", "User/UsePassKey", "Sign in with passkey", "auth/UsePassKey.html", "Click to sign in using a passkey", "IconUsePasskey", 2, null, true, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanSignInWithPassKey))]
     public sealed class PassKeyService
     {
@@ -61,6 +62,15 @@ namespace SysWeaver.MicroService
             if (uid == 0)
                 return TaskExt.FalseTask;
             return PassKeyTools.CanUse(PassKeyTools.GetOrigin(context.Prefix)) ? TaskExt.TrueTask : TaskExt.FalseTask;
+        }
+
+        async Task<bool> CanManagePassKeys(HttpServerRequest context, WebMenuItem item)
+        {
+            var s = context.Session;
+            if (s == null)
+                return false;
+            var um = Um;
+            return await um.HaveAnyPassKeys(um.GetUid(s.Auth)).ConfigureAwait(false);
         }
 
         #endregion//Dynamic menu
@@ -648,8 +658,8 @@ namespace SysWeaver.MicroService
             {
                 Id = x.CredentialId,
                 Name = x.DeviceName,
-                Created = x.Created,
-                LastUsed = x.LastUsed,
+                Created = DateTime.SpecifyKind(x.Created, DateTimeKind.Utc),
+                LastUsed = DateTime.SpecifyKind(x.LastUsed, DateTimeKind.Utc),
                 Synced = x.BackedUp,
                 ThisDevice = (deviceId != null) && deviceId.LimitLength(64, "").Equals(x.DeviceId, StringComparison.Ordinal),
             }).ToArray();

@@ -1,4 +1,5 @@
-﻿html {
+﻿
+html {
     padding: 0;
     display: block;
 }
@@ -8,7 +9,7 @@ body {
     margin: 0;
     padding: 0;
     min-width: 100%;
-    min-height: calc(100svh - 16px);
+    min-height: 100%;
     display: flex;
     flex-flow: row wrap;
     justify-content: center;
@@ -25,6 +26,7 @@ form.SysWeaver-AuthBox {
     box-sizing: border-box;
     background: rgba(var(--ThemeBackgroundRGB), 0.6);
     width: var(--boxWidth);
+    max-height: 80vh;
     margin: 0;
     padding: 1em;
     border: 1px solid rgba(var(--ThemeMainRGB), 0.5);
@@ -56,6 +58,14 @@ SysWeaver-AuthText {
     overflow: hidden;
 }
 
+.Highlight
+{
+    color: var(--ThemeAcc1);
+}
+
+.NoMargin{
+    margin-top: initial;
+}
 
 SysWeaver-AuthError {
     margin-top: var(--TM);
@@ -264,11 +274,26 @@ SysWeaver-AuthPhoneCc {
     }
 
 
-
-
-.InsideInput {
+SysWeaver-AuthList {
     position: relative;
+    margin-top: var(--TM);
+    border-radius: var(--ThemeRadInp);
+    border: 1px solid var(--ThemeMain25);
+    max-height: 50vh;
+    overflow: auto;
+    display: block;
+    padding: 0.5em;
+    background-color: rgba(var(--ThemeMainRGB), 0.05);
 }
+
+    SysWeaver-AuthList SysWeaver-CenterBlock {
+        margin-top: 1em;
+        padding-top: 0 !important;
+    }
+
+    .InsideInput {
+        position: relative;
+    }
 
     .InsideInput.IconDisabled {
         opacity: 0.1;
