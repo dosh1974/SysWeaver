@@ -49,6 +49,68 @@ namespace SysWeaver.Data
 
     }
 
+
+    /// <summary>
+    /// Format values as a percentage, ex: "23.50%".
+    /// Defaults to 2 decimals for decimal point numbers nad zero for integers.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataPercentageAttribute : TableDataNumberAttribute
+    {
+        /// <summary>
+        /// Format as a decimal number.
+        /// </summary>
+        /// <param name="decimals">
+        /// The number of decimals to display.
+        /// If less than zero, integer number will have zero decimals and floating point values will have -decimals decimal values. 
+        /// For example if decimals=-2, value=42, results will be:
+        /// For an Int32: "42". 
+        /// For a Single: "42.00".
+        /// </param>
+        /// <param name="titleFormat">
+        /// {0} = Formatted value (decimals and thousands separator applied)
+        /// {1} = Next value (must exist). 
+        /// {2} = Value before formatting.
+        /// {3} = The text (after formatting). 
+        /// </param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
+        public TableDataPercentageAttribute(int decimals = -2, String titleFormat = "Raw: {2}", bool copyOnClick = true)
+            : base(decimals, "{0} %", titleFormat, copyOnClick)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Format values as a multiplier, ex: "3.6x".
+    /// Defaults to 1 decimals for decimal point numbers nad zero for integers.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataMultiplierAttribute : TableDataNumberAttribute
+    {
+        /// <summary>
+        /// Format as a decimal number.
+        /// </summary>
+        /// <param name="decimals">
+        /// The number of decimals to display.
+        /// If less than zero, integer number will have zero decimals and floating point values will have -decimals decimal values. 
+        /// For example if decimals=-2, value=42, results will be:
+        /// For an Int32: "42". 
+        /// For a Single: "42.00".
+        /// </param>
+        /// <param name="titleFormat">
+        /// {0} = Formatted value (decimals and thousands separator applied)
+        /// {1} = Next value (must exist). 
+        /// {2} = Value before formatting.
+        /// {3} = The text (after formatting). 
+        /// </param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
+        public TableDataMultiplierAttribute(int decimals = -1, String titleFormat = "Raw: {2}", bool copyOnClick = true)
+            : base(decimals, "{0} x", titleFormat, copyOnClick)
+        {
+        }
+    }
+
+
     /// <summary>
     /// Use this attribute to mark a data table "column" as the primary key (used by default when creating a graph from a column)
     /// </summary>
@@ -109,7 +171,7 @@ namespace SysWeaver.Data
     /// Ex: "$ 22.50"
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public class TableDataAmountUSDAttribute : TableDataRawFormatAttribute
+    public class TableDataAmountUSDAttribute : TableDataNumberAttribute
     {
         /// <summary>
         /// Format valus as an amount in USD dollars.
@@ -122,16 +184,92 @@ namespace SysWeaver.Data
         /// {3} = The text (after formatting). 
         /// </param>
         /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
-        public TableDataAmountUSDAttribute(String titleFormat = "USD {2}", bool copyOnClick = true)
-            : base(TableDataFormats.Number, 2, "$ {0}", titleFormat ?? "USD {2}", copyOnClick ? "True" : "")
+        public TableDataAmountUSDAttribute(String titleFormat = "{0} USD.\nRaw: {2}", bool copyOnClick = true)
+            : base(2, "$ {0}", titleFormat ?? "{0} USD.\nRaw: {2}", copyOnClick)
         {
         }
     }
 
 
+    /// <summary>
+    /// Format values as an amount in an unknown currency using 2 decimals.
+    /// Ex: "22.50💰"
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataAmountAttribute : TableDataNumberAttribute
+    {
+        /// <summary>
+        /// Format values as an amount in an unknown currency using 2 decimals.
+        /// Ex: "22.50💰"
+        /// </summary>
+        /// <param name="titleFormat">
+        /// {0} = Formatted value (decimals and thousands separator applied)
+        /// {1} = Next value (must exist). 
+        /// {2} = Value before formatting.
+        /// {3} = The text (after formatting). 
+        /// </param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
+        public TableDataAmountAttribute(String titleFormat = "{0} of some unknown currency.\nRaw: {2}", bool copyOnClick = true)
+            : base(2, "{0}💰", titleFormat ?? "{0} of some unknown currency.\nRaw: {2}", copyOnClick)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Format values as XP points.
+    /// Ex: "22⚡"
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataXpAttribute : TableDataNumberAttribute
+    {
+        /// <summary>
+        /// Format values as XP points.
+        /// Ex: "22⚡"
+        /// </summary>
+        /// <param name="titleFormat">
+        /// {0} = Formatted value (thousands separator applied)
+        /// {1} = Next value (must exist). 
+        /// {2} = Value before formatting.
+        /// {3} = The text (after formatting). 
+        /// </param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
+        public TableDataXpAttribute(String titleFormat = "{0} Xp (experience points)", bool copyOnClick = true)
+            : base(0, "{0}⚡", titleFormat ?? "{0} Xp (experience points)", copyOnClick)
+        {
+        }
+    }
 
 
-
+    /// <summary>
+    /// Format values as number of stars
+    /// Ex: "22⭐"
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataStarAttribute : TableDataNumberAttribute
+    {
+        /// <summary>
+        /// Format values as XP points.
+        /// Ex: "22⭐"
+        /// </summary>
+        /// <param name="decimals">
+        /// The number of decimals to display.
+        /// If less than zero, integer number will have zero decimals and floating point values will have -decimals decimal values. 
+        /// For example if decimals=-2, value=42, results will be:
+        /// For an Int32: "42⭐". 
+        /// For a Single: "42.00⭐".
+        /// </param>
+        /// <param name="titleFormat">
+        /// {0} = Formatted value (thousands separator applied)
+        /// {1} = Next value (must exist). 
+        /// {2} = Value before formatting.
+        /// {3} = The text (after formatting). 
+        /// </param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
+        public TableDataStarAttribute(int decimals = -1, String titleFormat = "{0} stars", bool copyOnClick = true)
+            : base(decimals, "{0}⭐", titleFormat ?? "{0} stars", copyOnClick)
+        {
+        }
+    }
 
 }
 

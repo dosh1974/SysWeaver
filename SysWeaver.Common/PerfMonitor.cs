@@ -327,7 +327,7 @@ namespace SysWeaver
         /// <summary>
         /// The percentage of the time since the monitor was created (or reset) that was spent in this "method" (can exceed 100 with concurrent executions).
         /// </summary>
-        [TableDataNumber(3, "{0}%")]
+        [TableDataPercentage(3)]
         float Percentage { get; }
 
         /// <summary>
