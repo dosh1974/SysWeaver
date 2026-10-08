@@ -58,7 +58,7 @@ async function logoutMain() {
 async function loginMain() {
     await AuthPage("IconAuthLogin", async target => {
 
-        const havePasskey = typeof PassKey !== "undefined";
+        const havePasskey = (typeof PassKey !== "undefined") && PassKey.IsSupported();
 
         AuthLabel(target, _TF("User ID", "Label for an input box where a user should enter their user id (user name, email or phone number)"));
         const uname = AuthInput(target, _TF("Enter your user id", "Placeholder description on an input box where the user should enter their user id"), null, "username", async input => await setStatus(input.value, pwd.value));
@@ -137,24 +137,33 @@ async function loginMain() {
             pwd.focus();
         }, true);
         if (havePasskey) {
+            //  Get a challenge for any passkey before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
+            const anyPassKey = PassKey.SignIn();
+            anyPassKey.Fetch().then(c => {
+                if (c.error == PassKey.Errors.NotSupported)
+                    passKeyButton.Element.classList.add("Hide");
+            }).catch(() => { });
             passKeyButton = AuthButton(br,
-                _TF("Use passkey", "Text on a button that when pressed will attempt to sign in using a passkey"), 
-                _TF("Click to login using your passkey", "Tool tip description of a button that when pressed will attempt to sign in using a passkey"),
+                _TF("Use passkey", "Text on a button that when pressed will attempt to sign in using a passkey"),
+                _TF("Click to sign in using a passkey (if a user id is entered, only passkeys of that user are shown)", "Tool tip description of a button that when pressed will attempt to sign in using a passkey"),
                 "IconUsePasskey", async button => {
                 button.StartWorking();
                 uname.readOnly = true;
                 pwd.readOnly = true;
                 setButton.SetEnabled(false);
+                let res = null;
                 try {
                     AuthSetText(info, _TF("Select your passkey ..", "Text explaining to the user that he should select their passkey to continue sign in"));
-                    const res = await PassKey.LoginUsingPassKey();
-                    if (res) {
+                    const usr = AuthTrim(uname.value);
+                    res = await (usr ? PassKey.SignIn(usr) : anyPassKey).Run();
+                    if (res.Error == 0) {
                         AuthSetText(info, _TF("User signed in.", "Text displayed when a user have successfully signed in"));
                         passKeyButton.SetEnabled(false);
                         await AuthStartPage();
                         return;
                     }
-                    Fail(_TF("Failed to login.", "Error message displayed when a sign in failed"));
+                    if (res.Error != PassKey.Errors.Cancelled)
+                        Fail(PassKey.ErrorText(res) + (res.Message ? "\n\n" + res.Message : ""));
                 }
                 catch (e) {
                     Fail(_TF("Failed to login.", "Error message displayed when a sign in failed") + "\n\n" + e);
@@ -162,8 +171,10 @@ async function loginMain() {
                 finally {
                     button.StopWorking();
                 }
+                anyPassKey.Fetch().catch(() => { });
                 await setStatus(uname.value, pwd.value);
-                SetTemporaryInnerText(info, _TF("Failed to login, try again!?", "Message displayed when a sign in failed"), 5000);
+                if (res?.Error != PassKey.Errors.Cancelled)
+                    SetTemporaryInnerText(info, _TF("Failed to login, try again!?", "Message displayed when a sign in failed"), 5000);
                 uname.readOnly = false;
                 pwd.readOnly = false;
             }, false);

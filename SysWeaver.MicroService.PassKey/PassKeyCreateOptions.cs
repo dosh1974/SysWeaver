@@ -1,10 +1,5 @@
-﻿using SysWeaver.Auth;
-using SysWeaver.Net;
-using System;
+﻿using System;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Text;
-using System.Collections.Generic;
 
 using Fido2NetLib;
 using Fido2NetLib.Objects;
@@ -13,13 +8,39 @@ using Fido2NetLib.Objects;
 namespace SysWeaver.MicroService
 {
 
+    /// <summary>
+    /// The options to pass to navigator.credentials.create
+    /// </summary>
     public sealed class PassKeyCreateOptions
     {
+        /// <summary>
+        /// The id of the challenge, must be sent back with the response
+        /// </summary>
+        public String challengeId { get; set; }
+
+        /// <summary>
+        /// None (0) or the reason why no challenge was created (publicKey is then null)
+        /// </summary>
+        public PassKeyErrors error { get; set; }
+
         public PassKeyCreateCredential publicKey { get; set; }
+
+        internal static PassKeyCreateOptions Fail(PassKeyErrors error) => new PassKeyCreateOptions
+        {
+            error = error,
+        };
     }
 
+    /// <summary>
+    /// The response of navigator.credentials.create
+    /// </summary>
     public sealed class PassKeyCreateResponse
     {
+        /// <summary>
+        /// The id of the challenge (from <see cref="PassKeyCreateOptions.challengeId"/>)
+        /// </summary>
+        public String challengeId { get; set; }
+
         public string authenticatorAttachment { get; set; }
         public string id { get; set; }
         public Byte[] rawId { get; set; }
@@ -33,6 +54,10 @@ namespace SysWeaver.MicroService
         public Byte[] attestationObject { get; set; }
         public Byte[] clientDataJSON { get; set; }
 
+        /// <summary>
+        /// The result of response.getTransports() (if supported by the browser)
+        /// </summary>
+        public String[] transports { get; set; }
     }
 
     public sealed class PassKeyRp
@@ -40,8 +65,6 @@ namespace SysWeaver.MicroService
         public string id { get; set; }
 
         public string name { get; set; }
-
-        public string icon { get; set; }
 
         public PassKeyRp()
         {
@@ -51,7 +74,6 @@ namespace SysWeaver.MicroService
         {
             id = f.Id;
             name = f.Name;
-            icon = f.Icon;
         }
     }
 
@@ -89,7 +111,7 @@ namespace SysWeaver.MicroService
         internal PassKeyCredParam(PubKeyCredParam f)
         {
             alg = (int)f.Alg;
-            type = f.Type.ToString().RemoveCamelCase('-').FastToLower();
+            type = PassKeyTools.ToWebAuthn(f.Type);
         }
     }
 
@@ -109,10 +131,10 @@ namespace SysWeaver.MicroService
 
         internal PassKeyAuthenticatorSelection(AuthenticatorSelection f)
         {
-            authenticatorAttachment = f.AuthenticatorAttachment?.ToString()?.FastToLower();
-            requireResidentKey = f.RequireResidentKey;
-            userVerification = f.UserVerification.ToString().FastToLower();
-            residentKey = f.ResidentKey.ToString().FastToLower();
+            authenticatorAttachment = PassKeyTools.ToWebAuthn(f.AuthenticatorAttachment);
+            requireResidentKey = f.ResidentKey == ResidentKeyRequirement.Required;
+            userVerification = PassKeyTools.ToWebAuthn(f.UserVerification);
+            residentKey = PassKeyTools.ToWebAuthn(f.ResidentKey);
         }
 
     }
@@ -133,9 +155,9 @@ namespace SysWeaver.MicroService
 
         internal PassKeyPublicKeyCredentialDescriptor(PublicKeyCredentialDescriptor f)
         {
-            type = f.Type.ToString()?.RemoveCamelCase('-')?.FastToLower();
+            type = PassKeyTools.ToWebAuthn(f.Type);
             id = f.Id;
-            transports = f.Transports?.Select(x => x.ToString().FastToLower())?.ToArray();
+            transports = f.Transports?.Select(x => PassKeyTools.ToWebAuthn(x))?.ToArray();
         }
     }
 
@@ -143,11 +165,9 @@ namespace SysWeaver.MicroService
     {
         public string appid { get; set; }
 
-        public byte[][] authnSel { get; set; }
-
         public bool? exts { get; set; }
 
-        public bool? uvm { get; set; }
+        public bool? credProps { get; set; }
 
         public PassKeyAuthenticationExtensionsClientInputs()
         {
@@ -156,16 +176,15 @@ namespace SysWeaver.MicroService
         internal PassKeyAuthenticationExtensionsClientInputs(AuthenticationExtensionsClientInputs f)
         {
             appid = f.AppID;
-            //authnSel = f.;
             exts = f.Extensions;
-            uvm = f.UserVerificationMethod;
+            credProps = f.CredProps;
         }
     }
 
     public sealed class PassKeyCreateCredential
     {
 
-        //        public long timeout { get; set; }
+        public ulong timeout { get; set; }
 
         public String attestation { get; set; }
 
@@ -183,6 +202,8 @@ namespace SysWeaver.MicroService
 
         public PassKeyUser user { get; set; }
 
+        public String[] hints { get; set; }
+
 
         public PassKeyCreateCredential()
         {
@@ -190,16 +211,16 @@ namespace SysWeaver.MicroService
 
         internal PassKeyCreateCredential(CredentialCreateOptions f)
         {
-            attestation = f.Attestation.ToString().FastToLower();
+            timeout = f.Timeout;
+            attestation = PassKeyTools.ToWebAuthn(f.Attestation);
             authenticatorSelection = f.AuthenticatorSelection == null ? null : new PassKeyAuthenticatorSelection(f.AuthenticatorSelection);
             challenge = f.Challenge;
             excludeCredentials = f.ExcludeCredentials?.Select(x => new PassKeyPublicKeyCredentialDescriptor(x))?.ToArray();
             extensions = f.Extensions == null ? null : new PassKeyAuthenticationExtensionsClientInputs(f.Extensions);
             pubKeyCredParams = f.PubKeyCredParams?.Select(x => new PassKeyCredParam(x))?.ToArray();
             rp = f.Rp == null ? null : new PassKeyRp(f.Rp);
-            //            timeout = f.Timeout;
             user = f.User == null ? null : new PassKeyUser(f.User);
-
+            hints = f.Hints?.Select(x => PassKeyTools.ToWebAuthn(x)).ToArray();
         }
 
     }

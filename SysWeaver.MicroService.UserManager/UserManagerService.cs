@@ -506,29 +506,6 @@ namespace SysWeaver.MicroService
         #region Helpers
 
 
-        /// <summary>
-        /// Get authorization for a user with the specified credentials and update login time
-        /// </summary>
-        /// <param name="credentialId"></param>
-        /// <returns></returns>
-        public async Task<Authorization> AuthUser(String credentialId)
-        {
-            using var c = await Db.GetAsync().ConfigureAwait(false);
-            using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-            var p = await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.CredentialId == credentialId).ConfigureAwait(false);
-            if (p == null)
-                return null;
-            var id = p.UserId;
-            var a = await InternalAuthUser(c, id).ConfigureAwait(false);
-            if (a == null)
-                return null;
-            p.LastUsed = DateTime.UtcNow;
-            await c.UpdateAsync(p, x => new { x.LastUsed }).ConfigureAwait(false);
-            tr.Commit();
-            return a;
-        }
-
-
         public static String MakeGuid(long userId, String guidPrefix)
             => String.Concat(guidPrefix, ':', HashTools.GetCompactString(userId));
 
@@ -540,6 +517,9 @@ namespace SysWeaver.MicroService
         public async Task<Authorization> GetUser<T>(String token, String type, Func<T, long> getIdFromData, HttpServerRequest context)
         {
             var actionData = await GetAction<T>(token, type, context).ConfigureAwait(false);
+            if (actionData == null)
+                throw new TokenExpiredException();
+            token = actionData.Item1;
             var id = getIdFromData(actionData.Item2);
             if (id == 0)
                 throw new TokenExpiredException();
@@ -552,6 +532,7 @@ namespace SysWeaver.MicroService
             if (auth == null)
                 throw new UserNoLongerExistException(id);
             await DeleteAction(c, token, type, context).ConfigureAwait(false);
+            await tr.CommitAsync().ConfigureAwait(false);
             return auth;
         }
 
@@ -696,7 +677,18 @@ namespace SysWeaver.MicroService
             return nickName;
         }
 
-        public async Task<Authorization> CreateUser(AddUserRequest r, HttpServerRequest context, bool login)
+        public Task<Authorization> CreateUser(AddUserRequest r, HttpServerRequest context, bool login)
+            => CreateUser(r, context, login, null);
+
+        /// <summary>
+        /// Create a user using a create user action token
+        /// </summary>
+        /// <param name="r">The request</param>
+        /// <param name="context">The request context</param>
+        /// <param name="login">True to sign in the new user</param>
+        /// <param name="beforeCommit">Optional function that is called with the connection and the new user id before the transaction is committed (to add auth methods atomically)</param>
+        /// <returns>The new user</returns>
+        async Task<Authorization> CreateUser(AddUserRequest r, HttpServerRequest context, bool login, Func<OrmConnection, long, Task> beforeCommit)
         {
             var s = context?.Session;
             if (login)
@@ -779,6 +771,8 @@ namespace SysWeaver.MicroService
 
                     }).ConfigureAwait(false);
                 }
+                if (beforeCommit != null)
+                    await beforeCommit(c, id).ConfigureAwait(false);
                 auth = await InternalAuthUser(c, id).ConfigureAwait(false);
                 if (auth == null)
                     throw new UserDoNotExistException(userName);
@@ -1377,7 +1371,7 @@ namespace SysWeaver.MicroService
             token = token.Replace(' ', '+');
             using (var c = await Db.GetAsync().ConfigureAwait(false))
                 d = await c.FirstOrDefaultAsync<DbAction>(x => x.Token == token).ConfigureAwait(false);
-            if ((d == null) || (DateTime.UtcNow > d.Expiration) || (!type.FastEquals(type)))
+            if ((d == null) || (DateTime.UtcNow > d.Expiration) || (!type.FastEquals(d.Type)))
             {
                 if (removeIfFail)
                     context.Session.TryRemove(ShortCodeName);

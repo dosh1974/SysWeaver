@@ -102,7 +102,17 @@ async function choosePasswordMain() {
             return Fail(_TF("Token not found or invalid", "An error message shown when a required security token wasn't supplied or is invalid"));
         const salt = udata.Salt;
         const user = udata.NickName ?? udata.UserName;
-        const havePasskey = typeof PassKey !== "undefined";
+        let havePasskey = (typeof PassKey !== "undefined") && PassKey.IsSupported();
+        //  Get the challenge before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
+        const newPassKey = havePasskey ? PassKey.NewAccount(token) : null;
+        if (havePasskey) {
+            try {
+                havePasskey = !(await newPassKey.Fetch()).error;
+            }
+            catch {
+                havePasskey = false;
+            }
+        }
         if (user)
             AuthText(target, _T('Welcome {0}.', user, "A message displayed to greet a user.{0} is replaced with the user id (user name, email or phone number)"));
 
@@ -182,16 +192,18 @@ async function choosePasswordMain() {
                 button.StartWorking();
                 pwd.readOnly = true;
                 setButton.SetEnabled(false);
+                let res = null;
                 try {
                     AuthSetText(info, _TF("Create passkey..", "Message shown when a passkey is being created"));
-                    const res = await PassKey.NewAccount(token);
-                    if (res) {
+                    res = await newPassKey.Run();
+                    if (res.Error == 0) {
                         AuthSetText(info, _TF("Passkey created", "Message shown when a new passkey was created successfully"));
                         passKeyButton.SetEnabled(false);
                         await AuthStartPage();
                         return;
                     }
-                    Fail(_TF("Failed to create passkey.", "Error message shown when a new passkey couldn't be created"));
+                    if (res.Error != PassKey.Errors.Cancelled)
+                        Fail(PassKey.ErrorText(res) + (res.Message ? "\n\n" + res.Message : ""));
                 }
                 catch (e) {
                     Fail(_TF("Failed to create passkey.", "Error message shown when a new passkey couldn't be created") + "\n\n" + e);
@@ -199,8 +211,10 @@ async function choosePasswordMain() {
                 finally {
                     button.StopWorking();
                 }
+                newPassKey.Fetch().catch(() => { });
                 await setStatus(pwd.value);
-                SetTemporaryInnerText(info, _TF("Failed to create passkey, try again!?", "Message shown when a new passkey couldn't be created"), 5000);
+                if (res?.Error != PassKey.Errors.Cancelled)
+                    SetTemporaryInnerText(info, _TF("Failed to create passkey, try again!?", "Message shown when a new passkey couldn't be created"), 5000);
                 pwd.readOnly = false;
             }, false);
         }
@@ -498,7 +512,17 @@ async function resetPasswordMain() {
         const salt = udata.Salt;
         const user = udata.NickName ?? udata.UserName;
 
-        const havePasskey = typeof PassKey !== "undefined";
+        let havePasskey = (typeof PassKey !== "undefined") && PassKey.IsSupported();
+        //  Get the challenge before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
+        const newPassKey = havePasskey ? PassKey.AttachUsingToken(token) : null;
+        if (havePasskey) {
+            try {
+                havePasskey = !(await newPassKey.Fetch()).error;
+            }
+            catch {
+                havePasskey = false;
+            }
+        }
 
         const policy = await getCreatePasswordPolicy();
         const policyText = AuthPolicyText(policy);
@@ -581,16 +605,18 @@ async function resetPasswordMain() {
                 button.StartWorking();
                 pwd.readOnly = true;
                 setButton.SetEnabled(false);
+                let res = null;
                 try {
                     AuthSetText(info, _TF("Create passkey..", "Message shown when a passkey is being created"));
-                    const res = await PassKey.AttachNewToAccountFromToken(token);
-                    if (res) {
+                    res = await newPassKey.Run();
+                    if (res.Error == 0) {
                         AuthSetText(info, _TF("Passkey created", "Message shown when a new passkey was created successfully"));
                         passKeyButton.SetEnabled(false);
                         await AuthStartPage();
                         return;
                     }
-                    Fail(_TF("Failed to create passkey.", "Error message shown when a new passkey couldn't be created"));
+                    if (res.Error != PassKey.Errors.Cancelled)
+                        Fail(PassKey.ErrorText(res) + (res.Message ? "\n\n" + res.Message : ""));
                 }
                 catch (e) {
                     Fail(_TF("Failed to create passkey.", "Error message shown when a new passkey couldn't be created") + "\n\n" + e);
@@ -598,8 +624,10 @@ async function resetPasswordMain() {
                 finally {
                     button.StopWorking();
                 }
+                newPassKey.Fetch().catch(() => { });
                 await setStatus(pwd.value);
-                SetTemporaryInnerText(info, _TF("Failed to create passkey, try again!?", "Message shown when a new passkey couldn't be created"), 5000);
+                if (res?.Error != PassKey.Errors.Cancelled)
+                    SetTemporaryInnerText(info, _TF("Failed to create passkey, try again!?", "Message shown when a new passkey couldn't be created"), 5000);
                 pwd.readOnly = false;
             }, false);
         }

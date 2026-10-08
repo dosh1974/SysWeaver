@@ -38,6 +38,47 @@ namespace SysWeaver.MicroService.Db
         [Required]
         public byte[] PublicKey { get; set; }
 
+        /// <summary>
+        /// The user handle (user.id) that the credential was created with, null for credentials created before this was stored (the handle is then the user guid)
+        /// </summary>
+        public byte[] UserHandle { get; set; }
+
+        /// <summary>
+        /// The relying party id that the credential was created for, null if unknown
+        /// </summary>
+        [StringLength(253)]
+        [Ascii]
+        public string RpId { get; set; }
+
+        /// <summary>
+        /// The last seen signature counter (0 if the authenticator doesn't use a counter)
+        /// </summary>
+        public long SignCount { get; set; }
+
+        /// <summary>
+        /// Comma separated list of transports reported by the authenticator (ex: "internal,hybrid"), null if unknown
+        /// </summary>
+        [StringLength(128)]
+        [Ascii]
+        public string Transports { get; set; }
+
+        /// <summary>
+        /// True if the credential may be backed up (synced passkey)
+        /// </summary>
+        public bool BackupEligible { get; set; }
+
+        /// <summary>
+        /// True if the credential is backed up (synced passkey)
+        /// </summary>
+        public bool BackedUp { get; set; }
+
+        /// <summary>
+        /// The authenticator attestation guid (identifies the passkey provider), null if unknown
+        /// </summary>
+        [StringLength(36)]
+        [Ascii]
+        public string AaGuid { get; set; }
+
     }
 
 
