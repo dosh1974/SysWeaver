@@ -197,7 +197,7 @@ namespace SysWeaver.MicroService
             DisableLogin = p.DisableLogin;
             //  Add and setup communication methods
             List<IUserManagerComs> coms = new List<IUserManagerComs>(manager.GetAll<IUserManagerComs>(ServiceInstanceTypes.LocalOnly, ServiceInstanceOrders.Oldest));
-            if (coms.Count == 0)
+            if ((coms.Count == 0) && (!p.DisableLogin))
                 coms.Add(new EmailComs(manager, null));
             Coms = coms.ToArray();
             ComsMethods = new HashSet<string>(coms.Select(x => x.Name), StringComparer.Ordinal).Freeze();

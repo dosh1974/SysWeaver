@@ -87,38 +87,38 @@ namespace SysWeaver.ReverseProxy
         /// <summary>
         /// The ratio of cache hits
         /// </summary>
-        [TableDataNumber(2, "{0} %")]
+        [TableDataPercentage]
         public double GetHitRatio;
 
         /// <summary>
         /// The ratio of semi cache hits (returned cached, but waited for pending result, so not optimal performance)
         /// </summary>
-        [TableDataNumber(2, "{0} %")]
+        [TableDataPercentage]
         public double GetSemiHitRatio;
 
         /// <summary>
         /// The ratio of cache misses 
         /// </summary>
-        [TableDataNumber(2, "{0} %")]
+        [TableDataPercentage]
         public double GetMissRatio;
 
 
         /// <summary>
         /// The ratio of cache hits
         /// </summary>
-        [TableDataNumber(2, "{0} %")]
+        [TableDataPercentage]
         public double HeadHitRatio;
 
         /// <summary>
         /// The ratio of semi cache hits (returned cached, but waited for pending result, so not optimal performance)
         /// </summary>
-        [TableDataNumber(2, "{0} %")]
+        [TableDataPercentage]
         public double HeadSemiHitRatio;
 
         /// <summary>
         /// The ratio of cache misses 
         /// </summary>
-        [TableDataNumber(2, "{0} %")]
+        [TableDataPercentage]
         public double HeadMissRatio;
 
 
