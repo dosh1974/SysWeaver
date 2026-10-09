@@ -202,7 +202,8 @@ namespace SysWeaver
         {
             var s = new ConcurrentDictionary<string, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>>(StringComparer.Ordinal);
             SourceSchemaCreator = s;
-            s.TryAdd("file", (m, l, p, t, h) => new DiscManagedFile(m, l, p, t, h));
+            //  The disc source wants a local path, not the url
+            s.TryAdd("file", (m, l, p, t, h) => new DiscManagedFile(m, new Uri(l).LocalPath, p, t, h));
             s.TryAdd("http", (m, l, p, t, h) => new HttpManagedFile(m, l, p, t, h));
             s.TryAdd("https", (m, l, p, t, h) => new HttpManagedFile(m, l, p, t, h));
         }

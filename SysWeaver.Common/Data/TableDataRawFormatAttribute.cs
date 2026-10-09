@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 
 namespace SysWeaver.Data
@@ -28,12 +29,12 @@ namespace SysWeaver.Data
         /// Build a format string from a format and options.
         /// </summary>
         /// <param name="format">The format</param>
-        /// <param name="options">The format specific options (converted using ToString, null is converted to an empty string), see <see cref="TableDataFormats"/> for details</param>
+        /// <param name="options">The format specific options (converted using ToString with the invariant culture, null is converted to an empty string), see <see cref="TableDataFormats"/> for details</param>
         public TableDataRawFormatAttribute(TableDataFormats format, params Object[] options)
         {
             String opt = "";
             if ((options != null) && (options.Length > 0))
-                opt = ";" + String.Join(';', options.Select(x => x?.ToString() ?? ""));
+                opt = ";" + String.Join(';', options.Select(x => x is IFormattable f ? f.ToString(null, CultureInfo.InvariantCulture) : (x?.ToString() ?? "")));
             Value = format + opt;
         }
 

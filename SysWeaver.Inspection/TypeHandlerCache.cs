@@ -9,8 +9,15 @@ namespace SysWeaver.Inspection.Implementation
     public static class TypeHandlerCache<T>
     {
 
+        /// <summary>
+        /// True for Nullable&lt;U&gt;, the run time type of a value is U (not a derived type), so the handler of T is always used
+        /// </summary>
+        static readonly bool IsNullableValueType = System.Nullable.GetUnderlyingType(typeof(T)) != null;
+
         public static TypeHandler<T> GetHandler(T value)
         {
+            if (IsNullableValueType)
+                return Handler;
             Type type = typeof(T);
             bool nullable = HelpersTypeHandler.IsNullable(type);
             if (nullable && (value != null))
@@ -41,6 +48,8 @@ namespace SysWeaver.Inspection.Implementation
 
         public static TypeHandler<T> GetHandler(ref T value)
         {
+            if (IsNullableValueType)
+                return Handler;
             var tt = typeof(T);
             Type type = value?.GetType() ?? tt;
             if (type == tt)

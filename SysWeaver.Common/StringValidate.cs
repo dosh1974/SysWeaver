@@ -209,7 +209,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Validate that the input is valid for a Domain name (IPv4, IPv6 address, DNS or Computer name).
-        /// The type is detected from the format: no '.' and no ':' is a computer name, no '.' but a ':' is an IPv6 address,
+        /// The type is detected from the format: a ':' is an IPv6 address (possibly with an embedded IPv4 address), no '.' is a computer name,
         /// a numeric last part (after the last '.') is an IPv4 address, else it's a DNS name. The detected type is then validated.
         /// </summary>
         /// <param name="name">The string to test</param>
@@ -225,22 +225,8 @@ namespace SysWeaver
             if (l <= 0)
                 throw new Exception("A domain name may not be empty");
 
-            var p = name.LastIndexOf('.');
-            if (p < 0)
+            if (name.IndexOf(':') >= 0)
             {
-                p = name.IndexOf(':');
-                if (p < 0)
-                {
-                    try
-                    {
-                        ComputerName(name);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new Exception("Domain name is a NetBIOS computer name: " + ex.Message);
-                    }
-                    return DomainTypes.ComputerName;
-                }
                 try
                 {
                     IpV6(name);
@@ -250,6 +236,19 @@ namespace SysWeaver
                     throw new Exception("Domain name is an IPv6 address: " + ex.Message);
                 }
                 return DomainTypes.IPv6;
+            }
+            var p = name.LastIndexOf('.');
+            if (p < 0)
+            {
+                try
+                {
+                    ComputerName(name);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Domain name is a NetBIOS computer name: " + ex.Message);
+                }
+                return DomainTypes.ComputerName;
             }
             ++p;
             if (p >= l)

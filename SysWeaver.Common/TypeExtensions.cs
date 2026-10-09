@@ -241,6 +241,12 @@ namespace SysWeaver
         /// <remarks>Returns null for types without a full name (ex: open generic parameters).</remarks>
         public static String CleanTypename(this Type type)
         {
+            //  Arrays, pointers and by-ref types: the element type is cleaned
+            if (type.HasElementType)
+            {
+                var e = CleanTypename(type.GetElementType());
+                return e == null ? null : String.Concat(e, ElementSuffix(type));
+            }
             if (!type.IsGenericType)
                 return type.FullName;
             var c = CachedCleanTypename;
@@ -254,6 +260,33 @@ namespace SysWeaver
         }
 
         static readonly SemiFrozenDictionary<Type, String> CachedCleanTypename = new SemiFrozenDictionary<Type, string>();
+
+        /// <summary>
+        /// The suffix of an element type name: "[]", "[,]", "[*]", "*" or "&amp;"
+        /// </summary>
+        static String ElementSuffix(Type type)
+        {
+            if (type.IsArray)
+            {
+                if (type.IsSZArray)
+                    return "[]";
+                var rank = type.GetArrayRank();
+                return rank == 1 ? "[*]" : String.Concat("[", new String(',', rank - 1), "]");
+            }
+            return type.IsPointer ? "*" : "&";
+        }
+
+        /// <summary>
+        /// The full name with assembly qualified (cleaned) generic arguments, without the assembly of the type itself
+        /// </summary>
+        static String CleanQualifiedFullName(Type type)
+        {
+            if (type.HasElementType)
+                return String.Concat(CleanQualifiedFullName(type.GetElementType()), ElementSuffix(type));
+            if (type.IsGenericType)
+                return String.Concat(type.GetGenericTypeDefinition().FullName, '[', String.Join(", ", type.GetGenericArguments().Select(x => String.Concat('[', CleanAssemblyQualifiedTypename(x), ']'))), ']');
+            return type.FullName;
+        }
 
 
 
@@ -269,14 +302,7 @@ namespace SysWeaver
             if (c.TryGetValue(type, out var v))
                 return v;
 
-            if (type.IsGenericType)
-            {
-                var test = type.FullName;
-                var rt = type.GetGenericTypeDefinition();
-                v = String.Concat(rt.FullName, '[', String.Join(", ", type.GetGenericArguments().Select(x => String.Concat('[', CleanAssemblyQualifiedTypename(x), ']'))), "], ", type.Assembly.FullName.SplitFirst(','));
-            }
-            else 
-                v = String.Concat(type.FullName, ", ", type.Assembly.FullName.SplitFirst(','));
+            v = String.Concat(CleanQualifiedFullName(type), ", ", type.Assembly.FullName.SplitFirst(','));
             c.TryAdd(type, v);
             return v;
         }

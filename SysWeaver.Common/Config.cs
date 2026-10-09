@@ -525,8 +525,17 @@ namespace SysWeaver
                     if (text.AsSpan().IndexOfAny('.', 'e', 'E') >= 0)
                         return Tuple.Create(k, (Object)val.GetDecimal());
                     if (text.StartsWith("-"))
-                        return Tuple.Create(k, (Object)val.GetInt64());
-                    return Tuple.Create(k, (Object)val.GetUInt64());
+                    {
+                        if (val.TryGetInt64(out var sv))
+                            return Tuple.Create(k, (Object)sv);
+                    }
+                    else
+                    {
+                        if (val.TryGetUInt64(out var uv))
+                            return Tuple.Create(k, (Object)uv);
+                    }
+                    //  Outside the 64-bit integer range, still valid for decimal / floating point members
+                    return Tuple.Create(k, (Object)val.GetDecimal());
             }
             return null;
         }
@@ -583,7 +592,17 @@ namespace SysWeaver
 
         static bool TryParseString(JsonValueKind kind, Object data, out String value)
         {
-            value = kind == JsonValueKind.Null ? null : data.ToString();
+            value = null;
+            switch (kind)
+            {
+                case JsonValueKind.Null:
+                    return true;
+                //  Can't be represented as a string
+                case JsonValueKind.Array:
+                case JsonValueKind.Object:
+                    return false;
+            }
+            value = data is IFormattable f ? f.ToString(null, CultureInfo.InvariantCulture) : data.ToString();
             return true;
         }
         static bool TryParseBoolean(JsonValueKind kind, Object data, out Boolean value)

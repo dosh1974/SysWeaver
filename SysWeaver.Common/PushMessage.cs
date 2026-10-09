@@ -129,7 +129,7 @@ namespace SysWeaver
     public class PushMessageStringArrayValue : PushMessage
     {
 #if DEBUG
-        public override string ToString() => String.Join(" = ", base.ToString(), Value);
+        public override string ToString() => String.Concat(base.ToString(), " = [", String.Join(", ", Value ?? []), "]");
 #endif//DEBUG
 
 

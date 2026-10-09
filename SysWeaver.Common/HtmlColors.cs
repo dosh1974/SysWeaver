@@ -15,7 +15,7 @@ namespace SysWeaver
         /// Get an rgb value from a html color, 0xaarrggbb
         /// </summary>
         /// <param name="argColor">The color as 0xaarrggbb</param>
-        /// <param name="htmlColor">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
+        /// <param name="htmlColor">A html color, can be a name [Red] (or "transparent", 0x00000000), a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
         /// <returns>True if the input in understood and a hex colour value is returned, false if the format isn't recognized or is malformed (or <paramref name="htmlColor"/> is null)</returns>
         /// <remarks>
         /// Components in "rgb(..)" / "rgba(..)" are clamped to [0, 255] and the alpha to [0, 1].
@@ -31,6 +31,9 @@ namespace SysWeaver
                 argColor |= 0xff000000U;
                 return true;
             }
+            //  Produced by MakeHtmlColor / MakeTransparent
+            if (String.Equals(htmlColor, "transparent", StringComparison.OrdinalIgnoreCase))
+                return true;
             if (htmlColor.StartsWith('#'))
             {
                 var cl = htmlColor.Length;
@@ -213,11 +216,11 @@ namespace SysWeaver
         {
             if (a <= 0)
                 return "transparent";
+            r = r < 0 ? 0 : (r > 255 ? 255 : r);
+            g = g < 0 ? 0 : (g > 255 ? 255 : g);
+            b = b < 0 ? 0 : (b > 255 ? 255 : b);
             if (a >= 1)
             {
-                r = r < 0 ? 0 : (r > 255 ? 255 : r);
-                g = g < 0 ? 0 : (g > 255 ? 255 : g);
-                b = b < 0 ? 0 : (b > 255 ? 255 : b);
                 var key = (r << 16) | (g << 8) | b;
                 HexToName.TryGetValue((uint)key, out var name);
                 var h = Hex;
@@ -384,7 +387,7 @@ namespace SysWeaver
         static readonly char[] Hex = "0123456789abcdef".ToCharArray();
 
 
-        static readonly IReadOnlyDictionary<String, uint> NameToHex = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
+        static readonly Dictionary<String, uint> Names = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
         {
             {"AliceBlue",0xF0F8FF},
             {"AntiqueWhite",0xFAEBD7},
@@ -470,7 +473,7 @@ namespace SysWeaver
             {"MediumAquaMarine",0x66CDAA},
             {"MediumBlue",0x0000CD},
             {"MediumOrchid",0xBA55D3},
-            {"MediumPurple",0x9370D8},
+            {"MediumPurple",0x9370DB},
             {"MediumSeaGreen",0x3CB371},
             {"MediumSlateBlue",0x7B68EE},
             {"MediumSpringGreen",0x00FA9A},
@@ -526,13 +529,25 @@ namespace SysWeaver
             {"WhiteSmoke",0xF5F5F5},
             {"Yellow",0xFFFF00},
             {"YellowGreen",0x9ACD32},
-        }.Freeze();
+            {"RebeccaPurple",0x663399},
+            //  Alternative CSS spellings, after the names above so that those are used when making names (same length)
+            {"DarkGray",0xA9A9A9},
+            {"DarkSlateGray",0x2F4F4F},
+            {"DimGrey",0x696969},
+            {"Gray",0x808080},
+            {"LightGray",0xD3D3D3},
+            {"LightSlateGray",0x778899},
+            {"SlateGray",0x708090},
+        };
+
+        static readonly IReadOnlyDictionary<String, uint> NameToHex = Names.Freeze();
 
 
         static IReadOnlyDictionary<uint, String> GetHexToName()
         {
             var d = new Dictionary<uint, String>();
-            foreach (var x in NameToHex)
+            //  In declaration order, the first name wins on equal length
+            foreach (var x in Names)
             {
                 var newName = x.Key;
                 var hex = x.Value;

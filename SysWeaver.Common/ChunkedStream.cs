@@ -58,6 +58,9 @@ namespace SysWeaver
         {
             Current?.Dispose();
             Current = null;
+            //  Never open the first chunk after a close
+            if (ChunkIndex < 0)
+                ChunkIndex = 0;
             base.Close();
         }
 

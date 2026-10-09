@@ -77,6 +77,7 @@ namespace SysWeaver
         {
             if (String.IsNullOrEmpty(template))
                 return template;
+            //  Cached per exact template text (only the variable names are case in-sensitive)
             var cache = caseInSensitive ? CachInSens : Cache;
             if (!cache.TryGetValue(template, out var t))
             {
@@ -207,7 +208,7 @@ namespace SysWeaver
         }
 
         static readonly ConcurrentDictionary<String, TextTemplate> Cache = new ConcurrentDictionary<String, TextTemplate>(StringComparer.Ordinal);
-        static readonly ConcurrentDictionary<String, TextTemplate> CachInSens = new ConcurrentDictionary<String, TextTemplate>(StringComparer.OrdinalIgnoreCase);
+        static readonly ConcurrentDictionary<String, TextTemplate> CachInSens = new ConcurrentDictionary<String, TextTemplate>(StringComparer.Ordinal);
     }
 
 }

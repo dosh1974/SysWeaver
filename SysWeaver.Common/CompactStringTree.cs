@@ -418,9 +418,9 @@ namespace SysWeaver
                         break;
                     c = c.FastToUpper();
                     nodes.TryGetValue(c, out var n);
-                    ++start;
                     if (n == null)
-                        break;
+                        return false;
+                    ++start;
                     node = n;
                 }
             }
@@ -433,9 +433,9 @@ namespace SysWeaver
                     if (nodes == null)
                         break;
                     nodes.TryGetValue(c, out var n);
-                    ++start;
                     if (n == null)
-                        break;
+                        return false;
+                    ++start;
                     node = n;
                 }
             }

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Text;
 using System.Threading;
 using SysWeaver.Data;
@@ -251,7 +252,7 @@ namespace SysWeaver
         public String GetDate(String prev)
         {
             var localTime = Time.ToLocalTime();
-            var s = localTime.ToString("yyyy-MM-dd");
+            var s = localTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             return s == prev ? null : s;
         }
 
@@ -291,7 +292,7 @@ namespace SysWeaver
                 {
                     headerWidth += 8;
                     var localTime = Time.ToLocalTime();
-                    var timeStamp = localTime.ToString("HH:mm:ss");
+                    var timeStamp = localTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
                     sb.Append(timeStamp);
                     if (style >= TextStyles.Debug)
                     {

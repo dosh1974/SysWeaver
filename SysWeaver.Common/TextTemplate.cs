@@ -87,7 +87,7 @@ namespace SysWeaver
             int start = 0;
             int len = text.Length;
             int staticLen = 0;
-            Dictionary<String, Tuple<int, String, bool>> vars = caseInSensitive ? new Dictionary<string, Tuple<int, string, bool>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<int, string, bool>>(StringComparer.Ordinal);
+            Dictionary<String, Tuple<int, String, bool, int>> vars = caseInSensitive ? new Dictionary<string, Tuple<int, string, bool, int>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<int, string, bool, int>>(StringComparer.Ordinal);
             Dictionary<String, Tuple<String, Func<String, String>>> transformedVars = null;
             if (allowTransforms)
                 transformedVars = caseInSensitive ? new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.Ordinal);
@@ -148,9 +148,10 @@ namespace SysWeaver
                 start = e + endLen;
                 search = start;
                 bool isTransformed = format != null;
-                blocks.Add(new Block(key, isTransformed));
+                var tokenLen = start - f;
+                blocks.Add(new Block(key, isTransformed, f, tokenLen));
                 vars.TryGetValue(key, out var v);
-                vars[key] = new Tuple<int, String, bool>(1 + (v?.Item1 ?? 0), null, isTransformed);
+                vars[key] = new Tuple<int, String, bool, int>(1 + (v?.Item1 ?? 0), null, isTransformed, (v?.Item4 ?? 0) + tokenLen);
             }
             if (start < len)
             {
@@ -158,11 +159,7 @@ namespace SysWeaver
                 blocks.Add(new Block(start, flen));
                 staticLen += flen;
             }
-            foreach (var v in vars.ToList())
-            {
-                var k = v.Key;
-                vars[k] = new Tuple<int, String, bool>(v.Value.Item1, String.Join(k, varBegin, varEnd), v.Value.Item3);
-            }
+            KeepUnresolved = true;
             BuildAction = Build;
             Template = text;
             TransformedVars = transformedVars.Freeze();
@@ -210,7 +207,7 @@ namespace SysWeaver
             int start = 0;
             int len = text.Length;
             int staticLen = 0;
-            Dictionary<String, Tuple<int, String, bool>> vars = caseInSensitive ? new Dictionary<string, Tuple<int, string, bool>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<int, string, bool>>(StringComparer.Ordinal);
+            Dictionary<String, Tuple<int, String, bool, int>> vars = caseInSensitive ? new Dictionary<string, Tuple<int, string, bool, int>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<int, string, bool, int>>(StringComparer.Ordinal);
             while (start < len)
             {
                 var f = tree.IndexOfAny(out var keyN, text, start);
@@ -227,9 +224,9 @@ namespace SysWeaver
                 if (transforms.TryGetValue(key, out var transform))
                     transformedVars[key] = transform;
                 bool isTransformed = transform != null;
-                blocks.Add(new Block(key, isTransformed));
+                blocks.Add(new Block(key, isTransformed, f, key.Length));
                 vars.TryGetValue(key, out var v);
-                vars[key] = new Tuple<int, String, bool>(1 + (v?.Item1 ?? 0), null, isTransformed);
+                vars[key] = new Tuple<int, String, bool, int>(1 + (v?.Item1 ?? 0), null, isTransformed, (v?.Item4 ?? 0) + key.Length);
             }
             if (start < len)
             {
@@ -237,11 +234,7 @@ namespace SysWeaver
                 blocks.Add(new Block(start, flen));
                 staticLen += flen;
             }
-            foreach (var v in vars.ToList())
-            {
-                var k = v.Key;
-                vars[k] = new Tuple<int, String, bool>(v.Value.Item1, k, v.Value.Item3);
-            }
+            KeepUnresolved = true;
             TransformedVars = transformedVars.Freeze();
             BuildAction = Build;
             Template = text;
@@ -293,7 +286,7 @@ namespace SysWeaver
             int start = 0;
             int len = text.Length;
             int staticLen = 0;
-            Dictionary<String, Tuple<int, String, bool>> vars = caseInSensitive ? new Dictionary<string, Tuple<int, string, bool>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<int, string, bool>>(StringComparer.Ordinal);
+            Dictionary<String, Tuple<int, String, bool, int>> vars = caseInSensitive ? new Dictionary<string, Tuple<int, string, bool, int>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<int, string, bool, int>>(StringComparer.Ordinal);
             while (start < len)
             {
                 var f = tree.IndexOfAny(out var key, text, start);
@@ -318,9 +311,9 @@ namespace SysWeaver
                     varsWithDefaults.TryGetValue(key, out defValue);
                 }
                 bool isTransformed = transform != null;
-                blocks.Add(new Block(key, isTransformed));
+                blocks.Add(new Block(key, isTransformed, f, key.Length));
                 vars.TryGetValue(key, out var v);
-                vars[key] = new Tuple<int, String, bool>(1 + (v?.Item1 ?? 0), defValue, isTransformed);
+                vars[key] = new Tuple<int, String, bool, int>(1 + (v?.Item1 ?? 0), defValue, isTransformed, 0);
             }
             if (start < len)
             {
@@ -403,8 +396,14 @@ namespace SysWeaver
             foreach (var x in eVars)
             {
                 var k = x.Key;
-                var v = (x.Value.Item3 ? getTrans : getVars)(k) ?? x.Value.Item2;
-                var val = v ?? String.Empty;
+                var v = (x.Value.Item3 ? getTrans : getVars)(k);
+                //  Unresolved: the original text of each occurrence, or the default
+                if ((v == null) && KeepUnresolved)
+                {
+                    len += x.Value.Item4;
+                    continue;
+                }
+                var val = v ?? x.Value.Item2 ?? String.Empty;
                 len += (x.Value.Item1 * val.Length);
             }
             var str = String.Create(len, new ValueTuple<Func<String, String>, Func<String, String>>(getVars, getTrans), BuildAction);
@@ -501,9 +500,14 @@ namespace SysWeaver
             => new TextTemplate(text, varBegin, varEnd, caseInSensitive, allowTransforms).Get(values);
 
 
-        readonly IReadOnlyDictionary<String, Tuple<int, String, bool>> VarsAndFrequency;
+        readonly IReadOnlyDictionary<String, Tuple<int, String, bool, int>> VarsAndFrequency;
 
         readonly IReadOnlyDictionary<String, Tuple<String, Func<String, String>>> TransformedVars;
+
+        /// <summary>
+        /// True if unresolved variables are rendered as their original text (token and set constructors), false to use the defaults (dictionary constructor)
+        /// </summary>
+        readonly bool KeepUnresolved;
 
         /// <summary>
         /// Default values of the (untransformed) variables used by transformed variables, only set by the dictionary constructor (else null).
@@ -599,10 +603,12 @@ namespace SysWeaver
                 Start = start;
                 Count = count;
             }
-            public Block(String var, bool haveTransform)
+            public Block(String var, bool haveTransform, int start, int count)
             {
                 Var = var;
                 Transform = haveTransform;
+                Start = start;
+                Count = count;
             }
 
         }
@@ -625,7 +631,19 @@ namespace SysWeaver
                 var v = block.Var;
                 if (v != null)
                 {
-                    var val = (block.Transform ? vars.Item2 : vars.Item1)(v) ?? def[v].Item2;
+                    var val = (block.Transform ? vars.Item2 : vars.Item1)(v);
+                    if (val == null)
+                    {
+                        //  Unresolved: left as is (the original text) or the default
+                        if (KeepUnresolved)
+                        {
+                            var cl = block.Count;
+                            temp.Slice(block.Start, cl).CopyTo(dest.Slice(offset));
+                            offset += cl;
+                            continue;
+                        }
+                        val = def[v].Item2;
+                    }
                     if (String.IsNullOrEmpty(val))
                         continue;
                     val.AsSpan().CopyTo(dest.Slice(offset));

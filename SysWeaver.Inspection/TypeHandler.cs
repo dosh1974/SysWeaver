@@ -193,7 +193,31 @@ namespace SysWeaver.Inspection.Implementation
                             isCurrentVersion = Expression.Equal(falseConstant, falseConstant);
                             break;
                         }
-                        //  KeyValuePair<K, V>
+                        //  Nullable<U>: the value (the hasValue field is readonly and a boxed value is a U)
+                        var nullableOf = System.Nullable.GetUnderlyingType(type);
+                        if (sameType && (nullableOf != null))
+                        {
+                            var regValue = Expression.Constant(StaticTypeHandler.SimpleRegField.MakeGenericMethod(nullableOf).Invoke(null, null));
+                            var handler = typeof(ValueTypeHandlers).GetTypeInfo().GetDeclaredMethod(nameof(ValueTypeHandlers.Describe_Nullable)).MakeGenericMethod(nullableOf);
+                            describe = Expression.Lambda<DescribeDelegate>(Expression.Call(handler, inspectorParameter, valueParameter, regValue), inspectorParameter, valueParameter, versionParameter).Compile();
+                            version = 1;
+                            currentVersionConstant = Expression.Constant(version);
+                            isCurrentVersion = Expression.Equal(falseConstant, falseConstant);
+                            break;
+                        }
+                        //  KeyValuePair<K, V>: the key and value (the fields are readonly)
+                        if (sameType && type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>)))
+                        {
+                            var kv = type.GetGenericArguments();
+                            var regKey = Expression.Constant(StaticTypeHandler.SimpleRegField.MakeGenericMethod(kv[0]).Invoke(null, null));
+                            var regValue = Expression.Constant(StaticTypeHandler.SimpleRegField.MakeGenericMethod(kv[1]).Invoke(null, null));
+                            var handler = typeof(ValueTypeHandlers).GetTypeInfo().GetDeclaredMethod(nameof(ValueTypeHandlers.Describe_KeyValuePair)).MakeGenericMethod(kv);
+                            describe = Expression.Lambda<DescribeDelegate>(Expression.Call(handler, inspectorParameter, valueParameter, regKey, regValue), inspectorParameter, valueParameter, versionParameter).Compile();
+                            version = 1;
+                            currentVersionConstant = Expression.Constant(version);
+                            isCurrentVersion = Expression.Equal(falseConstant, falseConstant);
+                            break;
+                        }
                         var interfaces = typeInfo.ImplementedInterfaces;
                         //  IList<T>
                         var ilistType = interfaces.FirstOrDefault(x => x.GetTypeInfo().IsGenericType && (x.GetGenericTypeDefinition() == typeof(IList<>)));
@@ -265,7 +289,8 @@ namespace SysWeaver.Inspection.Implementation
 #endif//SupportSerializable
                             if (f.Attributes.HasFlag(FieldAttributes.InitOnly))
                                 continue;
-                            regs.Add(StaticTypeHandler.GetRegFieldExpression(f.FieldType, inspectorParameter, Expression.Field(valueTypeParameter, f)));
+                            //  The field of the (by ref) value itself, a field of the converted value is a field of a copy for value types (read values are lost)
+                            regs.Add(StaticTypeHandler.GetRegFieldExpression(f.FieldType, inspectorParameter, Expression.Field(sameType ? (Expression)valueParameter : valueTypeParameter, f)));
                         }
                         if (regs.Count == 0)
                             describe = EmptyDescribe;

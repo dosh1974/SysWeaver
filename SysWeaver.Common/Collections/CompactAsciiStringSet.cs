@@ -122,13 +122,11 @@ namespace SysWeaver.Collections
         /// Get the index of a string (in insert order, which is also the sort order)
         /// </summary>
         /// <param name="s">The string to find (non-null)</param>
-        /// <returns>The zero based index of the string or -1 if it's not in the set</returns>
-        /// <exception cref="Exception">DEBUG builds only: The string is empty or contains invalid chars</exception>
+        /// <returns>The zero based index of the string or -1 if it's not in the set (also if it contains chars outside [32, 255], those can't be added)</returns>
+        /// <exception cref="Exception">DEBUG builds only: The string is empty</exception>
         public int IndexOf(String s)
         {
 #if DEBUG
-            if (!s.IsAsciiOnly())
-                throw new Exception("Only ascii chars [32, 255] is allowed in string!");
             if (s.Length <= 0)
                 throw new Exception("String can't be empty!");
 #endif//DEBUG
@@ -141,7 +139,13 @@ namespace SysWeaver.Collections
             {
                 int i;
                 for (i = 0; i < sl; ++i)
-                    r[i] = (Byte)(int)s[i];
+                {
+                    int c = s[i];
+                    //  Chars outside [32, 255] can't be in the set (and must not be truncated to a byte)
+                    if ((uint)(c - 32) > (255 - 32))
+                        return -1;
+                    r[i] = (Byte)c;
+                }
                 var mem = new ReadOnlyMemory<Byte>(r, 0, sl);
                 var cmp = ReadOnlyMemoryComparer.GetComparer<Byte>();
                 var blocks = Blocks;

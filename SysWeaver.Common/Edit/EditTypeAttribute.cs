@@ -79,6 +79,13 @@ namespace SysWeaver
                 return Quote(value.ToString(), '"');
             if (t == typeof(Char))
                 return Quote(value.ToString(), (Char)39);
+            if (t == typeof(bool))
+                return (bool)value ? "true" : "false";
+            //  The editor holds enums as numbers
+            if (t.IsEnum)
+                return Convert.ToDecimal(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+            if (value is IFormattable f)
+                return f.ToString(null, CultureInfo.InvariantCulture);
             return value.ToString();
         }
 
@@ -87,7 +94,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memberName">The member to check against</param>
         /// <param name="op">The operation to perform</param>
-        /// <param name="value">The value to compare with (strings and chars are quoted, null becomes null, other values use ToString)</param>
+        /// <param name="value">The value to compare with (strings and chars are quoted, null becomes null, bools become true / false, enums their numeric value, other values are formatted with the invariant culture)</param>
         public EditHideIfAttribute(String memberName, EditHideOps op, Object value)
             : base("Hide:this." + memberName + Ops[(int)op] + Val(value))
         {
