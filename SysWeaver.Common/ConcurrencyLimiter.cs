@@ -55,6 +55,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k, i).ConfigureAwait(false);
             };
@@ -83,6 +84,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k, i).ConfigureAwait(false);
             };
@@ -111,6 +113,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k).ConfigureAwait(false);
             };
@@ -139,6 +142,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k).ConfigureAwait(false);
             };
@@ -171,6 +175,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k, v, i).ConfigureAwait(false);
             };
@@ -200,6 +205,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k, v, i).ConfigureAwait(false);
             };
@@ -229,6 +235,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k, v).ConfigureAwait(false);
             };
@@ -258,6 +265,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 return await orgFn(k, v).ConfigureAwait(false);
             };
@@ -289,6 +297,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k, i).ConfigureAwait(false);
             };
@@ -316,6 +325,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k, i).ConfigureAwait(false);
             };
@@ -343,6 +353,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k).ConfigureAwait(false);
             };
@@ -370,6 +381,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k).ConfigureAwait(false);
             };
@@ -401,6 +413,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k, v, i).ConfigureAwait(false);
             };
@@ -429,6 +442,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v, i) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k, v, i).ConfigureAwait(false);
             };
@@ -457,6 +471,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k, v).ConfigureAwait(false);
             };
@@ -485,6 +500,7 @@ namespace SysWeaver
             var orgFn = fn;
             fn = async (k, v) =>
             {
+                await Task.Yield();
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await orgFn(k, v).ConfigureAwait(false);
             };

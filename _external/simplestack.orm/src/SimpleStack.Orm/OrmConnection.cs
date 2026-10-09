@@ -95,6 +95,7 @@ namespace SimpleStack.Orm
             return Transaction;
         }
 
+        public bool IsOpen => _isOpen;
 
         /// <inheritdoc />
         public override void Close()

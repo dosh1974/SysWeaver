@@ -10,6 +10,7 @@
 //
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -68,8 +69,103 @@ namespace SimpleStack.Orm
         /// <returns>The new connection.</returns>
         public OrmConnection CreateConnection(string connectionString, ILoggerFactory logger)
         {
-            return new OrmConnection(CreateIDbConnection(connectionString), this, logger);
+            return Caches.GetOrAdd((connectionString, logger), x => new ConnectionCache()).Get(CreateIDbConnection(connectionString), this, logger);
+            //return new OrmConnection(CreateIDbConnection(connectionString), this, logger);
         }
+
+        /// <summary>
+        /// Flush all connection caches
+        /// </summary>
+        public void FlushAllConnectionCaches()
+        {
+            var c = Caches;
+            var keys = c.Keys.ToList();
+            foreach (var key in keys)
+            {
+                if (c.TryRemove(key, out var cache))
+                    cache.Dispose();
+            }
+        }
+
+        public const int MaxCachedConnection = 128;
+
+        sealed class ConnectionCache : IDisposable
+        {
+
+            sealed class PooledConnection : OrmConnection
+            {
+                public PooledConnection(ConnectionCache cache, DbConnection connection, IDialectProvider dialectProvider, ILoggerFactory loggerFactory)
+                    : base(connection, dialectProvider, loggerFactory)
+                {
+                    Cache = cache;
+                }
+                readonly ConnectionCache Cache;
+
+                public void RealDispose()
+                {
+                    base.Dispose();
+                }
+                protected override void Dispose(bool disposing)
+                {
+                    if (disposing)
+                        Cache.Release(this);
+                }
+            }
+
+            public volatile int Max = MaxCachedConnection;
+
+            public int CachedConnections;
+
+            void Release(PooledConnection c)
+            {
+                if (!c.IsOpen)
+                {
+                    c.RealDispose();
+                    return;
+                }
+                var max = Max;
+                if (Interlocked.Increment(ref CachedConnections) > max)
+                {
+                    Interlocked.Decrement(ref CachedConnections);
+                    c.RealDispose();
+                    return;
+                }
+                Connections.Push(c);
+            }
+
+            public OrmConnection Get(DbConnection connection, IDialectProvider dialectProvider, ILoggerFactory loggerFactory)
+            {
+                var cache = Connections;
+                if (cache.TryPop(out var con))
+                {
+                    Interlocked.Decrement(ref CachedConnections);
+                    return con;
+                }
+                con = new PooledConnection(this, connection, dialectProvider, loggerFactory);
+                return con;
+            }
+
+            readonly ConcurrentStack<PooledConnection> Connections = new ConcurrentStack<PooledConnection>();
+
+            public void Dispose()
+            {
+                Max = 0;
+                var p = Connections;
+                while (p.TryPop(out var conn))
+                {
+                    conn.RealDispose();
+                    Interlocked.Decrement(ref CachedConnections);
+                }
+                //  There is a small chance that another thread has added a connection to the stack after we emptied it, so we need to empty it again
+            }
+        }
+
+        readonly ConcurrentDictionary<(String, ILoggerFactory), ConnectionCache> Caches = new ConcurrentDictionary<(string, ILoggerFactory), ConnectionCache>();
+
+
+
+
+
 
         public string GetParameterName(int parameterCount)
         {
@@ -686,7 +782,7 @@ namespace SimpleStack.Orm
         /// <param name="compositeIndex">Zero-based index of the composite.</param>
         /// <param name="modelDef">      The model definition.</param>
         /// <returns>The composite index name.</returns>
-        protected virtual string GetCompositeIndexName(CompositeIndexAttribute compositeIndex, ModelDefinition modelDef)
+        public virtual string GetCompositeIndexName(CompositeIndexAttribute compositeIndex, ModelDefinition modelDef)
         {
             return compositeIndex.Name ?? GetIndexName(compositeIndex.Unique, modelDef.ModelName.SafeVarName(),
                 String.Join("_", compositeIndex.FieldNames.ToArray()));
@@ -699,7 +795,7 @@ namespace SimpleStack.Orm
         /// <param name="fieldName"> Name of the field.</param>
         /// <param name="isCombined">true if this object is combined.</param>
         /// <returns>The given data converted to a string.</returns>
-        protected virtual string ToCreateIndexStatement(bool isUnique, string indexName, ModelDefinition modelDef,
+        public virtual string ToCreateIndexStatement(bool isUnique, string indexName, ModelDefinition modelDef,
             string fieldName, bool isCombined = false)
         {
             return

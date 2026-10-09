@@ -53,10 +53,10 @@ namespace SimpleStack.Orm
         public async Task<OrmConnection> OpenConnectionAsync()
         {
             _logger.LogDebug("Opening connection");
-            
             var conn = DialectProvider.CreateConnection(_connectionString,_loggerFactory);
             conn.CommandTimeout = DefaultCommandTimeout;
-            await conn.OpenAsync().ConfigureAwait(false);
+            if (!conn.IsOpen)
+                await conn.OpenAsync().ConfigureAwait(false);
             return conn;
         }
 

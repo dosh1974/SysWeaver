@@ -955,7 +955,6 @@ namespace SysWeaver.Db
             var ns = dp.NamingStrategy;
             tableName = ns.GetTableName(model.ModelName);
             var tableNameQ = dp.GetQuotedTableName(tableName);
-
             Dictionary<String, FieldDefinition> fields = new Dictionary<string, FieldDefinition>(StringComparer.OrdinalIgnoreCase);
             Dictionary<String, FieldDefinition> props = new Dictionary<string, FieldDefinition>(StringComparer.OrdinalIgnoreCase);
             foreach (var x in model.FieldDefinitions)
@@ -1265,40 +1264,61 @@ namespace SysWeaver.Db
 
 
 
+            Task DropIndex(String name)
+            {
+                var cmd = String.Concat("DROP INDEX `", name, "` ON ", tableNameQ);
+                return con.CommandAsync(cmd);
+            }
+
             //  Add field indices
             foreach (var fd in model.FieldDefinitions)
             {
                 if (!fd.IsIndexed)
                     continue;
                 var colName = ns.GetColumnName(fd.Name);
-                if (existingSingle.TryRemove(colName, out var ii))
-                    continue;
                 var inname = dp.GetQuotedColumnName(String.Join('_', "idx", tableName, colName));
+                if (existingSingle.TryRemove(colName, out var ii))
+                {
+                    //if (ii.Unique == fd.IsUnique) // TODO: Check index type, how?
+                        continue;
+                    await DropIndex(inname).ConfigureAwait(false);
+                }
                 var cname = dp.GetQuotedColumnName(colName);
                 var cmd = String.Concat(fd.IsUnique ? "CREATE UNIQUE INDEX " : "CREATE INDEX ", inname, " ON ", tableNameQ, " (", cname, ')');
                 await con.CommandAsync(cmd).ConfigureAwait(false);
             }
 
-            //  TODO: Remove field indices
+            //  Remove field indices
             foreach (var x in existingSingle)
             {
-                if (x.Value.Name == "PRIMARY")
+                var name = x.Value.Name;
+                if (name == "PRIMARY")
                     continue;
-                var y = x;
+                await DropIndex(name).ConfigureAwait(false);
             }
 
-            //  TODO: Add composite indices
+            //  Add composite indices
             foreach (var x in model.CompositeIndexes)
             {
-                var y = x;
+                var name = dp.GetCompositeIndexName(x, model);
+                if (existingIndexes.TryRemove(name, out var ex))
+                {
+                    if (ex.Unique == x.Unique) // TODO: Check index type, how?
+                        continue;
+                    await DropIndex(name).ConfigureAwait(false);
+                }
+                var indexNames = string.Join(" ASC, ", x.FieldNames.Select(dp.GetQuotedColumnName).ToArray());
+                var c = dp.ToCreateIndexStatement(x.Unique, name, model, indexNames, true);
+                await con.ExecuteAsync(c).ConfigureAwait(false);
             }
 
-            //  TODO: Remove composite indices
+            //  Remove composite indices
             foreach (var x in existingIndexes)
             {
-                if (x.Value.Name == "PRIMARY")
+                var name = x.Value.Name;
+                if (name == "PRIMARY")
                     continue;
-                var y = x;
+                await DropIndex(name).ConfigureAwait(false);    
             }
             
             return await Partition(con, t, Partitions, tableName).ConfigureAwait(false);

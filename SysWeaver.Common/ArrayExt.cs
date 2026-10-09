@@ -677,20 +677,27 @@ namespace SysWeaver
                 return [await func(array[0], 0).ConfigureAwait(false)];
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task<T>>(l);
+            bool allCompleted = true;
             for (int i = 0; i < l; ++i)
             {
+                Task<T> t;
                 try
                 {
-                    tt[i] = func(array[i], i);
+                    t = func(array[i], i);
                 }
                 catch (Exception ex) when (i > 0)
                 {
                     //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
-                    tt[i] = Task.FromException<T>(ex);
+                    t = Task.FromException<T>(ex);
                 }
+                allCompleted &= t.IsCompleted;
+                tt[i] = t;
             }
-            // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
-            await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            if (!allCompleted)
+            {
+                // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
+                await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            }
             return GetResults(tt);
         }
 

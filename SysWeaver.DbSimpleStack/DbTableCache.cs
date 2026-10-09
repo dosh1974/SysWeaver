@@ -53,48 +53,6 @@ namespace SysWeaver.Db
             => new DbTableCache<K, T>(db, extractKey, refreshEveryMs, comparer, tableName, refineSelect);
     }
 
-    public interface IDbTableCache : IDisposable, IPerfMonitored
-    {
-        /// <summary>
-        /// Explicitly sync, call once after creation to populate the cache
-        /// </summary>
-        /// <returns></returns>
-        Task SyncNow();
-
-        /// <summary>
-        /// Explicitly sync using an explicit db connection, call once after creation to populate the cache
-        /// </summary>
-        /// <param name="c">The db connection to use</param>
-        /// <returns></returns>
-        Task SyncNow(OrmConnection c);
-    }
-
-
-    public sealed class DbCachedValues<K, T>  where T : class, new()
-    {
-        public override string ToString() => String.Concat(Values.Count, " @ ", SyncStart, " to ", SyncEnd);
-        /// <summary>
-        /// The values
-        /// </summary>
-        public readonly IReadOnlyDictionary<K, T> Values;
-        /// <summary>
-        /// Time stamp when the db read begun
-        /// </summary>
-        public readonly DateTime SyncStart;
-        /// <summary>
-        /// Time stamp when the db read ended
-        /// </summary>
-        public readonly DateTime SyncEnd;
-
-
-        public DbCachedValues(IReadOnlyDictionary<K, T> values, DateTime syncStart, DateTime syncEnd)
-        {
-            Values = values;
-            SyncStart = syncStart;
-            SyncEnd = syncEnd;
-        }
-    }
-
 
     /// <summary>
     /// Type that caches an entire database table in memory (in a key/value dictionary).
@@ -131,6 +89,128 @@ namespace SysWeaver.Db
                 UpdateTask = new PeriodicTask(Update, refreshEveryMs, true, true, true);
         }
 
+        /// <summary>
+        /// Get the current values (if no sync have been performed, this will block until a sync have been done).
+        /// </summary>
+        /// <returns></returns>
+        public ValueTask<IReadOnlyDictionary<K, T>> GetValues()
+        {
+            var c = InternalValues;
+            if (c != null)
+                return ValueTask.FromResult(c.Values);
+            return InternalGetValues();
+        }
+
+
+        /// <summary>
+        /// Get the current state (if no sync have been performed, this will block until a sync have been done).
+        /// </summary>
+        /// <returns></returns>
+        public ValueTask<DbCachedValues<K, T>> GetCurrent()
+        {
+            var c = InternalValues;
+            if (c != null)
+                return ValueTask.FromResult(c);
+            return InternalGetCurrent();
+        }
+
+
+        /// <summary>
+        /// Get the current values (if no sync have been performed, this will block until a sync have been done).
+        /// Prefer to use the async method GetValues() instead.
+        /// </summary>
+        public IReadOnlyDictionary<K, T> Values
+        {
+            get
+            {
+                var c = GetValues();
+                if (!c.IsCompleted)
+                    c.RunAsync();
+                return c.Result;
+            }
+        }
+
+        /// <summary>
+        /// Get the current state (if no sync have been performed, this will block until a sync have been done).
+        /// Prefer to use the async method GetCurrent() instead.
+        /// </summary>
+        public DbCachedValues<K, T> Current
+        {
+            get
+            {
+                var c = GetCurrent();
+                if (!c.IsCompleted)
+                    c.RunAsync();
+                return c.Result;
+            }
+        }
+
+        /// <summary>
+        /// Explicitly sync, call once after creation to populate the cache
+        /// </summary>
+        /// <returns></returns>
+        public async Task SyncNow()
+        {
+            using var _ = await SyncLock.Lock().ConfigureAwait(false);
+            await InternalSyncNow().ConfigureAwait(false);
+        }
+
+
+        /// <summary>
+        /// Explicitly sync using an explicit db connection, call once after creation to populate the cache
+        /// </summary>
+        /// <param name="c">The db connection to use</param>
+        /// <returns></returns>
+        public async Task SyncNow(OrmConnection c)
+        {
+            using var _ = await SyncLock.Lock().ConfigureAwait(false);
+            using var __ = PerfMon.Track(PerfNamePrefix + nameof(SyncNow));
+            var d = new Dictionary<K, T>(Comparer);
+            var extractKey = ExtractKey;
+            var dp = c.DialectProvider;
+            var s = new TypedSelectStatement<T>(dp);
+            if (!String.IsNullOrEmpty(TableName))
+                s.From(TableName);
+            RefineSelect?.Invoke(s, dp);
+            var cmd = dp.ToSelectStatement(s.Statement, CommandFlags.Buffered);
+            DateTime start = DateTime.UtcNow;
+            using var reader = await c.ExecuteReaderAsync(cmd).ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var value = reader.CreateObject<T>();
+                var key = extractKey(value);
+                d[key] = value;
+            }
+            DateTime end = DateTime.UtcNow;
+            var fd = d.Freeze();
+            var newVal = new DbCachedValues<K, T>(fd, start, end);
+            Interlocked.Exchange(ref InternalValues, newVal);
+            var os = OnSynced;
+            var osa = OnSyncedAsync;
+            if ((os != null) || (osa != null))
+            {
+                using var ___ = PerfMon.Track(String.Concat(PerfNamePrefix, nameof(SyncNow), ".Events"));
+                try
+                {
+                    os?.Invoke(newVal);
+                }
+                catch
+                {
+                }
+                try
+                {
+                    await osa.RaiseEvents(newVal).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+            }
+
+        }
+
+        public event Action<DbCachedValues<K, T>> OnSynced;
+        public event Func<DbCachedValues<K, T>, Task> OnSyncedAsync;
+
         public void Dispose()
         {
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
@@ -144,39 +224,27 @@ namespace SysWeaver.Db
         readonly IEqualityComparer<K> Comparer;
         readonly String TableName;
 
+        readonly AsyncLock SyncLock = new AsyncLock();
 
-        /// <summary>
-        /// Get the current values (if no sync have been performed, this will block until a sync have been done)
-        /// </summary>
-        public IReadOnlyDictionary<K, T> Values
+        async ValueTask<IReadOnlyDictionary<K, T>> InternalGetValues()
         {
-            get
-            {
-                var c = InternalValues;
-                if (c == null)
-                {
-                    SyncNow().RunAsync();
-                    c = InternalValues;
-                }
+            using var _ = await SyncLock.Lock().ConfigureAwait(false);
+            var c = InternalValues;
+            if (c != null)
                 return c.Values;
-            }
+            await InternalSyncNow().ConfigureAwait(false);
+            return InternalValues.Values;
         }
 
-        /// <summary>
-        /// Get the current state (if no sync have been performed, this will block until a sync have been done)
-        /// </summary>
-        public DbCachedValues<K, T> Current
+
+        async ValueTask<DbCachedValues<K, T>> InternalGetCurrent()
         {
-            get
-            {
-                var c = InternalValues;
-                if (c == null)
-                {
-                    SyncNow().RunAsync();
-                    c = InternalValues;
-                }
+            using var _ = await SyncLock.Lock().ConfigureAwait(false);
+            var c = InternalValues;
+            if (c != null)
                 return c;
-            }
+            await InternalSyncNow().ConfigureAwait(false);
+            return InternalValues;
         }
 
         volatile DbCachedValues<K, T> InternalValues;
@@ -184,15 +252,13 @@ namespace SysWeaver.Db
        
         async Task<bool> Update()
         {
-            await SyncNow().ConfigureAwait(false);
+            using var _ = await SyncLock.Lock().ConfigureAwait(false);
+            await InternalSyncNow().ConfigureAwait(false);
             return true;
         }
 
-        /// <summary>
-        /// Explicitly sync, call once after creation to populate the cache
-        /// </summary>
-        /// <returns></returns>
-        public async Task SyncNow()
+
+        async Task InternalSyncNow()
         {
             using var _ = PerfMon.Track(PerfNamePrefix + nameof(SyncNow));
             var d = new Dictionary<K, T>(Comparer);
@@ -229,60 +295,6 @@ namespace SysWeaver.Db
                 await osa.RaiseEvents(newVal).ConfigureAwait(false);
             }
         }
-
-        /// <summary>
-        /// Explicitly sync using an explicit db connection, call once after creation to populate the cache
-        /// </summary>
-        /// <param name="c">The db connection to use</param>
-        /// <returns></returns>
-        public async Task SyncNow(OrmConnection c)
-        {
-            using var _ = PerfMon.Track(PerfNamePrefix + nameof(SyncNow));
-            var d = new Dictionary<K, T>(Comparer);
-            var extractKey = ExtractKey;
-            var dp = c.DialectProvider;
-            var s = new TypedSelectStatement<T>(dp);
-            if (!String.IsNullOrEmpty(TableName))
-                s.From(TableName);
-            RefineSelect?.Invoke(s, dp);
-            var cmd = dp.ToSelectStatement(s.Statement, CommandFlags.Buffered);
-            DateTime start = DateTime.UtcNow;
-            using var reader = await c.ExecuteReaderAsync(cmd).ConfigureAwait(false);
-            while (await reader.ReadAsync().ConfigureAwait(false))
-            {
-                var value = reader.CreateObject<T>();
-                var key = extractKey(value);
-                d[key] = value;
-            }
-            DateTime end = DateTime.UtcNow;
-            var fd = d.Freeze();
-            var newVal = new DbCachedValues<K, T>(fd, start, end);
-            Interlocked.Exchange(ref InternalValues, newVal);
-            var os = OnSynced;
-            var osa = OnSyncedAsync;
-            if ((os != null) || (osa != null))
-            {
-                using var __ = PerfMon.Track(String.Concat(PerfNamePrefix, nameof(SyncNow), ".Events"));
-                try
-                {
-                    os?.Invoke(newVal);
-                }
-                catch
-                {
-                }
-                try
-                {
-                    await osa.RaiseEvents(newVal).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
-            }
-
-        }
-
-        public event Action<DbCachedValues<K, T>> OnSynced;
-        public event Func<DbCachedValues<K, T>, Task> OnSyncedAsync;
 
 
     }
