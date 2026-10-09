@@ -85,7 +85,7 @@ namespace SysWeaver.AI
         /// <param name="method">The method</param>
         /// <returns>True if the method is a tool</returns>
         public static bool IsTool(MethodInfo method)
-            => (method.GetCustomAttribute<AiToolAttribute>() != null) || (method.GetCustomAttribute<OpenAiUseAttribute>()?.Use ?? false);
+            => (method.GetCustomAttribute<AiToolAttribute>() != null) || (method.GetCustomAttribute<AiUseAttribute>()?.Use ?? false);
 
         /// <summary>
         /// Get all tool methods (have an AiToolAttribute or an OpenAiUseAttribute) of a type, including private methods declared in base types

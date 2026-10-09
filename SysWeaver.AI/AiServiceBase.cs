@@ -71,7 +71,7 @@ namespace SysWeaver.AI
             {
                 foreach (var x in sm.UniqueInstances)
                 {
-                    AddTools(x as IHaveOpenAiTools);
+                    AddTools(x as IHaveAiTools);
                 }
                 sm.OnServiceAdded += Sm_OnServiceAdded;
                 sm.OnServiceRemoved += Sm_OnServiceRemoved;
@@ -122,12 +122,12 @@ namespace SysWeaver.AI
 
         void Sm_OnServiceAdded(object arg1, ServiceInfo arg2)
         {
-            AddTools(arg1 as IHaveOpenAiTools);
+            AddTools(arg1 as IHaveAiTools);
         }
 
         void Sm_OnServiceRemoved(object arg1, ServiceInfo arg2)
         {
-            RemoveTools(arg1 as IHaveOpenAiTools);
+            RemoveTools(arg1 as IHaveAiTools);
         }
 
 
@@ -135,7 +135,7 @@ namespace SysWeaver.AI
         /// Register tools from an instance (tools still have to be added to a session)
         /// </summary>
         /// <param name="a"></param>
-        public void AddTools(IHaveOpenAiTools a)
+        public void AddTools(IHaveAiTools a)
         {
             if (a == null)
                 return;
@@ -145,7 +145,7 @@ namespace SysWeaver.AI
             foreach (var mm in t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 if (mm.GetCustomAttribute<AiToolAttribute>() == null)
-                    if (!(mm.GetCustomAttribute<OpenAiUseAttribute>()?.Use ?? false))
+                    if (!(mm.GetCustomAttribute<AiUseAttribute>()?.Use ?? false))
                         continue;
                 if (api.TryGetApi(mm, out var url))
                 {
@@ -166,7 +166,7 @@ namespace SysWeaver.AI
         /// Unregister tools from an instance
         /// </summary>
         /// <param name="a"></param>
-        public void RemoveTools(IHaveOpenAiTools a)
+        public void RemoveTools(IHaveAiTools a)
         {
             if (a == null)
                 return;
@@ -175,7 +175,7 @@ namespace SysWeaver.AI
             foreach (var mm in t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 if (mm.GetCustomAttribute<AiToolAttribute>() == null)
-                    if (!(mm.GetCustomAttribute<OpenAiUseAttribute>()?.Use ?? false))
+                    if (!(mm.GetCustomAttribute<AiUseAttribute>()?.Use ?? false))
                         continue;
                 var fn = GetToolName(mm);
                 cache.TryRemove(fn, out var _);

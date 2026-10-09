@@ -120,12 +120,12 @@ namespace SysWeaver.AI
         /// <summary>
         /// Register tools from an instance (tools still have to be added to a session)
         /// </summary>
-        void AddTools(IHaveOpenAiTools a);
+        void AddTools(IHaveAiTools a);
 
         /// <summary>
         /// Unregister tools from an instance
         /// </summary>
-        void RemoveTools(IHaveOpenAiTools a);
+        void RemoveTools(IHaveAiTools a);
 
         /// <summary>
         /// Callback with usage stats, args are: the request, model, number of input tokens, number of output tokens

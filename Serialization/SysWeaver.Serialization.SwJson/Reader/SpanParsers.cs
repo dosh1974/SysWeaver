@@ -371,6 +371,140 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
+        /// The shortest text <see cref="ToBoxedDateOrTime(ReadOnlySpan{byte})"/> can accept ("hh:mm:ss")
+        /// </summary>
+        internal const int MinBoxedDateOrTimeLength = 8;
+
+        /// <summary>
+        /// The longest text <see cref="ToBoxedDateOrTime(ReadOnlySpan{byte})"/> can accept ("yyyy-MM-ddTHH:mm:ss.fffffff+hh:mm")
+        /// </summary>
+        internal const int MaxBoxedDateOrTimeLength = 33;
+
+        /// <summary>
+        /// Get the boxed date or time value of a json string (that was boxed when written), if the text is exactly what the <see cref="JsonWriter"/> writes for it,
+        /// so that json => object => json gives the same json:
+        /// <list type="bullet">
+        /// <item>"yyyy-MM-dd" is a <see cref="DateOnly"/></item>
+        /// <item>"yyyy-MM-ddTHH:mm:ss[.fffffff]" is a <see cref="DateTime"/> (Unspecified), with a "Z" suffix Utc</item>
+        /// <item>"yyyy-MM-ddTHH:mm:ss[.fffffff]+hh:mm" (or -hh:mm) is a <see cref="DateTimeOffset"/> (a local <see cref="DateTime"/> is written like this too)</item>
+        /// <item>"[-][d.]hh:mm:ss[.fffffff]" is a <see cref="TimeSpan"/> (a <see cref="TimeOnly"/> is written like this too)</item>
+        /// </list>
+        /// </summary>
+        /// <remarks>
+        /// The parsers only accept fixed width fields, so the text is what the writer writes unless it has a trailing fraction zero, a leading days zero, a "-00:00" offset or is a negative zero time span.
+        /// Most strings are rejected by their length or by one or two chars, without parsing.
+        /// </remarks>
+        /// <param name="d">The (unescaped) text of the json string</param>
+        /// <returns>The boxed value, or null if the text is a plain string</returns>
+        internal static Object ToBoxedDateOrTime(ReadOnlySpan<Byte> d)
+        {
+            var l = d.Length;
+            if ((l < MinBoxedDateOrTimeLength) || (l > MaxBoxedDateOrTimeLength))
+                return null;
+            var first = d[0];
+            if ((l >= 10) && (d[4] == '-') && (d[7] == '-'))
+            {
+                if (((uint)first - '0') > 9)
+                    return null;
+                if (l == 10)
+                    return TryDate(d, out var date) ? DateOnly.FromDateTime(date) : null;
+                //  yyyy-MM-ddTHH:mm:ss[.fffffff] (no trailing fraction zero)
+                if (!TryDateTimeCore(d, out var dt, out var end) || ((end > 19) && (d[end - 1] == '0')))
+                    return null;
+                var rem = l - end;
+                if (rem == 0)
+                    return dt;
+                if (rem == 1)
+                    return d[end] == 'Z' ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : null;
+                //  +hh:mm or -hh:mm (not -00:00)
+                if ((rem != 6) || (d[end + 3] != ':') || !TryDigits(d, end + 1, 2, out var oh) || !TryDigits(d, end + 4, 2, out var om) || (om > 59))
+                    return null;
+                var offset = oh * 60 + om;
+                if (offset > 14 * 60)
+                    return null;
+                var sign = d[end];
+                if (sign == '-')
+                {
+                    if (offset == 0)
+                        return null;
+                    offset = -offset;
+                }
+                else if (sign != '+')
+                {
+                    return null;
+                }
+                var ot = new TimeSpan(offset * TimeSpan.TicksPerMinute);
+                var utc = dt.Ticks - ot.Ticks;
+                if ((utc < DateTime.MinValue.Ticks) || (utc > DateTime.MaxValue.Ticks))
+                    return null;
+                return new DateTimeOffset(dt, ot);
+            }
+            //  [-][d.]hh:mm:ss[.fffffff] (no leading days zero, no trailing fraction zero, no negative zero)
+            var o = first == '-' ? 1 : 0;
+            var dc = d[o];
+            //  The hours are two digits, so there are days if the first colon isn't the third char
+            if ((((uint)dc - '0') > 9) || ((dc == '0') && (d[o + 2] != ':')))
+                return null;
+            if (!TryTimeSpanFast(d, out var ts))
+                return null;
+            if ((d[l - 1] == '0') && (d[l - 3] != ':'))
+                return null;
+            if ((o != 0) && (ts.Ticks == 0))
+                return null;
+            return ts;
+        }
+
+        /// <summary>
+        /// The number of days of <see cref="TimeSpan.MaxValue"/> (and <see cref="TimeSpan.MinValue"/>), more days can't be a valid <see cref="TimeSpan"/>
+        /// </summary>
+        const int MaxTimeSpanDays = 10675199;
+
+        /// <summary>
+        /// Parse "[-][d.]hh:mm:ss[.fffffff]" (the "c" format, as written by the <see cref="JsonWriter"/>), the same result as <see cref="TimeSpan.Parse(string, IFormatProvider)"/> with the invariant culture,
+        /// false for anything else (including out of range values, left to the .NET parsing).
+        /// </summary>
+        internal static bool TryTimeSpanFast(ReadOnlySpan<Byte> d, out TimeSpan value)
+        {
+            value = default;
+            var len = d.Length;
+            int o = 0;
+            var neg = (len > 0) && (d[0] == '-');
+            if (neg)
+                ++o;
+            ulong days = 0;
+            var colon = d.IndexOf((Byte)':');
+            if (colon <= 0)
+                return false;
+            var dot = d.Slice(o).IndexOf((Byte)'.');
+            if ((dot >= 0) && ((o + dot) < colon))
+            {
+                //  Days (range checked, so that the ticks can't overflow)
+                var dl = dot;
+                if ((dl < 1) || (dl > 8) || !TryDigits(d, o, dl, out var dv) || (dv > MaxTimeSpanDays))
+                    return false;
+                days = (ulong)dv;
+                o += dl + 1;
+            }
+            if ((colon != o + 2) || !TryTimeOfDay(d, o, out var time))
+                return false;
+            o += 8;
+            if (!TryFraction(d, ref o, out var fraction) || (o != len))
+                return false;
+            var ticks = days * TimeSpan.TicksPerDay + (ulong)time + (ulong)fraction;
+            if (neg)
+            {
+                if (ticks > (1UL << 63))
+                    return false;
+                value = new TimeSpan(unchecked(-(long)ticks));
+                return true;
+            }
+            if (ticks > long.MaxValue)
+                return false;
+            value = new TimeSpan((long)ticks);
+            return true;
+        }
+
+        /// <summary>
         /// Parse a <see cref="TimeSpan"/> like <see cref="TimeSpan.Parse(string, IFormatProvider)"/> with the invariant culture.
         /// "[-][d.]hh:mm:ss[.fffffff]" is parsed directly.
         /// </summary>
@@ -378,47 +512,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <exception cref="OverflowException">The time span is out of range</exception>
         public static TimeSpan ToTimeSpan(ReadOnlySpan<Byte> d)
         {
-            //  [-][d.]hh:mm:ss[.fffffff]
-            {
-                var len = d.Length;
-                int o = 0;
-                var neg = (len > 0) && (d[0] == '-');
-                if (neg)
-                    ++o;
-                ulong days = 0;
-                var colon = d.IndexOf((Byte)':');
-                var dot = d.Slice(o).IndexOf((Byte)'.');
-                bool ok = colon > 0;
-                if (ok && (dot >= 0) && ((o + dot) < colon))
-                {
-                    //  Days
-                    var dl = dot;
-                    if ((dl < 1) || (dl > 8) || !TryDigits(d, o, dl, out var dv))
-                        ok = false;
-                    else
-                    {
-                        days = (ulong)dv;
-                        o += dl + 1;
-                    }
-                }
-                if (ok && (colon == o + 2) && TryTimeOfDay(d, o, out var time))
-                {
-                    o += 8;
-                    if (TryFraction(d, ref o, out var fraction) && (o == len))
-                    {
-                        var ticks = days * TimeSpan.TicksPerDay + (ulong)time + (ulong)fraction;
-                        if (neg)
-                        {
-                            if (ticks <= (1UL << 63))
-                                return new TimeSpan(unchecked(-(long)ticks));
-                        }
-                        else if (ticks <= long.MaxValue)
-                        {
-                            return new TimeSpan((long)ticks);
-                        }
-                    }
-                }
-            }
+            if (TryTimeSpanFast(d, out var ts))
+                return ts;
             var l = d.Length;
             Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)

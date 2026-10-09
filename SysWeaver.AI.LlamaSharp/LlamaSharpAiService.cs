@@ -20,7 +20,7 @@ namespace SysWeaver.AI
     [RequiredDep<ApiHttpServerModule>]
     [OptionalDep<IUserStorageService>]
     [OptionalDep<IQrCodeService>]
-    [OptionalDep<IHaveOpenAiTools>]
+    [OptionalDep<IHaveAiTools>]
     [AiToolPrefix("")]
     public sealed partial class LlamaSharpAiService : AiServiceBase
     {

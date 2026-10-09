@@ -30,7 +30,7 @@ namespace SysWeaver.Chat
     [OptionalDep<IUserStorageService>]
     [WebApiUrl("../chat")]
     [AiToolPrefix("")]
-    public sealed class ChatService : IDisposable, IHttpServerModule, IHaveOpenAiTools
+    public sealed class ChatService : IDisposable, IHttpServerModule, IHaveAiTools
     {
         public override string ToString() => "Providers: " + String.Join(", ", Providers.Values.Select(x => x.Provider.Name));
 

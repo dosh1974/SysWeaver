@@ -19,7 +19,7 @@ namespace SysWeaver.MicroService
 {
 
     [AiToolPrefix("")]
-    public sealed class ChartJsService : IHaveOpenAiTools, IDisposable, IChatStoreLinkHandler
+    public sealed class ChartJsService : IHaveAiTools, IDisposable, IChatStoreLinkHandler
     {
         public ChartJsService(ServiceManager manager, ChartJsParams p = null)
         {
@@ -111,7 +111,7 @@ namespace SysWeaver.MicroService
         /// <param name="chart">The chart in the format of a Graph.js configuration</param>
         /// <param name="request"></param>
         /// <returns>An url to a html page containing the generated chart</returns>
-        [OpenAiUse]
+        [AiUse]
         [AiTool("📊✨")]
         [AiHideMcp]
         String BuildAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
@@ -128,7 +128,7 @@ namespace SysWeaver.MicroService
         /// <param name="chart">The data required to generate the chart</param>
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
-        [OpenAiUse]
+        [AiUse]
         [AiTool("📊🖥️")]
         [AiHideMcp]
         bool DisplayAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
@@ -150,7 +150,7 @@ namespace SysWeaver.MicroService
         /// <param name="chart">The data required to generate the chart</param>
         /// <param name="request"></param>
         /// <returns>An url to a html page containing the generated chart</returns>
-        [OpenAiUse]
+        [AiUse]
         [AiTool("📊✨")]
         String BuildChart(Chart chart, HttpServerRequest request)
         {
@@ -380,7 +380,7 @@ namespace SysWeaver.MicroService
         /// <param name="chart">The data required to generate the chart</param>
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
-        [OpenAiUse]
+        [AiUse]
         [AiTool("📊🖥️")]
         [AiHideMcp]
         bool DisplayChart(Chart chart, HttpServerRequest request)

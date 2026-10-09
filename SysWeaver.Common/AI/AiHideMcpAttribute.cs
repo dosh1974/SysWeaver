@@ -7,7 +7,7 @@ namespace SysWeaver.AI
     /// The tool is not exposed to MCP clients (it's still available in the AI chat).
     /// </summary>
     /// <remarks>
-    /// Only has an effect on methods that are AI tools (see <see cref="AiToolAttribute"/> and <see cref="OpenAiUseAttribute"/>).
+    /// Only has an effect on methods that are AI tools (see <see cref="AiToolAttribute"/> and <see cref="AiUseAttribute"/>).
     /// Checked by the MCP service when registering the tools of an instance (looked up with inheritance).
     /// </remarks>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]

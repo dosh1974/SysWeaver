@@ -594,7 +594,8 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// Read a value declared as <see cref="Object"/>.
         /// Objects must have a <c>"$type"</c> member (else a plain new <see cref="Object"/> is returned and all members are skipped).
-        /// For Newtonsoft compatibility: strings that <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts (using the invariant culture) become a <see cref="DateTime"/>,
+        /// Boxed values are written without type information, so: strings that are exactly what the <see cref="JsonWriter"/> writes for a <see cref="DateOnly"/>, <see cref="DateTime"/>, <see cref="DateTimeOffset"/> or <see cref="TimeSpan"/>
+        /// become that type (so that json => object => json gives the same json, a <see cref="TimeOnly"/> becomes a <see cref="TimeSpan"/> and a local <see cref="DateTime"/> a <see cref="DateTimeOffset"/>, other strings stay strings),
         /// <c>true</c>/<c>false</c> a <see cref="Boolean"/>, integral numbers (in the <see cref="Int64"/> range, without an exponent) an <see cref="Int64"/> and other numbers (and the NaN, Infinity and -Infinity tokens of older versions) a <see cref="Double"/>.
         /// </summary>
         /// <param name="state">The parser state, positioned at the value</param>
@@ -621,12 +622,12 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Read a boxed json string (positioned at the opening quote): a <see cref="DateTime"/> if <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts it
-        /// (invariant culture, <see cref="DateTimeStyles.RoundtripKind"/>), else the string.
+        /// Read a boxed json string (positioned at the opening quote): a <see cref="DateOnly"/>, <see cref="DateTime"/>, <see cref="DateTimeOffset"/> or <see cref="TimeSpan"/>
+        /// if the text is exactly what the <see cref="JsonWriter"/> writes for such a value (so that json => object => json gives the same json), else the string.
+        /// See <see cref="SpanParsers.ToBoxedDateOrTime(ReadOnlySpan{byte})"/>.
         /// </summary>
         /// <remarks>
-        /// "yyyy-MM-ddTHH:mm:ss[.fffffff][Z]" (as written by the <see cref="JsonWriter"/>) is parsed directly from the UTF8 (no string is created).
-        /// Strings without an ASCII digit are never parsed as a date (DateTime.TryParse needs a number for a date or time, verified for all month / day names, designators and non ASCII digits).
+        /// Dates and times are parsed directly from the UTF8 (no string is created).
         /// </remarks>
         static Object CreateBoxedString(JsonParserState state)
         {
@@ -634,104 +635,31 @@ namespace SysWeaver.Serialization.SwJson
             var p = d + 1;
             var rem = new ReadOnlySpan<Byte>(p, (int)(state.E - p));
             var end = rem.IndexOf((Byte)'"');
-            if ((end >= 19) && SpanParsers.TryDateTimeFast(rem.Slice(0, end), out var fdt))
+            //  An escape (or the end of the data) makes the value null, the text after an escaped quote is never part of a date or time
+            if ((end >= SpanParsers.MinBoxedDateOrTimeLength) && (end <= SpanParsers.MaxBoxedDateOrTimeLength))
             {
-                d = p + end + 1;
-                return fdt;
+                var dt = SpanParsers.ToBoxedDateOrTime(rem.Slice(0, end));
+                if (dt != null)
+                {
+                    d = p + end + 1;
+                    return dt;
+                }
             }
             var v = Utf8JsonParser.ReadQuotedString(state);
-            //  Use the invariant culture so that the result doesn't depend on the culture of the current thread
-            if (MayBeDateTime(v) && DateTime.TryParse(v, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dts))
-                return dts;
+            //  The string had escapes (or non ASCII chars), the unescaped string can still be a date or time
+            if (v.Length != end)
+            {
+                var l = v.Length;
+                if ((l >= SpanParsers.MinBoxedDateOrTimeLength) && (l <= SpanParsers.MaxBoxedDateOrTimeLength) && System.Text.Ascii.IsValid(v))
+                {
+                    Span<Byte> b = stackalloc Byte[l];
+                    System.Text.Ascii.FromUtf16(v, b, out _);
+                    var dt = SpanParsers.ToBoxedDateOrTime(b);
+                    if (dt != null)
+                        return dt;
+                }
+            }
             return v;
-        }
-
-        /// <summary>
-        /// False if <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> (invariant culture) can't accept the string, so that most strings are never parsed (that is slow):
-        /// strings without an ASCII digit (a date or time needs a number), and ASCII strings with a word (a run of ASCII letters) that isn't one of the words of a date (see <see cref="DateWords"/>).
-        /// </summary>
-        /// <remarks>
-        /// Verified against DateTime.TryParse with about 45 million strings: all chars, all 1 - 3 letter words, random longer words and all date words (with variations) in many date contexts.
-        /// Strings with non ASCII chars (the parser knows some, like 年 and 午前) are always parsed if they have a digit.
-        /// </remarks>
-        static bool MayBeDateTime(String s)
-        {
-            var span = s.AsSpan();
-            if (span.IndexOfAnyInRange('0', '9') < 0)
-                return false;
-            if (!System.Text.Ascii.IsValid(span))
-                return true;
-            var words = DateWords;
-            var letters = AsciiLetters;
-            for (; ; )
-            {
-                var start = span.IndexOfAny(letters);
-                if (start < 0)
-                    return true;
-                span = span.Slice(start);
-                var len = span.IndexOfAnyExcept(letters);
-                if (len < 0)
-                    len = span.Length;
-                if (len >= words.Length)
-                    return false;
-                var word = span.Slice(0, len);
-                var found = false;
-                foreach (var w in words[len])
-                {
-                    if (word.Equals(w, StringComparison.OrdinalIgnoreCase))
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                    return false;
-                span = span.Slice(len);
-            }
-        }
-
-        static readonly SearchValues<Char> AsciiLetters = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
-
-        /// <summary>
-        /// The ASCII words that can be part of a date (indexed by the length of the word): the words of the month and day names (all forms), the AM / PM designators and the era names of the invariant culture, "T", "Z" and "GMT"
-        /// </summary>
-        static readonly String[][] DateWords = GetDateWords();
-
-        static String[][] GetDateWords()
-        {
-            var f = CultureInfo.InvariantCulture.DateTimeFormat;
-            var words = new HashSet<String>(StringComparer.OrdinalIgnoreCase);
-            IEnumerable<String>[] all =
-            [
-                f.MonthNames, f.AbbreviatedMonthNames, f.MonthGenitiveNames, f.AbbreviatedMonthGenitiveNames, f.DayNames, f.AbbreviatedDayNames, f.ShortestDayNames,
-                [f.AMDesignator, f.PMDesignator, f.GetEraName(1), f.GetAbbreviatedEraName(1), "T", "Z", "GMT"],
-            ];
-            foreach (var x in all)
-            {
-                foreach (var n in x)
-                {
-                    foreach (var w in n.Split([' ', '.', ','], StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        if (w.AsSpan().IndexOfAnyExcept(AsciiLetters) < 0)
-                            words.Add(w);
-                    }
-                }
-            }
-            var maxLen = 0;
-            foreach (var w in words)
-                maxLen = Math.Max(maxLen, w.Length);
-            var byLength = new String[maxLen + 1][];
-            for (int i = 0; i <= maxLen; ++i)
-            {
-                var l = new List<String>();
-                foreach (var w in words)
-                {
-                    if (w.Length == i)
-                        l.Add(w);
-                }
-                byLength[i] = l.ToArray();
-            }
-            return byLength;
         }
 
         /// <summary>

@@ -9,7 +9,7 @@ namespace SysWeaver.MicroService
 {
 
     [AiToolPrefix("")]
-    public sealed class MapService : IHaveOpenAiTools
+    public sealed class MapService : IHaveAiTools
     {
         public MapService() 
         { 
@@ -37,7 +37,7 @@ namespace SysWeaver.MicroService
         /// <param name="map">The data required to generate the map</param>
         /// <param name="request"></param>
         /// <returns>An url to a svg image with the generated map</returns>
-        [OpenAiUse]
+        [AiUse]
         [AiTool("🗺️✨")]
         public String BuildMap(MapGenParams map, HttpServerRequest request)
         {
@@ -54,7 +54,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="map">The map to get information about</param>
         /// <returns>An array of all region names (that can be stylized)</returns>
-        [OpenAiUse]
+        [AiUse]
         [AiTool("🗺️📥")]
         public String[] GetMapRegions(MapSelect map)
             => MapTools.GetRegions(map).Select(x => x.N).ToArray();

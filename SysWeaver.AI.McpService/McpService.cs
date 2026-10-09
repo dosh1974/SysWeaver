@@ -54,6 +54,7 @@ namespace SysWeaver.AI
             AllowedOrigins = new HashSet<String>(origins, StringComparer.OrdinalIgnoreCase);
             var auth = Authorization.GetRequiredTokens(p.Auth);
             RequiresAuth = auth != null;
+            DefaultToolAuth = p.Auth;
             UnauthorizedHandler = new McpRequestHandler("Unauthorized", null, Unauthorized);
             PostHandler = new McpRequestHandler(nameof(Post), auth, Post);
             MethodNotAllowedHandler = new McpRequestHandler("MethodNotAllowed", auth, MethodNotAllowed);
@@ -129,12 +130,18 @@ namespace SysWeaver.AI
         readonly ConcurrentDictionary<String, AiTool> Tools = new(StringComparer.Ordinal);
 
         /// <summary>
+        /// The auth of tools that doesn't specify any auth (McpParams.Auth)
+        /// </summary>
+        readonly String DefaultToolAuth;
+
+        /// <summary>
         /// The names of all registered tools
         /// </summary>
         public IReadOnlyCollection<String> ToolNames => Tools.Keys.ToArray();
 
         /// <summary>
         /// Register a method as a tool, the tool is described in the same way as AI chat tools (XML documentation, AiToolNameAttribute, AiToolPrefixAttribute, WebApiAuthAttribute etc).
+        /// Methods without any auth (WebApiAuthAttribute or IRunTimeWebApiAuth) requires McpParams.Auth.
         /// </summary>
         /// <param name="instance">Object instance (null for static methods)</param>
         /// <param name="method">The method</param>
@@ -145,7 +152,7 @@ namespace SysWeaver.AI
             AiTool tool;
             try
             {
-                tool = AiTool.FromMethod(instance, method, fn, PerfMon);
+                tool = AiTool.FromMethod(instance, method, fn, PerfMon, DefaultToolAuth);
             }
             catch (Exception ex)
             {
@@ -370,6 +377,35 @@ namespace SysWeaver.AI
             => (r.GetReqHeader("Authorization") ?? r.GetReqHeader("x-api-key") ?? r.GetReqHeader("x-goog-api-key")) != null;
 
         /// <summary>
+        /// The server only authenticates the credentials of a request if the session have no user, so a session cookie (ex: from a browser or an earlier request using another key) would make the request use the user of the session.
+        /// Check that the credentials (if any) belongs to the same user as the session.
+        /// </summary>
+        static async ValueTask<bool> CredentialsMatchSession(HttpServerRequest r)
+        {
+            var user = r.Session?.Auth;
+            if (user == null)
+                return true;
+            var server = r.Server;
+            if (!server.AllowAuthorizationAuth)
+                return true;
+            var h = r.GetReqHeader("Authorization");
+            if (h == null)
+            {
+                //  Same as the server
+                h = r.GetReqHeader("x-api-key") ?? r.GetReqHeader("x-goog-api-key");
+                if (h == null)
+                    return true;
+                h = "*key " + h;
+            }
+            var am = server.Auth;
+            if (am == null)
+                return false;
+            //  The result is cached by the auth manager
+            var a = (await am.Http(h).ConfigureAwait(false)).Item1;
+            return (a != null) && String.Equals(a.Guid, user.Guid, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// The response to a request (that requires auth) without any credentials
         /// </summary>
         static Task<HttpRequestData> Unauthorized(HttpServerRequest r)
@@ -436,6 +472,8 @@ namespace SysWeaver.AI
             using var _ = PerfMon.Track(nameof(Post));
             if (!IsOriginAllowed(r))
                 return JsonResponse(r, 403, Json(w => WriteError(w, default, ErrInvalidRequest, "The origin is not allowed")));
+            if (!await CredentialsMatchSession(r).ConfigureAwait(false))
+                return JsonResponse(r, 403, Json(w => WriteError(w, default, ErrInvalidRequest, "The supplied credentials doesn't match the user of the session (don't send cookies to the MCP end point)")));
             var version = r.GetReqHeader("MCP-Protocol-Version");
             if ((version != null) && (!ProtocolVersions.Contains(version)))
                 return JsonResponse(r, 400, Json(w => WriteError(w, default, ErrInvalidRequest, "Unsupported protocol version " + version.ToQuoted())));

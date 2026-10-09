@@ -6,8 +6,8 @@ namespace SysWeaver.AI
     /// Marks a method as an AI tool and specifies the icon (typically one or more emojis) that is displayed when the tool is called.
     /// </summary>
     /// <remarks>
-    /// A method is an AI tool if it has this attribute or an <see cref="OpenAiUseAttribute"/> with <see cref="OpenAiUseAttribute.Use"/> set to true.
-    /// Tool methods on service instances implementing <see cref="IHaveOpenAiTools"/> are added to AI chat services, and tool methods on any service instance can be exposed over MCP.
+    /// A method is an AI tool if it has this attribute or an <see cref="AiUseAttribute"/> with <see cref="AiUseAttribute.Use"/> set to true.
+    /// Tool methods on service instances implementing <see cref="IHaveAiTools"/> are added to AI chat services, and tool methods on any service instance can be exposed over MCP.
     /// The tool name is computed from <see cref="AiToolPrefixAttribute"/> and <see cref="AiToolNameAttribute"/>, the description from the XML documentation.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
@@ -35,13 +35,13 @@ namespace SysWeaver.AI
     /// Prefer <see cref="AiToolAttribute"/> which also specifies an icon.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-    public sealed class OpenAiUseAttribute : Attribute
+    public sealed class AiUseAttribute : Attribute
     {
         /// <summary>
         /// Marks (or explicitly unmarks) a method as an AI tool.
         /// </summary>
         /// <param name="use">True to use the method as an AI tool.</param>
-        public OpenAiUseAttribute(bool use = true)
+        public AiUseAttribute(bool use = true)
         {
             Use = use;
         }
@@ -52,13 +52,13 @@ namespace SysWeaver.AI
     }
 
     /// <summary>
-    /// A marker interface used to indicate that the type contains AI tools (methods with an <see cref="AiToolAttribute"/> or an <see cref="OpenAiUseAttribute"/>).
+    /// A marker interface used to indicate that the type contains AI tools (methods with an <see cref="AiToolAttribute"/> or an <see cref="AiUseAttribute"/>).
     /// </summary>
     /// <remarks>
     /// AI chat services add the tools of all service instances implementing this interface (and remove them when the instance is removed).
     /// The MCP service doesn't require this interface.
     /// </remarks>
-    public interface IHaveOpenAiTools
+    public interface IHaveAiTools
     {
     }
 
@@ -71,14 +71,14 @@ namespace SysWeaver.AI
     /// Note: Currently not read by any code in the framework.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-    public sealed class OpenAiTableRowTypeAttribute : Attribute
+    public sealed class AiTableRowTypeAttribute : Attribute
     {
         /// <summary>
         /// Specify the row type of the table data returned by an AI tool.
         /// </summary>
         /// <param name="rowType">The type of data in the table</param>
         /// <param name="canEdit">Set to true if this method can modify the table data before creating and returning a reference</param>
-        public OpenAiTableRowTypeAttribute(Type rowType, bool canEdit)
+        public AiTableRowTypeAttribute(Type rowType, bool canEdit)
         {
             RowType = rowType;
             CanEdit = canEdit;
