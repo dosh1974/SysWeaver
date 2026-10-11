@@ -3613,6 +3613,20 @@
             The default System.Text.Json encoder (and html / xml) escapes &amp;, +, &lt; and &gt;, use <see cref="F:SysWeaver.CompactAsciiString.Secure"/> for values that are written that way.
             </remarks>
         </member>
+        <member name="F:SysWeaver.CompactAsciiString.LegacyInvalidDefaults">
+            <summary>
+            The invalid set of <see cref="F:SysWeaver.CompactAsciiString.LegacyDefault"/>: <see cref="F:SysWeaver.CompactAsciiString.InvalidDefaults"/> without DEL (127)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompactAsciiString.LegacyDefault">
+            <summary>
+            The <see cref="F:SysWeaver.CompactAsciiString.Default"/> encoding used before 2026-10-05 (commit 139956c): all ASCII chars [33, 127] except the <see cref="F:SysWeaver.CompactAsciiString.LegacyInvalidDefaults"/> (base 87, DEL is the last digit).
+            Use it to decode values that were stored with the old <see cref="F:SysWeaver.CompactAsciiString.Default"/> (only single char values below 86 are encoded the same way, all other values differ).
+            </summary>
+            <remarks>
+            DEL (127) is escaped by json serializers, so values with that char expand "in transit", don't use this for new data.
+            </remarks>
+        </member>
         <member name="F:SysWeaver.CompactAsciiString.SecureChars">
             <summary>
             The alphabet of <see cref="F:SysWeaver.CompactAsciiString.Secure"/>, the index is the digit value

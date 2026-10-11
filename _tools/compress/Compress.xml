@@ -44,6 +44,11 @@
             If true, shader variables will be removed
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressParams.Force">
+            <summary>
+            If true, compress the files (even if it by default wouldn't)
+            </summary>
+        </member>
         <member name="F:SysWeaver.CompressProgram.ExitCompressFailed">
             <summary>
             Exit code: a file couldn't be compressed using any of the compression methods (with OnlyBest).

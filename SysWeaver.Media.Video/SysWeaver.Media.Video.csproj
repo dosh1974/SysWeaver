@@ -16,70 +16,73 @@
     <ProjectReference Include="..\SysWeaver.Media\SysWeaver.Media.csproj" />
   </ItemGroup>
 
+    <Target Name="PackResources" BeforeTargets="BeforeBuild">
+		<!--Exec Command="..\_tools\compress\Compress.exe -Force -Methods gzip .\runtimes\+ .\packed" /-->
+
+    </Target>
+
+  <!--
+    The native FFmpeg libraries are stored gzip compressed in runtimes\<os>_<arch>\<file>.gz.
+    They are extracted (incrementally) to the intermediate folder and then added as None items with CopyToOutputDirectory=PreserveNewest,
+    so they end up in runtimes\<os>_<arch>\<file> in the output, are published and flow to referencing projects just like normal content.
+    Only the libraries for the target OS are included (RuntimeIdentifier if set, else the build OS).
+  -->
+  <PropertyGroup>
+    <FfmpegTargetOs Condition="'$(RuntimeIdentifier)' != '' And $(RuntimeIdentifier.StartsWith('win'))">windows</FfmpegTargetOs>
+    <FfmpegTargetOs Condition="'$(RuntimeIdentifier)' != '' And $(RuntimeIdentifier.StartsWith('linux'))">linux</FfmpegTargetOs>
+    <FfmpegTargetOs Condition="'$(RuntimeIdentifier)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">windows</FfmpegTargetOs>
+    <FfmpegTargetOs Condition="'$(RuntimeIdentifier)' == '' And $([MSBuild]::IsOSPlatform('Linux'))">linux</FfmpegTargetOs>
+  </PropertyGroup>
+
   <ItemGroup>
-    <None Update="runtimes\linux_arm64\libavcodec.so.63">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_arm64\libavdevice.so.63">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_arm64\libavfilter.so.12">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_arm64\libavformat.so.63">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_arm64\libavutil.so.61">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_arm64\libswresample.so.7">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_arm64\libswscale.so.10">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libavcodec.so.63">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libavdevice.so.63">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libavfilter.so.12">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libavformat.so.63">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libavutil.so.61">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libswresample.so.7">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\linux_x64\libswscale.so.10">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\avcodec-63.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\avdevice-63.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\avfilter-12.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\avformat-63.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\avutil-61.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\swresample-7.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="runtimes\windows_x64\swscale-10.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <FfmpegPacked Include="runtimes\$(FfmpegTargetOs)_*\*.gz" Condition="'$(FfmpegTargetOs)' != ''" />
   </ItemGroup>
+
+  <UsingTask TaskName="GunzipFiles" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        foreach (var f in Files)
+        {
+            var dst = f.GetMetadata("Destination");
+            Directory.CreateDirectory(Path.GetDirectoryName(dst));
+            var tmp = dst + ".tmp";
+            using (var i = new GZipStream(File.OpenRead(f.ItemSpec), CompressionMode.Decompress))
+            using (var o = File.Create(tmp))
+                i.CopyTo(o);
+            if (File.Exists(dst))
+                File.Delete(dst);
+            File.Move(tmp, dst);
+            Log.LogMessage(MessageImportance.Normal, "Extracted " + f.ItemSpec + " -> " + dst);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="FfmpegPrepare">
+    <ItemGroup>
+      <FfmpegPacked Update="@(FfmpegPacked)">
+        <Link>runtimes\$([System.IO.Path]::GetFileName($([System.String]::Copy('%(Directory)').TrimEnd('\'))))\%(Filename)</Link>
+      </FfmpegPacked>
+      <FfmpegPacked Update="@(FfmpegPacked)">
+        <Destination>$(MSBuildProjectDirectory)\$(IntermediateOutputPath)%(Link)</Destination>
+      </FfmpegPacked>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="FfmpegExtract" DependsOnTargets="FfmpegPrepare" Inputs="@(FfmpegPacked)" Outputs="%(Destination)">
+    <GunzipFiles Files="@(FfmpegPacked)" />
+  </Target>
+
+  <Target Name="FfmpegAddToOutput" DependsOnTargets="FfmpegExtract" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Include="%(FfmpegPacked.Destination)" Link="%(FfmpegPacked.Link)" CopyToOutputDirectory="PreserveNewest" />
+      <FileWrites Include="%(FfmpegPacked.Destination)" />
+    </ItemGroup>
+  </Target>
 
 </Project>
