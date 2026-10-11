@@ -40,6 +40,8 @@ namespace SysWeaver
         /// Process a single file and return it's meta data.
         /// Reads any existing meta data, calls the process function and stores the result if non null.
         /// Failure to store the meta data is ignored (the associated files are deleted at process exit).
+        /// If the key type folder was deleted while the process is running, the process function (or the meta data write) fails with a <see cref="DirectoryNotFoundException"/>:
+        /// the folder is then re-created and the failed call is retried once.
         /// </summary>
         /// <param name="filename">The file to process.</param>
         /// <returns>The new meta data if the process function returned non null, else the existing meta data (may be null). Null if the file doesn't exist.</returns>
@@ -56,7 +58,8 @@ namespace SysWeaver
             var cleanMeta = Path.Combine(folder, String.Concat("Meta_", hash, KeySuffix));
             var dataName = cleanMeta + FileMetaData.FileExt;
 
-            using var sysLock = SystemLock.Get(hash);
+            //  Lock on the key type, key suffix and the content (case insensitive like the file names), so that a callback can process the same content using another key type / suffix (storage-cov-6)
+            using var sysLock = SystemLock.Get(String.Concat("FileMetaData_", KeyType, KeySuffix, "_", hash).FastToLower());
             var fi = new FileInfo(dataName);
             dataName = fi.FullName;
             T data = null;
@@ -86,13 +89,32 @@ namespace SysWeaver
                 }
             }
             var pd = data;
-            data = OnData(filename, destBase, data);
+            try
+            {
+                data = OnData(filename, destBase, pd);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                //  The folder was deleted while the process is running (rare), re-create it and retry once (storage-cov-4)
+                PathExt.EnsureFolderExist(folder);
+                data = OnData(filename, destBase, pd);
+            }
             if (data == null)
                 return pd;
             try
             {
-                using (var o = new FileStream(dataName, FileMode.Create))
-                    comp.Compress(ser.Serialize(data).Span, o, CompEncoderLevels.Balanced);
+                try
+                {
+                    using (var o = new FileStream(dataName, FileMode.Create))
+                        comp.Compress(ser.Serialize(data).Span, o, CompEncoderLevels.Balanced);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    //  The folder was deleted while the process is running (rare), re-create it and retry once (storage-cov-4)
+                    PathExt.EnsureFolderExist(folder);
+                    using (var o = new FileStream(dataName, FileMode.Create))
+                        comp.Compress(ser.Serialize(data).Span, o, CompEncoderLevels.Balanced);
+                }
                 fi.Refresh();
                 cache[dataName] = Tuple.Create(fi.LastWriteTimeUtc, (Object)data);
             }

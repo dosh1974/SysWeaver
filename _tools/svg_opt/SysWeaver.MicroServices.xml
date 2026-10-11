@@ -96,6 +96,17 @@
             Any instance registered to the service manager, that implements this interface will have the template variables registered
             </summary>
         </member>
+        <member name="T:SysWeaver.MicroService.IRunTimeWebApiAuth">
+            <summary>
+            Services with API's can implement this API to provide runtime configurable auths
+            </summary>
+        </member>
+        <member name="P:SysWeaver.MicroService.IRunTimeWebApiAuth.MethodAuths">
+            <summary>
+            Runtime auto overrides, key = method name, value = auth for that method
+            Key "*" means all all methods (that are not otherwise specified)
+            </summary>
+        </member>
         <member name="T:SysWeaver.MicroService.WebApiAttribute">
             <summary>
             Put this attribute on a method to make it available online
@@ -258,17 +269,6 @@
         <member name="F:SysWeaver.MicroService.WebApiAuthAttribute.Auth">
             <summary>
             Auth
-            </summary>
-        </member>
-        <member name="T:SysWeaver.MicroService.IRunTimeWebApiAuth">
-            <summary>
-            Services with API's can implement this API to provide runtime configurable auths
-            </summary>
-        </member>
-        <member name="P:SysWeaver.MicroService.IRunTimeWebApiAuth.MethodAuths">
-            <summary>
-            Runtime auto overrides, key = method name, value = auth for that method
-            Key "*" means all all methods (that are not otherwise specified)
             </summary>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiClientCacheAttribute">

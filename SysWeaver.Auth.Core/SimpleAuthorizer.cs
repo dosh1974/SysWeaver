@@ -168,6 +168,8 @@ namespace SysWeaver.Auth
                 //  Serialize updates, so that a concurrent update (file change vs api key change) can't publish a stale snapshot
                 lock (ApiKeyLock)
                 {
+                    //  Incremented before the new authorizations are created, so that they capture the new value (else their Cc never matches the ChangeCounter)
+                    Interlocked.Increment(ref InternalChangeCounter);
                     var p = Params;
                     var tokenDelim = TokenDelim;
                     var a = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal);
@@ -206,6 +208,8 @@ namespace SysWeaver.Auth
                                     continue;
                                 }
                                 var auth = AddUser(a, guidMap, kv + apiKeyAuth, true, true);
+                                if (auth == null)
+                                    continue;
                                 bearerAuths[kv.Substring(kv.IndexOf(':') + 1)] = Task.FromResult(auth);
                             }
                         }
@@ -228,10 +232,13 @@ namespace SysWeaver.Auth
                     Interlocked.Exchange(ref Auths, a.Freeze());
                     Interlocked.Exchange(ref BearerAuths, bearerAuths.Freeze());
                     Interlocked.Exchange(ref AuthGuids, guidMap.Freeze());
-                    Interlocked.Increment(ref InternalChangeCounter);
                 }
                 foreach (var x in changed)
+                {
                     x.Value.Item2.RequestLogout("Password or tokens have changed!");
+                    //  The weak (basic auth / API key) authorization is used by token and bearer logins
+                    x.Value.Item4?.RequestLogout("Password or tokens have changed!");
+                }
             }
             catch (Exception ex)
             {
@@ -241,7 +248,12 @@ namespace SysWeaver.Auth
                     if (MustExist)
                         throw;
                     msg?.AddMessage(LogPrefix + "Failed to update users", ex, MessageLevels.Warning);
+                }else
+                {
+                    //  Must be visible, the previous users are kept (so other changes of the update aren't applied)
+                    msg?.AddMessage(LogPrefix + "Failed to update users, keeping the previous users", ex, MessageLevels.Error);
                 }
+                return;
             }
             msg?.AddMessage(LogPrefix + "Users updated", MessageLevels.Debug);
         }
@@ -308,10 +320,23 @@ namespace SysWeaver.Auth
                 hash = AuthTools.ComputeSimplePasswordHash(ul, pwd);
             }
             var guid = String.Concat(GuidPrefix, ':', HashTools.GetHashString(user));
-            var auth = new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), false, guid, user, null, null, domain);
-            allowBasicAuth |= auth.Tokens.Contains("service");
-            var basicAuth = allowBasicAuth ? new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), true, guid, user, null, null, domain) : null;
-            guidMap[guid] = new AuthorizationInfo(auth);
+            Authorization auth;
+            Authorization basicAuth;
+            AuthorizationInfo info;
+            try
+            {
+                auth = new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), false, guid, user, null, null, domain);
+                allowBasicAuth |= auth.Tokens.Contains("service");
+                basicAuth = allowBasicAuth ? new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), true, guid, user, null, null, domain) : null;
+                info = new AuthorizationInfo(auth);
+            }
+            catch (ArgumentException ex)
+            {
+                //  An invalid line (ex: a too long user name or domain) is skipped, the other users are still loaded
+                Msg?.AddMessage(LogPrefix + "Ignoring user " + user.ToQuoted() + ", the user line is invalid: " + ex.Message, MessageLevels.Warning);
+                return null;
+            }
+            guidMap[guid] = info;
             a[ul] = new Tuple<byte[], Authorization, String, Authorization>(Convert.FromBase64String(hash), auth, hash, basicAuth);
             Msg?.AddMessage(String.Concat(LogPrefix, "Added user \"", user, '"'), MessageLevels.Debug);
             return basicAuth ?? auth;
@@ -465,10 +490,10 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Authorize using an API key as a token (same as <see cref="BearerAuth(string)"/>, the key is not consumed).
         /// </summary>
-        /// <param name="oneTimeToken">The API key</param>
+        /// <param name="oneTimeToken">The API key (null is not found)</param>
         /// <returns>A weak authorization for the API key user, or null</returns>
         public override Task<Authorization> TokenAuth(string oneTimeToken)
-            => BearerAuths.TryGetValue(oneTimeToken, out var data) ? data : NoAuth;
+            => (oneTimeToken != null) && BearerAuths.TryGetValue(oneTimeToken, out var data) ? data : NoAuth;
 
         static readonly Task<String> TaskTupleStringStringNull = Task.FromResult<String>(null);
 
@@ -578,11 +603,15 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
         /// <returns>True if the key was removed, false if it doesn't exist</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
         public bool RemoveApiKey(String keyName)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(keyName);
+#endif//DEBUG
             lock (ApiKeyLock)
             {
                 var t = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
@@ -645,7 +674,8 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
         /// <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
-        /// <exception cref="Exception">The key name is null, empty, contains a ':' or is too long.</exception>
+        /// <exception cref="ArgumentNullException">The key name is null.</exception>
+        /// <exception cref="ArgumentException">The key name is empty (or only white spaces), contains a ':', starts with a '#' or "//" or is too long.</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
@@ -653,15 +683,18 @@ namespace SysWeaver.Auth
         public String AddApiKey(String keyName)
         {
             if (keyName == null)
-                throw new Exception("Invalid key name (may not be null)");
+                throw new ArgumentNullException(nameof(keyName), "Invalid key name (may not be null)");
             keyName = keyName.Trim();
             if (keyName.Length <= 0)
-                throw new Exception("Invalid key name (may not be all white spaces or empty)");
+                throw new ArgumentException("Invalid key name (may not be all white spaces or empty)", nameof(keyName));
             if (keyName.Contains(':'))
-                throw new Exception("Invalid key name (may not contain a ':')");
+                throw new ArgumentException("Invalid key name (may not contain a ':')", nameof(keyName));
+            //  Would be parsed as a comment line (the key would never work)
+            if ((keyName[0] == '#') || keyName.StartsWith("//", StringComparison.Ordinal))
+                throw new ArgumentException("Invalid key name (may not start with a '#' or \"//\")", nameof(keyName));
             var kl = keyName.Length;
             if (kl > AuhorizationLimits.MaxUserNameLength)
-                throw new Exception("Key name to long, use at most " + AuhorizationLimits.MaxUserNameLength + " chars!");
+                throw new ArgumentException("Key name too long, use at most " + AuhorizationLimits.MaxUserNameLength + " chars!", nameof(keyName));
             lock (ApiKeyLock)
             {
                 var t = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);

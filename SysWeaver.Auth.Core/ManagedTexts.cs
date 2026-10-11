@@ -23,11 +23,20 @@ namespace SysWeaver
         /// "C:\Locale" should then include sub-folders named using a language code like: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv".
         /// </param>
         /// <param name="defaultLang">The default language if the supplied language isn't found, null uses "en"</param>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="sourceFile"/> doesn't contain a '*'.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="sourceFile"/> is null (DEBUG builds only).</exception>
+        /// <exception cref="ArgumentException"><paramref name="sourceFile"/> doesn't contain a '*' (DEBUG builds, release builds throw an <see cref="ArgumentOutOfRangeException"/>).</exception>
+        /// <exception cref="DirectoryNotFoundException">The folder before the '*' doesn't exist.</exception>
         public ManagedTexts(String sourceFile, String defaultLang)
         {
             var languages = new ConcurrentDictionary<String, ManagedLanguageTexts>(StringComparer.Ordinal);
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(sourceFile);
+#endif//DEBUG
             var i = sourceFile.IndexOf('*');
+#if DEBUG
+            if (i < 0)
+                throw new ArgumentException("The source file must contain a '*' where the language folder name is, ex: \"C:\\locale\\*\\MyTexts.txt\"", nameof(sourceFile));
+#endif//DEBUG
             String searchFolder = sourceFile.Substring(0, i).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar);
             foreach (var ff in Directory.GetDirectories(searchFolder))
             {
@@ -140,11 +149,11 @@ namespace SysWeaver
         /// </summary>
         /// <param name="key">The key</param>
         /// <param name="language">The language, ex: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv"</param>
-        /// <returns>null if not found, else the text template</returns>
+        /// <returns>null if not found (or if there are no languages), else the text template</returns>
         public TextTemplate GetText(String key, String language)
         {
             var l = GetLang(language);
-            return l.GetTemplate(key);
+            return l?.GetTemplate(key);
         }
 
     }

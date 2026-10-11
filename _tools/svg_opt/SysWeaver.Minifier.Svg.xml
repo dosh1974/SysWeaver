@@ -4,14 +4,357 @@
         <name>SysWeaver.Minifier.Svg</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Minifier.SvgMinifier">
+            <summary>
+            Svg minifier / optimizer (XDocument based), see <see cref="M:SysWeaver.Minifier.SvgMinifier.Optimize(System.String,SysWeaver.IMessageHost,SysWeaver.Minifier.SvgMinifierParams)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.Version">
+            <summary>
+            The output version, change it when the output of <see cref="M:SysWeaver.Minifier.SvgMinifier.Optimize(System.String,SysWeaver.IMessageHost,SysWeaver.Minifier.SvgMinifierParams)"/> changes (it's the first character of <see cref="P:SysWeaver.Minifier.SvgMinifierParams.CacheKey"/>,
+            used by SvgOpt and SvgTransformer to invalidate their cached outputs).
+            'm': svg-cov-29 / svg-cov-49 (numeric only trailing zeros, fixed point optimization), 'n': svg-cov-53 (the view box is rounded).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.Optimize(System.String,SysWeaver.IMessageHost,SysWeaver.Minifier.SvgMinifierParams)">
+            <summary>
+            Minify an svg document (or an xml fragment with several root elements) according to the options.
+            If the first svg element has a view box with a positive size, its width and height attributes are always removed (also when
+            <see cref="F:SysWeaver.Minifier.SvgMinifierParams.RemoveSize"/> is false), and x / y attributes that are zero are removed.
+            Some optimizations (clip-rule / fill-rule removal, <see cref="F:SysWeaver.Minifier.SvgMinifierParams.TryRemoveAttributes"/> and <see cref="F:SysWeaver.Minifier.SvgMinifierParams.BitmapValidation"/>)
+            render the document with System.Drawing (Windows only, they are skipped silently if rendering fails).
+            The DOCTYPE is always removed.
+            The optimization steps are repeated until the document doesn't change any more (at most 8 passes), so minifying the output again doesn't change it (svg-cov-49).
+            A step is only repeated if a step that can enable further optimizations of it changed the document after its last run (see <see cref="F:SysWeaver.Minifier.SvgMinifier.Steps"/>).
+            </summary>
+            <param name="svgText">The svg document</param>
+            <param name="msg">Not used, may be null</param>
+            <param name="opt">The options</param>
+            <returns>The minified svg</returns>
+            <exception cref="T:System.Xml.XmlException">The text is not valid xml</exception>
+            <exception cref="T:System.InvalidOperationException"><see cref="F:SysWeaver.Minifier.SvgMinifierParams.BitmapValidation"/> is enabled and an optimization changed the rendering
+            (or the optimized document can't be rendered). If <see cref="F:SysWeaver.Minifier.SvgMinifierParams.ErrorDir"/> is set, the reference image, the failed image and the source svg
+            are saved in that folder and their paths are in the message, nothing is written otherwise</exception>
+            <exception cref="T:System.ArgumentNullException"><paramref name="svgText"/> is null, or <paramref name="opt"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="T:SysWeaver.Minifier.SvgMinifier.OptContext">
+            <summary>
+            The state of one <see cref="M:SysWeaver.Minifier.SvgMinifier.Optimize(System.String,SysWeaver.IMessageHost,SysWeaver.Minifier.SvgMinifierParams)"/> call, shared by the steps
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.Svg">
+            <summary>
+            The first svg element (may be null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.SourceText">
+            <summary>
+            The svg text passed to <see cref="M:SysWeaver.Minifier.SvgMinifier.Optimize(System.String,SysWeaver.IMessageHost,SysWeaver.Minifier.SvgMinifierParams)"/> (saved with the validation errors)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.X">
+            <summary>
+            The view box of the first svg element (0 if none)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.Y">
+            <summary>
+            The view box of the first svg element (0 if none)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.Width">
+            <summary>
+            The view box of the first svg element (0 if none)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.Height">
+            <summary>
+            The view box of the first svg element (0 if none)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.CanDoVisualOpts">
+            <summary>
+            True if the document has a view box with a positive size (and no x / y offset), required by the rendering based optimizations
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.DecimalLimit">
+            <summary>
+            The number of decimals to keep (from <see cref="F:SysWeaver.Minifier.SvgMinifierParams.MaxDecimals"/> or <see cref="F:SysWeaver.Minifier.SvgMinifierParams.MaxDecimalRes"/>), less than zero to keep all
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.Step">
+            <summary>
+            The running step (used in validation errors)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.Ref">
+            <summary>
+            The bitmap validation reference image, rendered before a validated step (null if not rendered yet, or if rendering failed, see <see cref="F:SysWeaver.Minifier.SvgMinifier.OptContext.RefFailed"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OptContext.RefFailed">
+            <summary>
+            True if rendering the reference image failed (validation is skipped until a step changes the rendering)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.OptContext.EnsureRef">
+            <summary>
+            Render the reference image (if not done already)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.OptContext.InvalidateRef">
+            <summary>
+            A step changed the rendering on purpose (rounding, removed fills or background), the reference must be rendered again
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Minifier.SvgMinifier.StepId">
+            <summary>
+            Optimization steps in the order they are executed (the values are the indices in <see cref="F:SysWeaver.Minifier.SvgMinifier.Steps"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.StepFlags.Validate">
+            <summary>
+            The step must not change the rendering: if it changed the document, the document is compared with the reference image (if <see cref="F:SysWeaver.Minifier.SvgMinifierParams.BitmapValidation"/> is on)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.StepFlags.ValidatesItself">
+            <summary>
+            Like <see cref="F:SysWeaver.Minifier.SvgMinifier.StepFlags.Validate"/>, but the step validates each change itself
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.StepFlags.ChangesRendering">
+            <summary>
+            The step changes the rendering on purpose, the validation reference image is rendered again after it changed the document
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Minifier.SvgMinifier.Step">
+            <summary>
+            An optimization step
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.Step.IsEnabled">
+            <summary>
+            True if the step is enabled by the options
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.Step.Run">
+            <summary>
+            Execute the step, returns true if the document was changed.
+            A step must reach its own fixed point (running it again directly after itself doesn't change anything).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.Step.EnabledBy">
+            <summary>
+            A bit mask of the steps (1 &lt;&lt; StepId) whose changes can enable further optimizations of this step.
+            After its first run, the step is only executed again if one of these steps changed the document since then.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.MaxPasses">
+            <summary>
+            The maximum number of passes over the steps (the first pass runs all enabled steps, the following passes only the steps that may find more to do)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.Steps">
+            <summary>
+            All optimization steps, in execution order, with the steps that can enable further optimizations of each step (the dependency graph).
+            The order is chosen so that most dependencies point backwards (one pass is usually enough):
+            - Element removal (NonSvg, Title, Metadata, Hidden, Background, Graphs) and attribute removal (NonSvg, Fill, Rules, Ids, UseSize, Version)
+              can make ids unused (Ids, RenameIds), g elements attribute-less or empty (Graphs), namespace declarations unused (NamespaceCleanup),
+              and text nodes neighbours (TextNodes).
+            - Ids can remove the last attribute of a g element (Graphs), Graphs can remove an empty g element with an id or a reference (Ids, RenameIds).
+              These two are the only dependency cycle that points forward (rare, handled by a second pass).
+            - RenameIds depends on everything that changes the use counts of ids (Ids and all removals above), renaming an already renamed document is a no-op.
+            - The rendering based Rules (clip-rule / fill-rule / attribute removal) depends on steps that change the geometry or the painting
+              (Decimals, Transform rounding, Fill, Background), so it runs after them.
+            - Background (the first rect) depends on element removals before it and on the rounding (Decimals).
+            - UseSize ("100%") depends on TrailingZeros ("100.0%").
+            - The value formatting steps (AttributeSpaces, Colors, TrailingZeros, LeadingZeros, ShortenPath, Transform) are idempotent, run after the rounding (Decimals)
+              in an order where each one keeps the output of the previous ones, and are not affected by removals: they run once.
+            - Comments, Namespaces, NonSvg, Title, Metadata, Decimals, Fill and Version don't depend on any other step: they run once.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.RunSteps(SysWeaver.Minifier.SvgMinifier.OptContext)">
+            <summary>
+            Run the steps until no step can find anything more to do (or <see cref="F:SysWeaver.Minifier.SvgMinifier.MaxPasses"/> is reached).
+            The first pass runs all enabled steps, later passes only run a step if one of the steps in its <see cref="F:SysWeaver.Minifier.SvgMinifier.Step.EnabledBy"/> changed the document after its last run.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Minifier.SvgMinifier.Utf8StringWriter">
+            <summary>
+            A StringWriter that reports UTF-8 as its encoding, so that a saved xml declaration says encoding="utf-8" (svg-cov-30)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Minifier.SvgMinifier.IdData">
+            <summary>
+            The ids and id references of a document
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.Hist">
+            <summary>
+            The number of uses (id attributes + references) per id
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.Order">
+            <summary>
+            All ids (defined or referenced) in the order of their first occurrence
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.Attributes">
+            <summary>
+            All attributes that define or reference an id (id, href="#..", url(#..))
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.StyleTexts">
+            <summary>
+            The texts of style elements with url(#id) references (they are counted and renamed, but never removed)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.Defined">
+            <summary>
+            Ids defined by an id attribute
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.OpaqueText">
+            <summary>
+            Text that may reference ids, but can't be rewritten (style elements without their url(#id) references, script elements, event, animation timing and aria attributes), null if none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.IdData.OpaqueWords">
+            <summary>
+            The words (runs of letters, digits, '_' and '-') of the <see cref="F:SysWeaver.Minifier.SvgMinifier.IdData.OpaqueText"/>, null if none
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.IdData.IsOpaque(System.String)">
+            <summary>
+            True if the name may be used by the opaque text (conservative)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.IdData.CanRename(System.String)">
+            <summary>
+            True if an id can be renamed (it's defined in the document and not used by any opaque text)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.IdData.CanRemove(System.String)">
+            <summary>
+            True if a reference or an id that is used once can be removed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.OpaqueAttributes">
+            <summary>
+            Attributes that may reference ids in a way that the minifier can't rewrite
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.TryReadId(System.String,System.String,System.String[]@)">
+            <summary>
+            Read the ids defined (id attribute) or referenced (href="#id" or url(#id), several are possible) by an attribute.
+            Empty ids are ignored.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.RemoveIds(System.Xml.Linq.XAttribute,System.String[],SysWeaver.Minifier.SvgMinifier.IdData,System.Boolean@)">
+            <summary>
+            Remove the references to removable ids (used once, see <see cref="M:SysWeaver.Minifier.SvgMinifier.IdData.CanRemove(System.String)"/>) of an attribute (or an unused id attribute).
+            In a style attribute only the css declarations that reference such an id are removed (svg-cov-46), the attribute is removed if it becomes empty.
+            A fill or stroke attribute is kept, any other attribute is removed.
+            </summary>
+            <param name="x">The attribute</param>
+            <param name="ids">The ids the attribute defines or references</param>
+            <param name="data">The ids of the document</param>
+            <param name="collateral">Set to true if a removed value also referenced an id that can't be removed (its use count dropped, it may be removable now)</param>
+            <returns>True if the attribute was changed or removed</returns>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.RenameUrlIds(System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Rename all url(#id) references of a value using the map (in one pass, svg-cov-33)
+            </summary>
+            <returns>The new value, or the value itself if nothing changed</returns>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.RemoveUrlIds(System.String)">
+            <summary>
+            Remove the ids of all url(#id) references of a value ("url(#a)" =&gt; "url(#)")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.RenameIds(SysWeaver.Minifier.SvgMinifier.IdData)">
+            <summary>
+            Rename all ids that can be renamed (see <see cref="M:SysWeaver.Minifier.SvgMinifier.IdData.CanRename(System.String)"/>) to short names, the most used id (definition + references) gets "a" (ties: first occurrence first).
+            Generated names never equal an id that isn't renamed (references to missing ids, ids used by opaque text) or a word of the opaque text.
+            All references (id, href="#id", url(#id) in attributes and in style elements) are updated, each value is rewritten once (svg-cov-33 / svg-cov-34).
+            Renaming an already renamed document doesn't change it (the names are assigned in the same order).
+            </summary>
+            <returns>True if any value was changed</returns>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.Validate(SysWeaver.Minifier.SvgMinifier.OptContext)">
+            <summary>
+            Compare the rendering of the document with the reference image (if any), throws an <see cref="T:System.InvalidOperationException"/> if it differs or if the document can't be rendered.
+            Files are only written if <see cref="F:SysWeaver.Minifier.SvgMinifierParams.ErrorDir"/> is set (svg-cov-35).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.DecimalLimits">
+            <summary>
+            Shape elements and their numerical attributes (the decimals limit, leading zeros and rendering based removals are applied to these)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.NumericAttributes">
+            <summary>
+            Attributes (and css properties of style attributes) with numerical values (numbers, lengths, number lists, path data, transforms), <see cref="F:SysWeaver.Minifier.SvgMinifierParams.TrimTrailingZeros"/>
+            is only applied to these (svg-cov-29)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifier.AnimationValueAttributes">
+            <summary>
+            Animation value attributes, numerical if the animated attribute is
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.IsNumericAttribute(System.Xml.Linq.XElement,System.String)">
+            <summary>
+            True if the attribute of the element has a numerical value (see <see cref="F:SysWeaver.Minifier.SvgMinifier.NumericAttributes"/>).
+            The values / from / to / by attributes are numerical for animateTransform, animateMotion and feColorMatrix, and for animate / set if the attributeName is numerical.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.SetMaxDecimals(System.String,System.Int32,System.Boolean)">
+            <summary>
+            Round all numbers in the value that have a decimal point or an exponent to at most maxDecimals decimals (banker's rounding).
+            Numbers are tokenized like svg numbers: digits, an optional '.' with digits and an optional exponent ("e-5"),
+            a '.' after a number's decimals starts a new number ("1.5.5" is 1.5 and .5); the sign is left as is, unless the number is rounded to zero ("-0.001" => "0").
+            Numbers with a decimal point are written without leading / trailing zeros ("0.50" => ".5", "1.0" => "1"),
+            numbers with an exponent are only changed if rounding changes their value, integers are never changed.
+            A space is inserted between two numbers if the second would otherwise merge with the first ("1.5.5" with 0 decimals => "2 0").
+            If isPath is true, the value is path data: the large-arc-flag and sweep-flag of arcs are single chars ("a5 5 0 0110 10") and are kept as is.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.TrimTrailingZerosStyle(System.String)">
+            <summary>
+            Apply <see cref="M:SysWeaver.Minifier.SvgMinifier.TrimTrailingZeros(System.String)"/> to the values of the numerical css properties (<see cref="F:SysWeaver.Minifier.SvgMinifier.NumericAttributes"/>) of a style attribute value (svg-cov-29)
+            </summary>
+            <returns>The new value, or the value itself if nothing changed</returns>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.TrimTrailingZeros(System.String)">
+            <summary>
+            Remove trailing zeros of the decimals of all numbers in the value ("10.500" =&gt; "10.5", "13.0" =&gt; "13", ".0" =&gt; "0", "-.00" =&gt; "0")
+            </summary>
+            <returns>The new value, or the value itself if nothing changed</returns>
+        </member>
+        <member name="M:SysWeaver.Minifier.SvgMinifier.GenShort(System.Int32)">
+            <summary>
+            Generate a unique short name: index 0 - 25 => "a" - "z", the following indices use all two char names ("aa", "ba" .. "z9"), then three chars and so on.
+            The first char is a lower case letter, the others are lower case letters, '_' or digits (bijective numeration, every index gives a different name).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Minifier.SvgMinifierParams">
+            <summary>
+            The options of <see cref="M:SysWeaver.Minifier.SvgMinifier.Optimize(System.String,SysWeaver.IMessageHost,SysWeaver.Minifier.SvgMinifierParams)"/>.
+            "Shape elements" below are: circle, ellipse, line, path, polygon, polyline and rect.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveFill">
             <summary>
-            Remove all fill attributes.
+            Remove all fill attributes (except fill="none"), so that the fill can be set using css.
+            The fill of the svg element is removed if any other fill was removed or if it isn't "none".
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveSize">
             <summary>
-            Remove size attribute.
+            Remove the width and height attributes of the svg element (and x / y attributes that are zero), also when there is no view box.
+            Note that width and height are always removed when the svg element has a view box with a positive size.
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveComments">
@@ -21,42 +364,45 @@
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveWhiteSpaces">
             <summary>
-            Remove white spaces
+            Remove insignificant white space (the document is parsed without preserving white space and saved without formatting)
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveBackground">
             <summary>
-            Remove background rectangle
+            Remove the first rect element if its position and size equals the view box (missing attributes are treated as 0),
+            repeated while the new first rect matches too, and the enable-background attribute of the svg element
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveClipRule">
             <summary>
-            Remove clip-rules on paths (if they don't affect output)
+            Remove clip-rule attributes of shape elements if they don't affect the output (requires a view box, checked by rendering the document with System.Drawing, Windows only)
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveFillRule">
             <summary>
-            Remove fill-rules on paths (if they don't affect output)
+            Remove fill-rule attributes of shape elements if they don't affect the output (requires a view box, checked by rendering the document with System.Drawing, Windows only)
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.TryRemoveAttributes">
             <summary>
-            Try remove any attributes (on render items)
+            Try to remove every attribute of shape elements, an attribute is removed if it doesn't affect the output
+            (requires a view box, checked by rendering the document with System.Drawing, Windows only, slow)
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveAttributeSpaces">
             <summary>
-            Remove atribute spaces
+            Remove spaces in all attribute values: ", " is replaced with "," and multiple spaces with one space
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveNonSvg">
             <summary>
-            Remove non-svg data
+            Remove elements and attributes that are not in the svg, xlink, xmlns or the empty namespace (ex: editor data, xml:space)
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveNamespaces">
             <summary>
-            Remove non-svg namespaces
+            Remove the namespace declarations of the svg element, except the default (xmlns) and xlink declarations.
+            Unused namespace declarations are always removed.
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveTitle">
@@ -71,22 +417,24 @@
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveDocType">
             <summary>
-            Remove the doc type
+            Remove the xml declaration ("&lt;?xml ...?&gt;"), if false a declaration is written (also if the input had none), it always says encoding="utf-8".
+            Note that the DOCTYPE is always removed.
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.ShortenColors">
             <summary>
-            Select the shortest color representation
+            Select the shortest color representation of fill and stroke attributes (not in style attributes), ex: "#FF0000" =&gt; "Red"
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.ShortenPath">
             <summary>
-            Remove spaces from a path
+            Shorten path data: commas, tabs and line breaks are replaced by spaces, repeated L / l / A / a commands are joined, unnecessary spaces are removed
+            and the arc flags are written without separators (ex: "a5 5 0 0 1 10 10" =&gt; "a5 5 0 0110 10")
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveVersion">
             <summary>
-            Remove version
+            Remove the version attribute of svg elements
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.TrimTagClose">
@@ -96,55 +444,93 @@
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.TrimTransform">
             <summary>
-            Remove transform
+            Shorten transform attributes: the rotate values are rounded to 4 decimals and a "0 0" center is removed,
+            scale with two equal values is written with one value, a translate y of 0 is removed, commas are replaced by spaces
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.TrimLeadingZeros">
             <summary>
-            Remove the leading zeros, i.e "0.5" => ".5" and "-0.3" to "-.3"
+            Remove the leading zeros of numbers in the coordinate attributes of shape elements, i.e "0.5" =&gt; ".5" and "-0.3" to "-.3" (and "-0" to "0")
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.TrimTrailingZeros">
-            Remove trailing zeros, i.e "10.500" => "10.5", "13.0" => "13", "0.0" => "0", ".10" => ".1", ".0" => "0", "-0.0" => "0", "-.000" => "0"
+            <summary>
+            Remove trailing zeros of the numbers in numerical attribute values, i.e "10.500" =&gt; "10.5", "13.0" =&gt; "13", "0.0" =&gt; "0", ".10" =&gt; ".1", ".0" =&gt; "0", "-0.0" =&gt; "0", "-.000" =&gt; "0".
+            Only applied to attributes with numerical values (coordinates, sizes, path data, points, transforms, viewBox, opacities, stroke and font sizes, filter and animation timing numbers,
+            animation values of numerical attributes) and to the numerical css properties of style attributes;
+            other attributes (ex: href, id, class, font-family) are never changed.
+            </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveGraphs">
             <summary>
-            Remove empty and / or unnecessary graphs
+            Unwrap g elements without attributes (unless they contain an animation element) and remove empty g elements
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveTextNodes">
             <summary>
-            Remove empty text nodes
+            Remove empty (white space only) text nodes
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveHidden">
             <summary>
-            Remove hidden nodes (display = "none")
+            Remove hidden elements (with a display="none" attribute, the css display is not checked)
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveIds">
             <summary>
-            Remove unused id's
+            Remove id attributes that are not referenced (by href="#id", or url(#id) in an attribute or a style element), and attributes referencing a missing id (except fill and stroke).
+            In a style attribute only the css declarations referencing a missing id are removed (the attribute is removed if nothing is left).
+            Ids that may be used by text the minifier can't rewrite (style elements, ex: "#id" selectors, script elements, "on..." event attributes,
+            begin / end and aria id reference attributes) are never removed (a conservative word match: any word "a" in a script keeps an id "a").
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveUseSize">
             <summary>
-            Remove use width or height of 100% 
+            Remove width and height attributes with the value "100%" of use elements
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RenameIds">
             <summary>
-            Rename id's to shorten them
+            Rename all ids to short names and update the references (href="#id", url(#id) in attributes and style elements).
+            The ids are ordered by their number of uses (the id attribute + references, ties: first occurrence first), the most used id gets "a",
+            the next "b" .. "z", then two char names ("aa", "ba" ..) and so on.
+            The generated names never collide: ids that may be used by text that can't be rewritten (see <see cref="F:SysWeaver.Minifier.SvgMinifierParams.RemoveIds"/>) and references to ids
+            that are not defined in the document keep their name, and no other id is renamed to that name (or to any word of such a text).
+            Note: ids that are only referenced from outside the document (ex: "sprite.svg#icon" or css of a html page) are renamed too.
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.MaxDecimalRes">
             <summary>
-            Automatically select number of decimals so that at least this many coordinates are alllowed
+            If greater than zero (and the svg has a view box), the number of decimals is selected automatically so that the smallest view box dimension
+            (scaled by the largest scale transform) can be divided into at least this many coordinates. Overrides <see cref="F:SysWeaver.Minifier.SvgMinifierParams.MaxDecimals"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.MaxDecimals">
             <summary>
-            The maximum number of decimals to keep, less than zero to disable
+            The maximum number of decimals to keep in the numerical attributes of shape elements and transforms, less than zero to disable.
+            Numbers are rounded half to even (2.25 => 2.2 with 1 decimal); compact numbers ("1.5.5"), exponents ("1e-3") and arc flags in path data are handled,
+            a space is inserted if two rounded numbers would merge ("1.5.5" with 0 decimals => "2 0").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifierParams.BitmapValidation">
+            <summary>
+            Render the document before and after each step and throw an exception if the output changed (Windows only, slow, for debugging).
+            Defaults to true in DEBUG builds of the library and false in RELEASE builds.
+            Nothing is written to disk unless <see cref="F:SysWeaver.Minifier.SvgMinifierParams.ErrorDir"/> is set.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifierParams.ErrorDir">
+            <summary>
+            A folder where a failed bitmap validation saves the reference image, the failed image and the source svg
+            (named "SvgMinifier_&lt;source hash&gt;_&lt;step&gt;_&lt;random&gt;_Ref.png", "_Failed.png" and "_Source.svg", the folder is created if needed,
+            the paths are in the exception message). If null (the default) or empty, nothing is written.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Minifier.SvgMinifierParams.CacheKey">
+            <summary>
+            A key (letters, digits and '_', safe in file names) that identifies the output: <see cref="F:SysWeaver.Minifier.SvgMinifier.Version"/> followed by the options that change the output.
+            Used by SvgOpt and SvgTransformer to name (or validate) cached outputs, so that a new minifier version or other options invalidate them.
+            ErrorDir and BitmapValidation don't change the output, they are not part of the key.
             </summary>
         </member>
     </members>

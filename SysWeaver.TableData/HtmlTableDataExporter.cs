@@ -14,6 +14,7 @@ namespace SysWeaver.Data
     /// <remarks>
     /// Templates use <c>${Var}</c> variables (with the usual <see cref="TextTemplate"/> transforms, ex: <c>${#Text}</c> for HTML encoding).
     /// Variables: body: Title, Rows; row: Cells; header: Title (column description), Text, Class; cell: Title (raw value), Text (encoded by the template), TextFmt (pre-formatted markup), Class.
+    /// Header cells use the column title (the name if there is no title), cells beyond the column definitions are formatted using the runtime type of the value.
     /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links (unless the link uses an unsafe scheme, see <see cref="TableDataExporterTools.IsSafeLink(string)"/>).
     /// The exporter is immutable and thread safe.
     /// </remarks>
@@ -110,7 +111,7 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// CSS classes to apply to cells, keyed on the full type name of the column
+        /// CSS classes to apply to cells, keyed on the full type name of the column (nullable versions of the types use the same classes)
         /// ("m" = monospace, "n" = number, "t" = time, "b" = boolean).
         /// </summary>
         public static readonly IReadOnlyDictionary<String, String> Classes = new Dictionary<String, String>(StringComparer.Ordinal)
@@ -137,6 +138,29 @@ namespace SysWeaver.Data
 
             { typeof(Guid).FullName, "m" },
             { typeof(Boolean).FullName, "b" },
+
+            { typeof(Single?).FullName, "m n" },
+            { typeof(Double?).FullName, "m n" },
+            { typeof(Decimal?).FullName, "m n" },
+
+            { typeof(SByte?).FullName, "m n" },
+            { typeof(Int16?).FullName, "m n" },
+            { typeof(Int32?).FullName, "m n" },
+            { typeof(Int64?).FullName, "m n" },
+
+            { typeof(Byte?).FullName, "m n" },
+            { typeof(UInt16?).FullName, "m n" },
+            { typeof(UInt32?).FullName, "m n" },
+            { typeof(UInt64?).FullName, "m n" },
+
+            { typeof(DateTime?).FullName, "m t" },
+            { typeof(TimeSpan?).FullName, "m t" },
+            { typeof(DateOnly?).FullName, "m t" },
+            { typeof(DateTimeOffset?).FullName, "m t" },
+            { typeof(TimeOnly?).FullName, "m t" },
+
+            { typeof(Guid?).FullName, "m" },
+            { typeof(Boolean?).FullName, "b" },
         }.Freeze();
 
 
@@ -222,7 +246,7 @@ namespace SysWeaver.Data
                     var col = cols[i];
                     var colFmt = TableDataExporterTools.Get(col.Type, col.Format, Formatters);
                     colToStrings.Add(colFmt);
-                    dc.TryGetValue(col.Type, out var cl);
+                    dc.TryGetValue(col.Type ?? "", out var cl);
                     classes.Add(cl ?? "");
                     if ((col.Props & TableDataColumnProps.Hide) != 0)
                     {
@@ -231,8 +255,8 @@ namespace SysWeaver.Data
                     }
                     if (headers)
                     {
-                        vals["Title"] = col.Desc;
-                        vals["Text"] = col.Title.Replace(' ', (Char)0xa0);
+                        vals["Title"] = col.Desc ?? "";
+                        vals["Text"] = (col.Title ?? col.Name ?? "").Replace(' ', (Char)0xa0);
                         vals["Class"] = (colFmt.Item2 ? "r " : "") + (cl ?? "").Replace("m", "").Trim();
                         rowBuilder.Append(Header.Get(vals));
                     }

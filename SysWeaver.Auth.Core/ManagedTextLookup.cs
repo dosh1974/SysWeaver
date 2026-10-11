@@ -27,7 +27,7 @@ namespace SysWeaver
         /// Get a text, evaluated with the given variables.
         /// </summary>
         /// <param name="key">The text key</param>
-        /// <param name="vars">The variables, if null an <see cref="Overrides"/> value (exact key match) is returned if present</param>
+        /// <param name="vars">The variables, if null an <see cref="Overrides"/> value (exact key match) is returned if present, else the template is evaluated without variables</param>
         /// <returns>The text, or null if the key isn't found</returns>
         public String GetText(String key, IReadOnlyDictionary<String, String> vars = null)
         { 
@@ -36,8 +36,10 @@ namespace SysWeaver
                 if (Overrides.TryGetValue(key, out var o))
                     return o;
             }
-            return GetTemplate(key)?.Get(vars);
+            return GetTemplate(key)?.Get(vars ?? NoVars);
         }
+
+        static readonly IReadOnlyDictionary<String, String> NoVars = new Dictionary<String, String>(StringComparer.Ordinal);
 
         /// <summary>
         /// Texts that override the templates (case sensitive keys), only used by <see cref="GetText(string, IReadOnlyDictionary{string, string})"/> when no variables are supplied.
@@ -95,7 +97,8 @@ namespace SysWeaver
                     return t;
                 var lines = ManagedTools.GetLines(Text, GetType(), () => Templates = null);
                 Dictionary<String, TextTemplate> map = new Dictionary<string, TextTemplate>(StringComparer.Ordinal);
-                foreach (var line in lines)
+                //  No text (null or empty) gives no templates
+                foreach (var line in lines ?? [])
                 {
                     var l = line.Trim();
                     if (l.Length <= 0) 

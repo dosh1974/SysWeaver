@@ -12,15 +12,20 @@ namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Extension methods for <see cref="BigRat"/>.
+    /// </summary>
     public static class BigRatExt
     {
         /// <summary>
-        /// Randomly pass a test based on the probability (this value)
+        /// Randomly pass a test based on the probability (this value).
+        /// The probability is converted to a 64 bit fraction (numerator and denominator halved until the denominator is below 2^62, the halved values are truncated to integers),
+        /// and the test passes if a random value in [0, denominator) is below the numerator.
         /// </summary>
         /// <param name="probability">A probability [0, 1]</param>
         /// <param name="rng">The rng to use</param>
-        /// <param name="usedProb">The actual probability used (may be a truncated value that differes from the desired probability)</param>
-        /// <returns>True if the test passed</returns>
+        /// <param name="usedProb">The actual probability used (may be a truncated value that differs from the desired probability)</param>
+        /// <returns>True if the test passed (always false for a zero probability, always true for a probability of one or more)</returns>
         public static bool PassProbability64(this BigRat probability, SecureRng rng, out BigRat usedProb)
         {
             var x = probability.Normalize();
@@ -42,10 +47,33 @@ namespace SysWeaver
     }
 
     /// <summary>
+    /// An arbitrary precision rational number (a big integer numerator and denominator), implementing the .NET generic math interfaces.
     /// The "new" version from:
     /// https://github.com/c-ohle/RationalNumerics?tab=readme-ov-file
     /// </summary>
-
+    /// <remarks>
+    /// <para>
+    /// The value is immutable, <c>default(BigRat)</c> is zero. Arithmetic (+, -, *, /, %) is exact, but results are not automatically reduced
+    /// (ex: 2/4 stays 2/4, see <see cref="Normalize"/>), equality and comparisons are by value.
+    /// There are no NaN or infinity values, operations that have no rational result throw instead (ex: division by zero).
+    /// </para>
+    /// <para>
+    /// The functions with a <c>digits</c> parameter (<see cref="Sqrt(BigRat, int)"/>, <see cref="Log(BigRat, int)"/>, <see cref="Sin(BigRat, int)"/> etc) compute an approximation
+    /// and round the result to that number of decimal digits (after the decimal point; <see cref="Exp(BigRat, int)"/> counts from the most significant digit instead).
+    /// A negative value of <c>digits</c> computes with the same precision but returns the unrounded value.
+    /// The overloads without <c>digits</c> use 32 digits.
+    /// </para>
+    /// <para>
+    /// Note that <c>Log(x, 2)</c> binds to <see cref="Log(BigRat, int)"/> (natural logarithm with 2 digits), use <c>Log(x, (BigRat)2)</c> for a base 2 logarithm.
+    /// </para>
+    /// <para>
+    /// The implicit conversions from <see cref="double"/>, <see cref="float"/> and <see cref="Half"/> are exact (the binary value, ex: 0.1 becomes 3602879701896397/36028797018963968,
+    /// same as the <see cref="BigRat(double)"/> constructor), so they round trip; NaN and infinity throw an <see cref="OverflowException"/>.
+    /// Parse the text of a value (ex: <c>BigRat.Parse("0.1")</c>) to get the decimal value.
+    /// The explicit conversions to integer types truncate towards zero, the conversions to the 32 bit (and smaller) integer types go through <see cref="double"/>.
+    /// The unchecked conversions don't throw if the value doesn't fit (the result is then undefined, it may wrap or saturate), the checked ones throw an <see cref="OverflowException"/>.
+    /// </para>
+    /// </remarks>
     [Serializable, SkipLocalsInit, DebuggerDisplay("{ToString(\"\"),nq}")]
     public unsafe readonly struct BigRat :
 #if NET7_0_OR_GREATER
@@ -56,13 +84,27 @@ namespace SysWeaver
       IEquatable<BigRat>, IComparable<BigRat>, IComparable, IFormattable, ISpanFormattable
     {
         #region Add on's
-        public BigRat(long nom, ulong denom) : this(nom)
+        /// <summary>
+        /// Create a rational number from a numerator and a denominator (exact, not reduced).
+        /// </summary>
+        /// <param name="nom">The numerator.</param>
+        /// <param name="denom">The denominator.</param>
+        /// <exception cref="DivideByZeroException"><paramref name="denom"/> is zero.</exception>
+        public BigRat(long nom, ulong denom) : this(((BigRat)nom).p)
         {
+            if (denom == 0)
+                throw new DivideByZeroException();
             if (denom > 1)
                 this /= denom;
         }
 
+        /// <summary>
+        /// The value zero (same as <c>default(BigRat)</c>).
+        /// </summary>
         public static readonly BigRat Zero = new BigRat(0);
+        /// <summary>
+        /// The value one.
+        /// </summary>
         public static readonly BigRat One = new BigRat(1);
 
         #endregion//Add on's
@@ -124,29 +166,22 @@ namespace SysWeaver
         {
             return (double)value;
         }
+        /// <summary>
+        /// Convert a double exactly (the binary value, same as <see cref="BigRat(double)"/>, ex: 0.1 becomes 3602879701896397/36028797018963968),
+        /// so converting back to a double gives the same value. Use <c>BigRat.Parse(value.ToString("R"))</c> or <see cref="Round(BigRat, int)"/> to get a "decimal" value (0.1 = 1/10).
+        /// </summary>
+        /// <param name="value">The value to convert.</param>
+        /// <exception cref="OverflowException"><paramref name="value"/> is NaN or infinity.</exception>
         public static implicit operator BigRat(double value)
         {
-            if (value == 0) return default; // if (value == (float)value) { }
-            var e = unchecked((int)((*(ulong*)&value >> 52) & 0x7FF) - 1022); //Debug.Assert(!double.IsFinite(v) == (e == 0x401));
-            if (e == 0x401) throw new OverflowException(nameof(value)); // NaN, +/-Inifinity 
-            int p = 14 - ((e * 19728) >> 16), t = p; if (p > 308) p = 308; // v < 1E-294
-            var d = Math.Abs(value) * Math.Pow(10, p); //Debug.Assert(double.IsNormal(d));
-            t = t - p; if (d < 1e14) { t++; if (e == -1022) t += 14 - (int)Math.Log10(*(ulong*)&value & ~(1ul << 63)); }
-            if (t != 0) { d *= Math.Pow(10, t); p += t; }
-            var m = (ulong)Math.Round(d); // var a = m / Pow10(p); if (value < 0) a.p![0] |= 0x80000000; return a;
-            var u = stackalloc uint[5 + ((e = abs(p)) >> 3)];
-            u[0] = (m >> 32) != 0 ? 2u : 1u; *(ulong*)(u + 1) = m;
-            var v = u + u[0] + 1; pow10(v, unchecked((uint)e));
-            if (p < 0) { u[0] = mul((uint*)&m, u[0], v + 1, v[0], u + 1); *(ulong*)(u + u[0] + 1) = 0x100000001; }
-            var n = u[0]; u[0] |= ((uint*)&value)[1] & 0x80000000;
-            return new BigRat(u, 2 + n + u[n + 1]);
+            return new BigRat(value);
         }
         public static implicit operator BigRat(decimal value)
         {
             var b = (uint*)&value; uint f = b[0], e = (f >> 16) & 0xff; //0..28 
             uint* p = stackalloc uint[9];
             *(ulong*)&p[1] = *(ulong*)&b[2]; p[3] = b[1]; p[0] = p[3] != 0 ? 3u : p[2] != 0 ? 2u : 1;
-            if (*(ulong*)p == 1) { *(ulong*)(p + 2) = 0x100000001; }
+            if (*(ulong*)p == 1) return default; // zero
             else
             {
                 var s = p + (p[0] + 1);
@@ -166,11 +201,14 @@ namespace SysWeaver
         {
             var si = value.Sign; if (si == 0) return default;
             if (si < 0) value = -value; int n = value.GetByteCount(true), c = ((n - 1) >> 2) + 1;
-            uint* p = stackalloc uint[c + 3];
-            p[c] = 0; var ok = value.TryWriteBytes(new Span<byte>(p + 1, n), out _, true);
-            if (p[c] == 0) c--; Debug.Assert(ok && p[c] != 0); //todo: report BigInteger bug p[c] == 0
-            p[0] = unchecked((uint)c) | ((uint)si & 0x80000000); *(ulong*)(p + c + 1) = 0x100000001;
-            return new BigRat(p, unchecked((uint)c) + 3);
+            Span<uint> s = c + 3 <= maxstack ? stackalloc uint[c + 3] : heap(c + 3);
+            fixed (uint* p = s)
+            {
+                p[c] = 0; var ok = value.TryWriteBytes(new Span<byte>(p + 1, n), out _, true);
+                if (p[c] == 0) c--; Debug.Assert(ok && p[c] != 0); //todo: report BigInteger bug p[c] == 0
+                p[0] = unchecked((uint)c) | ((uint)si & 0x80000000); *(ulong*)(p + c + 1) = 0x100000001;
+                return new BigRat(p, unchecked((uint)c) + 3);
+            }
         }
 
         public static explicit operator byte(BigRat value)
@@ -225,6 +263,11 @@ namespace SysWeaver
         {
             return (float)(double)value;
         }
+        /// <summary>
+        /// Convert to the nearest double (approximately, the last bit may differ), infinity if the value is too large.
+        /// Values converted from a double (or float / Half) convert back to exactly the same value (incl. subnormals and <see cref="double.MaxValue"/>).
+        /// </summary>
+        /// <param name="value">The value.</param>
         public static explicit operator double(BigRat value)
         {
             if (value.p == null) return 0;
@@ -314,28 +357,28 @@ namespace SysWeaver
         {
             if (a.p == null) return b;
             if (b.p == null) return a;
-            var w = stackalloc uint[(a.p.Length + b.p.Length) * 3];
-            fixed (uint* u = a.p, v = b.p) return add(u, v, w, 0);
+            var n = (a.p.Length + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = b.p, w = s) return add(u, v, w, 0);
         }
         public static BigRat operator -(BigRat a, BigRat b)
         {
             if (a.p == null) return -b;
             if (b.p == null) return a;
-            var w = stackalloc uint[(a.p.Length + b.p.Length) * 3];
-            fixed (uint* u = a.p, v = b.p) return add(u, v, w, 0x80000000);
+            var n = (a.p.Length + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = b.p, w = s) return add(u, v, w, 0x80000000);
         }
         public static BigRat operator *(BigRat a, BigRat b)
         {
             if (a.p == null || b.p == null) return default;
-            uint* w = stackalloc uint[a.p.Length + b.p.Length];
-            fixed (uint* u = a.p, v = b.p) return mul(u, v, w);
+            var n = a.p.Length + b.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = b.p, w = s) return mul(u, v, w);
         }
         public static BigRat operator /(BigRat a, BigRat b)
         {
             if (b.p == null) throw new DivideByZeroException();
             if (a.p == null) return default;
-            uint* w = stackalloc uint[a.p.Length + b.p.Length];
-            fixed (uint* u = a.p, v = b.p) return div(u, v, w);
+            var n = a.p.Length + b.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = b.p, w = s) return div(u, v, w);
         }
         public static BigRat operator %(BigRat a, BigRat b)
         {
@@ -345,25 +388,25 @@ namespace SysWeaver
         {
             if (a.p == null) return b;
             if (b == 0) return a;
-            var v = stackalloc uint[4 + (a.p.Length + 4) * 3]; copy(v, b);
-            fixed (uint* u = a.p) return add(u, v, v + 4, 0);
+            var n = 4 + (a.p.Length + 4) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = s) { copy(v, b); return add(u, v, v + 4, 0); }
         }
         public static BigRat operator -(BigRat a, int b)
         {
-            return a + -b;
+            return b != int.MinValue ? a + -b : a - (BigRat)b;
         }
         public static BigRat operator *(BigRat a, int b)
         {
             if (a.p == null || b == 0) return default;
-            var v = stackalloc uint[a.p.Length + 8]; copy(v, b);
-            fixed (uint* u = a.p) return mul(u, v, v + 4);
+            var n = a.p.Length + 8; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = s) { copy(v, b); return mul(u, v, v + 4); }
         }
         public static BigRat operator /(BigRat a, int b)
         {
             if (b == 0) throw new DivideByZeroException();
             if (a.p == null) return default;
-            var v = stackalloc uint[a.p.Length + 8]; copy(v, b);
-            fixed (uint* u = a.p) return div(u, v, v + 4);
+            var n = a.p.Length + 8; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = a.p, v = s) { copy(v, b); return div(u, v, v + 4); }
         }
         public static BigRat operator %(BigRat a, int b)
         {
@@ -373,28 +416,28 @@ namespace SysWeaver
         {
             if (a == 0) return b;
             if (b.p == null) return a;
-            var u = stackalloc uint[4 + (4 + b.p.Length) * 3]; copy(u, a);
-            fixed (uint* v = b.p) return add(u, v, u + 4, 0);
+            var n = 4 + (4 + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = s, v = b.p) { copy(u, a); return add(u, v, u + 4, 0); }
         }
         public static BigRat operator -(int a, BigRat b)
         {
             if (a == 0) return -b;
             if (b.p == null) return a;
-            var u = stackalloc uint[4 + (4 + b.p.Length) * 3]; copy(u, a);
-            fixed (uint* v = b.p) return add(u, v, u + 4, 0x80000000);
+            var n = 4 + (4 + b.p.Length) * 3; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = s, v = b.p) { copy(u, a); return add(u, v, u + 4, 0x80000000); }
         }
         public static BigRat operator *(int a, BigRat b)
         {
             if (a == 0 || b.p == null) return default;
-            var u = stackalloc uint[8 + b.p.Length]; copy(u, a);
-            fixed (uint* v = b.p) return mul(u, v, u + 4);
+            var n = 8 + b.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = s, v = b.p) { copy(u, a); return mul(u, v, u + 4); }
         }
         public static BigRat operator /(int a, BigRat b)
         {
             if (b.p == null) throw new DivideByZeroException();
             if (a == 0) return default;
-            var u = stackalloc uint[8 + b.p.Length];
-            fixed (uint* v = b.p)
+            var l = 8 + b.p.Length; Span<uint> s = l <= maxstack ? stackalloc uint[l] : heap(l);
+            fixed (uint* u = s, v = b.p)
             {
                 if (a == 1) // fast inv 1 / x
                 {
@@ -490,6 +533,12 @@ namespace SysWeaver
         {
             return value.p == null ? 0 : (value.p[0] & 0x80000000) != 0 ? -1 : +1;
         }
+        /// <summary>
+        /// Fast estimate of the base 2 exponent: the bit length of the numerator minus the bit length of the denominator.
+        /// The result is floor(log2(|value|)) or one more.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The exponent estimate, -int.MaxValue for zero.</returns>
         public static int ILogB(BigRat value)
         {
             if (value.p == null) return -int.MaxValue; // int.MinValue; //-2147483648; //infinity
@@ -501,6 +550,11 @@ namespace SysWeaver
                 return unchecked((int)u - (int)v);
             }
         }
+        /// <summary>
+        /// Get the base 10 exponent, floor(log10(|value|)), ex: 999 =&gt; 2, 0.001 =&gt; -3.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The base 10 exponent, 0 for zero.</returns>
         public static int ILog10(BigRat value)
         {
             if (value.p == null) return 0;
@@ -510,16 +564,20 @@ namespace SysWeaver
                 var mp = ((((long)np << 5) - BitOperations.LeadingZeroCount(p[np])) * 1292913986) >> 32;
                 var mq = ((((long)nq << 5) - BitOperations.LeadingZeroCount(q[nq])) * 1292913986) >> 32;
                 var ex = unchecked((int)(mp - mq)); var ne = 5 + (abs(ex) >> 3);
-                uint* u = stackalloc uint[(ne + value.p.Length) << 1], w = u + ne, z;
-                for (; ; )
+                var l = (ne + value.p.Length) << 1; Span<uint> s = l <= maxstack ? stackalloc uint[l] : heap(l);
+                fixed (uint* u = s)
                 {
-                    pow10(u, uabs(ex));
-                    if (ex < 0) { w[0] = mul(p + 1, np, u + 1, u[0], w + 1); mod(w, q, u); }
-                    else { w[0] = mul(q + 1, nq, u + 1, u[0], w + 1); copy(z = w + w[0] + 1, p, np + 1); z[0] &= 0x3fffffff; mod(z, w, u); }
-                    Debug.Assert(u[0] == 1);
-                    if (u[1] == 00) { ex--; continue; }
-                    if (u[1] >= 10) { ex++; continue; }
-                    return ex;
+                    uint* w = u + ne, z;
+                    for (; ; )
+                    {
+                        pow10(u, uabs(ex));
+                        if (ex < 0) { w[0] = mul(p + 1, np, u + 1, u[0], w + 1); mod(w, q, u); }
+                        else { w[0] = mul(q + 1, nq, u + 1, u[0], w + 1); copy(z = w + w[0] + 1, p, np + 1); z[0] &= 0x3fffffff; mod(z, w, u); }
+                        Debug.Assert(u[0] == 1);
+                        if (u[1] == 00) { ex--; continue; }
+                        if (u[1] >= 10) { ex++; continue; }
+                        return ex;
+                    }
                 }
             }
         }
@@ -557,25 +615,51 @@ namespace SysWeaver
         }
         public static BigRat Clamp(BigRat value, BigRat min, BigRat max)
         {
-            if (min > max) throw new ArgumentException($"{nameof(min)} {nameof(max)}");
+            if (min > max) throw new ArgumentException("min must be less than or equal to max", nameof(min));
             return value < min ? min : value > max ? max : value;
         }
+        /// <summary>
+        /// Round towards zero to an integer.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The integer part of the value.</returns>
         public static BigRat Truncate(BigRat value)
         {
             return mod(value, 0);
         }
+        /// <summary>
+        /// Round down (towards negative infinity) to an integer.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The largest integer less than or equal to the value.</returns>
         public static BigRat Floor(BigRat value)
         {
             return mod(value, 1);
         }
+        /// <summary>
+        /// Round up (towards positive infinity) to an integer.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The smallest integer greater than or equal to the value.</returns>
         public static BigRat Ceiling(BigRat value)
         {
             return mod(value, 2);
         }
+        /// <summary>
+        /// Round to the nearest integer, midpoints are rounded to the nearest even integer (banker's rounding, ex: 2.5 =&gt; 2, 3.5 =&gt; 4).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The rounded value.</returns>
         public static BigRat Round(BigRat value)
         {
             return mod(value, 3);
         }
+        /// <summary>
+        /// Round to a number of decimal digits, midpoints are rounded to even (banker's rounding).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="digits">The number of decimal digits after the decimal point, may be negative (ex: -2 rounds to hundreds).</param>
+        /// <returns>The rounded value.</returns>
         public static BigRat Round(BigRat value, int digits)
         {
             //todo: inline see BigRat(double value)
@@ -599,9 +683,17 @@ namespace SysWeaver
                     var u = Truncate(value); var v = value - u;
                     if (Abs(v) >= new BigRat(1, 2)) u += Sign(v); value = u; // >= 0.5
                     break;
+                default: throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown rounding mode");
             }
             value /= p; return value;
         }
+        /// <summary>
+        /// Reduce the size of a value: if both the numerator and the denominator have more than <paramref name="bits"/> bits, both are shifted right
+        /// until the smaller of them has <paramref name="bits"/> bits (an approximation that keeps about <paramref name="bits"/> significant bits).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="bits">The number of bits to keep.</param>
+        /// <returns>The approximated value, zero if <paramref name="bits"/> is zero or negative.</returns>
         public static BigRat RoundB(BigRat value, int bits)
         {
             if (value.p == null || bits <= 0) return default;
@@ -611,29 +703,73 @@ namespace SysWeaver
                 var u = (a << 5) - unchecked((uint)BitOperations.LeadingZeroCount(p[a]));
                 var v = (b << 5) - unchecked((uint)BitOperations.LeadingZeroCount(q[b]));
                 if (u > v) u = v; if (u <= bits) return value;
-                var w = stackalloc uint[value.p.Length]; copy(w, p, unchecked((uint)value.p.Length));
-                var t = (int)(u - bits); shr(w, t); shr(q = w + a + 1, t);
-                if (w[0] != a) copy(w + w[0] + 1, q, q[0] + 1);
-                var l = 2 + w[0] + w[w[0] + 1]; w[0] |= h & 0x80000000;
-                return new BigRat(w, l);
+                var n = value.p.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+                fixed (uint* w = s)
+                {
+                    copy(w, p, unchecked((uint)n));
+                    var t = (int)(u - bits); shr(w, t); shr(q = w + a + 1, t);
+                    if (w[0] != a) copy(w + w[0] + 1, q, q[0] + 1);
+                    var l = 2 + w[0] + w[w[0] + 1]; w[0] |= h & 0x80000000;
+                    return new BigRat(w, l);
+                }
             }
         }
+        /// <summary>
+        /// Raise a value to an integer power (exact).
+        /// </summary>
+        /// <param name="x">The value.</param>
+        /// <param name="y">The exponent, may be negative.</param>
+        /// <returns>x^y (1 if y is 0, also for x = 0).</returns>
+        /// <exception cref="DivideByZeroException"><paramref name="x"/> is zero and <paramref name="y"/> is negative.</exception>
         public static BigRat Pow(BigRat x, int y)
         {
+            if ((y < 0) && (x.p == null))
+                throw new DivideByZeroException();
             var r = (BigRat)1u;
             for (var e = uabs(y); ; e >>= 1) { if ((e & 1) != 0) r *= x; if (e <= 1) break; x *= x; }
             if (y < 0) fixed (uint* p = r.p) inv(p); // if (y < 0) r = 1 / r;
             return r;
         }
+        /// <summary>
+        /// Raise a value to a rational power (approximation, computed as exp(y * log(x))).
+        /// </summary>
+        /// <param name="x">The value, must be zero or positive (use <see cref="Pow(BigRat, int)"/> for integer powers of negative values).</param>
+        /// <param name="y">The exponent.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>x^y, if <paramref name="x"/> is zero: 0 if y is positive and 1 if y is zero.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is negative.</exception>
+        /// <exception cref="DivideByZeroException"><paramref name="x"/> is zero and <paramref name="y"/> is negative.</exception>
         public static BigRat Pow(BigRat x, BigRat y, int digits)
         {
+            if (x.p == null)
+            {
+                var ys = Sign(y);
+                if (ys < 0)
+                    throw new DivideByZeroException();
+                return ys == 0 ? 1u : default;
+            }
+            if (IsNegative(x))
+                throw new ArgumentOutOfRangeException(nameof(x), "Negative values can't be raised to a rational power");
             var p = base2(abs(digits)); x = exp(y * log(x, p), p);
             return digits >= 0 ? Round(x, digits) : x;
         }
+        /// <summary>
+        /// Raise a value to a rational power (approximation with 32 decimal digits), see <see cref="Pow(BigRat, BigRat, int)"/>.
+        /// </summary>
+        /// <param name="x">The value, must be zero or positive.</param>
+        /// <param name="y">The exponent.</param>
+        /// <returns>x^y.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is negative.</exception>
+        /// <exception cref="DivideByZeroException"><paramref name="x"/> is zero and <paramref name="y"/> is negative.</exception>
         public static BigRat Pow(BigRat x, BigRat y)
         {
             return Pow(x, y, 032);
         }
+        /// <summary>
+        /// Get 2^y (exact).
+        /// </summary>
+        /// <param name="y">The exponent, may be negative.</param>
+        /// <returns>2 raised to the power of <paramref name="y"/>.</returns>
         public static BigRat Pow2(int y)
         {
             var z = abs(y); uint a = (unchecked((uint)z) >> 5) + 1, b = 1u << (z & 31);
@@ -641,35 +777,70 @@ namespace SysWeaver
             else { p[2] = a; p[a + 2] = b; p[0] = p[1] = 1; }
             return new BigRat(p);
         }
+        /// <summary>
+        /// Get 10^y (exact).
+        /// </summary>
+        /// <param name="y">The exponent, may be negative.</param>
+        /// <returns>10 raised to the power of <paramref name="y"/>.</returns>
         public static BigRat Pow10(int y)
         {
-            uint e = uabs(y); uint* u = stackalloc uint[5 + unchecked((int)(e >> 3))], v;
-            pow10(v = y >= 0 ? u : u + 2, e); *(ulong*)(u + (y >= 0 ? u[0] + 1 : 0)) = 0x100000001;
-            return new BigRat(u, 3 + v[0]);
+            uint e = uabs(y); var n = 5 + unchecked((int)(e >> 3)); Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* u = s)
+            {
+                uint* v;
+                pow10(v = y >= 0 ? u : u + 2, e); *(ulong*)(u + (y >= 0 ? u[0] + 1 : 0)) = 0x100000001;
+                return new BigRat(u, 3 + v[0]);
+            }
         }
         public static BigRat Sqrt(BigRat x)
         {
             return Sqrt(x, 032);
         }
+        /// <summary>
+        /// Compute the square root (approximation).
+        /// </summary>
+        /// <param name="x">The value, must not be negative.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The square root of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is negative.</exception>
         public static BigRat Sqrt(BigRat x, int digits)
         {
-            if (x <= 0) { if (x == 0) return default; throw new ArgumentException(nameof(x)); }
+            if (x <= 0) { if (x == 0) return default; throw new ArgumentOutOfRangeException(nameof(x), "The value must not be negative"); }
             x = sqrt(x, base2(abs(digits))); return digits >= 0 ? Round(x, digits) : x;
         }
         public static BigRat Cbrt(BigRat x)
         {
             return Cbrt(x, 032);
         }
+        /// <summary>
+        /// Compute the cube root (approximation), negative values give a negative result.
+        /// </summary>
+        /// <param name="x">The value.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The cube root of <paramref name="x"/>.</returns>
         public static BigRat Cbrt(BigRat x, int digits)
         {
-            return Pow(x, new BigRat(1, 3), digits);
+            return RootN(x, 3, digits);
         }
         public static BigRat RootN(BigRat x, int n)
         {
             return RootN(x, n, 032);
         }
+        /// <summary>
+        /// Compute the n:th root (approximation, computed using <see cref="Pow(BigRat, BigRat, int)"/>).
+        /// </summary>
+        /// <param name="x">The value, may only be negative if <paramref name="n"/> is odd (the result is then negative).</param>
+        /// <param name="n">The root, must not be zero (a negative value computes 1 / root).</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The n:th root of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="n"/> is zero, or <paramref name="x"/> is negative and <paramref name="n"/> is even.</exception>
+        /// <exception cref="DivideByZeroException"><paramref name="x"/> is zero and <paramref name="n"/> is negative.</exception>
         public static BigRat RootN(BigRat x, int n, int digits)
         {
+            if (n == 0)
+                throw new ArgumentOutOfRangeException(nameof(n), "The root must not be zero");
+            if (IsNegative(x) && ((n & 1) != 0))
+                return -Pow(-x, new BigRat(1, n), digits);
             return Pow(x, new BigRat(1, n), digits);
         }
         public static BigRat Hypot(BigRat x, BigRat y)
@@ -684,6 +855,13 @@ namespace SysWeaver
         {
             return Exp(x, 032);
         }
+        /// <summary>
+        /// Compute e^x (approximation).
+        /// </summary>
+        /// <param name="x">The exponent.</param>
+        /// <param name="digits">Unlike the other functions, the result is rounded to <c>digits - floor(log10(result))</c> decimals, i.e. <c>digits + 1</c> significant digits
+        /// (ex: Exp(1, 3) = 2.718, Exp(10, 5) = 22026.5); a negative value doesn't round.</param>
+        /// <returns>e raised to the power of <paramref name="x"/>.</returns>
         public static BigRat Exp(BigRat x, int digits)
         {
             x = exp(x, base2(abs(digits)));
@@ -709,19 +887,35 @@ namespace SysWeaver
         {
             return Log(x, 032);
         }
+        /// <summary>
+        /// Compute the natural logarithm (approximation).
+        /// Note that the second parameter is the number of digits, not the base, use <see cref="Log(BigRat, BigRat)"/> with a BigRat base for other bases.
+        /// </summary>
+        /// <param name="x">The value, must be positive.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The natural logarithm of <paramref name="x"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="x"/> is zero or negative.</exception>
         public static BigRat Log(BigRat x, int digits)
         {
-            if (x <= 0) throw new ArgumentException(nameof(x));
+            if (x <= 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             x = log(x, base2(abs(digits))); return digits >= 0 ? Round(x, digits) : x;
         }
         public static BigRat Log(BigRat x, BigRat newBase)
         {
             return Log(x, newBase, 032);
         }
+        /// <summary>
+        /// Compute the logarithm in a base (approximation, log(x) / log(newBase)).
+        /// </summary>
+        /// <param name="x">The value, must be positive (except for the special cases of the base).</param>
+        /// <param name="newBase">The base, must not be negative or one.</param>
+        /// <param name="digits">The number of decimal digits to round the result to, see <see cref="BigRat"/>.</param>
+        /// <returns>The logarithm of <paramref name="x"/> in the base <paramref name="newBase"/>, zero if the base is zero and <paramref name="x"/> is one.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="newBase"/> is negative or one, or zero (unless <paramref name="x"/> is one), or <paramref name="x"/> is negative or zero.</exception>
         public static BigRat Log(BigRat x, BigRat newBase, int digits)
         {
-            if (newBase < 0 || newBase == 1 || newBase == 0 && x != 1) throw new ArgumentException(nameof(newBase));
-            if (x < 0 || x == 0 && (newBase > 1 || newBase > 0 && newBase < 1)) throw new ArgumentException(nameof(x));
+            if (newBase < 0 || newBase == 1 || newBase == 0 && x != 1) throw new ArgumentOutOfRangeException(nameof(newBase), "Invalid logarithm base");
+            if (x < 0 || x == 0 && (newBase > 1 || newBase > 0 && newBase < 1)) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             if (newBase == 0 && x == 1) return default;
             var p = base2(abs(digits)); x = log(x, p) / log(newBase, p);
             return digits >= 0 ? Round(x, digits) : x;
@@ -732,7 +926,7 @@ namespace SysWeaver
         }
         public static BigRat Log2(BigRat x, int digits)
         {
-            if (x <= 0) throw new ArgumentException(nameof(x));
+            if (x <= 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             x = log2(x, base2(abs(digits)));
             return digits >= 0 ? Round(x, digits) : x;
         }
@@ -742,7 +936,7 @@ namespace SysWeaver
         }
         public static BigRat Log10(BigRat x, int digits)
         {
-            if (x <= 0) throw new ArgumentException(nameof(x));
+            if (x <= 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be positive");
             var b = base2(abs(digits)); x = log2(x, b) / log2(10, b); //todo: test 
             return digits >= 0 ? Round(x, digits) : x;
         }
@@ -809,7 +1003,7 @@ namespace SysWeaver
             var t = base2(abs(digits)); var a = 1 - x * x;
             if (a > 0) x = atan(x / sqrt(a, t), t);
             else if (a == 0) { var b = pi(t) / 2; x = x < 0 ? -b : b; }
-            else throw new ArgumentException(nameof(x));
+            else throw new ArgumentOutOfRangeException(nameof(x), "The value must be in the [-1, 1] range");
             return digits >= 0 ? Round(x, digits) : x;
         }
         public static BigRat Acos(BigRat x)
@@ -819,7 +1013,7 @@ namespace SysWeaver
         public static BigRat Acos(BigRat x, int digits)
         {
             var t = base2(abs(digits)); var a = 1 - x; var b = 1 + x;
-            if (a < 0 || b < 0) throw new ArgumentException(nameof(x));
+            if (a < 0 || b < 0) throw new ArgumentOutOfRangeException(nameof(x), "The value must be in the [-1, 1] range");
             if (b > 0) x = 2 * atan(sqrt(a / b, t), t); else x = pi(t);
             return digits >= 0 ? Round(x, digits) : x;
         }
@@ -845,7 +1039,7 @@ namespace SysWeaver
                 if (x > 0) return 2 * atan(y / (sqrt(x * x + y * y, bits) + x), bits);
                 else if (y != 0) return 2 * atan((sqrt(x * x + y * y, bits) - x) / y, bits);
                 else if (x < 0 && y == 0) return pi(bits);
-                else throw new ArgumentException(); //x == y == 0
+                else throw new ArgumentException("Atan2 is undefined when both x and y are zero"); //x == y == 0
             }
         }
         public static BigRat Acosh(BigRat x)
@@ -988,7 +1182,7 @@ namespace SysWeaver
         public static bool IsInteger(BigRat value)
         {
             // return Truncate(value) == value;
-            return mod(value, 4).p != null;
+            return value.p == null || mod(value, 4).p != null;
         }
         public static bool IsEvenInteger(BigRat value)
         {
@@ -1001,26 +1195,42 @@ namespace SysWeaver
             //return value.p != null && IsInteger(value) && (Normalize(value).p![1] & 1) == 1;
             var a = mod(value, 5); return a.p != null ? (a.p[1] & 1) != 0 : false;
         }
+        /// <summary>
+        /// Check if the numerator and denominator have no common factor (other than 1).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>True if the value is already reduced (ex: 1/2), false if not (ex: 2/4).</returns>
         public static bool IsNormalized(BigRat value)
         {
             return value.Normalize().p == value.p;
         }
 
+        /// <summary>
+        /// Reduce the fraction by dividing the numerator and the denominator by their greatest common divisor (ex: 2/4 =&gt; 1/2).
+        /// </summary>
+        /// <returns>An equal value with the smallest possible numerator and denominator (this value if it's already reduced).</returns>
         public BigRat Normalize()
         {
             if (this.p == null) return this;
             fixed (uint* p = this.p)
             {
                 var d = p + (p[0] & 0x3fffffff) + 1; if (*(ulong*)d == 0x100000001) return this;
-                var l = this.p.Length; var s = stackalloc uint[l * 3]; uint x;
-                copy(s, p, unchecked((uint)l)); s[0] &= 0x3fffffff;
-                var e = gcd(s, s + s[0] + 1); if (*(ulong*)e == 0x100000001) return this;
-                var t = s + l; copy(t, p, unchecked((uint)l)); t[0] &= 0x3fffffff;
-                var r = t + l; d = t + t[0] + 1; mod(t, e, r); mod(d, e, r + r[0] + 1);
-                x = r[0]; r[0] |= p[0] & 0x80000000;
-                return new BigRat(r, 2 + x + r[x + 1]);
+                var l = this.p.Length; Span<uint> ss = l * 3 <= maxstack ? stackalloc uint[l * 3] : heap(l * 3); uint x;
+                fixed (uint* s = ss)
+                {
+                    copy(s, p, unchecked((uint)l)); s[0] &= 0x3fffffff;
+                    var e = gcd(s, s + s[0] + 1); if (*(ulong*)e == 0x100000001) return this;
+                    var t = s + l; copy(t, p, unchecked((uint)l)); t[0] &= 0x3fffffff;
+                    var r = t + l; d = t + t[0] + 1; mod(t, e, r); mod(d, e, r + r[0] + 1);
+                    x = r[0]; r[0] |= p[0] & 0x80000000;
+                    return new BigRat(r, 2 + x + r[x + 1]);
+                }
             }
         }
+        /// <summary>
+        /// Get the numerator (with the sign of this value), as stored (not reduced, ex: 2/4 =&gt; 2, use <see cref="Normalize"/> first if needed).
+        /// </summary>
+        /// <returns>The numerator, zero for zero.</returns>
         public BigRat Numerator()
         {
             if (this.p == null) return default;
@@ -1029,6 +1239,10 @@ namespace SysWeaver
             s.Slice(0, n + 1).CopyTo(a); a[n + 1] = a[n + 2] = 1;
             return new BigRat(a);
         }
+        /// <summary>
+        /// Get the denominator (always positive), as stored (not reduced, ex: 2/4 =&gt; 4, use <see cref="Normalize"/> first if needed).
+        /// </summary>
+        /// <returns>The denominator, one for zero.</returns>
         public BigRat Denominator()
         {
             if (this.p == null) return 1u;
@@ -1038,12 +1252,17 @@ namespace SysWeaver
             return new BigRat(a);
         }
 
+        /// <summary>
+        /// Get a hash code, equal values (ex: 1/2 and 2/4) have the same hash code (the hash is computed from the <see cref="Normalize"/>d value).
+        /// </summary>
+        /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
             if (p == null) return 0;
-            fixed (uint* p = this.p)
+            var norm = Normalize().p;
+            fixed (uint* p = norm)
             {
-                uint h = 0, n = unchecked((uint)this.p.Length); // n = p[(n = p[0] & 0x3fffffff) + 1] + n + 2;
+                uint h = 0, n = unchecked((uint)norm.Length); // n = p[(n = p[0] & 0x3fffffff) + 1] + n + 2;
                 for (uint i = 0; i < n; i++) h = ((h << 7) | (h >> 25)) ^ p[i];
                 return unchecked((int)h);
             }
@@ -1071,16 +1290,28 @@ namespace SysWeaver
         {
             if (value == null) return 1;
             if (value is BigRat d) return CompareTo(d);
-            throw new ArgumentException(nameof(value));
+            throw new ArgumentException("Object must be of type BigRat", nameof(value));
         }
 
+        /// <summary>
+        /// Format the value.
+        /// Formats: "Q" (the default, decimal notation with up to 32 digits, repeating decimals are marked with a ' (ex: 1/3 =&gt; "0.'3"), "…" is appended when truncated),
+        /// "Qn" (same as "Q" with n digits, the digits are truncated, not rounded, a truncated value with more than n integer digits uses exponent notation (ex: 1234567.89 with "Q5" =&gt; "1.2345…E+06"), "Q0" formats as numerator/denominator), "R" (same as "Q" but formats as numerator/denominator instead of truncating, so it always round trips through <see cref="Parse(string)"/>),
+        /// "En" (scientific), "Gn" (general), "Fn" (fixed point) and "Nn" (fixed point with group separators).
+        /// </summary>
+        /// <param name="s">The destination.</param>
+        /// <param name="charsWritten">The number of chars written.</param>
+        /// <param name="format">The format, see above (empty for "Q").</param>
+        /// <param name="provider">The format provider for the decimal and group separators, null for the current culture.</param>
+        /// <returns>True if the value was written, false if the destination is too small.</returns>
+        /// <exception cref="FormatException">The format is not supported.</exception>
         public bool TryFormat(Span<char> s, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider provider = null)
         {
             var a = this; char f = 'Q', g = f; int d = 32; var info = NumberFormatInfo.GetInstance(provider);
             if (format.Length != 0)
             {
-                f = (char)((g = format[0]) & ~0x20); var l = format.Length; if (l > 10) throw new FormatException(nameof(format));
-                if (l > 1) for (int j = 1, y = d = 0; j < l; d = d * 10 + (y = format[j++] - '0')) if ((uint)y > 9) throw new FormatException(nameof(format));
+                f = (char)((g = format[0]) & ~0x20); var l = format.Length; if (l > 10) throw new FormatException("Invalid format string, the precision is too long");
+                if (l > 1) { d = 0; for (int j = 1; j < l; j++) { var y = format[j] - '0'; if ((uint)y > 9) throw new FormatException("Invalid format string, the precision must be a number"); d = d * 10 + y; } }
                 switch (f)
                 {
                     case 'Q': if (d == 0 && a.p != null) goto fmq; break;
@@ -1089,7 +1320,7 @@ namespace SysWeaver
                     case 'F': case 'N': if (l == 1) d = info.NumberDecimalDigits; g = f; f = 'F'; break;
                     case 'R': f = 'Q'; if (d == 0 && a.p != null) goto fmq; break;
                     //todo: case 'P': case 'C':  
-                    default: throw new FormatException(nameof(format));
+                    default: throw new FormatException("Unsupported format string, supported formats are Q, R, E, G, F and N");
                 }
             }
             int e = ILog10(a), x = e + 1, t = 16 + d + (f == 'F' && e > 0 ? e * 3 / 2 : 0);
@@ -1097,17 +1328,17 @@ namespace SysWeaver
             if (f != 'Q') a = Round(a, f == 'G' ? d - (e + 1) : f == 'E' ? d - e : d);
             if (a.p == null) { if (f != 'E' && f != 'F') { s[0] = '0'; charsWritten = 1; return true; } }
             else if (e != 0) a = a / BigRat.Pow10(e);
-            int n = tos(s.Slice(0, f == 'F' ? Math.Max(d + e, 0) + 2 : d + 1), a, f == 'Q', out var r);
-            if (n == d + 1) { if (f != 'E' && f != 'F') n--; if (f == 'Q') { if ((g & ~0x20) == 'R') goto fmq; s[n++] = '…'; } }
-            else if (f == 'Q' && abs(x) < d) { /*e = 0;*/ } //todo: check
+            int n = tos(s.Slice(0, f == 'F' ? Math.Max(d + e, 0) + 2 : d + 1), a, f == 'Q', out var r), tr = 0;
+            if (n == d + 1) { if (f != 'E' && f != 'F') n--; if (f == 'Q') { if ((g & ~0x20) == 'R') goto fmq; s[n++] = '…'; tr = 1; } }
             if (r != -1) { s.Slice(r, n - r).CopyTo(s.Slice(r + 1)); s[r] = '\''; n++; if (r == 0) { s.Slice(0, n).CopyTo(s.Slice(1)); s[0] = '0'; n++; e++; x++; } }
             if (f == 'F') { e = 0; if (a.p == null) x = 1; }
-            if ((e <= -5 || e >= 17) || (f == 'G' && x > d) || f == 'E' || (r != -1 && e >= r)) x = 1; else e = 0;
+            // Truncated "Q" with more integer digits than digits written: exponent notation (padding zeros after the '…' would misrepresent the value)
+            if ((e <= -5 || e >= 17) || ((f == 'G' || tr != 0) && x > d) || f == 'E' || (r != -1 && e >= r)) x = 1; else e = 0;
             if (x <= 0) { t = 1 - x; s.Slice(0, n).CopyTo(s.Slice(t)); s.Slice(0, t).Fill('0'); n += t; x += t; }
             if (x > n) { s.Slice(n, x - n).Fill('0'); n = x; }
             if (f == 'E' && (t = d - n + 1) > 0) { s.Slice(n, t).Fill('0'); n += t; }
             if (f == 'F' && (t = d - (n - x)) > 0) { s.Slice(n, t).Fill('0'); n += t; }
-            if (x > 0 && x < n) { s.Slice(x, n++ - x).CopyTo(s.Slice(x + 1)); s[x] = info.NumberDecimalSeparator[0]; }
+            if (x > 0 && x < n - tr) { s.Slice(x, n++ - x).CopyTo(s.Slice(x + 1)); s[x] = info.NumberDecimalSeparator[0]; }
             if (g == 'N')
             {
                 var l = info.NumberGroupSizes[0]; var c = info.NumberGroupSeparator[0];
@@ -1136,7 +1367,7 @@ namespace SysWeaver
             int need; fixed (char* p = s) need = *(int*)p; char* pa = null;
             try
             {
-                char* p; if (need < (250000 >> 1)) { var t = stackalloc char[need]; p = t; }
+                char* p; if (need <= (maxstack << 1)) { var t = stackalloc char[need]; p = t; }
                 else p = pa = (char*)alloc(need << 1);
                 var ok = TryFormat(s = new Span<char>(p, need), out charsWritten, format, provider); Debug.Assert(ok);
                 return s.Slice(0, charsWritten).ToString();
@@ -1151,33 +1382,136 @@ namespace SysWeaver
         {
             return ToString(default(string), provider);
         }
+        /// <summary>
+        /// Format the value using the "Q" format (up to 32 digits, repeating decimals marked with a ', ex: "0.'3") and the current culture, see <see cref="TryFormat"/>.
+        /// </summary>
+        /// <returns>The value as text.</returns>
         public override string ToString()
         {
             return ToString(default(string), default(IFormatProvider));
         }
 
+        /// <summary>
+        /// Parse a number: decimal notation (ex: "-1.25", "2.5E-3"), repeating decimals as formatted by <see cref="TryFormat"/> (ex: "0.'3" = 1/3)
+        /// and fractions (ex: "1/3", "-2.5/7").
+        /// </summary>
+        /// <param name="s">The text.</param>
+        /// <param name="style">The allowed styles (hex is not supported): <see cref="NumberStyles.AllowLeadingWhite"/>, <see cref="NumberStyles.AllowTrailingWhite"/> (of the whole text),
+        /// <see cref="NumberStyles.AllowLeadingSign"/> (of the numerator and of the denominator), <see cref="NumberStyles.AllowDecimalPoint"/>, <see cref="NumberStyles.AllowExponent"/>
+        /// and <see cref="NumberStyles.AllowThousands"/> (only used with a <paramref name="provider"/>).</param>
+        /// <param name="provider">The provider of the decimal separator, group separator and signs.
+        /// If null (culture independent): '.' and ',' are both accepted, if both are used the last one is the decimal separator and the other one the group separator ("1,234.5" and "1.234,5" = 1234.5),
+        /// if only one of them is used it's the decimal separator if used once ("1,5" = 1.5), else the group separator ("1,234,567").</param>
+        /// <param name="result">The parsed value, zero if parsing failed.</param>
+        /// <returns>True if the text could be parsed.</returns>
+        /// <remarks>
+        /// The syntax is: [sign] digits [decimal separator [digits] ['&#39;' repeating digits]] ['…'] [('e' | 'E') [sign] digits], optionally followed by '/' and a denominator with the same syntax.
+        /// At least one digit is required before the exponent, group separators and '_' are only accepted between digits of the integer part ('_' also in the fraction),
+        /// the '…' that <see cref="TryFormat"/> appends to truncated values is accepted (and ignored) at the end of the digits.
+        /// A sign is '+', '-', '−' or the <see cref="NumberFormatInfo.PositiveSign"/> / <see cref="NumberFormatInfo.NegativeSign"/> of the <paramref name="provider"/>.
+        /// No white space is allowed inside the text (ex: around the '/'). The magnitude of the exponent must be at most 100000 (computing 10^exponent for a huge exponent would take "forever").
+        /// </remarks>
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out BigRat result)
         {
             if ((style & NumberStyles.AllowHexSpecifier) != 0) goto err;
             if ((style & NumberStyles.AllowLeadingWhite) != 0) s = s.TrimStart(" \u0009\u000A\u000B\u000C\u000D");
             if ((style & NumberStyles.AllowTrailingWhite) != 0) s = s.TrimEnd(" \u0009\u000A\u000B\u000C\u000D");
-            if (s.Length == 0) goto err;
-            var h = provider != null ? NumberFormatInfo.GetInstance(provider).NumberDecimalSeparator[0] : default;
-            BigRat a = 0, e = 1, d = 0, p = 0; char c;
-            for (int i = s.Length - 1; i >= 0; i--)
-                switch (c = s[i])
+            var info = provider != null ? NumberFormatInfo.GetInstance(provider) : null;
+            var i = s.IndexOf('/');
+            if (i < 0) { if (parse(s, style, info, out result)) return true; goto err; }
+            if (!parse(s.Slice(0, i), style, info, out var n) || !parse(s.Slice(i + 1), style, info, out var d) || d.p == null) goto err;
+            result = n / d; return true; err: result = default; return false;
+        }
+        /// <summary>
+        /// The max magnitude of an exponent in a parsed text (10^exponent is computed, a huge exponent would take "forever").
+        /// </summary>
+        const int maxparseexp = 100000;
+        static bool parse(ReadOnlySpan<char> s, NumberStyles style, NumberFormatInfo info, out BigRat result)
+        {
+            result = default; int l = s.Length, i = 0, nd = 0, f = 0, k = -1, j;
+            if (l == 0) return false;
+            // Decimal and group separators
+            ReadOnlySpan<char> dec, grp = default;
+            if (info != null)
+            {
+                dec = info.NumberDecimalSeparator;
+                if ((style & NumberStyles.AllowThousands) != 0) grp = info.NumberGroupSeparator;
+            }
+            else
+            {
+                int a = s.LastIndexOf('.'), b = s.LastIndexOf(',');
+                if (a >= 0 && b >= 0) { dec = a > b ? "." : ","; grp = a > b ? "," : "."; }
+                else if (a >= 0 || b >= 0) { var c = a >= 0 ? "." : ","; if (s.IndexOf(c[0]) == (a >= 0 ? a : b)) dec = c; else { dec = default; grp = c; } }
+                else dec = default;
+            }
+            // Sign
+            var neg = false;
+            if ((j = sign(s, info, out neg)) > 0) { if ((style & NumberStyles.AllowLeadingSign) == 0) return false; i = j; }
+            // Digits, collected in a buffer (without separators)
+            Span<char> buf = l <= 256 ? stackalloc char[l] : new char[l];
+            bool point = false, digit = false;
+            while (i < l)
+            {
+                var c = s[i];
+                if ((uint)(c - '0') <= 9) { buf[nd++] = c; if (point) f++; digit = true; i++; continue; }
+                var next = i + 1 < l && (uint)(s[i + 1] - '0') <= 9;
+                if (c == '_' && digit && next) { i++; continue; }
+                if (c == '\'' && point && k < 0 && next) { k = nd; digit = false; i++; continue; }
+                if (!point && dec.Length > 0 && s.Slice(i).StartsWith(dec))
                 {
-                    case >= '0' and <= '9': a += e * (c - '0'); e *= 10; continue;
-                    case '.': case ',': if (h == default || h == c) d = e; if ((style & NumberStyles.AllowDecimalPoint) == 0) goto err; continue;
-                    case '\'': a *= e / (e - 1); continue;
-                    case '-': a = -a; if ((style & NumberStyles.AllowLeadingSign) == 0) goto err; continue;
-                    case '+' or '_' or '…': continue;
-                    case 'e' or 'E': p = Pow10((int)a); a = 0; e = 1; if ((style & NumberStyles.AllowExponent) == 0) goto err; continue;
-                    case '/': if (!TryParse(s.Slice(0, i), style, provider, out d)) goto err; result = d / a; return true;
-                    default: goto err;
+                    if ((style & NumberStyles.AllowDecimalPoint) == 0) return false;
+                    point = true; digit = false; i += dec.Length; continue;
                 }
-            if (d != 0) a /= d; if (p != 0) a *= p;
-            result = a; return true; err: result = default; return false;
+                if (!point && digit && grp.Length > 0)
+                {
+                    j = s.Slice(i).StartsWith(grp) ? grp.Length : c == ' ' && (grp.SequenceEqual(" ") || grp.SequenceEqual(" ")) ? 1 : 0;
+                    if (j > 0 && i + j < l && (uint)(s[i + j] - '0') <= 9) { i += j; continue; }
+                }
+                break;
+            }
+            if (nd == 0) return false;
+            if (i < l && s[i] == '…') i++;
+            // Exponent
+            long e = 0;
+            if (i < l && (s[i] | 0x20) == 'e')
+            {
+                if ((style & NumberStyles.AllowExponent) == 0) return false;
+                ++i; j = sign(s.Slice(i), info, out var en); i += j;
+                var ed = 0;
+                for (; i < l && (uint)(s[i] - '0') <= 9; i++, ed++) if ((e = e * 10 + (s[i] - '0')) > maxparseexp) return false;
+                if (ed == 0) return false;
+                if (en) e = -e;
+            }
+            if (i != l) return false;
+            e -= f; if (e < int.MinValue || e > int.MaxValue) return false;
+            // Value: digits * 10^e, with repeating digits: (A * (10^r - 1) + R) * 10^(e + r) / (10^r - 1) where A are the digits before the "'" and R the r digits after it
+            var digits = buf.Slice(0, nd);
+            if (k < 0) result = num(digits);
+            else
+            {
+                var r = nd - k; var p = Pow10(r) - 1;
+                result = (num(digits.Slice(0, k)) * p + num(digits.Slice(k))) / p; e += r;
+                if (e > int.MaxValue) return false;
+            }
+            if (result.p != null)
+            {
+                if (e != 0) result *= Pow10(unchecked((int)e));
+                if (neg) result = -result;
+            }
+            return true;
+            static int sign(ReadOnlySpan<char> s, NumberFormatInfo info, out bool neg)
+            {
+                neg = false; if (s.Length == 0) return 0;
+                switch (s[0]) { case '+': return 1; case '-' or '−': neg = true; return 1; }
+                if (info == null) return 0;
+                var t = info.NegativeSign; if (t.Length > 0 && s.StartsWith(t)) { neg = true; return t.Length; }
+                t = info.PositiveSign; return t.Length > 0 && s.StartsWith(t) ? t.Length : 0;
+            }
+            static BigRat num(ReadOnlySpan<char> d)
+            {
+                if (d.Length <= 19) { ulong v = 0; foreach (var c in d) v = v * 10 + unchecked((uint)(c - '0')); return v; }
+                return BigInteger.Parse(d, NumberStyles.None, CultureInfo.InvariantCulture);
+            }
         }
         public static bool TryParse([NotNullWhen(true)] string s, out BigRat result)
         {
@@ -1200,10 +1534,19 @@ namespace SysWeaver
             return TryParse(s.AsSpan(), NumberStyles.Float, provider, out result);
         }
 
+        /// <summary>
+        /// Parse a number, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.
+        /// </summary>
+        /// <param name="s">The text.</param>
+        /// <param name="style">The allowed styles (hex is not supported).</param>
+        /// <param name="provider">The format provider, see <see cref="TryParse(ReadOnlySpan{char}, NumberStyles, IFormatProvider, out BigRat)"/>.</param>
+        /// <returns>The parsed value.</returns>
+        /// <exception cref="ArgumentException"><paramref name="style"/> includes <see cref="NumberStyles.AllowHexSpecifier"/>.</exception>
+        /// <exception cref="FormatException">The text is not a valid number.</exception>
         public static BigRat Parse(ReadOnlySpan<char> s, NumberStyles style = NumberStyles.Float | NumberStyles.AllowThousands, IFormatProvider provider = null)
         {
-            if ((style & NumberStyles.AllowHexSpecifier) != 0) throw new ArgumentException(nameof(style));
-            if (!TryParse(s, style, provider, out var result)) throw new ArgumentException(); return result;
+            if ((style & NumberStyles.AllowHexSpecifier) != 0) throw new ArgumentException("Hex numbers are not supported", nameof(style));
+            if (!TryParse(s, style, provider, out var result)) throw new FormatException("The input is not a valid rational number"); return result;
         }
         public static BigRat Parse(string s)
         {
@@ -1228,10 +1571,15 @@ namespace SysWeaver
 
 
         // fast bit precise conversion
+        /// <summary>
+        /// Create a rational number with exactly the same value as a double (ex: 0.1 becomes 3602879701896397/36028797018963968).
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <exception cref="OverflowException"><paramref name="value"/> is NaN or infinity.</exception>
         public BigRat(double value)
         {
             if (value == 0) return; int h = ((int*)&value)[1], e = ((h >> 20) & 0x7FF) - 1075;
-            if (e == 0x3cc) throw new OverflowException(nameof(value)); // NaN 
+            if (e == 0x3cc) throw new OverflowException("NaN and infinity can't be converted to a BigRat"); // NaN
             var p = stackalloc uint[64]; Debug.Assert((abs(e) >> 5) + 8 <= 41);
             p[0] = 2; p[1] = *(uint*)&value; p[2] = (unchecked((uint)h) & 0x000FFFFF) | 0x100000;
             if (e == -1075) { if ((p[2] &= 0xfffff) == 0 && p[p[0] = 1] == 0) { *(ulong*)(p + 2) = 0x100000001; goto m1; } e++; } // denormalized
@@ -1240,17 +1588,27 @@ namespace SysWeaver
         }
 
         // fast bitlevel access, binary serialization etc.
+        /// <summary>
+        /// Get the internal representation (for binary serialization), empty for zero.
+        /// Layout: [sign bit | numerator length], numerator words (least significant first), denominator length, denominator words.
+        /// </summary>
+        /// <returns>The internal data, can be used to create an equal value using <see cref="BigRat(ReadOnlySpan{uint})"/>.</returns>
         public ReadOnlySpan<uint> AsSpan()
         {
             return p;
         }
+        /// <summary>
+        /// Create a rational number from data returned by <see cref="AsSpan"/> (the data is copied, trailing data is ignored).
+        /// </summary>
+        /// <param name="span">The internal representation, empty for zero.</param>
+        /// <exception cref="ArgumentException">The data is not a valid representation (ex: lengths out of range, zero denominator).</exception>
         public BigRat(ReadOnlySpan<uint> span)
         {
             uint n = unchecked((uint)span.Length), u, v, l; if (n == 0) return; // zero
             fixed (uint* p = span)
             {
-                if ((u = p[0] & 0x7fffffff) == 0 || u + 3 > n || u != 1 && p[u] == 0) throw new ArgumentException($"{nameof(span)} {"numerator"}");
-                if ((v = p[u + 1]) == 0 || (l = u + v + 2) > n || p[u + v + 1] == 0) throw new ArgumentException($"{nameof(span)} {"denominator"}");
+                if ((u = p[0] & 0x7fffffff) == 0 || u + 3 > n || u != 1 && p[u] == 0) throw new ArgumentException("Invalid numerator", nameof(span));
+                if ((v = p[u + 1]) == 0 || (l = u + v + 2) > n || p[u + v + 1] == 0) throw new ArgumentException("Invalid denominator", nameof(span));
                 this.p = p[u] != 0 ? span.Slice(0, unchecked((int)l)).ToArray() : null;
             }
         }
@@ -1330,25 +1688,29 @@ namespace SysWeaver
             fixed (uint* p = a.p)
             {
                 var n = p[0] & 0x3fffffff; if (*(ulong*)(p + n + 1) == 0x100000001) return a;
-                var u = stackalloc uint[a.p.Length << 1]; var v = u + a.p.Length; // n + 1;
-                copy(u, p, n + 1); u[0] = n; mod(u, p + n + 1, v); var inc = false;
-                switch (f)
+                var sl = a.p.Length << 1; Span<uint> s = sl <= maxstack ? stackalloc uint[sl] : heap(sl);
+                fixed (uint* u = s)
                 {
-                    case 1: inc = (p[0] & 0x80000000) != 0 && *(ulong*)u != 1; break; // Floor 
-                    case 2: inc = (p[0] & 0x80000000) == 0 && *(ulong*)u != 1; break; // Ceiling
-                    case 3: // Round
-                        {
-                            var t = u + n + 1; copy(t, p + n + 1, p[n + 1] + 1);
-                            shr(t, 1); var x = cms(u, t); if (x == 0 && (v[1] & 1) != 0) x = 1; inc = x > 0;
-                        }
-                        break;
-                    case 4: return *(ulong*)u != 1 ? default : a; // IsInteger // case 6: v = u; break;
-                    case 5: if (*(ulong*)u != 1) return default; break; // return int's only IsEvenInt, IsOddInt
+                    var v = u + a.p.Length; // n + 1;
+                    copy(u, p, n + 1); u[0] = n; mod(u, p + n + 1, v); var inc = false;
+                    switch (f)
+                    {
+                        case 1: inc = (p[0] & 0x80000000) != 0 && *(ulong*)u != 1; break; // Floor
+                        case 2: inc = (p[0] & 0x80000000) == 0 && *(ulong*)u != 1; break; // Ceiling
+                        case 3: // Round
+                            {
+                                var t = u + n + 1; copy(t, p + n + 1, p[n + 1] + 1);
+                                shr(t, 1); var x = cms(u, t); if (x == 0 && (v[1] & 1) != 0 && (p[n + 2] & 1) == 0) x = 1; inc = x > 0; // a tie (remainder = denominator / 2) is only possible with an even denominator
+                            }
+                            break;
+                        case 4: return *(ulong*)u != 1 ? default : a; // IsInteger // case 6: v = u; break;
+                        case 5: if (*(ulong*)u != 1) return default; break; // return int's only IsEvenInt, IsOddInt
+                    }
+                    if (inc) { var w = 1u; v[0] = add(v + 1, v[0], &w, 1, v + 1); }
+                    if (*(ulong*)v == 1) return default;
+                    var l = v[0]; v[0] |= p[0] & 0x80000000; *(ulong*)(v + l + 1) = 0x100000001;
+                    return new BigRat(v, l + 3);
                 }
-                if (inc) { var w = 1u; v[0] = add(v + 1, v[0], &w, 1, v + 1); }
-                if (*(ulong*)v == 1) return default;
-                var l = v[0]; v[0] |= p[0] & 0x80000000; *(ulong*)(v + l + 1) = 0x100000001;
-                return new BigRat(v, l + 3);
             }
         }
 
@@ -1419,13 +1781,17 @@ namespace SysWeaver
             return a;
             static BigRat est(BigRat x)
             {
-                var u = stackalloc uint[x.p!.Length]; fixed (uint* t = x.p) copy(u, t, unchecked((uint)x.p.Length));
-                uint nu = u[0], nv = u[nu + 1]; var v = u + nu + 1;
-                var mu = (nu << 5) - unchecked((uint)BitOperations.LeadingZeroCount(u[nu]));
-                var mv = (nv << 5) - unchecked((uint)BitOperations.LeadingZeroCount(v[nv]));
-                if (mu > 1) shr(u, unchecked((int)(mu >> 1))); var un = u[0];
-                if (mv > 1) shr(v, unchecked((int)(mv >> 1))); var vn = v[0];
-                if (un != nu) copy(u + un + 1, v, vn + 1); return new BigRat(u, 2 + un + vn);
+                var n = x.p!.Length; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+                fixed (uint* u = s, t = x.p)
+                {
+                    copy(u, t, unchecked((uint)n));
+                    uint nu = u[0], nv = u[nu + 1]; var v = u + nu + 1;
+                    var mu = (nu << 5) - unchecked((uint)BitOperations.LeadingZeroCount(u[nu]));
+                    var mv = (nv << 5) - unchecked((uint)BitOperations.LeadingZeroCount(v[nv]));
+                    if (mu > 1) shr(u, unchecked((int)(mu >> 1))); var un = u[0];
+                    if (mv > 1) shr(v, unchecked((int)(mv >> 1))); var vn = v[0];
+                    if (un != nu) copy(u + un + 1, v, vn + 1); return new BigRat(u, 2 + un + vn);
+                }
             }
         }
         static BigRat atan(BigRat _x, int bits)
@@ -1455,7 +1821,7 @@ namespace SysWeaver
             var need = checked(v.p.Length + 8 + ex); uint* pa = default;
             try
             {
-                uint* p; if (need < (500000 >> 2)) { var t = stackalloc uint[need]; p = t; }
+                uint* p; if (need <= maxstack) { var t = stackalloc uint[need]; p = t; }
                 else p = pa = (uint*)alloc(need << 2);
                 uint* d = p + np + 1 + 4;
                 fixed (uint* t = v.p) { copy(p, t, np + 1); copy(d, t + np + 1, t[np + 1] + 1); p[0] &= 0x3fffffff; }
@@ -1525,20 +1891,24 @@ namespace SysWeaver
                 var mu = unchecked((int)nu << 5) - BitOperations.LeadingZeroCount(u[nu]);
                 var mv = unchecked((int)nv << 5) - BitOperations.LeadingZeroCount(v[nv]);
                 var sh = Math.Max(mu - 96, mv - 96);
-                if (sh > 0)
+                var n = sh > 0 ? x.p.Length : 0; Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+                fixed (uint* t = s)
                 {
-                    var t = stackalloc uint[x.p.Length]; copy(t, u, unchecked((uint)x.p.Length));
-                    v = (u = t) + nu + 1; shr(u, sh); shr(v, sh); nu = u[0]; nv = v[0];
-                    if (*(ulong*)u == 1) return default;
-                    if (*(ulong*)v == 1)
+                    if (sh > 0)
                     {
-                        if (sat) return (p[0] & 0x80000000) != 0 ? decimal.MinValue : decimal.MaxValue;
-                        throw new ArgumentException();
+                        copy(t, u, unchecked((uint)n));
+                        v = (u = t) + nu + 1; shr(u, sh); shr(v, sh); nu = u[0]; nv = v[0];
+                        if (*(ulong*)u == 1) return default;
+                        if (*(ulong*)v == 1)
+                        {
+                            if (sat) return (p[0] & 0x80000000) != 0 ? decimal.MinValue : decimal.MaxValue;
+                            throw new OverflowException("The value is too large for a decimal");
+                        }
                     }
+                    var du = new decimal(((int*)u)[1], nu >= 2 ? ((int*)u)[2] : 0, nu >= 3 ? ((int*)u)[3] : 0, (x.p[0] & 0x80000000) != 0, 0);
+                    var dv = new decimal(((int*)v)[1], nv >= 2 ? ((int*)v)[2] : 0, nv >= 3 ? ((int*)v)[3] : 0, false, 0);
+                    return du / dv;
                 }
-                var du = new decimal(((int*)u)[1], nu >= 2 ? ((int*)u)[2] : 0, nu >= 3 ? ((int*)u)[3] : 0, (x.p[0] & 0x80000000) != 0, 0);
-                var dv = new decimal(((int*)v)[1], nv >= 2 ? ((int*)v)[2] : 0, nv >= 3 ? ((int*)v)[3] : 0, false, 0);
-                return du / dv;
             }
         }
         static void pow10(uint* p, uint e)
@@ -1546,12 +1916,16 @@ namespace SysWeaver
             uint n = e / 19, r = e - n * 19; ulong a = 1, b = 10;
             for (; ; r >>= 1) { if ((r & 1) != 0) a *= b; if (r <= 1) break; b *= b; }
             *(ulong*)(p + 1) = a; p[0] = p[2] != 0 ? 2u : 1u; if (n == 0) return;
-            var l = 4 + (int)(e >> 3); uint* v = stackalloc uint[l << 1], w = v + l, t;
-            v[0] = 2; *(ulong*)(v + 1) = 10000000000000000000;
-            for (; ; n >>= 1)
+            var l = 4 + (int)(e >> 3); Span<uint> s = (l << 1) <= maxstack ? stackalloc uint[l << 1] : heap(l << 1);
+            fixed (uint* sv = s)
             {
-                if ((n & 1) != 0) { copy(w, p, p[0] + 1); p[0] = mul(v + 1, v[0], w + 1, w[0], p + 1); } // p *= v;
-                if (n <= 1) break; w[0] = sqr(v + 1, v[0], w + 1); t = v; v = w; w = t; // v *= v; 
+                uint* v = sv, w = v + l, t;
+                v[0] = 2; *(ulong*)(v + 1) = 10000000000000000000;
+                for (; ; n >>= 1)
+                {
+                    if ((n & 1) != 0) { copy(w, p, p[0] + 1); p[0] = mul(v + 1, v[0], w + 1, w[0], p + 1); } // p *= v;
+                    if (n <= 1) break; w[0] = sqr(v + 1, v[0], w + 1); t = v; v = w; w = t; // v *= v;
+                }
             }
         }
 
@@ -1568,12 +1942,16 @@ namespace SysWeaver
             var sv = b == null ? 0 : (b[0] & 0x80000000) != 0 ? -1 : +1;
             if (su != sv) return su > sv ? +1 : -1;
             uint nu = a[0] & 0x3fffffff, du = a[nu + 1], nv = b[0] & 0x3fffffff, dv = b[nv + 1];
-            uint* w = stackalloc uint[unchecked((int)(nu + du + nv + dv + 8))], p;
-            uint cu = mul(a + 1, nu, b + nv + 2, dv, w);
-            uint cv = mul(b + 1, nv, a + nu + 2, du, p = w + cu);
-            if (cu != cv) return cu > cv ? su : -su;
-            for (uint i = cu; i != 0;) if (w[--i] != p[i]) return w[i] > p[i] ? su : -su;
-            return 0;
+            var n = unchecked((int)(nu + du + nv + dv + 8)); Span<uint> s = n <= maxstack ? stackalloc uint[n] : heap(n);
+            fixed (uint* w = s)
+            {
+                uint* p;
+                uint cu = mul(a + 1, nu, b + nv + 2, dv, w);
+                uint cv = mul(b + 1, nv, a + nu + 2, du, p = w + cu);
+                if (cu != cv) return cu > cv ? su : -su;
+                for (uint i = cu; i != 0;) if (w[--i] != p[i]) return w[i] > p[i] ? su : -su;
+                return 0;
+            }
         }
         static uint mul(uint* a, uint na, uint* b, uint nb, uint* r)
         {
@@ -1834,6 +2212,16 @@ namespace SysWeaver
         {
             if (p != null) Marshal.FreeCoTaskMem((IntPtr)p);
         }
+        /// <summary>
+        /// The max number of uint's of a temporary buffer on the stack, larger buffers are allocated on the heap (huge values would overflow the stack).
+        /// Usage: Span&lt;uint&gt; s = n &lt;= maxstack ? stackalloc uint[n] : heap(n); fixed (uint* p = s) ...
+        /// </summary>
+        const int maxstack = 0x4000;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static uint[] heap(int n)
+        {
+            return GC.AllocateUninitializedArray<uint>(n);
+        }
 
 #if NET7_0_OR_GREATER
         public static implicit operator BigRat(Int128 value)
@@ -1945,7 +2333,7 @@ namespace SysWeaver
             if (typeof(T) == typeof(BigRat)) { result = (T)(object)(BigRat)value; return true; }
             else if (typeof(T) == typeof(double)) { result = (T)(object)checked((double)value); return true; }
             else if (typeof(T) == typeof(long)) { result = (T)(object)checked((long)value); return true; }
-            else if (typeof(T) == typeof(ulong)) { result = (T)(object)checked((long)value); return true; }
+            else if (typeof(T) == typeof(ulong)) { result = (T)(object)checked((ulong)value); return true; }
             else if (typeof(T) == typeof(nint)) { result = (T)(object)checked((nint)value); return true; }
             else if (typeof(T) == typeof(nuint)) { result = (T)(object)checked((nuint)value); return true; }
             else if (typeof(T) == typeof(decimal)) { result = (T)(object)checked((decimal)value); return true; }

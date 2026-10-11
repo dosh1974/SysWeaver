@@ -22,7 +22,30 @@
             <returns>Sync results</returns>
             <exception cref="T:System.Exception"></exception>
         </member>
-        <member name="M:SysWeaver.FolderSync.FolderSyncer.PullFolder(System.String,System.String,System.Boolean,System.Boolean,System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String})">
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.GetPullFolderVersion(System.String)">
+            <summary>
+            Get the "version" (aka hash) of a folder on the local machine
+            </summary>
+            <param name="destFolder">The folder to get the hash for</param>
+            <returns>A version string</returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.CheckPullFolder(System.String,System.String)">
+            <summary>
+            Check if a new version of a shared folder is available
+            </summary>
+            <param name="srcName"></param>
+            <param name="version"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.WaitPullFolder(System.String,System.String)">
+            <summary>
+            Wait until a new version of a shared folder is available (or the request time's out)
+            </summary>
+            <param name="srcName"></param>
+            <param name="version"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.PullFolder(System.String,System.String,System.Boolean,System.Boolean,System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String},System.Func{System.String,System.String,System.Threading.Tasks.Task{System.Exception}})">
             <summary>
             Update a local folder from a remote repository
             </summary>
@@ -31,6 +54,7 @@
             <param name="switchTo">If true, the newly synched folder will be used when updated</param>
             <param name="useCdc">If true, try to use Content Dependent Chunking</param>
             <param name="onEvent">An optional callback used to display what's going on</param>
+            <param name="onBackupCopy">if non null, the existing folder is copied to the backup folder, then this function is executed</param>
             <returns>Sync results</returns>
             <exception cref="T:System.Exception"></exception>
         </member>
@@ -184,12 +208,24 @@
             List of errors
             </summary>
         </member>
+        <member name="F:SysWeaver.FolderSync.FolderPullSyncResult.Version">
+            <summary>
+            Version string
+            </summary>
+        </member>
         <member name="M:SysWeaver.FolderSync.IFolderSyncApi.CheckManagedFolder(SysWeaver.FolderSync.ManagedFolderSyncRequest)">
             <summary>
             Check if there are any differences in the managed folder
             </summary>
             <param name="r">Folder and local files</param>
             <returns>Changes required to sync the managed folder</returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.IFolderSyncApi.CheckSharedFolder(SysWeaver.FolderSync.LocalFolderInfo)">
+            <summary>
+            Check for updates against a shared folder
+            </summary>
+            <param name="r">Folder and local files</param>
+            <returns>Changes required to sync the local folder</returns>
         </member>
         <member name="M:SysWeaver.FolderSync.IFolderSyncApi.SharedFolderHasChanged(SysWeaver.FolderSync.SharedFolderSyncRequest)">
             <summary>
@@ -198,12 +234,12 @@
             <param name="r">Folder name and version (aka hash)</param>
             <returns>True if a new version is available</returns>
         </member>
-        <member name="M:SysWeaver.FolderSync.IFolderSyncApi.CheckSharedFolder(SysWeaver.FolderSync.LocalFolderInfo)">
+        <member name="M:SysWeaver.FolderSync.IFolderSyncApi.WaitUntilSharedFolderHasChanged(SysWeaver.FolderSync.SharedFolderSyncRequest)">
             <summary>
-            Check for updates against a shared folder
+            Wait until a a new version of a shared folder is available (or the request time's out)
             </summary>
-            <param name="r">Folder and local files</param>
-            <returns>Changes required to sync the local folder</returns>
+            <param name="r">Folder name and version (aka hash)</param>
+            <returns>True if a new version is available</returns>
         </member>
         <member name="T:SysWeaver.FolderSync.IFolderSyncEndPoints">
             <summary>

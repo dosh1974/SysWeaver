@@ -26,15 +26,19 @@ namespace SysWeaver.Auth
         /// </summary>  
         /// <param name="text">The text to hash, may not be null</param>
         /// <returns>Computed hash as a byte array: SHA256(UTF8(text))</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="text"/> is null (DEBUG builds only).</exception>
         public static Byte[] ComputeHash(String text)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(text);
+#endif//DEBUG
             Byte[] rented = null;
             var l = text.Length << 2;
             Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPoolStream.Rent(l));
             try
             {
                 if (!Encoding.UTF8.TryGetBytes(text.AsSpan(), dest, out var size))
-                    throw new Exception("Internal error!");
+                    throw new InvalidOperationException("Internal error!");
                 return SHA256.HashData(dest.Slice(0, size));
             }
             finally
@@ -49,19 +53,23 @@ namespace SysWeaver.Auth
         /// Compute a hash for some given text: SHA256(UTF8(text))
         /// </summary>
         /// <param name="text">The text to hash, may not be null</param>
-        /// <returns>The hash as a string: ToBase64(SHA256(UTF8(text)))</returns>
+        /// <returns>The hash as a string: ToBase64(SHA256(UTF8(text))), 44 chars</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="text"/> is null (DEBUG builds only).</exception>
         public static String ComputeHashString(String text)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(text);
+#endif//DEBUG
             Byte[] rented = null;
             var l = text.Length << 2;
             Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPoolStream.Rent(l));
             try
             {
                 if (!Encoding.UTF8.TryGetBytes(text.AsSpan(), dest, out var size))
-                    throw new Exception("Internal error!");
+                    throw new InvalidOperationException("Internal error!");
                 Span<Byte> hash = stackalloc Byte[SHA256.HashSizeInBytes];
                 if (SHA256.HashData(dest.Slice(0, size), hash) != SHA256.HashSizeInBytes)
-                    throw new Exception("Internal error!");
+                    throw new InvalidOperationException("Internal error!");
                 return Convert.ToBase64String(hash);
             }
             finally
@@ -75,8 +83,8 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Compute a hash for the given password and salt: SHA256(UTF8(password|salt))
         /// </summary>
-        /// <param name="password">Password</param>
-        /// <param name="userSalt">Salt</param>
+        /// <param name="password">Password (null is treated as empty)</param>
+        /// <param name="userSalt">Salt (null is treated as empty)</param>
         /// <returns>Computed hash as a byte array: SHA256(UTF8(password|salt))</returns>
         public static Byte[] ComputeHash(String password, String userSalt) => ComputeHash(String.Join('|', password, userSalt));
 
@@ -84,10 +92,9 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Compute a hash for the given password and salt: SHA256(UTF8(password|salt))
         /// </summary>
-        /// <param name="password">Password</param>
-        /// <param name="userSalt">Salt</param>
-        /// <returns>The hash as a string: ToBase64(SHA256(UTF8(password|salt)))</returns>
-        /// 
+        /// <param name="password">Password (null is treated as empty)</param>
+        /// <param name="userSalt">Salt (null is treated as empty)</param>
+        /// <returns>The hash as a string: ToBase64(SHA256(UTF8(password|salt))), 44 chars</returns>
         public static String ComputeHashString(String password, String userSalt) => ComputeHashString(String.Join('|', password, userSalt));
 
         /// <summary>
@@ -232,13 +239,17 @@ namespace SysWeaver.Auth
         /// Validate that a user guid is at most <see cref="AuhorizationLimits.MaxGuidLength"/> chars and only contains ASCII chars.
         /// </summary>
         /// <param name="guid">The guid to validate, may not be null</param>
-        /// <exception cref="Exception">The guid is too long or contains non ASCII chars.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="guid"/> is null (DEBUG builds only).</exception>
+        /// <exception cref="ArgumentException">The guid is too long or contains non ASCII chars.</exception>
         public static void ValidateUserGuid(String guid)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(guid);
+#endif//DEBUG
             if (guid.Length > AuhorizationLimits.MaxGuidLength)
-                throw new Exception("Guid to long!");
+                throw new ArgumentException("Guid too long, use at most " + AuhorizationLimits.MaxGuidLength + " chars!", nameof(guid));
             if (!StringTools.IsAsciiOnly(guid))
-                throw new Exception("Guid may only contain ASCII chars!");
+                throw new ArgumentException("Guid may only contain ASCII chars!", nameof(guid));
         }
 
     }

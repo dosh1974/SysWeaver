@@ -33,6 +33,8 @@ The transformer is a `CachedTransformer`, which implements the server's transfor
 
 - SVG files only; aggressive minification can alter documents that rely on editor metadata.
 - The disc cache grows with the number of distinct files and versions; entries unused for a while are removed.
+- The cached file name includes `SvgMinifierParams.CacheKey` (`<hash>.<key>.svg`, the key starts with `SvgMinifier.Version`), so a new minifier version or other minifier options
+  build new files instead of serving outputs of the previous version (files of the old naming / versions are no longer used).
 - This project is not included in the main solution file and must be added to your build explicitly.
 
 ## Using it

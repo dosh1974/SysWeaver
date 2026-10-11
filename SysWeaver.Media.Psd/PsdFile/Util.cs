@@ -109,8 +109,16 @@ namespace PhotoshopFile
             }
         }
 
-        /////////////////////////////////////////////////////////////////////////// 
+        ///////////////////////////////////////////////////////////////////////////
 
+        /// <summary>
+        /// Reverses the endianness of the words of a byte array, the word size is given by the bit depth (1 and 8 bit: nothing is changed).
+        /// </summary>
+        /// <param name="bitDepth">1, 8, 16 or 32.</param>
+        /// <param name="byteArray">Byte array containing the sequence on which to swap endianness</param>
+        /// <param name="startIdx">Byte index of the first word to swap</param>
+        /// <param name="count">Number of words to swap</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="bitDepth"/> is not 1, 8, 16 or 32, or the words are not inside the array.</exception>
         public static void SwapByteArray(int bitDepth,
           byte[] byteArray, int startIdx, int count)
         {
@@ -129,7 +137,7 @@ namespace PhotoshopFile
                     break;
 
                 default:
-                    throw new Exception(
+                    throw new ArgumentOutOfRangeException(nameof(bitDepth), bitDepth,
                       "Byte-swapping implemented only for 16-bit and 32-bit depths.");
             }
         }
@@ -140,11 +148,12 @@ namespace PhotoshopFile
         /// <param name="byteArray">Byte array containing the sequence on which to swap endianness</param>
         /// <param name="startIdx">Byte index of the first word to swap</param>
         /// <param name="count">Number of words to swap</param>
+        /// <exception cref="ArgumentOutOfRangeException">The words are not inside the array.</exception>
         public static void SwapByteArray2(byte[] byteArray, int startIdx, int count)
         {
             int endIdx = startIdx + count * 2;
             if (byteArray.Length < endIdx)
-                throw new IndexOutOfRangeException();
+                throw new ArgumentOutOfRangeException(nameof(count), count, "The words to swap exceed the array length.");
             var s = MemoryMarshal.Cast<Byte, ushort>(byteArray.AsSpan().Slice(startIdx, endIdx - startIdx));
             BinaryPrimitives.ReverseEndianness(s, s);
             /*unsafe
@@ -168,12 +177,13 @@ namespace PhotoshopFile
         /// <param name="byteArray">Byte array containing the sequence on which to swap endianness</param>
         /// <param name="startIdx">Byte index of the first word to swap</param>
         /// <param name="count">Number of words to swap</param>
+        /// <exception cref="ArgumentOutOfRangeException">The words are not inside the array.</exception>
         public static void SwapByteArray4(byte[] byteArray, int startIdx, int count)
         {
             int endIdx = startIdx + count * 4;
             if (byteArray.Length < endIdx)
-                throw new IndexOutOfRangeException();
-            var s = MemoryMarshal.Cast<Byte, ulong>(byteArray.AsSpan().Slice(startIdx, endIdx - startIdx));
+                throw new ArgumentOutOfRangeException(nameof(count), count, "The words to swap exceed the array length.");
+            var s = MemoryMarshal.Cast<Byte, uint>(byteArray.AsSpan().Slice(startIdx, endIdx - startIdx));
             BinaryPrimitives.ReverseEndianness(s, s);
             /*
             unsafe
@@ -214,7 +224,9 @@ namespace PhotoshopFile
 
         /// <summary>
         /// Round the integer to a multiple.
+        /// Positive values are rounded up, negative values are returned unchanged.
         /// </summary>
+        /// <exception cref="ArgumentException"><paramref name="value"/> and <paramref name="multiple"/> have opposite signs (or <paramref name="multiple"/> is 0 and <paramref name="value"/> is not).</exception>
         public static int RoundUp(int value, int multiple)
         {
             if (value == 0)
@@ -237,10 +249,12 @@ namespace PhotoshopFile
         /// <summary>
         /// Get number of bytes required to pad to the specified multiple.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> or <paramref name="padMultiple"/> is negative.</exception>
+        /// <exception cref="DivideByZeroException"><paramref name="padMultiple"/> is 0.</exception>
         public static int GetPadding(int length, int padMultiple)
         {
-            if ((length < 0) || (padMultiple < 0))
-                throw new ArgumentException();
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
+            ArgumentOutOfRangeException.ThrowIfNegative(padMultiple);
 
             var remainder = length % padMultiple;
             if (remainder == 0)
@@ -254,6 +268,7 @@ namespace PhotoshopFile
         /// Returns the number of bytes needed to store a single pixel of the
         /// specified bit depth.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="depth"/> is not 1, 8, 16 or 32.</exception>
         public static int BytesFromBitDepth(int depth)
         {
             switch (depth)
@@ -266,10 +281,14 @@ namespace PhotoshopFile
                 case 32:
                     return 4;
                 default:
-                    throw new ArgumentException("Invalid bit depth.");
+                    throw new ArgumentOutOfRangeException(nameof(depth), depth, "Invalid bit depth.");
             }
         }
 
+        /// <summary>
+        /// The number of color channels of a color mode (1 for Bitmap, Duotone, Grayscale, Indexed and Multichannel, 3 for Lab and RGB, 4 for CMYK).
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="colorMode"/> is not a defined color mode.</exception>
         public static short MinChannelCount(this PsdColorMode colorMode)
         {
             switch (colorMode)
@@ -287,7 +306,7 @@ namespace PhotoshopFile
                     return 4;
             }
 
-            throw new ArgumentException("Unknown color mode.");
+            throw new ArgumentOutOfRangeException(nameof(colorMode), colorMode, "Unknown color mode.");
         }
 
         /// <summary>
@@ -307,16 +326,46 @@ namespace PhotoshopFile
             return true;
         }
 
+        /// <summary>
+        /// Checks that a byte array of the given length can be allocated.
+        /// </summary>
+        /// <exception cref="PsdInvalidException"><paramref name="length"/> is negative (corrupt length field).</exception>
+        /// <exception cref="OutOfMemoryException"><paramref name="length"/> is larger than 0x7fffffc7 (the maximum .NET byte array length).</exception>
         public static void CheckByteArrayLength(long length)
         {
             if (length < 0)
             {
-                throw new Exception("Byte array cannot have a negative length.");
+                throw new PsdInvalidException("Byte array cannot have a negative length.");
             }
             if (length > 0x7fffffc7)
             {
                 throw new OutOfMemoryException(
                   "Byte array cannot exceed 2,147,483,591 in length.");
+            }
+        }
+
+        /// <summary>
+        /// The maximum size of a layer (or mask) relative to the document: a layer may be bigger than the document,
+        /// but not more than this many times wider or higher (protects against huge allocations from corrupt layer rects).
+        /// </summary>
+        public const int MaxLayerSizeFactor = 5;
+
+        /// <summary>
+        /// Checks the size of a layer or channel rect before image data is allocated for it.
+        /// </summary>
+        /// <param name="size">The layer / channel rect size.</param>
+        /// <param name="psdFile">The document.</param>
+        /// <exception cref="PsdInvalidException">The width or height is negative, or the width is more than <see cref="MaxLayerSizeFactor"/> times
+        /// the document width (<see cref="PsdFile.ColumnCount"/>), or the height more than <see cref="MaxLayerSizeFactor"/> times the document height (<see cref="PsdFile.RowCount"/>).</exception>
+        public static void CheckLayerSize(Size size, PsdFile psdFile)
+        {
+            if ((size.Width < 0) || (size.Height < 0))
+            {
+                throw new PsdInvalidException("Layer size " + size.Width + " x " + size.Height + " is negative.");
+            }
+            if (((long)size.Width > (long)MaxLayerSizeFactor * psdFile.ColumnCount) || ((long)size.Height > (long)MaxLayerSizeFactor * psdFile.RowCount))
+            {
+                throw new PsdInvalidException("Layer size " + size.Width + " x " + size.Height + " is more than " + MaxLayerSizeFactor + " times the image size " + psdFile.ColumnCount + " x " + psdFile.RowCount + ".");
             }
         }
 
@@ -355,16 +404,23 @@ namespace PhotoshopFile
             Fraction = (UInt16)(value & 0x0000ffff);
         }
 
+        /// <summary>
+        /// Convert a double to the nearest fixed-point number.
+        /// </summary>
+        /// <exception cref="OverflowException"><paramref name="value"/> is negative or rounds to 65536 or more.</exception>
         public UFixed16_16(double value)
         {
             if (value >= 65536.0) throw new OverflowException();
             if (value < 0) throw new OverflowException();
 
-            Integer = (UInt16)value;
-
             // Round instead of truncate, because doubles may not represent the
-            // fraction exactly.
-            Fraction = (UInt16)((value - Integer) * 65536 + 0.5);
+            // fraction exactly.  The whole 16.16 value is rounded, so that a
+            // fraction that rounds up to 1 carries into the integer part.
+            var fixedValue = Math.Floor(value * 65536 + 0.5);
+            if (fixedValue > UInt32.MaxValue) throw new OverflowException();
+            var bits = (UInt32)fixedValue;
+            Integer = (UInt16)(bits >> 16);
+            Fraction = (UInt16)(bits & 0x0000ffff);
         }
 
         public static implicit operator double(UFixed16_16 value)

@@ -25,6 +25,7 @@ namespace SysWeaver.Remote
     /// <remarks>
     /// Each instance owns its own <see cref="HttpClient"/> and handler; dispose the instance when it's no longer needed.
     /// All request methods are thread safe and may be called concurrently.
+    /// Any 2xx status code is a success (a 2xx other than 200 without a body returns default(T)), other codes throw a <see cref="HttpResponseException"/>.
     /// Failures are tracked per HTTP method and exposed through <see cref="GetStats"/>, timings through <see cref="PerfMon"/>.
     /// </remarks>
     public abstract class RemoteConnectionBase : IRemoteApi, IPerfMonitored, IHaveStats
@@ -56,10 +57,12 @@ namespace SysWeaver.Remote
 
         /// <summary>
         /// Cancels any pending requests and disposes the owned <see cref="HttpClient"/> and handler.
-        /// The instance can't be used after disposal.
+        /// The instance can't be used after disposal (calls fail with an exception wrapping an <see cref="ObjectDisposedException"/>), calling Dispose again does nothing.
         /// </summary>
         public void Dispose()
         {
+            if (Interlocked.Exchange(ref Disposed, 1) != 0)
+                return;
             var c = Client;
             c.CancelPendingRequests();
             c.Dispose();
@@ -164,8 +167,12 @@ namespace SysWeaver.Remote
         /// "bearer" are sent as a Bearer token, a user name starting with '*' sends the password in a custom header named by the rest of the user name (lower cased),
         /// and anything else uses Basic auth (UTF-8 encoded). For <see cref="RemoteAuthMethod.SysWeaverLogin"/> a login is performed synchronously (blocking) during construction.
         /// </remarks>
-        /// <exception cref="Exception">Unknown compression, both a proxy and Tor specified, Tor unavailable, an empty base url file or a failed SysWeaver login.</exception>
+        /// <exception cref="NotSupportedException">Unknown <see cref="RemoteConnection.Compression"/>.</exception>
+        /// <exception cref="InvalidOperationException">Both a <see cref="RemoteConnection.Proxy"/> and <see cref="RemoteConnection.UseTor"/> are specified, or Tor is unavailable.</exception>
         /// <exception cref="ArgumentException"><see cref="RemoteConnection.BaseUrl"/> is null.</exception>
+        /// <exception cref="InvalidDataException">The base url file doesn't contain any non-comment line.</exception>
+        /// <exception cref="FormatException"><see cref="RemoteConnection.UserAgent"/> isn't a valid product token.</exception>
+        /// <exception cref="Exception">Invalid credentials (see <see cref="CredentialParams.GetUserPassword"/>) or a failed SysWeaver login.</exception>
         protected RemoteConnectionBase(RemoteConnection p, Type interfaceType)
         {
             PerfMon = new PerfMonitor(interfaceType.Name + "@" + p.BaseUrl);
@@ -190,16 +197,18 @@ namespace SysWeaver.Remote
             {
                 Compression = CompManager.GetFromHttp(comp);
                 if (Compression == null)
-                    throw new Exception("Unknown compression format \"" + comp + "\"");
+                    throw new NotSupportedException("Unknown compression format \"" + comp + "\"");
                 CompLevel = p.CompLevel;
             }
 
             p.Serializer = ser;
             p.PostSerializer = postSer;
-            if (String.Equals(ser, RemoteParam.FormUrlSerializer, StringComparison.InvariantCultureIgnoreCase) || String.Equals(postSer, RemoteParam.FormUrlSerializer, StringComparison.InvariantCultureIgnoreCase))
-                FormUrlSerializer.Register();
-            if (String.Equals(ser, RemoteParam.FormUrlIgnoreDefaultsSerializer, StringComparison.InvariantCultureIgnoreCase) || String.Equals(postSer, RemoteParam.FormUrlIgnoreDefaultsSerializer, StringComparison.InvariantCultureIgnoreCase))
-                IgnoreDefaultsFormUrlSerializer.Register();
+            if (!FormSersRegistered)
+            {
+                if (String.Equals(ser, RemoteParam.FormUrlSerializer, StringComparison.OrdinalIgnoreCase) || String.Equals(postSer, RemoteParam.FormUrlSerializer, StringComparison.OrdinalIgnoreCase)
+                    || String.Equals(ser, RemoteParam.FormUrlIgnoreDefaultsSerializer, StringComparison.OrdinalIgnoreCase) || String.Equals(postSer, RemoteParam.FormUrlIgnoreDefaultsSerializer, StringComparison.OrdinalIgnoreCase))
+                    RegisterFormSers();
+            }
 
             int timeOut = p.TimeoutInMilliSeconds;
             if (timeOut <= 0)
@@ -219,16 +228,16 @@ namespace SysWeaver.Remote
                 if (epTimeOut > clientTimeOut)
                     clientTimeOut = epTimeOut;
             }
-            Ser = SerManager.Get(ser);
-            PostSer = SerManager.Get(postSer);
+            Ser = EndPointOptions.GetSerializer(ser);
+            PostSer = EndPointOptions.GetSerializer(postSer);
             //  Proxy/Tor
             var proxy = p.Proxy;
             if (p.UseTor)
             {
                 if (proxy != null)
-                    throw new Exception("Can't have a Proxy and use Tor at the same time!");
+                    throw new InvalidOperationException("Can't have a Proxy and use Tor at the same time!");
                 if (!TorService.IsAvailable)
-                    throw new Exception("The SysWeaver.Tor assembly is not available!");
+                    throw new InvalidOperationException("The SysWeaver.Tor assembly is not available!");
                 proxy = TorService.Proxy;
                 UsingTor = proxy != null;
             }
@@ -263,7 +272,7 @@ namespace SysWeaver.Remote
                 var fn = baseUrl;
                 baseUrl = FileExt.ReadNonCommentString(baseUrl);
                 if (baseUrl == null)
-                    throw new Exception("Base url file " + fn.ToFilename() + " must contain at least one line of text!");
+                    throw new InvalidDataException("Base url file " + fn.ToFilename() + " must contain at least one line of text!");
             }
             p.BaseUrl = baseUrl;
             UrlBase = baseUrl.TrimEnd('/') + '/';
@@ -345,8 +354,8 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Get<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
@@ -391,8 +400,8 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Delete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
@@ -439,8 +448,8 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Post<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
@@ -477,8 +486,8 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Put<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
@@ -518,8 +527,8 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValueGet<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
@@ -564,8 +573,8 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValueDelete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
@@ -612,8 +621,8 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValuePost<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
@@ -650,8 +659,8 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <returns>The deserialized response.</returns>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValuePut<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
@@ -695,7 +704,7 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
@@ -727,7 +736,7 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
@@ -761,7 +770,7 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
@@ -799,7 +808,7 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
@@ -841,7 +850,7 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
@@ -873,7 +882,7 @@ namespace SysWeaver.Remote
         /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
@@ -907,7 +916,7 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
@@ -945,7 +954,7 @@ namespace SysWeaver.Remote
         /// <param name="meta">End point meta data (name used for perf tracking).</param>
         /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
         /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
-        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
@@ -983,6 +992,32 @@ namespace SysWeaver.Remote
 
         #endregion//Called by the generated class
 
+        /// <summary>
+        /// True once the form url serializers are registered in <see cref="SerManager"/>.
+        /// </summary>
+        static volatile bool FormSersRegistered;
+
+        /// <summary>
+        /// Serializes the one time registration of the form url serializers.
+        /// </summary>
+        static readonly Object FormSersLock = new Object();
+
+        /// <summary>
+        /// Register both form url serializers in <see cref="SerManager"/> once per process (thread safe).
+        /// The connection doesn't need the registration (it uses the instances directly, see <see cref="EndPointOptions.GetSerializer"/>), it only makes the serializers available by name to other code.
+        /// </summary>
+        static void RegisterFormSers()
+        {
+            lock (FormSersLock)
+            {
+                if (FormSersRegistered)
+                    return;
+                FormUrlSerializer.Register();
+                IgnoreDefaultsFormUrlSerializer.Register();
+                FormSersRegistered = true;
+            }
+        }
+
         static T GetAttribute<T>(Type t) where T : Attribute
         {
             var at = typeof(T);
@@ -998,6 +1033,8 @@ namespace SysWeaver.Remote
         readonly String Tos;
 
         long ReqId;
+
+        int Disposed;
 
         /// <summary>
         /// Removes the scheme, host and query string from a url if <see cref="CleanUrl"/> is true, ex: "https://host/api/Get?key=x" becomes "api/Get".
@@ -1048,6 +1085,13 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// True for a success (2xx) status code.
+        /// </summary>
+        /// <param name="code">The HTTP status code.</param>
+        /// <returns>True if the code is in the range 200-299.</returns>
+        static bool IsSuccess(int code) => (uint)(code - 200) <= 99;
+
         async Task<T> ReadResponse<T>(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
         {
             long rid = Interlocked.Increment(ref ReqId);
@@ -1056,16 +1100,17 @@ namespace SysWeaver.Remote
             if (cb != null)
                 cb?.Invoke(rid, req.RequestUri.ToString(), type, timeout, payloadSer?.Name, payload, (int)(content?.Headers?.ContentLength ?? 0));
             var ce = OnCallEnd;
+            bool ended = false;
             try
             {
                 if (timeout > 0)
                     req.SetTimeout(TimeSpan.FromMilliseconds(timeout));
-                var res = await Send(req, timeout).ConfigureAwait(false);
+                using var res = await Send(req, timeout).ConfigureAwait(false);
                 var c = res.Content;
                 Memory<Byte> data = c == null ? null : await c.ReadAsByteArrayAsync().ConfigureAwait(false);
                 var code = res.StatusCode;
                 var icode = (int)code;
-                if (code != HttpStatusCode.OK)
+                if (!IsSuccess(icode))
                 {
                     Exception fromText = null;
                     try
@@ -1105,12 +1150,17 @@ namespace SysWeaver.Remote
                 }
                 var ser = opt?.Ser ?? Ser;
                 if (ce != null)
-                    ce?.Invoke(rid, null, 200, ser?.Name, ref data);
+                    ce?.Invoke(rid, null, icode, ser?.Name, ref data);
+                //  OnCallEnd is already called, a deserialization failure must not call it again
+                ended = true;
+                //  2xx other than 200 (ex: 204 No Content) without a body: no value
+                if ((code != HttpStatusCode.OK) && data.IsEmpty)
+                    return default;
                 return ser.Create<T>(data.Span);
             }
             catch (Exception ex)
             {
-                if ((ce != null) && (ex is not HttpResponseException))
+                if ((ce != null) && (!ended) && (ex is not HttpResponseException))
                 {
                     Memory<Byte> b = null;
                     ce?.Invoke(rid, ex, 0, null, ref b);
@@ -1131,9 +1181,9 @@ namespace SysWeaver.Remote
             {
                 if (timeout > 0)
                     req.SetTimeout(TimeSpan.FromMilliseconds(timeout));
-                var res = await Send(req, timeout).ConfigureAwait(false);
+                using var res = await Send(req, timeout).ConfigureAwait(false);
                 var code = res.StatusCode;
-                if (code != HttpStatusCode.OK)
+                if (!IsSuccess((int)code))
                 {
                     var c = res.Content;
                     Memory<Byte> data = c == null ? null : await c.ReadAsByteArrayAsync().ConfigureAwait(false);
@@ -1177,7 +1227,7 @@ namespace SysWeaver.Remote
                 if (ce != null)
                 {
                     Memory<Byte> data = null;
-                    ce?.Invoke(rid, null, 200, null, ref data);
+                    ce?.Invoke(rid, null, (int)code, null, ref data);
                 }
             }
             catch (Exception ex)

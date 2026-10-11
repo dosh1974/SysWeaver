@@ -16,7 +16,11 @@ namespace SysWeaver.OsServices.ServiceManager
         public string lpBinaryPathName;
         public string lpLoadOrderGroup;
         public uint dwTagID;
-        public string lpDependencies;
+        /// <summary>
+        /// Pointer to a double null terminated list of the names of the services and groups (prefixed with '+') this service depends on (a string would only hold the first name).
+        /// Only valid while the native buffer it was read from is alive, read it with <see cref="Win32ServiceManager.ReadMultiString(nint)"/> (<see cref="Win32ServiceManager.GetDependencies(string, bool)"/> does).
+        /// </summary>
+        public nint lpDependencies;
         public string lpServiceStartName;
         public string lpDisplayName;
     };

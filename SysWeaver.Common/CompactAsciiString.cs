@@ -34,6 +34,20 @@ namespace SysWeaver
         public static readonly CompactAsciiString Default = new CompactAsciiString();
 
         /// <summary>
+        /// The invalid set of <see cref="LegacyDefault"/>: <see cref="InvalidDefaults"/> without DEL (127)
+        /// </summary>
+        public static readonly IReadOnlySet<Char> LegacyInvalidDefaults = ReadOnlyData.Set("\\/'\"´`|%_".ToCharArray());
+
+        /// <summary>
+        /// The <see cref="Default"/> encoding used before 2026-10-05 (commit 139956c): all ASCII chars [33, 127] except the <see cref="LegacyInvalidDefaults"/> (base 87, DEL is the last digit).
+        /// Use it to decode values that were stored with the old <see cref="Default"/> (only single char values below 86 are encoded the same way, all other values differ).
+        /// </summary>
+        /// <remarks>
+        /// DEL (127) is escaped by json serializers, so values with that char expand "in transit", don't use this for new data.
+        /// </remarks>
+        public static readonly CompactAsciiString LegacyDefault = new CompactAsciiString(LegacyInvalidDefaults);
+
+        /// <summary>
         /// The alphabet of <see cref="Secure"/>, the index is the digit value
         /// </summary>
         const String SecureChars = "-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

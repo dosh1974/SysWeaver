@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using SysWeaver.Net;
 using System.Collections.Concurrent;
 using System.Text;
+using System.Formats.Asn1;
+using System.Security.Cryptography;
 
 namespace SysWeaver.Security
 {
@@ -19,7 +21,8 @@ namespace SysWeaver.Security
     /// Optionally the public part of the root certificate is published on the HTTP server (as an <see cref="IHttpServerModule"/>) so that clients can download and trust it.
     /// </summary>
     /// <remarks>
-    /// A cached certificate is reused if it matches the parameters, isn't about to expire and was issued by the current root certificate.
+    /// A cached certificate is reused if it matches the parameters, isn't about to expire and was signed by the current root certificate (the signature is verified with the public key of the root,
+    /// so a root replaced by a new one with the same subject creates a new certificate).
     /// The root file is monitored, if it changes the cached certificate is disposed and <see cref="OnChanged"/> is raised.
     /// Thread safe.
     /// </remarks>
@@ -36,18 +39,20 @@ namespace SysWeaver.Security
         /// </summary>
         /// <param name="msg">Optional message handler, used to report problems with the root certificate.</param>
         /// <param name="p">Parameters, null uses the defaults.</param>
-        /// <exception cref="Exception">A subject field contains an invalid character.</exception>
+        /// <exception cref="ArgumentException">A subject field is invalid (see <see cref="SignedCertificateCreator.ValidateString(string, string)"/>).</exception>
         public SignedCertificateProvider(IMessageHost msg = null, SignedCertificateProviderParams p = null)
         {
             p = p ?? new SignedCertificateProviderParams();
             P = new SignedCertificateCreator(p);
             Msg = msg;
-            Filename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
+            Filename = String.IsNullOrEmpty(p.Filename) ? null : EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
             Password = EnvInfo.ResolveText(p.Password);
             RootFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.RootFilename));
             RootPassword = PathTemplate.Resolve(p.RootPassword);
             MinValidHours = Math.Max(p.MinValidHours, 2);
             RenewBeforeExpirationHours = -Math.Max(p.RenewBeforeExpirationHours, (MinValidHours + 1) >> 1);
+            //  A loaded certificate that is due for renewal must be replaced, else the renewal is re-scheduled in the past (immediately, in a loop) (security-cov-2)
+            MinValidHours = Math.Max(MinValidHours, -RenewBeforeExpirationHours);
             var u = p.RootCertUri?.Trim(' ', '\t', '\n', '\\', '/');
             bool publish = p.PublishRoot && (!String.IsNullOrEmpty(u));
             if (publish)
@@ -192,8 +197,11 @@ namespace SysWeaver.Security
                                 //  Must create a new
                                 using (var root = await CertificateTools.Load(rootFile, RootPassword).ConfigureAwait(false))
                                 {
-                                    if (root.Subject == c.Issuer)
+                                    //  The signature must be verified, a replaced root can have the same subject (security-cov-3)
+                                    if (IsSignedBy(c, root))
                                     {
+                                        if (Fw == null)
+                                            Fw = new OnFileChangeAsync(rootFile, InvokeRootChanged);
                                         Interlocked.Exchange(ref C, c)?.Dispose();
                                         ExpireAction = Scheduler.Add(expires.AddHours(RenewBeforeExpirationHours), InvokeExpireSoon, "Self signed cert renewal");
                                         return c;
@@ -229,6 +237,73 @@ namespace SysWeaver.Security
             finally
             {
                 l.Release();
+            }
+        }
+
+        /// <summary>
+        /// Check if a certificate was issued by another certificate: the issuer name must match the subject name of the issuer
+        /// and the signature of the certificate must be valid for the public key of the issuer.
+        /// </summary>
+        /// <param name="cert">The certificate to check</param>
+        /// <param name="issuer">The (root) certificate that should have signed the certificate</param>
+        /// <returns>True if the certificate was signed by the issuer, false if not, or if the signature algorithm isn't supported (RSA PKCS#1 and ECDSA with SHA1 / SHA256 / SHA384 / SHA512 are)</returns>
+        internal static bool IsSignedBy(X509Certificate2 cert, X509Certificate2 issuer)
+        {
+            if (!cert.IssuerName.RawData.AsSpan().SequenceEqual(issuer.SubjectName.RawData))
+                return false;
+            try
+            {
+                //  Certificate ::= SEQUENCE { tbsCertificate, signatureAlgorithm AlgorithmIdentifier, signatureValue BIT STRING }
+                var r = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence();
+                var tbs = r.ReadEncodedValue();
+                var oid = r.ReadSequence().ReadObjectIdentifier();
+                var sig = r.ReadBitString(out _);
+                HashAlgorithmName hash;
+                bool ec = false;
+                switch (oid)
+                {
+                    case "1.2.840.113549.1.1.5":
+                        hash = HashAlgorithmName.SHA1;
+                        break;
+                    case "1.2.840.113549.1.1.11":
+                        hash = HashAlgorithmName.SHA256;
+                        break;
+                    case "1.2.840.113549.1.1.12":
+                        hash = HashAlgorithmName.SHA384;
+                        break;
+                    case "1.2.840.113549.1.1.13":
+                        hash = HashAlgorithmName.SHA512;
+                        break;
+                    case "1.2.840.10045.4.1":
+                        hash = HashAlgorithmName.SHA1;
+                        ec = true;
+                        break;
+                    case "1.2.840.10045.4.3.2":
+                        hash = HashAlgorithmName.SHA256;
+                        ec = true;
+                        break;
+                    case "1.2.840.10045.4.3.3":
+                        hash = HashAlgorithmName.SHA384;
+                        ec = true;
+                        break;
+                    case "1.2.840.10045.4.3.4":
+                        hash = HashAlgorithmName.SHA512;
+                        ec = true;
+                        break;
+                    default:
+                        return false;
+                }
+                if (ec)
+                {
+                    using var key = issuer.GetECDsaPublicKey();
+                    return key?.VerifyData(tbs.Span, sig, hash, DSASignatureFormat.Rfc3279DerSequence) ?? false;
+                }
+                using (var key = issuer.GetRSAPublicKey())
+                    return key?.VerifyData(tbs.Span, sig, hash, RSASignaturePadding.Pkcs1) ?? false;
+            }
+            catch
+            {
+                return false;
             }
         }
 

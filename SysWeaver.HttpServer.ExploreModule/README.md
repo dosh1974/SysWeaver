@@ -35,6 +35,7 @@ flowchart LR
 ## Limitations and considerations
 
 - Most endpoints are restricted to debug/dev roles; the module is intended for development and operations, not end users.
+- `DataRefTable` (a data reference as a table) returns at most `TableDataTools.DefaultMaxAllowedRows` rows per request (a request with no row limit gets the cap).
 
 ## Using it
 

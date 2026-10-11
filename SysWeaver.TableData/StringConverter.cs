@@ -6,7 +6,7 @@ using System.Reflection;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Lenient string to value conversions that never throw (invalid or null input gives the default value).
+    /// Lenient string to value conversions that never throw (invalid or null input gives the default value, null for the <c>ToNullableXxx</c> methods).
     /// The methods are looked up by return type using <see cref="GetMethod(Type)"/>, typically to build expression trees (see <see cref="StringConverterExp"/>).
     /// </summary>
     /// <remarks>
@@ -214,6 +214,209 @@ namespace SysWeaver.Data
             return ((value != null) && Enum.TryParse<T>(value.Trim(), true, out var val)) ? val : default;
         }
 
+        #region Nullable
+
+        /// <summary>
+        /// Parse a nullable <see cref="SByte"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static SByte? ToNullableSByte(String value)
+        {
+            return ((value != null) && SByte.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Int16"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Int16? ToNullableInt16(String value)
+        {
+            return ((value != null) && Int16.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Int32"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Int32? ToNullableInt32(String value)
+        {
+            return ((value != null) && Int32.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Int64"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Int64? ToNullableInt64(String value)
+        {
+            return ((value != null) && Int64.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Byte"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Byte? ToNullableByte(String value)
+        {
+            return ((value != null) && Byte.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="UInt16"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static UInt16? ToNullableUInt16(String value)
+        {
+            return ((value != null) && UInt16.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="UInt32"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static UInt32? ToNullableUInt32(String value)
+        {
+            return ((value != null) && UInt32.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="UInt64"/> using the current culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static UInt64? ToNullableUInt64(String value)
+        {
+            return ((value != null) && UInt64.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Single"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Single? ToNullableSingle(String value)
+        {
+            return ((value != null) && Single.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Double"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Double? ToNullableDouble(String value)
+        {
+            return ((value != null) && Double.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Decimal"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Decimal? ToNullableDecimal(String value)
+        {
+            return ((value != null) && Decimal.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="DateTime"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static DateTime? ToNullableDateTime(String value)
+        {
+            return ((value != null) && DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="TimeSpan"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static TimeSpan? ToNullableTimeSpan(String value)
+        {
+            return ((value != null) && TimeSpan.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="DateOnly"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static DateOnly? ToNullableDateOnly(String value)
+        {
+            return ((value != null) && DateOnly.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="TimeOnly"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static TimeOnly? ToNullableTimeOnly(String value)
+        {
+            return ((value != null) && TimeOnly.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Guid"/> using the invariant culture, ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Guid? ToNullableGuid(String value)
+        {
+            return ((value != null) && Guid.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable <see cref="Boolean"/> (case insensitive "true"/"false"), ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static Boolean? ToNullableBoolean(String value)
+        {
+            return ((value != null) && Boolean.TryParse(value.Trim(), out var val)) ? val : null;
+        }
+
+        /// <summary>
+        /// Parse a nullable enum value by name or number (case insensitive), ignoring leading and trailing white space.
+        /// Never throws, returns null if the text is null, empty or invalid.
+        /// </summary>
+        /// <typeparam name="T">The enum type.</typeparam>
+        /// <param name="value">The text to parse, may be null.</param>
+        /// <returns>The parsed value or null.</returns>
+        public static T? ToNullableEnum<T>(String value) where T : struct
+        {
+            return ((value != null) && Enum.TryParse<T>(value.Trim(), true, out var val)) ? val : null;
+        }
+
+        #endregion//Nullable
+
 
         static StringConverter()
         {
@@ -234,18 +437,23 @@ namespace SysWeaver.Data
 
         static readonly IReadOnlyDictionary<Type, MethodInfo> MapMethods;
         static readonly MethodInfo EnumMethod = typeof(StringConverter).GetMethod(nameof(ToEnum), BindingFlags.Static | BindingFlags.Public);
+        static readonly MethodInfo NullableEnumMethod = typeof(StringConverter).GetMethod(nameof(ToNullableEnum), BindingFlags.Static | BindingFlags.Public);
 
         /// <summary>
         /// Get the static conversion method (<c>T Method(String)</c>) for a type.
         /// </summary>
         /// <param name="t">The destination type.</param>
-        /// <returns>The method for one of the supported primitive types, a closed <see cref="ToEnum{T}(string)"/> for enums, or null if the type isn't supported.</returns>
+        /// <returns>The method for one of the supported primitive types (or a <see cref="Nullable{T}"/> of these, ex: <see cref="ToNullableInt32(string)"/>),
+        /// a closed <see cref="ToEnum{T}(string)"/> for enums, a closed <see cref="ToNullableEnum{T}(string)"/> for nullable enums, or null if the type isn't supported.</returns>
         public static MethodInfo GetMethod(Type t)
         {
             if (MapMethods.TryGetValue(t, out var m))
                 return m;
             if (t.IsEnum)
                 return EnumMethod.MakeGenericMethod(t);
+            var ut = Nullable.GetUnderlyingType(t);
+            if ((ut != null) && ut.IsEnum)
+                return NullableEnumMethod.MakeGenericMethod(ut);
             return null;
         }
 

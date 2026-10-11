@@ -32,7 +32,11 @@ namespace SysWeaver.Auth
         /// The password may therefore not contain ':' or '|'.
         /// Password could be a simple hash (a base64 encoded SHA256, see <see cref="AuthTools.ComputeSimplePasswordHash(string, string)"/>, can be generated using the "Generate password hash" debug page).
         /// Simple hashes are unique per user per application (entry assembly name).
+        /// Any 44 char password that is valid base64 of 32 bytes is used as a hash (so such a clear text password can't be used).
         /// Clear text passwords must fulfill the <see cref="PasswordPolicy"/>, users with invalid passwords are skipped.
+        /// Users with a too long name (over <see cref="AuhorizationLimits.MaxUserNameLength"/> chars) or domain (over <see cref="AuhorizationLimits.MaxDomainName"/> chars) are skipped with a warning message, the other users are still loaded.
+        /// User names are case insensitive (the last definition of a name wins), white spaces around the parts are trimmed, empty lines and lines starting with "#" or "//" are ignored.
+        /// The user guid is "SI:" followed by a hash of the user name (as written, case sensitive).
         /// </summary>
         public string[] Users;
 

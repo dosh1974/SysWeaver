@@ -24,7 +24,7 @@ namespace SysWeaver
         /// <param name="password">Password (never sent in plaintext, nor sent using the same hash twice)</param>
         /// <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
         /// <returns>User information (check <see cref="SysWeaverHttpClientExt.AuthInfo.Succeeded"/>), or null if <paramref name="connection"/> isn't a remote connection</returns>
-        /// <exception cref="Exception">A request failed (non 200 response).</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">A request failed (non 2xx response).</exception>
         public static Task<SysWeaverHttpClientExt.AuthInfo> SysWeaverLogin(this IRemoteApi connection, String username, String password, String urlFix = null)
         {
             var b = connection as RemoteConnectionBase;

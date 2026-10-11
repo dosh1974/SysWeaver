@@ -8,9 +8,31 @@ using PhotoshopFile;
 namespace SysWeaver.Media.Psd
 {
 
+    /// <summary>
+    /// Helpers to load PSD files as RGBA images, to enumerate layers and to extract text layers.
+    /// Only RGB documents with 8 or 16 bits per channel can be decoded to an image.
+    /// </summary>
     public static class PsdImage
     {
+        /// <summary>
+        /// Decode a channel, unless it has no compressed data (a channel added by <see cref="Layer.CreateMissingChannels"/> already has its ImageData).
+        /// </summary>
+        static void Decode(Channel c)
+        {
+            if (c.ImageDataRaw != null)
+                c.DecodeImageData();
+        }
 
+        /// <summary>
+        /// Decode a layer (or the composite image, <see cref="PsdFile.BaseLayer"/>) to an RGBA image of the layer's rect size.
+        /// Missing color channels are added as fully saturated (255) by <see cref="Layer.CreateMissingChannels"/>, the channels are decoded (the layer is modified).
+        /// Without an alpha channel (ID -1) the alpha is 255.
+        /// 16 bit channels are reduced to 8 bits by taking the high byte.
+        /// </summary>
+        /// <param name="layer">The layer to decode.</param>
+        /// <param name="fromFilename">Optional file name, only used in the exception message.</param>
+        /// <returns>The RGBA image (R, G, B, A byte order, stride = width * 4).</returns>
+        /// <exception cref="NotSupportedException">The document is not RGB, or the bit depth is not 8 or 16.</exception>
         public static ImageData32 DecodeLayer(Layer layer, String fromFilename = null)
         {
             layer.CreateMissingChannels();
@@ -28,11 +50,11 @@ namespace SysWeaver.Media.Psd
                         var gl = layer.Channels.First(x => x.ID == 1);
                         var bl = layer.Channels.First(x => x.ID == 2);
                         var al = layer.AlphaChannel;
-                        rl.DecodeImageData();
-                        gl.DecodeImageData();
-                        bl.DecodeImageData();
+                        Decode(rl);
+                        Decode(gl);
+                        Decode(bl);
                         if (al != null)
-                            al.DecodeImageData();
+                            Decode(al);
                         var r = rl.ImageData;
                         var g = gl.ImageData;
                         var b = bl.ImageData;
@@ -98,10 +120,17 @@ namespace SysWeaver.Media.Psd
 
                     }
             }
-            throw new Exception("Color mode " + mode + " with " + bpp + (bpp == 1 ? " bit per channel is not supported!" : " bits per channel is not supported!"));
+            throw new NotSupportedException("Color mode " + mode + " with " + bpp + (bpp == 1 ? " bit per channel is not supported!" : " bits per channel is not supported!") + " Layer: " + id);
         }
 
 
+        /// <summary>
+        /// Load a PSD file and decode its composite image (<see cref="PsdFile.BaseLayer"/>), see <see cref="DecodeLayer"/>.
+        /// </summary>
+        /// <param name="filename">The PSD file.</param>
+        /// <returns>The RGBA composite image.</returns>
+        /// <exception cref="NotSupportedException">The document is not RGB, or the bit depth is not 8 or 16.</exception>
+        /// <exception cref="PsdInvalidException">The file is not a valid PSD file.</exception>
         public static ImageData32 Load(String filename)
         {
             var t = new PsdFile(filename, new LoadContext());
@@ -118,7 +147,18 @@ namespace SysWeaver.Media.Psd
             return r.ReadAsciiChars(cidl);
         }
 
-        static Object ReadType(String type, PsdBinaryReader r)
+        /// <summary>
+        /// The maximum nesting depth of descriptors / lists (prevents a stack overflow on malicious data)
+        /// </summary>
+        const int MaxDescriptorDepth = 64;
+
+        static void CheckDescriptorDepth(int depth)
+        {
+            if (depth > MaxDescriptorDepth)
+                throw new PsdInvalidException("Descriptors are nested deeper than " + MaxDescriptorDepth + " levels.");
+        }
+
+        static Object ReadType(String type, PsdBinaryReader r, int depth)
         {
             if (type == "TEXT")
                 return r.ReadUnicodeString();
@@ -134,15 +174,23 @@ namespace SysWeaver.Media.Psd
                 return new KeyValuePair<String, Double>(unit, BitConverter.Int64BitsToDouble(r.ReadInt64()));
             }
             if (type == "Objc")
-                return ReadDescriptor(r).ToList();
+            {
+                CheckDescriptorDepth(depth + 1);
+                return ReadDescriptor(r, depth + 1).ToList();
+            }
             if ((type == "obj ") || (type == "VlLs"))
             {
+                CheckDescriptorDepth(depth + 1);
                 var count = r.ReadInt32();
+                if (count < 0)
+                    throw new PsdInvalidException("Negative list item count (" + count + ").");
+                // Each item has at least a 4 byte type, prevents huge allocations from corrupt counts
+                r.CheckAvailable(4L * count);
                 KeyValuePair<String, Object>[] data = new KeyValuePair<string, object>[count];
                 for (int i = 0; i < count; ++ i)
                 {
                     var keyType = r.ReadAsciiChars(4);
-                    data[i] = new KeyValuePair<string, object>(keyType, ReadType(keyType, r));
+                    data[i] = new KeyValuePair<string, object>(keyType, ReadType(keyType, r, depth + 1));
                 }
                 return data;
             }
@@ -168,10 +216,10 @@ namespace SysWeaver.Media.Psd
             {
                 return r.ReadByte() != 0;
             }
-            throw new Exception("Type + " + type + " is unsupported!\nSee: https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/#50577411_21585");
+            throw new NotSupportedException("Type " + type + " is unsupported!\nSee: https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/#50577411_21585");
         }
 
-        static IEnumerable<KeyValuePair<String, Object>> ReadDescriptor(PsdBinaryReader r)
+        static IEnumerable<KeyValuePair<String, Object>> ReadDescriptor(PsdBinaryReader r, int depth)
         {
             var name = r.ReadUnicodeString();
             var cid = ReadId(r);
@@ -180,15 +228,28 @@ namespace SysWeaver.Media.Psd
             {
                 var key = ReadId(r);
                 var osType = r.ReadAsciiChars(4);
-                var value = ReadType(osType, r);
+                var value = ReadType(osType, r, depth);
                 yield return new KeyValuePair<string, object>(key, value);
             }
         }
 
    
 
+        /// <summary>
+        /// Load a PSD file, extract the visible text layers and decode the composite image, see <see cref="LoadAndExtractTextLayers(out List{PsdTextLayer}, out IReadOnlyDictionary{string, string}, string)"/>.
+        /// </summary>
         public static ImageData32 LoadAndExtractTextLayers(out List<PsdTextLayer> layers, String filename) => LoadAndExtractTextLayers(out layers, out var _, filename);
 
+        /// <summary>
+        /// Extract the text of a text layer (Photoshop 6+ "TySh" layer info, the layer must also have a "fxrp" layer info).
+        /// </summary>
+        /// <param name="text">The text ("Txt " descriptor item, trailing NUL characters removed), null if the descriptor has no text item.</param>
+        /// <param name="ty">The vertical translation of the text transform (used as the baseline).</param>
+        /// <param name="l">The layer.</param>
+        /// <returns>True if the layer is a text layer, false if it has no "TySh" or no "fxrp" layer info.</returns>
+        /// <exception cref="NotSupportedException">The text descriptor contains an unsupported item type.</exception>
+        /// <exception cref="System.IO.EndOfStreamException">The text data is truncated.</exception>
+        /// <exception cref="PsdInvalidException">The text descriptor is invalid (a negative list item count, or descriptors / lists nested deeper than 64 levels).</exception>
         public static bool ExtractText(out String text, out double ty, Layer l)
         {
             text = null;
@@ -218,7 +279,7 @@ namespace SysWeaver.Media.Psd
                 var transforms = r.ReadBytes(6 * 8);
                 var textVersion = r.ReadInt16();
                 var descVersion = r.ReadInt32();
-                foreach (var c in ReadDescriptor(r))
+                foreach (var c in ReadDescriptor(r, 0))
                 {
                     if (c.Key == "Txt ")
                         text = ((String)c.Value).TrimEnd((Char)0);
@@ -232,6 +293,16 @@ namespace SysWeaver.Media.Psd
             return true;
         }
 
+        /// <summary>
+        /// Load a PSD file, extract the visible text layers (see <see cref="ExtractText"/>) and decode the composite image (see <see cref="DecodeLayer"/>).
+        /// Visible layers that are not text layers and are named "key=value" are returned as properties
+        /// (key and value trimmed, split at the first '=', layers with an empty value are ignored, a later layer overwrites an earlier one with the same key).
+        /// Hidden layers are ignored.
+        /// </summary>
+        /// <param name="layers">The visible text layers, in file order (bottom to top).</param>
+        /// <param name="props">The properties (ordinal, case sensitive keys).</param>
+        /// <param name="filename">The PSD file.</param>
+        /// <returns>The RGBA composite image.</returns>
         public static ImageData32 LoadAndExtractTextLayers(out List<PsdTextLayer> layers, out IReadOnlyDictionary<String, String> props, String filename)
         {
             Dictionary<String, String> properties = new(StringComparer.Ordinal);
@@ -257,6 +328,12 @@ namespace SysWeaver.Media.Psd
         }
 
 
+        /// <summary>
+        /// Load a PSD file and call a function for each layer (in file order, bottom to top, hidden layers included).
+        /// </summary>
+        /// <param name="filename">The PSD file.</param>
+        /// <param name="onLayer">Called for each layer, return false to stop.</param>
+        /// <returns>False if <paramref name="onLayer"/> returned false, else true.</returns>
         public static bool OnPsdLayers(String filename, Func<PsdFile, Layer, bool> onLayer)
         {
             PsdFile t = new PsdFile(filename, new LoadContext());
@@ -266,6 +343,12 @@ namespace SysWeaver.Media.Psd
             return true;
         }
 
+        /// <summary>
+        /// Load a PSD file, call a function for each layer (see <see cref="OnPsdLayers"/>) and decode the composite image (see <see cref="DecodeLayer"/>).
+        /// </summary>
+        /// <param name="filename">The PSD file.</param>
+        /// <param name="onLayer">Called for each layer, return false to stop.</param>
+        /// <returns>The RGBA composite image, or null if <paramref name="onLayer"/> returned false.</returns>
         public static ImageData32 GetImageAndProcessPsdLayers(String filename, Func<PsdFile, Layer, bool> onLayer)
         {
             PsdFile t = new PsdFile(filename, new LoadContext());
@@ -275,6 +358,11 @@ namespace SysWeaver.Media.Psd
             return DecodeLayer(t.BaseLayer, filename);
         }
 
+        /// <summary>
+        /// Get the name and rect of the visible layers of a PSD file (in file order, bottom to top).
+        /// Layers whose rect is <see cref="System.Drawing.Rectangle.IsEmpty"/> (all values 0) are skipped.
+        /// </summary>
+        /// <param name="filename">The PSD file.</param>
         public static List<NamedLayer> GetNamedLayers(String filename)
         {
             List<NamedLayer> layers = new List<NamedLayer>();
@@ -299,15 +387,33 @@ namespace SysWeaver.Media.Psd
         }
     }
 
+    /// <summary>
+    /// The name and rect (in document pixels) of a layer, see <see cref="PsdImage.GetNamedLayers"/>.
+    /// </summary>
     public sealed class NamedLayer
     {
 #if DEBUG
         public override string ToString() => String.Concat(W, 'x', H, ' ', Name, " @ ", X, ',', Y);
 #endif//DEBUG
+        /// <summary>
+        /// The layer name (the Unicode name if present).
+        /// </summary>
         public String Name;
+        /// <summary>
+        /// Left edge.
+        /// </summary>
         public int X;
+        /// <summary>
+        /// Top edge.
+        /// </summary>
         public int Y;
+        /// <summary>
+        /// Width.
+        /// </summary>
         public int W;
+        /// <summary>
+        /// Height.
+        /// </summary>
         public int H;
     }
 }

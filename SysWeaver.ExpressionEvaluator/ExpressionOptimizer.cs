@@ -29,12 +29,26 @@ namespace SysWeaver
 //        private static long Id;
 
         /// <summary>
-        /// Optimizes a linq expression
+        /// Optimizes a linq expression (repeated until nothing changes):
+        /// binary operations and static method calls with constant arguments are evaluated (constant folding),
+        /// "x + 0", "x - 0", "x * 1", "x / 1", "x | 0", "x ^ 0" become "x", "x * 0", "0 * x", "x &amp; 0" and "0 &lt;&lt; x" become 0, "0 - x", "x * -1" and "x / -1" become "-x" (not for unsigned types),
+        /// conversions to the same type are removed, conditionals with a constant test are replaced by the taken branch,
+        /// and nodes that are equal to a node seen before (by this or an earlier optimization) are replaced by that shared node (parameters are never merged).
+        /// For floating point types (Half, Single, Double) "x * 0", "0 * x" and "0 - x" are kept as is (x * 0 is NaN if x is NaN or infinite, 0 - 0 is +0 but -0 is -0).
+        /// The other floating point rules are kept, they differ from IEEE arithmetic only in the sign of a zero result (by design, expr-cov-17):
+        /// "x + 0" and "0 + x" give -0 for x = -0 (IEEE: -0 + +0 = +0), and "x - c" with a -0.0 constant c (also matched as 0) gives -0 for x = -0 (IEEE: +0).
+        /// NaN and infinities give the same result as the unoptimized expression; "x * 1", "1 * x", "x / 1", "x * -1", "-1 * x" and "x / -1" are exact (they're not folded for Half).
+        /// For Decimal the folded result has the same value, but may have a different scale (ex: 1.5m + 0.00m is 1.50m unoptimized, 1.5m optimized; 1.5m * 0m is 0.0m unoptimized, 0m optimized).
+        /// Constant folding runs the operation when optimizing, so exceptions (ex: an integer division by zero) are thrown by this method.
         /// </summary>
         /// <param name="e">The linq expression to optimize</param>
         /// <returns>An optimized version of the expression</returns>
+        /// <exception cref="ArgumentNullException">The expression is null (DEBUG builds only)</exception>
         public static Expression Optimize(this Expression e)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(e);
+#endif//DEBUG
             var count = NodeCount(e);
             bool changed = false;
             var v = new ReduceVisitor();
@@ -92,7 +106,7 @@ namespace SysWeaver
         /// Counts the number of nodes in the expression
         /// </summary>
         /// <param name="e">The linq expression to count nodes in</param>
-        /// <returns>The number of nodes found in the supplied linq expression</returns>
+        /// <returns>The number of nodes found in the supplied linq expression (0 for null)</returns>
         public static int NodeCount(this Expression e)
         {
             return NodeCountVisitor.Count(e);
@@ -161,7 +175,7 @@ namespace SysWeaver
             private Expression ApplyAction(Actions a, Expression current, Expression other)
             {
                 if (other == null)
-                    throw new Exception("Internal error!");
+                    throw new InvalidOperationException("Internal error!");
                 switch (a)
                 {
                     case Actions.UseOther:
@@ -171,6 +185,9 @@ namespace SysWeaver
                         Changed = true;
                         return Expression.Constant(Activator.CreateInstance(current.Type), current.Type);
                     case Actions.NegateOther:
+                        //  Unsigned types can't be negated (0 - x is kept as is)
+                        if (UnsignedTypes.Contains(other.Type))
+                            return current;
                         Changed = true;
                         return Expression.Negate(other);
                 }
@@ -207,6 +224,13 @@ namespace SysWeaver
                 typeof(float),
                 typeof(double),
                 typeof(decimal)
+            );
+
+            static readonly IReadOnlySet<Type> UnsignedTypes = ReadOnlyData.Set(
+                typeof(Byte),
+                typeof(UInt16),
+                typeof(UInt32),
+                typeof(UInt64)
             );
 
             private static bool IsNegOne(ConstantExpression c)
@@ -275,12 +299,38 @@ namespace SysWeaver
                 { ExpressionType.Divide, Actions.NegateOther },
             }.Freeze();
 
+            //  Floating point: x * 0 isn't 0 for NaN and infinity, and 0 - x isn't -x for x = 0 (+0 vs -0), so these are not folded
+            //  x + 0 / 0 + x are folded although -0 + 0 is +0 (by design, the sign of a zero result may differ: expr-cov-17)
+            private static readonly IReadOnlyDictionary<ExpressionType, Actions> FloatBinaryLeftDefaultActions = new Dictionary<ExpressionType, Actions>
+            {
+                { ExpressionType.Add, Actions.UseOther },
+            }.Freeze();
+
+            private static readonly IReadOnlyDictionary<ExpressionType, Actions> FloatBinaryRightDefaultActions = new Dictionary<ExpressionType, Actions>()
+            {
+                { ExpressionType.Add, Actions.UseOther },
+                { ExpressionType.Subtract, Actions.UseOther },
+            }.Freeze();
+
             private static readonly Tuple<Func<ConstantExpression, bool>, IReadOnlyDictionary<ExpressionType, Actions>, IReadOnlyDictionary<ExpressionType, Actions>>[] BinaryTests = new Tuple<Func<ConstantExpression, bool>, IReadOnlyDictionary<ExpressionType, Actions>, IReadOnlyDictionary<ExpressionType, Actions>>[]
             {
                 Tuple.Create((Func<ConstantExpression, bool>)IsDefault, BinaryLeftDefaultActions, BinaryRightDefaultActions),
                 Tuple.Create((Func<ConstantExpression, bool>)IsOne, BinaryLeftIsOneActions, BinaryRightIsOneActions),
                 Tuple.Create((Func<ConstantExpression, bool>)IsNegOne, BinaryLeftIsMinusOneActions, BinaryRightIsMinusOneActions),
             };
+
+            private static readonly Tuple<Func<ConstantExpression, bool>, IReadOnlyDictionary<ExpressionType, Actions>, IReadOnlyDictionary<ExpressionType, Actions>>[] FloatBinaryTests = new Tuple<Func<ConstantExpression, bool>, IReadOnlyDictionary<ExpressionType, Actions>, IReadOnlyDictionary<ExpressionType, Actions>>[]
+            {
+                Tuple.Create((Func<ConstantExpression, bool>)IsDefault, FloatBinaryLeftDefaultActions, FloatBinaryRightDefaultActions),
+                Tuple.Create((Func<ConstantExpression, bool>)IsOne, BinaryLeftIsOneActions, BinaryRightIsOneActions),
+                Tuple.Create((Func<ConstantExpression, bool>)IsNegOne, BinaryLeftIsMinusOneActions, BinaryRightIsMinusOneActions),
+            };
+
+            static readonly IReadOnlySet<Type> FloatTypes = ReadOnlyData.Set(
+                typeof(Half),
+                typeof(Single),
+                typeof(Double)
+            );
 
             private static HashSet<ExpressionType> GetBinaryTypes()
             {
@@ -341,7 +391,9 @@ namespace SysWeaver
                     return base.Visit(node);
             //  Merge nodes if possible
                 var old = node;
-                node = ObjectMerger.GetShared(node);
+                //  Parameters are never merged (different parameters can have the same name and type)
+                if (node.NodeType != ExpressionType.Parameter)
+                    node = ObjectMerger.GetShared(node);
                 if (node != old)
                 {
                     Changed = true;
@@ -362,11 +414,12 @@ namespace SysWeaver
                     if (BinaryTypes.Contains(b.NodeType))
                     {
                         if (!b.Type.GetTypeInfo().IsValueType)
-                            throw new Exception("Don't know how to process binary expression of non value types!");
+                            throw new NotSupportedException("Don't know how to process binary expression of non value types!");
+                        var binaryTests = FloatTypes.Contains(b.Type) ? FloatBinaryTests : BinaryTests;
                         if (left != null)
                         {
                             Actions a = Actions.None;
-                            foreach (var x in BinaryTests)
+                            foreach (var x in binaryTests)
                             {
                                 if (x.Item1(left) && (x.Item2.TryGetValue(b.NodeType, out a)))
                                     break;
@@ -377,7 +430,7 @@ namespace SysWeaver
                         if (right != null)
                         {
                             Actions a = Actions.None;
-                            foreach (var x in BinaryTests)
+                            foreach (var x in binaryTests)
                             {
                                 if (x.Item1(right) && (x.Item3.TryGetValue(b.NodeType, out a)))
                                     break;
@@ -625,8 +678,10 @@ namespace SysWeaver
 
         public override Expression Visit(Expression node)
         {
+            if (node == null)
+                return null;
             ++InternalCount;
-            return base.Visit(node) ?? throw new NullReferenceException();
+            return base.Visit(node);
         }
     }
 

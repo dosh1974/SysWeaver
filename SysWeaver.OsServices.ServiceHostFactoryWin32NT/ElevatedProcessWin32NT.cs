@@ -35,7 +35,7 @@ namespace SysWeaver.OsServices
         public static int RunElevated(String commandLine, bool terminal, bool noWait)
         {
             var cmd = SystemHelper.GetCommandAndArgs(out var args, commandLine);
-            var p = new Process();
+            using var p = new Process();
             var startInfo = p.StartInfo;
             startInfo.WindowStyle = terminal ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden;
             startInfo.FileName = cmd;

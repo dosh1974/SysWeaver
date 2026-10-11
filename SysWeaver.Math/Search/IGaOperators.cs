@@ -9,7 +9,7 @@ namespace SysWeaver.Search
     public interface IGaOperators<T> where T : class
     {
         /// <summary>
-        /// Create a new state that is a depp clone of the source
+        /// Create a new state that is a deep clone of the source
         /// </summary>
         /// <param name="data">The data/state to clone</param>
         /// <param name="into">If non-null this object may be used as the target of the clone (save some allocations)</param>
@@ -38,7 +38,7 @@ namespace SysWeaver.Search
         double Error(T data);
 
         /// <summary>
-        /// Called periodically, may return true to abort computations and/or to display progress
+        /// Called once per generation (before the generation is computed), may return true to abort computations and/or to display progress
         /// </summary>
         /// <param name="error">The lowest error found so far</param>
         /// <param name="generation">The number of generations processed so far</param>

@@ -3,6 +3,10 @@ using System.Reflection;
 
 namespace SysWeaver.Inspection.Implementation
 {
+    /// <summary>
+    /// Reflection info about the methods of an inspector implementation (used to compile the type handlers, normally with I = <see cref="IInspectorImplementation"/>), null if not declared by <typeparamref name="I"/>
+    /// </summary>
+    /// <typeparam name="I">The inspector implementation type</typeparam>
     public static class InspectorImplementationInfo<I> where I : IInspectorImplementation
     {
         public static readonly TypeInfo InspectorTypeInfo = typeof(I).GetTypeInfo();

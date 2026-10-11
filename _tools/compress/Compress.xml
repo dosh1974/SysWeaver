@@ -44,6 +44,11 @@
             If true, shader variables will be removed
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressProgram.ExitCompressFailed">
+            <summary>
+            Exit code: a file couldn't be compressed using any of the compression methods (with OnlyBest).
+            </summary>
+        </member>
         <member name="F:SysWeaver.CompressProgram.ToolMinify">
             <summary>
             https://github.com/tdewolff/minify/

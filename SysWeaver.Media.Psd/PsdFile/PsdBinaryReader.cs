@@ -30,13 +30,26 @@ namespace PhotoshopFile
         private BinaryReader reader;
         private Encoding encoding;
 
+        /// <summary>
+        /// The underlying stream.
+        /// </summary>
         public Stream BaseStream => reader.BaseStream;
 
+        /// <summary>
+        /// Create a reader for another stream, using the same Pascal string encoding as an existing reader.
+        /// </summary>
+        /// <param name="stream">The stream to read from (it is closed when this reader is disposed).</param>
+        /// <param name="reader">The reader to take the encoding from.</param>
         public PsdBinaryReader(Stream stream, PsdBinaryReader reader)
           : this(stream, reader.encoding)
         {
         }
 
+        /// <summary>
+        /// Create a big-endian reader.
+        /// </summary>
+        /// <param name="stream">The stream to read from (it is closed when this reader is disposed).</param>
+        /// <param name="encoding">The encoding used by <see cref="ReadPascalString(int)"/>.</param>
         public PsdBinaryReader(Stream stream, Encoding encoding)
         {
             this.encoding = encoding;
@@ -47,13 +60,60 @@ namespace PhotoshopFile
             reader = new BinaryReader(stream, Encoding.ASCII);
         }
 
+        /// <summary>
+        /// Strings up to this number of bytes are read into a stack buffer.
+        /// </summary>
+        const int MaxStackBytes = 1024;
+
+        /// <summary>
+        /// Throws if a seekable stream has less than <paramref name="count"/> bytes left.
+        /// Prevents huge (stack) allocations caused by corrupt length fields.
+        /// </summary>
+        internal void CheckAvailable(long count)
+        {
+            var s = reader.BaseStream;
+            if (s.CanSeek && (count > (s.Length - s.Position)))
+                throw new EndOfStreamException("Can't read " + count + " bytes at position " + s.Position + ", the stream only has " + (s.Length - s.Position) + " bytes left (truncated or corrupt data).");
+        }
+
+        /// <summary>
+        /// Read a string of byteCount bytes, using a stack buffer for short strings.
+        /// </summary>
+        string ReadString(long byteCount, Encoding enc)
+        {
+            CheckAvailable(byteCount);
+            if (byteCount <= MaxStackBytes)
+            {
+                Span<Byte> bytes = stackalloc Byte[(int)byteCount];
+                reader.ReadExactly(bytes);
+                return enc.GetString(bytes);
+            }
+            Util.CheckByteArrayLength(byteCount);
+            var data = new byte[byteCount];
+            reader.ReadExactly(data);
+            return enc.GetString(data);
+        }
+
+        /// <summary>
+        /// Read a byte.
+        /// </summary>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached.</exception>
         public byte ReadByte()
         {
             return reader.ReadByte();
         }
 
+        /// <summary>
+        /// Read <paramref name="count"/> bytes.
+        /// </summary>
+        /// <param name="count">The number of bytes to read.</param>
+        /// <returns>The bytes read. If the stream is not seekable, this can be shorter than <paramref name="count"/> at the end of the stream.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative.</exception>
+        /// <exception cref="EndOfStreamException">The stream is seekable and has less than <paramref name="count"/> bytes left.</exception>
         public byte[] ReadBytes(int count)
         {
+            if (count > 0)
+                CheckAvailable(count);
             return reader.ReadBytes(count);
         }
 
@@ -111,6 +171,9 @@ namespace PhotoshopFile
             }
         }
 
+        /// <summary>
+        /// Read a rectangle stored as four big-endian Int32 values: top, left, bottom, right.
+        /// </summary>
         public Rectangle ReadRectangle()
         {
             var rect = new Rectangle();
@@ -124,16 +187,18 @@ namespace PhotoshopFile
         /// <summary>
         /// Read a fixed-length ASCII string.
         /// </summary>
+        /// <param name="count">The number of characters (bytes) to read.</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative.</exception>
+        /// <exception cref="EndOfStreamException">The stream has less than <paramref name="count"/> bytes left.</exception>
         public string ReadAsciiChars(int count)
         {
-            Span<Byte> bytes = stackalloc Byte[count];
-            reader.ReadExactly(bytes);
-            var s = Encoding.ASCII.GetString(bytes);
-            return s;
+            ArgumentOutOfRangeException.ThrowIfNegative(count);
+            return ReadString(count, Encoding.ASCII);
         }
 
         /// <summary>
-        /// Read a Pascal string using the specified encoding.
+        /// Read a Pascal string (a length byte followed by the bytes) using the encoding given to the constructor.
+        /// The padding bytes (counted from the length byte) are skipped.
         /// </summary>
         /// <param name="padMultiple">Byte multiple that the Pascal string is padded to.</param>
         public string ReadPascalString(int padMultiple)
@@ -151,21 +216,28 @@ namespace PhotoshopFile
             return str;
         }
 
+        /// <summary>
+        /// Read a Unicode string: a big-endian Int32 character count followed by the UTF-16 big-endian characters.
+        /// </summary>
+        /// <exception cref="PsdInvalidException">The character count is negative.</exception>
+        /// <exception cref="EndOfStreamException">The stream ends before the string does.</exception>
         public string ReadUnicodeString()
         {
             var numChars = ReadInt32();
-            Span<Byte> bytes = stackalloc Byte[2 * numChars];
-            reader.ReadExactly(bytes);
-            var str = Encoding.BigEndianUnicode.GetString(bytes);
-            return str;
+            if (numChars < 0)
+                throw new PsdInvalidException("Unicode string has a negative length (" + numChars + ").");
+            return ReadString(2L * numChars, Encoding.BigEndianUnicode);
         }
 
+        /// <summary>
+        /// Read <paramref name="numChars"/> UTF-16 big-endian characters (no length prefix).
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="numChars"/> is negative.</exception>
+        /// <exception cref="EndOfStreamException">The stream ends before the string does.</exception>
         public string ReadUnicodeString(int numChars)
         {
-            Span<Byte> bytes = stackalloc Byte[2 * numChars];
-            reader.ReadExactly(bytes);
-            var str = Encoding.BigEndianUnicode.GetString(bytes);
-            return str;
+            ArgumentOutOfRangeException.ThrowIfNegative(numChars);
+            return ReadString(2L * numChars, Encoding.BigEndianUnicode);
         }
 
         //////////////////////////////////////////////////////////////////

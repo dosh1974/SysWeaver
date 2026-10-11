@@ -78,7 +78,7 @@ sequenceDiagram
 | `ApiHttpServerModule`, `ApiHttpEntry`, `ApiIoParams` | The Web API engine, a compiled API method, and serializer negotiation. |
 | `FileHttpServerModule`, `StaticDataHttpServerModule`, `RedirectHttpServerModule` | Disc folders, embedded / in-memory content, and redirects. |
 | `FileProxy`, `ProxyTools`, `ProxyRequestCache` | Forwarding requests to other servers. |
-| `CertificateBinder`, `IFirewallHandler` (`WindowsFirewallHandler`, `NoFirewallHandler`) | HTTPS certificate binding and firewall rules. |
+| `CertificateBinder`, `IFirewallHandler` (`FirewallHandler`, `WindowsFirewallHandler`, `LinuxFirewallHandler`, `NoFirewallHandler`) | HTTPS certificate binding and firewall rules (`FirewallHandler.Instance` picks the handler for the current OS). |
 | `NoUserLoggedInException` and related auth exceptions | Thrown by modules during handler resolution to start the login flow. |
 | `IApiAuditService`, `IHttpTransformerService`, `IUserStorageService` | Contracts implemented by other services. |
 
@@ -122,6 +122,7 @@ sequenceDiagram
 - The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source). The reverse proxy forwards the client's headers, including cookies and authorization; `FileProxy` strips the Cookie and Authorization headers unless `FileProxyParams.ForwardCookies` / `ForwardAuthorization` are set. The proxy cache keys responses on the forwarded Cookie and Authorization headers, never stores `private` / `no-store` responses and never caches `Set-Cookie` headers.
 - The API engine limits POST request bodies to `ApiHttpServerModuleParams.MaxRequestSize` (64 MB by default) and their decompressed size (`Content-Encoding`) to `MaxDecompressedSize` (64 MB by default), responding with 413 when exceeded. Other modules apply no request body size limit.
 - Request path handling and template output have known open hardening issues; expose only folders meant to be public and don't rely on the server as the only protection for sensitive files.
+- Firewall rules: `WindowsFirewallHandler` uses `netsh advfirewall` (needs elevation). Its `Remove` returns true when no rule with the name exists. `LinuxFirewallHandler` detects the active firewall (`Detect()`: firewalld, ufw or plain nftables, in that priority order) and needs root (it never uses `sudo`). When no firewall is active it does nothing and returns true. Rule names are sanitized (`SanitizeRuleName`: diacritics are removed, other disallowed chars become `_`, too long names get a hash). Rules that the handler didn't add are never changed or removed. ufw rules carry the rule name as comment. An identical ufw rule without that comment counts as present and isn't taken over. firewalld gets a `sysweaver-...` service in the default zone (adding or changing it runs `firewall-cmd --reload`, outbound rules aren't needed). nftables rules (with the name as comment) are inserted into the existing input / output filter chains and are runtime only (lost on reboot or ruleset reload). iptables-only systems aren't supported. macOS uses `NoFirewallHandler` (warning, false).
 - The build embeds pre-compressed assets produced by a Windows tool, so the project builds as-is only on Windows.
 
 ## Using it

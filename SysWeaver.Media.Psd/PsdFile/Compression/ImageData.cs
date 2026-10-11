@@ -57,7 +57,8 @@ namespace PhotoshopFile.Compression
     /// <summary>
     /// Writes rows of image data into compressed format.
     /// </summary>
-    /// <param name="array">An array containing the data to be compressed.</param>
+    /// <param name="array">An array containing the data to be compressed (native byte order), it is not modified.</param>
+    /// <exception cref="ArgumentException">The array length is not <see cref="BytesPerRow"/> * height.</exception>
     public void Write(byte[] array)
     {
       var imageLength = (long)BytesPerRow * Size.Height;

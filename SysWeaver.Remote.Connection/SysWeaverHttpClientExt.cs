@@ -94,7 +94,8 @@ namespace SysWeaver
         /// <remarks>
         /// Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the double SHA256 hash to "Api/auth/Login".
         /// </remarks>
-        /// <exception cref="Exception">A request failed (non 200 response).</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">A request failed (non 2xx response).</exception>
+        /// <exception cref="InvalidDataException">The salt response doesn't contain a salt and a one time pad.</exception>
         public async static Task<AuthInfo> SysWeaverLogin(this HttpClient client, String server, String username, String password)
         {
             String hash = null;
@@ -109,6 +110,8 @@ namespace SysWeaver
             }
             var urlbase = server.TrimEnd('/') + '/';
             var data = await client.PostJsonRequest<String, String[]>(urlbase + "Api/auth/GetUserSalt", username).ConfigureAwait(false);
+            if ((data == null) || (data.Length < 2))
+                throw new InvalidDataException("Invalid GetUserSalt response, expected a salt and a one time pad!");
             var salt = data[0];
             var oneTimePad = data[1];
             hash = hash ?? Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', password, salt))));
@@ -127,10 +130,11 @@ namespace SysWeaver
         /// <param name="client">The http client to log out</param>
         /// <param name="server">The base address to a SysWeaver service</param>
         /// <returns>Always true (the response status is ignored).</returns>
+        /// <exception cref="HttpRequestException">The request couldn't be sent (ex: the server can't be reached).</exception>
         public async static Task<bool> SysWeaverLogout(this HttpClient client, String server)
         {
             var urlbase = server.TrimEnd('/') + '/';
-            await client.GetAsync(urlbase + "logout").ConfigureAwait(false);
+            using var res = await client.GetAsync(urlbase + "logout").ConfigureAwait(false);
             return true;
         }
 
@@ -148,7 +152,7 @@ namespace SysWeaver
             /// <summary>
             /// Returns the file name and the status.
             /// </summary>
-            /// <returns>Ex: "file.txt [Upload]".</returns>
+            /// <returns>The name formatted using ToFilename and the status, ex: <c>"file://file.txt" [Upload]</c> (including the quotes).</returns>
             public override string ToString() => String.Concat(Name.ToFilename(), " [", Status, ']');
 
             /// <summary>
@@ -169,11 +173,14 @@ namespace SysWeaver
             public double LastModified;
 
             /// <summary>
-            /// Set the LastModified field from a an UTC DateTime time.
+            /// Set the LastModified field from a an UTC DateTime time (whole milliseconds).
             /// </summary>
-            /// <param name="utcLastModified">The last modified time in UTC</param>
+            /// <param name="utcLastModified">The last modified time in UTC, a <see cref="DateTimeKind.Unspecified"/> time is treated as UTC, a <see cref="DateTimeKind.Local"/> time is converted.</param>
             public void SetLastModified(DateTime utcLastModified)
             {
+                //  An unspecified kind would be treated as local time by DateTimeOffset
+                if (utcLastModified.Kind == DateTimeKind.Unspecified)
+                    utcLastModified = DateTime.SpecifyKind(utcLastModified, DateTimeKind.Utc);
                 LastModified = new DateTimeOffset(utcLastModified).ToUnixTimeMilliseconds();
             }
 
@@ -262,7 +269,8 @@ namespace SysWeaver
         /// <param name="repo">The repository</param>
         /// <param name="filenames">File(s) to prepare for upload</param>
         /// <returns>Information about the files (with the server status), or null if no files were specified or the server response was invalid</returns>
-        /// <exception cref="Exception">A file doesn't exist, or the request failed.</exception>
+        /// <exception cref="FileNotFoundException">A file doesn't exist.</exception>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">The request failed (non 2xx response).</exception>
         public async static Task<FileInfo[]> SysWeaverFileUploadPrepare(this HttpClient client, String server, String repo, params String[] filenames)
         {
             var urlbase = server.TrimEnd('/') + '/';
@@ -275,7 +283,7 @@ namespace SysWeaver
                 var di = new System.IO.FileInfo(filenames[i]);
                 var fn = di.FullName;
                 if (!di.Exists)
-                    throw new Exception("File " + fn.ToFilename() + " doesn't exist!");
+                    throw new FileNotFoundException("File " + fn.ToFilename() + " doesn't exist!", fn);
                 var hashStr = await FileHash.GetHashAsync(fn).ConfigureAwait(false);
                 var hash = HashTools.GetHashFromString26(hashStr);
                 var hexhHash = hash.ToHex();

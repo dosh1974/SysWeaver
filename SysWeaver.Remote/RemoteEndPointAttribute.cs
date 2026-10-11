@@ -22,7 +22,10 @@ namespace SysWeaver.Remote
         /// <summary>
         /// Defines the end point formatting for an api call and optionally the rest type (verb)
         /// </summary>
-        /// <param name="path">The path formatting to use, for GET and PUT calls - method arguments can be inserted using the {arg} syntax, if there is a single argument and that argument is an object, the syntax is {field} or {property}</param>
+        /// <param name="path">The path formatting to use (relative to the base url and any <see cref="RemotePathPrefixAttribute"/>, null or empty to use the method name).
+        /// For GET and DELETE calls the path is a url template: with a single primitive or string argument every {name} is replaced by the value,
+        /// with a single object argument {field} or {property} names a public member, with several arguments use <see cref="ParamAsObjectAttribute"/> and {parameterName}.
+        /// Strings, floating point values and DateTime values are url escaped, use "{{" for a literal '{'. For POST and PUT calls the path is used as is (the arguments are the payload).</param>
         /// <param name="type">The type of verb to use</param>
         public RemoteEndPointAttribute(String path, HttpEndPointTypes type = HttpEndPointTypes.Get)
         {
@@ -34,7 +37,7 @@ namespace SysWeaver.Remote
         /// Defines the rest type (verb) of an api and optionally the end point formatting 
         /// </summary>
         /// <param name="type">The type of verb to use</param>
-        /// <param name="path">The path formatting to use, for GET and PUT calls - method arguments can be inserted using the {arg} syntax, if there is a single argument and that argument is an object, the syntax is {field} or {property}</param>
+        /// <param name="path">The path formatting to use, null or empty to use the method name, see <see cref="RemoteEndPointAttribute(string, HttpEndPointTypes)"/>.</param>
         public RemoteEndPointAttribute(HttpEndPointTypes type, String path = null)
         {
             Type = type;

@@ -8,6 +8,8 @@ namespace SysWeaver.Data
     /// <summary>
     /// Strict string to boxed value conversions, used to convert filter values and cell texts to typed values.
     /// The individual <c>ToXxx</c> methods throw on invalid input, <see cref="ToType(Type, string)"/> doesn't.
+    /// The <see cref="Nullable{T}"/> of every supported type is supported by <see cref="ToType(Type, string)"/>, <see cref="CanConvert(Type)"/> and <see cref="TryGetConverter(Type, out Func{string, object})"/>:
+    /// a null, empty or white space text gives null, any other text is converted as the underlying type.
     /// </summary>
     /// <remarks>
     /// <see cref="Single"/>, <see cref="Double"/> and <see cref="Decimal"/> are parsed using the invariant culture,
@@ -324,7 +326,21 @@ namespace SysWeaver.Data
             { typeof(TimeOnly), new Func<String, Object>(x => ToTimeOnly(x)) },
             { typeof(DateOnly), new Func<String, Object>(x => ToDateOnly(x)) },
             { typeof(Guid), new Func<String, Object>(x => ToGuid(x)) },
-        }.Freeze();
+        }.AddNullables().Freeze();
+
+        /// <summary>
+        /// Add a converter for the <see cref="Nullable{T}"/> of every (value) type in the dictionary:
+        /// a null, empty or white space text gives null, else the conversion of the underlying type is used (and may throw).
+        /// </summary>
+        static Dictionary<Type, Func<String, Object>> AddNullables(this Dictionary<Type, Func<String, Object>> d)
+        {
+            foreach (var kv in new List<KeyValuePair<Type, Func<String, Object>>>(d))
+            {
+                var c = kv.Value;
+                d[typeof(Nullable<>).MakeGenericType(kv.Key)] = x => String.IsNullOrWhiteSpace(x) ? null : c(x);
+            }
+            return d;
+        }
 
     }
 

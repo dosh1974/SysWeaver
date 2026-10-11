@@ -31,6 +31,11 @@ namespace SysWeaver
         static readonly Char[] SplitChars = [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar];
 
         /// <summary>
+        /// The next file name in a numbered sequence, only the file name is counted up (never a number in the folder path)
+        /// </summary>
+        static String NextInSequence(String fileName) => Path.Combine(Path.GetDirectoryName(fileName), StringTools.CountUp(Path.GetFileName(fileName)));
+
+        /// <summary>
         /// Parses one or more file names or masks into the list of existing files they match.
         /// </summary>
         /// <param name="values">
@@ -38,9 +43,10 @@ namespace SysWeaver
         /// A mask ending with '+' (ex: "src/*.cs+") searches sub directories recursively.
         /// Relative paths are resolved against the current directory.
         /// </param>
-        /// <param name="allowSequences">If true, each found file is treated as the first in a numbered sequence and following files (ex: "Frame_1.png", "Frame_2.png") are added while they exist (see <c>StringTools.CountUp</c>).</param>
+        /// <param name="allowSequences">If true, each found file is treated as the first in a numbered sequence and following files (ex: "Frame_1.png", "Frame_2.png") are added while they exist
+        /// (the last number in the file name is incremented, see <c>StringTools.CountUp</c>; a gap ends the sequence).</param>
         /// <returns>
-        /// The matching files sorted by full path (ordinal, case insensitive).
+        /// The matching files sorted by full path (ordinal, case insensitive), without duplicates (also when several masks match the same file).
         /// The key is the full path and the value is the path relative to the searched folder (includes sub folders for recursive searches).
         /// </returns>
         /// <exception cref="DirectoryNotFoundException">The folder of a mask doesn't exist.</exception>
@@ -71,14 +77,14 @@ namespace SysWeaver
                             continue;
                         if (allowSequences)
                         {
-                            var test = StringTools.CountUp(f);
+                            var test = NextInSequence(f);
                             while (test != f)
                             {
                                 if (!File.Exists(test))
                                     break;
                                 if (!allFiles.TryAdd(test, test.Substring(fl)))
                                     break;
-                                test = StringTools.CountUp(test);
+                                test = NextInSequence(test);
                             }
                         }
                     }

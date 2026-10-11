@@ -24,7 +24,8 @@ namespace SysWeaver.Geometry
         public int Index { get; }
 
         /// <summary>
-        /// The left child of the current node.
+        /// The left child of the current node, null if the child index is not less than the array length minus one.
+        /// Note that a returned child may be an empty slot (<see cref="Point"/> is then null / default).
         /// </summary>
         public BinaryTreeNavigator<TPoint, TNode> Left
             =>
@@ -33,7 +34,8 @@ namespace SysWeaver.Geometry
                     : null;
 
         /// <summary>
-        /// The right child of the current node.
+        /// The right child of the current node, null if the child index is not less than the array length minus one.
+        /// Note that a returned child may be an empty slot (<see cref="Point"/> is then null / default).
         /// </summary>
         public BinaryTreeNavigator<TPoint, TNode> Right
                =>
@@ -42,7 +44,7 @@ namespace SysWeaver.Geometry
                        : null;
 
         /// <summary>
-        /// The parent of the current node.
+        /// The parent of the current node, null for the root (index 0).
         /// </summary>
         public BinaryTreeNavigator<TPoint, TNode> Parent => this.Index == 0 ? null : new BinaryTreeNavigator<TPoint, TNode>(this.pointArray, this.nodeArray, BinaryTreeNavigation.ParentIndex(this.Index));
 

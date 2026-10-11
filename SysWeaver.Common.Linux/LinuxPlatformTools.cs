@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace SysWeaver
 {
@@ -15,7 +16,7 @@ namespace SysWeaver
     /// <remarks>
     /// <para>Not referenced directly: <see cref="PlatformTools.Current"/> loads it by name ("SysWeaver.LinuxPlatformTools, SysWeaver.Common.Linux") when running on Linux,
     /// so the assembly only needs to be deployed with the application.</para>
-    /// <para>Uses /etc/*-release for the OS name, /proc/meminfo for memory and the output of "top -b -n 1" for CPU usage.
+    /// <para>Uses /etc/*-release for the OS name, /proc/meminfo for memory and two samples of /proc/stat for CPU usage.
     /// <see cref="FlushToDisc(SafeHandle)"/> is a no-op. <see cref="MakeDirectoryAccessableToEveryOne(string)"/> uses mode bits and POSIX default ACL's (setfacl).</para>
     /// <para>Failures are counted in an <see cref="ExceptionTracker"/> exposed through <see cref="GetStats"/>.</para>
     /// </remarks>
@@ -96,7 +97,8 @@ namespace SysWeaver
         /// <param name="availableBytes">Receives the available memory in bytes (MemAvailable), 0 on failure.</param>
         /// <param name="totalBytes">Receives the total memory in bytes (MemTotal), 0 on failure.</param>
         /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
-        /// <remarks>Thread safe (serialized by a static lock, since a static buffer is reused). Only the first 200 characters of the file are read.</remarks>
+        /// <remarks>Thread safe (serialized by a static lock, since a static buffer is reused). Only the first 200 characters of the file are read,
+        /// if an entry isn't found there (ex: kernels older than 3.14 have no MemAvailable) false is returned.</remarks>
         public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
         {
             try
@@ -131,6 +133,8 @@ namespace SysWeaver
                 reader.ReadBlock(readSpan);
             }
             var tokenIndex = readSpan.IndexOf(token);
+            if (tokenIndex < 0)
+                throw new InvalidDataException(String.Concat("No \"", token, "\" entry found at the start of /proc/meminfo"));
             var fromTokenSpan = readSpan.Slice(tokenIndex + token.Length);
             var kbIndex = fromTokenSpan.IndexOf("kB");
             var notTrimmedSpan = fromTokenSpan.Slice(0, kbIndex);
@@ -301,40 +305,91 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Gets the total CPU usage by running "top -b -n 1" through /bin/bash and parsing the idle value of the "%Cpu(s):" line.
+        /// The time between the two /proc/stat samples of <see cref="GetCpuUsage(out double)"/> in milliseconds.
         /// </summary>
-        /// <param name="cpuUsage">Receives the CPU usage in percent [0, 100], 0 on failure.</param>
+        const int CpuSampleIntervalMs = 250;
+
+        /// <summary>
+        /// Parses the aggregated "cpu" line of /proc/stat ("cpu  user nice system idle iowait irq softirq steal guest guest_nice", in clock ticks since boot).
+        /// </summary>
+        /// <param name="procStat">The text of /proc/stat (only the line starting with "cpu " is used).</param>
+        /// <param name="idle">Receives the idle time (idle + iowait).</param>
+        /// <param name="total">Receives the total time (user + nice + system + idle + iowait + irq + softirq + steal; guest time is already included in user / nice). Missing trailing values (old kernels) count as 0.</param>
+        /// <returns>True if the line was found and parsed, false otherwise.</returns>
+        internal static bool TryParseProcStatCpu(String procStat, out ulong idle, out ulong total)
+        {
+            idle = 0;
+            total = 0;
+            if (procStat == null)
+                return false;
+            foreach (var line in procStat.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!line.FastStartsWith("cpu "))
+                    continue;
+                var values = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                //  values[0] is "cpu", at least user, nice, system and idle are needed
+                var vl = values.Length;
+                if (vl < 5)
+                    return false;
+                if (vl > 9)
+                    vl = 9;
+                ulong t = 0;
+                for (int i = 1; i < vl; ++i)
+                {
+                    if (!ulong.TryParse(values[i], NumberStyles.None, CultureInfo.InvariantCulture, out var v))
+                        return false;
+                    t += v;
+                    if ((i == 4) || (i == 5))
+                        idle += v;
+                }
+                total = t;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Computes the CPU usage in percent [0, 100] between two samples of /proc/stat (see <see cref="TryParseProcStatCpu"/>).
+        /// </summary>
+        /// <param name="idle0">The idle time of the first sample.</param>
+        /// <param name="total0">The total time of the first sample.</param>
+        /// <param name="idle1">The idle time of the second sample.</param>
+        /// <param name="total1">The total time of the second sample.</param>
+        /// <returns>The CPU usage in percent, 0 if no time passed (or the counters went backwards).</returns>
+        internal static double ComputeCpuUsage(ulong idle0, ulong total0, ulong idle1, ulong total1)
+        {
+            if ((total1 <= total0) || (idle1 < idle0))
+                return 0;
+            var dt = (double)(total1 - total0);
+            var c = 100.0 * (1.0 - (idle1 - idle0) / dt);
+            if (c < 0)
+                c = 0;
+            if (c > 100)
+                c = 100;
+            return c;
+        }
+
+        static void SampleProcStatCpu(out ulong idle, out ulong total)
+        {
+            if (!TryParseProcStatCpu(File.ReadAllText("/proc/stat"), out idle, out total))
+                throw new InvalidDataException("No valid \"cpu\" line found in /proc/stat");
+        }
+
+        /// <summary>
+        /// Gets the current total CPU usage by sampling the aggregated "cpu" line of /proc/stat twice, 250 ms apart.
+        /// </summary>
+        /// <param name="cpuUsage">Receives the CPU usage in percent [0, 100] during the sampling interval, 0 on failure.</param>
         /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
-        /// <remarks>Starts a process on every call, so it is relatively expensive. The process runs with LC_ALL=C and the number is parsed using the invariant culture.</remarks>
+        /// <remarks>Blocks the calling thread for the sampling interval (250 ms). Idle time includes iowait.</remarks>
         public bool GetCpuUsage(out double cpuUsage)
         {
             try
             {
-                var pi = new ProcessStartInfo();
-                pi.FileName = "/bin/bash";
-                pi.Arguments = "-c \"top -b -n 1\"";
-                pi.RedirectStandardOutput = true;
-                pi.Environment["LC_ALL"] = "C";
-                String output;
-                using (var process = Process.Start(pi))
-                    output = process.StandardOutput.ReadToEnd();
-                foreach (var x in output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-                {
-                    if (x.FastStartsWith("%Cpu(s):"))
-                    {
-                        var times = x.Substring(8).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                        var idleS = times[3];
-                        var idle = double.Parse(idleS.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0], CultureInfo.InvariantCulture);
-                        var c = 100.0 - idle;
-                        if (c < 0)
-                            c = 0;
-                        if (c > 100)
-                            c = 100;
-                        cpuUsage = c;
-                        return true;
-                    }
-                }
-                throw new Exception("No \"%Cpu(s)\" row found in the output from \"top -b -n 1\"");
+                SampleProcStatCpu(out var idle0, out var total0);
+                Thread.Sleep(CpuSampleIntervalMs);
+                SampleProcStatCpu(out var idle1, out var total1);
+                cpuUsage = ComputeCpuUsage(idle0, total0, idle1, total1);
+                return true;
             }
             catch (Exception ex)
             {

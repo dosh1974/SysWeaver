@@ -21,7 +21,8 @@ namespace SysWeaver
         /// <param name="pattern">A wildcard pattern which can use char * to match any amount of characters; or char ? to match one character.</param>
         /// <param name="unixStyle">
         /// If true, use the *nix style wildcard rules (case sensitive, * matches anything, ? exactly one character);
-        /// otherwise use Windows style rules (case insensitive, ? matches zero or one non-dot character, special handling of trailing dots and ".*").
+        /// otherwise use Windows style rules (case insensitive, ? matches zero or one non-dot character, special handling of trailing dots and ".*",
+        /// ex: "*.*" and "name.*" also match names without an extension, "name." matches "name", and a pattern with ".." followed by a non-dot char never matches).
         /// </param>
         /// <returns>true if the file name matches the pattern, false otherwise.</returns>
         public static bool Match(string fileName, string pattern, bool unixStyle = false)

@@ -198,7 +198,7 @@ namespace SysWeaver.OsServices
             item("debug", "run as a command line program with more verbose output.");
             item("hash [user] [password]", "compute and display a simple password hash.");
             ConsoleTools.ResetColor();
-            var ci = (int)i;
+            var ci = i.ToExitCode(ServiceVerbs.Help);
             Environment.Exit(ci);
             return ci;
         }
@@ -216,8 +216,8 @@ namespace SysWeaver.OsServices
                 Console.WriteLine("Must be atleast one character!");
                 ConsoleTools.ResetColor();
                 ConsoleTools.SetProgress(ConsoleProgressDisplays.Error, 100);
-                Environment.Exit(0);
-                return 0;
+                Environment.Exit(ServiceResponseHelper.ExitInvalidArguments);
+                return ServiceResponseHelper.ExitInvalidArguments;
             }
             var pe = AuthTools.ValidatePassword(password);
             if (pe != null)
@@ -228,8 +228,8 @@ namespace SysWeaver.OsServices
                 Console.WriteLine(AuthTools.PasswordRules);
                 ConsoleTools.ResetColor();
                 ConsoleTools.SetProgress(ConsoleProgressDisplays.Error, 100);
-                Environment.Exit(0);
-                return 0;
+                Environment.Exit(ServiceResponseHelper.ExitInvalidArguments);
+                return ServiceResponseHelper.ExitInvalidArguments;
             }
             ConsoleTools.ForegroundColor = ConsoleColor.Gray;
             Console.Write("Hash: ");
@@ -241,8 +241,8 @@ namespace SysWeaver.OsServices
             Console.WriteLine(AuthTools.ComputeSimplePasswordHash(user, password));
             ConsoleTools.ResetColor();
             ConsoleTools.SetProgress(ConsoleProgressDisplays.Disabled, 0);
-            Environment.Exit(1);
-            return 1;
+            Environment.Exit(ServiceResponseHelper.ExitSuccess);
+            return ServiceResponseHelper.ExitSuccess;
         }
 
         static void WriteCode(int code)
@@ -295,6 +295,7 @@ namespace SysWeaver.OsServices
             {
                 case ServiceResponse.Ok:
                 case ServiceResponse.AlreadyStopping:
+                case ServiceResponse.NotRunning:
                     break;
                 default:
                     return (int)ret;
@@ -303,51 +304,125 @@ namespace SysWeaver.OsServices
         }
 
         /// <summary>
-        /// Never call directly, used internally by OS specific hosts as the restart callback of the <see cref="ServiceManager"/>.
-        /// Starts a new hidden process of this executable with the "restart" verb (that stops and starts the service using the OS service system).
+        /// Get the program and arguments to run this application with a verb: the command of <see cref="GetCommand"/> ("host" or "host asm.dll") followed by the verb.
         /// </summary>
-        /// <param name="man">The service manager used to log the restart, or null to write to the console.</param>
-        public static void RestartService(ServiceManager man)
+        /// <param name="verb">The verb.</param>
+        /// <param name="args">The arguments, ex: "/opt/app/MyService.dll" restart (the path is quoted if it contains spaces).</param>
+        /// <returns>The program, ex: "/usr/bin/dotnet" or "/opt/app/MyService".</returns>
+        internal static String GetVerbCommand(ServiceVerbs verb, out String args) => SystemHelper.GetCommandAndArgs(out args, GetCommand(verb.ToString().FastToLower()));
+
+        static void StartSelf(ServiceVerbs verb, String what, ServiceManager man, bool hidden)
         {
-            var cmd = EnvInfo.HostExecutable;
-            var args = ServiceVerbs.Restart.ToString().FastToLower();
-            var msg = "Restarting service using command: " + cmd.ToQuoted() + " " + args;
+            var cmd = GetVerbCommand(verb, out var args);
+            var msg = what + " service using command: " + cmd.ToQuoted() + " " + args;
             if (man == null)
                 Console.WriteLine(msg);
             else
                 man.AddMessage(msg);
             ProcessStartInfo p = new ProcessStartInfo();
             p.Arguments = args;
-            p.WindowStyle = ProcessWindowStyle.Hidden;
-            p.CreateNoWindow = true;
+            if (hidden)
+            {
+                p.WindowStyle = ProcessWindowStyle.Hidden;
+                p.CreateNoWindow = true;
+            }
             p.FileName = cmd;
             Process.Start(p);
         }
 
-        static void StartService()
+        /// <summary>
+        /// Never call directly, used internally by OS specific hosts as the restart callback of the <see cref="ServiceManager"/> (the default <see cref="IServiceHost.RequestRestart"/>).
+        /// Starts a new hidden process of this application (<see cref="GetCommand"/>, ex: "dotnet MyService.dll") with the "restart" verb (that stops and starts the service using the OS service system).
+        /// Not used under systemd: that process would be killed when the unit is stopped, systemd restarts the service itself.
+        /// </summary>
+        /// <param name="man">The service manager used to log the restart, or null to write to the console.</param>
+        public static void RestartService(ServiceManager man) => StartSelf(ServiceVerbs.Restart, "Restarting", man, true);
+
+        /// <summary>
+        /// Start a new hidden process of this application with the "start" verb, the default <see cref="IServiceHost.RequestRestart"/> of the auto recovery.
+        /// </summary>
+        internal static void StartService() => StartSelf(ServiceVerbs.Start, "Starting", null, true);
+
+
+        static void DoRestart(ServiceVerbs verb) => StartSelf(verb, "Restarting", null, false);
+
+        /// <summary>
+        /// Get the exit code to return for the result of <see cref="IServiceHost.RunElevated"/>: the exit code of the elevated process, but a value outside 0-255
+        /// (ex: -1 when the elevation program couldn't be started) becomes <see cref="ServiceResponseHelper.ExitGenericError"/> (1), all exit codes stay in 0-255.
+        /// </summary>
+        /// <param name="exitCode">The result of <see cref="IServiceHost.RunElevated"/>.</param>
+        /// <returns>The exit code, 0-255.</returns>
+        internal static int ToElevatedExitCode(int exitCode) => ((exitCode < 0) || (exitCode > 255)) ? ServiceResponseHelper.ExitGenericError : exitCode;
+
+        /// <summary>
+        /// Kept alive (and owned) for the lifetime of a console mode ("debug" / "execute") process, so that a new console mode instance of the same application
+        /// (ex: started by a restart) waits for this one to exit. Released by the OS when the process exits.
+        /// </summary>
+        static Mutex ConsoleInstanceLock;
+
+        /// <summary>
+        /// Get the name of the named mutex that identifies the console mode instances of an application.
+        /// </summary>
+        /// <param name="executable">The executable (or entry assembly) path, ex: <see cref="EnvInfo.Executable"/>, compared case insensitive.</param>
+        /// <returns>"Global\SysWeaver.OsServices.Console." followed by 32 hex digits (a hash of the path), global so that instances in other sessions are found too.</returns>
+        static String GetConsoleInstanceLockName(String executable)
         {
-            var cmd = EnvInfo.HostExecutable;
-            var args = ServiceVerbs.Start.ToString().FastToLower();
-            var msg = "Starting service using command: " + cmd.ToQuoted() + " " + args;
-            Console.WriteLine(msg);
-            ProcessStartInfo p = new ProcessStartInfo();
-            p.Arguments = args;
-            p.WindowStyle = ProcessWindowStyle.Hidden;
-            p.CreateNoWindow = true;
-            p.FileName = cmd;
-            Process.Start(p);
+            var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(executable.ToUpperInvariant()));
+            return "Global\\SysWeaver.OsServices.Console." + Convert.ToHexString(hash, 0, 16);
         }
 
-
-        static void DoRestart(ServiceVerbs verb)
+        /// <summary>
+        /// Acquire a named mutex, waiting for another owner (another console mode instance of the same application) to release it (or exit).
+        /// </summary>
+        /// <param name="name">The mutex name.</param>
+        /// <param name="timeOut">The maximum time to wait.</param>
+        /// <param name="isCancelled">Called while waiting (every 10 ms), return true to stop waiting.</param>
+        /// <param name="onWait">Called once if the mutex is owned by someone else (i.e. before waiting).</param>
+        /// <param name="result">1 = acquired (also if the other owner exited without releasing it), 0 = timed out (or the mutex couldn't be created), -1 = cancelled.</param>
+        /// <returns>The acquired mutex (owned by the calling thread), null if not acquired.</returns>
+        static Mutex AcquireInstanceLock(String name, TimeSpan timeOut, Func<bool> isCancelled, Action onWait, out int result)
         {
-            var cmd = EnvInfo.HostExecutable;
-            var args = verb.ToString().FastToLower();
-            Console.WriteLine("Restarting service using command: " + cmd.ToQuoted() + " " + args);
-            ProcessStartInfo p = new ProcessStartInfo();
-            p.Arguments = args;
-            p.FileName = cmd;
-            Process.Start(p);
+            Mutex m;
+            try
+            {
+                m = new Mutex(false, name);
+            }
+            catch
+            {
+                result = 0;
+                return null;
+            }
+            var giveUpAt = DateTime.UtcNow + timeOut;
+            for (int i = 0; ; ++i)
+            {
+                try
+                {
+                    if (m.WaitOne(i == 0 ? 0 : 10))
+                    {
+                        result = 1;
+                        return m;
+                    }
+                }
+                catch (AbandonedMutexException)
+                {
+                    result = 1;
+                    return m;
+                }
+                if (i == 0)
+                    onWait?.Invoke();
+                if (DateTime.UtcNow > giveUpAt)
+                {
+                    m.Dispose();
+                    result = 0;
+                    return null;
+                }
+                if (isCancelled?.Invoke() ?? false)
+                {
+                    m.Dispose();
+                    result = -1;
+                    return null;
+                }
+            }
         }
 
         static readonly IReadOnlyDictionary<int, char> BackLocs = new Dictionary<int, char>
@@ -385,6 +460,7 @@ namespace SysWeaver.OsServices
                 {
                     if (m == c)
                         continue;
+                    return false;
                 }
                 if (c < '0')
                     return false;
@@ -393,7 +469,7 @@ namespace SysWeaver.OsServices
             }
             if (len == 19)
                 return true;
-            if (filename[19] != '_')
+            if ((filename[19] != '_') || (len == 20))
                 return false;
             for (int i = 20; i < len; ++ i)
             {
@@ -428,6 +504,8 @@ namespace SysWeaver.OsServices
             if (!filename.FastStartsWith("Bak_"))
                 return false;
             var bak = filename.SplitFirst('.', out orgName);
+            if (String.IsNullOrEmpty(orgName))
+                return false;
             var len = bak.Length;
             if (len < 43)
                 return false;
@@ -439,6 +517,7 @@ namespace SysWeaver.OsServices
                 {
                     if (m == c)
                         continue;
+                    return false;
                 }
                 if (c < '0')
                     return false;
@@ -447,7 +526,7 @@ namespace SysWeaver.OsServices
             }
             if (len == 43)
                 return true;
-            if (filename[43] != '_')
+            if ((filename[43] != '_') || (len == 44))
                 return false;
             for (int i = 44; i < len; ++i)
             {
@@ -462,7 +541,8 @@ namespace SysWeaver.OsServices
 
         /// <summary>
         /// Check if a file name is a backup name created by <see cref="GetConfigBackupName"/> ("Bak_[yyyy-MM-dd_HH_mm_ss]_[yyyy-MM-dd_HH_mm_ss]{_N}.Name.ext"),
-        /// or a legacy backup name ("Name.[yyyy-MM-dd_HH_mm_ss].ext" or "Name.LastGood.ext").
+        /// or a legacy backup name ("Name.[yyyy-MM-dd_HH_mm_ss]{_N}.ext" or "Name.LastGood.ext").
+        /// The comparison is case sensitive and the date parts must be digits with the exact separators (the dates are not validated further, ex: month 13 is accepted).
         /// </summary>
         /// <param name="filename">The file name (no directory).</param>
         /// <param name="orgName">If a backup name, the original file name, else undefined (may be non-null).</param>
@@ -488,7 +568,8 @@ namespace SysWeaver.OsServices
         /// <param name="path">The folder.</param>
         /// <param name="filename">The original file name (no directory).</param>
         /// <param name="lastWrite">The last write time of the file being backed up.</param>
-        /// <returns>The full path of a file that didn't exist when checked (not reserved, so racy with concurrent callers).</returns>
+        /// <returns>The full path of a file that didn't exist when checked (not reserved, so racy with concurrent callers).
+        /// If the first candidate exists, "_0", "_1", ... is appended to the dates.</returns>
         public static String AppendDateAndMakeUnique(String path, String filename, DateTime lastWrite)
         {
             String unique = "";
@@ -661,13 +742,19 @@ namespace SysWeaver.OsServices
         /// </summary>
         /// <param name="p">Optional params, if null defaults are used. Name and display name are resolved and written back.</param>
         /// <param name="onStart">Optional callback to execute after all services in the manifest file have been created</param>
-        /// <returns>The process exit code, a <see cref="ServiceResponse"/> value (or a <see cref="ServiceStatus"/> value for the "status" verb).
+        /// <returns>The process exit code: 0 = success, non-zero = failure (all codes are in 0-255).
+        /// The result of a service verb is mapped using <see cref="ServiceResponseHelper.ToExitCode"/> (ex: "start" of a running service and "stop" of a stopped service are a success),
+        /// "status" uses <see cref="ServiceStatusHelper.ToExitCode"/> (0 = running, 3 = stopped, 4 = unknown, 150 + status for the others, ex: 151 = not installed).
+        /// "help" exits with 0, "hash" with 0 on success and 2 on invalid input, an unknown verb or a wrong argument count with 2, a missing service system for this OS with 3,
+        /// "debug" / "execute" with 0 and "daemon" with the exit code of <see cref="IServiceHost.Run"/> (0).
+        /// A verb that was re-run elevated returns the exit code of the elevated process (1 if the elevation failed, ex: "sudo" isn't installed; a code outside 0-255 becomes 1).
         /// NOTE: the "help", "hash" and invalid command paths call <see cref="Environment.Exit"/> directly.</returns>
         /// <remarks>
         /// The OS specific <see cref="IServiceHost"/> is created by the <see cref="IServiceHostFactory"/> named "SysWeaver.OsServices.ServiceHostFactory[Platform]".
         /// Verbs that need elevation are re-run elevated using <see cref="IServiceHost.RunElevated"/> when the process isn't elevated.
-        /// In console mode ("debug"/"execute") 'Esc' (or SIGINT/SIGTERM/SIGHUP/SIGQUIT) shuts down and 'Space' toggles pause; the process first waits up to 15 seconds for other processes with the same name to exit.
-        /// Exceptions are caught and reported as <see cref="ServiceResponse.GenericError"/>.
+        /// In console mode ("debug"/"execute") 'Esc' (or SIGINT/SIGTERM/SIGHUP/SIGQUIT) shuts down and 'Space' toggles pause; the process first waits up to 15 seconds for
+        /// another console mode instance of the same application (same <see cref="EnvInfo.Executable"/>, compared case insensitive, using a global named mutex) to exit.
+        /// Exceptions are caught and reported as exit code 1 (<see cref="ServiceResponse.GenericError"/>).
         /// </remarks>
         public static int Run(ServiceParams p = null, Action<ServiceManager> onStart = null)
         {
@@ -786,13 +873,16 @@ namespace SysWeaver.OsServices
                         Console.WriteLine("Couldn't find a service system for this OS (" + Environment.OSVersion.Platform + ").");
                         Console.WriteLine("Expected a " + nameof(IServiceHostFactory).ToQuoted() + " type implementation named " + dname.ToQuoted());
                         ConsoleTools.ResetColor();
-                        return (int)ServiceResponse.UnhandledOs;
+                        return ServiceResponse.UnhandledOs.ToExitCode(verb);
                     }
                 }
 
                 Action header = () => WriteAction(p, serviceManager, verb);
+                //  Returns a ServiceResponse (or ServiceStatus for "status") value, or an exit code for the terminal verbs (toExitCode = null)
                 Func<int> doIt = null;
                 Action<int> onResponse = WriteCode;
+                Func<int, int> toExitCode = r => ((ServiceResponse)r).ToExitCode(verb);
+                Func<int, int> fromExitCode = c => (int)ServiceResponseHelper.FromExitCode(c);
                 bool terminal = false;
                 bool forceElevation = false;
                 switch (verb)
@@ -800,76 +890,65 @@ namespace SysWeaver.OsServices
                     case ServiceVerbs.Daemon:
                         header = null;
                         onResponse = null;
+                        toExitCode = null;
                         doIt = () =>
                         {
                             if (p.AutoRecover)
-                                WatchFaultyManifest(StartService);
+                                WatchFaultyManifest(() => serviceManager.RequestRestart(null, true));
                             return serviceManager.Run(onStart);
                         };
                         forceElevation = p.NeedToRunElevated;
                         terminal = true;
                         break;
                     case ServiceVerbs.Hash:
-                        Hash(p, serviceManager, args[2], args[3]);
+                        var hashResult = Hash(p, serviceManager, args[2], args[3]);
                         setProgress(ConsoleProgressDisplays.Disabled, 0);
-                        return (int)ServiceResponse.Ok;
+                        return hashResult;
                     case ServiceVerbs.Help:
                         setProgress(ConsoleProgressDisplays.Disabled, 0);
-                        Usage(p, 0, serviceManager);
-                        return (int)ServiceResponse.Ok;
+                        return Usage(p, ServiceResponse.Ok, serviceManager);
                     case ServiceVerbs.Execute:
                     case ServiceVerbs.Debug:
-                        var procName = Process.GetCurrentProcess().ProcessName;
-                        const int timeOutSeconds = 15;
-                        var giveUpAt = DateTime.UtcNow.AddSeconds(timeOutSeconds);
-                        for (int i = 0; ; ++ i)
                         {
-                            var procs = Process.GetProcessesByName(procName);
-                            var l = procs.Length;
-                            if (l <= 0)
-                            {
-                                ConsoleTools.ForegroundColor = ConsoleColor.Red;
-                                Console.WriteLine("No process named " + procName.ToQuoted() + " found?!");
-                                ConsoleTools.ResetColor();
-                                break;
-                            }
-                            if (l == 1)
-                            {
-                                if (i > 0)
+                            //  Wait for another console mode instance of this application (same executable / entry assembly path) to exit, ex: when restarting
+                            const int timeOutSeconds = 15;
+                            bool waiting = false;
+                            ConsoleInstanceLock = AcquireInstanceLock(GetConsoleInstanceLockName(EnvInfo.Executable), TimeSpan.FromSeconds(timeOutSeconds),
+                                () => (!Console.IsInputRedirected) && Console.KeyAvailable && (Console.ReadKey(true).Key == ConsoleKey.Escape),
+                                () =>
                                 {
-                                    ConsoleTools.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine(".done!");
+                                    waiting = true;
+                                    ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
+                                    Console.Write("Another instance of " + EnvInfo.Executable.ToQuoted() + " is running, waiting for it to close..");
                                     ConsoleTools.ResetColor();
-                                }
-                                break;
-                            }
-                            if (i == 0)
-                            {
-                                ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
-                                Console.Write("Multiple processes named " + procName.ToQuoted() + " found, waiting for other process to close..");
-                                ConsoleTools.ResetColor();
-                            }
-                            Thread.Sleep(10);
-                            if (DateTime.UtcNow > giveUpAt)
-                            {
-                                ConsoleTools.ForegroundColor = ConsoleColor.Red;
-                                Console.WriteLine(".gave up after " + timeOutSeconds + " seconds!");
-                                ConsoleTools.ResetColor();
-                                break;
-                            }
-                            if (Console.KeyAvailable && (Console.ReadKey(true).Key == ConsoleKey.Escape))
+                                }, out var lockResult);
+                            if (lockResult < 0)
                             {
                                 ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                 Console.WriteLine("..cancelled!");
                                 Console.WriteLine("'Esc' pressed, shutting down.");
                                 ConsoleTools.ResetColor();
                                 setProgress(ConsoleProgressDisplays.Disabled, 0);
-                                return 0;
+                                return ServiceResponseHelper.ExitSuccess;
                             }
-
+                            if (waiting)
+                            {
+                                if (lockResult > 0)
+                                {
+                                    ConsoleTools.ForegroundColor = ConsoleColor.Green;
+                                    Console.WriteLine(".done!");
+                                }
+                                else
+                                {
+                                    ConsoleTools.ForegroundColor = ConsoleColor.Red;
+                                    Console.WriteLine(".gave up after " + timeOutSeconds + " seconds!");
+                                }
+                                ConsoleTools.ResetColor();
+                            }
                         }
                         header = null;
                         onResponse = null;
+                        toExitCode = null;
                         forceElevation = p.NeedToRunElevated;
                         terminal = true;
                         doIt = () =>
@@ -878,9 +957,17 @@ namespace SysWeaver.OsServices
                             Console.WriteLine();
                             Console.WriteLine("Running as a console program.");
                             bool restart = false;
+                            //  Called from a signal / restart handler: must always end with Environment.Exit (an exception on that thread would abort the process)
                             void Shutdown(ServiceManager manager)
                             {
-                                manager.Dispose();
+                                try
+                                {
+                                    manager.Dispose();
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine("Failed to dispose the services: " + ex);
+                                }
                                 ConsoleTools.ResetColor();
                                 Console.WriteLine("All services disposed.");
                                 Console.WriteLine();
@@ -888,7 +975,7 @@ namespace SysWeaver.OsServices
                                 setProgress(ConsoleProgressDisplays.Disabled, 0);
                                 if (restart)
                                     DoRestart(verb);
-                                Environment.Exit((int)ServiceResponse.Ok);
+                                Environment.Exit(ServiceResponseHelper.ExitSuccess);
                             }
 
                             int didAbort = 0;
@@ -919,17 +1006,12 @@ namespace SysWeaver.OsServices
                                     manager.AddMessage("Press 'Esc' to exit.");
                                     setProgress(ConsoleProgressDisplays.Disabled, 0);
                                     ConsoleTools.ResetColor();
-                                    bool consoleAlive = true;
-
+                                    //  Shuts down and exits the process (the main thread may stay blocked reading the console, nothing is written to stdin:
+                                    //  that fails if stdin is redirected, ex: from a pipe)
                                     Action<PosixSignalContext> onAbort = c =>
                                     {
                                         if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
                                             return;
-                                        if (consoleAlive)
-                                        {
-                                            using (var s = Console.OpenStandardInput())
-                                                s.Write([27, 10, 13]);
-                                        }
                                         c.Cancel = true;
                                         ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                         manager.AddMessage("Got " + c.Signal + ", shutting down.");
@@ -959,7 +1041,6 @@ namespace SysWeaver.OsServices
 
                                     Console.CancelKeyPress += (o, s) =>
                                     {
-                                        consoleAlive = false;
                                         onAbort(new PosixSignalContext(PosixSignal.SIGINT));
                                     };
 
@@ -1014,12 +1095,14 @@ namespace SysWeaver.OsServices
                                 if (restart)
                                     DoRestart(verb);
                             }
-                            return (int)ServiceResponse.Ok;
+                            return ServiceResponseHelper.ExitSuccess;
                         };
                         break;
                     case ServiceVerbs.Status:
                         doIt = () => (int)serviceManager.Status();
                         onResponse = WriteStatus;
+                        toExitCode = s => ((ServiceStatus)s).ToExitCode();
+                        fromExitCode = c => (int)ServiceStatusHelper.FromExitCode(c);
                         break;
                     case ServiceVerbs.Install:
                         doIt = () => (int)serviceManager.Install();
@@ -1067,7 +1150,11 @@ namespace SysWeaver.OsServices
                             /*Console.WriteLine();
                             Console.WriteLine("Running elevated >>>" + EnvInfo.CommandLine + "<<<");
                             Console.WriteLine();*/
-                            c = serviceManager.RunElevated(EnvInfo.CommandLine, terminal, terminal);
+                            //  The elevated process returns an exit code, display the (most likely) result it represents
+                            c = ToElevatedExitCode(serviceManager.RunElevated(EnvInfo.CommandLine, terminal, terminal));
+                            onResponse?.Invoke(fromExitCode(c));
+                            setProgress(ConsoleProgressDisplays.Disabled, 0);
+                            return c;
                         }
                         else
                         {
@@ -1077,12 +1164,12 @@ namespace SysWeaver.OsServices
                 }
                 onResponse?.Invoke(c);
                 setProgress(ConsoleProgressDisplays.Disabled, 0);
-                return c;
+                return toExitCode == null ? c : toExitCode(c);
             }
             catch
             {
                 setProgress(ConsoleProgressDisplays.Error, 100);
-                return (int)ServiceResponse.GenericError;
+                return ServiceResponseHelper.ExitGenericError;
             }
             finally
             {

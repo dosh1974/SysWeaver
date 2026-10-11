@@ -4,6 +4,26 @@
         <name>SwSyncTool</name>
     </assembly>
     <members>
+        <member name="F:SwSyncTool.SwSyncToolProgram.ExitSuccess">
+            <summary>
+            Exit code: success (also returned when help was requested).
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.ExitGenericError">
+            <summary>
+            Exit code: generic error, the operation threw an exception.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.ExitInvalidArguments">
+            <summary>
+            Exit code: invalid command line (unknown option or operation, too few or too many arguments).
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.ExitItemsFailed">
+            <summary>
+            Exit code: the operation completed but failed for one or more items (an archive failed to expand / verify / recover, or a push / pull reported errors).
+            </summary>
+        </member>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.Comment">
             <summary>
             [Push]

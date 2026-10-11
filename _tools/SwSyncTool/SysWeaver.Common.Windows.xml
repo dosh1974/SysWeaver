@@ -4,5 +4,91 @@
         <name>SysWeaver.Common.Windows</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.WindowsPlatformTools">
+            <summary>
+            Windows implementation of <see cref="T:SysWeaver.IPlatformTools"/>.
+            </summary>
+            <remarks>
+            <para>Not referenced directly: <see cref="F:SysWeaver.PlatformTools.Current"/> loads it by name ("SysWeaver.WindowsPlatformTools, SysWeaver.Common.Windows") when running on Windows,
+            so the assembly only needs to be deployed with the application.</para>
+            <para>Uses WMI for the OS name, a "Processor Information" performance counter for CPU usage, GlobalMemoryStatusEx for memory,
+            FlushFileBuffers, ExitWindowsEx and directory ACLs.</para>
+            <para>The type initializer creates the performance counter and the constructor queries WMI; if the counter can't be created <see cref="M:SysWeaver.WindowsPlatformTools.GetCpuUsage(System.Double@)"/> returns false,
+            and if WMI fails <see cref="P:SysWeaver.WindowsPlatformTools.OsFriendlyName"/> falls back to <see cref="P:System.Runtime.InteropServices.RuntimeInformation.OSDescription"/>.</para>
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.WindowsPlatformTools.Name">
+            <summary>
+            Returns "Windows".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.WindowsPlatformTools.DefaultKeyDir">
+            <summary>
+            Returns "C:\Keys".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.WindowsPlatformTools.OsFriendlyName">
+            <summary>
+            The WMI caption of the OS with build number and bitness, ex: "Microsoft Windows 11 Pro build 26100 (64 bits)".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.FlushToDisc(System.Runtime.InteropServices.SafeHandle)">
+            <summary>
+            Flushes the OS buffers of a file to disc using FlushFileBuffers.
+            </summary>
+            <param name="h">The file handle, must have write access.</param>
+            <returns>True if successful, false on failure (ex: a handle without write access). Exceptions (ex: a null handle) are tracked in the stats, a failed FlushFileBuffers call isn't.</returns>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.GetMemorySize(System.UInt64@,System.UInt64@)">
+            <summary>
+            Gets the physical memory size using GlobalMemoryStatusEx.
+            </summary>
+            <param name="availableBytes">Receives the available physical memory in bytes, 0 on failure.</param>
+            <param name="totalBytes">Receives the total physical memory in bytes, 0 on failure.</param>
+            <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.GetCpuUsage(System.Double@)">
+            <summary>
+            Gets the total CPU usage from the "Processor Information\% Processor Time\_Total" performance counter.
+            </summary>
+            <param name="cpuUsage">Receives the CPU usage in percent, 0 on failure.</param>
+            <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
+            <remarks>The value is averaged over the time since the previous call (by any caller, the counter is shared and calls are serialized).</remarks>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.Reboot">
+            <summary>
+            Reboots the computer using ExitWindowsEx (planned shutdown, not forced) after enabling the SeShutdownPrivilege.
+            </summary>
+            <returns>True if the reboot was initiated, false if the privilege couldn't be enabled or the call failed.</returns>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.MakeDirectoryAccessableToEveryOne(System.String)">
+            <summary>
+            Adds a "full control" access rule for the Everyone group to a directory, unless an equivalent rule exists.
+            </summary>
+            <param name="directoryName">The directory.</param>
+            <returns>null if successful, else the exception that occurred (also tracked in the stats), ex: a <see cref="T:System.IO.DirectoryNotFoundException"/>.</returns>
+            <remarks>
+            The rule applies to the directory itself and is inherited by all files and sub directories.
+            An existing Everyone rule only counts if it grants full control to the directory itself and its descendants
+            (so directories processed by older versions, that only got an inherit-only rule, are fixed).
+            A non inherited rule added by older versions (using <see cref="F:System.Security.AccessControl.PropagationFlags.NoPropagateInherit"/>, only inherited by direct children) is replaced,
+            same as <see cref="M:SysWeaver.PathExt.AllowAllAccess(System.String)"/>.
+            This makes files and folders created by a service (ex: running as SYSTEM) modifiable by users (without an UAC prompt) and vice versa.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.TokenAdjuster.EnablePrivilege(System.String,System.Boolean)">
+            <summary>
+            Enables a privilege (ex: "SeShutdownPrivilege") in the current process token.
+            </summary>
+            <param name="lpszPrivilege">The privilege name.</param>
+            <param name="bEnablePrivilege">Intended to choose enable/disable, but the privilege is always enabled.</param>
+            <returns>True if the privilege was enabled (the process holds it), else false.</returns>
+        </member>
+        <member name="M:SysWeaver.WindowsPlatformTools.GetStats">
+            <summary>
+            Returns the exception statistics (system "Windows.Platform", names prefixed with "Exception.").
+            </summary>
+            <returns>The statistics.</returns>
+        </member>
     </members>
 </doc>

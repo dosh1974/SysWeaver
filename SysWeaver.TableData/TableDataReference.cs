@@ -14,9 +14,8 @@ namespace SysWeaver.Data
         /// <summary>
         /// Returns the table dimensions and the reference info, for debugging.
         /// </summary>
-        /// <returns>A text such as <c>Table 4x100 "gXyz" expires at ...</c>.</returns>
-        /// <remarks>Throws a <see cref="NullReferenceException"/> on a response copy created without columns.</remarks>
-        public override string ToString() => String.Concat("Table ", Cols.Length, 'x', Rows, ' ', base.ToString());
+        /// <returns>A text such as <c>Table 4x100 "gXyz" expires at ...</c> (the column count is 0 on a response copy created without columns).</returns>
+        public override string ToString() => String.Concat("Table ", Cols?.Length ?? 0, 'x', Rows, ' ', base.ToString());
 
         /// <summary>
         /// Validate the table before the base constructor schedules the expiration (so that nothing is scheduled for a rejected table).
@@ -88,6 +87,27 @@ namespace SysWeaver.Data
         /// </summary>
         /// <returns>The stored table, or null on a response copy.</returns>
         public BaseTableData Get() => DataGet<BaseTableData>();
+
+        /// <summary>
+        /// Get the original data back to return it as a whole to a client or an AI (ex: the "GetTableData" web API / AI tool), with a row cap.
+        /// A larger table is never truncated silently: an exception tells the caller to select fewer rows first
+        /// (ex: an "EditTableData" call with a SortAndFilterRows step using Row / MaxRowCount, then get the new reference).
+        /// </summary>
+        /// <param name="maxAllowedRows">The maximum number of rows that may be returned, defaults to <see cref="TableDataTools.DefaultMaxAllowedRows"/>.
+        /// Zero or negative disables the cap (only for trusted server side callers).</param>
+        /// <returns>The stored table (the same instance as <see cref="Get"/>), or null on a response copy.</returns>
+        /// <exception cref="InvalidOperationException">The table has more than <paramref name="maxAllowedRows"/> rows.</exception>
+        public BaseTableData GetForClient(long maxAllowedRows = TableDataTools.DefaultMaxAllowedRows)
+        {
+            var data = Get();
+            if ((data == null) || (maxAllowedRows <= 0))
+                return data;
+            var rows = data.Rows?.LongLength ?? 0;
+            if (rows > maxAllowedRows)
+                throw new InvalidOperationException(String.Concat("The table data reference \"", Id, "\" has ", rows.ToString(), " rows, at most ", maxAllowedRows.ToString(),
+                    " rows can be returned. Select fewer rows first, ex: use EditTableData with SortAndFilterRows (Row and MaxRowCount) and get the new reference."));
+            return data;
+        }
 
         #endregion//Server side
 

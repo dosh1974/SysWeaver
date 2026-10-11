@@ -7,12 +7,26 @@ using System.Text;
 namespace SysWeaver.Media
 {
 
+    /// <summary>
+    /// Builds an svg document from styles (css classes), gradients, masks and geometry (svg text snippets), see <see cref="ToSvg"/>.
+    /// Generated names ("S0", "M1", "G2" etc) use a shared counter, so they are unique within a scene.
+    /// All generated numbers are formatted using the invariant culture. Not thread safe.
+    /// </summary>
     public sealed class SvgScene
     {
         int StyleIndex;
-        
+
+        /// <summary>
+        /// Add a css class with the css of a style
+        /// </summary>
+        /// <param name="style">The style</param>
+        /// <returns>The name of the css class ("S" + index), null if the css is empty (nothing is added)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="style"/> is null (DEBUG builds only)</exception>
         public String AddStyle(ISvgCss style)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(style);
+#endif//DEBUG
             var s = style.GetCss();
             if (String.IsNullOrEmpty(s))
                 return null;
@@ -22,6 +36,13 @@ namespace SysWeaver.Media
             return name;
         }
 
+        /// <summary>
+        /// Add a mask
+        /// </summary>
+        /// <param name="geometries">The svg elements (text) of the mask content</param>
+        /// <param name="style">The css class name to apply to the mask content, null or empty to add a style with a white fill</param>
+        /// <param name="transform">An optional transform of the mask content</param>
+        /// <returns>The id of the mask ("M" + index), use with mask='url(#id)'</returns>
         public String AddMask(String geometries, String style = null, String transform = null)
         {
             if (String.IsNullOrEmpty(style))
@@ -39,18 +60,49 @@ namespace SysWeaver.Media
             return name;
         }
 
+        /// <summary>
+        /// Add a top to bottom linear gradient
+        /// </summary>
+        /// <param name="stops">The gradient stops</param>
+        /// <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
         public String AddVerticalGradient(params SvgGradStop[] stops)
             => AddLinearGradient(0, 0, 0, 1, false, null, stops);
 
+        /// <summary>
+        /// Add a left to right linear gradient
+        /// </summary>
+        /// <param name="stops">The gradient stops</param>
+        /// <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
         public String AddHorizontalGradient(params SvgGradStop[] stops)
             => AddLinearGradient(0, 0, 1, 0, false, null, stops);
 
+        /// <summary>
+        /// Add a top left to bottom right linear gradient
+        /// </summary>
+        /// <param name="stops">The gradient stops</param>
+        /// <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
         public String AddDiagonalGradient(params SvgGradStop[] stops)
             => AddLinearGradient(0, 0, 1, 1, false, null, stops);
 
+        /// <summary>
+        /// Add a top right to bottom left linear gradient
+        /// </summary>
+        /// <param name="stops">The gradient stops</param>
+        /// <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
         public String AddOtherDiagonalGradient(params SvgGradStop[] stops)
             => AddLinearGradient(1, 0, 0, 1, false, null, stops);
 
+        /// <summary>
+        /// Add a linear gradient definition
+        /// </summary>
+        /// <param name="x0">The start x (x1)</param>
+        /// <param name="y0">The start y (y1)</param>
+        /// <param name="x1">The end x (x2)</param>
+        /// <param name="y1">The end y (y2)</param>
+        /// <param name="userSpace">If true the coordinates are in user space (gradientUnits='userSpaceOnUse'), else relative to the bounding box</param>
+        /// <param name="transform">An optional gradientTransform</param>
+        /// <param name="stops">The gradient stops</param>
+        /// <returns>The fill / stroke value to use the gradient: "url(#id)", the id is "G" + index</returns>
         public String AddLinearGradient(double x0, double y0, double x1, double y1, bool userSpace, String transform, params SvgGradStop[] stops)
         {
             var fmt = SvgTools.FullFormat;
@@ -70,6 +122,18 @@ namespace SysWeaver.Media
             return String.Join(name, "url(#", ')');
         }
 
+        /// <summary>
+        /// Add a radial gradient definition
+        /// </summary>
+        /// <param name="cx">The center x</param>
+        /// <param name="cy">The center y</param>
+        /// <param name="r">The radius</param>
+        /// <param name="fx">The focal point x</param>
+        /// <param name="fy">The focal point y</param>
+        /// <param name="userSpace">If true the coordinates are in user space (gradientUnits='userSpaceOnUse'), else relative to the bounding box</param>
+        /// <param name="transform">An optional gradientTransform</param>
+        /// <param name="stops">The gradient stops</param>
+        /// <returns>The fill / stroke value to use the gradient: "url(#id)", the id is "G" + index</returns>
         public String AddRadialGradient(double cx, double cy, double r, double fx, double fy, bool userSpace, String transform, params SvgGradStop[] stops)
         {
             var fmt = SvgTools.FullFormat;
@@ -89,11 +153,21 @@ namespace SysWeaver.Media
             return String.Join(name, "url(#", ')');
         }
 
+        /// <summary>
+        /// Add some svg elements (text, added as is, one line in the output)
+        /// </summary>
+        /// <param name="geometries">The svg elements</param>
         public void AddGeometry(String geometries)
         {
             Geometry.Add(geometries);
         }
 
+        /// <summary>
+        /// Add a text (converted to paths and fitted into FitWidth x FitHeight at OffsetX, OffsetY) using <see cref="AddPath"/>
+        /// </summary>
+        /// <param name="text">The text</param>
+        /// <param name="p">The parameters (the font must be set), null for defaults (fails since there is no default font)</param>
+        /// <exception cref="ArgumentNullException">The font is null</exception>
         public void AddText(String text, SvgTextParams p)
         {
             p = p ?? new SvgTextParams();
@@ -111,6 +185,12 @@ namespace SysWeaver.Media
             AddPath(path, p);
         }
 
+        /// <summary>
+        /// Add a regular n-gon (see <see cref="SvgPath.GetNGonPath"/>) using <see cref="AddPath"/>
+        /// </summary>
+        /// <param name="n">The number of vertices, must be at least 3</param>
+        /// <param name="p">The parameters, null for defaults</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="n"/> is less than 3</exception>
         public void AddNGon(int n, SvgNgonParams p)
         {
             p = p ?? new SvgNgonParams();
@@ -119,6 +199,15 @@ namespace SysWeaver.Media
         }
 
 
+        /// <summary>
+        /// Add a rectangle (with a new css class for the style)
+        /// </summary>
+        /// <param name="x">The left position</param>
+        /// <param name="y">The top position</param>
+        /// <param name="w">The width</param>
+        /// <param name="h">The height</param>
+        /// <param name="color">The style</param>
+        /// <param name="maxDecimals">The maximum number of decimals of the coordinates</param>
         public void AddRect(double x, double y, double w, double h, SvgColorStyle color, int maxDecimals = 4)
         {
             var style = AddStyle(color);
@@ -126,13 +215,24 @@ namespace SysWeaver.Media
             var svg = new StringBuilder();
             svg.Append($"\t\t\t<rect width='{fmt(w)}' height='{fmt(h)}' ");
             if (x != 0)
-                svg.Append($"x='{x}' ");
+                svg.Append($"x='{fmt(x)}' ");
             if (y != 0)
-                svg.Append($"y='{y}' ");
+                svg.Append($"y='{fmt(y)}' ");
             svg.AppendLine($"class='{style}' />");
             AddGeometry(svg.ToString());
         }
 
+        /// <summary>
+        /// Add a path with an optional drop shadow, extrusion (3D sides, see <see cref="SvgPath.Extrude"/>) and face.
+        /// The shadow is a rectangle covering the scene, masked by the (translated) face and extrusion.
+        /// The extrusion only supports absolute M, L, H, V, Q and Z commands.
+        /// If <see cref="SvgExtrudeParams.ExtrudeFillLight"/> is set, each side face gets a color interpolated between it and the extrusion fill color
+        /// (both must be colors that <see cref="SvgColor.Parse"/> supports).
+        /// </summary>
+        /// <param name="facePath">The path data</param>
+        /// <param name="p">The style parameters, null for defaults. Set Face, Extrude or Shadow (or their colors) to null to skip that part</param>
+        /// <exception cref="NotSupportedException">The path contains a command that the extrusion doesn't support</exception>
+        /// <exception cref="FormatException">The extrusion light and fill colors can't be parsed</exception>
         public void AddPath(String facePath, Svg3dParams p = null)
         {
             p = p ?? new Svg3dParams();
@@ -152,7 +252,7 @@ namespace SysWeaver.Media
             if (doShadow)
             {
                 bool ext = p.IncludeExtrusionInShadow && doExtrude;
-                var s = ext ? 0.25 : extrude.StrokeWidth;
+                var s = ext ? 0.25 : (extrude?.StrokeWidth ?? 0);
                 var maskStyle = AddStyle(new SvgColorStyle
                 {
                     FillColor = "#fff",
@@ -165,10 +265,10 @@ namespace SysWeaver.Media
                     foreach (var x in extPaths)
                         svg.AppendLine($"\t\t\t<path d='{x.Item1}' />");
                 }
-                s = extrude.StrokeWidth;
+                s = extrude?.StrokeWidth ?? 0;
                 if (s != 0.25)
                 {
-                    svg.AppendLine($"\t\t\t<path stroke-width='{s}' d='{facePath}' />");
+                    svg.AppendLine($"\t\t\t<path stroke-width='{SvgTools.FullFormat(s)}' d='{facePath}' />");
                 }
                 else
                 { 
@@ -176,7 +276,7 @@ namespace SysWeaver.Media
                 }
                 shadowMask = AddMask(svg.ToString(), maskStyle, String.Concat("translate(", fmt(shadow.ShadowX), ' ', fmt(shadow.ShadowY), ')'));
                 var shadowStyle = AddStyle(shadow);
-                AddGeometry($"\t<rect width='{Width}' height='{Height}' class='{shadowStyle}' mask='url(#{shadowMask})' />");
+                AddGeometry($"\t<rect width='{SvgTools.FullFormat(Width)}' height='{SvgTools.FullFormat(Height)}' class='{shadowStyle}' mask='url(#{shadowMask})' />");
             }
             //  Do extrude
             if (doExtrude)
@@ -239,9 +339,20 @@ namespace SysWeaver.Media
         readonly List<String> Geometry = new List<string>();
 
 
+        /// <summary>
+        /// The width of the scene (the view box width)
+        /// </summary>
         public readonly double Width;
+        /// <summary>
+        /// The height of the scene (the view box height)
+        /// </summary>
         public readonly double Height;
 
+        /// <summary>
+        /// Create an empty scene
+        /// </summary>
+        /// <param name="width">The width of the scene (the view box width)</param>
+        /// <param name="height">The height of the scene (the view box height)</param>
         public SvgScene(double width, double height)
         {
             Width = width;
@@ -249,12 +360,22 @@ namespace SysWeaver.Media
         }
 
 
+        /// <summary>
+        /// Same as <see cref="ToSvg"/>
+        /// </summary>
+        /// <returns>The svg document</returns>
         public override string ToString() => ToSvg();
 
+        /// <summary>
+        /// Get the svg document: the svg element (view box "0 0 Width Height"), followed by the defs (gradients), the style (css classes),
+        /// the masks and the geometries in the order they were added. Lines are separated by <see cref="Environment.NewLine"/>.
+        /// </summary>
+        /// <returns>The svg document</returns>
         public String ToSvg()
         {
-            var tw = Width;
-            var th = Height;
+            var fmt = SvgTools.FullFormat;
+            var tw = fmt(Width);
+            var th = fmt(Height);
             var svg = new StringBuilder();
             svg.AppendLine($"<svg viewBox='0 0 {tw} {th}' xmlns='http://www.w3.org/2000/svg' version='1.1'>");
             var defs = Defs;
@@ -273,11 +394,10 @@ namespace SysWeaver.Media
                     svg.AppendLine(style);
                 svg.AppendLine($"\t</style>");
             }
-            var fmt = SvgTools.FullFormat;
             foreach (var mask in Masks)
             {
                 svg.AppendLine($"\t<mask id='{mask.Item1}' maskUnits='objectBoundingBox' width='{tw}' height='{th}'>");
-                svg.AppendLine($"\t\t<rect width='{tw}' height='{tw}' fill='#000' />");
+                svg.AppendLine($"\t\t<rect width='{tw}' height='{th}' fill='#000' />");
                 svg.Append($"\t\t<g class='{mask.Item3}'");
                 if (!String.IsNullOrEmpty(mask.Item4))
                     svg.Append($" transform='{mask.Item4}'");
@@ -310,6 +430,17 @@ namespace SysWeaver.Media
             [ 1.0, 57.9, 62.1, 0.9, 0.9, 1.1, 0.8, 0.8],
         ];
 
+        /// <summary>
+        /// Add a generated (deterministic) icon for a name: a background plate (n-gon or rounded square), the initials of the name (up to 3 upper case letters,
+        /// else the first char) using one of the embedded fonts, and an optional sub title plate.
+        /// The layout is made for a 256 x 256 scene without a sub title and a 512 x 384 scene with a sub title.
+        /// The same name, sub title, colors and seed always gives the same icon.
+        /// </summary>
+        /// <param name="name">The name to make an icon for</param>
+        /// <param name="subTitle">An optional sub title</param>
+        /// <param name="color">The colors to use, null to derive them from the name and seed</param>
+        /// <param name="seed">A seed used to derive the colors (if <paramref name="color"/> is null)</param>
+        /// <param name="opaque">If true a background rectangle (covering the scene) is added</param>
         public void AddFavIcon(String name, String subTitle = null, HashColors color = null, int seed = 0, bool opaque = false)
         {
             color = color ?? new HashColors(name, seed);
@@ -471,6 +602,12 @@ namespace SysWeaver.Media
         }
 
 
+        /// <summary>
+        /// Render the scene to a png image, see <see cref="SvgBitmapRenderer.CreatePng(string, int, int)"/>
+        /// </summary>
+        /// <param name="width">The image width, zero or less to use the scene width (each axis is scaled independently)</param>
+        /// <param name="height">The image height, zero or less to use the scene height (each axis is scaled independently)</param>
+        /// <returns>The png file data</returns>
         public Byte[] ToPng(int width = 0, int height = 0)
             => SvgBitmapRenderer.CreatePng(ToSvg(), width, height);
 

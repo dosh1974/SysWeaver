@@ -4,19 +4,48 @@
         <name>SysWeaver.Compression</name>
     </assembly>
     <members>
-        <member name="M:SysWeaver.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)">
+        <member name="T:SysWeaver.AsmResExt">
             <summary>
-            Given an uncompressed resource name, find the compressed version (if any) and modify to the true resource name
+            Extension methods for reading (optionally pre-compressed) embedded resources.
+            </summary>
+            <remarks>
+            A resource is considered compressed if its name ends with a "." followed by an extension registered in the <see cref="T:SysWeaver.Compression.CompManager"/> (ex: "Site.index.html.br").
+            Uncompressed data of resources that are memory mapped (the normal case) is returned without copying, as memory that is valid for the lifetime of the (non-collectible) assembly.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.AsmResExt.ResourceNames">
+            <summary>
+            The resource names of an assembly (GetManifestResourceNames returns a new array every time)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.ReadAllBytes(System.IO.Stream)">
+            <summary>
+            Read all data of a stream into an array of the exact size
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.OpenResource(System.Reflection.Assembly,System.String,System.String)">
+            <summary>
+            Open a resource stream, throws a <see cref="T:System.IO.FileNotFoundException"/> naming the resource if it doesn't exist
             </summary>
             <param name="asm">The assembly that contain the resource</param>
-            <param name="uncompressedName">The name of the resource, if a compressed version is found it's modified to that resource</param>
-            <returns>The compression type or null</returns>
+            <param name="name">The full name of the resource, null if it wasn't found</param>
+            <param name="requestedName">The name to report if the resource doesn't exist</param>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)">
+            <summary>
+            Given an uncompressed resource name, find the resource that has that name or that name + "." + a compression extension, and modify to the true resource name.
+            If no resource starts with the name, the name is retried with the prefix of the first resource that contains ".data." (the convention used for embedded web data).
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="uncompressedName">The name of the resource.
+            On return it's the full name of the resource that was found (the compressed or uncompressed one, whichever is listed first), or null if no resource was found</param>
+            <returns>The compression type of the found resource, or null if it's uncompressed or not found</returns>
         </member>
         <member name="M:SysWeaver.AsmResExt.GetResourceCompression(System.Reflection.Assembly,System.String@)">
             <summary>
-            Determine the compression method used in a resource based on it's extension
+            Determine the compression method used in a resource based on its extension (only the name is inspected, the resource doesn't need to exist)
             </summary>
-            <param name="asm">The assembly that contain the resource</param>
+            <param name="asm">The assembly that contain the resource (not used)</param>
             <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
             <returns>The compression type or null</returns>
         </member>
@@ -25,52 +54,62 @@
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
             <param name="asm">The assembly that contain the resource</param>
-            <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <param name="compressedName">The full name of the resource (including any compression extension), if the resource is compressed the compression extension is removed</param>
             <returns>The uncompressed data of the resource</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource doesn't exist.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid.</exception>
         </member>
         <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
             <param name="asm">The assembly that contain the resource</param>
-            <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="M:SysWeaver.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)"/></param>
             <returns>The uncompressed data of the resource</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource doesn't exist.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid.</exception>
         </member>
         <member name="M:SysWeaver.AsmResExt.GetResourceData(System.Reflection.Assembly,System.String)">
             <summary>
-            Get the data of an embedded resource
+            Get the data of an embedded resource (no decompression), without copying if the resource is memory mapped
             </summary>
             <param name="asm">The assembly that contain the resource</param>
-            <param name="name">The name of the resource</param>
+            <param name="name">The full name of the resource</param>
             <returns>The data of the resource</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource doesn't exist.</exception>
         </member>
         <member name="M:SysWeaver.AsmResExt.GetResourceDataBytes(System.Reflection.Assembly,System.String)">
             <summary>
-            Get the data of an embedded resource as a byte array
+            Get the data of an embedded resource as a new byte array (no decompression)
             </summary>
             <param name="asm">The assembly that contain the resource</param>
-            <param name="name">The name of the resource</param>
+            <param name="name">The full name of the resource</param>
             <returns>The data of the resource</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource doesn't exist.</exception>
         </member>
         <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceData(System.Type,System.String)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
-            <param name="asmType">A type in the assembly that contain the resource</param>
-            <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <param name="asmType">A type in the assembly that contain the resource, if the resource isn't found by name it's retried prefixed with the namespace of this type</param>
+            <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="M:SysWeaver.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)"/></param>
             <returns>The uncompressed data of the resource</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource doesn't exist.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid.</exception>
         </member>
         <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceDataBytes(System.Type,System.String)">
             <summary>
-            Get the data of an embedded resource, if it's compressed it will be decompressed
+            Get the data of an embedded resource as a new byte array, if it's compressed it will be decompressed
             </summary>
-            <param name="asmType">A type in the assembly that contain the resource</param>
-            <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <param name="asmType">A type in the assembly that contain the resource, if the resource isn't found by name it's retried prefixed with the namespace of this type</param>
+            <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="M:SysWeaver.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)"/></param>
             <returns>The uncompressed data of the resource</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource doesn't exist.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid.</exception>
         </member>
         <member name="T:SysWeaver.AsmResExt.UnmanagedMemoryManager`1">
             <summary>
-            A MemoryManager over a raw pointer
+            A <see cref="T:System.Buffers.MemoryManager`1"/> over a raw pointer, used to expose memory mapped resource data as <see cref="T:System.Memory`1"/> without copying
             </summary>
             <remarks>The pointer is assumed to be fully unmanaged, or externally pinned - no attempt will be made to pin this data</remarks>
         </member>
@@ -123,8 +162,13 @@
         </member>
         <member name="T:SysWeaver.Compression.CompBrotliNET">
             <summary>
-            A compression type that uses brotli for compression
+            A Brotli ("br") implementation that compresses using the .NET <see cref="T:System.IO.Compression.BrotliStream"/> (priority -1, not registered by default).
+            Decompression is forwarded to <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/>, since the stream silently accepts truncated data.
             </summary>
+            <remarks>
+            Kept as a reference / benchmark implementation, <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/> is the one registered in the <see cref="T:SysWeaver.Compression.CompManager"/>.
+            The stream is created with a <see cref="T:System.IO.Compression.CompressionLevel"/> (see <see cref="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)"/>), so the brotli quality differs from <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/>.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.CompBrotliNET.Register">
             <summary>
@@ -136,10 +180,77 @@
             The instance of the compressor
             </summary>
         </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNET.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompBrotliNET.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNET.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNET.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNET.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNET.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
         <member name="T:SysWeaver.Compression.CompBrotliNETNew">
             <summary>
-            A compression type that uses brotli for compression
+            The default Brotli ("br") implementation (priority 0, registered by default), using the .NET <see cref="T:System.IO.Compression.BrotliEncoder"/> / <see cref="T:System.IO.Compression.BrotliDecoder"/>
+            through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
             </summary>
+            <remarks>
+            Uses brotli quality 1 / 4 / 11 for <see cref="F:SysWeaver.Compression.CompEncoderLevels.Fast"/> / <see cref="F:SysWeaver.Compression.CompEncoderLevels.Balanced"/> / <see cref="F:SysWeaver.Compression.CompEncoderLevels.Best"/> with a 2^24 byte window.
+            Truncated or invalid data throws an <see cref="T:System.IO.InvalidDataException"/>, concatenated brotli streams are not supported (data after the first stream is ignored).
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.CompBrotliNETNew.Register">
             <summary>
@@ -151,10 +262,125 @@
             The instance of the compressor
             </summary>
         </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNETNew.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompBrotliNETNew.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNETNew.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNETNew.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNETNew.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNETNew.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder">
+            <summary>
+            The .NET brotli encoder (a struct, the native state can't be reset so it's not pooled)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder.Create(SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder.GetMaxCompressedLength(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder.TryCompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Uses the one-shot native compression (no encoder state is created)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder">
+            <summary>
+            The .NET brotli decoder (a struct, the native state can't be reset so it's not pooled)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder.Create">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder.TryDecompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <summary>
+            Uses the one-shot native decompression (no decoder state is created)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder.NextHeaderSize">
+            <summary>
+            Concatenated brotli streams are not supported
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder.BeginNext(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
         <member name="T:SysWeaver.Compression.CompDeflateNET">
             <summary>
-            A compression type that uses deflate for compression
+            The default raw Deflate ("deflate") implementation (priority 0, registered by default), using the .NET <see cref="T:System.IO.Compression.DeflateStream"/>.
             </summary>
+            <remarks>
+            Uses <see cref="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)"/> to map the level.
+            Truncated data is detected using <see cref="T:SysWeaver.Compression.CompInflaterState"/> (reflection on the .NET internals), so it throws an <see cref="T:System.IO.InvalidDataException"/> instead of returning partial data.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.CompDeflateNET.Register">
             <summary>
@@ -166,103 +392,266 @@
             The instance of the compressor
             </summary>
         </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNET.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompDeflateNET.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNET.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNET.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNET.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompDeflateNET.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompEncoderLevels">
+            <summary>
+            The compression effort, each implementation maps it to a format specific quality setting
+            (ex: brotli quality 1 / 4 / 11, deflate / gzip <see cref="F:System.IO.Compression.CompressionLevel.Fastest"/> / <see cref="F:System.IO.Compression.CompressionLevel.Optimal"/> / <see cref="F:System.IO.Compression.CompressionLevel.SmallestSize"/>, zstd level 1 / 9 / 22).
+            </summary>
+            <remarks>
+            The values are used as array indices by the implementations, only the defined values are valid.
+            </remarks>
+        </member>
         <member name="F:SysWeaver.Compression.CompEncoderLevels.Fast">
             <summary>
-            Use for real-time compression of API's etc
+            Fastest compression, use for real-time compression of API responses etc
             </summary>
         </member>
         <member name="F:SysWeaver.Compression.CompEncoderLevels.Balanced">
             <summary>
-            Use for offline preview or for longer caching etc
+            A balance between speed and size, use for offline preview or for data that is cached for a longer time etc
             </summary>
         </member>
         <member name="F:SysWeaver.Compression.CompEncoderLevels.Best">
             <summary>
-            Use for offline builds etc
+            Smallest output (can be very slow), use for offline builds and pre-compressed assets etc
             </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompExt">
+            <summary>
+            Extension methods that compress / decompress into newly allocated memory, for when the output size isn't known in advance.
+            </summary>
+            <remarks>
+            Temporary buffers are stack allocated or pooled, the result is a single exact size allocation (or pooled unmanaged memory for the <c>GetUnmanagedDecompressed</c> methods).
+            Streams passed in are not disposed.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.ReadOnlySpan{System.Byte},SysWeaver.Compression.CompEncoderLevels,System.Boolean)">
             <summary>
-            Get compressed data
+            Get compressed data.
+            Compresses into a temporary buffer (on the stack for small data) of the input size plus a small overhead, falling back to a growing stream if the data doesn't compress.
             </summary>
             <param name="c">The compression encoder</param>
             <param name="from">The memory to read uncompressed data from</param>
             <param name="level">The compression level to use</param>
-            <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
+            <param name="trim">Not used, the returned memory is always trimmed (a single allocation of the exact size)</param>
             <returns>The compressed data</returns>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels,System.Boolean)">
             <summary>
-            Get compressed data
+            Get compressed data, reading from the current position to the end of the stream.
+            For seekable streams the remaining length is used to size a temporary buffer (if the data doesn't compress, the stream is rewound and compressed to a growing stream),
+            unseekable streams are compressed to a growing stream.
             </summary>
             <param name="c">The compression encoder</param>
             <param name="from">The stream to read the uncompressed data from</param>
             <param name="level">The compression level to use</param>
-            <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
+            <param name="trim">Not used, the returned memory is always trimmed (a single allocation of the exact size)</param>
             <returns>The compressed data</returns>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetCompressedAsync(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels,System.Boolean)">
             <summary>
-            Get compressed data
+            Get compressed data asynchronously, reading from the current position to the end of the stream.
+            For seekable streams the remaining length is used to size a pooled temporary buffer (if the data doesn't compress, the stream is rewound and compressed to a growing stream),
+            unseekable streams are compressed to a growing stream.
             </summary>
             <param name="c">The compression encoder</param>
             <param name="from">The stream to read the uncompressed data from</param>
             <param name="level">The compression level to use</param>
-            <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
+            <param name="trim">Not used, the returned memory is always trimmed (a single allocation of the exact size)</param>
             <returns>The compressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.CompressToStream(SysWeaver.Compression.ICompEncoder,System.ReadOnlySpan{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress to a (growing) stream, used when the compressed data doesn't fit in the guessed size
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetSeekableSize(System.IO.Stream,System.Int64@)">
+            <summary>
+            Get the size of the destination to compress to, for a seekable stream
+            </summary>
+            <param name="from">The stream</param>
+            <param name="start">The current position of the stream</param>
+            <returns>The size of the destination, or 0 if the size is unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GrowGuess(System.Int32)">
+            <summary>
+            The initial size of a stream to compress to
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.ToArray(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Copy data to an array of the exact size
+            </summary>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetDecompressed(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
             <summary>
-            Get compressed data
+            Get decompressed data (as a new array of the exact size)
             </summary>
             <param name="c">The compression decoder</param>
             <param name="from">The memory to read compressed data from</param>
             <returns>The decompressed data</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetDecompressed(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
             <summary>
-            Get compressed data
+            Get decompressed data (as a new array of the exact size), reading from the current position of the stream
             </summary>
             <param name="c">The compression decoder</param>
             <param name="from">The stream to read the compressed data from</param>
             <returns>The decompressed data</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetDecompressedAsync(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
             <summary>
-            Get compressed data
+            Get decompressed data asynchronously (as a new array of the exact size), reading from the current position of the stream
             </summary>
             <param name="c">The compression decoder</param>
             <param name="from">The stream to read the compressed data from</param>
             <returns>The decompressed data</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
         </member>
-        <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressed(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
+        <member name="M:SysWeaver.Compression.CompExt.GetDecompressedArray(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
             <summary>
-            Get compressed data
+            Get decompressed data as an array
             </summary>
             <param name="c">The compression decoder</param>
             <param name="from">The memory to read compressed data from</param>
             <returns>The decompressed data</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetDecompressedArray(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
+            <summary>
+            Get decompressed data as an array
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The stream to read the compressed data from</param>
+            <returns>The decompressed data</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressed(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get decompressed data in pooled memory (no exact size copy is made)
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The memory to read compressed data from</param>
+            <returns>The decompressed data, the caller must dispose it to return the memory to the pool</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressed(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
             <summary>
-            Get compressed data
+            Get decompressed data in pooled memory (no exact size copy is made), reading from the current position of the stream
             </summary>
             <param name="c">The compression decoder</param>
             <param name="from">The stream to read the compressed data from</param>
-            <returns>The decompressed data</returns>
+            <returns>The decompressed data, the caller must dispose it to return the memory to the pool</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressedAsync(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
             <summary>
-            Get compressed data
+            Get decompressed data asynchronously in pooled memory (no exact size copy is made), reading from the current position of the stream
             </summary>
             <param name="c">The compression decoder</param>
             <param name="from">The stream to read the compressed data from</param>
-            <returns>The decompressed data</returns>
+            <returns>The decompressed data, the caller must dispose it to return the memory to the pool</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="T:SysWeaver.Compression.CompFile">
+            <summary>
+            Read text files that may be stored compressed on disc (ex: "words.txt" stored as "words.txt.br").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompFile.TryGetAllText(System.String,System.Text.Encoding)">
+            <summary>
+            Read the text from a file on disc, optionally compressed.
+            If <paramref name="filename"/> exists it's read as is, else the first existing file named <paramref name="filename"/> + "." + a registered compression extension
+            (in the order that the extensions were registered in the <see cref="T:SysWeaver.Compression.CompManager"/>) is decompressed.
+            </summary>
+            <param name="filename">The filename without any compression extension</param>
+            <param name="encoding">Optional text encoding, UTF8 assumed by default</param>
+            <returns>The string content or null if neither the file nor a compressed version of it exists</returns>
+            <exception cref="T:System.IO.InvalidDataException">The compressed file is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompFile.TryGetNonCommentLines(System.String,System.Text.Encoding,System.Boolean)">
+            <summary>
+            Read the non-empty, non-comment lines of text from a file on disc, optionally compressed (see <see cref="M:SysWeaver.Compression.CompFile.TryGetAllText(System.String,System.Text.Encoding)"/>).
+            Comments are lines that start with a '#', lines are split on line feeds and trimmed.
+            </summary>
+            <param name="filename">The filename without any compression extension</param>
+            <param name="encoding">Optional text encoding, UTF8 assumed by default</param>
+            <param name="trimComment">If true, everything on a line after a '#' will be trimmed (treated as a comment)</param>
+            <returns>The non-empty, non-comment lines or null if file doesn't exist</returns>
         </member>
         <member name="T:SysWeaver.Compression.CompGZipNET">
             <summary>
-            A compression type that uses gzip for compression
+            The default GZip ("gzip", extensions "gz" and "gzip") implementation (priority 0, registered by default), using the .NET <see cref="T:System.IO.Compression.GZipStream"/>.
             </summary>
+            <remarks>
+            Uses <see cref="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)"/> to map the level.
+            Concatenated gzip members are decompressed (as supported by <see cref="T:System.IO.Compression.GZipStream"/>).
+            Truncated data is detected using <see cref="T:SysWeaver.Compression.CompInflaterState"/> (reflection on the .NET internals), so it throws an <see cref="T:System.IO.InvalidDataException"/> instead of returning partial data.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.CompGZipNET.Register">
             <summary>
@@ -274,56 +663,871 @@
             The instance of the compressor
             </summary>
         </member>
+        <member name="P:SysWeaver.Compression.CompGZipNET.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompGZipNET.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNET.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNET.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNET.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompGZipNET.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompHelpers">
+            <summary>
+            Shared constants and helpers for compression implementations.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.TempSize">
+            <summary>
+            A suggested size of temporary buffers (16 KB), currently not used by the built-in implementations.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.StreamLevels">
+            <summary>
+            The .NET <see cref="T:System.IO.Compression.CompressionLevel"/> to use for each <see cref="T:SysWeaver.Compression.CompEncoderLevels"/> (indexed by the level), used by the stream based (Deflate / GZip / Brotli stream) implementations.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompHelpers.GetStreamLevel(SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Get the .NET compression level to use for a compression level (same as <see cref="F:SysWeaver.Compression.CompHelpers.StreamLevels"/>, without the interface call)
+            </summary>
+            <param name="level">The compression level</param>
+            <returns>The .NET compression level</returns>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.EncDestTooSmall">
+            <summary>
+            Exception message used (with an <see cref="T:System.ArgumentException"/>) when the compressed data doesn't fit in the destination memory.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.DecDestTooSmall">
+            <summary>
+            Exception message used (with an <see cref="T:System.ArgumentException"/>) when the decompressed data doesn't fit in the destination memory.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.EncFailed">
+            <summary>
+            Exception message used (with an <see cref="T:System.InvalidOperationException"/>) when an encoder fails.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.DecInvalid">
+            <summary>
+            Exception message used (with a <see cref="T:System.IO.InvalidDataException"/>) when the compressed data is invalid.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompHelpers.DecTruncated">
+            <summary>
+            Exception message used (with a <see cref="T:System.IO.InvalidDataException"/>) when the compressed data ends before the end of the compressed stream.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompHelpers.IsGZipMember(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Check if the data starts with a gzip member (concatenated gzip members are valid gzip data)
+            </summary>
+            <param name="data">The data</param>
+            <returns>True if the data starts with the gzip magic number</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompHelpers.IsZstdFrame(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Check if the data starts with a zstd frame or a skippable frame (concatenated frames are valid zstd data)
+            </summary>
+            <param name="data">The data</param>
+            <returns>True if the data starts with the magic number of a zstd frame or a skippable frame</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.CompInflaterState">
+            <summary>
+            Detects truncated data in the .NET DeflateStream / GZipStream.
+            The streams silently return the data decompressed so far when the compressed data is truncated
+            (unless the process wide "System.IO.Compression.UseStrictValidation" switch is set, that also rejects empty data).
+            This reads the state of the internal inflater, if the internals change (in a future .NET version) the check is skipped.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompInflaterState.State">
+            <summary>
+            The state of an inflater
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.State.Done">
+            <summary>
+            Done (or unknown)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.State.Truncated">
+            <summary>
+            The data is truncated
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.State.Empty">
+            <summary>
+            There was no data at all
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.GetDeflateState">
+            <summary>
+            Get the state of a DeflateStream (compiled once, reads the internal fields without any allocations)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.GetGZipDeflate">
+            <summary>
+            Get the inner DeflateStream of a GZipStream
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.DeflateEmptyIsValid">
+            <summary>
+            Empty data is valid if the encoder of this .NET version produces no data for empty data (true for .NET 10 and earlier)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompInflaterState.GZipEmptyIsValid">
+            <summary>
+            Empty data is valid if the encoder of this .NET version produces no data for empty data (true for .NET 10 and earlier)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompInflaterState.ThrowIfTruncated(System.IO.Stream)">
+            <summary>
+            Call when all data have been read from a decompression stream (and before it's disposed).
+            Throws an InvalidDataException if the compressed data was truncated.
+            Empty compressed data is valid if the encoder of the current .NET version produces no data for empty data (.NET 10 and earlier).
+            </summary>
+            <param name="s">A DeflateStream or GZipStream in decompression mode</param>
+            <exception cref="T:System.IO.InvalidDataException"></exception>
+        </member>
+        <member name="T:SysWeaver.Compression.CompInstancePool`1">
+            <summary>
+            A small, bounded, lock-free and allocation-free pool of reusable instances (such as encoders and decoders).
+            </summary>
+            <remarks>
+            Thread safe. The pool never creates instances, callers create a new instance when <see cref="M:SysWeaver.Compression.CompInstancePool`1.TryRent"/> returns null.
+            The pool doesn't reset instances, callers must only return instances that are in a reusable state.
+            Instances held by the pool are never disposed (the pool itself isn't disposable), so pools are typically static.
+            </remarks>
+            <typeparam name="T">The instance type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Compression.CompInstancePool`1.#ctor(System.Int32)">
+            <summary>
+            Create a pool
+            </summary>
+            <param name="maxRetained">The max number of instances to keep in the pool, zero or negative uses the number of processors capped at 8</param>
+        </member>
+        <member name="M:SysWeaver.Compression.CompInstancePool`1.TryRent">
+            <summary>
+            Get an instance from the pool (the caller owns it until it's returned using <see cref="M:SysWeaver.Compression.CompInstancePool`1.Return(`0)"/> or disposed)
+            </summary>
+            <returns>An instance or null if the pool is empty</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompInstancePool`1.Return(`0)">
+            <summary>
+            Return an instance to the pool, the instance is disposed if the pool is full
+            </summary>
+            <param name="instance">The instance to return, must be in a reusable state and not used by the caller after this call</param>
+        </member>
         <member name="T:SysWeaver.Compression.CompManager">
             <summary>
-            Manages compression implementations
+            The process wide registry of compression implementations, looked up by HTTP content-coding name or file extension.
             </summary>
+            <remarks>
+            The built-in .NET implementations are registered automatically: <see cref="T:SysWeaver.Compression.CompBrotliNETNew"/> ("br"), <see cref="T:SysWeaver.Compression.CompDeflateNET"/> ("deflate") and <see cref="T:SysWeaver.Compression.CompGZipNET"/> ("gzip").
+            Plug-ins (like native Brotli or Zstandard) are added using <see cref="M:SysWeaver.Compression.CompManager.AddType(SysWeaver.Compression.ICompType)"/>, usually through their static <c>Register</c> method.
+            Registration is thread safe (serialized by a lock), lookups are lock free.
+            When multiple implementations share an HTTP code or extension, the one with the highest <see cref="P:SysWeaver.Compression.ICompInfo.Prio"/> is used (on a tie, the last one added).
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.CompManager.AddType(SysWeaver.Compression.ICompType)">
             <summary>
             Add a compression type to the compression manager
             </summary>
             <param name="type">The type to add</param>
-            <exception cref="T:System.ArgumentException"></exception>
+            <returns>True if the type was added, false if this instance was already added</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompManager.GetFromExt(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Get the implementation for a given file extension (uses the ones with highest prio if multiple compressors are available)
+            </summary>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip"), compared ordinally</param>
+            <returns>A compressor for the given file extension or null if none exist</returns>
+            <remarks>Allocation free, performs a linear search of the (few) registered extensions.</remarks>
+        </member>
+        <member name="P:SysWeaver.Compression.CompManager.ExtensionArray">
+            <summary>
+            All file extensions (with and without a "." prefix) and the implementation to use, in the order that they were added (a copy-on-write snapshot, safe to enumerate while types are added)
+            </summary>
         </member>
         <member name="P:SysWeaver.Compression.CompManager.All">
             <summary>
-            Get all added compression types in the order that they we're added
+            Get all added compression types in the order that they were added
             </summary>
+            <remarks>A copy-on-write snapshot, safe to enumerate while types are added concurrently.</remarks>
         </member>
         <member name="P:SysWeaver.Compression.CompManager.HttpCodes">
             <summary>
-            Get all supported http codes
+            Get all supported HTTP codes
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.CompManager.Extensions">
             <summary>
-            Get all supported file extensions
+            Get all supported file extensions (each extension is included both with and without a "." prefix)
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.CompManager.HttpCodeHandlers">
             <summary>
-            Get all handlers for all suported http codes
+            Get the implementation to use for each supported HTTP code
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.CompManager.ExtensionHandlers">
             <summary>
-            Get all handlers for all suported file extensions
+            Get the implementation to use for each supported file extension (with and without a "." prefix)
             </summary>
         </member>
         <member name="M:SysWeaver.Compression.CompManager.GetFromHttp(System.String)">
             <summary>
-            Get the implementation for a given http code (uses the ones with highest prio if multiple compressors are available)
+            Get the implementation for a given HTTP content-coding (uses the ones with highest prio if multiple compressors are available)
             </summary>
-            <param name="httpCode">The http code, all lowercase</param>
-            <returns>A compressor for the given http code or null if non exist</returns>
+            <param name="httpCode">The HTTP code, all lowercase (compared ordinally), ex: "br"</param>
+            <returns>A compressor for the given HTTP code or null if none exist</returns>
         </member>
         <member name="M:SysWeaver.Compression.CompManager.GetFromExt(System.String)">
             <summary>
             Get the implementation for a given file extension (uses the ones with highest prio if multiple compressors are available)
             </summary>
-            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip")</param>
-            <returns>A compressor for the given file extension or null if non exist</returns>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip"), compared ordinally</param>
+            <returns>A compressor for the given file extension or null if none exist</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.ICompStreamEncoder`1">
+            <summary>
+            A streaming encoder, with the same semantics as System.IO.Compression.BrotliEncoder.
+            Implemented as a struct so that the generic code in <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/> is specialized (no boxing, no interface calls).
+            </summary>
+            <typeparam name="TSelf">The implementing type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamEncoder`1.Create(SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Create (or rent) an encoder, it's disposed (or returned) when done
+            </summary>
+            <param name="level">The compression level to use</param>
+            <returns>An encoder ready to encode a new stream</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamEncoder`1.GetMaxCompressedLength(System.Int32)">
+            <summary>
+            Get the max size of the compressed data
+            </summary>
+            <param name="inputSize">The number of uncompressed bytes</param>
+            <returns>The worst case number of compressed bytes</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamEncoder`1.TryCompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress all data in one go, <see cref="M:SysWeaver.Compression.CompStreamCodec`2.TryCompress(`0@,System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)"/> can be used if there is no special one-shot api
+            </summary>
+            <param name="source">The data to compress</param>
+            <param name="destination">The memory to write the compressed data to</param>
+            <param name="bytesWritten">The number of bytes written to the destination</param>
+            <param name="level">The compression level to use</param>
+            <returns>False if the compressed data doesn't fit in the destination</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamEncoder`1.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@,System.Boolean)">
+            <summary>
+            Compress some data.
+            Returns Done when all source data is consumed (and if isFinalBlock is true, when all data is written),
+            DestinationTooSmall if there is more data to write (or source data to consume), InvalidData on errors.
+            </summary>
+            <param name="source">The uncompressed data</param>
+            <param name="destination">The memory to write compressed data to</param>
+            <param name="bytesConsumed">The number of source bytes consumed</param>
+            <param name="bytesWritten">The number of bytes written to the destination</param>
+            <param name="isFinalBlock">True if this is the last of the data, the stream is finished</param>
+            <returns>The status of the operation</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.ICompStreamDecoder`1">
+            <summary>
+            A streaming decoder, with the same semantics as System.IO.Compression.BrotliDecoder.
+            Implemented as a struct so that the generic code in <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/> is specialized (no boxing, no interface calls).
+            </summary>
+            <typeparam name="TSelf">The implementing type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamDecoder`1.Create">
+            <summary>
+            Create (or rent) a decoder, it's disposed (or returned) when done
+            </summary>
+            <returns>A decoder ready to decode a new stream</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamDecoder`1.TryDecompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <summary>
+            Decompress all data in one go using a special one-shot api.
+            Return false to use the streaming decoder instead (also return false on any failure, the streaming decoder determines the exception to throw).
+            </summary>
+            <param name="source">The compressed data</param>
+            <param name="destination">The memory to write the decompressed data to</param>
+            <param name="bytesWritten">The number of bytes written to the destination</param>
+            <returns>True if all data was decompressed</returns>
+        </member>
+        <member name="P:SysWeaver.Compression.ICompStreamDecoder`1.NextHeaderSize">
+            <summary>
+            The number of bytes needed to determine if another (concatenated) stream follows a stream, 0 if the format doesn't support concatenated streams.
+            For formats where concatenated streams decompress to the concatenated data (like gzip members and zstd frames).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamDecoder`1.BeginNext(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Called when the decoder is done (and NextHeaderSize is greater than 0) and there is more data.
+            Return true if the data is the start of another (concatenated) stream, the decoder must be ready to decode it.
+            Return false to stop (any remaining data is ignored).
+            </summary>
+            <param name="next">The data after the stream, at least NextHeaderSize bytes unless the data ends before</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompStreamDecoder`1.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@)">
+            <summary>
+            Decompress some data.
+            Returns Done when the end of the compressed data is reached, NeedMoreData if all source data is consumed,
+            DestinationTooSmall if the destination is full (may also be returned for an empty destination), InvalidData if the data is invalid.
+            </summary>
+            <param name="source">The compressed data</param>
+            <param name="destination">The memory to write uncompressed data to</param>
+            <param name="bytesConsumed">The number of source bytes consumed</param>
+            <param name="bytesWritten">The number of bytes written to the destination</param>
+            <returns>The status of the operation</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.CompStreamCodec`2">
+            <summary>
+            Implements all <see cref="T:SysWeaver.Compression.ICompEncoder"/> and <see cref="T:SysWeaver.Compression.ICompDecoder"/> methods for a streaming encoder and decoder,
+            an <see cref="T:SysWeaver.Compression.ICompType"/> implementation simply forwards each method to this class.
+            Small data is compressed in one go, larger data is streamed in 64 KB chunks.
+            All temporary buffers are pooled, so the only heap allocations are the ones done by the encoder / decoder (and the tasks of the async methods).
+            </summary>
+            <remarks>
+            Thread safe, a new (or rented) encoder / decoder is used per call and it's always disposed (or returned) when done.
+            Destination streams are written to but never flushed or disposed.
+            </remarks>
+            <typeparam name="TEncoder">The encoder</typeparam>
+            <typeparam name="TDecoder">The decoder</typeparam>
+        </member>
+        <member name="F:SysWeaver.Compression.CompStreamCodec`2.MaxStack">
+            <summary>
+            Max number of input bytes to read into a stack buffer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompStreamCodec`2.MaxBuffered">
+            <summary>
+            Max number of input bytes to compress in one go (larger inputs are streamed)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompStreamCodec`2.ChunkSize">
+            <summary>
+            Size of the input and output chunks used when streaming
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.GetBufferableLength(System.IO.Stream)">
+            <summary>
+            Get the number of bytes remaining in a stream if it's small enough to be compressed in one go
+            </summary>
+            <param name="s">The stream</param>
+            <returns>The number of bytes remaining in the stream, or -1 if the stream is unseekable or too large</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.TryCompress(`0@,System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <summary>
+            Compress all data using an encoder (for encoders without a special one-shot api)
+            </summary>
+            <param name="enc">The encoder</param>
+            <param name="source">The data to compress</param>
+            <param name="destination">The destination</param>
+            <param name="bytesWritten">The number of bytes written to the destination</param>
+            <returns>False if the compressed data doesn't fit in the destination</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Encode(`0@,System.ReadOnlySpan{System.Byte},System.Boolean,System.Span{System.Byte},System.Int32)">
+            <summary>
+            Feed data to an encoder, writing the output to a span
+            </summary>
+            <returns>The new position in the output span</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Encode(`0@,System.ReadOnlySpan{System.Byte},System.Boolean,System.Byte[],System.Int32,System.IO.Stream)">
+            <summary>
+            Feed data to an encoder, writing the output to a stream
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.IsDone(System.Buffers.OperationStatus)">
+            <summary>
+            Check the decoder status after it was fed
+            </summary>
+            <returns>True if the decoder is done</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.ProbeIsDone(`1@,System.ReadOnlySpan{System.Byte},System.Int32@)">
+            <summary>
+            Call when the decoder reports DestinationTooSmall and the destination is full.
+            The decoder reports DestinationTooSmall for an empty destination, probe if there is any more output.
+            </summary>
+            <returns>True if the decoder is done</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.BeginNext(`1@,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Call when the decoder is done, to check if another (concatenated) stream follows
+            </summary>
+            <returns>True if another stream follows and the decoder is ready to decode it</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Refill(System.IO.Stream,System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Move any unconsumed input to the start of the buffer and fill the rest from the stream
+            </summary>
+            <returns>The number of bytes in the input buffer</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.FillNext(System.IO.Stream,System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Make sure that there is enough data in the input buffer to determine if another stream follows (the end of the stream is fine)
+            </summary>
+            <returns>The number of bytes in the input buffer (starting at 0)</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress all remaining data of a stream to a stream.
+            Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <exception cref="T:System.InvalidOperationException">The encoder failed.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress all remaining data of a stream to memory.
+            Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The memory to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <returns>The number of compressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The compressed data doesn't fit in <paramref name="to"/>.</exception>
+            <exception cref="T:System.InvalidOperationException">The encoder failed.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress memory to memory in one go (using the encoder's one-shot api).
+            </summary>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="to">The memory to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <returns>The number of compressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The compressed data doesn't fit in <paramref name="to"/>.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress memory to a stream.
+            Data smaller than 64 KB is compressed in one go to a pooled buffer, larger data is streamed in 64 KB output chunks.
+            </summary>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <exception cref="T:System.InvalidOperationException">The encoder failed.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress all remaining data of a stream to a stream asynchronously.
+            Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <exception cref="T:System.InvalidOperationException">The encoder failed.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress all remaining data of a stream to memory asynchronously.
+            Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The memory to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <returns>The number of compressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The compressed data doesn't fit in <paramref name="to"/>.</exception>
+            <exception cref="T:System.InvalidOperationException">The encoder failed.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress memory to a stream asynchronously.
+            Data smaller than 64 KB is compressed in one go to a pooled buffer, larger data is streamed in 64 KB output chunks.
+            </summary>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <exception cref="T:System.InvalidOperationException">The encoder failed.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Decompress(System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Decompress a stream to a stream, in 64 KB chunks.
+            Concatenated streams are decompressed if the format supports them (<see cref="P:SysWeaver.Compression.ICompStreamDecoder`1.NextHeaderSize"/> is greater than 0).
+            </summary>
+            <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <summary>
+            Decompress a stream to memory.
+            Seekable sources with less than 64 KB remaining are read into memory and decompressed in one go, other sources are streamed in 64 KB chunks.
+            </summary>
+            <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The memory to write the uncompressed data to</param>
+            <returns>The number of uncompressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <summary>
+            Decompress memory to memory.
+            Uses the decoder's one-shot api if it has one (and it succeeds), else the streaming decoder.
+            </summary>
+            <remarks>Any data after the (last concatenated) compressed stream is ignored.</remarks>
+            <param name="from">The memory to read compressed data from</param>
+            <param name="to">The memory to write the uncompressed data to</param>
+            <returns>The number of uncompressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <summary>
+            Decompress memory to a stream, in 64 KB output chunks.
+            </summary>
+            <remarks>Any data after the (last concatenated) compressed stream is ignored.</remarks>
+            <param name="from">The memory to read compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Decompress a stream to a stream asynchronously, in 64 KB chunks.
+            Concatenated streams are decompressed if the format supports them (<see cref="P:SysWeaver.Compression.ICompStreamDecoder`1.NextHeaderSize"/> is greater than 0).
+            </summary>
+            <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <summary>
+            Decompress a stream to memory asynchronously.
+            Seekable sources with less than 64 KB remaining are read into memory and decompressed in one go, other sources are streamed in 64 KB chunks.
+            </summary>
+            <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The memory to write the uncompressed data to</param>
+            <returns>The number of uncompressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamCodec`2.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <summary>
+            Decompress memory to a stream asynchronously, in 64 KB output chunks.
+            </summary>
+            <remarks>Any data after the (last concatenated) compressed stream is ignored.</remarks>
+            <param name="from">The memory to read compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+            <exception cref="T:System.IO.InvalidDataException">The compressed data is invalid or truncated.</exception>
+        </member>
+        <member name="T:SysWeaver.Compression.CompStreamHelpers">
+            <summary>
+            Helpers for compression implementations that are built on top of compression / decompression streams
+            (copying in large chunks, reading into memory and pooled streams over pinned memory).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompStreamHelpers.CopyChunkSize">
+            <summary>
+            The number of bytes to read before writing to an encoder stream
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.CopyFull(System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Copy all data from a stream to an encoder stream.
+            The data is written in large chunks even if the source stream returns a few bytes per read (like a network stream),
+            some encoders (like brotli at low qualities) compress each write separately and produces a lot more data when fed small chunks.
+            </summary>
+            <param name="from">The stream to read from</param>
+            <param name="to">The stream to write to</param>
+            <remarks>In-memory sources (<see cref="T:System.IO.MemoryStream"/>, <see cref="T:System.IO.UnmanagedMemoryStream"/>, <see cref="T:SysWeaver.Compression.PointerReadStream"/>) are copied using <see cref="M:System.IO.Stream.CopyTo(System.IO.Stream)"/>, since they write everything at once.</remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.CopyFullAsync(System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Copy all data from a stream to an encoder stream.
+            The data is written in large chunks even if the source stream returns a few bytes per read (like a network stream),
+            some encoders (like brotli at low qualities) compress each write separately and produces a lot more data when fed small chunks.
+            </summary>
+            <param name="from">The stream to read from</param>
+            <param name="to">The stream to write to</param>
+            <remarks>In-memory sources (<see cref="T:System.IO.MemoryStream"/>, <see cref="T:System.IO.UnmanagedMemoryStream"/>, <see cref="T:SysWeaver.Compression.PointerReadStream"/>) are copied using <see cref="M:System.IO.Stream.CopyToAsync(System.IO.Stream)"/>, since they write everything at once.</remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.IsInMemory(System.IO.Stream)">
+            <summary>
+            Memory streams always return all requested data, and their CopyTo writes all data at once
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.ReadAll(System.IO.Stream,System.Span{System.Byte})">
+            <summary>
+            Read all data from a decoder stream into memory.
+            When the destination is full, a single byte is read to verify that the stream has ended.
+            </summary>
+            <param name="from">The decoder stream</param>
+            <param name="to">The memory to write the data to</param>
+            <returns>The number of bytes written</returns>
+            <exception cref="T:System.ArgumentException">The data doesn't fit in the destination</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.ReadAllAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <summary>
+            Read all data from a decoder stream into memory asynchronously.
+            When the destination is full, a single byte is read to verify that the stream has ended.
+            </summary>
+            <param name="from">The decoder stream</param>
+            <param name="to">The memory to write the data to</param>
+            <returns>The number of bytes written</returns>
+            <exception cref="T:System.ArgumentException">The data doesn't fit in the destination</exception>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.RentReader(System.Byte*,System.Int32)">
+            <summary>
+            Rent a stream that reads from pinned memory (works for empty memory, where the pointer may be null).
+            Return it using <see cref="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerReadStream)"/> when done (and not used by anything else).
+            </summary>
+            <param name="data">A pointer to the data, must be pinned until the stream is returned</param>
+            <param name="length">The number of bytes</param>
+            <returns>A readable stream</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.RentReader(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Rent a stream that reads from memory (the memory is pinned until the stream is returned).
+            Return it using <see cref="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerReadStream)"/> when done (and not used by anything else).
+            </summary>
+            <param name="data">The data</param>
+            <returns>A readable stream</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerReadStream)">
+            <summary>
+            Return a stream rented using <see cref="M:SysWeaver.Compression.CompStreamHelpers.RentReader(System.ReadOnlyMemory{System.Byte})"/> or <see cref="M:SysWeaver.Compression.CompStreamHelpers.RentReader(System.Byte*,System.Int32)"/>, unpinning any memory pinned by the rent.
+            </summary>
+            <param name="s">The stream, must not be used after this call</param>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.RentWriter(System.Byte*,System.Int32)">
+            <summary>
+            Rent a stream that writes to pinned memory (works for empty memory, where the pointer may be null).
+            Writing more data than fits throws an ArgumentException.
+            Return it using <see cref="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerWriteStream)"/> when done (and not used by anything else).
+            </summary>
+            <param name="data">A pointer to the memory, must be pinned until the stream is returned</param>
+            <param name="length">The number of bytes available</param>
+            <returns>A writable stream, use <see cref="P:SysWeaver.Compression.PointerWriteStream.Written"/> to get the number of bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.RentWriter(System.Memory{System.Byte})">
+            <summary>
+            Rent a stream that writes to memory (the memory is pinned until the stream is returned).
+            Writing more data than fits throws an ArgumentException.
+            Return it using <see cref="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerWriteStream)"/> when done (and not used by anything else).
+            </summary>
+            <param name="data">The memory to write to</param>
+            <returns>A writable stream, use <see cref="P:SysWeaver.Compression.PointerWriteStream.Written"/> to get the number of bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerWriteStream)">
+            <summary>
+            Return a stream rented using <see cref="M:SysWeaver.Compression.CompStreamHelpers.RentWriter(System.Memory{System.Byte})"/> or <see cref="M:SysWeaver.Compression.CompStreamHelpers.RentWriter(System.Byte*,System.Int32)"/>, unpinning any memory pinned by the rent.
+            </summary>
+            <param name="s">The stream, must not be used after this call</param>
+        </member>
+        <member name="T:SysWeaver.Compression.PointerReadStream">
+            <summary>
+            A seekable read only stream that reads from pinned memory, rent using <see cref="M:SysWeaver.Compression.CompStreamHelpers.RentReader(System.ReadOnlyMemory{System.Byte})"/>
+            </summary>
+            <remarks>
+            Not thread safe. The instances are pooled, so never keep a reference after returning it using <see cref="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerReadStream)"/>.
+            Disposing the stream has no effect (it must still be returned).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Init(System.Byte*,System.Int32,System.Buffers.MemoryHandle)">
+            <summary>
+            Start reading from some memory
+            </summary>
+            <param name="data">The data, must be pinned until <see cref="M:SysWeaver.Compression.PointerReadStream.Release"/> is called</param>
+            <param name="length">The number of bytes</param>
+            <param name="handle">A pin handle that is disposed when the stream is released (or default)</param>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Release">
+            <summary>
+            Stop using the memory, disposing the pin handle
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerReadStream.CanRead">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerReadStream.CanSeek">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerReadStream.CanWrite">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerReadStream.Length">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerReadStream.Position">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Flush">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Seek(System.Int64,System.IO.SeekOrigin)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.SetLength(System.Int64)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Write(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Read(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.Read(System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.ReadByte">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.ReadAsync(System.Memory{System.Byte},System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.ReadAsync(System.Byte[],System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerReadStream.CopyTo(System.IO.Stream,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.PointerWriteStream">
+            <summary>
+            A write only stream that writes to pinned memory, writing more data than fits throws an ArgumentException.
+            Rent using <see cref="M:SysWeaver.Compression.CompStreamHelpers.RentWriter(System.Memory{System.Byte})"/>.
+            </summary>
+            <remarks>
+            Not thread safe. The instances are pooled, so never keep a reference after returning it using <see cref="M:SysWeaver.Compression.CompStreamHelpers.Return(SysWeaver.Compression.PointerWriteStream)"/>.
+            Disposing the stream has no effect (it must still be returned).
+            A write that doesn't fit throws without writing anything.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Init(System.Byte*,System.Int32,System.Buffers.MemoryHandle)">
+            <summary>
+            Start writing to some memory
+            </summary>
+            <param name="data">The memory, must be pinned until <see cref="M:SysWeaver.Compression.PointerWriteStream.Release"/> is called</param>
+            <param name="length">The number of bytes available</param>
+            <param name="handle">A pin handle that is disposed when the stream is released (or default)</param>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Release">
+            <summary>
+            Stop using the memory, disposing the pin handle
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerWriteStream.Written">
+            <summary>
+            The number of bytes written
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerWriteStream.CanRead">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerWriteStream.CanSeek">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerWriteStream.CanWrite">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerWriteStream.Length">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.PointerWriteStream.Position">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Flush">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.FlushAsync(System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Read(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Seek(System.Int64,System.IO.SeekOrigin)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.SetLength(System.Int64)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Write(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.Write(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.WriteByte(System.Byte)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.WriteAsync(System.Byte[],System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.PointerWriteStream.WriteAsync(System.ReadOnlyMemory{System.Byte},System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.ICompDecoder">
+            <summary>
+            Decompresses data, from / to streams or memory.
+            </summary>
+            <remarks>
+            Implementations are thread safe (any per-call state is created or rented per call).
+            Streams passed in are never disposed by the decoder, reading starts at the current position of the source stream.
+            When reading from a stream, the decoder may read (and consume) bytes past the end of the compressed data, so don't rely on the source position afterwards.
+            Invalid or truncated compressed data throws (typically an <see cref="T:System.IO.InvalidDataException"/>), the built-in implementations never silently return partial data.
+            Use the extension methods in <see cref="T:SysWeaver.Compression.CompExt"/> to decompress into a new array without knowing the size in advance.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.IO.Stream,System.IO.Stream)">
             <summary>
@@ -339,6 +1543,7 @@
             <param name="from">The stream to read the compressed data from</param>
             <param name="to">The memory to write the uncompressed data to</param>
             <returns>The number of uncompressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
         </member>
         <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
             <summary>
@@ -347,6 +1552,7 @@
             <param name="from">The memory to read compressed data from</param>
             <param name="to">The memory to write the uncompressed data to</param>
             <returns>The number of uncompressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
         </member>
         <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
             <summary>
@@ -369,13 +1575,25 @@
             <param name="from">The stream to read the compressed data from</param>
             <param name="to">The memory to write the uncompressed data to</param>
             <returns>The number of uncompressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
         </member>
         <member name="M:SysWeaver.Compression.ICompDecoder.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
             <summary>
             Decompress data
             </summary>
-            <param name="from">The memory to read ompressed data from</param>
+            <param name="from">The memory to read compressed data from</param>
             <param name="to">The stream to write the uncompressed data to</param>
+        </member>
+        <member name="T:SysWeaver.Compression.ICompEncoder">
+            <summary>
+            Compresses data, from / to streams or memory.
+            </summary>
+            <remarks>
+            Implementations are thread safe (any per-call state is created or rented per call).
+            Streams passed in are never disposed or flushed by the encoder, reading starts at the current position of the source stream and continues to its end.
+            The output is a complete, self contained compressed stream in the format given by <see cref="P:SysWeaver.Compression.ICompInfo.HttpCode"/>.
+            Use the extension methods in <see cref="T:SysWeaver.Compression.CompExt"/> to compress into a new array without knowing the size in advance.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
             <summary>
@@ -393,6 +1611,7 @@
             <param name="to">The memory to write the compressed data to</param>
             <param name="level">The compression level to use</param>
             <returns>The number of compressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The compressed data doesn't fit in <paramref name="to"/> (the content of <paramref name="to"/> is undefined).</exception>
         </member>
         <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
             <summary>
@@ -402,6 +1621,7 @@
             <param name="to">The memory to write the compressed data to</param>
             <param name="level">The compression level to use</param>
             <returns>The number of compressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The compressed data doesn't fit in <paramref name="to"/> (the content of <paramref name="to"/> is undefined).</exception>
         </member>
         <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
             <summary>
@@ -427,6 +1647,7 @@
             <param name="to">The memory to write the compressed data to</param>
             <param name="level">The compression level to use</param>
             <returns>The number of compressed bytes written</returns>
+            <exception cref="T:System.ArgumentException">The compressed data doesn't fit in <paramref name="to"/> (the content of <paramref name="to"/> is undefined).</exception>
         </member>
         <member name="M:SysWeaver.Compression.ICompEncoder.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
             <summary>
@@ -436,46 +1657,129 @@
             <param name="to">The stream to write the compressed data to</param>
             <param name="level">The compression level to use</param>
         </member>
+        <member name="T:SysWeaver.Compression.ICompInfo">
+            <summary>
+            Describes a compression implementation (name, HTTP content-coding, priority and file extensions).
+            </summary>
+        </member>
         <member name="P:SysWeaver.Compression.ICompInfo.Name">
             <summary>
-            The name of the compression implementation
+            A human readable name of the compression implementation (used for diagnostics, for example ".NET brotli").
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.ICompInfo.HttpCode">
             <summary>
-            The http code as specified for the Accept-Encoding header (or custom), ex: "deflate", "gzip" or "br", "compress", must be all lowercase
+            The HTTP content-coding name as used in the Accept-Encoding / Content-Encoding headers (or a custom name), ex: "deflate", "gzip", "br" or "zstd".
+            Must be all lowercase, lookups in <see cref="M:SysWeaver.Compression.CompManager.GetFromHttp(System.String)"/> are ordinal (case sensitive).
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.ICompInfo.Prio">
             <summary>
-            The priority (quality) of the compressor, if multiple compressors are available the one with the highest priority is returned by the compression manager
+            The priority of the implementation. If multiple implementations share an HTTP code or file extension, the <see cref="T:SysWeaver.Compression.CompManager"/> returns the one with the highest priority
+            (on a tie, the one registered last).
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.ICompInfo.FileExtensions">
             <summary>
-            File extensions that is associated with the compressor, must be all lowercase
+            The file extensions (without a "." prefix) associated with the format, ex: "br", "gz".
+            Must be all lowercase, the <see cref="T:SysWeaver.Compression.CompManager"/> registers each extension both with and without a "." prefix.
             </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.ICompType">
+            <summary>
+            A complete compression implementation (encoder and decoder) that can be registered in the <see cref="T:SysWeaver.Compression.CompManager"/>.
+            </summary>
+            <remarks>
+            Implementations are stateless singletons that are safe to use concurrently from multiple threads.
+            Plug-ins are typically registered by type name in a service manifest, the service manager then invokes the public static parameterless <c>Register</c> method using reflection.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompType.Register">
+            <summary>
+            Register the implementation in the <see cref="T:SysWeaver.Compression.CompManager"/> (implementations call <see cref="M:SysWeaver.Compression.CompManager.AddType(SysWeaver.Compression.ICompType)"/> with their singleton instance).
+            </summary>
+            <exception cref="T:System.NotImplementedException">The implementing type doesn't provide a static <c>Register</c> method.</exception>
+        </member>
+        <member name="P:SysWeaver.Compression.ICompType.Instance">
+            <summary>
+            The singleton instance of the implementation.
+            </summary>
+            <remarks>
+            The built-in implementations expose <c>Instance</c> as a static field and implement this property explicitly (returning the field),
+            so it can also be accessed through a generic type parameter constrained to <see cref="T:SysWeaver.Compression.ICompType"/>.
+            </remarks>
+            <exception cref="T:System.NotImplementedException">The implementing type doesn't override this property.</exception>
         </member>
         <member name="T:SysWeaver.Compression.TransformGZipToDeflateStream">
             <summary>
-            A stream that takes a seekable input stream containing GZip compressed data, and presents it as a deflate compressed data stream
+            A stream that takes a seekable input stream containing GZip compressed data, and presents it as a raw deflate compressed data stream
+            (the GZip header and the 8 byte CRC32 / size trailer are skipped, no recompression is done).
             </summary>
+            <remarks>
+            Used by the HTTP server to serve pre-compressed ".gz" data to clients that only accept "deflate".
+            Only single member GZip data is supported (anything after the first member's deflate data is treated as part of it).
+            Not thread safe, the position of the underlying stream is used as the position of this stream.
+            </remarks>
         </member>
         <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.GetDeflateData(System.ReadOnlyMemory{System.Byte})">
             <summary>
             Get deflate memory from gzip memory
             </summary>
             <param name="gzipData">Memory containing GZip data</param>
-            <returns>Memory with the deflate portion of the memory data</returns>
-            <exception cref="T:System.Exception"></exception>
+            <returns>Memory with the deflate portion of the memory data (a slice of <paramref name="gzipData"/>, no copy is made)</returns>
+            <exception cref="T:System.Exception">The data isn't valid GZip data, or isn't deflate compressed.</exception>
         </member>
         <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.#ctor(System.IO.Stream,System.Boolean)">
             <summary>
-            Create a defalte data stream from a gzip data stream
+            Create a deflate data stream from a gzip data stream, the GZip header is read (and validated) from the current position
             </summary>
-            <param name="gzipData">Stream containing GZIp data (must be a complete file and nothing after that)</param>
-            <param name="leaveOpen">If true, the underlaying stream isn't disposed when this stream is disposed</param>
-            <exception cref="T:System.Exception"></exception>
+            <param name="gzipData">Seekable stream containing GZip data (must be a complete file and nothing after that)</param>
+            <param name="leaveOpen">If true, the underlying stream isn't disposed when this stream is disposed</param>
+            <exception cref="T:System.Exception">The data isn't valid GZip data, or isn't deflate compressed.</exception>
+            <exception cref="T:System.NotSupportedException"><paramref name="gzipData"/> isn't seekable.</exception>
+        </member>
+        <member name="F:SysWeaver.Compression.TransformGZipToDeflateStream.LeaveOpen">
+            <summary>
+            If true, the underlying stream isn't disposed when this stream is disposed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.TransformGZipToDeflateStream.UnderlayingStream">
+            <summary>
+            The stream containing the GZip data
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.TransformGZipToDeflateStream.CanRead">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.TransformGZipToDeflateStream.CanSeek">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.TransformGZipToDeflateStream.CanWrite">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.TransformGZipToDeflateStream.Length">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.TransformGZipToDeflateStream.Position">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.Flush">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.Read(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.Seek(System.Int64,System.IO.SeekOrigin)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.SetLength(System.Int64)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.Write(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.Dispose(System.Boolean)">
+            <inheritdoc/>
         </member>
     </members>
 </doc>

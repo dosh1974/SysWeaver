@@ -4,5 +4,20 @@
         <name>OnDuplicates</name>
     </assembly>
     <members>
+        <member name="F:SysWeaver.OnDuplicatesProgram.ExitSuccess">
+            <summary>
+            Exit code: success (also returned when help was requested), finding duplicates is not an error.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.OnDuplicatesProgram.ExitGenericError">
+            <summary>
+            Exit code: generic error, an exception while searching.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.OnDuplicatesProgram.ExitInvalidArguments">
+            <summary>
+            Exit code: invalid command line (no arguments, an unknown option or missing arguments).
+            </summary>
+        </member>
     </members>
 </doc>

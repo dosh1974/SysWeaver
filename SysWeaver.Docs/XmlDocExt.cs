@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -18,7 +18,11 @@ namespace SysWeaver.Docs
     /// <para>The documentation is read from the "AssemblyName.xml" file next to each assembly's <see cref="Assembly.Location"/> the first time an assembly is needed,
     /// and all results are cached (thread safe). Assemblies without a location (single-file publish, dynamic) or without a documentation file yield null.</para>
     /// <para>Lookups also search the assemblies of the declaring type's interfaces and base types.
-    /// Fields, properties and methods are matched by name (and signature for methods) against members of the same or a related (base/derived) type.</para>
+    /// Fields, properties, methods and constructors are matched exactly first (the member definition, regardless of the type it was reflected from),
+    /// so a documented base member and a documented override each get their own documentation.
+    /// Without an exact match they are matched by name (and signature for methods) against members of the same or a related (base/derived) type,
+    /// preferring the closest documented base type (or interface) member (so an undocumented override gets the documentation of the overridden member), else a derived type's member.
+    /// Members of constructed generic types (ex: List&lt;int&gt;) and constructed generic methods are looked up on their generic definitions.</para>
     /// <para>Used for command line help (SysWeaver.CommandLine), config file comments (loaded by name from SysWeaver.Common), API/type info and table column descriptions.</para>
     /// </remarks>
     public static class XmlDocExt
@@ -73,6 +77,34 @@ namespace SysWeaver.Docs
             return asms;
         }
 
+        /// <summary>
+        /// Get the member of the generic type definition if the member is declared by a constructed generic type (ex: List&lt;int&gt;.Add => List&lt;T&gt;.Add), since only those are documented
+        /// </summary>
+        static T Definition<T>(T mi) where T : MemberInfo
+        {
+            var dt = mi.DeclaringType;
+            if ((dt == null) || (!dt.IsConstructedGenericType))
+                return mi;
+            return (dt.GetGenericTypeDefinition().GetMemberWithSameMetadataDefinitionAs(mi) as T) ?? mi;
+        }
+
+        /// <summary>
+        /// Find the documentation of a member: the exact member definition first, then a same-named (same signature) member of a related type:
+        /// the closest base type (or interface) member (ex: an undocumented override gets the documentation of the overridden member), else one of a derived type.
+        /// </summary>
+        static TD Find<TM, TD>(TM def, Func<DocAssembly, RelatedMembers<TM, TD>> related) where TM : MemberInfo where TD : DocInfo
+        {
+            var exact = GetAsm(def.Module.Assembly);
+            if ((exact != null) && exact.Members.TryGetValue(def, out var d) && (d is TD e))
+                return e;
+            TD best = null;
+            Type bestType = null;
+            TD other = null;
+            foreach (var asm in GetAssemblies(def.DeclaringType))
+                related(asm).Find(def, ref best, ref bestType, ref other);
+            return best ?? other;
+        }
+
 
 
         /// <summary>
@@ -115,8 +147,12 @@ namespace SysWeaver.Docs
         /// <param name="type">The enum type.</param>
         /// <param name="enumValueName">The name of the enum value (case sensitive).</param>
         /// <returns>The documentation, or null if not found.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="type"/> (DEBUG builds only) or <paramref name="enumValueName"/> is null.</exception>
         public static IXmlDocInfo XmlDocEnum(this Type type, String enumValueName)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(type);
+#endif//DEBUG
             var fi = type.GetField(enumValueName, BindingFlags.Public | BindingFlags.Static);
             return fi?.XmlDoc();
         }
@@ -148,15 +184,7 @@ namespace SysWeaver.Docs
             var cache = FieldCache;
             if (cache.TryGetValue(mi, out var docType))
                 return docType;
-
-            foreach (var asm in GetAssemblies(mi.DeclaringType))
-            {
-                if (asm.Fields.TryGetValue(mi, out var t))
-                {
-                    docType = t;
-                    break;
-                }
-            }
+            docType = Find(Definition(mi), static x => x.Fields);
             cache.TryAdd(mi, docType);
             return docType;
         }
@@ -173,14 +201,7 @@ namespace SysWeaver.Docs
             var cache = PropertyCache;
             if (cache.TryGetValue(mi, out var docType))
                 return docType;
-            foreach (var asm in GetAssemblies(mi.DeclaringType))
-            {
-                if (asm.Properties.TryGetValue(mi, out var t))
-                {
-                    docType = t;
-                    break;
-                }
-            }
+            docType = Find(Definition(mi), static x => x.Properties);
             cache.TryAdd(mi, docType);
             return docType;
         }
@@ -197,14 +218,7 @@ namespace SysWeaver.Docs
             var cache = MethodCache;
             if (cache.TryGetValue(mi, out var docType))
                 return docType;
-            foreach (var asm in GetAssemblies(mi.DeclaringType))
-            {
-                if (asm.Methods.TryGetValue(mi, out var t))
-                {
-                    docType = t;
-                    break;
-                }
-            }
+            docType = Find(Definition(mi.IsConstructedGenericMethod ? mi.GetGenericMethodDefinition() : mi), static x => x.Methods);
             cache.TryAdd(mi, docType);
             return docType;
         }
@@ -253,14 +267,7 @@ namespace SysWeaver.Docs
             var cache = ConstructorCache;
             if (cache.TryGetValue(mi, out var docType))
                 return docType;
-            foreach (var asm in GetAssemblies(mi.DeclaringType))
-            {
-                if (asm.Constructors.TryGetValue(mi, out var t ))
-                {
-                    docType = t;
-                    break;
-                }
-            }
+            docType = Find(Definition(mi), static x => x.Constructors);
             cache.TryAdd(mi, docType);
             return docType;
         }
@@ -398,13 +405,16 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Matches the exact same member definition (same module and metadata token), regardless of the type it was reflected from.
+        /// </summary>
         sealed class MemberInfoComparer : IEqualityComparer<MemberInfo>
         {
             MemberInfoComparer()
             {
             }
 
-            public static MemberInfoComparer Comparer = new MemberInfoComparer();
+            public static readonly MemberInfoComparer Comparer = new MemberInfoComparer();
 
 
             bool IEqualityComparer<MemberInfo>.Equals(MemberInfo x, MemberInfo y)
@@ -413,7 +423,7 @@ namespace SysWeaver.Docs
                     return y == null;
                 if (y == null)
                     return false;
-                return x.MetadataToken == y.MetadataToken;
+                return (x.MetadataToken == y.MetadataToken) && (x.Module == y.Module);
             }
 
             int IEqualityComparer<MemberInfo>.GetHashCode(MemberInfo obj) => obj.MetadataToken;
@@ -557,10 +567,81 @@ namespace SysWeaver.Docs
             public override string ToString() => Name;
 
             public readonly ConcurrentDictionary<Type, DocInfo> Types = new();
-            public readonly ConcurrentDictionary<MethodInfo, DocMethodInfo> Methods = new ConcurrentDictionary<MethodInfo, DocMethodInfo>(new MethodInfoComparer());
-            public readonly ConcurrentDictionary<ConstructorInfo, DocMethodInfo> Constructors = new ConcurrentDictionary<ConstructorInfo, DocMethodInfo>(new ConstructorInfoComparer());
-            public readonly ConcurrentDictionary<FieldInfo, DocInfo> Fields = new ConcurrentDictionary<FieldInfo, DocInfo>(new FieldInfoComparer());
-            public readonly ConcurrentDictionary<PropertyInfo, DocInfo> Properties = new ConcurrentDictionary<PropertyInfo, DocInfo>(new PropertyInfoComparer());
+            /// <summary>
+            /// All documented fields, properties, methods and constructors, keyed by the exact member definition (tried first).
+            /// </summary>
+            public readonly ConcurrentDictionary<MemberInfo, DocInfo> Members = new ConcurrentDictionary<MemberInfo, DocInfo>(MemberInfoComparer.Comparer);
+            /// <summary>
+            /// Add the documentation of a member, both as an exact match and by name (for related type matches).
+            /// Only called while the documentation file is parsed (before the instance is published).
+            /// </summary>
+            public void Add<TM, TD>(RelatedMembers<TM, TD> related, TM mi, TD doc) where TM : MemberInfo where TD : DocInfo
+            {
+                Members.TryAdd(mi, doc);
+                related.Add(mi, doc);
+            }
+            //  The documented members by name, used if there is no exact match (ex: an undocumented override)
+            public readonly RelatedMembers<MethodInfo, DocMethodInfo> Methods = new RelatedMembers<MethodInfo, DocMethodInfo>(new MethodInfoComparer());
+            public readonly RelatedMembers<ConstructorInfo, DocMethodInfo> Constructors = new RelatedMembers<ConstructorInfo, DocMethodInfo>(new ConstructorInfoComparer());
+            public readonly RelatedMembers<FieldInfo, DocInfo> Fields = new RelatedMembers<FieldInfo, DocInfo>(new FieldInfoComparer());
+            public readonly RelatedMembers<PropertyInfo, DocInfo> Properties = new RelatedMembers<PropertyInfo, DocInfo>(new PropertyInfoComparer());
+        }
+
+        /// <summary>
+        /// The documented members of one kind in an assembly, by name.
+        /// Filled while the documentation file is parsed, read only afterwards (so no locking is needed).
+        /// </summary>
+        sealed class RelatedMembers<TM, TD> where TM : MemberInfo where TD : DocInfo
+        {
+            public RelatedMembers(IEqualityComparer<TM> sameSignature)
+            {
+                SameSignature = sameSignature;
+            }
+            readonly IEqualityComparer<TM> SameSignature;
+            readonly Dictionary<String, List<KeyValuePair<TM, TD>>> ByName = new Dictionary<String, List<KeyValuePair<TM, TD>>>(StringComparer.Ordinal);
+
+            public void Add(TM mi, TD doc)
+            {
+                var n = mi.Name;
+                if (!ByName.TryGetValue(n, out var l))
+                {
+                    l = new List<KeyValuePair<TM, TD>>(1);
+                    ByName.Add(n, l);
+                }
+                l.Add(new KeyValuePair<TM, TD>(mi, doc));
+            }
+
+            /// <summary>
+            /// Find documented members with the same signature in related types.
+            /// </summary>
+            /// <param name="def">The member to find</param>
+            /// <param name="best">The documentation of the closest base type (or interface) member found so far</param>
+            /// <param name="bestType">The declaring type of <paramref name="best"/></param>
+            /// <param name="other">The documentation of the first member of another related type (ex: a derived type) found so far</param>
+            public void Find(TM def, ref TD best, ref Type bestType, ref TD other)
+            {
+                if (!ByName.TryGetValue(def.Name, out var l))
+                    return;
+                var dt = def.DeclaringType;
+                foreach (var e in l)
+                {
+                    var em = e.Key;
+                    if (!SameSignature.Equals(em, def))
+                        continue;
+                    var et = em.DeclaringType;
+                    if (et.IsAssignableFrom(dt))
+                    {
+                        //  A base type or interface, prefer the closest one
+                        if ((bestType == null) || bestType.IsAssignableFrom(et))
+                        {
+                            best = e.Value;
+                            bestType = et;
+                        }
+                        continue;
+                    }
+                    other ??= e.Value;
+                }
+            }
         }
 
         static readonly ConcurrentDictionary<Assembly, DocAssembly> DocAssemblies = new ();
@@ -709,7 +790,7 @@ namespace SysWeaver.Docs
                                                         dt = new DocInfo(null, null);
                                                         types.TryAdd(t, dt);
                                                     }
-                                                    docAsm.Fields.TryAdd(mi, new DocInfo(Read(m, ElementSummary), Read(m, ElementRemarks)));
+                                                    docAsm.Add(docAsm.Fields, mi, new DocInfo(Read(m, ElementSummary), Read(m, ElementRemarks)));
                                                 }
                                                 break;
                                             case 'P':
@@ -725,7 +806,7 @@ namespace SysWeaver.Docs
                                                         dt = new DocInfo(null, null);
                                                         types.TryAdd(t, dt);
                                                     }
-                                                    docAsm.Properties.TryAdd(mi, new DocInfo(Read(m, ElementSummary), Read(m, ElementRemarks)));
+                                                    docAsm.Add(docAsm.Properties, mi, new DocInfo(Read(m, ElementSummary), Read(m, ElementRemarks)));
                                                 }
                                                 break;
                                             case 'M':
@@ -757,7 +838,7 @@ namespace SysWeaver.Docs
                                                                     sig += GenericParameter + mis.GetGenericArguments().Length;
                                                                 if (sig != mname)
                                                                     continue;
-                                                                var pm = String.Join(',', mis.GetParameters().Select(x => GetParamaterSig(x)));
+                                                                var pm = String.Join(',', mis.GetParameters().Select(x => GetParamaterSig(x))).Replace('+', '.');
                                                                 if (pm == argTypes)
                                                                 {
                                                                     ci = mis;
@@ -867,11 +948,11 @@ namespace SysWeaver.Docs
                                                         }
                                                     }
                                                     if (mi != null)
-                                                        docAsm.Methods.TryAdd(mi, new DocMethodInfo(Read(m, ElementSummary), Read(m, ElementRemarks), Read(m, ElementReturns), ps));
+                                                        docAsm.Add(docAsm.Methods, mi, new DocMethodInfo(Read(m, ElementSummary), Read(m, ElementRemarks), Read(m, ElementReturns), ps));
                                                     else
                                                     {
                                                         if (ci != null)
-                                                            docAsm.Constructors.TryAdd(ci, new DocMethodInfo(Read(m, ElementSummary), Read(m, ElementRemarks), Read(m, ElementReturns), ps));
+                                                            docAsm.Add(docAsm.Constructors, ci, new DocMethodInfo(Read(m, ElementSummary), Read(m, ElementRemarks), Read(m, ElementReturns), ps));
                                                     }
                                                 }
                                                 break;
@@ -884,7 +965,7 @@ namespace SysWeaver.Docs
                         {
                         }
                         if (!DocAssemblies.TryAdd(asm, docAsm))
-                            throw new Exception("Internal error!");
+                            throw new InvalidOperationException("Internal error, the documentation of " + asm.FullName + " was added twice!");
                     }
                 }
             }

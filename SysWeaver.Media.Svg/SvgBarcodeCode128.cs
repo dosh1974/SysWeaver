@@ -5,16 +5,30 @@ using System.Text;
 
 namespace SysWeaver.Media
 {
+    /// <summary>
+    /// Creates Code 128 bar codes as svg paths (one closed rectangle sub path per bar, no quiet zone, no text).
+    /// Only digits can be encoded (code set C, a trailing odd digit is encoded in code set A), optionally as GS1-128 (<see cref="GetGs1Path"/>).
+    /// </summary>
     public sealed class SvgBarcodeCode128
     {
+        /// <summary>
+        /// An instance with a module width of 1 and a height of 32
+        /// </summary>
         public static readonly SvgBarcodeCode128 Default = new();
 
 
+        /// <summary>
+        /// Create a bar code generator
+        /// </summary>
+        /// <param name="width">The width of a module (the most narrow bar), at least 0.001</param>
+        /// <param name="height">The bar height, at least 4 modules</param>
+        /// <param name="decimalCount">The maximum number of decimals in the path</param>
         public SvgBarcodeCode128(double width = 1, double height = 32, int decimalCount = 1)
         {
             Width = Math.Max(0.001, width);
             Height = Math.Max(Width * 4, height);
             DecimalMask = decimalCount <= 0 ? "0" : ("0." + new string('#', decimalCount));
+            width = Width;
             BarWidths = [0, width, width * 2, width * 3, width * 4, width * 5];
         }
 
@@ -25,34 +39,96 @@ namespace SysWeaver.Media
         String S(double v)
             => v.ToString(DecimalMask, CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Get the path of a bar code (only digits are supported)
+        /// </summary>
+        /// <param name="data">The data to encode, only the digits 0-9</param>
+        /// <param name="offsetX">The left position</param>
+        /// <param name="offsetY">The top position</param>
+        /// <returns>The svg path</returns>
+        /// <exception cref="NotSupportedException">The data contains other chars than digits (not implemented)</exception>
         public String GetPath(String data, double offsetX = 0, double offsetY = 0)
         {
-            if (data.IsNumeric())
+            if (data.IsNumeric(false))
                 return UnsafeGetCompactNumericPath(data, offsetX, offsetY);
             if (!data.IsAsciiOnly())
-                throw new Exception("Only ASCII data can be encoded ATM!");
+                throw new NotSupportedException("Only ASCII data can be encoded ATM!");
             //  TODO: Implement all
-            throw new NotImplementedException();
+            throw new NotSupportedException("Only digits can be encoded ATM!");
         }
 
+        /// <summary>
+        /// Get the path of a GS1-128 bar code: start C, FNC1, digit pairs in code set C, a trailing odd digit in code set A, checksum, stop.
+        /// The data is the concatenation of the application identifiers and their values (ex: "0109501101530003" for AI 01 (GTIN));
+        /// no FNC1 separators can be inserted, so a variable length field must be the last one.
+        /// </summary>
+        /// <param name="data">The data to encode, only the digits 0-9</param>
+        /// <param name="offsetX">The left position</param>
+        /// <param name="offsetY">The top position</param>
+        /// <returns>The svg path</returns>
+        /// <exception cref="ArgumentException">The data is empty or contains other chars than digits</exception>
         public String GetGs1Path(String data, double offsetX = 0, double offsetY = 0)
         {
-            if (!data.IsNumeric())
-                throw new Exception("Only numeric data can be encoded");
+            if (!data.IsNumeric(false))
+                throw new ArgumentException("Only numeric data can be encoded", nameof(data));
             return UnsafeGetGs1Path(data, offsetX, offsetY);
         }
 
+        /// <summary>
+        /// Get the path of a compact numeric bar code (code set C, a trailing odd digit is encoded in code set A)
+        /// </summary>
+        /// <param name="data">The data to encode, only the digits 0-9</param>
+        /// <param name="offsetX">The left position</param>
+        /// <param name="offsetY">The top position</param>
+        /// <returns>The svg path</returns>
+        /// <exception cref="ArgumentException">The data is empty or contains other chars than digits</exception>
         public String GetNumericPath(String data, double offsetX = 0, double offsetY = 0)
         {
-            if (!data.IsNumeric())
-                throw new Exception("Only numeric data can be encoded");
+            if (!data.IsNumeric(false))
+                throw new ArgumentException("Only numeric data can be encoded", nameof(data));
             return UnsafeGetCompactNumericPath(data, offsetX, offsetY);
         }
 
+        /// <summary>
+        /// Get the path of a compact numeric bar code without validating the data (other chars than digits gives an invalid bar code or an exception)
+        /// </summary>
+        /// <param name="data">The data to encode, only the digits 0-9</param>
+        /// <param name="offsetX">The left position</param>
+        /// <param name="offsetY">The top position</param>
+        /// <returns>The svg path</returns>
         public String UnsafeGetCompactNumericPath(String data, double offsetX = 0, double offsetY = 0)
         {
             List<int> codes = new List<int>();
             codes.Add(105);
+            AddNumeric(codes, data);
+            AddChecksumAndEnd(codes);
+            return Render(codes, offsetX, offsetY);
+        }
+
+        /// <summary>
+        /// Get the path of a GS1-128 bar code without validating the data (other chars than digits gives an invalid bar code or an exception), see <see cref="GetGs1Path"/>.
+        /// Encoded as: start C, FNC1, digit pairs (code set C), a trailing odd digit in code set A, checksum, stop.
+        /// </summary>
+        /// <param name="data">The data to encode, only the digits 0-9 (application identifiers and their data)</param>
+        /// <param name="offsetX">The left position</param>
+        /// <param name="offsetY">The top position</param>
+        /// <returns>The svg path</returns>
+        public String UnsafeGetGs1Path(String data, double offsetX = 0, double offsetY = 0)
+        {
+            List<int> codes = new List<int>();
+            codes.Add(105);
+            //  FNC1 directly after the start marks the bar code as GS1-128
+            codes.Add(102);
+            AddNumeric(codes, data);
+            AddChecksumAndEnd(codes);
+            return Render(codes, offsetX, offsetY);
+        }
+
+        /// <summary>
+        /// Add digits when in code set C: digit pairs, a trailing odd digit in code set A (switch with 101)
+        /// </summary>
+        static void AddNumeric(List<int> codes, String data)
+        {
             var l = data.Length;
             var s2 = l >> 1;
             int o = 0;
@@ -76,22 +152,6 @@ namespace SysWeaver.Media
                     codes.Add(ca);
                 }
             }
-            AddChecksumAndEnd(codes);
-            return Render(codes, offsetX, offsetY);
-        }
-
-        public String UnsafeGetGs1Path(String data, double offsetX = 0, double offsetY = 0)
-        {
-            List<int> codes = new List<int>();
-            codes.Add(103);
-            var l = data.Length;
-            for (int i = 0; i < l; ++i)
-            {
-                int ca = data[i] - '0' + 16;
-                codes.Add(ca);
-            }
-            AddChecksumAndEnd(codes);
-            return Render(codes, offsetX, offsetY);
         }
 
 
@@ -144,7 +204,13 @@ namespace SysWeaver.Media
 
 
 
+        /// <summary>
+        /// The width of a module (the most narrow bar)
+        /// </summary>
         public readonly double Width;
+        /// <summary>
+        /// The bar height
+        /// </summary>
         public readonly double Height;
 
         static readonly int[] Widths =

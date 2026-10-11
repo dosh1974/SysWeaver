@@ -69,7 +69,8 @@ namespace SysWeaver
         /// Make a path relative to the current path if it's not already rooted
         /// </summary>
         /// <param name="path">A relative or rooted path</param>
-        /// <returns>A rooted path (a rooted input is returned as is, without any normalization)</returns>
+        /// <returns>A rooted path (a rooted input is returned as is, without any normalization).
+        /// The path is resolved by <see cref="Path.GetFullPath(string)"/>, so only the directory separators of the OS are used: on Linux "a\b.txt" is a single file name.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
         /// <exception cref="ArgumentException"><paramref name="path"/> contains invalid characters (ex: '\0').</exception>
         public static String RootCurrent(string path)
@@ -161,6 +162,11 @@ namespace SysWeaver
         /// <param name="filename">The filename to test</param>
         /// <returns>True if valid (no invalid file name or path chars, and no volume, path or directory separators), only way to make sure is to actuallty try to use it though.
         /// An empty string is considered valid.</returns>
+        /// <remarks>
+        /// The rules of the OS that the process runs on are used (<see cref="Path.GetInvalidFileNameChars"/>, <see cref="Path.GetInvalidPathChars"/> and the separators of <see cref="Path"/>):
+        /// on Windows the control chars (0-31), '"', '&lt;', '&gt;', '|', '*', '?', ':', ';', '\' and '/' are invalid,
+        /// on Linux (and other Unix platforms) only '\0', '/' and ':' (the path separator) are invalid, so ex: "a\b", "a*b" or "a|b" are valid file names there.
+        /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null.</exception>
         public static bool IsValidFilename(String filename)
         {
@@ -175,6 +181,10 @@ namespace SysWeaver
         /// <returns>True if valid, only way to make sure is to actuallty try to use it though.
         /// Invalid paths contains invalid path chars, a path separator (';' on Windows), more than one ':' or two consecutive directory separators (except at the start, to allow UNC paths).
         /// An empty string is considered valid.</returns>
+        /// <remarks>
+        /// The rules of the OS that the process runs on are used: on Windows the invalid chars are '|', '\0', the control chars and ';', and both '\' and '/' are directory separators.
+        /// On Linux (and other Unix platforms) the invalid chars are '\0' and ':' (the path separator, so a Windows path like "C:\Windows" is invalid) and only '/' is a directory separator ('\' is a valid file name char).
+        /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="dirPath"/> is null.</exception>
         public static bool IsValidFolderPath(String dirPath)
         {
@@ -187,7 +197,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fullPath">The path to the file to test</param>
         /// <returns>True if valid, only way to make sure is to actuallty try to use it though.
-        /// The part after the last volume or directory separator must be a valid file name (see <see cref="IsValidFilename(string)"/>) and the part before it must be a valid folder path (see <see cref="IsValidFolderPath(string)"/>).</returns>
+        /// The part after the last volume or directory separator must be a valid file name (see <see cref="IsValidFilename(string)"/>) and the part before it must be a valid folder path (see <see cref="IsValidFolderPath(string)"/>).
+        /// The rules (separators and invalid chars) of the OS that the process runs on are used, on Linux a Windows path like "C:\Filename.txt" is invalid (':') and "a\b.txt" is a valid file name.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="fullPath"/> is null.</exception>
         public static bool IsValidFilePath(String fullPath)
         {
@@ -205,7 +216,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="s">The string to make into a safe filename, can be null or empty</param>
         /// <returns>A string of the same length as the input where every char that is invalid in a file name (see <see cref="IsValidFilename(string)"/>) is replaced with a '_'.
-        /// If no chars needs to be replaced (or if the input is null or empty) the input instance is returned</returns>
+        /// If no chars needs to be replaced (or if the input is null or empty) the input instance is returned.
+        /// The rules of the OS that the process runs on are used: on Linux only '\0', '/' and ':' are replaced (ex: "a\b*c" is kept as is), so the result may not be a valid file name on Windows.</returns>
         public static String SafeFilename(String s)
         {
             if (String.IsNullOrEmpty(s))
@@ -220,9 +232,10 @@ namespace SysWeaver
         /// <summary>
         /// Validate that the path doesn't contain ".", ".." or any invalid chars, including volume separator
         /// </summary>
-        /// <param name="s">A relative path, using <see cref="Path.DirectorySeparatorChar"/> as the separator, ex: "Sub\Folder\File.txt"</param>
+        /// <param name="s">A relative path, using <see cref="Path.DirectorySeparatorChar"/> as the separator, ex: "Sub\Folder\File.txt" (Windows) or "Sub/Folder/File.txt" (Linux)</param>
         /// <returns>True if every part (separated by <see cref="Path.DirectorySeparatorChar"/>) is a non-empty valid file name (see <see cref="IsValidFilename(string)"/>) that isn't "." or "..".
-        /// An empty string, a leading or trailing separator or two consecutive separators makes the path invalid.</returns>
+        /// An empty string, a leading or trailing separator or two consecutive separators makes the path invalid.
+        /// The alternative separator ('/' on Windows) is not a separator, it's an invalid file name char on Windows. On Linux '\' is a valid file name char, so ex: "..\a" is a single (valid) name.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="s"/> is null.</exception>
         public static bool IsValidSubPath(String s)
         {
@@ -252,7 +265,8 @@ namespace SysWeaver
         /// Get the full directory name (fixes casing)
         /// </summary>
         /// <param name="directoryName">Name of an absolute or relative directory</param>
-        /// <returns>A full directory name with correct case (the casing of the parts that doesn't exist is kept as is)</returns>
+        /// <returns>A full directory name with correct case (the casing of the parts that doesn't exist is kept as is).
+        /// On case sensitive file systems (Linux) a part with another casing is another (missing) entry, so the casing is kept as is.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="directoryName"/> is null.</exception>
         /// <exception cref="ArgumentException"><paramref name="directoryName"/> is empty or contains invalid characters (ex: '\0').</exception>
         /// <exception cref="PathTooLongException">The path is too long.</exception>
@@ -266,7 +280,8 @@ namespace SysWeaver
         /// Get the full file name (fixes casing)
         /// </summary>
         /// <param name="fileName">Name of an absolute or relative file</param>
-        /// <returns>A full file name with correct case (the casing of the parts that doesn't exist is kept as is)</returns>
+        /// <returns>A full file name with correct case (the casing of the parts that doesn't exist is kept as is).
+        /// On case sensitive file systems (Linux) a part with another casing is another (missing) entry, so the casing is kept as is.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="fileName"/> is null.</exception>
         /// <exception cref="ArgumentException"><paramref name="fileName"/> is empty or contains invalid characters (ex: '\0').</exception>
         /// <exception cref="PathTooLongException">The path is too long.</exception>
@@ -277,8 +292,14 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// True if the file system is assumed to be case insensitive (same as <see cref="MatchCasing.PlatformDefault"/>: Windows and Apple platforms)
+        /// </summary>
+        static readonly bool CaseInsensitiveFileSystem = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsIOS() || OperatingSystem.IsTvOS() || OperatingSystem.IsWatchOS();
+
+        /// <summary>
         /// Use the casing of the file system for all existing parts of a full path (the root is kept as is).
         /// A name containing wild cards ('*' or '?', only valid on non-Windows file systems) is matched by name only (not used as a search pattern).
+        /// On case sensitive platforms (ex: Linux) only exact matches exist, so the casing is never changed.
         /// </summary>
         /// <param name="full">A full path</param>
         /// <returns>The path with the casing of the existing parts fixed</returns>
@@ -303,8 +324,10 @@ namespace SysWeaver
                     else
                     {
                         //  Wild cards are valid file name chars on some file systems, don't use the name as a search pattern
-                        m = di.EnumerateFileSystemInfos().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.Ordinal))
-                            ?? di.EnumerateFileSystemInfos().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                        m = di.EnumerateFileSystemInfos().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.Ordinal));
+                        //  Only match another casing on file systems that are case insensitive (on Linux it's another file)
+                        if ((m == null) && CaseInsensitiveFileSystem)
+                            m = di.EnumerateFileSystemInfos().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
                     }
                 }
                 return Path.Combine(p, m?.Name ?? name) + full.Substring(t.Length);
@@ -479,6 +502,7 @@ namespace SysWeaver
         /// <summary>
         /// Delete a file if it exists.
         /// If it fails, it's retried (up to retryCount attempts in total).
+        /// On Windows a file that is open without <see cref="FileShare.Delete"/> can't be deleted, on Linux an open file can always be deleted (unlinked, open handles stay valid).
         /// </summary>
         /// <param name="filename">The file to delete</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
@@ -509,6 +533,7 @@ namespace SysWeaver
         /// <summary>
         /// Delete a file if it exists.
         /// If it fails, it's retried (up to retryCount attempts in total).
+        /// On Windows a file that is open without <see cref="FileShare.Delete"/> can't be deleted, on Linux an open file can always be deleted (unlinked, open handles stay valid).
         /// </summary>
         /// <param name="filename">The file to delete</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
@@ -551,6 +576,7 @@ namespace SysWeaver
                 dir.Create();
             File.Copy(source, dest, true);
             //di = new FileInfo(dest);
+            //  The creation time first: on Linux it can't be set, .NET sets the last write time instead
             di.CreationTimeUtc = ct;
             di.LastWriteTimeUtc = lwt;
             di.LastAccessTimeUtc = la;
@@ -649,6 +675,7 @@ namespace SysWeaver
         /// <summary>
         /// Try to copy a file (the destination folder is created if needed, a read only destination is overwritten and the file times of the source are applied to the destination).
         /// If it fails, it's retried (up to retryCount attempts in total).
+        /// On Linux the creation (birth) time can't be set (.NET sets the last write time instead), so only the last write and last access times are applied.
         /// </summary>
         /// <param name="source">The file to copy</param>
         /// <param name="dest">The file to overwrite or create</param>
@@ -672,6 +699,7 @@ namespace SysWeaver
         /// <summary>
         /// Try to copy a file (the destination folder is created if needed, a read only destination is overwritten and the file times of the source are applied to the destination).
         /// If it fails, it's retried (up to retryCount attempts in total).
+        /// On Linux the creation (birth) time can't be set (.NET sets the last write time instead), so only the last write and last access times are applied.
         /// </summary>
         /// <param name="source">The file to copy</param>
         /// <param name="dest">The file to overwrite or create</param>
@@ -1148,15 +1176,16 @@ namespace SysWeaver
                 var di = new DirectoryInfo(dest);
                 var fi = new DirectoryInfo(f);
                 di.Attributes = fi.Attributes;
-                di.LastWriteTimeUtc = fi.LastWriteTimeUtc;
+                //  The creation time first: on Linux it can't be set, .NET sets the last write time instead
                 di.CreationTimeUtc = fi.CreationTimeUtc;
+                di.LastWriteTimeUtc = fi.LastWriteTimeUtc;
             }
         }
 
 
         /// <summary>
         /// Make a copy of a folder (recursively, existing files in the destination are overwritten).
-        /// File times are kept for files (by <see cref="File.Copy(string, string, bool)"/>), attributes and times are copied for sub folders.
+        /// File times are kept for files (by <see cref="File.Copy(string, string, bool)"/>), attributes and times are copied for sub folders (on Linux only the last write time, the creation time can't be set).
         /// </summary>
         /// <param name="from">The existing folder that should be copied</param>
         /// <param name="to">The desired name of the target folder</param>
@@ -1276,6 +1305,9 @@ namespace SysWeaver
         /// Applying the rule to an existing folder also propagates it to the existing files and sub folders that inherit permissions (Windows does this when the security descriptor is written).
         /// A rule added by older versions (using <see cref="PropagationFlags.NoPropagateInherit"/>, only inherited by direct children) is replaced.
         /// Granting everyone full control makes the folder writable by any local user, only use it for data that isn't security sensitive.
+        /// On Linux the mode bits (rwx for everyone and setgid on folders, rw on files) are applied to the folder and all of it's content, but only the owner (or root) can change them,
+        /// and the default ACL (for entries created later) requires the "setfacl" tool (package "acl"): if it's missing, the mode bits are still applied but false is returned.
+        /// If the platform assembly (SysWeaver.Common.Linux) isn't deployed, nothing is done and true is returned.
         /// </remarks>
         /// <param name="folder">The folder</param>
         /// <returns>True if successful (or if the folder doesn't exist or the platform has no implementation), false on error (never throws)</returns>
@@ -1340,12 +1372,17 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Disable content indexing of a folder
+        /// Disable content indexing of a folder (sets the <see cref="FileAttributes.NotContentIndexed"/> attribute on Windows).
+        /// On other platforms there is no such attribute, nothing is done and true is returned (the attributes aren't written back,
+        /// on Unix .NET would map the <see cref="FileAttributes.ReadOnly"/> attribute to the mode bits).
         /// </summary>
         /// <param name="folder">The folder</param>
-        /// <returns>True if successful (or if the folder doesn't exist), false on error (never throws)</returns>
+        /// <returns>True if successful (or if the folder doesn't exist or the platform has no such attribute), false on error (never throws)</returns>
         public static bool DisableIndexing(String folder)
         {
+            //  Windows only attribute, .NET ignores it on other platforms (but writing the attributes may change the mode bits)
+            if (!OperatingSystem.IsWindows())
+                return true;
             try
             {
                 var dInfo = new DirectoryInfo(folder);
@@ -1385,10 +1422,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Set up a folder for data: disable content indexing and allow it to be accessed by everyone (see <see cref="AllowAllAccess(string)"/>)
+        /// Set up a folder for data: disable content indexing (see <see cref="DisableIndexing(string)"/>) and allow it to be accessed by everyone (see <see cref="AllowAllAccess(string)"/>)
         /// </summary>
         /// <param name="path">The folder</param>
-        /// <returns>True if successful, false on error (never throws)</returns>
+        /// <returns>True if successful, false on error (never throws). On Linux false is returned if the default ACL can't be set ("setfacl" not installed), see <see cref="AllowAllAccess(string)"/></returns>
         public static bool SetupDataFolder(String path)
         {
             bool r = PathExt.AllowAllAccess(path);
@@ -1400,6 +1437,7 @@ namespace SysWeaver
         /// Get the directory name and file mask from a path (typically containing wild cards).
         /// Example: "D:\Temp\*.png" => "D:\Temp" and fileMask = "*.png".
         /// Handles cases like having no directory (uses Environment.CurrentDirectory), ex: "*.png", "..\*.txt", ".\*.exe", "Sub\*.jpg" and so on.
+        /// Only the separators of the OS that the process runs on are used ('\', '/' and ':' on Windows, '/' on Linux, where ex: "Sub\*.jpg" is a mask in the current directory, '\' being a valid file name char).
         /// </summary>
         /// <param name="pathWithMask">Path (directory and file mask), ex: "D:\Temp\*.png"</param>
         /// <param name="fileMask">Will be filled in with the file mask</param>

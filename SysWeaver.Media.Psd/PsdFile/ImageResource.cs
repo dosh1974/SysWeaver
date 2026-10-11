@@ -233,11 +233,17 @@ namespace PhotoshopFile
     {
     }
 
+    /// <summary>
+    /// Get the first resource with the given ID, or null.
+    /// </summary>
     public ImageResource Get(ResourceID id)
     {
       return Find(x => x.ID == id);
     }
 
+    /// <summary>
+    /// Add a resource, or replace the resource(s) with the same ID (all of them, the new one is placed at the position of the first).
+    /// </summary>
     public void Set(ImageResource resource)
     {
       Predicate<ImageResource> matchId = delegate(ImageResource res)

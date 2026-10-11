@@ -459,7 +459,7 @@
             </summary>
             <param name="sourceStream"></param>
             <param name="props">The properties, if null the default properties will be used (recommended)</param>
-            <returns>True if the chunks was added, elase false</returns>
+            <returns>The number of chunks added, or -1 if the function fails to add a chunk</returns>
         </member>
         <member name="M:SysWeaver.ContentDependentChunking.GetCutSize(System.Span{System.Byte},SysWeaver.CdcProps)">
             <summary>

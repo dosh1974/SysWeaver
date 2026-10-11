@@ -12,7 +12,7 @@ namespace SysWeaver.Data
     /// </summary>
     /// <remarks>
     /// All methods return a new table and never modify the source table, but cell values (and column objects) are shared, not cloned.
-    /// Column names are matched case sensitive (ordinal). The resulting tables do not keep the <see cref="CommonTableData.Title"/> (except <see cref="Filter(BaseTableData, TableDataOrderRequest)"/>).
+    /// Column names are matched case sensitive (ordinal). The resulting tables do not keep the <see cref="CommonTableData.Title"/> (except <see cref="Filter(BaseTableData, TableDataOrderRequest, long)"/>).
     /// Used by the "EditTableData" web API through <see cref="ApplyOps(BaseTableData, Func{String, BaseTableData}, TableDataOp[])"/>.
     /// </remarks>
     public static class TableDataEdit
@@ -25,7 +25,8 @@ namespace SysWeaver.Data
         /// <param name="data">The table to manipulate</param>
         /// <param name="columnNames">The columns to keep (in desired order), the same column may be selected multiple times</param>
         /// <returns>A new table with only the selected columns, an empty table (no columns or rows) if <paramref name="columnNames"/> is empty</returns>
-        /// <exception cref="Exception">If the table have no columns or if a column name isn't found</exception>
+        /// <exception cref="ArgumentException">If the table have no columns or if a column name isn't found</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is null (DEBUG builds only).</exception>
         public static BaseTableData SelectColumns(this BaseTableData data, params String[] columnNames)
         {
             var lookup = BuildLookUpValidateNames(data, columnNames);
@@ -54,7 +55,8 @@ namespace SysWeaver.Data
         /// <param name="data">The table to manipulate</param>
         /// <param name="columnNames">The columns to remove (duplicates are ignored)</param>
         /// <returns>A new table without the selected columns, an empty table (no columns or rows) if all columns are removed</returns>
-        /// <exception cref="Exception">If the table have no columns or if a column name isn't found</exception>
+        /// <exception cref="ArgumentException">If the table have no columns or if a column name isn't found</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is null (DEBUG builds only).</exception>
         public static BaseTableData RemoveColumns(this BaseTableData data, params String[] columnNames)
         {
             BuildLookUpValidateNames(data, columnNames);
@@ -92,13 +94,20 @@ namespace SysWeaver.Data
         /// <param name="columns">The columns to add (processed in order, a later column may be positioned relative to an earlier new column)</param>
         /// <returns>A new table with the added columns</returns>
         /// <exception cref="ArgumentException">If a new column name already exists, a referenced insert position column isn't found,
-        /// the column type is unknown (resolved using TypeFinder) or the expression can't be compiled</exception>
-        /// <exception cref="Exception">If the table have no columns</exception>
+        /// the column type is unknown (resolved using TypeFinder), an expression is given for a non numeric column type (ex: String),
+        /// the expression can't be compiled (ex: syntax error, unknown variable) or the expression references a usable column whose name is reserved by the evaluator (a constant, ex: "E", "PI").</exception>
+        /// <exception cref="ArgumentException">If the table have no columns</exception>
+        /// <exception cref="OverflowException">A computed value doesn't fit in the column type (integer types are evaluated using 64-bit integers).</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is null (DEBUG builds only).</exception>
         /// <remarks>
         /// Expression variables are the names of existing columns (and new columns defined earlier in <paramref name="columns"/>) whose values
-        /// can be converted to the new column type, other columns are silently unavailable.
-        /// If the expression is empty, the type have no expression evaluator, or no column can be used as a variable,
-        /// the default value of the type is used for all rows.
+        /// can be converted to the new column type, other columns are unavailable (using one is an unknown identifier).
+        /// Only the columns referenced by the expression are used, so other columns may have any name.
+        /// Names are resolved like the evaluator does: a function call (ex: "Max(A, B)") is always the function, even if a column is named "Max";
+        /// an evaluator constant name (ex: "E", "PI", "Tau" for Double / Single columns) used in an expression that also matches a usable column is ambiguous and throws an <see cref="ArgumentException"/>
+        /// (if no usable column has that name, the constant is used).
+        /// A constant expression (ex: "1 + 2") is evaluated for every row. If the expression is empty, the default value of the type is used for all rows.
+        /// The computed values are converted to the column type.
         /// A null <see cref="TableDataBaseColumn.Desc"/> defaults to the expression and a null <see cref="TableDataColumn.Title"/> to the de-camel-cased name.
         /// </remarks>
         public static BaseTableData AddColumns(this BaseTableData data, params NewTableDataColumn[] columns)
@@ -151,8 +160,6 @@ namespace SysWeaver.Data
                     ncol.Title = StringTools.RemoveCamelCase(col.Name);
                 destLookUp[col.Name] = Tuple.Create(ncol, index);
             }
-            var destLen = destLookUp.Count;
-
             Func<Object[], Object>[] setExp = new Func<object[], object>[newCount];
             var invalid = new HashSet<String>(columns.Select(x => x.Name), StringComparer.Ordinal);
             int[] newPos = new int[newCount];
@@ -173,35 +180,47 @@ namespace SysWeaver.Data
                         var evType = ExpressionEvaluator.Get(type);
                         if (evType != null)
                         {
-                            List<String> varNames = new(destLen);
-                            List<Tuple<int, Func<Object, Object>>> vars = new(destLen);
-                            foreach (var tcol in destLookUp)
+                            //  Only the columns that the expression references are passed as variables (tabledata-cov-5),
+                            //  so a column named like an evaluator constant or function (ex: "E", "PI", "Max") or with a name that isn't a valid identifier doesn't break other expressions.
+                            //  Known identifiers (functions, constants) are tokenized as such, unknown identifiers as operands (only identifier operands are column candidates).
+                            //  A reference to a column named like a constant (ex: "E") is ambiguous: passing it as a variable throws (reserved name) instead of silently using the constant.
+                            List<String> varNames = new();
+                            List<Tuple<int, Func<Object, Object>>> vars = new();
+                            HashSet<String> seen = null;
+                            foreach (var token in evType.ToTokens(exp, true))
                             {
-                                var name = tcol.Key;
+                                if (token.Item1 != TokenClasses.Operand)
+                                    continue;
+                                var name = token.Item4;
+                                if (!StringTokenizerHelper.IsValidIdentiferCharFirst(name[0]))
+                                    continue;
                                 if (invalid.Contains(name))
                                     continue;
-                                var c = ObjectConverter.TryGetConverter(TypeFinder.Get(tcol.Value.Item1.Type), type);
+                                if (!destLookUp.TryGetValue(name, out var tcol))
+                                    continue;
+                                seen ??= new HashSet<String>(StringComparer.Ordinal);
+                                if (!seen.Add(name))
+                                    continue;
+                                var c = ObjectConverter.TryGetConverter(TypeFinder.Get(tcol.Item1.Type), type);
                                 if (c != null)
                                 {
                                     varNames.Add(name);
-                                    vars.Add(Tuple.Create(tcol.Value.Item2, c));
+                                    vars.Add(Tuple.Create(tcol.Item2, c));
                                 }
                             }
+                            //  Compiled even without variables (a constant expression, tabledata-cov-18)
                             var varCount = varNames.Count;
-                            if (varCount > 0)
+                            var ev = evType.ObjectEvaluator(exp, varNames);
+                            var varTemp = new Object[varCount];
+                            setExp[i] = values =>
                             {
-                                var ev = evType.ObjectEvaluator(exp, varNames);
-                                var varTemp = new Object[varCount];
-                                setExp[i] = values =>
+                                for (int k = 0; k < varCount; ++k)
                                 {
-                                    for (int k = 0; k < varCount; ++k)
-                                    {
-                                        var p = vars[k];
-                                        varTemp[k] = p.Item2(values[p.Item1]);
-                                    }
-                                    return ev(varTemp);
-                                };
-                            }
+                                    var p = vars[k];
+                                    varTemp[k] = p.Item2(values[p.Item1]);
+                                }
+                                return Convert.ChangeType(ev(varTemp), type);
+                            };
                         }
                     }
                     catch (Exception ex)
@@ -248,17 +267,17 @@ namespace SysWeaver.Data
         /// <param name="data">The table to append data to (at end), it's columns are used for the result</param>
         /// <param name="dataToAppend">The data to append</param>
         /// <returns>A new table with the rows of both tables (row objects are shared, not copied)</returns>
-        /// <exception cref="Exception">If the column count or any column type differs</exception>
+        /// <exception cref="ArgumentException">If the column count or any column type differs</exception>
         public static BaseTableData Append(this BaseTableData data, BaseTableData dataToAppend)
         {
             var dcols = data.Cols;
             var scols = dataToAppend.Cols;
             var colCount = dcols.Length;
             if (colCount != scols.Length)
-                throw new Exception("Tables must have matching columns, column counts are " + colCount + " and " + scols.Length);
+                throw new ArgumentException("Tables must have matching columns, column counts are " + colCount + " and " + scols.Length, nameof(dataToAppend));
             for (int i = 0; i < colCount; ++i)
                 if (dcols[i].Type != scols[i].Type)
-                    throw new Exception("Tables must have mathing columns, column " + i + " have the types " + dcols[i].Type.ToQuoted() + " and " + scols[i].Type.ToQuoted());
+                    throw new ArgumentException("Tables must have matching columns, column " + i + " have the types " + dcols[i].Type.ToQuoted() + " and " + scols[i].Type.ToQuoted(), nameof(dataToAppend));
             var drows = data.Rows;
             var srows = dataToAppend.Rows;
             var dc = drows.Length;
@@ -280,15 +299,22 @@ namespace SysWeaver.Data
         /// </summary>
         /// <param name="data">The table to filter</param>
         /// <param name="r">The filter, order, start row and max row count options</param>
-        /// <returns>A new table, as returned by <see cref="TableDataTools.GetStaticTableFn(TableDataColumn[], IEnumerable{object[]}, string)"/></returns>
-        public static BaseTableData Filter(this BaseTableData data, TableDataOrderRequest r)
+        /// <param name="maxAllowedRows">Cap on the number of returned rows, zero or negative (the default) means no cap.
+        /// Pass <see cref="TableDataTools.DefaultMaxAllowedRows"/> when the result is returned to a client (a request with no limit, or above the cap, then gets the cap).</param>
+        /// <returns>A new table, as returned by <see cref="TableDataTools.GetStaticTableFn(TableDataColumn[], IEnumerable{object[]}, string, long)"/></returns>
+        /// <remarks>
+        /// By default this is a server side operation on a table that is already in memory, so the result is not capped:
+        /// a <see cref="TableDataOrderRequest.MaxRowCount"/> of zero or less keeps all (remaining) rows (<see cref="ApplyOps"/> uses this).
+        /// The result never has more rows than <paramref name="data"/>.
+        /// </remarks>
+        public static BaseTableData Filter(this BaseTableData data, TableDataOrderRequest r, long maxAllowedRows = 0)
         {
             var t = new TableDataRequest();
             t.Filters = r.Filters;
             t.Order = r.Order;
             t.Row = r.Row;
             t.MaxRowCount = r.MaxRowCount;
-            return TableDataTools.GetStaticTableFn(data.Cols, data.Rows.Select(x => x.Values), data.Title)(t);
+            return TableDataTools.GetStaticTableFn(data.Cols, data.Rows.Select(x => x.Values), data.Title, maxAllowedRows)(t);
         }
 
         /// <summary>
@@ -326,7 +352,7 @@ namespace SysWeaver.Data
         /// If a column exist in both tables, use a prefix of '-' to take it from the first or '+' to take it from the other table.
         /// A name without prefix is taken from the first table if it exists there, else from the other table.</param>
         /// <returns>A new table with the selected columns, an empty table (no columns or rows) if <paramref name="columnNames"/> is empty</returns>
-        /// <exception cref="Exception">If the row counts differ or a table have no columns</exception>
+        /// <exception cref="ArgumentException">If the row counts differ or a table have no columns</exception>
         /// <exception cref="KeyNotFoundException">If a column name isn't found</exception>
         public static BaseTableData MergeColumns(this BaseTableData data, BaseTableData other, params String[] columnNames)
         {
@@ -334,10 +360,10 @@ namespace SysWeaver.Data
             var rows2 = other.Rows;
             var rowCount = rows1.Length;
             if (rows2.Length != rowCount)
-                throw new Exception("Tables must have the same number of rows, got " + rowCount + " and " + rows2.Length);
+                throw new ArgumentException("Tables must have the same number of rows, got " + rowCount + " and " + rows2.Length, nameof(other));
 
-            var lookup1 = BuildLookUp(data);
-            var lookup2 = BuildLookUp(other);
+            var lookup1 = BuildLookUp(data, nameof(data));
+            var lookup2 = BuildLookUp(other, nameof(other));
             var newCount = columnNames.Length;
             if (newCount <= 0)
                 return new BaseTableData();
@@ -468,11 +494,14 @@ namespace SysWeaver.Data
 
         #region Helpers
 
-        static Dictionary<String, Tuple<TableDataColumn, int>> BuildLookUp(BaseTableData data)
+        static Dictionary<String, Tuple<TableDataColumn, int>> BuildLookUp(BaseTableData data, String paramName)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(data, paramName);
+#endif//DEBUG
             var cols = data.Cols;
             if (cols == null)
-                throw new Exception("Can only manipulate complete tables!");
+                throw new ArgumentException("Can only manipulate complete tables (with columns)!", paramName);
             var count = cols.Length;
             Dictionary<String, Tuple<TableDataColumn, int>> lookup = new(count, StringComparer.Ordinal);
             for (int i = 0; i < count; ++i)
@@ -485,10 +514,10 @@ namespace SysWeaver.Data
 
         static Dictionary<String, Tuple<TableDataColumn, int>> BuildLookUpValidateNames(BaseTableData data, params String[] columnNames)
         {
-            var lookup = BuildLookUp(data);
+            var lookup = BuildLookUp(data, nameof(data));
             foreach (var name in columnNames)
                 if (!lookup.TryGetValue(name, out var _))
-                    throw new Exception("Column name " + name.ToQuoted() + " is NOT found in the table!");
+                    throw new ArgumentException("Column name " + name.ToQuoted() + " is NOT found in the table!", nameof(columnNames));
             return lookup;
         }
 

@@ -118,7 +118,7 @@ namespace SysWeaver.Data
         /// <see cref="TableDataExportOptions.Custom"/> is used as a prefix for every line (ex: for indentation or quoting),
         /// <see cref="TableDataExportOptions.NoHeaders"/> only removes the header emphasis, a header line is always written (required by Markdown).</param>
         /// <returns>The Markdown text.</returns>
-        /// <remarks>Every row must have at least as many values as there are columns.</remarks>
+        /// <remarks>Missing values (rows shorter than the column count, or rows without values) are written as empty cells, values beyond the column count are ignored.</remarks>
         public String GetMarkDownText(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             //  Measure and get data

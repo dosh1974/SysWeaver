@@ -14,7 +14,7 @@ namespace SysWeaver.Security
     /// </remarks>
     public sealed class WindowsFirewallHandler : IFirewallHandler
     {
-        /// <summary>
+        /// <summary>I still need the Legacy e
         /// The singleton instance.
         /// </summary>
         public static readonly IFirewallHandler Instance = new WindowsFirewallHandler();
@@ -165,7 +165,11 @@ namespace SysWeaver.Security
         /// <param name="ruleName">The name of the rule</param>
         /// <param name="msg">Optional message handler</param>
         /// <param name="messagePrefix">The prefix to use for messages, null for the default</param>
-        /// <returns>True if the rule was deleted</returns>
+        /// <returns>True if the rule was deleted or if no rule with that name exists, false if the delete failed (ex: not elevated)</returns>
+        /// <remarks>
+        /// If "netsh advfirewall firewall delete rule" fails, "netsh advfirewall firewall show rule" checks if a rule with that name exists
+        /// (its exit code is 1 when no rule matches, this doesn't depend on the language of the output and doesn't need elevation).
+        /// </remarks>
         public bool Remove(string ruleName, IMessageHost msg = null, string messagePrefix = null)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
@@ -177,6 +181,12 @@ namespace SysWeaver.Security
             if (r == 0)
             {
                 msg?.AddMessage(p + "Deleted firewall rule " + qn);
+                return true;
+            }
+            //  Failed, check if a rule with that name exists at all
+            if (ExternalProcess.Run("netsh", "advfirewall firewall show rule name=" + qn) == 1)
+            {
+                msg?.AddMessage(p + "Firewall rule " + qn + " doesn't exist", MessageLevels.Debug);
                 return true;
             }
             if (msg != null)
@@ -194,7 +204,7 @@ namespace SysWeaver.Security
 
 
     /// <summary>
-    /// A firewall handler for platforms without firewall support, every operation logs a warning and fails.
+    /// A firewall handler for platforms without firewall support (ex: macOS), every operation logs a warning and fails.
     /// </summary>
     public sealed class NoFirewallHandler : IFirewallHandler
     {
@@ -221,7 +231,8 @@ namespace SysWeaver.Security
     }
 
     /// <summary>
-    /// A firewall handler that forwards to the handler for the current platform (<see cref="WindowsFirewallHandler"/> on Windows, else <see cref="NoFirewallHandler"/>).
+    /// A firewall handler that forwards to the handler for the current platform (<see cref="WindowsFirewallHandler"/> on Windows,
+    /// <see cref="LinuxFirewallHandler"/> on Linux, else <see cref="NoFirewallHandler"/>, ex: on macOS).
     /// </summary>
     public sealed class FirewallHandler : IFirewallHandler
     {
@@ -235,19 +246,23 @@ namespace SysWeaver.Security
         {
             var rs = Handlers;
             var r = rs.Count;
-            return String.Concat(r, r == 1 ? " supported platform: " : " supported platforms: ", String.Join(", ", rs.Select(x => x.Key.ToString().ToQuoted())));
+            return String.Concat(r, r == 1 ? " supported platform: " : " supported platforms: ", String.Join(", ", rs.Select(x => x.Key.ToQuoted())));
         }
 
-        static readonly IReadOnlyDictionary<PlatformID, IFirewallHandler> Handlers = new Dictionary<PlatformID, IFirewallHandler>()
+        static readonly IReadOnlyDictionary<String, IFirewallHandler> Handlers = new Dictionary<String, IFirewallHandler>()
         {
-            { PlatformID.Win32NT,  WindowsFirewallHandler.Instance },
+            { "Windows",  WindowsFirewallHandler.Instance },
+            { "Linux",  LinuxFirewallHandler.Instance },
         }.Freeze();
 
         static IFirewallHandler Get()
         {
-            var os = Environment.OSVersion.Platform;
-            Handlers.TryGetValue(os, out var h);
-            return h ?? NoFirewallHandler.Instance;
+            //  Note: PlatformID.Unix is also used on macOS, so OperatingSystem is used
+            if (OperatingSystem.IsWindows())
+                return WindowsFirewallHandler.Instance;
+            if (OperatingSystem.IsLinux())
+                return LinuxFirewallHandler.Instance;
+            return NoFirewallHandler.Instance;
         }
 
         /// <summary>

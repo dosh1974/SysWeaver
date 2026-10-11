@@ -1,5 +1,9 @@
 ﻿namespace SysWeaver.Media.Png
 {
+    /// <summary>
+    /// The predefined png text keywords, used by <see cref="PngTools.CreateInformationChunk(PngKeywords, string)"/>.
+    /// The keyword written is the name with a space before each inner capital letter, ex: CreationTime is written as "Creation Time"
+    /// </summary>
     public enum PngKeywords
     {
         /// <summary>

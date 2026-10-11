@@ -9,7 +9,9 @@ namespace SysWeaver.Data
     /// Shared cell formatting helpers for the text based table exporters (<see cref="HtmlTableDataExporter"/> and <see cref="MarkDownTableDataExporter"/>).
     /// </summary>
     /// <remarks>
-    /// Numbers are formatted using <c>ToValueString</c> (with the decimal count from a <see cref="TableDataFormats.Number"/> column format, default 3).
+    /// Numbers (columns of the built-in numeric types and their nullable versions) are formatted using <c>ToValueString</c>
+    /// (with the decimal count from a <see cref="TableDataFormats.Number"/> column format, default 3), other values using <see cref="Object.ToString"/>.
+    /// Null values are formatted as empty texts.
     /// If the column format is <see cref="TableDataFormats.Default"/> or <see cref="TableDataFormats.Number"/> with a format string part,
     /// the text is formatted using <see cref="String.Format(string, object, object)"/> with {0} = the value text and {1} = the next column's value.
     /// All spaces in formatted text are replaced with non breaking spaces (U+00A0).
@@ -238,19 +240,30 @@ namespace SysWeaver.Data
             { typeof(UInt16).FullName, UInt16ToString },
             { typeof(UInt32).FullName, UInt32ToString },
             { typeof(UInt64).FullName, UInt64ToString },
+            { typeof(Single?).FullName, SingleToString },
+            { typeof(Double?).FullName, DoubleToString },
+            { typeof(Decimal?).FullName, DecimalToString },
+            { typeof(SByte?).FullName, SByteToString },
+            { typeof(Int16?).FullName, Int16ToString },
+            { typeof(Int32?).FullName, Int32ToString },
+            { typeof(Int64?).FullName, Int64ToString },
+            { typeof(Byte?).FullName, ByteToString },
+            { typeof(UInt16?).FullName, UInt16ToString },
+            { typeof(UInt32?).FullName, UInt32ToString },
+            { typeof(UInt64?).FullName, UInt64ToString },
         }.Freeze();
 
 
         /// <summary>
         /// Get the formatter to use for a column.
         /// </summary>
-        /// <param name="typeName">The full type name of the column (<see cref="TableDataBaseColumn.Type"/>).</param>
+        /// <param name="typeName">The full type name of the column (<see cref="TableDataBaseColumn.Type"/>), may be null (formatted using <see cref="Object.ToString"/>).</param>
         /// <param name="headerFormat">The column format (<see cref="TableDataColumn.Format"/>), may be null.</param>
         /// <param name="specials">Optional special formatters keyed on the first ';' separated part of the format, wrapping the type formatter.</param>
         /// <returns>The formatter, and true if the column is numeric (should be right aligned).</returns>
         public static ValueTuple<Formatter, bool> Get(String typeName, String headerFormat, IReadOnlyDictionary<String, SpecialFormatter> specials = null)
         {
-            var rightAlign = DefToStrings.TryGetValue(typeName, out var fmt);
+            var rightAlign = DefToStrings.TryGetValue(typeName ?? "", out var fmt);
             if ((specials != null) && (!String.IsNullOrEmpty(headerFormat)))
             {
                 var special = headerFormat.SplitFirst(';');

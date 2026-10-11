@@ -25,12 +25,34 @@ namespace PhotoshopFile
     private string key;
     public override string Key => key;
 
+    /// <summary>
+    /// The layer info data (without the signature, key and length), saved as is.
+    /// </summary>
     public byte[] Data { get; private set; }
 
+    /// <summary>
+    /// Create a layer info with no data (an empty <see cref="Data"/> array).
+    /// </summary>
+    /// <param name="key">The 4 character key.</param>
+    /// <param name="signature">The signature, "8BIM" or "8B64".</param>
     public RawLayerInfo(string key, string signature = "8BIM")
+      : this(key, Array.Empty<byte>(), signature)
     {
+    }
+
+    /// <summary>
+    /// Create a layer info with data.
+    /// </summary>
+    /// <param name="key">The 4 character key.</param>
+    /// <param name="data">The data, saved as is (not copied).</param>
+    /// <param name="signature">The signature, "8BIM" or "8B64".</param>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null.</exception>
+    public RawLayerInfo(string key, byte[] data, string signature = "8BIM")
+    {
+      ArgumentNullException.ThrowIfNull(data);
       this.signature = signature;
       this.key = key;
+      Data = data;
     }
 
     public RawLayerInfo(PsdBinaryReader reader, string signature, string key,

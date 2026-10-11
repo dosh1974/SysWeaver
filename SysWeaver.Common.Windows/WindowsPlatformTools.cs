@@ -45,7 +45,7 @@ namespace SysWeaver
         /// Flushes the OS buffers of a file to disc using FlushFileBuffers.
         /// </summary>
         /// <param name="h">The file handle, must have write access.</param>
-        /// <returns>True if successful, false on failure.</returns>
+        /// <returns>True if successful, false on failure (ex: a handle without write access). Exceptions (ex: a null handle) are tracked in the stats, a failed FlushFileBuffers call isn't.</returns>
         public bool FlushToDisc(SafeHandle h)
         {
             try
@@ -77,7 +77,7 @@ namespace SysWeaver
                     totalBytes = ms.ullTotalPhys;
                 }else
                 {
-                    throw new Exception(String.Concat(nameof(GlobalMemoryStatusEx), " failed with error code: ", Marshal.GetLastPInvokeError()));
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError(), nameof(GlobalMemoryStatusEx) + " failed");
                 }
                 return true;
             }
@@ -164,7 +164,7 @@ namespace SysWeaver
         /// Adds a "full control" access rule for the Everyone group to a directory, unless an equivalent rule exists.
         /// </summary>
         /// <param name="directoryName">The directory.</param>
-        /// <returns>null if successful, else the exception that occurred.</returns>
+        /// <returns>null if successful, else the exception that occurred (also tracked in the stats), ex: a <see cref="DirectoryNotFoundException"/>.</returns>
         /// <remarks>
         /// The rule applies to the directory itself and is inherited by all files and sub directories.
         /// An existing Everyone rule only counts if it grants full control to the directory itself and its descendants
@@ -215,6 +215,7 @@ namespace SysWeaver
             }
             catch (Exception ex)
             {
+                Exs.OnException(ex);
                 return ex;
             }
         }

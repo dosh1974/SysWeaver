@@ -28,7 +28,7 @@ namespace SysWeaver
         /// <param name="noThrow">If true, return null if not found instead of throwing an error</param>
         /// <returns>A stream to the (uncompressed) resource data, the caller must dispose it. Null if not found and <paramref name="noThrow"/> is true.
         /// Compressed resources are fully decompressed into memory.</returns>
-        /// <exception cref="Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
+        /// <exception cref="FileNotFoundException">The resource wasn't found (neither uncompressed nor with the file extension of a registered compression method appended) and <paramref name="noThrow"/> is false.</exception>
         public static Stream GetManifestResourceStream(this Type t, string resourceName, bool noThrow = false)
         {
             var asm = t.Assembly;
@@ -36,10 +36,10 @@ namespace SysWeaver
             var res = asm.GetEmbeddedResource();
             if (res.Contains(n))
                 return asm.GetManifestResourceStream(n);
-            n += '.';
+            var nd = n + '.';
             foreach (var x in CompManager.Extensions)
             {
-                var tn = n + x;
+                var tn = nd + x;
                 if (res.Contains(tn))
                 {
                     ReadOnlyMemory<Byte> data;
@@ -50,7 +50,7 @@ namespace SysWeaver
             }
             if (noThrow)
                 return null;
-            throw new Exception(String.Concat("No resource named \"", n, "\" found in assembly \"", asm.FullName, "\".\nResources found:\n", String.Join('\n', res.Select(x => x.ToQuoted()))));
+            throw new FileNotFoundException(String.Concat("No resource named \"", n, "\" found in assembly \"", asm.FullName, "\".\nResources found:\n", String.Join('\n', res.Select(x => x.ToQuoted()))));
         }
 
         /// <summary>
@@ -94,7 +94,8 @@ namespace SysWeaver
         /// <param name="resourceName">Name of the resource (without name space)</param>
         /// <param name="noThrow">If true, return null if not found instead of throwing an error</param>
         /// <param name="encoding">The encoding to use, default is to use UTF-8</param>
-        /// <returns>The text of the embedded resource</returns>
+        /// <returns>The text of the embedded resource, without a leading byte order mark (the preamble of the encoding).
+        /// Null if not found (or empty) and <paramref name="noThrow"/> is true.</returns>
         /// <exception cref="Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
         public static String GetManifestResourceText(this Type t, string resourceName, bool noThrow = false, Encoding encoding = null)
         {
@@ -104,7 +105,7 @@ namespace SysWeaver
                 if (noThrow)
                     return null;
             }
-            return (encoding ?? Encoding.UTF8).GetString(s.Span);
+            return (encoding ?? Encoding.UTF8).GetStringWithoutBom(s.Span);
         }
 
 
@@ -122,9 +123,10 @@ namespace SysWeaver
         /// <typeparam name="T">The type of the stored object</typeparam>
         /// <param name="t">The type</param>
         /// <param name="resourceName">Name of the resource (without name space)</param>
-        /// <param name="noThrow">If true, return default if not found (or if no serializer exists for the extension) instead of throwing an error</param>
+        /// <param name="noThrow">If true, return default if not found (or empty, or if no serializer exists for the extension) instead of throwing an error</param>
         /// <returns>The object stored in the embedded resource</returns>
-        /// <exception cref="Exception">The resource wasn't found or no serializer exists for the file extension, and <paramref name="noThrow"/> is false.</exception>
+        /// <exception cref="Exception">The resource wasn't found or no serializer exists for the file extension, and <paramref name="noThrow"/> is false, or deserialization failed.</exception>
+        /// <remarks>A leading UTF-8 byte order mark is skipped for text serializers (ex: json).</remarks>
         public static T GetManifestResourceObject<T>(this Type t, string resourceName, bool noThrow = false)
         {
             var s = GetManifestResourceData(t, resourceName, noThrow);
@@ -141,8 +143,14 @@ namespace SysWeaver
                     return default;
                 throw new Exception(String.Concat("No serializer could be found for the file extension \"", ext, "\", can't create an object from \"", resourceName, '"'));
             }
-            return ser.Create<T>(s.Span);
+            var span = s.Span;
+            //  Text files (ex: json) are often saved with a byte order mark that the deserializer doesn't accept
+            if ((ser is ITextSerializerType) && span.StartsWith(Utf8Bom))
+                span = span.Slice(Utf8Bom.Length);
+            return ser.Create<T>(span);
         }
+
+        static ReadOnlySpan<Byte> Utf8Bom => [0xef, 0xbb, 0xbf];
 
     }
 

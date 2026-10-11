@@ -38,7 +38,7 @@ namespace SysWeaver.Net.ExploreModule
         public ExploreHttpServerModule(StaticDataHttpServerModule dataModule, IconHttpServerModule iconModule, ExploreHttpServerModuleParams p = null)
         {
             var pp = p ?? new ExploreHttpServerModuleParams();
-            PerfMon.Enabled = p.PerMon;
+            PerfMon.Enabled = pp.PerMon;
             var auth = pp.Auth;
             var t = GetType();
             var asm = t.Assembly;
@@ -250,7 +250,8 @@ namespace SysWeaver.Net.ExploreModule
         #region Data References
 
         /// <summary>
-        /// Get table data from a table data reference
+        /// Get table data from a table data reference.
+        /// The returned rows are capped at <see cref="TableDataTools.DefaultMaxAllowedRows"/> (a request with no limit, or above the cap, gets the cap).
         /// </summary>
         /// <param name="request">The request paramaters, must contain a table data reference in the Params</param>
         /// <param name="context"></param>
@@ -267,7 +268,7 @@ namespace SysWeaver.Net.ExploreModule
             if (td == null)
                 throw new Exception("Unknown data table reference (expired?)");
             var data = td.Get();
-            data = data.Filter(request);
+            data = data.Filter(request, TableDataTools.DefaultMaxAllowedRows);
             return new TableData
             {
                 Rows = data.Rows,

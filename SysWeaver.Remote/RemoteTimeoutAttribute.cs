@@ -30,6 +30,11 @@ namespace SysWeaver.Remote
     /// <summary>
     /// Override the cache behaviour for a specific API call (or calls if placed on an interface)
     /// </summary>
+    /// <remarks>
+    /// Only GET and DELETE end points that return a value are cached, the responses are cached per end point keyed by the relative url (failures are not cached).
+    /// An attribute on the method takes precedence over one on the interface, without any attribute the connection settings are used.
+    /// Caching is disabled if both values resolve to 0 (so <c>RemoteCache(0, 0)</c> disables caching even if the connection enables it).
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
     public class RemoteCacheAttribute : Attribute
     {
@@ -45,12 +50,12 @@ namespace SysWeaver.Remote
 
 
         /// <summary>
-        /// Number of seconds that the response can be resued, if 0 or less no time based caching is performed
+        /// Number of seconds that the response can be resued, if 0 no time based caching is performed, <see cref="UseConnection"/> to use the connection value
         /// </summary>
         public readonly int Duration;
 
         /// <summary>
-        /// Maximum number of cached responses, if 0 or less there is no maximum
+        /// Maximum number of cached responses (LRU), 0 to use the default capacity of the LRU cache (if <see cref="Duration"/> enables caching), <see cref="UseConnection"/> to use the connection value
         /// </summary>
         public readonly int MaxItems;
 
@@ -58,8 +63,8 @@ namespace SysWeaver.Remote
         /// <summary>
         /// Override the cache behaviour for this specific API call (or calls if placed on an interface)
         /// </summary>
-        /// <param name="duration">Number of seconds that the response can be resued, if 0 or less no time based caching is performed</param>
-        /// <param name="maxItems">Maximum number of cached responses, if 0 or less there is no maximum</param>
+        /// <param name="duration">Number of seconds that the response can be resued, if 0 no time based caching is performed, -1 (or less) = <see cref="UseConnection"/></param>
+        /// <param name="maxItems">Maximum number of cached responses, 0 for the default LRU capacity, -1 (or less) = <see cref="UseConnection"/></param>
         public RemoteCacheAttribute(int duration = 0, int maxItems = 0)
         {
             Duration = Math.Max(UseConnection, duration);

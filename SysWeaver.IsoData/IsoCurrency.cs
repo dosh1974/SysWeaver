@@ -415,7 +415,7 @@ namespace SysWeaver.IsoData
             UnderUnits = d > 0 ? (d >= 1 ? (int)Math.Round(Math.Pow(10.0, d)) : (int)Math.Round(1.0 / d)) : 1;
             DecimalNumbers = (int)Math.Ceiling(d);
             ThousandsSeparator = thousandsSeparator;
-            ThousandsSeparatorFormat = String.Join(thousandsSeparator, '#', String.Join(thousandsSeparator, Enumerable.Range(0, 6).Select(x => "###")));
+            ThousandsSeparatorFormat = String.Join(thousandsSeparator, '#', String.Join(thousandsSeparator, Enumerable.Range(0, 10).Select(x => "###"))); // 31 digits, enough for decimal.MaxValue (29 digits)
             ThousandsSeparatorTrim = thousandsSeparator.ToCharArray();
             DecimalSeparator = decimalSeparator;
             Example = ToString(98765.4321M, CurrencyFormatOptions.ApplyThousandsSeparator | CurrencyFormatOptions.AutomaticRounding | CurrencyFormatOptions.Symbol);
@@ -435,7 +435,8 @@ namespace SysWeaver.IsoData
             var t = new Dictionary<string, IsoCurrency>(StringComparer.Ordinal);
             var t2 = new Dictionary<int, IsoCurrency>();
             var hf = new HashSet<Char>();
-            Add(hf, "-0123456789");
+            // '-' and U+2212 (the NegativeSign of sv-SE, nb-NO, fi-FI etc. used by ToString), the only visible negative signs of all .NET cultures (some also use invisible bidi marks)
+            Add(hf, "-−0123456789");
             foreach (var c in Currencies)
             {
                 t.Add(c.Iso4217.FastToLower(), c);
@@ -458,7 +459,7 @@ namespace SysWeaver.IsoData
         
 
         /// <summary>
-        /// All chars needed to display currency strings (digits, minus sign, ISO codes, symbols and separators of all currencies), sorted by char value.
+        /// All chars needed to display currency strings (digits, the minus signs '-' and U+2212 (the negative sign of some cultures, ex: sv-SE), ISO codes, symbols and separators of all currencies), sorted by char value.
         /// Useful when creating font subsets.
         /// </summary>
         public static readonly IReadOnlyList<Char> CurrencyGlyphs;

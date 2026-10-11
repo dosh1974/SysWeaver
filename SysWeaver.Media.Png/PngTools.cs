@@ -22,14 +22,20 @@ namespace SysWeaver.Media.Png
         /// Determine if some data seems to be a png file (by inspecting the first 8 bytes)
         /// </summary>
         /// <param name="data">The data to test</param>
-        /// <returns>Tru if the data header matches a png header</returns>
+        /// <returns>True if the data header matches a png header (false if the data is shorter than 8 bytes)</returns>
         public static bool IsPng(ReadOnlySpan<Byte> data)
         {
             if (data.Length < 8)
                 return false;
             return Header.AsSpan().SequenceEqual(data[..8]);
-        }                
+        }
 
+        /// <summary>
+        /// Read all png chunks from a png file (up to and including the IEND chunk)
+        /// </summary>
+        /// <param name="pngFile">The name of the png file</param>
+        /// <returns>The png chunks in the file</returns>
+        /// <exception cref="IOException">The header isn't a png header, a chunk is longer than the remaining data, or the file is truncated (<see cref="EndOfStreamException"/>)</exception>
         public static List<PngChunk> ReadChunks(String pngFile)
         {
             using var fs = new FileStream(pngFile, FileMode.Open, FileAccess.Read);
@@ -37,10 +43,13 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Read all png chunks from a a png file stream
+        /// Read all png chunks from a png file stream (up to and including the IEND chunk).
+        /// The chunks are read lazily (while enumerating), the chunk CRC's are read but not validated.
+        /// The stream must be seekable (Position and Length are used), and it's disposed when the enumeration ends.
         /// </summary>
         /// <param name="pngFile">The png file stream</param>
         /// <returns>The png chunks in the file</returns>
+        /// <exception cref="IOException">The header isn't a png header, a chunk is longer than the remaining data, or the stream is truncated (<see cref="EndOfStreamException"/>)</exception>
         public static IEnumerable<PngChunk> ReadChunks(Stream pngFile)
         {
             var end = PngChunkIds.IEND;
@@ -57,6 +66,8 @@ namespace SysWeaver.Media.Png
                 uint length = r.ReadUInt32();
                 uint hunkId = r.ReadUInt32();
                 var pos = pngFile.Position;
+                if (length > (pngFile.Length - pos))
+                    throw new IOException("Invalid PNG stream, declared chunk size " + length + " is larger than the remaining data!");
                 var endPos = pos += length;
                 var data = new Byte[length];
                 r.ReadExactly(data);
@@ -90,12 +101,12 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Helper method to compute the Crc32 checksum.
+        /// Helper method to compute the Crc32 checksum (the standard CRC-32 used by png and zip, polynomial 0xEDB88320).
         /// </summary>
         /// <param name="data">Data</param>
         /// <param name="offset">Offset in the data</param>
-        /// <param name="len">Length to compute for</param>
-        /// <param name="crc">Initial crc</param>
+        /// <param name="len">Length to compute for (clamped to the end of the data)</param>
+        /// <param name="crc">Initial crc, pass the result of a previous call to continue a computation (0 to start a new one)</param>
         /// <returns>The Crc32 check sum for the specified range</returns>
         public static uint CalcCrc32(Byte[] data, long offset, long len, uint crc = 0)
         {
@@ -111,10 +122,10 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Helper method to compute the Crc32 checksum.
+        /// Helper method to compute the Crc32 checksum (the standard CRC-32 used by png and zip, polynomial 0xEDB88320).
         /// </summary>
         /// <param name="data">Data</param>
-        /// <param name="crc">Initial crc</param>
+        /// <param name="crc">Initial crc, pass the result of a previous call to continue a computation (0 to start a new one)</param>
         /// <returns>The crc32 for the data</returns>
         public static uint CalcCrc32(ReadOnlySpan<Byte> data, uint crc = 0)
         {
@@ -129,8 +140,8 @@ namespace SysWeaver.Media.Png
         /// </summary>
         /// <param name="data">Data</param>
         /// <param name="offset">Offset in the data</param>
-        /// <param name="len">Length to compute for</param>
-        /// <param name="crc">Initial crc</param>
+        /// <param name="len">Length to compute for (clamped to the end of the data)</param>
+        /// <param name="crc">Initial checksum, pass the result of a previous call to continue a computation (1 to start a new one)</param>
         /// <returns>The Adler32 checksum for the specified range</returns>
         public static uint CalcAdler32(ReadOnlySpan<Byte> data, int offset, int len, uint crc = 1)
         {
@@ -140,6 +151,7 @@ namespace SysWeaver.Media.Png
             while (offset < end)
             {
                 var b = data[offset];
+                ++offset;
                 s1 = (s1 + (uint)b) % 65521;
                 s2 = (s2 + s1) % 65521;
             }
@@ -150,7 +162,7 @@ namespace SysWeaver.Media.Png
         /// Helper method to compute the Adler32 checksum.
         /// </summary>
         /// <param name="data">Data</param>
-        /// <param name="crc">Initial crc</param>
+        /// <param name="crc">Initial checksum, pass the result of a previous call to continue a computation (1 to start a new one)</param>
         /// <returns>The Adler32 checksum for the data</returns>
         public static uint CalcAdler32(ReadOnlySpan<Byte> data, uint crc = 1)
         { 
@@ -170,8 +182,8 @@ namespace SysWeaver.Media.Png
         /// </summary>
         /// <param name="chunks">Chunks (from an existing file)</param>
         /// <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
-        /// <param name="a">Compression method</param>
-        /// <param name="b">Compression type</param>
+        /// <param name="a">The first zlib header byte (CMF, 120 = deflate with a 32K window)</param>
+        /// <param name="b">The second zlib header byte (FLG, a * 256 + b must be a multiple of 31)</param>
         /// <returns>Png file data</returns>
         public static Byte[] MakePng(IEnumerable<PngChunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1)
         {
@@ -218,9 +230,9 @@ namespace SysWeaver.Media.Png
         /// <param name="pngFile">The name of the destination file</param>
         /// <param name="chunks">Chunks (from an existing file)</param>
         /// <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
-        /// <param name="a">Compression method</param>
-        /// <param name="b">Compression type</param>
-        /// <param name="comp">Compression level</param>
+        /// <param name="a">The first zlib header byte (CMF, 120 = deflate with a 32K window)</param>
+        /// <param name="b">The second zlib header byte (FLG, a * 256 + b must be a multiple of 31)</param>
+        /// <param name="comp">The deflate compression level (no compression by default)</param>
         public static void WriteChunks(String pngFile, IEnumerable<PngChunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1, CompressionLevel comp = CompressionLevel.NoCompression)
         {
             using var fs = new FileStream(pngFile, FileMode.Create);
@@ -233,9 +245,9 @@ namespace SysWeaver.Media.Png
         /// <param name="pngFile">The destination stream</param>
         /// <param name="chunks">Chunks (from an existing file)</param>
         /// <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
-        /// <param name="a">Compression method</param>
-        /// <param name="b">Compression type</param>
-        /// <param name="comp">Compression level</param>
+        /// <param name="a">The first zlib header byte (CMF, 120 = deflate with a 32K window)</param>
+        /// <param name="b">The second zlib header byte (FLG, a * 256 + b must be a multiple of 31)</param>
+        /// <param name="comp">The deflate compression level (no compression by default)</param>
         public static void WriteChunks(Stream pngFile, IEnumerable<PngChunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1, CompressionLevel comp = CompressionLevel.NoCompression)
         {
             var imageDataCrc = CalcAdler32(newData);
@@ -273,11 +285,12 @@ namespace SysWeaver.Media.Png
 
 
         /// <summary>
-        /// Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file)
+        /// Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file).
+        /// The first IDAT chunk is replaced by <paramref name="newDataChunk"/>, any other IDAT chunks are removed.
         /// </summary>
         /// <param name="pngFile">The destination stream</param>
         /// <param name="chunks">Chunks (from an existing file)</param>
-        /// <param name="newDataChunk">The new IDAT chunk</param>
+        /// <param name="newDataChunk">The new IDAT chunk, null removes all IDAT chunks</param>
         public static void WriteChunks(Stream pngFile, IEnumerable<PngChunk> chunks, PngChunk newDataChunk)
         {
             WriteChunks(pngFile, chunks.Where(x => (x.Id != PngChunkIds.IDAT) || (newDataChunk != null)).Select(x =>
@@ -306,7 +319,7 @@ namespace SysWeaver.Media.Png
 
 
         /// <summary>
-        /// Helper method to write a new png file (as bytes) from some png chunks
+        /// Helper method to write a new png file from some png chunks: the png header followed by the chunks (written using <see cref="WriteChunk"/>)
         /// </summary>
         /// <param name="pngFile">The destination stream</param>
         /// <param name="chunks">Chunks (from an existing file)</param>
@@ -320,7 +333,9 @@ namespace SysWeaver.Media.Png
 
 
         /// <summary>
-        /// Helper method to write a new png file (as bytes) from some png chunks
+        /// Write a single png chunk (length, id, data and crc, big endian).
+        /// The length written is the length of <see cref="PngChunk.Data"/> and the crc is computed from the id and data
+        /// (<see cref="PngChunk.Length"/> and <see cref="PngChunk.Crc32"/> are ignored).
         /// </summary>
         /// <param name="pngFile">The destination stream</param>
         /// <param name="c">Chunk</param>
@@ -353,13 +368,20 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Read an png file into bytes
+        /// Read (decode) a png image into 32-bit pixels (8 bits per channel).
+        /// All color types and bit depths of the png specification are supported, 16-bit channels are truncated to 8 bits.
+        /// Transparency (tRNS) is applied, other ancillary chunks are skipped. Chunk CRC's are not validated.
+        /// Interlaced images are not supported.
+        /// The stream must be seekable (Position and Length are used).
         /// </summary>
         /// <param name="width">The png image width</param>
         /// <param name="height">The png image height</param>
         /// <param name="pngFile">The stream containg the png image</param>
         /// <param name="leaveOpen">True to leave the stream open</param>
-        /// <returns>The bytes in Blue, Green, Red, Alpha order</returns>
+        /// <returns>The bytes in Blue, Green, Red, Alpha order, rows top to bottom with no padding (stride = width * 4).
+        /// Null if an IEND chunk is found before any IDAT chunk</returns>
+        /// <exception cref="IOException">Invalid or unsupported png data (including an indexed image without a palette or with an index outside the palette), or the stream is truncated (<see cref="EndOfStreamException"/>)</exception>
+        /// <exception cref="NotSupportedException">The image is interlaced</exception>
         public static Byte[] DecodeArgb(out int width, out int height, Stream pngFile, bool leaveOpen = false)
         {
             width = 0;
@@ -411,23 +433,52 @@ namespace SysWeaver.Media.Png
 
 
 
+        /// <summary>
+        /// The byte offset of the red channel in a pixel returned by <see cref="DecodeArgb"/>
+        /// </summary>
         public const int Red = 2;
+        /// <summary>
+        /// The byte offset of the green channel in a pixel returned by <see cref="DecodeArgb"/>
+        /// </summary>
         public const int Green = 1;
+        /// <summary>
+        /// The byte offset of the blue channel in a pixel returned by <see cref="DecodeArgb"/>
+        /// </summary>
         public const int Blue = 0;
+        /// <summary>
+        /// The byte offset of the alpha channel in a pixel returned by <see cref="DecodeArgb"/>
+        /// </summary>
         public const int Alpha = 3;
 
+        /// <summary>
+        /// Png color type: grayscale
+        /// </summary>
         public const Byte Grayscale = 0;
+        /// <summary>
+        /// Png color type: RGB (truecolor)
+        /// </summary>
         public const Byte Rgb = 2;
+        /// <summary>
+        /// Png color type: indexed (palette)
+        /// </summary>
         public const Byte Indexed = 3;
+        /// <summary>
+        /// Png color type: grayscale with alpha
+        /// </summary>
         public const Byte GrayscaleAlpha = 4;
+        /// <summary>
+        /// Png color type: RGBA (truecolor with alpha)
+        /// </summary>
         public const Byte Rgba = 6;
 
 
         /// <summary>
-        /// Decodes the information in the IHDR chunk
+        /// Decodes the information in the IHDR chunk (and computes ChannelCount, PixelBytes and Pitch from it).
+        /// The values are not validated, except the color type.
         /// </summary>
         /// <param name="ihdr">The IHDR chunk</param>
         /// <returns>The decoded image information</returns>
+        /// <exception cref="IOException">The color type is unknown (greater than 6), or the chunk data is shorter than 13 bytes (<see cref="EndOfStreamException"/>)</exception>
         public static PngImageInfo DecodeIHDR(PngChunk ihdr)
         {
             var image = new PngImageInfo();
@@ -451,10 +502,11 @@ namespace SysWeaver.Media.Png
         /// <summary>
         /// Get the filters used (one per row)
         /// </summary>
-        /// <param name="s">Stream containing the raw image data, including the filter byte</param>
-        /// <param name="info">Information about the image</param>
+        /// <param name="s">Stream containing the raw (uncompressed) image data, including the filter byte, starting at the current position</param>
+        /// <param name="info">Information about the image (only Height and Pitch are used)</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
         /// <returns>An array with the filter used, one per row</returns>
+        /// <exception cref="EndOfStreamException">The stream ends before the filter byte of the last row</exception>
         public static Byte[] GetFilters(Stream s, PngImageInfo info, bool leaveOpen = false)
         {
             var h = info.Height;
@@ -467,7 +519,10 @@ namespace SysWeaver.Media.Png
             {
                 for (int i = 0; i < h; ++ i)
                 {
-                    dest[i] = (Byte)s.ReadByte();
+                    var f = s.ReadByte();
+                    if (f < 0)
+                        throw new EndOfStreamException("The image data ends before the filter byte of row " + i + "!");
+                    dest[i] = (Byte)f;
                     if (temp == null)
                         s.Position += skip;
                     else
@@ -480,10 +535,11 @@ namespace SysWeaver.Media.Png
         /// <summary>
         /// Get the filters used (one per row)
         /// </summary>
-        /// <param name="imageData">Data containing raw image data including the filter byte</param>
-        /// <param name="info">Information about the image</param>
+        /// <param name="imageData">Data containing raw (uncompressed) image data including the filter byte</param>
+        /// <param name="info">Information about the image (only Height and Pitch are used)</param>
         /// <param name="offset">Offset into the data for the first filter byte</param>
         /// <returns>An array with the filter used, one per row</returns>
+        /// <exception cref="IndexOutOfRangeException">The data is too short</exception>
         public static Byte[] GetFilters(Byte[] imageData, PngImageInfo info, int offset = 0)
         {
             var pitch = info.Pitch;
@@ -493,15 +549,17 @@ namespace SysWeaver.Media.Png
 
         /// <summary>
         /// Takes some filtered raw data (inlcuding the filter byte) and decodes it (make it all use filter 0, none).
+        /// The stream is read to the end, it must contain exactly <see cref="PngImageInfo.Height"/> scanlines.
         /// </summary>
         /// <param name="stream">The raw image data (first) byte is the filter of the first row</param>
-        /// <param name="info">Information about the image</param>
+        /// <param name="info">Information about the image (only Height, Pitch and PixelBytes are used)</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
-        /// <param name="keepFilterByte">If true, the original filter byte is kept</param>
+        /// <param name="keepFilterByte">If true, the original filter byte is kept, else the filter byte of every row is set to 0 (none)</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
+        /// <exception cref="IOException">The data contains more or less scanlines than the image height, an unknown filter type, or a truncated scanline (<see cref="EndOfStreamException"/>)</exception>
         public static Byte[] UnfilterData(Stream stream, PngImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
         {
-            using (leaveOpen ? stream : null)
+            using (leaveOpen ? null : stream)
             {
                 var pitch = info.Pitch;
                 var pitchFilter = info.Pitch + 1;
@@ -526,12 +584,13 @@ namespace SysWeaver.Media.Png
                     //if (read != pitch)
                         //throw new IOException("Invalid PNG stream, the pitch of the decoded scan line doesn't match the width specified in the header!");
                     //  Filter
-                    if ((filter >= 0) && (filter <= Filters.Length))
-                        Filters[filter](image);
+                    if (filter >= Filters.Length)
+                        throw new IOException("Invalid PNG stream, filter type " + filter + " is unknown!");
+                    Filters[filter](image);
                     //  Decode
                     if (p >= maxP)
                         throw new IOException("Invalid PNG stream, data contains more scanlines than specified in the header!");
-                    data[p] = (Byte)filter;
+                    data[p] = keepFilterByte ? (Byte)filter : (Byte)0;
                     Array.Copy(image.UnfilteredScanline, pb, data, p + 1, pitch);
                     p += pitchFilter;
                     //  Swap scanlines
@@ -546,13 +605,15 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Decompresses the data found in the IDAT header and unfilters it
+        /// Decompresses the data found in the IDAT header and unfilters it (see <see cref="UnfilterData"/>)
         /// </summary>
-        /// <param name="stream">The data found in an IDAT header without the header (2 bytes) and footer (4 bytes)</param>
+        /// <param name="stream">The data found in an IDAT header without the header (2 bytes) and footer (4 bytes), i.e. the raw deflate data</param>
         /// <param name="info">Information about the image</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
-        /// <param name="keepFilterByte">If true, the original filter byte is kept</param>
+        /// <param name="keepFilterByte">If true, the original filter byte is kept, else the filter byte of every row is set to 0 (none)</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
+        /// <exception cref="IOException">See <see cref="UnfilterData"/></exception>
+        /// <exception cref="InvalidDataException">The deflate data is invalid</exception>
         public static Byte[] DecodeAndUnfilterData(Stream stream, PngImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
         {
             using var g = new DeflateStream(stream, CompressionMode.Decompress, leaveOpen);
@@ -560,35 +621,39 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Decompresses the data found in the IDAT header and unfilters it
+        /// Decompresses the data found in the IDAT header and unfilters it (see <see cref="UnfilterData"/>).
+        /// The filter byte of every row is set to 0 (none).
         /// </summary>
-        /// <param name="idat">The data found in an IDAT header</param>
+        /// <param name="idat">The data found in an IDAT header (the zlib stream: a 2 byte header, the deflate data and a 4 byte footer), from the current position to the end of the stream.
+        /// The stream must be seekable (Length is used). The zlib header and footer are skipped, not validated</param>
         /// <param name="info">Information about the image</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
+        /// <exception cref="InvalidDataException">The data is shorter than 6 bytes, or the deflate data is invalid</exception>
+        /// <exception cref="IOException">See <see cref="UnfilterData"/></exception>
         public static Byte[] DecodeAndUnfilterIDAT(Stream idat, PngImageInfo info, bool leaveOpen = true)
         {
-            using (leaveOpen ? idat : null)
+            using (leaveOpen ? null : idat)
             {
                 if (idat.ReadByte() < 0)
-                    throw new Exception("Invalid IDAT data!");
+                    throw new InvalidDataException("Invalid IDAT data!");
                 if (idat.ReadByte() < 0)
-                    throw new Exception("Invalid IDAT data!");
+                    throw new InvalidDataException("Invalid IDAT data!");
                 var len = idat.Length - idat.Position - 4;
                 if (len < 0)
-                    throw new Exception("Invalid IDAT data!");
+                    throw new InvalidDataException("Invalid IDAT data!");
                 return DecodeAndUnfilterData(new LengthLimitedStream(idat, len), info, false);
             }
         }
 
 
         /// <summary>
-        /// Create an information chunk with the original creation time
+        /// Create an information chunk with the original creation time (a "Creation Time" text chunk, ex: "2024-05-06T07:08:09.123Z")
         /// </summary>
-        /// <param name="creationTime">The creation time</param>
+        /// <param name="creationTime">The creation time, converted to UTC (a time of kind Unspecified is treated as local time)</param>
         /// <returns>A chunk that can be added</returns>
         public static PngChunk SetCreationTimeInfo(DateTime creationTime)
-                => CreateInformationChunk("Creation Time", creationTime.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffK"));
+                => CreateInformationChunk("Creation Time", creationTime.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffK", System.Globalization.CultureInfo.InvariantCulture));
 
 
         /// <summary>
@@ -645,6 +710,11 @@ namespace SysWeaver.Media.Png
 
         }
 */
+        /// <summary>
+        /// Compress some data into a zlib stream (a 2 byte header 0x78 0x9c, the deflate data (smallest size) and the big endian Adler32 checksum of the data)
+        /// </summary>
+        /// <param name="data">The data to compress</param>
+        /// <returns>The zlib stream (a new buffer, owned by the caller)</returns>
         public static Memory<Byte> GetCompressed(ReadOnlySpan<Byte> data)
         {
             var c = CalcAdler32(data);
@@ -662,19 +732,23 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
-        /// Create an information chunk that can be added to a png
+        /// Create an information chunk that can be added to a png.
+        /// An ASCII value is stored in a tEXt chunk, or a zTXt chunk if compression saves more than 2 bytes.
+        /// A value with non-ASCII chars is stored as UTF-8 in an iTXt chunk (empty language tag and translated keyword), compressed if that saves more than 6 bytes.
         /// </summary>
         /// <param name="keyword">The keyword to set, use well known tags via the PngInfos overload unless you know what you're doing</param>
         /// <param name="value">The value to set it to</param>
         /// <returns>A chunk that can be added</returns>
+        /// <exception cref="ArgumentException">The keyword contains non-ASCII chars, or isn't [1, 79] chars long</exception>
+        /// <exception cref="ArgumentNullException">The keyword or value is null</exception>
         public static PngChunk CreateInformationChunk(String keyword, String value)
         {
             if (!keyword.IsAsciiOnly())
-                throw new Exception("Keyword must be ASCII only!");
+                throw new ArgumentException("Keyword must be ASCII only!", nameof(keyword));
             var kw = Encoding.ASCII.GetBytes(keyword);
             var kwl = kw.Length;
             if ((kwl <= 0) || (kwl > 79))
-                throw new Exception("Keyword must be [1, 79] chars long!");
+                throw new ArgumentException("Keyword must be [1, 79] chars long!", nameof(keyword));
             int chunkLen;
             Byte[] chunkData;
             if (value.IsAsciiOnly())
@@ -798,6 +872,10 @@ namespace SysWeaver.Media.Png
             image.InterlaceMethodMethod = r.ReadByte();
             if (image.ColorType >= ChannelCounts.Length)
                 throw new IOException("Invalid PNG stream, color type " + image.ColorType + " is unknown!");
+            if ((image.Width <= 0) || (image.Height <= 0) || (((long)image.Width * image.Height * 4) > Array.MaxLength))
+                throw new IOException("Invalid PNG stream, the image size " + image.Width + "x" + image.Height + " is invalid or too large!");
+            if (image.InterlaceMethodMethod != 0)
+                throw new NotSupportedException("Interlaced PNG images are not supported!");
             image.ChannelCount = ChannelCounts[image.ColorType];
             image.PixelBytes = (((int)image.BitDepth * image.ChannelCount) + 7) >> 3;
             image.Pitch = (int)(((ulong)image.Width * image.BitDepth * image.ChannelCount + 7) >> 3);
@@ -837,6 +915,8 @@ namespace SysWeaver.Media.Png
             bool first = image.ImageData == null;
             if (first)
                 image.ImageData = new Byte[r.BaseStream.Length - r.BaseStream.Position];
+            if (chunkLength > (uint)(image.ImageData.Length - image.ImageDataOffset))
+                throw new IOException("Invalid PNG stream, declared IDAT chunk size " + chunkLength + " is larger than the remaining data!");
             int size = (int)chunkLength;
             r.ReadExactly(image.ImageData.AsSpan(image.ImageDataOffset, size));
             image.ImageDataOffset += size;
@@ -854,6 +934,8 @@ namespace SysWeaver.Media.Png
             Action<Image> decoder;
             if (!Decoders.TryGetValue(Tuple.Create((int)image.ColorType, (int)image.BitDepth), out decoder))
                 throw new IOException("Invalid PNG stream, the combination of color type " + image.ColorType + " and bitdepth " + image.BitDepth + " is invalid!");
+            if ((image.ColorType == 3) && (image.Palette == null))
+                throw new IOException("Invalid PNG stream, the indexed color image has no PLTE chunk!");
             using (var g = new DeflateStream(new MemoryStream(image.ImageData, 2, image.ImageDataOffset - 6), CompressionMode.Decompress, false))
             {
                 int maxP = image.Width * image.Height * 4;
@@ -867,8 +949,9 @@ namespace SysWeaver.Media.Png
                     //  Decompress
                     g.ReadExactly(image.UncompressedScanline, image.PixelBytes, image.Pitch);
                     //  Filter
-                    if ((filter >= 0) && (filter <= Filters.Length))
-                        Filters[filter](image);
+                    if (filter >= Filters.Length)
+                        throw new IOException("Invalid PNG stream, filter type " + filter + " is unknown!");
+                    Filters[filter](image);
                     //  Decode
                     if (image.Position >= maxP)
                         throw new IOException("Invalid PNG stream, data contains more scanlines than specified in the header!");
@@ -891,10 +974,25 @@ namespace SysWeaver.Media.Png
 
         #region Filters
 
+        /// <summary>
+        /// Png filter type: None
+        /// </summary>
         public const int FilterIndexNone = 0;
+        /// <summary>
+        /// Png filter type: Sub
+        /// </summary>
         public const int FilterIndexSub = 1;
+        /// <summary>
+        /// Png filter type: Up
+        /// </summary>
         public const int FilterIndexUp = 2;
+        /// <summary>
+        /// Png filter type: Average
+        /// </summary>
         public const int FilterIndexAverage = 3;
+        /// <summary>
+        /// Png filter type: Paeth
+        /// </summary>
         public const int FilterIndexPaeth = 4;
 
         /// <summary>
@@ -908,7 +1006,8 @@ namespace SysWeaver.Media.Png
         /// <param name="srcPitch">The number of bytes from one source scanline to the next</param>
         /// <param name="y">The current row, used to determine special cases for the first scanline</param>
         /// <param name="filter">[0, 4] The filter to apply: 0:None, 1:Sub, 2:Up, 3:Average, 4:Paeth</param>
-        /// <param name="bytesPerPixel">Bytes per pixel, </param>
+        /// <param name="bytesPerPixel">Bytes per pixel (rounded up to at least 1 byte for bit depths less than 8)</param>
+        /// <exception cref="ArgumentOutOfRangeException">The filter is not [0, 4] (the filter byte is written to dest before the exception is thrown)</exception>
         public static void ApplyFilterToScanline(Byte[] dest, int destOffset, int bytesPerRow, Byte[] src, int srcOffset, int srcPitch, int y, int filter, int bytesPerPixel)
         {
             dest[destOffset] = (Byte)filter;
@@ -1027,7 +1126,7 @@ namespace SysWeaver.Media.Png
                     }
                     break;
                 default:
-                    throw new Exception("Invalid filter!");
+                    throw new ArgumentOutOfRangeException(nameof(filter), filter, "Invalid filter, must be [0, 4]!");
             }
         }
 
@@ -1080,6 +1179,13 @@ namespace SysWeaver.Media.Png
                 d[i] = (Byte)(s[i] + Paeth(d[i - o], p[i], p[i - o]));
         }
 
+        /// <summary>
+        /// The png Paeth predictor
+        /// </summary>
+        /// <param name="a">The byte to the left</param>
+        /// <param name="b">The byte above</param>
+        /// <param name="c">The byte above and to the left</param>
+        /// <returns>The one of a, b or c that is closest to a + b - c (ties are resolved in the order a, b, c)</returns>
         public static Byte Paeth(Byte a, Byte b, Byte c)
         {
             var p = a + b - c;
@@ -1382,6 +1488,10 @@ namespace SysWeaver.Media.Png
             image.Position = p;
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        static void ThrowBadPaletteIndex(int index, int paletteSize)
+            => throw new IOException("Invalid PNG stream, palette index " + index + " is outside the palette of " + paletteSize + " colors!");
+
         static void Decode_Index_1(Image image)
         {
             var alpha = image.IndexedTrans;
@@ -1402,6 +1512,8 @@ namespace SysWeaver.Media.Png
                     ++o;
                 }
                 var index = data >> 7;
+                if ((uint)index >= (uint)pl.Length)
+                    ThrowBadPaletteIndex(index, pl.Length);
                 var t = pl[index];
                 d[p + Alpha] = ((alpha != null) && (index < alphaLen)) ? alpha[index] : (Byte)0xff;
                 d[p + Red] = (Byte)(t >> 16);
@@ -1431,6 +1543,8 @@ namespace SysWeaver.Media.Png
                     ++o;
                 }
                 var index = data >> 6;
+                if ((uint)index >= (uint)pl.Length)
+                    ThrowBadPaletteIndex(index, pl.Length);
                 var t = pl[index];
                 d[p + Alpha] = ((alpha != null) && (index < alphaLen)) ? alpha[index] : (Byte)0xff;
                 d[p + Red] = (Byte)(t >> 16);
@@ -1460,6 +1574,8 @@ namespace SysWeaver.Media.Png
                     ++o;
                 }
                 var index = data >> 4;
+                if ((uint)index >= (uint)pl.Length)
+                    ThrowBadPaletteIndex(index, pl.Length);
                 var t = pl[index];
                 d[p + Alpha] = ((alpha != null) && (index < alphaLen)) ? alpha[index] : (Byte)0xff;
                 d[p + Red] = (Byte)(t >> 16);
@@ -1482,6 +1598,8 @@ namespace SysWeaver.Media.Png
             for (int i = 0; i < w; ++i, p += 4)
             {
                 var index = s[o];
+                if ((uint)index >= (uint)pl.Length)
+                    ThrowBadPaletteIndex(index, pl.Length);
                 var t = pl[index];
                 ++o;
                 d[p + Alpha] = ((alpha != null) && (index < alphaLen)) ? alpha[index] : (Byte)0xff;

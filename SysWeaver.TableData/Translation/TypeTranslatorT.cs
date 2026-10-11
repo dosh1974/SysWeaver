@@ -277,13 +277,13 @@ namespace SysWeaver.Translation
                     ++argStart;
                     var argEnd = x.IndexOf('}', argStart);
                     if (argEnd < 0)
-                        throw new Exception(String.Concat("Mismatched '{' found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Mismatched '{' found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
                     if (!int.TryParse(x.Substring(argStart, argEnd - argStart), out var ix))
-                        throw new Exception(String.Concat("Invalid argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Invalid argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
                     if (ix < 0)
-                        throw new Exception(String.Concat("Negative argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Negative argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
                     if (ix >= tl)
-                        throw new Exception(String  .Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String  .Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
                     argStart = x.IndexOf('{', argEnd + 1);
                 }
 #endif//DEBUG
@@ -330,7 +330,7 @@ namespace SysWeaver.Translation
                         tt = tt.BaseType;
                     }
                     if (read == null)
-                        throw new Exception(String.Concat(
+                        throw new InvalidOperationException(String.Concat(
                         "The member named \"", name, "\" was not found in the type \"", type.FullName, "\" detected when processing a \"", nameof(AutoTranslateContextAttribute), "\" attribute"));
                     reads[i] = read;
                 }
@@ -341,7 +341,11 @@ namespace SysWeaver.Translation
                     var r = reads[i];
                     var rt = r.Type;
                     if (!rt.IsClass)
+                    {
+                        //  Value types are boxed (not checked for null, a null Nullable<T> is formatted as an empty text)
+                        reads[i] = Expression.Convert(r, typeof(Object));
                         continue;
+                    }
                     var tp = Expression.Variable(rt);
                     dynP.Add(tp);
                     dynProg.Add(Expression.Assign(tp, r));
@@ -418,7 +422,7 @@ namespace SysWeaver.Translation
                             }
                             else
                             {
-                                throw new Exception(String.Concat('"', type.FullName, "\" doesn't contain a member named \"", fromLanguageMember, "\" as declared using the \"", nameof(AutoTranslateDynLanguageAttribute), "\" on member \"", memberName, '"'));
+                                throw new InvalidOperationException(String.Concat('"', type.FullName, "\" doesn't contain a member named \"", fromLanguageMember, "\" as declared using the \"", nameof(AutoTranslateDynLanguageAttribute), "\" on member \"", memberName, '"'));
                             }
                         }
                     }
@@ -536,7 +540,7 @@ namespace SysWeaver.Translation
                 {
                     //  Generate the struct translator now (as for other members), so that invalid attribute usage is detected here
                     if (!TypeTranslator.TryGetTranslator(et, out var _))
-                        throw new Exception("Internal error!");
+                        throw new InvalidOperationException("Internal error!");
                 }
                 var v = Expression.Parameter(et, "v");
                 var save = Expression.Lambda(typeof(Action<>).MakeGenericType(et), Expression.Assign(src, v), v);
@@ -556,7 +560,7 @@ namespace SysWeaver.Translation
             else
             {
                 if (!TypeTranslator.TryGetTranslator(et, out var vt))
-                    throw new Exception("Internal error!");
+                    throw new InvalidOperationException("Internal error!");
                 trElement = Expression.Constant(vt.DelTranslator, typeof(Func<,,,,,>).MakeGenericType(typeof(ITranslator), typeof(String), et, typeof(TranslationEffort), typeof(TranslationCacheRetention), typeof(Task)));
             }
 

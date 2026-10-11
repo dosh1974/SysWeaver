@@ -53,6 +53,23 @@ flowchart TB
 - API keys are stored in clear text in the application key/value store.
 - Only successful Authorization header results are cached, for `CacheDuration` seconds (default 30) and at most `MaxCachedHeaders` (default 10 000) entries, keyed by a SHA256 hash of the header.
   Cached results are re-validated when the owning authorizer's `ChangeCounter` changes (`SimpleAuthorizer` increments it whenever users or API keys are updated).
+- Authorization header schemes (`Basic`, `Bearer`, `*key`) are case insensitive. Basic credentials are UTF-8 + base64 encoded `user:password`.
+- `AuthManager.UserHash` (secure login) doesn't validate the one-time pad itself; the caller (the login service) must issue and consume pads.
+- Authorizers must have unique guid prefixes (`AddAuth` / the constructor throw an `ArgumentException`).
+- `SimpleAuthorizer` user lines: user names are case insensitive (the last definition wins), `:` and `|` separate the parts (so passwords can't contain them),
+  any 44 char base64 string of 32 bytes is taken as a hash, clear text passwords that fail the password policy are skipped (with a warning).
+  Lines with a too long user name (over 128 chars) or domain (over 256) are skipped with a warning naming the user, the other users are still loaded.
+  If a later update (file reload, API key change) fails, an error is logged and the previous users are kept.
+  When users change (file reload, API key removal) both the normal and the weak (basic auth / API key) authorizations of changed or removed users get a logout request.
+- Per-user data (`Authorization.GetOrCreate`, `Set`, ...) is shared by all `Authorization` instances of a user from the same authorizer, a reference is taken on first use and released by `Dispose`.
+- Managed texts: a string that is an existing file is read from the file, else (with a type) an embedded resource with that name (case insensitive, optionally prefixed with the namespace of the type;
+  a compressed resource is also found by the name without the compression extension, ex: `web.auth.index.html` finds `SysWeaver.Auth.web.auth.index.html.br`),
+  else the string itself is the text. A missing file therefore silently becomes the literal text (ex: the file path).
+  Only existing files are monitored for changes (the first change triggers a reload), a file created later is not picked up.
+
+## Known bugs
+
+- security-storage-auth-10: password hashes are a single fast SHA256 (see above).
 
 ## Using it
 

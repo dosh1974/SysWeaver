@@ -29,7 +29,7 @@ namespace SysWeaver.Security
         /// Create a new certificate creator, resolving EnvInfo variables and validating all subject fields.
         /// </summary>
         /// <param name="p">The parameters to use when generating the certificate, null uses the <see cref="SelfSignedCertificateProviderParams"/> defaults.</param>
-        /// <exception cref="Exception">A subject field contains '=' or ','.</exception>
+        /// <exception cref="ArgumentException">A subject field is invalid, see <see cref="ValidateString(string, string)"/>, or the country is unknown, see <see cref="GetValidatedCountry(string, string)"/> (the parameter name is the name of the field).</exception>
         public SignedCertificateCreator(CertificateParams p)
         {
             p = p ?? new SelfSignedCertificateProviderParams();
@@ -68,7 +68,7 @@ namespace SysWeaver.Security
         /// <param name="cn">The configured common name, may be null or empty.</param>
         /// <param name="propertyName">Name of the property (used in the exception message).</param>
         /// <returns>The resolved common name.</returns>
-        /// <exception cref="Exception">The common name contains '=' or ','.</exception>
+        /// <exception cref="ArgumentException">The common name is invalid, see <see cref="ValidateString(string, string)"/>.</exception>
         public static String GetValidatedCommonName(String cn, String propertyName)
         {
             if (String.IsNullOrEmpty(cn))
@@ -79,31 +79,55 @@ namespace SysWeaver.Security
         /// <summary>
         /// Get an ISO 3166 alpha-2 country code from a country value, using the current region if none is supplied.
         /// </summary>
-        /// <param name="country">The configured country (any value understood by <c>IsoCountry.TryGet</c>, can use EnvInfo variables), may be null or empty.</param>
+        /// <param name="country">The configured country, a two letter ISO 3166 alpha-2 code or a country name / nick name (case insensitive, looked up using <c>IsoCountry.TryGetName</c>, ex: "se", "Sweden", "UK"),
+        /// can use EnvInfo variables, may be null or empty (the current region is then used).</param>
         /// <param name="propertyName">Name of the property (used in the exception message).</param>
-        /// <returns>The two letter country code, or null if the country is unknown.</returns>
+        /// <returns>The two letter country code (upper case), null if no country is supplied and the current region is unknown (or the supplied value resolves to an empty string).</returns>
+        /// <exception cref="ArgumentException">A supplied (non empty) country isn't known (the <see cref="ArgumentException.ParamName"/> is <paramref name="propertyName"/>).</exception>
         public static String GetValidatedCountry(String country, String propertyName)
         {
             if (String.IsNullOrEmpty(country))
-                country = EnvInfo.GetCurrentRegion();
-            return ValidateString(IsoData.IsoCountry.TryGet(EnvInfo.ResolveText(country))?.Iso3166a2, propertyName);
+                return IsoData.IsoCountry.TryGet(EnvInfo.GetCurrentRegion())?.Iso3166a2;
+            var c = EnvInfo.ResolveText(country);
+            if (String.IsNullOrEmpty(c))
+                return null;
+            var info = IsoData.IsoCountry.TryGetName(c);
+            if (info == null)
+                throw new ArgumentException("Unknown country " + c.ToQuoted() + "! Use a two letter ISO 3166 code or a country name for parameter " + propertyName.ToQuoted(), propertyName);
+            return info.Iso3166a2;
         }
 
         /// <summary>
-        /// Validate that a subject field value doesn't contain characters that would break the distinguished name ('=' and ',').
+        /// Validate that a subject field value can be used as is in a distinguished name, i.e. it doesn't contain characters that are special in a distinguished name
+        /// (they would break the subject, or be escaped / quoted in the certificate so that <see cref="IsSame(X509Certificate2)"/> is false).
         /// </summary>
         /// <param name="s">The value to validate, null or empty is allowed.</param>
         /// <param name="pname">Name of the property (used in the exception message).</param>
         /// <returns>The input value.</returns>
-        /// <exception cref="Exception"><paramref name="s"/> contains '=' or ','.</exception>
+        /// <exception cref="ArgumentException"><paramref name="s"/> contains one of the chars '=', ',', '+', ';', '"', '#', '&lt;', '&gt;' or a control char,
+        /// or starts / ends with white space (the <see cref="ArgumentException.ParamName"/> is <paramref name="pname"/>).</exception>
         public static String ValidateString(String s, String pname)
         {
             if (String.IsNullOrEmpty(s))
                 return s;
+            if (Char.IsWhiteSpace(s[0]) || Char.IsWhiteSpace(s[s.Length - 1]))
+                throw new ArgumentException("Invalid value! A value may not start or end with white space for parameter " + pname.ToQuoted(), pname);
             foreach (var c in s)
             {
-                if ((c == '=') || (c == ','))
-                    throw new Exception("Invalid character! '" + c + "' is not allowed for paramater " + pname.ToQuoted());
+                switch (c)
+                {
+                    case '=':
+                    case ',':
+                    case '+':
+                    case ';':
+                    case '"':
+                    case '#':
+                    case '<':
+                    case '>':
+                        throw new ArgumentException("Invalid character! '" + c + "' is not allowed for parameter " + pname.ToQuoted(), pname);
+                }
+                if (Char.IsControl(c))
+                    throw new ArgumentException("Invalid character! Control characters (" + ((int)c).ToString("x4") + ") are not allowed for parameter " + pname.ToQuoted(), pname);
             }
             return s;
         }
@@ -200,7 +224,7 @@ namespace SysWeaver.Security
 
         /// <summary>
         /// Build the subject distinguished name, ex: "CN=SysWeaver.App.MyService,C=SE,O=SysWeaver,OU=Platform".
-        /// Only non-empty fields are included.
+        /// Only non-empty fields are included, in a fixed order: CN, C, ST, L, O, OU, dnQualifier, serialNumber, title, SN, GN, initials, pseudonym (as "OID.2.5.4.65") , generationQualifier (as "OID.2.5.4.44") and E.
         /// </summary>
         /// <returns>The subject distinguished name.</returns>
         public String GetSubject()
@@ -241,12 +265,13 @@ namespace SysWeaver.Security
             t = Initials;
             if (!String.IsNullOrEmpty(t))
                 sb.Append(", initials=").Append(t);
+            //  The names "pseudonym" and "generationQualifier" aren't understood by the platform X500 parser (security-cov-1), use the OID's
             t = Pseudonym;
             if (!String.IsNullOrEmpty(t))
-                sb.Append(", pseudonym=").Append(t);
+                sb.Append(", OID.2.5.4.65=").Append(t);
             t = GenerationQualifier;
             if (!String.IsNullOrEmpty(t))
-                sb.Append(", generationQualifier=").Append(t);
+                sb.Append(", OID.2.5.4.44=").Append(t);
             t = Email;
             if (!String.IsNullOrEmpty(t))
                 sb.Append(", E=").Append(t);

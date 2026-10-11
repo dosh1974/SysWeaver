@@ -38,6 +38,8 @@ No project calls this assembly directly; it only needs to be deployed with the a
 ## Limitations and considerations
 
 - Only meaningful on Windows; relies on Windows management and performance-counter APIs.
+- `FlushToDisc` needs a handle with write access (returns false otherwise). `MakeDirectoryAccessableToEveryOne` returns the exception instead of throwing (ex: a missing directory). Exceptions of these and of the memory / CPU queries are counted in the statistics (`Windows.Platform`, `Exception.Count` / `Time` / `Exception`).
+- `Reboot` only reports whether the shutdown was initiated, and requires `SeShutdownPrivilege` (not tested).
 - If the assembly is missing, the framework silently falls back to a dummy implementation. If the performance counter can't be created only CPU usage is unavailable (`GetCpuUsage` returns false), and if the WMI query fails `OsFriendlyName` falls back to `RuntimeInformation.OSDescription`.
 
 ## Using it

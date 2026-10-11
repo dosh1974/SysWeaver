@@ -279,14 +279,14 @@ namespace SysWeaver.Inspection
 
         /// <summary>
         /// A reference to a parent object (an object higher up in the object graph), the value isn't stored.
-        /// When reading, the closest object on the <see cref="Stack"/> that is assignable to <typeparamref name="T"/> is assigned (or null).
+        /// When reading, the closest object on the <see cref="Stack"/> that is assignable to <typeparamref name="T"/> is assigned (or null), the object being described itself is skipped (it's not its own parent).
         /// </summary>
         /// <typeparam name="T">The parent type</typeparam>
         /// <param name="value">The field value, may be assigned by the inspector</param>
         void ParentField<T>(ref T value) where T : class;
         /// <summary>
         /// A reference to a parent object (an object higher up in the object graph), the value isn't stored.
-        /// When reading, the closest object on the <see cref="Stack"/> that is assignable to <typeparamref name="T"/> is passed to the setter (or null).
+        /// When reading, the closest object on the <see cref="Stack"/> that is assignable to <typeparamref name="T"/> is passed to the setter (or null), the object being described itself is skipped (it's not its own parent).
         /// </summary>
         /// <typeparam name="T">The parent type</typeparam>
         /// <param name="value">The current value</param>
@@ -311,7 +311,8 @@ namespace SysWeaver.Inspection
         /// </summary>
         /// <typeparam name="T">The object type</typeparam>
         /// <param name="value">The new instance</param>
-        /// <param name="replaceLast">True to replace the last registered object (a placeholder), false to add it</param>
+        /// <param name="replaceLast">A hint for inspectors that register a placeholder before the object is created: true to replace it, false to add the object.
+        /// The meaning is inspector specific (the SysWeaver.Inspection.Binary reader ignores it: it fills the slot it reserved for the object being read).</param>
         void OnNew<T>(T value, bool replaceLast = true);
         /// <summary>
         /// User defined context values (can be used to pass information to the <see cref="IDescribable"/> implementations)

@@ -111,14 +111,21 @@ namespace SysWeaver.IsoData
 
         /// <summary>
         /// Get information about a language from a language name (or any comma separated part of the name), ISO 639-1 or ISO 639-2 code (case insensitive).
-        /// Anything from the first hyphen is ignored, so regional codes like "en-GB" are accepted.
+        /// Leading and trailing white space is ignored. If the whole text isn't found, anything from the first hyphen is ignored, so regional codes like "en-GB" are accepted
+        /// (and names with a hyphen like "Luba-Katanga" are found).
         /// Ex:
         ///   "Swedish" =&gt; "sv"
         ///   "Maldivian" =&gt; "dv"
         /// </summary>
         /// <param name="name">The name of the language, may be null.</param>
         /// <returns>Information about the language if it's known, or null if it's unknown</returns>
-        public static IsoLanguage TryGetName(String name) => NameToInfo.TryGetValue((name ?? "").Split('-')[0].FastTrimToLower(), out var i) ? i : null;
+        public static IsoLanguage TryGetName(String name)
+        {
+            var ni = NameToInfo;
+            if (ni.TryGetValue((name ?? "").FastTrimToLower(), out var i))
+                return i;
+            return ni.TryGetValue((name ?? "").Split('-')[0].FastTrimToLower(), out i) ? i : null;
+        }
 
 
         /// <summary>
@@ -473,7 +480,7 @@ namespace SysWeaver.IsoData
         /// <param name="allowNames">If true a known language name is accepted (only when no country part is present)</param>
         /// <returns>The ISO 639-1 language code, optionally followed by a hyphen and the upper case ISO 3166-A2 country code (ex: "en-GB"),
         /// or null if <paramref name="language"/> is null, empty or white space.</returns>
-        /// <exception cref="Exception">If the language or country is unknown, or the input contains more than one hyphen.</exception>
+        /// <exception cref="FormatException">If the language or country is unknown, or the input contains more than one hyphen (the message is human readable).</exception>
         public static String Validate(string language, bool allowNames = false)
         {
             language = language?.Trim();
@@ -490,20 +497,20 @@ namespace SysWeaver.IsoData
                         if (allowNames)
                             t = TryGetName(language);
                         if (t == null)
-                            throw new Exception("Unknown language code");
+                            throw new FormatException("Unknown language code");
                     }
                     return t.Iso639_1;
                 case 2:
                     t = TryGet(cc[0]);
                     if (t == null)
-                        throw new Exception("Unknown language code");
+                        throw new FormatException("Unknown language code");
                     var t2 = IsoCountry.TryGet(cc[1]);
                     if (t2 == null)
-                        throw new Exception("The country part of the language part is unknown");
+                        throw new FormatException("The country part of the language code is unknown");
 
                     return String.Join('-', t.Iso639_1, t2.Iso3166a2);
                 default:
-                    throw new Exception("Invalid language code, mat not contain more than one '-'");
+                    throw new FormatException("Invalid language code, may not contain more than one '-'");
             }
         }
 

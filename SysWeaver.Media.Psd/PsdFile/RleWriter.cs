@@ -21,6 +21,9 @@ using System.IO;
 
 namespace PhotoshopFile
 {
+  /// <summary>
+  /// Encodes data with PackBits RLE compression (packets of at most 128 bytes) to a stream.
+  /// </summary>
   public class RleWriter
   {
     private int maxPacketLength = 128;
@@ -39,6 +42,10 @@ namespace PhotoshopFile
     private byte runValue;
     private int runLength;
 
+    /// <summary>
+    /// Create an encoder writing to a stream.
+    /// </summary>
+    /// <param name="stream">The output stream, must support <see cref="Stream.Position"/> (used to compute the encoded length).</param>
     public RleWriter(Stream stream)
     {
       rleLock = new object();
@@ -64,10 +71,11 @@ namespace PhotoshopFile
     /// compression efficiency than Apple PackBits, and is easier to implement
     /// than TIFF PackBits.
     /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative, their sum exceeds the data length, or <paramref name="count"/> is 0.</exception>
     unsafe public int Write(byte[] data, int offset, int count)
     {
       if (!Util.CheckBufferBounds(data, offset, count))
-        throw new ArgumentOutOfRangeException();
+        throw new ArgumentOutOfRangeException(nameof(count), "The offset and count must be inside the data.");
 
       // We cannot encode a count of 0, because the PackBits flag-counter byte
       // uses 0 to indicate a length of 1.

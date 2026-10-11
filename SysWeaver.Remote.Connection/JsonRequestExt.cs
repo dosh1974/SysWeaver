@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using SysWeaver.Net;
 using SysWeaver.Serialization;
 
 namespace SysWeaver
@@ -10,7 +11,9 @@ namespace SysWeaver
     /// <see cref="HttpClient"/> extensions for POSTing json or raw binary payloads to an url (typically SysWeaver API end points).
     /// </summary>
     /// <remarks>
-    /// All methods throw an <see cref="Exception"/> if the response status code isn't 200 (OK), and use the json serializer registered in <see cref="SerManager"/>.
+    /// All methods throw an <see cref="HttpResponseException"/> if the response status code isn't a success (2xx) code (the body is not read), and use the json serializer registered in <see cref="SerManager"/>.
+    /// The deserializing methods return default(R) for a 2xx response other than 200 without a body (ex: 204 No Content).
+    /// Json payloads are sent with the content type "application/json; charset=utf-8". The client's own <see cref="HttpClient.Timeout"/> applies.
     /// Raw payloads are sent with the content type <see cref="MimeTypeMap.Data"/>.
     /// </remarks>
     public static class JsonRequestExt
@@ -27,16 +30,18 @@ namespace SysWeaver
         /// <param name="url">The absolute url (or relative to the client base address).</param>
         /// <param name="data">The request object.</param>
         /// <returns>The deserialized response.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<R> PostJsonRequest<T, R>(this HttpClient client, String url, T data)
         {
             var j = Ser;
             using var c = new ReadOnlyMemoryContent(j.Serialize(data));
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            if ((ret.Length == 0) && (res.StatusCode != System.Net.HttpStatusCode.OK))
+                return default;
             return j.Create<R>(ret.AsSpan());
         }
 
@@ -49,14 +54,14 @@ namespace SysWeaver
         /// <param name="url">The absolute url (or relative to the client base address).</param>
         /// <param name="data">The request object.</param>
         /// <returns>The response body.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<ReadOnlyMemory<Byte>> PostJsonRequestRaw<T>(this HttpClient client, String url, T data)
         {
             using var c = new ReadOnlyMemoryContent(Ser.Serialize(data));
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             return await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
         }
 
@@ -70,17 +75,19 @@ namespace SysWeaver
         /// <param name="data">The request object.</param>
         /// <param name="onRaw">Called with the response message (disposed after the call returns) and the raw body, before deserialization (ex: to read headers).</param>
         /// <returns>The deserialized response.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<R> PostJsonRequest<T, R>(this HttpClient client, String url, T data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, Task> onRaw)
         {
             var j = Ser;
             using var c = new ReadOnlyMemoryContent(j.Serialize(data));
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             await onRaw(res, ret).ConfigureAwait(false);
+            if ((ret.Length == 0) && (res.StatusCode != System.Net.HttpStatusCode.OK))
+                return default;
             return j.Create<R>(ret.AsSpan());
         }
 
@@ -94,14 +101,14 @@ namespace SysWeaver
         /// <param name="data">The request object.</param>
         /// <param name="onRaw">Called with the response message (disposed after the call returns) and the raw body.</param>
         /// <returns>The response body.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<ReadOnlyMemory<Byte>> PostJsonRequestRaw<T>(this HttpClient client, String url, T data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, Task> onRaw)
         {
             using var c = new ReadOnlyMemoryContent(Ser.Serialize(data));
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             await onRaw(res, ret).ConfigureAwait(false);
             return ret;
@@ -116,14 +123,14 @@ namespace SysWeaver
         /// <param name="url">The absolute url (or relative to the client base address).</param>
         /// <param name="data">The payload, sent as <see cref="MimeTypeMap.Data"/>.</param>
         /// <returns>The response body.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<ReadOnlyMemory<Byte>> PostRawRequestRaw(this HttpClient client, String url, ReadOnlyMemory<Byte> data)
         {
             using var c = new ReadOnlyMemoryContent(data);
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             return ret;
         }
@@ -136,14 +143,14 @@ namespace SysWeaver
         /// <param name="data">The payload, sent as <see cref="MimeTypeMap.Data"/>.</param>
         /// <param name="onRaw">Called with the response message (disposed after the call returns) and the raw body.</param>
         /// <returns>The response body.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<ReadOnlyMemory<Byte>> PostRawRequestRaw(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, Task> onRaw)
         {
             using var c = new ReadOnlyMemoryContent(data);
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             await onRaw(res, ret).ConfigureAwait(false);
             return ret;
@@ -158,7 +165,7 @@ namespace SysWeaver
         /// <param name="data">The payload, sent as <see cref="MimeTypeMap.Data"/>.</param>
         /// <param name="onResponse">Called with the response stream and the content length (if known), the stream is disposed when the returned task completes.</param>
         /// <returns>A task that completes when <paramref name="onResponse"/> has completed.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task PostRawRequestStream(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<Stream, long?, Task> onResponse)
         {
             using var message = new HttpRequestMessage(HttpMethod.Post, url);
@@ -166,8 +173,8 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             message.Content = c;
             using var res = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             var cc = res.Content;
             using var stream = await cc.ReadAsStreamAsync().ConfigureAwait(false);
             await onResponse(stream, cc.Headers.ContentLength).ConfigureAwait(false);
@@ -182,14 +189,14 @@ namespace SysWeaver
         /// <param name="data">The payload, sent as <see cref="MimeTypeMap.Data"/>.</param>
         /// <param name="onResponse">Called with the response message (disposed after the returned task completes) to produce the result.</param>
         /// <returns>The result of <paramref name="onResponse"/>.</returns>
-        /// <exception cref="Exception">The response status code isn't 200 (OK).</exception>
+        /// <exception cref="HttpResponseException">The response status code isn't a success (2xx) code, <see cref="HttpResponseException.ResponseCode"/> is the status code.</exception>
         public static async Task<T> PostRawRequest<T>(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<HttpResponseMessage, Task<T>> onResponse)
         {
             using var c = new ReadOnlyMemoryContent(data);
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
-            if (res.StatusCode != System.Net.HttpStatusCode.OK)
-                throw new Exception("Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+            if (!res.IsSuccessStatusCode)
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
             return await onResponse(res).ConfigureAwait(false);
         }
 

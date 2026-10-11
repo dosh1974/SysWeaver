@@ -31,7 +31,8 @@ namespace SysWeaver
         /// <param name="names">The names/keys of messages.
         /// Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
         /// If the name starts with a '*', the data is optional (will return empty strings if not found), note that the '*' is part of the lookup key.</param>
-        /// <exception cref="Exception">A required message file doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">A required message file doesn't exist (checked in the order: mail body, mail subject, text).</exception>
+        /// <exception cref="DirectoryNotFoundException">The source folder (the part before any '*') doesn't exist.</exception>
         public ManagedMessages(String sourceFolder, String defaultLang, bool htmlMail, params String[] names)
             : this(sourceFolder, defaultLang, htmlMail, null, names)
         {
@@ -51,7 +52,8 @@ namespace SysWeaver
         /// <param name="names">The names/keys of messages.
         /// Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
         /// If the name starts with a '*', the data is optional (will return empty strings if not found), note that the '*' is part of the lookup key.</param>
-        /// <exception cref="Exception">A required message file doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">A required message file doesn't exist (checked in the order: mail body, mail subject, text).</exception>
+        /// <exception cref="DirectoryNotFoundException">The source folder (the part before any '*') doesn't exist.</exception>
         public ManagedMessages(String sourceFolder, String defaultLang, bool htmlMail, IReadOnlySet<String> vars, params String[] names)
         {
             vars = vars.Freeze();
@@ -92,17 +94,17 @@ namespace SysWeaver
                         if (isOptional)
                             mm.Body = "";
                         else
-                            throw new Exception("Localized message file " + mm.Body.ToFilename() + " does NOT exist!");
+                            throw new FileNotFoundException("Localized message file " + mm.Body.ToFilename() + " does NOT exist!", mm.Body);
                     if (!File.Exists(mm.Subject))
                         if (isOptional)
                             mm.Subject = "";
                         else
-                            throw new Exception("Localized message file " + mm.Subject.ToFilename() + " does NOT exist!");
+                            throw new FileNotFoundException("Localized message file " + mm.Subject.ToFilename() + " does NOT exist!", mm.Subject);
                     if (!File.Exists(tm.Body))
                         if (isOptional)
                             tm.Body = "";
                         else
-                            throw new Exception("Localized message file " + tm.Body.ToFilename() + " does NOT exist!");
+                            throw new FileNotFoundException("Localized message file " + tm.Body.ToFilename() + " does NOT exist!", tm.Body);
                     var key = name.FastToLower();
                     text.Add(key, tm);
                     mail.Add(key, mm);

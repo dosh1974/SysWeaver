@@ -13,7 +13,16 @@
         </member>
         <member name="F:SysWeaver.SvgOptParams.Compare">
             <summary>
-            Supply a filename to create a .html file that can be used to compare the original and the modified files
+            Supply a filename to create a .html file that can be used to compare the original and the modified files.
+            ".html" is appended unless the name ends with ".htm" or ".html", a name without a folder is created in the output folder.
+            No file is created if no files were processed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SvgOptProgram.Main(System.String[])">
+            <summary>
+            Process exit codes (from SysWeaver.CommandLine FilesToFolderTool), 0 = success, non-zero (1-255) = failure:
+            0 = success or help requested, 1 = an exception while processing, 2 = invalid command line.
+            A file that fails to optimize is only reported, it doesn't change the exit code.
             </summary>
         </member>
     </members>

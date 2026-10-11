@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Numerics;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Search
@@ -52,23 +53,33 @@ namespace SysWeaver.Search
             Parallel.For(0, count, Opt, action);
 
         /// <summary>
-        /// Solve or optimize a problem
+        /// Solve or optimize a problem.
+        /// The population is initialized with clones of <paramref name="data"/> (all but the first are mutated). Each generation the population is sorted by error,
+        /// <see cref="IGaOperators{T}.Abort"/> is called, and all but the best states are replaced by mutated states
+        /// (every second one is a mutated clone of one of the best states, the others mutate their own state further).
+        /// The number of kept (best) states is populationSize / 32 rounded down to a power of two, at least 1 and at most 32, so the best state is never lost.
         /// </summary>
         /// <typeparam name="T">The state/data of the problem</typeparam>
-        /// <param name="data">The initial state, after completion this is the most optimal state found</param>
-        /// <param name="rng">The rng to use</param>
+        /// <param name="data">The initial state, after completion this is the most optimal state found (one of the states created by <see cref="IGaOperators{T}.Clone"/>)</param>
+        /// <param name="rng">The rng to use, if null a new Random(43) is used</param>
         /// <param name="ops">Implements the required operations on a state</param>
-        /// <param name="mutationRate">Number of mutation to apply at generation 0, mutation rate goes down over each generation</param>
-        /// <param name="maxGenerations">Maximum number of generations to run the optimizations</param>
-        /// <param name="populationSize">The population size</param>
-        /// <param name="runInParallel">True to run in paralell (defaults to true in release builds and false in debug builds)</param>
+        /// <param name="mutationRate">Maximum number of mutations to apply at generation 0 (at least 1), mutation rate goes down linearly to 1 at generation maxGenerations / 8 (or at generation mutationRate if maxGenerations is zero or less)</param>
+        /// <param name="maxGenerations">Maximum number of generations to run the optimizations, zero or less for no limit (then <see cref="IGaOperators{T}.Abort"/> must return true at some point or the method never returns)</param>
+        /// <param name="populationSize">The population size (with fewer than 64 states only the single best state is kept)</param>
+        /// <param name="runInParallel">True to run in paralell (defaults to true in release builds and false in debug builds), the operators must then be thread safe</param>
         /// <returns>The result/stats of the solver</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="ops"/> is null (DEBUG builds only).</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="populationSize"/> is zero or negative (DEBUG builds only).</exception>
 #if DEBUG
         public static GaResult SolveOrOptimize<T>(ref T data, Random rng, IGaOperators<T> ops, int mutationRate = 50, int maxGenerations = 0, int populationSize = 1024, bool runInParallel = false) where T : class
 #else//DEBUG
         public static GaResult SolveOrOptimize<T>(ref T data, Random rng, IGaOperators<T> ops, int mutationRate = 50, int maxGenerations = 0, int populationSize = 1024, bool runInParallel = true) where T : class
 #endif//DEBUG
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(ops);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(populationSize);
+#endif//DEBUG
             rng = rng ?? new Random(43);
 
             if (mutationRate < 1)
@@ -109,7 +120,8 @@ namespace SysWeaver.Search
             if (minRateAt <= 0)
                 minRateAt = 1;
 
-            var keep = populationSize >> 5;
+            // Keep the best states: populationSize / 32 rounded down to a power of two, at least 1 and at most 32 (so that keepMask works)
+            var keep = 1 << BitOperations.Log2((uint)(populationSize >> 5));
             if (keep > 32)
                 keep = 32;
             var mutateSize = populationSize - keep;

@@ -8,34 +8,72 @@ using SysWeaver.Inspection.Implementation;
 namespace SysWeaver.Inspection
 {
 
+    /// <summary>
+    /// Writes objects in SysWeaver's binary format, read them with a <see cref="BinaryReaderInspector"/>.
+    /// Use <see cref="Write{T}(T, bool)"/> or one of the static Write helpers.
+    /// </summary>
+    /// <remarks>
+    /// Values are written as their declared type, the type name is only written when the runtime type of an object differs from the declared type (polymorphic members, values written as an object).
+    /// Strings and objects (by reference) that are written more than once are written once, then as a back reference.
+    /// Classes and structs are written as their fields (including private and inherited fields, except readonly fields, so get-only and init-only auto properties are not written),
+    /// <see cref="IDescribable"/> types describe themselves.
+    /// Chars are written as an UInt16 (any char, also a lone surrogate, independent of the encoding).
+    /// The look ups are reused by the next writer on the same thread when the writer is disposed.
+    /// Not thread safe (but several writers may write the same objects and collections at the same time, writing doesn't modify them).
+    /// </remarks>
     public sealed class BinaryWriterInspector : IInspectorImplementation, IWriteInspector, IDisposable
     {
         #region Life time
 
+        /// <summary>
+        /// Write to a stream.
+        /// </summary>
+        /// <param name="s">The stream to write to</param>
+        /// <param name="encoding">The encoding of strings (chars are always 16 bit code units), the reader must use the same encoding</param>
+        /// <param name="leaveOpen">True to keep the stream open when the writer is disposed</param>
         public BinaryWriterInspector(Stream s, Encoding encoding, bool leaveOpen = false)
             : this(new BinaryWriter(s, encoding, leaveOpen), false)
         {
             Encoding = encoding;
         }
 
+        /// <summary>
+        /// Write to a stream, strings are written as UTF-16 (<see cref="Encoding.Unicode"/>).
+        /// </summary>
+        /// <param name="s">The stream to write to</param>
+        /// <param name="leaveOpen">True to keep the stream open when the writer is disposed</param>
         public BinaryWriterInspector(Stream s, bool leaveOpen = false)
             : this(s, Encoding.Unicode, leaveOpen)
         {
             Encoding = Encoding.Unicode;
         }
 
+        /// <summary>
+        /// Write using a binary writer.
+        /// Strings are always encoded as UTF-16 (<see cref="Encoding.Unicode"/>).
+        /// </summary>
+        /// <param name="writer">The writer to use</param>
+        /// <param name="leaveOpen">True to keep the writer open when this inspector is disposed</param>
+        /// <exception cref="ArgumentNullException"><paramref name="writer"/> is null</exception>
         public BinaryWriterInspector(BinaryWriter writer, bool leaveOpen = false)
         {
+            ArgumentNullException.ThrowIfNull(writer);
             Writer = writer;
             LeaveOpen = leaveOpen;
             Encoding = Encoding.Unicode;
         }
 
+        /// <summary>
+        /// The binary writer that is used
+        /// </summary>
         public readonly BinaryWriter Writer;
 
         readonly bool LeaveOpen;
         readonly Encoding Encoding;
 
+        /// <summary>
+        /// User defined context values (case insensitive keys), created on first use
+        /// </summary>
         public Dictionary<String, Object> Context
         {
             get
@@ -46,8 +84,15 @@ namespace SysWeaver.Inspection
         }
         Dictionary<String, Object> InternalContext;
 
+        /// <summary>
+        /// How type names (of polymorphic values) are written, the default is the full type name and the assembly name (without version etc)
+        /// </summary>
         public TypenameQualifications TypenameQualification = TypenameQualifications.Assembly;
 
+        /// <summary>
+        /// Dispose the writer (unless leaveOpen was true) and return the look ups for reuse by the next writer on this thread.
+        /// The inspector can't be used after this (may be called more than once).
+        /// </summary>
         public void Dispose()
         {
             if (!LeaveOpen)
@@ -80,7 +125,8 @@ namespace SysWeaver.Inspection
 
         public void Field(ref Char value)
         {
-            Writer.Write(value);
+            //  As an UInt16: any char (BinaryWriter.Write(Char) throws for a lone surrogate), independent of the encoding
+            Writer.Write((UInt16)value);
         }
 
         public void Field(ref Decimal value)
@@ -209,7 +255,7 @@ namespace SysWeaver.Inspection
 
         public void Prop(Char value, SetProp<Char> onSet)
         {
-            Writer.Write(value);
+            Writer.Write((UInt16)value);
         }
 
         public void Prop(Decimal value, SetProp<Decimal> onSet)
@@ -322,9 +368,13 @@ namespace SysWeaver.Inspection
             handler.Prop(this, ref value, setValue);
         }
 
+        /// <summary>
+        /// Not supported, a writer never creates objects.
+        /// </summary>
+        /// <exception cref="NotSupportedException">Always</exception>
         public void OnNew<T>(T value, bool replaceLast)
         {
-            throw new Exception("Internal error!");
+            throw new NotSupportedException("Internal error, a writer never creates objects!");
         }
 
         public void ParentField<T>(ref T value) where T : class
@@ -349,7 +399,10 @@ namespace SysWeaver.Inspection
         /// </summary>
         sealed class WriterState
         {
-            public readonly Dictionary<Object, int> Objects = new Dictionary<Object, int>();
+            /// <summary>
+            /// The objects written so far, by reference (objects that are equal, but not the same instance, must be written separately)
+            /// </summary>
+            public readonly Dictionary<Object, int> Objects = new Dictionary<Object, int>(ReferenceEqualityComparer.Instance);
             public readonly Dictionary<Type, int> Types = new Dictionary<Type, int>();
             public readonly Dictionary<String, int> StringPool = new Dictionary<string, int>(StringComparer.Ordinal);
             public readonly Stack<Object> Stack = new Stack<object>();
@@ -612,6 +665,9 @@ namespace SysWeaver.Inspection
         /// <typeparam name="T">The type of the value</typeparam>
         /// <param name="obj">The value</param>
         /// <param name="saveAsObject">If true the value is written as an Object (with type information), the same as writing it with T = Object</param>
+        /// <remarks>
+        /// The default of <paramref name="saveAsObject"/> is false (also when called through <see cref="IWriteInspector"/>), so <c>Write(x)</c> is read by <c>Read&lt;T&gt;()</c> with the same T.
+        /// </remarks>
         public void Write<T>(T obj, bool saveAsObject = false)
         {
             //  Field, as BinaryReaderInspector.Read, the typed Prop and Field overloads doesn't write the same data for all types (ex: DateTimeOffset)
@@ -627,6 +683,15 @@ namespace SysWeaver.Inspection
         }
 
 
+        /// <summary>
+        /// Write a value as T to a stream (see <see cref="Write{T}(T, bool)"/>).
+        /// </summary>
+        /// <typeparam name="T">The type of the value, read it with the same type</typeparam>
+        /// <param name="obj">The value</param>
+        /// <param name="s">The stream</param>
+        /// <param name="encoding">The encoding of strings (the reader must use the same encoding)</param>
+        /// <param name="leaveOpen">True to keep the stream open</param>
+        /// <param name="context">Context values added to the <see cref="Context"/> of the inspector (keys must be unique)</param>
         public static void Write<T>(T obj, Stream s, Encoding encoding, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
             using (var insp = new BinaryWriterInspector(s, encoding, leaveOpen))
@@ -636,6 +701,14 @@ namespace SysWeaver.Inspection
             }
         }
 
+        /// <summary>
+        /// Write a value as T to a stream with UTF-16 strings (see <see cref="Write{T}(T, bool)"/>).
+        /// </summary>
+        /// <typeparam name="T">The type of the value, read it with the same type</typeparam>
+        /// <param name="obj">The value</param>
+        /// <param name="s">The stream</param>
+        /// <param name="leaveOpen">True to keep the stream open</param>
+        /// <param name="context">Context values added to the <see cref="Context"/> of the inspector (keys must be unique)</param>
         public static void Write<T>(T obj, Stream s, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
             using (var insp = new BinaryWriterInspector(s, leaveOpen))
@@ -645,6 +718,14 @@ namespace SysWeaver.Inspection
             }
         }
 
+        /// <summary>
+        /// Write a value as T using a binary writer (see <see cref="Write{T}(T, bool)"/>).
+        /// </summary>
+        /// <typeparam name="T">The type of the value, read it with the same type</typeparam>
+        /// <param name="obj">The value</param>
+        /// <param name="writer">The writer (strings are UTF-16)</param>
+        /// <param name="leaveOpen">True to keep the writer open</param>
+        /// <param name="context">Context values added to the <see cref="Context"/> of the inspector (keys must be unique)</param>
         public static void Write<T>(T obj, BinaryWriter writer, bool leaveOpen = false, params KeyValuePair<String, Object>[] context)
         {
             using (var insp = new BinaryWriterInspector(writer, leaveOpen))

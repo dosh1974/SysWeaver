@@ -493,7 +493,7 @@ flowchart LR
 - **Build:** many projects pre-compress or optimise their embedded web assets with pre-built Windows tools from `_tools` and use Windows shell commands in their build steps, so the repository builds as-is on Windows.
 - **Windows-only components:** the WebView2 browser, the CEF runtime packages as configured, certificate binding for the HttpListener server, and the Windows service host.
 - **Commercial or third-party terms:** Excel export uses a commercial spreadsheet library (free limited mode without a key); the Google translator uses a public web page rather than an official API; LLM features require an API account.
-- **Not in the solution:** a number of projects (mostly experimental or specialised) exist on disk but are not part of `SysWeaver.sln`; they are marked in their own documents.
+- **Not in the solution:** a number of projects (mostly experimental or specialised) exist on disk but are not part of `SysWeaver.slnx`; they are marked in their own documents.
 
 ## Repository layout
 
@@ -504,4 +504,4 @@ flowchart LR
 | `_external/` | Vendored third-party libraries — see [_external](_external/README.md) |
 | `_tools/` | Pre-built build tools — see [_tools](_tools/README.md) |
 | `_docs/` | Additional documents |
-| `SysWeaver.sln` | Solution file |
+| `SysWeaver.slnx` | Solution file |

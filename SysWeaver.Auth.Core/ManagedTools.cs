@@ -37,7 +37,7 @@ namespace SysWeaver
         /// Get some string data from a string.
         /// The input is evaluated in the following order:
         /// - If it points to a valid local file, it's read using UTF8 encoding.
-        /// - If a type is supplied and an embedded resource exist (raw or compressed using any of the supported compressors), the embedded data is read as UTF8.
+        /// - If a type is supplied and an embedded resource exist (see <see cref="InternalGet{T}(string, Func{string, T}, Func{ReadOnlyMemory{byte}, T}, Func{string, T}, Type, Action)"/>), the embedded data is read as UTF8.
         /// - The string is the input string
         /// </summary>
         /// <param name="s">Input data, can be a filename, the actual data or if a type is supplied the embedded resource</param>
@@ -57,7 +57,7 @@ namespace SysWeaver
         /// Get some data from a string.
         /// The input is evaluated in the following order:
         /// - If it points to a valid local file, it's read.
-        /// - If a type is supplied and an embedded resource exist (raw or compressed using any of the supported compressors), the embedded data is read.
+        /// - If a type is supplied and an embedded resource exist (see <see cref="InternalGet{T}(string, Func{string, T}, Func{ReadOnlyMemory{byte}, T}, Func{string, T}, Type, Action)"/>), the embedded data is read.
         /// - The data is the input string base64 encoded
         /// </summary>
         /// <param name="s">Input data, can be a filename, the actual data (as base64) or if a type is supplied the embedded resource</param>
@@ -78,7 +78,7 @@ namespace SysWeaver
         /// Get some text lines from a string.
         /// The input is evaluated in the following order:
         /// - If it points to a valid local file, the lines are read from it using UTF8 encoding.
-        /// - If a type is supplied and an embedded resource exist (raw or compressed using any of the supported compressors), the embedded data is read as UTF8 and split on new lines.
+        /// - If a type is supplied and an embedded resource exist (see <see cref="InternalGet{T}(string, Func{string, T}, Func{ReadOnlyMemory{byte}, T}, Func{string, T}, Type, Action)"/>), the embedded data is read as UTF8 and split on new lines.
         /// - The string is the input string split on new lines
         /// </summary>
         /// <param name="s">Input data, can be a filename, the actual data or if a type is supplied the embedded resource</param>
@@ -124,7 +124,8 @@ namespace SysWeaver
         /// Get some data from a string using the supplied conversion functions.
         /// The input is evaluated in the following order:
         /// - If it is a valid path to an existing file (relative paths are relative to the executable), it's read using <paramref name="getFromFile"/>.
-        /// - If a type is supplied and an embedded resource exist with the exact name, or the name prefixed with the namespace of the type (case insensitive), it's read using <paramref name="getFromMemory"/>.
+        /// - If a type is supplied and an embedded resource exist with the name, or the name prefixed with the namespace of the type (case insensitive), it's read (decompressed) using <paramref name="getFromMemory"/>.
+        /// A compressed resource is found by its full name or by the name without the compression extension (ex: "web.auth.index.html" finds "SysWeaver.Auth.web.auth.index.html.br"), an exact match is preferred.
         /// - Else <paramref name="getFromString"/> is called with the input string.
         /// </summary>
         /// <typeparam name="T">The type of data</typeparam>
@@ -133,7 +134,8 @@ namespace SysWeaver
         /// <param name="getFromMemory">Read the data from (uncompressed) embedded resource data</param>
         /// <param name="getFromString">Get the data from the string itself</param>
         /// <param name="embeddedResourceType">If supplied the data can be read from an embedded resource</param>
-        /// <param name="onFileChange">If non null and the input is a valid file path, a file monitor is created and this is called (once) the first time the file changes</param>
+        /// <param name="onFileChange">If non null and the input is the path of an existing file, a file monitor is created and this is called (once) the first time the file changes (the monitor is disposed after that).
+        /// No monitor is created for a non-existing file (so creating the file later doesn't trigger a reload).</param>
         /// <returns>The data, null if <paramref name="s"/> is null or empty</returns>
         /// <remarks>Errors reading files or resources are ignored (falls through to the next option).</remarks>
         public static T InternalGet<T>(String s, Func<String, T> getFromFile, Func<ReadOnlyMemory<Byte>, T> getFromMemory, Func<String, T> getFromString, Type embeddedResourceType, Action onFileChange) where T : class
@@ -151,7 +153,8 @@ namespace SysWeaver
                     isFile = File.Exists(fn);
                     if (isFile)
                         res = getFromFile(fn);
-                    if (onFileChange != null)
+                    //  Only monitor existing files (a monitor for a non-existing file, ex: a literal text, would never be disposed)
+                    if (isFile && (onFileChange != null))
                     {
                         new ManagedFile(new ManagedFileParams
                         {
@@ -175,7 +178,6 @@ namespace SysWeaver
             }
             if (res == null)
             {
-                bool isEmbedded = false;
                 //  If it's an embedded resource, use that
                 if ((!isFile) && (embeddedResourceType != null))
                 {
@@ -183,34 +185,12 @@ namespace SysWeaver
                     {
                         var asm = embeddedResourceType.Assembly;
                         var rs = asm.GetManifestResourceNames();
-                        var en = s;
-                        foreach (var t in rs)
+                        var t = FindResourceName(rs, s) ?? FindResourceName(rs, embeddedResourceType.Namespace + "." + s);
+                        if (t != null)
                         {
-                            if (!t.StartsWith(en, StringComparison.OrdinalIgnoreCase))
-                                continue;
-                            if (String.Equals(t, en, StringComparison.OrdinalIgnoreCase))
-                            {
-                                var mem = asm.GetUncompressedResourceData(t);
-                                res = getFromMemory(mem);
-                                isEmbedded = true;
-                                break;
-                            }
-                        }
-                        if (!isEmbedded)
-                        {
-                            en = embeddedResourceType.Namespace + "." + s;
-                            foreach (var t in rs)
-                            {
-                                if (!t.StartsWith(en, StringComparison.OrdinalIgnoreCase))
-                                    continue;
-                                if (String.Equals(t, en, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    var mem = asm.GetUncompressedResourceData(t);
-                                    res = getFromMemory(mem);
-                                    isEmbedded = true;
-                                    break;
-                                }
-                            }
+                            //  Decompresses the data if the name ends with a compression extension
+                            var mem = asm.GetUncompressedResourceData(ref t);
+                            res = getFromMemory(mem);
                         }
                     }
                     catch
@@ -219,6 +199,29 @@ namespace SysWeaver
                 }
             }
             return res ?? getFromString(s);
+        }
+
+        /// <summary>
+        /// Find the name of a resource that is equal to a name (case insensitive), or the name + "." + a compression extension (ex: ".br").
+        /// An exact match is preferred over a compressed one.
+        /// </summary>
+        /// <param name="names">The resource names</param>
+        /// <param name="name">The (uncompressed) name to find</param>
+        /// <returns>The full name of the resource or null if not found</returns>
+        static String FindResourceName(String[] names, String name)
+        {
+            String compressed = null;
+            var nl = name.Length;
+            foreach (var t in names)
+            {
+                if (!t.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (t.Length == nl)
+                    return t;
+                if ((compressed == null) && (t[nl] == '.') && (CompManager.GetFromExt(t.AsSpan(nl + 1)) != null))
+                    compressed = t;
+            }
+            return compressed;
         }
 
 

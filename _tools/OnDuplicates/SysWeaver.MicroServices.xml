@@ -54,6 +54,16 @@
             The from address when sending emails using this instance
             </summary>
         </member>
+        <member name="T:SysWeaver.MicroService.IHaveDefaultInstanceName">
+            <summary>
+            Use this to specify a default instance name for a service object
+            </summary>
+        </member>
+        <member name="P:SysWeaver.MicroService.IHaveDefaultInstanceName.DefaultInstanceName">
+            <summary>
+            If no instance name is supplied when creating the service object, the name is collected from the instance
+            </summary>
+        </member>
         <member name="T:SysWeaver.MicroService.IQrCodeService">
             <summary>
             Service for generating QR code svgs
@@ -84,6 +94,17 @@
         <member name="T:SysWeaver.MicroService.IHaveTemplateVariables">
             <summary>
             Any instance registered to the service manager, that implements this interface will have the template variables registered
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.IRunTimeWebApiAuth">
+            <summary>
+            Services with API's can implement this API to provide runtime configurable auths
+            </summary>
+        </member>
+        <member name="P:SysWeaver.MicroService.IRunTimeWebApiAuth.MethodAuths">
+            <summary>
+            Runtime auto overrides, key = method name, value = auth for that method
+            Key "*" means all all methods (that are not otherwise specified)
             </summary>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiAttribute">
@@ -122,12 +143,25 @@
             Set to true if the response data is localized (different pending on the specified language)
             </summary>
         </member>
+        <member name="F:SysWeaver.MicroService.WebApiRawAttribute.PreCompressedWith">
+            <summary>
+            The compression method used on the returned data
+            </summary>
+        </member>
         <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.Boolean,System.Boolean)">
             <summary>
             The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
             </summary>
             <param name="mime">The mimetype of the raw output data</param>
             <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+            <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+            </summary>
+            <param name="mime">The mimetype of the raw output data</param>
+            <param name="preCompressedWith">The compression method used on the returned data</param>
             <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiRawTextAttribute">
@@ -140,6 +174,34 @@
             The method must returns some readonly memory containg UTF8 encoded text, and in that case the function should be treated as raw data (i.e no serialization will happen).
             </summary>
             <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiServiceRateLimitAttribute">
+            <summary>
+            Limit the call rate to an API on the service process level
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiServiceRateLimitAttribute.#ctor(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Limit the call rate to an API on the service process level
+            </summary>
+            <param name="count">Number of request</param>
+            <param name="duration">Over this time frame in seconds</param>
+            <param name="maxQueue">The maximum number of request to keep queued</param>
+            <param name="maxDelay">The maximum time to delay a request</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiSessionRateLimitAttribute">
+            <summary>
+            Limit the call rate to an API per session
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiSessionRateLimitAttribute.#ctor(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Limit the call rate to an API per session
+            </summary>
+            <param name="count">Number of request</param>
+            <param name="duration">Over this time frame in seconds</param>
+            <param name="maxQueue">The maximum number of request to keep queued</param>
+            <param name="maxDelay">The maximum time to delay a request</param>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiAuditAttribute">
             <summary>
@@ -207,17 +269,6 @@
         <member name="F:SysWeaver.MicroService.WebApiAuthAttribute.Auth">
             <summary>
             Auth
-            </summary>
-        </member>
-        <member name="T:SysWeaver.MicroService.IRunTimeWebApiAuth">
-            <summary>
-            Services with API's can implement this API to provide runtime configurable auths
-            </summary>
-        </member>
-        <member name="P:SysWeaver.MicroService.IRunTimeWebApiAuth.MethodAuths">
-            <summary>
-            Runtime auto overrides, key = method name, value = auth for that method
-            Key "*" means all all methods (that are not otherwise specified)
             </summary>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiClientCacheAttribute">

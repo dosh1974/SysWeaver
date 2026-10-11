@@ -115,21 +115,43 @@ namespace SysWeaver.Data
         /// Sort some data by column names (lazily, using LINQ).
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>
-        /// <param name="order">The column names to sort by in priority order, a '-' prefix reverses the order. Unknown names are ignored.</param>
+        /// <param name="order">The column names to sort by in priority order (names are trimmed and case sensitive), a '-' prefix reverses the order.
+        /// Unknown names are ignored. Columns with a <see cref="TableDataSortDescAttribute"/> sort descending by default (ascending with '-').</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
+        /// <remarks>
+        /// The sort is stable. Strings use the default (current culture) comparer.
+        /// A nullable value type column (ex: int?, DateTime?) whose underlying type implements <see cref="IComparable{T}"/> is sorted by value, null first (as <see cref="Comparer{T}.Default"/> of the nullable type).
+        /// Columns whose type doesn't implement <see cref="IComparable{T}"/> (ex: enums and nullable enums, <see cref="Type"/>) and columns with a
+        /// <see cref="TableDataNoSortAttribute"/> are sorted by the <see cref="Object.ToString"/> text of the value (an empty text for null).
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> Sort<T>(String[] order, IEnumerable<T> data)
             => TableDataType<T>.Sort(order, data);
 
         /// <summary>
         /// Filter some data using <see cref="TableDataFilter"/>'s (lazily, using LINQ).
-        /// Filters with a null value, an unknown column name or an undefined <see cref="TableDataFilterOps"/> value are ignored.
+        /// Filters with a null value, an unknown column name (case sensitive) or an undefined <see cref="TableDataFilterOps"/> value are ignored, multiple filters must all match.
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>
         /// <param name="filters">The filters to apply, may be null.</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
+        /// <exception cref="FormatException">A compare filter (Equals .. GreaterEqual) value can't be parsed as the column type (thrown immediately, <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/> returns an empty table instead).</exception>
+        /// <remarks>
+        /// Compare ops (<see cref="TableDataFilterOps.Equals"/> to <see cref="TableDataFilterOps.GreaterEqual"/>) parse the filter value strictly
+        /// (<see cref="StringToObject"/>, floating point numbers using the invariant culture, other numbers and dates using the current culture).
+        /// <see cref="TableDataFilterOps.Contains"/>, <see cref="TableDataFilterOps.StartsWith"/> and <see cref="TableDataFilterOps.EndsWith"/> use the
+        /// <see cref="Object.ToString"/> text of the value (an empty text for null).
+        /// <see cref="TableDataFilterOps.AnyOf"/>, <see cref="TableDataFilterOps.NoneOf"/>, <see cref="TableDataFilterOps.InRange"/> and <see cref="TableDataFilterOps.OutsideRange"/>
+        /// split the value on ',' (entries trimmed) and convert the entries leniently (<see cref="StringConverter"/>, invalid entries become the default value),
+        /// the range is [min, max) of the entries (InRange) or below min / above max (OutsideRange).
+        /// Strings compare ordinal (case insensitive unless <see cref="TableDataFilterBase.CaseSensitive"/>), a null string is less than any string and equal to none.
+        /// Enum columns, nullable enum columns (and columns of types without <see cref="IComparable{T}"/>) compare the name / text of the value.
+        /// Nullable value type columns (ex: int?, DateTime?) compare by value using a total order where null is less than any value and equal to null
+        /// (the sort order, <see cref="Nullable.Compare{T}(T?, T?)"/>): an empty (or white space) compare filter value or AnyOf / range entry is null,
+        /// invalid AnyOf / range entries are null too.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> Filter<T>(TableDataFilter[] filters, IEnumerable<T> data)
             => TableDataType<T>.Filter(filters, data);
@@ -190,6 +212,14 @@ namespace SysWeaver.Data
         /// <remarks>
         /// Exceptions while processing the data are swallowed, giving an empty table.
         /// The requested row count is capped server side by <paramref name="maxAllowedRows"/> (a request with no limit, zero or negative, gets <paramref name="maxAllowedRows"/> rows).
+        /// A <see cref="TableDataRequest.SearchText"/> (trimmed, ignored if empty or if the row type has no searchable string members) is ranked by <see cref="DefaultSearch"/>
+        /// over the public string fields and properties of the row type without a <see cref="TableDataIgnoreAttribute"/> (the string columns, hidden ones included,
+        /// members of <see cref="TableDataExpandAttribute"/> expanded members are not searched), plus the non-public or ignored string members that have a
+        /// <see cref="TableDataSearchAttribute"/>, ordered by descending <see cref="TableDataSearchAttribute"/> weight (weight zero or less excludes a member).
+        /// The rank of each member is multiplied by its weight (default 1) times 0.95 per preceding searched member (in that order).
+        /// Compiler generated members (auto property backing fields) are never searched, a member is only searched once.
+        /// Rows without a match are removed and the result is ordered by rank (after filtering and sorting, so the rank order wins).
+        /// <see cref="CommonTableData.RowCount"/> is the start row plus the number of returned rows plus the number of look ahead rows found.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableData Get<T>(TableDataRequest request, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
@@ -750,6 +780,7 @@ namespace SysWeaver.Data
 
         static readonly MethodInfo StringCompareCase = typeof(String).GetMethod(nameof(String.CompareOrdinal), BindingFlags.Public | BindingFlags.Static, [typeof(String), typeof(String)]);
         static readonly MethodInfo StringCompareNoCase = typeof(String).GetMethod(nameof(String.Compare), BindingFlags.Public | BindingFlags.Static, [typeof(String), typeof(String), typeof(StringComparison)]);
+        static readonly MethodInfo NullableCompareMethod = typeof(Nullable).GetMethods(BindingFlags.Public | BindingFlags.Static).First(x => (x.Name == nameof(Nullable.Compare)) && x.IsGenericMethodDefinition);
 
 
         static readonly MethodInfo StringContains = typeof(String).GetMethod(nameof(String.Contains), BindingFlags.Public | BindingFlags.Instance, [typeof(String), typeof(StringComparison)]);
@@ -820,6 +851,14 @@ namespace SysWeaver.Data
                 {
                     value = Expression.Call(null, StringCompareNoCase, value, cmpValue, CompNoCaseExp);
                 }
+                cmpValue = ConstInt32_0;
+                return;
+            }
+            //  Nullable value types: total order (null is less than any value and equal to null), same as Comparer<T?>.Default used when sorting
+            var ut = Nullable.GetUnderlyingType(vt);
+            if (ut != null)
+            {
+                value = Expression.Call(null, NullableCompareMethod.MakeGenericMethod(ut), value, cmpValue);
                 cmpValue = ConstInt32_0;
                 return;
             }
@@ -1230,17 +1269,20 @@ namespace SysWeaver.Data
         /// <param name="columns">Optionally override the description, format, title and the hide/key/chart flags of the columns derived from the type.
         /// Must have the same number of columns, in the same order, as the type. Name and type are always taken from the type.</param>
         /// <param name="title">Optional title.</param>
-        /// <returns>A function that can be used to get the static data</returns>
-        /// <exception cref="Exception">The number of <paramref name="columns"/> doesn't match the type.</exception>
-        public static Func<TableDataRequest, TableData> GetStaticTableFn<T>(IEnumerable<T> data, TableDataColumn[] columns = null, String title = null)
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
+        /// Zero or negative disables the cap (only for trusted server side callers, never for client requests).</param>
+        /// <returns>A function that can be used to get the static data, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>
+        /// (a null request gives the first 20 rows, the row count is capped at <paramref name="maxAllowedRows"/>).</returns>
+        /// <exception cref="ArgumentException">The number of <paramref name="columns"/> doesn't match the type.</exception>
+        public static Func<TableDataRequest, TableData> GetStaticTableFn<T>(IEnumerable<T> data, TableDataColumn[] columns = null, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
         {
             var d = data.ToList();
             if (columns == null)
-                return r => Get(r, d, title);
+                return r => Get(r, d, title, maxAllowedRows);
             var cols = TableDataType<T>.Cols;
             var cl = cols.Length;
             if (columns.Length != cl)
-                throw new Exception("Invalid number of columns!");
+                throw new ArgumentException("Invalid number of columns, expected " + cl + " but got " + columns.Length + "!", nameof(columns));
             TableDataColumn[] destCols = new TableDataColumn[cl];
             for (int i = 0; i < cl; ++ i)
             {
@@ -1257,13 +1299,13 @@ namespace SysWeaver.Data
             }
             return r =>
             {
-                var t = Get(r, d);
+                var t = Get(r, d, null, maxAllowedRows);
                 return new TableData
                 {
                     RowCount = t.RowCount,
                     RefreshRate = t.RefreshRate,
                     Rows = t.Rows,
-                }.HandleCc(r.Cc, destCols, title);
+                }.HandleCc((r ?? DefRequest).Cc, destCols, title);
             };
         }
 
@@ -1327,19 +1369,22 @@ namespace SysWeaver.Data
         /// <param name="rows">Data for each row and column, values are converted to the column type when needed (strings are parsed).
         /// Enumerated once, immediately.</param>
         /// <param name="title">Optional title</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
+        /// Zero or negative disables the cap (only for trusted server side callers, never for client requests).</param>
         /// <returns>A function that can be used to get the static data</returns>
         /// <remarks>Null values, and values that can't be converted, are replaced by the default value of the column type (ex: 0 for numbers, null for reference types).</remarks>
-        public static Func<TableDataRequest, TableData> GetStaticTableFn(TableDataColumn[] columns, IEnumerable<object[]> rows, String title = null)
+        public static Func<TableDataRequest, TableData> GetStaticTableFn(TableDataColumn[] columns, IEnumerable<object[]> rows, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
         {
             var type = GetDynType(out var createFn, columns);
             using var it = rows.GetEnumerator();
-            return createFn(it, columns, title);
+            return createFn(it, columns, title, maxAllowedRows);
         }
 
         static readonly ParameterExpression InputRows = Expression.Parameter(typeof(IEnumerator<object[]>), "rows");
         static readonly ParameterExpression VarCols = Expression.Variable(typeof(object[]), "columnValues");
         static readonly ParameterExpression InputColumns = Expression.Variable(typeof(TableDataColumn[]), "colDefs");
         static readonly ParameterExpression Title = Expression.Variable(typeof(String), "title");
+        static readonly ParameterExpression MaxAllowedRows = Expression.Variable(typeof(long), "maxAllowedRows");
 
 
         static readonly MethodInfo MethodMoveNext = typeof(IEnumerator).GetMethod(nameof(IEnumerator.MoveNext));
@@ -1356,7 +1401,7 @@ namespace SysWeaver.Data
 
         static long TypeName;
 
-        static Type GetDynType(out Func<IEnumerator<Object[]>, TableDataColumn[], String, Func<TableDataRequest, TableData>> createFn, TableDataColumn[] defs)
+        static Type GetDynType(out Func<IEnumerator<Object[]>, TableDataColumn[], String, long, Func<TableDataRequest, TableData>> createFn, TableDataColumn[] defs)
         {
             var types = defs.Select(x => TypeFinder.Get(x.Type)).ToArray();
             var names = defs.Select(x => x.Name).ToArray();
@@ -1431,9 +1476,10 @@ namespace SysWeaver.Data
                 var m = MethodGetStaticTableFn.MakeGenericMethod(type);
                 var inpCols = InputColumns;
                 var inpTitle = Title;
-                program.Add(Expression.Call(m, varList, inpCols, inpTitle));
+                var inpMax = MaxAllowedRows;
+                program.Add(Expression.Call(m, varList, inpCols, inpTitle, inpMax));
                 var expProg = Expression.Block([varList], program);
-                createFn = Expression.Lambda<Func<IEnumerator<Object[]>, TableDataColumn[], String, Func<TableDataRequest, TableData>>>(expProg, inpRows, inpCols, inpTitle).Compile();
+                createFn = Expression.Lambda<Func<IEnumerator<Object[]>, TableDataColumn[], String, long, Func<TableDataRequest, TableData>>>(expProg, inpRows, inpCols, inpTitle, inpMax).Compile();
                 c = Tuple.Create(createFn, type);
                 if (!cache.TryAdd(key, c))
                 {
@@ -1445,7 +1491,7 @@ namespace SysWeaver.Data
             }
         }
 
-        static readonly ConcurrentDictionary<String, Tuple<Func<IEnumerator<Object[]>, TableDataColumn[], String, Func<TableDataRequest, TableData>>, Type>> TypeCache = new (StringComparer.Ordinal);
+        static readonly ConcurrentDictionary<String, Tuple<Func<IEnumerator<Object[]>, TableDataColumn[], String, long, Func<TableDataRequest, TableData>>, Type>> TypeCache = new (StringComparer.Ordinal);
 
 
 

@@ -4,18 +4,258 @@
         <name>SysWeaver.Serialization.NewtonsoftJson</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Serialization.ExtendedJsonTextWriter">
+            <summary>
+            A <see cref="T:Newtonsoft.Json.JsonTextWriter"/> that exposes indentation helpers, used by <see cref="T:SysWeaver.Serialization.JsonByteArrayConverter"/> to write raw, aligned byte array rows.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.ExtendedJsonTextWriter.#ctor(System.IO.TextWriter)">
+            <summary>
+            Create a writer.
+            </summary>
+            <param name="textWriter">The text writer to write to.</param>
+        </member>
+        <member name="F:SysWeaver.Serialization.ExtendedJsonTextWriter.ExtraIndent">
+            <summary>
+            One indentation level (computed from the indentation settings at construction time).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.ExtendedJsonTextWriter.WriteIndent">
+            <summary>
+            Write a new line followed by the indentation of the current nesting level.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.JsonByteArrayConverter">
+            <summary>
+            Write-only Newtonsoft converter that writes byte arrays as arrays of numbers, 32 per line with right aligned columns, instead of base64 strings.
+            </summary>
+            <remarks>
+            Only works with an <see cref="T:SysWeaver.Serialization.ExtendedJsonTextWriter"/> (used by <see cref="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToFormattedJson``1(``0)"/>).
+            The numbers are written as raw text, so the writer state is not updated for each value.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Serialization.JsonByteArrayConverter.Instance">
+            <summary>
+            The shared instance.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.JsonByteArrayConverter.ReadJson(Newtonsoft.Json.JsonReader,System.Type,System.Object,Newtonsoft.Json.JsonSerializer)">
+            <summary>
+            Not supported (<see cref="P:SysWeaver.Serialization.JsonByteArrayConverter.CanRead"/> is false).
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always thrown.</exception>
+        </member>
+        <member name="P:SysWeaver.Serialization.JsonByteArrayConverter.CanRead">
+            <summary>
+            Always false, this converter is write only.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.JsonByteArrayConverter.CanConvert(System.Type)">
+            <summary>
+            Returns true for byte arrays.
+            </summary>
+            <param name="t">The type to test.</param>
+            <returns>True if <paramref name="t"/> is a byte array type.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.JsonByteArrayConverter.WriteJson(Newtonsoft.Json.JsonWriter,System.Object,Newtonsoft.Json.JsonSerializer)">
+            <summary>
+            Write a byte array (or null) as a json array of numbers.
+            Arrays with at most 32 elements are written on a single line, longer arrays are written with 32 numbers per line.
+            </summary>
+            <param name="jw">The writer, must be an <see cref="T:SysWeaver.Serialization.ExtendedJsonTextWriter"/>.</param>
+            <param name="value">The byte array to write, may be null.</param>
+            <param name="serializer">The calling serializer (unused).</param>
+        </member>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJson.MemberResolver">
+            <summary>
+            Newtonsoft contract resolver used for serialization: only writable members (non read-only fields and properties with a setter) are serialized,
+            and collection items use <see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/> by default.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.Instance">
+            <summary>
+            The shared instance (contract resolvers cache contracts, so share a single instance).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.CreateProperty(System.Reflection.MemberInfo,Newtonsoft.Json.MemberSerialization)">
+            <summary>
+            Creates the property as the default resolver does, but read-only fields and properties without a setter are never serialized.
+            </summary>
+            <param name="member">The field or property.</param>
+            <param name="memberSerialization">The member serialization mode of the declaring type.</param>
+            <returns>The property, with <see cref="P:Newtonsoft.Json.Serialization.JsonProperty.ShouldSerialize"/> returning false for read-only members.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.CreateContract(System.Type)">
+            <summary>
+            Creates the contract as the default resolver does, but container contracts (collections and dictionaries) default to
+            <see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/> for their items (when not set by attributes).
+            </summary>
+            <param name="objectType">The type to create a contract for.</param>
+            <returns>The contract.</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder">
+            <summary>
+            Serialization binder that writes type names like the default Newtonsoft binder, but resolves type names using <see cref="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)"/>.
+            </summary>
+            <remarks>
+            Only types allowed by the <see cref="T:SysWeaver.DataTypePolicy"/> can be bound (Newtonsoft checks that the type is assignable to the declared type).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.Instance">
+            <summary>
+            The shared instance.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.BindToName(System.Type,System.String@,System.String@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.BindToType(System.String,System.String)">
+            <inheritdoc/>
+            <exception cref="T:SysWeaver.DataTypeNotAllowedException">The type isn't allowed by the <see cref="T:SysWeaver.DataTypePolicy"/></exception>
+        </member>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJsonSerializer">
+            <summary>
+            Serializer for the "json" extension backed by Newtonsoft.Json (priority 1).
+            </summary>
+            <remarks>
+            Serialization uses <see cref="T:SysWeaver.Serialization.NewtonsoftJson.MemberResolver"/>: fields are included and read-only fields/get-only properties are not written.
+            "$type" information is written only where needed for <see cref="F:SysWeaver.Serialization.SerializerOptions.Compact"/>, on every object (and indented) for <see cref="F:SysWeaver.Serialization.SerializerOptions.Verbose"/> and never for <see cref="F:SysWeaver.Serialization.SerializerOptions.Typeless"/>.
+            Deserialization honors "$type" (<see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/>) and resolves names with <see cref="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)"/>,
+            so only types allowed by the <see cref="T:SysWeaver.DataTypePolicy"/> (and assignable to the declared type) can be instantiated.
+            A json null is read as NaN into a (not nullable) float / double (SysWeaver.Json writes NaN and infinities as null), see <see cref="T:SysWeaver.Serialization.NullAsNaNConverter"/>.
+            Deserializers are pooled (<see cref="T:SysWeaver.LimitedObjectPool`1"/>) so concurrent calls are safe.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Extension">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.MimeType">
+            <summary>
+            The MIME type of the data produced by this serializer.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Mime">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.MimeHeader">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Encoding">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.Instance">
+            <summary>
+            The singleton instance of this serializer.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToString">
+            <summary>
+            Returns the <see cref="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Name"/> of this serializer.
+            </summary>
+        </member>
         <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Register">
             <summary>
             Call once to register this serializer type to the serializer manager
             </summary>
         </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.DeserCreate">
+            <summary>
+            Factory for pooled deserializers (type name handling enabled, resolving type names using <see cref="T:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder"/>, null is read as NaN for float / double, see <see cref="T:SysWeaver.Serialization.NullAsNaNConverter"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.SerCreate">
+            <summary>
+            Factory for pooled serializers used by <see cref="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToFormattedJson``1(``0)"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Create``1(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Create``1(System.ReadOnlyMemory{System.Byte})">
+            <inheritdoc/>
+        </member>
         <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToFormattedJson``1(``0)">
             <summary>
-            Convert an object to json text with nice formatting, specifically for byte array's.
+            Convert an object to indented json text (Newtonsoft, with "$type" information on every object) where byte arrays are written as compact,
+            column aligned rows of 32 numbers per line instead of base64 strings.
+            Intended for human readable diagnostics output.
             </summary>
-            <typeparam name="T"></typeparam>
-            <param name="obj"></param>
-            <returns></returns>
+            <typeparam name="T">The static type to serialize as.</typeparam>
+            <param name="obj">The object to serialize.</param>
+            <returns>The formatted json text.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.FromString``1(System.ReadOnlySpan{System.Char})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.FromString``1(System.String)">
+            <inheritdoc/>
+            <remarks>Null, empty or white space text and "null" (surrounding white space is allowed) return null (like the span overload).</remarks>
+            <exception cref="T:System.NullReferenceException">The text deserialized to null but is not null, white space or "null".</exception>
+        </member>
+        <member name="T:SysWeaver.Serialization.NullAsNaNConverter">
+            <summary>
+            Read-only Newtonsoft converter for <see cref="T:System.Double"/> and <see cref="T:System.Single"/> (not nullable) that reads a json null as NaN.
+            </summary>
+            <remarks>
+            SysWeaver.Json (SwJson) writes NaN and infinities as null (json has no such numbers), so data written by it (like the compact output of the SafeJson serializer) can be read back.
+            Numbers (and the NaN, Infinity and -Infinity tokens written by older versions) are read as before, nullable members are not affected (null is null).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Serialization.NullAsNaNConverter.Instance">
+            <summary>
+            The shared instance.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NullAsNaNConverter.CanConvert(System.Type)">
+            <summary>
+            Returns true for <see cref="T:System.Double"/> and <see cref="T:System.Single"/>.
+            </summary>
+            <param name="objectType">The type to test.</param>
+            <returns>True if <paramref name="objectType"/> is a <see cref="T:System.Double"/> or a <see cref="T:System.Single"/>.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.NullAsNaNConverter.ReadJson(Newtonsoft.Json.JsonReader,System.Type,System.Object,Newtonsoft.Json.JsonSerializer)">
+            <summary>
+            Read a <see cref="T:System.Double"/> or a <see cref="T:System.Single"/>, null is read as NaN.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.NullAsNaNConverter.CanWrite">
+            <summary>
+            Always false, this converter is read only.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NullAsNaNConverter.WriteJson(Newtonsoft.Json.JsonWriter,System.Object,Newtonsoft.Json.JsonSerializer)">
+            <summary>
+            Not supported (<see cref="P:SysWeaver.Serialization.NullAsNaNConverter.CanWrite"/> is false).
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always thrown.</exception>
+        </member>
+        <member name="T:SysWeaver.Serialization.PooledJsonSerializer">
+            <summary>
+            A Newtonsoft <see cref="T:Newtonsoft.Json.JsonSerializer"/> that returns itself to its pool when disposed (instead of being disposed).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.PooledJsonSerializer.#ctor(System.Action{SysWeaver.Serialization.PooledJsonSerializer})">
+            <summary>
+            Create a pooled serializer.
+            </summary>
+            <param name="onDispose">Called with this instance when it is disposed (returns it to the pool).</param>
+        </member>
+        <member name="M:SysWeaver.Serialization.PooledJsonSerializer.Dispose">
+            <summary>
+            Return this serializer to its pool, it must not be used after this call.
+            </summary>
         </member>
     </members>
 </doc>

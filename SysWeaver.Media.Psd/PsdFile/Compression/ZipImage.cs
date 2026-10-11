@@ -18,13 +18,27 @@ using System.IO.Compression;
 
 namespace PhotoshopFile.Compression
 {
+  /// <summary>
+  /// ZIP (zlib header + deflate) compressed image data, without prediction.
+  /// An instance is either a decompressor (created with data) or a compressor (created with null data).
+  /// </summary>
   public class ZipImage : ImageData
   {
     private MemoryStream zipDataStream;
-    private DeflateStream zipStream;
+    private Stream zipStream;
+    private bool hasData;
 
     protected override bool AltersWrittenData => false;
 
+    /// <summary>
+    /// Create a decompressor or a compressor.
+    /// </summary>
+    /// <param name="data">The compressed data (starting with the 2 byte zlib header, which is skipped, the Adler-32 trailer is not checked),
+    /// or null to create a compressor.
+    /// A compressor writes a complete zlib (RFC 1950) stream: header, deflate data and Adler-32 checksum (nothing at all for empty image data).</param>
+    /// <param name="size">The image size in pixels.</param>
+    /// <param name="bitDepth">The bit depth (1, 8, 16 or 32), this class does not change the byte order.</param>
+    /// <exception cref="ArgumentException"><paramref name="bitDepth"/> is invalid.</exception>
     public ZipImage(byte[] data, Size size, int bitDepth)
       : base(size, bitDepth)
     {
@@ -42,20 +56,8 @@ namespace PhotoshopFile.Compression
     {
       zipDataStream = new MemoryStream();
 
-      // Write 2-byte zlib (RFC 1950) header
-      //
-      // CMF Compression Method and flags:
-      //   CM     0:3 = 8 = deflate
-      //   CINFO  4:7 = 4 = undefined, RFC 1950 only defines CINFO = 8
-      //
-      // FLG Flags:
-      //   FCHECK  0:4 = 9 = check bits for CMF and FLG
-      //   FDICT     5 = 0 = no preset dictionary
-      //   FLEVEL  6:7 = 2 = default compression level
-
-      zipDataStream.WriteByte(0x48);
-      zipDataStream.WriteByte(0x89);
-      zipStream = new DeflateStream(zipDataStream, CompressionMode.Compress,
+      // ZLibStream writes the zlib (RFC 1950) header and the Adler-32 trailer
+      zipStream = new ZLibStream(zipDataStream, CompressionMode.Compress,
         true);
     }
 
@@ -63,8 +65,8 @@ namespace PhotoshopFile.Compression
     {
       zipDataStream = new MemoryStream(data);
 
-      // .NET implements Deflate (RFC 1951) but not zlib (RFC 1950),
-      // so we have to skip the first two bytes.
+      // Skip the 2 byte zlib (RFC 1950) header and decode the raw deflate data,
+      // a missing or wrong Adler-32 trailer is tolerated (older versions of this library wrote none).
       zipDataStream.ReadByte();
       zipDataStream.ReadByte();
       zipStream = new DeflateStream(zipDataStream, CompressionMode.Decompress,
@@ -76,10 +78,11 @@ namespace PhotoshopFile.Compression
       var bytesToRead = (long)Size.Height * BytesPerRow;
       Util.CheckByteArrayLength(bytesToRead);
 
-      var bytesRead = zipStream.Read(buffer, 0, (int)bytesToRead);
+      // DeflateStream.Read may return fewer bytes than requested, read until done.
+      var bytesRead = zipStream.ReadAtLeast(buffer.AsSpan(0, (int)bytesToRead), (int)bytesToRead, false);
       if (bytesRead != bytesToRead)
       {
-        throw new Exception("ZIP stream was not fully decompressed.");
+        throw new InvalidDataException("ZIP stream was not fully decompressed.");
       }
     }
 
@@ -88,8 +91,8 @@ namespace PhotoshopFile.Compression
       // Write out the last block.  (Flush leaves the last block open.)
       zipStream.Close();
 
-      // Do not write the zlib header when the image data is empty
-      var result = (zipDataStream.Length == 2)
+      // Do not write anything when the image data is empty
+      var result = !hasData
         ? new byte[0]
         : zipDataStream.ToArray();
       return result;
@@ -97,6 +100,7 @@ namespace PhotoshopFile.Compression
 
     internal override void WriteInternal(byte[] array)
     {
+      hasData |= (array.Length > 0);
       zipStream.Write(array, 0, array.Length);
     }
   }

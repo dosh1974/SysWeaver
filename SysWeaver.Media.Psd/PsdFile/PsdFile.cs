@@ -24,6 +24,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using PhotoshopFile.Compression;
+
 namespace PhotoshopFile
 {
   public enum PsdColorMode
@@ -48,6 +50,12 @@ namespace PhotoshopFile
   {
     #region Constructors
 
+    /// <summary>
+    /// Create an empty document (no layers, no image resources, no channels, 0 x 0 pixels).
+    /// Set <see cref="ChannelCount"/>, <see cref="RowCount"/>, <see cref="ColumnCount"/>, <see cref="BitDepth"/>, <see cref="ColorMode"/>
+    /// and the <see cref="BaseLayer"/> channels before saving.
+    /// </summary>
+    /// <param name="version">PSD or PSB (large document) format.</param>
     public PsdFile(PsdFileVersion version = PsdFileVersion.Psd)
     {
       Version = version;
@@ -58,6 +66,15 @@ namespace PhotoshopFile
       AdditionalInfo = new List<LayerInfo>();
     }
 
+    /// <summary>
+    /// Load a PSD or PSB file.
+    /// The image data stays compressed, call <see cref="Channel.DecodeImageData"/> to decompress a channel.
+    /// </summary>
+    /// <param name="filename">The file to load.</param>
+    /// <param name="loadContext">The Pascal string encoding and load callbacks.</param>
+    /// <exception cref="PsdInvalidException">The file is not a valid PSD file (bad signature, version or structure).</exception>
+    /// <exception cref="System.IO.EndOfStreamException">The file is truncated.</exception>
+    /// <exception cref="ArgumentException">A header value (channel count, dimension, bit depth) is out of range.</exception>
     public PsdFile(string filename, LoadContext loadContext)
       : this()
     {
@@ -67,6 +84,15 @@ namespace PhotoshopFile
       }
     }
 
+    /// <summary>
+    /// Load a PSD or PSB file from the current position of a stream (the stream is not closed).
+    /// The image data stays compressed, call <see cref="Channel.DecodeImageData"/> to decompress a channel.
+    /// </summary>
+    /// <param name="stream">The stream to read, must be seekable.</param>
+    /// <param name="loadContext">The Pascal string encoding and load callbacks.</param>
+    /// <exception cref="PsdInvalidException">The data is not a valid PSD file (bad signature, version or structure).</exception>
+    /// <exception cref="System.IO.EndOfStreamException">The data is truncated.</exception>
+    /// <exception cref="ArgumentException">A header value (channel count, dimension, bit depth) is out of range.</exception>
     public PsdFile(Stream stream, LoadContext loadContext)
       : this()
     {
@@ -93,6 +119,9 @@ namespace PhotoshopFile
       //DecompressImages();
     }
 
+    /// <summary>
+    /// Save the document to a file (created or overwritten), see <see cref="Save(Stream, Encoding)"/>.
+    /// </summary>
     public void Save(string fileName, Encoding encoding)
     {
       using (var stream = new FileStream(fileName, FileMode.Create))
@@ -101,6 +130,12 @@ namespace PhotoshopFile
       }
     }
 
+    /// <summary>
+    /// Save the document to a seekable stream (the stream is not closed).
+    /// Calls <see cref="PrepareSave"/> first, which compresses all channels that have <see cref="Channel.ImageData"/> but no <see cref="Channel.ImageDataRaw"/>.
+    /// </summary>
+    /// <param name="stream">The output stream, must be seekable (block lengths are patched after writing a block).</param>
+    /// <param name="encoding">The encoding used for Pascal strings (layer names, resource names).</param>
     public void Save(Stream stream, Encoding encoding)
     {
       PrepareSave();
@@ -131,13 +166,14 @@ namespace PhotoshopFile
     /// <summary>
     /// The number of channels in the image, including any alpha channels.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not 1 to 56.</exception>
     public Int16 ChannelCount
     {
       get => channelCount;
       set
       {
         if (value < 1 || value > 56)
-          throw new ArgumentException("Number of channels must be from 1 to 56.");
+          throw new ArgumentOutOfRangeException(nameof(value), value, "Number of channels must be from 1 to 56.");
         channelCount = value;
       }
     }
@@ -146,21 +182,22 @@ namespace PhotoshopFile
     {
       if (dimension < 1)
       {
-        throw new ArgumentException("Image dimension must be at least 1.");
+        throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "Image dimension must be at least 1.");
       }
       if ((Version == PsdFileVersion.Psd) && (dimension > 30000))
       {
-        throw new ArgumentException("PSD image dimension cannot exceed 30000.");
+        throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "PSD image dimension cannot exceed 30000.");
       }
       if ((Version == PsdFileVersion.PsbLargeDocument) && (dimension > 300000))
       {
-        throw new ArgumentException("PSB image dimension cannot exceed 300000.");
+        throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "PSB image dimension cannot exceed 300000.");
       }
     }
 
     /// <summary>
-    /// The height of the image in pixels.
+    /// The height of the image in pixels (the height of <see cref="BaseLayer"/>).
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is less than 1, or larger than 30000 (PSD) / 300000 (PSB).</exception>
     public int RowCount
     {
       get => this.BaseLayer.Rect.Height;
@@ -173,8 +210,9 @@ namespace PhotoshopFile
 
 
     /// <summary>
-    /// The width of the image in pixels. 
+    /// The width of the image in pixels (the width of <see cref="BaseLayer"/>).
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is less than 1, or larger than 30000 (PSD) / 300000 (PSB).</exception>
     public int ColumnCount
     {
       get => this.BaseLayer.Rect.Width;
@@ -189,6 +227,7 @@ namespace PhotoshopFile
     /// <summary>
     /// The number of bits per channel. Supported values are 1, 8, 16, and 32.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not 1, 8, 16 or 32.</exception>
     public int BitDepth
     {
       get => bitDepth;
@@ -203,7 +242,7 @@ namespace PhotoshopFile
             bitDepth = value;
             break;
           default:
-            throw new NotImplementedException("Invalid bit depth.");
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Invalid bit depth (supported: 1, 8, 16 and 32).");
         }
       }
     }
@@ -514,12 +553,9 @@ namespace PhotoshopFile
         // Layers Info section is documented to be even-padded, but Photoshop
         // actually pads to 4 bytes.
         var endPosition = startPosition + sectionLength;
-        var positionOffset = reader.BaseStream.Position - endPosition;
-        Debug.Assert(positionOffset > -4,
-          "LoadLayers did not read the full length of the Layers Info section.");
-        Debug.Assert(positionOffset <= 0,
-          "LoadLayers read past the end of the Layers Info section.");
-
+        // Unread bytes (more padding than expected) are skipped below.
+        if (reader.BaseStream.Position > endPosition)
+          throw new PsdInvalidException("The layers and their image data are longer than the Layers Info section.");
 
         if (reader.BaseStream.Position < endPosition)
           reader.BaseStream.Position = endPosition;
@@ -556,6 +592,8 @@ namespace PhotoshopFile
 
     /// <summary>
     /// Check the validity of the PSD file and generate necessary data.
+    /// The composite channels are converted to the compression that is saved (raw or RLE, see <see cref="ImageCompression"/>),
+    /// then all channels without <see cref="Channel.ImageDataRaw"/> are compressed.
     /// </summary>
     public void PrepareSave()
     {
@@ -563,7 +601,8 @@ namespace PhotoshopFile
       CheckDimension(RowCount);
       VerifyInfoLayers();
       VerifyLayerSections();
-      
+      PrepareSaveComposite();
+
       var imageLayers = Layers.Concat(new List<Layer>() { this.BaseLayer }).ToList();
 
       foreach (var layer in imageLayers)
@@ -787,13 +826,27 @@ namespace PhotoshopFile
     /// </summary>
     public Layer BaseLayer { get; set; }
 
+    /// <summary>
+    /// The compression of the composite image (<see cref="BaseLayer"/>).
+    /// Loading sets the value stored in the file (raw, RLE, or ZIP with or without prediction).
+    /// Saving writes the composite raw if this is <see cref="ImageCompression.Raw"/>, else RLE compressed (like Photoshop, which never writes a ZIP composite,
+    /// so <see cref="ImageCompression.Zip"/> and <see cref="ImageCompression.ZipPrediction"/> are saved as RLE).
+    /// The composite channels are converted to that compression when saving (<see cref="PrepareSave"/>).
+    /// </summary>
     public ImageCompression ImageCompression { get; set; }
+
+    /// <summary>
+    /// The compression used to save the composite image: raw or RLE (Photoshop only writes these two).
+    /// </summary>
+    private ImageCompression CompositeSaveCompression =>
+      (ImageCompression == ImageCompression.Raw) ? ImageCompression.Raw : ImageCompression.Rle;
 
     private void LoadImage(PsdBinaryReader reader)
     {
       Util.DebugMessage(reader.BaseStream, "Load, Begin, Composite image");
 
       ImageCompression = (ImageCompression)reader.ReadInt16();
+      var isZip = (ImageCompression == ImageCompression.Zip) || (ImageCompression == ImageCompression.ZipPrediction);
 
       // Create channels
       for (Int16 i = 0; i < ChannelCount; i++)
@@ -801,8 +854,8 @@ namespace PhotoshopFile
         Util.DebugMessage(reader.BaseStream, "Load, Begin, Channel image data");
 
         var channel = new Channel(i, this.BaseLayer);
-        channel.ImageCompression = ImageCompression;
-        channel.Length = this.RowCount
+        channel.ImageCompression = isZip ? ImageCompression.Raw : ImageCompression;
+        channel.Length = (long)this.RowCount
           * Util.BytesPerRow(BaseLayer.Rect.Size, BitDepth);
 
         // The composite image stores all RLE headers up-front, rather than
@@ -817,12 +870,19 @@ namespace PhotoshopFile
         Util.DebugMessage(reader.BaseStream, "Load, End, Channel image data");
       }
 
-      foreach (var channel in this.BaseLayer.Channels)
+      if (isZip)
       {
-        Util.DebugMessage(reader.BaseStream, "Load, Begin, Channel image data");
-        Util.CheckByteArrayLength(channel.Length);
-        channel.ImageDataRaw = reader.ReadBytes((int)channel.Length);
-        Util.DebugMessage(reader.BaseStream, "Load, End, Channel image data");
+        LoadZipImage(reader);
+      }
+      else
+      {
+        foreach (var channel in this.BaseLayer.Channels)
+        {
+          Util.DebugMessage(reader.BaseStream, "Load, Begin, Channel image data");
+          Util.CheckByteArrayLength(channel.Length);
+          channel.ImageDataRaw = reader.ReadBytes((int)channel.Length);
+          Util.DebugMessage(reader.BaseStream, "Load, End, Channel image data");
+        }
       }
 
       // If there is exactly one more channel than we need, then it is the
@@ -837,14 +897,77 @@ namespace PhotoshopFile
       Util.DebugMessage(reader.BaseStream, "Load, End, Composite image");
     }
 
+    /// <summary>
+    /// Load a ZIP compressed composite image.
+    /// The specification allows ZIP (2) and ZIP with prediction (3) for the composite but does not define the layout, Photoshop never writes it.
+    /// Like other readers (e.g. psd-tools), the rest of the stream is read as one zlib stream with the planar data of all channels
+    /// (channel after channel, prediction per row; 32 bit ZIP is read as ZIP with prediction, like for layers).
+    /// The channels are decoded right away and stored as raw channels (<see cref="Channel.ImageData"/> in native byte order,
+    /// <see cref="Channel.ImageDataRaw"/> in big endian on-disk format).
+    /// </summary>
+    private void LoadZipImage(PsdBinaryReader reader)
+    {
+      var stream = reader.BaseStream;
+      var zipLength = stream.Length - stream.Position;
+      Util.CheckByteArrayLength(zipLength);
+      var zipData = reader.ReadBytes((int)zipLength);
+
+      var size = BaseLayer.Rect.Size;
+      var channelLength = (long)RowCount * Util.BytesPerRow(size, BitDepth);
+      Util.CheckByteArrayLength(channelLength);
+
+      // One decoder for all channels: each Read continues the zlib stream
+      var decoder = ImageDataFactory.Create(ImageCompression, zipData, size, BitDepth, null);
+      foreach (var channel in BaseLayer.Channels)
+      {
+        Util.DebugMessage(reader.BaseStream, "Load, Begin, Channel image data");
+        var data = new byte[channelLength];
+        decoder.Read(data);
+        channel.ImageData = data;
+        channel.Length = channelLength;
+        if (BitDepth <= 8)
+        {
+          channel.ImageDataRaw = data;
+        }
+        else
+        {
+          var raw = (byte[])data.Clone();
+          Util.SwapByteArray(BitDepth, raw, 0, size.Width * size.Height);
+          channel.ImageDataRaw = raw;
+        }
+        Util.DebugMessage(reader.BaseStream, "Load, End, Channel image data");
+      }
+    }
+
     ///////////////////////////////////////////////////////////////////////////
+
+    /// <summary>
+    /// Convert the composite channels to the compression used for saving (see <see cref="ImageCompression"/>), decoding them if needed.
+    /// </summary>
+    private void PrepareSaveComposite()
+    {
+      var compression = CompositeSaveCompression;
+      foreach (var channel in BaseLayer.Channels)
+      {
+        if (channel.ImageCompression == compression)
+          continue;
+        if (channel.ImageDataRaw != null)
+        {
+          if (channel.ImageData == null)
+            channel.DecodeImageData();
+          channel.ImageDataRaw = null;
+        }
+        channel.ImageCompression = compression;
+      }
+    }
 
     private void SaveImage(PsdBinaryWriter writer)
     {
       Util.DebugMessage(writer.BaseStream, "Save, Begin, Composite image");
 
-      writer.Write((short)this.ImageCompression);
-      if (this.ImageCompression == PhotoshopFile.ImageCompression.Rle)
+      var compression = CompositeSaveCompression;
+      writer.Write((short)compression);
+      if (compression == PhotoshopFile.ImageCompression.Rle)
       {
         foreach (var channel in this.BaseLayer.Channels)
         {

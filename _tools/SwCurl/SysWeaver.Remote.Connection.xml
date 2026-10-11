@@ -4,77 +4,635 @@
         <name>SysWeaver.Remote.Connection</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Remote.Connection.EncoderHelper">
+            <summary>
+            Expression tree building blocks used by <see cref="T:SysWeaver.Remote.Connection.UriParamsEncoder`1"/> to build url query strings.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.Sb">
+            <summary>
+            The <see cref="T:System.Text.StringBuilder"/> variable used in the generated code.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.SbNew">
+            <summary>
+            Assigns a new <see cref="T:System.Text.StringBuilder"/> to <see cref="F:SysWeaver.Remote.Connection.EncoderHelper.Sb"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.SbBlock">
+            <summary>
+            Block variables (only <see cref="F:SysWeaver.Remote.Connection.EncoderHelper.Sb"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.SbAppendString">
+            <summary>
+            <see cref="M:System.Text.StringBuilder.Append(System.String)"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.SbToString">
+            <summary>
+            <see cref="M:System.Text.StringBuilder.ToString"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.ToStringMethod">
+            <summary>
+            <see cref="M:System.Object.ToString"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.EscapeMethod">
+            <summary>
+            <see cref="M:System.Uri.EscapeDataString(System.String)"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.EncoderHelper.Secure(System.Linq.Expressions.Expression)">
+            <summary>
+            Wraps a string expression in a <see cref="M:System.Uri.EscapeDataString(System.String)"/> call.
+            </summary>
+            <param name="ex">A string expression.</param>
+            <returns>The escaped string expression.</returns>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.InvariantToString">
+            <summary>
+            value.ToString(CultureInfo.InvariantCulture), for the integer types (the current culture may use another negative sign, ex: U+2212).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.ToStrings">
+            <summary>
+            Per type converters from a value expression to a url string expression (invariant culture, round-trippable formats).
+            Strings, <see cref="T:System.Single"/>, <see cref="T:System.Double"/> and <see cref="T:System.DateTime"/> values are url escaped (a null string becomes an empty string); other values are emitted as formatted.
+            </summary>
+            <remarks>
+            <see cref="T:System.DateTime"/> uses the "o" format which may include a '+' (time zone offset), floating point values use "r" which may include a '+' (exponent), so they are escaped.
+            <see cref="T:System.Boolean"/> is formatted as "True" / "False".
+            Enums, nullable types and <see cref="T:System.Char"/> are not supported.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.EncoderHelper.FormatObject(System.Object)">
+            <summary>
+            Format a value of any type (an element of an object[]) as an escaped url string, using the same formats as <see cref="F:SysWeaver.Remote.Connection.EncoderHelper.ToStrings"/>.
+            </summary>
+            <param name="value">The value, may be null</param>
+            <returns>The url escaped string, an empty string if <paramref name="value"/> is null</returns>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.ObjectToString">
+            <summary>
+            Converter from an <see cref="T:System.Object"/> expression to a url string expression (formatted at runtime by <see cref="M:SysWeaver.Remote.Connection.EncoderHelper.FormatObject(System.Object)"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.StringJoin">
+            <summary>
+            <see cref="M:System.String.Join(System.String,System.String[])"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.EncoderHelper.ConstEqual">
+            <summary>
+            The constant string "=".
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.FormUrlWriter">
+            <summary>
+            A growable byte buffer writer that serializes the public instance fields and properties of an object as application/x-www-form-urlencoded data (UTF-8).
+            Used by <see cref="T:SysWeaver.Remote.FormUrlSerializer"/> and <see cref="T:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer"/>.
+            </summary>
+            <remarks>
+            Supported member types: integer types, <see cref="T:System.Single"/>, <see cref="T:System.Double"/>, <see cref="T:System.Decimal"/>, <see cref="T:System.TimeSpan"/>, <see cref="T:System.DateTime"/>, <see cref="T:System.Guid"/>,
+            <see cref="T:System.Boolean"/>, <see cref="T:System.Char"/> and <see cref="T:System.String"/>; members of other types (including enums and nullables) are silently skipped.
+            Only names, strings, chars and <see cref="T:System.DateTime"/> values are url escaped (and the exponent '+' of <see cref="T:System.Single"/> / <see cref="T:System.Double"/> values). Not thread safe.
+            Integers are written with an ASCII '-' (culture independent), floating point values use the invariant "r" format, <see cref="T:System.Boolean"/> is "true" / "false".
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.FormUrlWriter.#ctor(System.Byte[],System.Int32)">
+            <summary>
+            Creates a writer.
+            </summary>
+            <param name="initData">The initial buffer to write to, null to allocate a 4 KiB buffer.</param>
+            <param name="startOffset">The offset in the buffer to start writing at.</param>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.FormUrlWriter.Data">
+            <summary>
+            The current buffer (replaced when growing), valid data is in [0, <see cref="F:SysWeaver.Remote.Connection.FormUrlWriter.Offset"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.FormUrlWriter.Offset">
+            <summary>
+            The current write position (the number of valid bytes when starting at 0).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.FormUrlWriter.Ensure(System.Int32)">
+            <summary>
+            Make sure that at least <paramref name="size"/> bytes can be written at the current offset, growing (and copying) the buffer if needed.
+            </summary>
+            <param name="size">The number of bytes required.</param>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.FormUrlWriter.WriteSmall(System.Byte[])">
+            <summary>
+            Copy a small byte array to the buffer, space must have been ensured.
+            </summary>
+            <param name="data">The bytes to write.</param>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.FormUrlWriter.WriteAsciiString(System.String)">
+            <summary>
+            Write an ASCII only string as bytes (no escaping), space must have been ensured.
+            </summary>
+            <param name="s">The string, must only contain ASCII chars (only validated in DEBUG builds).</param>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.FormUrlWriter.Cache`1">
+            <summary>
+            Compiled (expression tree) writers for a type.
+            </summary>
+            <typeparam name="T">The type to serialize.</typeparam>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.FormUrlWriter.Cache`1.Write">
+            <summary>
+            Writes all supported members as "name=value" pairs separated by '&amp;'.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.FormUrlWriter.Cache`1.WriteIgnoreDefaults">
+            <summary>
+            Writes all supported members that don't have their default value, NOTE: the output may start with a '&amp;' that must be skipped by the caller.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.HttpClientTimeoutHandler">
+            <summary>
+            Delegating handler that applies a per request timeout (set using the internal SetTimeout request extension), or <see cref="P:SysWeaver.Remote.Connection.HttpClientTimeoutHandler.DefaultTimeout"/>.
+            A timeout is reported as a <see cref="T:System.TimeoutException"/> instead of a <see cref="T:System.Threading.Tasks.TaskCanceledException"/>.
+            </summary>
+            <remarks>
+            The <see cref="P:System.Net.Http.HttpClient.Timeout"/> of the owning client still applies, so a per request timeout longer than that has no effect
+            (RemoteConnectionBase sets it to the largest end point timeout of the interface).
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.Remote.Connection.HttpClientTimeoutHandler.DefaultTimeout">
+            <summary>
+            The timeout used for requests that don't specify one, <see cref="F:System.Threading.Timeout.InfiniteTimeSpan"/> for no timeout. Defaults to 100 seconds.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.HttpClientTimeoutHandler.SendAsync(System.Net.Http.HttpRequestMessage,System.Threading.CancellationToken)">
+            <summary>
+            Sends the request, cancelling it if the timeout elapses.
+            </summary>
+            <param name="request">The request.</param>
+            <param name="cancellationToken">The caller's cancellation token.</param>
+            <returns>The response.</returns>
+            <exception cref="T:System.TimeoutException">The timeout elapsed before a response was received.</exception>
+            <exception cref="T:System.OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.HttpRequestExtensions">
+            <summary>
+            Stores a per request timeout in <see cref="P:System.Net.Http.HttpRequestMessage.Options"/>, consumed by <see cref="T:SysWeaver.Remote.Connection.HttpClientTimeoutHandler"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.HttpRequestExtensions.SetTimeout(System.Net.Http.HttpRequestMessage,System.Nullable{System.TimeSpan})">
+            <summary>
+            Sets the timeout for this request.
+            </summary>
+            <param name="request">The request.</param>
+            <param name="timeout">The timeout, null to use the handler default.</param>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.HttpRequestExtensions.GetTimeout(System.Net.Http.HttpRequestMessage)">
+            <summary>
+            Gets the timeout set using <see cref="M:SysWeaver.Remote.Connection.HttpRequestExtensions.SetTimeout(System.Net.Http.HttpRequestMessage,System.Nullable{System.TimeSpan})"/>.
+            </summary>
+            <param name="request">The request.</param>
+            <returns>The timeout or null if none is set.</returns>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.ApiMeta">
+            <summary>
+            Per end point meta data stored in a field of the generated remote API class (one instance per end point and connection).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.ApiMeta.#ctor(System.String,System.Int32,System.Int32,SysWeaver.Remote.RemoteConnection)">
+            <summary>
+            Creates the meta data, the cache parameters are ignored by this non-generic (void returning) version.
+            </summary>
+            <param name="name">The end point name, "METHOD path", used for perf tracking.</param>
+            <param name="cacheDuration">Ignored.</param>
+            <param name="maxCachedItems">Ignored.</param>
+            <param name="con">Ignored.</param>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.ApiMeta.Name">
+            <summary>
+            The end point name, "METHOD path" (ex: "GET Api/GetUser"), used for perf tracking.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.ApiMeta`1">
+            <summary>
+            Meta data for an end point that returns a value, optionally holding a response cache.
+            </summary>
+            <typeparam name="T">The response type.</typeparam>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.ApiMeta`1.#ctor(System.String,System.Int32,System.Int32,SysWeaver.Remote.RemoteConnection)">
+            <summary>
+            Creates the meta data and, if caching is enabled, the response cache.
+            </summary>
+            <param name="name">The end point name, "METHOD path", used for perf tracking.</param>
+            <param name="cacheDuration">Seconds to keep a cached response, <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/> to use <see cref="F:SysWeaver.Remote.RemoteConnection.CacheDuration"/>, 0 for no time based expiry.</param>
+            <param name="maxCachedItems">Maximum number of cached responses, <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/> to use <see cref="F:SysWeaver.Remote.RemoteConnection.MaxCachedItems"/>, 0 for the default LRU capacity.</param>
+            <param name="con">The connection parameters.</param>
+            <remarks>
+            No cache is created if both the duration and max items resolve to 0 or less.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.ApiMeta`1.Cache">
+            <summary>
+            The response cache keyed by relative url (thread safe LRU), or null if caching is disabled.
+            Cached values are shared between callers, so returned reference types must not be mutated.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.InterfaceTypeConsts">
+            <summary>
+            Reflection data used when emitting remote API classes.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.BaseType">
+            <summary>
+            The base class of all generated classes, <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.BaseConstructorTypes">
+            <summary>
+            The constructor signature of the base (and generated) class.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.BaseConstructor">
+            <summary>
+            The protected constructor of <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/>.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.InterfaceTypeConsts.RetTypes">
+            <summary>
+            The supported return types of a remote API method, also the first index into <see cref="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.RestMethods"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.RetTypes.ReturnTask">
+            <summary>
+            Task'1
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.RetTypes.ReturnValueTask">
+            <summary>
+            ValueTask'1 (the selected base methods return Task'1, the generated method wraps it in a ValueTask'1)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.RetTypes.Void">
+            <summary>
+            Task
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.RetTypes.ValueVoid">
+            <summary>
+            ValueTask (the selected base methods return Task, the generated method wraps it in a ValueTask)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.InterfaceTypeConsts.GetRetType(System.Type@)">
+            <summary>
+            Classifies a method return type.
+            </summary>
+            <param name="t">On input the method return type, on output the result type (the generic argument, or <c>typeof(void)</c> for non-generic tasks).</param>
+            <returns>The return type kind.</returns>
+            <exception cref="T:System.NotSupportedException">The return type isn't a Task, Task'1, ValueTask or ValueTask'1.</exception>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeConsts.RestMethods">
+            <summary>
+            The <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/> helper methods, indexed by [<see cref="T:SysWeaver.Remote.Connection.InterfaceTypeConsts.RetTypes"/>][<see cref="T:SysWeaver.Remote.HttpEndPointTypes"/>].
+            </summary>
+        </member>
         <member name="T:SysWeaver.Remote.Connection.InterfaceTypeCache`1">
             <summary>
-            Provides functionality for creating a remote connection instance of a specific type, this uses il emit to build a new type.
+            Provides functionality for creating a remote connection instance of a specific type, this uses il emit to build a new type (once per interface, in a new dynamic assembly).
             </summary>
-            <typeparam name="T"></typeparam>
+            <typeparam name="T">A public interface inheriting <see cref="T:System.IDisposable"/>.</typeparam>
+            <remarks>
+            Each method declared directly on the interface becomes an end point (members of inherited interfaces other than <see cref="T:SysWeaver.Remote.IRemoteApi"/>/<see cref="T:System.IDisposable"/> are not implemented).
+            The end point path is <see cref="T:SysWeaver.Remote.RemotePathPrefixAttribute"/> + <see cref="F:SysWeaver.Remote.RemoteEndPointAttribute.Path"/> (default the method name);
+            without a <see cref="T:SysWeaver.Remote.RemoteEndPointAttribute"/>, methods without parameters use GET and others POST.
+            GET/DELETE format the path as a <see cref="T:SysWeaver.Remote.Connection.UriParamsEncoder`1"/> template using the parameter(s); POST/PUT send the parameter(s) as the payload
+            (a null object if the method has no parameters, ex: "null" with the json serializer).
+            Methods with more than one parameter pass an object[] (or, with <see cref="T:SysWeaver.Remote.ParamAsObjectAttribute"/>, a generated object with one field per parameter);
+            for GET/DELETE the template variables of an object[] are the parameter names (ex: "{a}") or indices (ex: "{0}"), see <see cref="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.Get(System.String,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            <see cref="T:SysWeaver.Remote.RemoteCacheAttribute"/> is read from the method, or else from the interface; only method level <see cref="T:SysWeaver.Remote.RemoteSerializerAttribute"/> and <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/> are read here.
+            </remarks>
         </member>
         <member name="F:SysWeaver.Remote.Connection.InterfaceTypeCache`1.Create">
             <summary>
-            Creates a remote connection instance for a specific remote interface
+            Creates a remote connection instance for a specific remote interface, arguments are the connection parameters and the interface type.
+            The type is built when this class is first accessed, so any interface validation error surfaces as a <see cref="T:System.TypeInitializationException"/>.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.Connection.UriParamsEncoder`1">
+            <summary>
+            Compiles url templates such as <c>"Get?id={Id}&amp;name={Name}"</c> into functions that format a value of type <typeparamref name="T"/> into a url.
+            Used by the generated remote API classes to build GET/DELETE urls from method parameters.
+            </summary>
+            <typeparam name="T">The type of the value that is used to resolve the template variables.</typeparam>
+            <remarks>
+            Variable resolution: if <typeparamref name="T"/> is a supported primitive (see <see cref="F:SysWeaver.Remote.Connection.EncoderHelper.ToStrings"/>), every variable is replaced by the value itself;
+            if it's an array of a supported type or of <see cref="T:System.Object"/>, the variable is the element index (ex: "{0}") or an element name (see <see cref="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.Get(System.String,System.Collections.Generic.IReadOnlyList{System.String})"/>);
+            otherwise the variable names a public instance property or field.
+            Use "{{" to emit a literal '{'. Strings, floating point values and <see cref="T:System.DateTime"/> values are url escaped.
+            Elements of an <see cref="T:System.Object"/> array are formatted at runtime based on their type, like the typed values (invariant culture), other types (ex: enums) use <see cref="M:System.Convert.ToString(System.Object,System.IFormatProvider)"/>;
+            they are always url escaped and null becomes an empty string.
+            Compiled functions are cached per template (thread safe, a template may be compiled more than once under contention).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.Get(System.String)">
+            <summary>
+            Get (or compile and cache) the formatting function for a template.
+            </summary>
+            <param name="textTemplate">The url template, variables are enclosed in { and }.</param>
+            <returns>A function that formats a value into a url.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="textTemplate"/> is null.</exception>
+            <exception cref="T:System.FormatException">Nested '{', or a variable that names a missing member (or an invalid index for array types).</exception>
+            <exception cref="T:System.NotSupportedException">A variable names a member of an unsupported type.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.Get(System.String,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Get (or compile and cache) the formatting function for a template, where <typeparamref name="T"/> is an array whose elements can also be named (ex: method parameters).
+            </summary>
+            <param name="textTemplate">The url template, variables are enclosed in { and }.</param>
+            <param name="elementNames">For array types: the names of the elements (by index), a variable can be an element name (ex: "{a}", case sensitive) or an index (ex: "{0}").
+            The array is expected to have (at least) this many elements. Null if the elements are only referenced by index. Ignored for other types.</param>
+            <returns>A function that formats a value into a url.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="textTemplate"/> is null.</exception>
+            <exception cref="T:System.FormatException">Nested '{', or a variable that names a missing member (or an invalid index / unknown element name for array types).</exception>
+            <exception cref="T:System.NotSupportedException">A variable names a member of an unsupported type.</exception>
+        </member>
+        <member name="T:SysWeaver.Remote.EndPointOptions">
+            <summary>
+            Per end point overrides (serializers and timeout) built from method attributes (<see cref="T:SysWeaver.Remote.RemoteSerializerAttribute"/>, <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/>).
+            Instances are created by the static constructor of the generated remote API class and shared between end points with identical settings.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.EndPointOptions.Ser">
+            <summary>
+            The serializer used to decode responses, null to use the connection default.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.EndPointOptions.PostSer">
+            <summary>
+            The serializer used to encode request payloads, null to use the connection default (defaults to <see cref="F:SysWeaver.Remote.EndPointOptions.Ser"/> if only that is specified).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.EndPointOptions.TimeOutInMilliSeconds">
+            <summary>
+            The request timeout in milliseconds, 0 or less to use the connection timeout.
+            It overrides the connection timeout (it can both shorten and extend it).
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.EndPointOptions.#ctor(System.String,System.String,System.Int32)">
             <summary>
-            Changes to this must be reflected in the 
+            Creates the options. Changes to the signature must be reflected in the IL emitted by the remote API type generator (InterfaceTypeCache).
             </summary>
-            <param name="ser"></param>
-            <param name="postSer"></param>
-            <param name="timeOutInMilliSeconds"></param>
+            <param name="ser">The response serializer name (ex: "json"), null or empty to use the connection default.</param>
+            <param name="postSer">The request serializer name, null or empty to use <paramref name="ser"/> (or the connection default).</param>
+            <param name="timeOutInMilliSeconds">The request timeout in milliseconds, 0 or less to use the connection timeout.</param>
+            <exception cref="T:System.NotSupportedException">A serializer name isn't known (see <see cref="M:SysWeaver.Remote.EndPointOptions.GetSerializer(System.String)"/>).</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.EndPointOptions.GetSerializer(System.String)">
+            <summary>
+            Get a serializer by name: <see cref="F:SysWeaver.Remote.RemoteParam.FormUrlSerializer"/> and <see cref="F:SysWeaver.Remote.RemoteParam.FormUrlIgnoreDefaultsSerializer"/> (case insensitive)
+            return the form url serializers (no registration needed), anything else is looked up using <see cref="M:SysWeaver.Serialization.SerManager.Get(System.String)"/>.
+            </summary>
+            <param name="name">The serializer name (file extension), ex: "json".</param>
+            <returns>The serializer, never null.</returns>
+            <exception cref="T:System.NotSupportedException">No serializer with that name is registered.</exception>
+        </member>
+        <member name="T:SysWeaver.Remote.FormUrlSerializer">
+            <summary>
+            Write only serializer that produces application/x-www-form-urlencoded data from the public fields and properties of an object (registered with the extension "formUrl").
+            Registered automatically (once per process, together with <see cref="T:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer"/>) by the first <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/> that uses a form url <see cref="T:SysWeaver.Remote.RemoteParam"/> serializer name.
+            </summary>
+            <remarks>
+            Deserialization is not supported (all Create/FromString methods throw <see cref="T:System.NotImplementedException"/>). Thread safe.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Remote.FormUrlSerializer.Instance">
+            <summary>
+            The shared instance.
+            </summary>
         </member>
         <member name="M:SysWeaver.Remote.FormUrlSerializer.Register">
             <summary>
-            Call once to register this serializer type to the serializer manager
+            Register <see cref="F:SysWeaver.Remote.FormUrlSerializer.Instance"/> with <see cref="T:SysWeaver.Serialization.SerManager"/> (safe to call multiple times).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.FormUrlSerializer.Encoding">
+            <summary>
+            Always UTF-8.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.FormUrlSerializer.Extension">
+            <summary>
+            The serializer name / extension, "formUrl".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.FormUrlSerializer.MimeType">
+            <summary>
+            The mime type, "application/x-www-form-urlencoded".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.FormUrlSerializer.Mime">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Remote.FormUrlSerializer.MimeHeader">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Remote.FormUrlSerializer.Prio">
+            <summary>
+            Low priority (-1) so that it's never preferred over other serializers for the same extension.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.FormUrlSerializer.Name">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.Create``1(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.Create``1(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.FromString``1(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.FromString``1(System.String)">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serializes the supported public members of <paramref name="obj"/> as UTF-8 form url encoded data.
+            </summary>
+            <typeparam name="T">The object type.</typeparam>
+            <param name="obj">The object, must not be null.</param>
+            <param name="options">Ignored.</param>
+            <returns>The encoded data (a slice of a newly allocated buffer).</returns>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serializes the supported public members of <paramref name="obj"/> as a form url encoded string.
+            </summary>
+            <typeparam name="T">The object type.</typeparam>
+            <param name="obj">The object, must not be null.</param>
+            <param name="options">Ignored.</param>
+            <returns>The encoded text.</returns>
+        </member>
+        <member name="T:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer">
+            <summary>
+            Write only serializer that produces application/x-www-form-urlencoded data from the public fields and properties of an object (registered with the extension "formUrlIgnoreDefaults"). Members with default values are omitted.
+            Registered automatically (once per process, together with <see cref="T:SysWeaver.Remote.FormUrlSerializer"/>) by the first <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/> that uses a form url <see cref="T:SysWeaver.Remote.RemoteParam"/> serializer name.
+            </summary>
+            <remarks>
+            Deserialization is not supported (all Create/FromString methods throw <see cref="T:System.NotImplementedException"/>). Thread safe.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Instance">
+            <summary>
+            The instance that <see cref="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Register"/> adds.
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Register">
             <summary>
-            Call once to register this serializer type to the serializer manager
+            Register <see cref="F:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Instance"/> with <see cref="T:SysWeaver.Serialization.SerManager"/> (safe to call multiple times).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Encoding">
+            <summary>
+            Always UTF-8.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Extension">
+            <summary>
+            The serializer name / extension, "formUrlIgnoreDefaults".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.MimeType">
+            <summary>
+            The mime type, "application/x-www-form-urlencoded".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Mime">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.MimeHeader">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Prio">
+            <summary>
+            Low priority (-1) so that it's never preferred over other serializers for the same extension.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Name">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Create``1(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Create``1(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.FromString``1(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.FromString``1(System.String)">
+            <summary>
+            Not supported.
+            </summary>
+            <exception cref="T:System.NotImplementedException">Always.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serializes the supported public members of <paramref name="obj"/> as UTF-8 form url encoded data. Members with default values are omitted.
+            </summary>
+            <typeparam name="T">The object type.</typeparam>
+            <param name="obj">The object, must not be null.</param>
+            <param name="options">Ignored.</param>
+            <returns>The encoded data (a slice of a newly allocated buffer).</returns>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serializes the supported public members of <paramref name="obj"/> as a form url encoded string. Members with default values are omitted.
+            </summary>
+            <typeparam name="T">The object type.</typeparam>
+            <param name="obj">The object, must not be null.</param>
+            <param name="options">Ignored.</param>
+            <returns>The encoded text.</returns>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteAuthMethod">
+            <summary>
+            How the credentials of a <see cref="T:SysWeaver.Remote.RemoteConnection"/> are used to authenticate.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteAuthMethod.HttpAuth">
             <summary>
             Use the Authorization http header for auth.
-            Can use Bearer or Basic 
+            Basic auth with user:password, Bearer if the user name is "bearer", or a custom header if the user name starts with '*' (ex: "*x-api-key").
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteAuthMethod.SysWeaverLogin">
             <summary>
-            Use the SysWeaver login protocol (no plain text, no replay attacks)
+            Use the SysWeaver login protocol (no plain text, no replay attacks), performed once when the connection is created, the session is kept using cookies.
             </summary>
         </member>
         <member name="T:SysWeaver.Remote.RemoteConnection">
             <summary>
-            Parameters for a specific instance of a remote connection
+            Parameters for a remote connection, and the factory (<see cref="M:SysWeaver.Remote.RemoteConnection.Create``1"/>) that creates a runtime generated implementation of a remote API interface using them.
+            Typically deserialized from the "Params" of a service manifest entry whose type is a remote API interface.
             </summary>
+            <remarks>
+            Credentials (<see cref="P:SysWeaver.CredentialParams.User"/>, <see cref="P:SysWeaver.CredentialParams.Password"/> or <see cref="P:SysWeaver.CredentialParams.CredFile"/>) are used according to <see cref="F:SysWeaver.Remote.RemoteConnection.AuthMethod"/>.
+            Creating a connection updates some fields of this instance with resolved values (base url, serializers, timeout).
+            </remarks>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.BaseUrl">
             <summary>
-            The base url, all endpoints defined in an API is prefixed with this value, ex: "http://locahost:1234/api/"
+            The base url, all endpoints defined in an API are prefixed with this value, ex: "http://localhost:1234/api/".
+            Path templates (see <see cref="T:SysWeaver.PathTemplate"/>) are resolved, and if the result is an existing file, the first non-comment line of that file is used as the url.
+            Required.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.BearerToken">
             <summary>
-            If this is non-empty, the bearer token is sent in the Authorization header (typically this is the API key).
-            The bearer token can be read from a credentials file where the user name part is bearer, ex:
-            "CredFile": "Test.txt" and "Test.txt" content is "bearer:the token".
+            If this is non-empty, the bearer token is sent in the Authorization header (typically this is the API key), and any user credentials are ignored.
+            The bearer token can also be read from a credentials file where the user name part is bearer, ex:
+            "CredFile": "Test.txt" and "Test.txt" content is "bearer:the token" (only with <see cref="F:SysWeaver.Remote.RemoteAuthMethod.HttpAuth"/>).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.TimeoutInMilliSeconds">
             <summary>
-            The timeout to use for a request, less or equal to zero to uses the timeout attribute on the interface type or if not present 60 000 ms is used.
+            The default timeout in milliseconds for a request, less or equal to zero to use the <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/> on the interface type, or if not present 60 000 ms.
+            A per end point <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/> overrides it (it can both shorten and extend it).
+            A timeout fails the call with an exception whose <see cref="P:System.Exception.InnerException"/> is a <see cref="T:System.TimeoutException"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.AcceptedCompressionMethods">
             <summary>
-            Alllow the server to respond with compressed data using these formats
+            Allow the server to respond with compressed data using these formats (automatically decompressed).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.Compression">
             <summary>
             The compression method to use when sending content, the server MUST support the compression method.
-            null = Uncomporessed.
+            null = Uncompressed.
             br = Brotli
             deflate = Deflate.
             gzip = GZip
@@ -87,143 +645,178 @@
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.Serializer">
             <summary>
-            The serializer to use for encoding (POST/PUT) and for decoding responses, encoding can be different if PostSerializer is used, if null or empty the serializer attribute of the interface is used (or else json)
+            The serializer (file extension name, ex: "json") to use for encoding (POST/PUT) and for decoding responses, encoding can be different if PostSerializer is used, if null or empty the <see cref="T:SysWeaver.Remote.RemoteSerializerAttribute"/> of the interface is used (or else "json").
+            Use <see cref="F:SysWeaver.Remote.RemoteParam.FormUrlSerializer"/> for x-www-form-urlencoded payloads (write only).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.PostSerializer">
             <summary>
-            The serializer to use for encoding (POST/PUT), by default the Serializer is used
+            The serializer to use for encoding (POST/PUT), if null or empty the <see cref="T:SysWeaver.Remote.RemoteSerializerAttribute"/> of the interface is used, or else <see cref="F:SysWeaver.Remote.RemoteConnection.Serializer"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.MaxConcurrency">
             <summary>
-            Maximum number of concurrent API calls on this connection
+            Maximum number of concurrent connections to the server (used as <see cref="P:System.Net.Http.HttpClientHandler.MaxConnectionsPerServer"/>, minimum 2).
+            Calls above this limit are queued by the handler, not rejected.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.CleanUrl">
             <summary>
-            If true, url's in exceptions is stripped to not disclose sensitive information
+            If true, urls in exceptions are stripped of scheme, host and query string to not disclose sensitive information.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.CacheDuration">
             <summary>
-            Number of seconds to cache remote calls on this connection, typically it's better to specify this per API end point, use 0 to disable caching.
+            Number of seconds to cache GET/DELETE responses on this connection (used by end points without a <see cref="T:SysWeaver.Remote.RemoteCacheAttribute"/>), typically it's better to specify this per API end point, use 0 to disable time based caching.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.MaxCachedItems">
             <summary>
-            Maximum number of cached calls per api on this connection, typically it's better to specify this per API end point, use 0 to disable caching.
+            Maximum number of cached responses per end point on this connection (used by end points without a <see cref="T:SysWeaver.Remote.RemoteCacheAttribute"/>), typically it's better to specify this per API end point.
+            Caching is disabled only if both this and <see cref="F:SysWeaver.Remote.RemoteConnection.CacheDuration"/> are 0.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.Proxy">
             <summary>
-            An optional proxy to use.
+            An optional proxy to use, can't be combined with <see cref="F:SysWeaver.Remote.RemoteConnection.UseTor"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.UseTor">
             <summary>
-            If true and no Proxy is specified, route all API calls through the TOR network.
+            If true, route all API calls through the TOR network (an exception is thrown on creation if a <see cref="F:SysWeaver.Remote.RemoteConnection.Proxy"/> is also specified).
             The SysWeaver.Tor assembly must be available.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.IgnoreCertErrors">
             <summary>
-            If true, any bad server certificates are accepted.. NOT RECOMMENDED!
+            If true, any bad server certificates are accepted. NOT RECOMMENDED! Ignored if <see cref="F:SysWeaver.Remote.RemoteConnection.CertValidator"/> is set.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.CertValidator">
             <summary>
-            An optional cert validator, return true to accept the request
+            An optional server certificate validator, return true to accept the certificate. Takes precedence over <see cref="F:SysWeaver.Remote.RemoteConnection.IgnoreCertErrors"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.AllowAutoRedirect">
             <summary>
-            If true, redirected requests are followed
+            If true, redirect responses are followed automatically.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.UserAgent">
             <summary>
-            Optional user agent string to use.
+            Optional user agent string to use (must be a valid product token, ex: "MyApp/1.0"), if null or empty the SysWeaver default user agent is used.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.AuthMethod">
             <summary>
-            The auth method to use
+            The auth method to use for the credentials (ignored if <see cref="F:SysWeaver.Remote.RemoteConnection.BearerToken"/> is set).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnection.SysWeaverBaseSuffix">
             <summary>
-            The suffix to add to the BaseUrl to get to the service root url (if required)
+            The suffix to add to the BaseUrl to get to the service root url (if required), only used for <see cref="F:SysWeaver.Remote.RemoteAuthMethod.SysWeaverLogin"/>.
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.RemoteConnection.Create``1">
             <summary>
-            Create an instance of a remote connection with the specified parameters (any parameters changes after creation will not affect the created connection)
+            Create an instance of a remote connection with the specified parameters (any parameters changes after creation will not affect the created connection).
+            The implementing type is generated once per interface (on first use) and cached.
             </summary>
-            <typeparam name="T">The interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions</typeparam>
-            <returns>An instance of T</returns>
+            <typeparam name="T">The public interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions.
+            All methods must return <see cref="T:System.Threading.Tasks.Task"/>, <see cref="T:System.Threading.Tasks.Task`1"/>, <see cref="T:System.Threading.Tasks.ValueTask"/> or <see cref="T:System.Threading.Tasks.ValueTask`1"/>.
+            The interface may be nested if all declaring types are public.</typeparam>
+            <returns>An instance of T, the caller owns it and should dispose it.</returns>
+            <exception cref="T:System.TypeInitializationException">The interface is invalid (the inner exception tells why, typically a <see cref="T:System.NotSupportedException"/> or a <see cref="T:System.FormatException"/> for an invalid url template).
+            The type is only built once, so later calls for the same interface throw the same way.</exception>
+            <exception cref="T:System.Exception">The connection could not be set up (see the <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/> constructor).</exception>
         </member>
         <member name="M:SysWeaver.Remote.RemoteConnection.Create(System.Type)">
             <summary>
-            Create an instance of a remote connection with the specified parameters (any parameters changes after creation will not affect the created connection)
+            Create an instance of a remote connection with the specified parameters (any parameters changes after creation will not affect the created connection).
+            Non-generic version of <see cref="M:SysWeaver.Remote.RemoteConnection.Create``1"/>, the compiled factory delegate is cached per type (thread safe).
             </summary>
             <param name="t">The type of the interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions</param>
-            <returns>An instance of the type, must cast to use</returns>
+            <returns>An instance of the type, must cast to use. The caller owns it and should dispose it.</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="t"/> doesn't implement <see cref="T:System.IDisposable"/> (or is a value type).</exception>
+            <exception cref="T:System.TypeInitializationException">The interface is invalid, see <see cref="M:SysWeaver.Remote.RemoteConnection.Create``1"/>.</exception>
+            <exception cref="T:System.Exception">The connection could not be set up (see the <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/> constructor).</exception>
         </member>
         <member name="T:SysWeaver.Remote.RemoteConnectionBase">
             <summary>
-            Base class for remote connection implmentations
+            Base class for the runtime generated (IL emitted) classes that implement remote API interfaces, see <see cref="M:SysWeaver.Remote.RemoteConnection.Create``1"/>.
+            Owns the <see cref="T:System.Net.Http.HttpClient"/> used for all calls and contains the GET/POST/PUT/DELETE helpers that the generated methods call.
             </summary>
+            <remarks>
+            Each instance owns its own <see cref="T:System.Net.Http.HttpClient"/> and handler; dispose the instance when it's no longer needed.
+            All request methods are thread safe and may be called concurrently.
+            Any 2xx status code is a success (a 2xx other than 200 without a body returns default(T)), other codes throw a <see cref="T:SysWeaver.Net.HttpResponseException"/>.
+            Failures are tracked per HTTP method and exposed through <see cref="M:SysWeaver.Remote.RemoteConnectionBase.GetStats"/>, timings through <see cref="P:SysWeaver.Remote.RemoteConnectionBase.PerfMon"/>.
+            </remarks>
         </member>
         <member name="E:SysWeaver.Remote.RemoteConnectionBase.OnCallBegin">
             <summary>
-            Invoked before any request (after request payload serilization)
+            Invoked before any request is sent (after request payload serialization and compression).
             </summary>
         </member>
         <member name="E:SysWeaver.Remote.RemoteConnectionBase.OnCallEnd">
             <summary>
-            Invoked after any request (before response payload deserilization)
-            Will always get called if OnRequestBegin is called
+            Invoked after any request completes (before response payload deserialization).
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.RemoteConnectionBase.Cancel">
             <summary>
-            Cancels all pending request on the remote connection 
+            Cancels all pending requests on this connection (calls <see cref="M:System.Net.Http.HttpClient.CancelPendingRequests"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ToString">
+            <summary>
+            Returns a description of the connection: interface name, base url, Tor usage and the auth method (never any secrets).
+            </summary>
+            <returns>A text such as <c>"IMyApi@http://host/api/, auth: Bearer"</c>.</returns>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Dispose">
+            <summary>
+            Cancels any pending requests and disposes the owned <see cref="T:System.Net.Http.HttpClient"/> and handler.
+            The instance can't be used after disposal (calls fail with an exception wrapping an <see cref="T:System.ObjectDisposedException"/>), calling Dispose again does nothing.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase">
             <summary>
-            The base url, all endpoints defined in an API is prefixed with this value, ex: "http://locahost:1234/api/"
+            The resolved base url (always ending with a single '/'), all endpoints defined in an API are prefixed with this value, ex: "http://localhost:1234/api/".
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.Ser">
             <summary>
-            The serializer to use for for decoding responses
+            The default serializer used for decoding responses (can be overridden per end point using <see cref="T:SysWeaver.Remote.RemoteSerializerAttribute"/>).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.PostSer">
             <summary>
-            The serializer to use for encoding (POST/PUT)
+            The default serializer used for encoding request payloads (POST/PUT).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.Client">
             <summary>
-            The internal HttpClient that is used
+            The internal HttpClient that is used, owned by this instance (default headers contain the user agent and any auth).
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.ClientHandler">
             <summary>
-            The internal HttpClientHandler that is used
+            The message handler used by <see cref="F:SysWeaver.Remote.RemoteConnectionBase.Client"/>, a <see cref="T:SysWeaver.Remote.Connection.HttpClientTimeoutHandler"/> wrapping a <see cref="T:System.Net.Http.HttpClientHandler"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.TimeoutInMilliSeconds">
             <summary>
-            The timeout to use for a request, less or equal to zero to uses the timeout attribute on the interface type or if not present 60 000 ms is used.
+            The resolved default timeout in milliseconds (from <see cref="F:SysWeaver.Remote.RemoteConnection.TimeoutInMilliSeconds"/>, else the interface <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/>, else 60 000 ms).
             </summary>
+            <remarks>
+            A per end point <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/> overrides it (it can both shorten and extend the request time).
+            <see cref="P:System.Net.Http.HttpClient.Timeout"/> of <see cref="F:SysWeaver.Remote.RemoteConnectionBase.Client"/> is set to the largest of this and all per end point timeouts of the interface.
+            </remarks>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.CleanUrl">
             <summary>
-            If true, url's in exceptions is stripped to not disclose sensitive information
+            If true, urls in exceptions are stripped of scheme, host and query to not disclose sensitive information, see <see cref="M:SysWeaver.Remote.RemoteConnectionBase.GetCleanUrl(System.String)"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.UsingTor">
@@ -233,24 +826,389 @@
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.Compression">
             <summary>
-            The compression type to use when sending content, the server MUST support the compression method.
+            The compression type to use when sending content (null for no compression), the server MUST support the compression method.
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteConnectionBase.CompLevel">
             <summary>
-            The compression level
+            The compression level used when compressing request payloads (only used if <see cref="F:SysWeaver.Remote.RemoteConnectionBase.Compression"/> is non-null).
             </summary>
         </member>
         <member name="P:SysWeaver.Remote.RemoteConnectionBase.PerfMon">
             <summary>
-            The performance monitor instance
+            The performance monitor that tracks the time of every end point call (and cache lookups), named "Interface@BaseUrl".
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.RemoteConnectionBase.GetStats">
             <summary>
-            Return some stats
+            Returns failure statistics (exception counts) per HTTP method, using the system name "Remote " + <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/>.
             </summary>
-            <returns>The stats</returns>
+            <returns>The stats, lazily enumerated.</returns>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.#ctor(SysWeaver.Remote.RemoteConnection,System.Type)">
+            <summary>
+            Creates the connection, resolving defaults and building the <see cref="T:System.Net.Http.HttpClient"/>.
+            Called by the constructor of the generated class.
+            </summary>
+            <param name="p">The connection parameters. NOTE: <see cref="F:SysWeaver.Remote.RemoteConnection.Serializer"/>, <see cref="F:SysWeaver.Remote.RemoteConnection.PostSerializer"/>,
+            <see cref="F:SysWeaver.Remote.RemoteConnection.TimeoutInMilliSeconds"/> and <see cref="F:SysWeaver.Remote.RemoteConnection.BaseUrl"/> are updated in place with the resolved values.</param>
+            <param name="interfaceType">The remote API interface type being implemented (used for naming).</param>
+            <remarks>
+            Serializers: <see cref="F:SysWeaver.Remote.RemoteConnection.Serializer"/>, else the interface <see cref="T:SysWeaver.Remote.RemoteSerializerAttribute"/>, else "json"; the post serializer defaults to the serializer.
+            The base url is resolved using <see cref="M:SysWeaver.PathTemplate.Resolve(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.Boolean,System.Boolean)"/>; if it then points to an existing file, the first non-comment line is used as the url.
+            Auth: a non-empty <see cref="F:SysWeaver.Remote.RemoteConnection.BearerToken"/> is sent as a Bearer token. Otherwise, for <see cref="F:SysWeaver.Remote.RemoteAuthMethod.HttpAuth"/>, credentials with the user name
+            "bearer" are sent as a Bearer token, a user name starting with '*' sends the password in a custom header named by the rest of the user name (lower cased),
+            and anything else uses Basic auth (UTF-8 encoded). For <see cref="F:SysWeaver.Remote.RemoteAuthMethod.SysWeaverLogin"/> a login is performed synchronously (blocking) during construction.
+            </remarks>
+            <exception cref="T:System.NotSupportedException">Unknown <see cref="F:SysWeaver.Remote.RemoteConnection.Compression"/>.</exception>
+            <exception cref="T:System.InvalidOperationException">Both a <see cref="F:SysWeaver.Remote.RemoteConnection.Proxy"/> and <see cref="F:SysWeaver.Remote.RemoteConnection.UseTor"/> are specified, or Tor is unavailable.</exception>
+            <exception cref="T:System.ArgumentException"><see cref="F:SysWeaver.Remote.RemoteConnection.BaseUrl"/> is null.</exception>
+            <exception cref="T:System.IO.InvalidDataException">The base url file doesn't contain any non-comment line.</exception>
+            <exception cref="T:System.FormatException"><see cref="F:SysWeaver.Remote.RemoteConnection.UserAgent"/> isn't a valid product token.</exception>
+            <exception cref="T:System.Exception">Invalid credentials (see <see cref="M:SysWeaver.CredentialParams.GetUserPassword(System.String@,System.String@,System.Boolean)"/>) or a failed SysWeaver login.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Get``1(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a GET request returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Consults and updates the end point cache, keyed by <paramref name="url"/>.
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Delete``1(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a DELETE request returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Consults and updates the end point cache, keyed by <paramref name="url"/>.
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Post``2(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},``1,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a POST request with a serialized payload returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Never cached.
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Put``2(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},``1,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a PUT request with a serialized payload returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Never cached.
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValueGet``1(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            GET helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.Get``1(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task`1"/>, not a <see cref="T:System.Threading.Tasks.ValueTask`1"/>).
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValueDelete``1(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            DELETE helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.Delete``1(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task`1"/>, not a <see cref="T:System.Threading.Tasks.ValueTask`1"/>).
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValuePost``2(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},``1,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            POST helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.Post``2(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},``1,SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task`1"/>, not a <see cref="T:System.Threading.Tasks.ValueTask`1"/>).
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValuePut``2(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},``1,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            PUT helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.Put``2(System.String,SysWeaver.Remote.Connection.ApiMeta{``0},``1,SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task`1"/>, not a <see cref="T:System.Threading.Tasks.ValueTask`1"/>).
+            </summary>
+            <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <returns>The deserialized response, default(T) for a 2xx response other than 200 without a body (ex: 204 No Content).</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.VoidGet(System.String,SysWeaver.Remote.Connection.ApiMeta,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a GET request without a return value (used by generated <see cref="T:System.Threading.Tasks.Task"/> methods). The response body is ignored and never cached.
+            </summary>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.VoidDelete(System.String,SysWeaver.Remote.Connection.ApiMeta,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a DELETE request without a return value (used by generated <see cref="T:System.Threading.Tasks.Task"/> methods). The response body is ignored.
+            </summary>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.VoidPost``1(System.String,SysWeaver.Remote.Connection.ApiMeta,``0,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a POST request with a serialized payload without a return value (used by generated <see cref="T:System.Threading.Tasks.Task"/> methods).
+            </summary>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.VoidPut``1(System.String,SysWeaver.Remote.Connection.ApiMeta,``0,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            Performs a PUT request with a serialized payload without a return value (used by generated <see cref="T:System.Threading.Tasks.Task"/> methods).
+            </summary>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValueVoidGet(System.String,SysWeaver.Remote.Connection.ApiMeta,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            GET helper selected for <see cref="T:System.Threading.Tasks.ValueTask"/> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.VoidGet(System.String,SysWeaver.Remote.Connection.ApiMeta,SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task"/>, not a <see cref="T:System.Threading.Tasks.ValueTask"/>).
+            </summary>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValueVoidDelete(System.String,SysWeaver.Remote.Connection.ApiMeta,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            DELETE helper selected for <see cref="T:System.Threading.Tasks.ValueTask"/> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.VoidDelete(System.String,SysWeaver.Remote.Connection.ApiMeta,SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task"/>, not a <see cref="T:System.Threading.Tasks.ValueTask"/>).
+            </summary>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValueVoidPost``1(System.String,SysWeaver.Remote.Connection.ApiMeta,``0,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            POST helper selected for <see cref="T:System.Threading.Tasks.ValueTask"/> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.VoidPost``1(System.String,SysWeaver.Remote.Connection.ApiMeta,``0,SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task"/>, not a <see cref="T:System.Threading.Tasks.ValueTask"/>).
+            </summary>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.ValueVoidPut``1(System.String,SysWeaver.Remote.Connection.ApiMeta,``0,SysWeaver.Remote.EndPointOptions)">
+            <summary>
+            PUT helper selected for <see cref="T:System.Threading.Tasks.ValueTask"/> interface methods, identical to <see cref="M:SysWeaver.Remote.RemoteConnectionBase.VoidPut``1(System.String,SysWeaver.Remote.Connection.ApiMeta,``0,SysWeaver.Remote.EndPointOptions)"/> (note: it returns a <see cref="T:System.Threading.Tasks.Task"/>, not a <see cref="T:System.Threading.Tasks.ValueTask"/>).
+            </summary>
+            <typeparam name="D">The request payload type.</typeparam>
+            <param name="url">The url relative to <see cref="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase"/> (including any query string).</param>
+            <param name="meta">End point meta data (name used for perf tracking).</param>
+            <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+            <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The server responded with a status code that isn't a success (2xx) code.</exception>
+            <exception cref="T:System.Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.FormSersRegistered">
+            <summary>
+            True once the form url serializers are registered in <see cref="T:SysWeaver.Serialization.SerManager"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.FormSersLock">
+            <summary>
+            Serializes the one time registration of the form url serializers.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.RegisterFormSers">
+            <summary>
+            Register both form url serializers in <see cref="T:SysWeaver.Serialization.SerManager"/> once per process (thread safe).
+            The connection doesn't need the registration (it uses the instances directly, see <see cref="M:SysWeaver.Remote.EndPointOptions.GetSerializer(System.String)"/>), it only makes the serializers available by name to other code.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.GetCleanUrl(System.String)">
+            <summary>
+            Removes the scheme, host and query string from a url if <see cref="F:SysWeaver.Remote.RemoteConnectionBase.CleanUrl"/> is true, ex: "https://host/api/Get?key=x" becomes "api/Get".
+            </summary>
+            <param name="s">The url to clean.</param>
+            <returns>The cleaned url (empty if the url only contains a host), or <paramref name="s"/> unchanged if <see cref="F:SysWeaver.Remote.RemoteConnectionBase.CleanUrl"/> is false.</returns>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Send(System.Net.Http.HttpRequestMessage,System.Int32)">
+            <summary>
+            Send a request (buffering the response content), the whole request (including reading the response content) must complete within the timeout.
+            </summary>
+            <param name="req">The request.</param>
+            <param name="timeout">The per end point timeout in milliseconds, less or equal to zero to use <see cref="F:SysWeaver.Remote.RemoteConnectionBase.TimeoutInMilliSeconds"/>.</param>
+            <returns>The response.</returns>
+            <exception cref="T:System.TimeoutException">The timeout elapsed before the response was received.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.IsSuccess(System.Int32)">
+            <summary>
+            True for a success (2xx) status code.
+            </summary>
+            <param name="code">The HTTP status code.</param>
+            <returns>True if the code is in the range 200-299.</returns>
+        </member>
+        <member name="T:SysWeaver.JsonRequestExt">
+            <summary>
+            <see cref="T:System.Net.Http.HttpClient"/> extensions for POSTing json or raw binary payloads to an url (typically SysWeaver API end points).
+            </summary>
+            <remarks>
+            All methods throw an <see cref="T:SysWeaver.Net.HttpResponseException"/> if the response status code isn't a success (2xx) code (the body is not read), and use the json serializer registered in <see cref="T:SysWeaver.Serialization.SerManager"/>.
+            The deserializing methods return default(R) for a 2xx response other than 200 without a body (ex: 204 No Content).
+            Json payloads are sent with the content type "application/json; charset=utf-8". The client's own <see cref="P:System.Net.Http.HttpClient.Timeout"/> applies.
+            Raw payloads are sent with the content type <see cref="F:SysWeaver.MimeTypeMap.Data"/>.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostJsonRequest``2(System.Net.Http.HttpClient,System.String,``0)">
+            <summary>
+            POST <paramref name="data"/> serialized as json, and deserialize the json response.
+            </summary>
+            <typeparam name="T">The request type.</typeparam>
+            <typeparam name="R">The response type.</typeparam>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The request object.</param>
+            <returns>The deserialized response.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostJsonRequestRaw``1(System.Net.Http.HttpClient,System.String,``0)">
+            <summary>
+            POST <paramref name="data"/> serialized as json, and return the raw response body.
+            </summary>
+            <typeparam name="T">The request type.</typeparam>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The request object.</param>
+            <returns>The response body.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostJsonRequest``2(System.Net.Http.HttpClient,System.String,``0,System.Func{System.Net.Http.HttpResponseMessage,System.ReadOnlyMemory{System.Byte},System.Threading.Tasks.Task})">
+            <summary>
+            POST <paramref name="data"/> serialized as json, call <paramref name="onRaw"/> with the raw response, and deserialize the json response.
+            </summary>
+            <typeparam name="T">The request type.</typeparam>
+            <typeparam name="R">The response type.</typeparam>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The request object.</param>
+            <param name="onRaw">Called with the response message (disposed after the call returns) and the raw body, before deserialization (ex: to read headers).</param>
+            <returns>The deserialized response.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostJsonRequestRaw``1(System.Net.Http.HttpClient,System.String,``0,System.Func{System.Net.Http.HttpResponseMessage,System.ReadOnlyMemory{System.Byte},System.Threading.Tasks.Task})">
+            <summary>
+            POST <paramref name="data"/> serialized as json, call <paramref name="onRaw"/> with the raw response and return the raw response body.
+            </summary>
+            <typeparam name="T">The request type.</typeparam>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The request object.</param>
+            <param name="onRaw">Called with the response message (disposed after the call returns) and the raw body.</param>
+            <returns>The response body.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostRawRequestRaw(System.Net.Http.HttpClient,System.String,System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            POST a raw binary payload and return the raw response body.
+            </summary>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The payload, sent as <see cref="F:SysWeaver.MimeTypeMap.Data"/>.</param>
+            <returns>The response body.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostRawRequestRaw(System.Net.Http.HttpClient,System.String,System.ReadOnlyMemory{System.Byte},System.Func{System.Net.Http.HttpResponseMessage,System.ReadOnlyMemory{System.Byte},System.Threading.Tasks.Task})">
+            <summary>
+            POST a raw binary payload, call <paramref name="onRaw"/> with the raw response and return the raw response body.
+            </summary>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The payload, sent as <see cref="F:SysWeaver.MimeTypeMap.Data"/>.</param>
+            <param name="onRaw">Called with the response message (disposed after the call returns) and the raw body.</param>
+            <returns>The response body.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostRawRequestStream(System.Net.Http.HttpClient,System.String,System.ReadOnlyMemory{System.Byte},System.Func{System.IO.Stream,System.Nullable{System.Int64},System.Threading.Tasks.Task})">
+            <summary>
+            POST a raw binary payload and stream the response body (the response is not buffered, completes after headers are read).
+            </summary>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The payload, sent as <see cref="F:SysWeaver.MimeTypeMap.Data"/>.</param>
+            <param name="onResponse">Called with the response stream and the content length (if known), the stream is disposed when the returned task completes.</param>
+            <returns>A task that completes when <paramref name="onResponse"/> has completed.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="M:SysWeaver.JsonRequestExt.PostRawRequest``1(System.Net.Http.HttpClient,System.String,System.ReadOnlyMemory{System.Byte},System.Func{System.Net.Http.HttpResponseMessage,System.Threading.Tasks.Task{``0}})">
+            <summary>
+            POST a raw binary payload and let <paramref name="onResponse"/> process the (buffered) response.
+            </summary>
+            <typeparam name="T">The result type.</typeparam>
+            <param name="client">The client to use.</param>
+            <param name="url">The absolute url (or relative to the client base address).</param>
+            <param name="data">The payload, sent as <see cref="F:SysWeaver.MimeTypeMap.Data"/>.</param>
+            <param name="onResponse">Called with the response message (disposed after the returned task completes) to produce the result.</param>
+            <returns>The result of <paramref name="onResponse"/>.</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The response status code isn't a success (2xx) code, <see cref="F:SysWeaver.Net.HttpResponseException.ResponseCode"/> is the status code.</exception>
+        </member>
+        <member name="T:SysWeaver.RemoteConnectionExt">
+            <summary>
+            Extensions for remote API instances (created by <see cref="T:SysWeaver.Remote.RemoteConnection"/>) that perform SysWeaver specific actions (login, logout, file upload)
+            using the connection's <see cref="T:System.Net.Http.HttpClient"/> (and therefore its cookies, auth headers and settings), see <see cref="T:SysWeaver.SysWeaverHttpClientExt"/>.
+            </summary>
+            <remarks>
+            If the instance isn't a generated remote connection (doesn't derive from <see cref="T:SysWeaver.Remote.RemoteConnectionBase"/>), the methods return null / false without doing anything.
+            </remarks>
         </member>
         <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverLogin(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String)">
             <summary>
@@ -260,15 +1218,16 @@
             <param name="username">Username</param>
             <param name="password">Password (never sent in plaintext, nor sent using the same hash twice)</param>
             <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
-            <returns>User information if successful else null</returns>
+            <returns>User information (check <see cref="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Succeeded"/>), or null if <paramref name="connection"/> isn't a remote connection</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">A request failed (non 2xx response).</exception>
         </member>
         <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverLogOut(SysWeaver.Remote.IRemoteApi,System.String)">
             <summary>
-            Log out the currentgly logged in user
+            Log out the currently logged in user
             </summary>
             <param name="connection">A connection to a SysWeaver service</param>
             <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
-            <returns></returns>
+            <returns>True if the logout request was sent (regardless of the response), false if <paramref name="connection"/> isn't a remote connection</returns>
         </member>
         <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUploadPrepare(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String[])">
             <summary>
@@ -278,7 +1237,7 @@
             <param name="repo">The repository</param>
             <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
             <param name="filenames">File(s) to prepare for upload</param>
-            <returns>Information about the files</returns>
+            <returns>Information about the files, or null if no files were specified, the server response was invalid or <paramref name="connection"/> isn't a remote connection</returns>
         </member>
         <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUploadPrepared(SysWeaver.Remote.IRemoteApi,System.String,System.String,SysWeaver.SysWeaverHttpClientExt.FileInfo[])">
             <summary>
@@ -287,8 +1246,9 @@
             <param name="connection">The remote connection</param>
             <param name="repo">The repository</param>
             <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
-            <param name="info">The files as returned byFileUploadPrepare</param>
-            <returns>True if the upload request(s) was performed and status was updated in the file info(s). True does NOT mean that the file(s) was uploaded succesfully, need to check status</returns>
+            <param name="info">The files as returned by <see cref="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUploadPrepare(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String[])"/></param>
+            <returns>True if the upload request(s) were performed. True does NOT mean that the file(s) were uploaded successfully,
+            the per file upload status is written back to <paramref name="info"/>.</returns>
         </member>
         <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUpload(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String[])">
             <summary>
@@ -302,8 +1262,11 @@
         </member>
         <member name="T:SysWeaver.SysWeaverHttpClientExt">
             <summary>
-            Extensions to HttpClient to perform some action against SysWeaver services
+            Extensions to HttpClient to perform some actions against SysWeaver services: login / logout (session cookie based) and file upload.
             </summary>
+            <remarks>
+            The client must keep cookies (the default <see cref="T:System.Net.Http.HttpClientHandler"/> does) for the login session to be used by later requests.
+            </remarks>
         </member>
         <member name="T:SysWeaver.SysWeaverHttpClientExt.AuthInfo">
             <summary>
@@ -345,6 +1308,11 @@
             The security tokens that this user have
             </summary>
         </member>
+        <member name="T:SysWeaver.SysWeaverHttpClientExt.LoginReq">
+            <summary>
+            The login request payload sent to "Api/auth/Login".
+            </summary>
+        </member>
         <member name="P:SysWeaver.SysWeaverHttpClientExt.LoginReq.Hash">
             <summary>
             Process: 
@@ -364,21 +1332,34 @@
             <param name="client">The http client to login</param>
             <param name="server">The base address to a SysWeaver service</param>
             <param name="username">Username</param>
-            <param name="password">Password (never sent in plaintext, nor sent using the same hash twice) or password hash</param>
-            <returns>User information if successful else null</returns>
+            <param name="password">Password (never sent in plaintext, nor sent using the same hash twice) or password hash.
+            A 44 character base64 string that decodes to 32 bytes is treated as the already salted password hash.</param>
+            <returns>User information, check <see cref="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Succeeded"/></returns>
+            <remarks>
+            Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the double SHA256 hash to "Api/auth/Login".
+            </remarks>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">A request failed (non 2xx response).</exception>
+            <exception cref="T:System.IO.InvalidDataException">The salt response doesn't contain a salt and a one time pad.</exception>
         </member>
         <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverLogout(System.Net.Http.HttpClient,System.String)">
             <summary>
-            Log out the currentgly logged in user
+            Log out the currently logged in user (GET "logout").
             </summary>
-            <param name="client">The http client to login</param>
+            <param name="client">The http client to log out</param>
             <param name="server">The base address to a SysWeaver service</param>
-            <returns></returns>
+            <returns>Always true (the response status is ignored).</returns>
+            <exception cref="T:System.Net.Http.HttpRequestException">The request couldn't be sent (ex: the server can't be reached).</exception>
         </member>
         <member name="T:SysWeaver.SysWeaverHttpClientExt.FileInfo">
             <summary>
             Information about a file 
             </summary>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.FileInfo.ToString">
+            <summary>
+            Returns the file name and the status.
+            </summary>
+            <returns>The name formatted using ToFilename and the status, ex: <c>"file://file.txt" [Upload]</c> (including the quotes).</returns>
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.Name">
             <summary>
@@ -392,19 +1373,25 @@
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.Hash">
             <summary>
-            The MD5 checksum of the file content, encoded using hex values, "abcd...", where a = is the high nibble of the first byte, b is the low nibble of the first byte and so on...
+            The hash of the file content (as computed by <see cref="M:SysWeaver.FileHash.GetHashAsync(System.String)"/>), encoded using lower case hex values, "abcd...", where a = is the high nibble of the first byte, b is the low nibble of the first byte and so on...
             </summary>
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.LastModified">
             <summary>
-            Numer of milliseconds since the Unix epoch
+            Number of milliseconds since the Unix epoch (UTC) of the last modification
             </summary>
         </member>
         <member name="M:SysWeaver.SysWeaverHttpClientExt.FileInfo.SetLastModified(System.DateTime)">
             <summary>
-            Set the LastModified field from a an UTC DateTime time.
+            Set the LastModified field from a an UTC DateTime time (whole milliseconds).
             </summary>
-            <param name="utcLastModified">The last modified time in UTC</param>
+            <param name="utcLastModified">The last modified time in UTC, a <see cref="F:System.DateTimeKind.Unspecified"/> time is treated as UTC, a <see cref="F:System.DateTimeKind.Local"/> time is converted.</param>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.FileInfo.GetStatus">
+            <summary>
+            Get the status reported by the server (from <see cref="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUploadPrepare(System.Net.Http.HttpClient,System.String,System.String,System.String[])"/>).
+            </summary>
+            <returns>The status.</returns>
         </member>
         <member name="T:SysWeaver.SysWeaverHttpClientExt.FileStatus">
             <summary>
@@ -418,17 +1405,17 @@
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.NotAuthorized">
             <summary>
-            Not autharized to upload this file
+            Not authorized to upload this file
             </summary>
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.InvalidParams">
             <summary>
-            Some paramaters are wrong
+            Some parameters are wrong
             </summary>
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.RefuseExtension">
             <summary>
-            The file extension is not accepeted
+            The file extension is not accepted
             </summary>
         </member>
         <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.RefuseSize">
@@ -480,27 +1467,30 @@
             <summary>
             Prepare file(s) for upload to a SysWeaver service (get information from the server about the files)
             </summary>
-            <param name="client">The http client to login</param>
+            <param name="client">The http client to use</param>
             <param name="server">The base address to a SysWeaver service</param>
             <param name="repo">The repository</param>
             <param name="filenames">File(s) to prepare for upload</param>
-            <returns>Information about the files</returns>
+            <returns>Information about the files (with the server status), or null if no files were specified or the server response was invalid</returns>
+            <exception cref="T:System.IO.FileNotFoundException">A file doesn't exist.</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">The request failed (non 2xx response).</exception>
         </member>
         <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUploadPrepared(System.Net.Http.HttpClient,System.String,System.String,SysWeaver.SysWeaverHttpClientExt.FileInfo[])">
             <summary>
             Upload the files previously prepared
             </summary>
-            <param name="client">The http client to login</param>
+            <param name="client">The http client to use</param>
             <param name="server">The base address to a SysWeaver service</param>
             <param name="repo">The repository</param>
-            <param name="info">The files as returned byFileUploadPrepare</param>
-            <returns>True if the upload request(s) was performed and status was updated in the file info(s). True does NOT mean that the file(s) was uploaded succesfully, need to check status</returns>
+            <param name="info">The files as returned by <see cref="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUploadPrepare(System.Net.Http.HttpClient,System.String,System.String,System.String[])"/>, only files with the status <see cref="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.Upload"/> are uploaded (concurrently)</param>
+            <returns>True if the upload request(s) were performed, false if <paramref name="info"/> is empty. True does NOT mean that the file(s) were uploaded successfully,
+            the per file upload result is written back to the file info(s) (see <see cref="M:SysWeaver.SysWeaverHttpClientExt.FileInfo.GetStatus"/>).</returns>
         </member>
         <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUpload(System.Net.Http.HttpClient,System.String,System.String,System.String[])">
             <summary>
             Upload one or more files to a SysWeaver service
             </summary>
-            <param name="client">The http client to login</param>
+            <param name="client">The http client to use</param>
             <param name="server">The base address to a SysWeaver service</param>
             <param name="repo">The repository</param>
             <param name="filenames">File(s) to upload</param>

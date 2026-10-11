@@ -137,10 +137,14 @@ namespace SysWeaver.Auth
         /// <param name="authContext">Optional authorizer specific data</param>
         /// <param name="domain">Optional application specific domain</param>
         /// <param name="language">Optional preferred language</param>
-        /// <exception cref="Exception">A value is too long or the guid contains non ASCII chars.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="auth"/>, <paramref name="username"/> or <paramref name="guid"/> is null (DEBUG builds only).</exception>
+        /// <exception cref="ArgumentException">A value is too long or the guid contains non ASCII chars.</exception>
         public Authorization(AuthorizerBase auth, string username, IReadOnlySet<string> tokens, bool weakMethod, String guid, string email = null, string nickName = null, object authContext = null, String domain = null, string language = null)
             : base(username, tokens, language, domain, email, guid, nickName)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(auth);
+#endif//DEBUG
             WeakMethod = weakMethod;
             Auth = auth;
             Cc = auth.ChangeCounter;
@@ -176,6 +180,7 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Release the reference to the shared user data.
+        /// Using the user data methods after this acquires a new reference (released by calling dispose again).
         /// </summary>
         public void Dispose()
         {
@@ -211,6 +216,7 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Get or create user data.
         /// User data is shared between all <see cref="Authorization"/> instances of the same user (by guid) from the same authorizer.
+        /// An instance acquires a reference to the shared data on the first use of any user data method, the data is dropped when all references are released (see <see cref="Dispose"/>).
         /// </summary>
         /// <typeparam name="T">The type of data</typeparam>
         /// <param name="key">The unique key for this data</param>
@@ -247,6 +253,7 @@ namespace SysWeaver.Auth
         /// <param name="key">The unique key for this data</param>
         /// <param name="val">The data (if present)</param>
         /// <returns>True if the data exists, else false</returns>
+        /// <exception cref="InvalidCastException">The data exists but isn't a <typeparamref name="T"/>.</exception>
         public bool TryGet<T>(String key, out T val)
         {
             if (Values.TryGetValue(key, out var v))

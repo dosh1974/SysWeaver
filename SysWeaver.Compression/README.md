@@ -58,6 +58,8 @@ flowchart TB
 - Concatenated streams are only decoded for GZip (members) and Zstandard (frames); for other formats data after the first compressed stream is ignored.
 - When decompressing from a stream, the decoder may read past the end of the compressed data.
 - Build steps that pre-compress web assets use an external tool (see [SysWeaver overview](../README.md) build notes).
+- Platforms: this library and the Zstandard plug-in (ZstdSharp.Port) are fully managed. The native Brotli plug-in only has native libraries for x64 / x86 (no arm64),
+  see [SysWeaver.Compression.BrotliNativeNET](../SysWeaver.Compression.BrotliNativeNET/README.md).
 
 ## Using it
 

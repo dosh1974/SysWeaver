@@ -73,19 +73,20 @@ namespace SysWeaver.Auth
         /// <param name="email">Email (at most <see cref="AuhorizationLimits.MaxEmailLength"/> chars), may be null</param>
         /// <param name="guid">The user guid (ASCII, at most <see cref="AuhorizationLimits.MaxGuidLength"/> chars)</param>
         /// <param name="nickName">The nick name, null uses the user name</param>
-        /// <exception cref="Exception">A value is too long or the guid contains non ASCII chars.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="username"/> or <paramref name="guid"/> is null (DEBUG builds only).</exception>
+        /// <exception cref="ArgumentException">A value is too long or the guid contains non ASCII chars.</exception>
         public AuthorizationInfo(string username, IReadOnlySet<string> tokens, string language, string domain, string email, string guid, string nickName)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(username);
+#endif//DEBUG
             AuthTools.ValidateUserGuid(guid);
             if (username.Length > AuhorizationLimits.MaxUserNameLength)
-                throw new Exception("User name to long!");
+                throw new ArgumentException("User name too long, use at most " + AuhorizationLimits.MaxUserNameLength + " chars!", nameof(username));
             if ((email?.Length ?? 0) > AuhorizationLimits.MaxEmailLength)
-                throw new Exception("Email to long!");
+                throw new ArgumentException("Email too long, use at most " + AuhorizationLimits.MaxEmailLength + " chars!", nameof(email));
             if ((domain?.Length ?? 0) > AuhorizationLimits.MaxDomainName)
-                throw new Exception("Domain to long!");
-            var l = System.Text.Encoding.UTF8.GetBytes(guid);
-            if (l.Length > 64)
-                throw new Exception("Guid to long!");
+                throw new ArgumentException("Domain too long, use at most " + AuhorizationLimits.MaxDomainName + " chars!", nameof(domain));
             Guid = guid;
             Username = username;
             Tokens = tokens?.Freeze() ?? AuthTools.EmptyTokens;

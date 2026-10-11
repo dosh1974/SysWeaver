@@ -46,7 +46,7 @@
         <member name="F:SwCurl.SwCurlParmas.Save">
             <summary>
             An optional filename where the result will be saved.
-            If there is an error it will be saved as ?status code, ex: "?404".
+            If the response has an error status, the status line is saved, ex: "&lt;404&gt; - Not found", followed by a new line and the response body (if any).
             </summary>
         </member>
         <member name="F:SwCurl.SwCurlParmas.SwRoot">
@@ -79,7 +79,8 @@
         </member>
         <member name="F:SwCurl.SwCurlParmas.Silent">
             <summary>
-            If true, no console message will be displayed
+            If true, no console message will be displayed.
+            The HTTP status of a failed request is then only available in the Save file (the exit code is 3 for a 4xx, 4 for a 5xx, 5 for other statuses).
             </summary>
         </member>
         <member name="F:SwCurl.SwCurlParmas.Dump">
@@ -110,6 +111,46 @@
         <member name="F:SwCurl.SwCurlParmas.GetThreshold">
             <summary>
             If the post data is less than this, use a get request if possible (SysWeaver only)
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitSuccess">
+            <summary>
+            Exit code: success, a 2xx HTTP status (also returned when help was requested).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitGenericError">
+            <summary>
+            Exit code: generic error (an exception, ex: failed to read the payload file or to write the -Save file).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitInvalidArguments">
+            <summary>
+            Exit code: invalid command line arguments.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitHttpClientError">
+            <summary>
+            Exit code: the server responded with a 4xx HTTP status (client error).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitHttpServerError">
+            <summary>
+            Exit code: the server responded with a 5xx HTTP status (server error).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitHttpOtherStatus">
+            <summary>
+            Exit code: the server responded with some other non successful HTTP status (1xx or 3xx).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitRequestFailed">
+            <summary>
+            Exit code: the request failed without a response (connection refused, name resolution, TLS errors etc).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlProgram.ExitTimeout">
+            <summary>
+            Exit code: the request timed out.
             </summary>
         </member>
         <member name="F:SwCurl.SwMethods.Auto">

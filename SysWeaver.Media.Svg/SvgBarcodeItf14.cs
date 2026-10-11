@@ -12,11 +12,11 @@ namespace SysWeaver.Media
     {
 
         /// <summary>
-        /// Default path
+        /// Default path (narrow width 2, height 64, no decimals)
         /// </summary>
         public static readonly SvgBarcodeItf14 Default = new (2, -32, 0);
-        
-        
+
+
         /// <summary>
         /// Compact path, the height of the bar code need to be scaled up by 64 to show correctly.
         /// </summary>
@@ -26,13 +26,32 @@ namespace SysWeaver.Media
 
         static void Throw1()
         {
-            throw new Exception("Only 13 digits are supported!");
+            throw new ArgumentException("Only 13 digits are supported!", "digits");
         }
         static void Throw2()
         {
-            throw new Exception("Only digits can be supplied!");
+            throw new ArgumentException("Only digits can be supplied!", "digits");
         }
 
+        static uint Digit(String text, int index)
+        {
+            var d = (uint)text[index] - '0';
+            if (d >= 10)
+                ThrowNotDigit(text, index);
+            return d;
+        }
+
+        static void ThrowNotDigit(String text, int index)
+        {
+            throw new ArgumentException("Only digits are supported, found '" + text[index] + "' at index " + index.ToString(CultureInfo.InvariantCulture) + "!", nameof(text));
+        }
+
+        /// <summary>
+        /// Compute the GTIN check digit of 13 digits (the 14th digit of an ITF-14 / GTIN-14)
+        /// </summary>
+        /// <param name="digits">Exactly 13 digits</param>
+        /// <returns>The check digit ('0' - '9')</returns>
+        /// <exception cref="ArgumentException"><paramref name="digits"/> is not exactly 13 digits</exception>
         public static Char ComputeCheckSum(String digits)
         {
             var ds = digits.AsSpan();
@@ -59,6 +78,12 @@ namespace SysWeaver.Media
             return (Char)('0' + sum);
         }
 
+        /// <summary>
+        /// Compute the GTIN style check digit of any number of digits without validation (weight 3 for even indices counted from the start,
+        /// so it's only the GTIN check digit for an odd number of digits)
+        /// </summary>
+        /// <param name="digits">The digits</param>
+        /// <returns>The check digit (garbage if the input contains other chars than digits)</returns>
         public static Char ComputeCheckSumUnsafe(String digits)
         {
             var ds = digits.AsSpan();
@@ -85,7 +110,7 @@ namespace SysWeaver.Media
         /// Init an instance
         /// </summary>
         /// <param name="narrowPixelWidth">The width of the most narrow bar in the code, everything else is derviced using best practices</param>
-        /// <param name="height">Height, less than zero is a multiplier of the narrow width, greater than zero sets the height to that</param>
+        /// <param name="height">Height, less than zero is a multiplier of the narrow width, greater than zero sets the height to that, zero is 32 narrow widths</param>
         /// <param name="decimalCount">Number of decimals</param>
         /// <param name="wideMultiplier">The multiplier to apply to get a wide bar</param>
         /// <param name="barBleed">[0, 0.5] account for ink-bleed by reducing the black bar width by this amount (as a fraction)</param>
@@ -110,10 +135,11 @@ namespace SysWeaver.Media
         public double Height { get; init; }
 
         /// <summary>
-        /// Measures the width of a given text
+        /// Measures the width of a given text: from the left edge of the first bar to the right edge of the last bar of <see cref="GetPath"/>
         /// </summary>
         /// <param name="text">Must be even number of digits, only digits are supported</param>
-        /// <returns>The width in pixels of the text</returns>
+        /// <returns>The width in pixels of the text, 0 if the text is empty or has an odd length</returns>
+        /// <exception cref="ArgumentException"><paramref name="text"/> has an even length and contains a char that is not a digit ('0' - '9')</exception>
         public double Measure(String text)
             => InternalWidth(text, Wide, Narrow);
 
@@ -125,8 +151,8 @@ namespace SysWeaver.Media
             double x = Width(0, 4, w, n);
             for (int i = 0; i < l; i += 2)
             {
-                uint d0 = ((uint)text[i] - '0') % 10;
-                uint d1 = ((uint)text[i + 1] - '0') % 10;
+                var d0 = Digit(text, i);
+                var d1 = Digit(text, i + 1);
                 int value = (Numbers[d0] << 1);
                 value |= Numbers[d1];
                 x += Width(value, 10, w, n);
@@ -183,12 +209,13 @@ namespace SysWeaver.Media
 
 
         /// <summary>
-        /// Get a path
+        /// Get a path (interleaved 2 of 5 with start / stop pattern, one closed rectangle sub path per bar, no quiet zone, no bearer bars, no check digit is added)
         /// </summary>
         /// <param name="text">Must be even number of digits, only digits are supported</param>
         /// <param name="x">The left position</param>
         /// <param name="y">The top postion</param>
-        /// <returns>An svg path with the barcode</returns>
+        /// <returns>An svg path with the barcode, null if the text is empty or has an odd length</returns>
+        /// <exception cref="ArgumentException"><paramref name="text"/> has an even length and contains a char that is not a digit ('0' - '9')</exception>
         public String GetPath(String text, double x = 0, double y = 0)
         {
             var l = text.Length;
@@ -199,8 +226,8 @@ namespace SysWeaver.Media
             int value = 0;
             for (int i = 0; i < l; i += 2)
             {
-                uint d0 = ((uint)text[i] - '0') % 10;
-                uint d1 = ((uint)text[i + 1] - '0') % 10;
+                var d0 = Digit(text, i);
+                var d1 = Digit(text, i + 1);
                 value <<= 10;
                 value |= (Numbers[d0] << 1);
                 value |= Numbers[d1];
@@ -241,7 +268,13 @@ namespace SysWeaver.Media
             return n;
         }
 
+        /// <summary>
+        /// The width of a wide bar / space (narrow width * wide multiplier)
+        /// </summary>
         public readonly double Wide;
+        /// <summary>
+        /// The width of a narrow bar / space
+        /// </summary>
         public readonly double Narrow;
 
         static readonly int[] Numbers = GetNumbers();

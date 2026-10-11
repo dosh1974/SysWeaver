@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SysWeaver
@@ -17,6 +18,7 @@ namespace SysWeaver
     /// <remarks>
     /// Configure the argument names/help (and <see cref="AllowSourceSequence"/>) before calling one of the processing methods.
     /// For most uses the static <see cref="FilesToFolderTool"/> helpers (which use <see cref="Instance"/>) are enough.
+    /// The processing methods return a process exit code (0 = success, non-zero = failure), see <see cref="FilesToFolderTool"/>.
     /// </remarks>
     public sealed class FilesToFolderTool<T> where T : class, new()
     {
@@ -88,8 +90,8 @@ namespace SysWeaver
         /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
         /// <returns>
-        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
-        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// The process exit code: 0 (<see cref="FilesToFolderTool.ExitSuccess"/>) if successful or if help was requested, 2 (<see cref="FilesToFolderTool.ExitInvalidArguments"/>) if the command line was invalid,
+        /// 1 (<see cref="FilesToFolderTool.ExitGenericError"/>) if processing threw an exception, otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
         /// </returns>
         public int OnFiles(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, int> doOnFile, Func<T, int> validateParams = null)
         {
@@ -118,8 +120,8 @@ namespace SysWeaver
         /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
         /// <returns>
-        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
-        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// The process exit code: 0 (<see cref="FilesToFolderTool.ExitSuccess"/>) if successful or if help was requested, 2 (<see cref="FilesToFolderTool.ExitInvalidArguments"/>) if the command line was invalid,
+        /// 1 (<see cref="FilesToFolderTool.ExitGenericError"/>) if processing threw an exception, otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
         /// </returns>
         public int OnFiles(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null)
         {
@@ -153,11 +155,13 @@ namespace SysWeaver
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
         /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's the number of CPU threads plus the thread count (so -1 gives one less than the CPU count), at least 1</param>
         /// <returns>
-        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
-        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// The process exit code: 0 (<see cref="FilesToFolderTool.ExitSuccess"/>) if successful or if help was requested, 2 (<see cref="FilesToFolderTool.ExitInvalidArguments"/>) if the command line was invalid,
+        /// 1 (<see cref="FilesToFolderTool.ExitGenericError"/>) if processing threw an exception, otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
         /// </returns>
         /// <remarks>
         /// Blocks the calling thread until all files have been processed.
+        /// Once a file returns a non-zero value, files not yet started are skipped; the first non-zero value returned is the result.
+        /// <paramref name="doOnFile"/> must be thread safe.
         /// </remarks>
         public int OnFilesParallel(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1)
         {
@@ -178,7 +182,7 @@ namespace SysWeaver
                     var d = MakeDir(dest, src);
                     var r = await doOnFile(msg, opt, src.Key, src.Value, d).ConfigureAwait(false);
                     if (r != 0)
-                        InterlockedEx.Min(ref ret, r);
+                        Interlocked.CompareExchange(ref ret, r, 0);
                 }).GetAwaiter().GetResult();
                 return ret;
             }, validateParams);
@@ -198,8 +202,8 @@ namespace SysWeaver
         /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
         /// <returns>
-        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
-        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// The process exit code: 0 (<see cref="FilesToFolderTool.ExitSuccess"/>) if successful or if help was requested, 2 (<see cref="FilesToFolderTool.ExitInvalidArguments"/>) if the command line was invalid,
+        /// 1 (<see cref="FilesToFolderTool.ExitGenericError"/>) if processing threw an exception, otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
         /// </returns>
         public Task<int> OnFilesAsync(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null)
         {
@@ -228,11 +232,12 @@ namespace SysWeaver
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
         /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's the number of CPU threads plus the thread count (so -1 gives one less than the CPU count), at least 1</param>
         /// <returns>
-        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
-        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// The process exit code: 0 (<see cref="FilesToFolderTool.ExitSuccess"/>) if successful or if help was requested, 2 (<see cref="FilesToFolderTool.ExitInvalidArguments"/>) if the command line was invalid,
+        /// 1 (<see cref="FilesToFolderTool.ExitGenericError"/>) if processing threw an exception, otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
         /// </returns>
         /// <remarks>
-        /// Once a file returns a non-zero value, files not yet started are skipped; the smallest non-zero value is returned.
+        /// Once a file returns a non-zero value, files not yet started are skipped; the first non-zero value returned is the result
+        /// (files already running are completed).
         /// <paramref name="doOnFile"/> must be thread safe.
         /// </remarks>
         public Task<int> OnFilesParallelAsync(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1)
@@ -254,7 +259,7 @@ namespace SysWeaver
                     var d = MakeDir(dest, src);
                     var r = await doOnFile(msg, opt, src.Key, src.Value, d).ConfigureAwait(false);
                     if (r != 0)
-                        InterlockedEx.Min(ref ret, r);
+                        Interlocked.CompareExchange(ref ret, r, 0);
                 }).ConfigureAwait(false);
                 return ret;
             }, validateParams);
@@ -279,7 +284,8 @@ namespace SysWeaver
                 {
                     foreach (var t in CommandLine.SyntaxObject<T>(validArgs, CommandLine.OptionMembers.All))
                         msg.AddMessage(t);
-                    return 1;
+                    //  Help requested and displayed: success
+                    return FilesToFolderTool.ExitSuccess;
                 }
                 if (validateParams != null)
                 {
@@ -297,7 +303,7 @@ namespace SysWeaver
                 msg.AddMessage(ex.Message, MessageLevels.Error);
                 foreach (var t in CommandLine.SyntaxObject<T>(validArgs, CommandLine.OptionMembers.All))
                     msg.AddMessage(t);
-                return -1;
+                return FilesToFolderTool.ExitInvalidArguments;
             }
 
             var files = cmd.Arguments[0].Item2 as IEnumerable<KeyValuePair<String, String>>;
@@ -309,7 +315,7 @@ namespace SysWeaver
             catch (Exception ex)
             {
                 msg.AddMessage(ex.Message, MessageLevels.Error);
-                return -2;
+                return FilesToFolderTool.ExitGenericError;
             }
         }
 
@@ -330,7 +336,8 @@ namespace SysWeaver
                 {
                     foreach (var t in CommandLine.SyntaxObject<T>(validArgs, CommandLine.OptionMembers.All))
                         msg.AddMessage(t);
-                    return 1;
+                    //  Help requested and displayed: success
+                    return FilesToFolderTool.ExitSuccess;
                 }
                 if (validateParams != null)
                 {
@@ -348,7 +355,7 @@ namespace SysWeaver
                 msg.AddMessage(ex.Message, MessageLevels.Error);
                 foreach (var t in CommandLine.SyntaxObject<T>(validArgs, CommandLine.OptionMembers.All))
                     msg.AddMessage(t);
-                return -1;
+                return FilesToFolderTool.ExitInvalidArguments;
             }
             var files = cmd.Arguments[0].Item2 as IEnumerable<KeyValuePair<String, String>>;
             var dest = cmd.Arguments.FirstOrDefault(x => x.Item1.Name == DestFolderName)?.Item2 as String;
@@ -359,7 +366,7 @@ namespace SysWeaver
             catch (Exception ex)
             {
                 msg.AddMessage(ex.Message, MessageLevels.Error);
-                return -2;
+                return FilesToFolderTool.ExitGenericError;
             }
         }
 

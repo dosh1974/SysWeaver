@@ -260,7 +260,7 @@ namespace SysWeaver.Data
             {
                 try
                 {
-                    if (!type.IsPublic)
+                    if (!(type.IsPublic || type.IsNestedPublic))
                         return;
                     if (type.IsInterface)
                         return;

@@ -67,6 +67,8 @@ namespace SysWeaver
         /// Process a single file and return it's meta data.
         /// Reads any existing meta data, calls the process function and stores the result if non null.
         /// Failure to store the meta data is ignored (the associated files are deleted at process exit).
+        /// If the key type folder was deleted while the process is running, the process function (or the meta data write) fails with a <see cref="DirectoryNotFoundException"/>:
+        /// the folder is then re-created and the failed call is retried once.
         /// </summary>
         /// <param name="filename">The file to process.</param>
         /// <returns>The new meta data if the process function returned non null, else the existing meta data (may be null). Null if the file doesn't exist.</returns>
@@ -84,7 +86,8 @@ namespace SysWeaver
             var cleanMeta = Path.Combine(folder, String.Concat("Meta_", hash, KeySuffix));
             var dataName = cleanMeta + FileMetaData.FileExt;
 
-            using var sysLock = await SystemLock.GetAsync(hash).ConfigureAwait(false);
+            //  Lock on the key type, key suffix and the content (case insensitive like the file names), so that a callback can process the same content using another key type / suffix (storage-cov-6)
+            using var sysLock = await SystemLock.GetAsync(String.Concat("FileMetaData_", KeyType, KeySuffix, "_", hash).FastToLower()).ConfigureAwait(false);
             var fi = new FileInfo(dataName);
             dataName = fi.FullName;
             T data = null;
@@ -115,20 +118,32 @@ namespace SysWeaver
             }
             var pd = data;
             var ad = OnDataAsync;
-            if (ad == null)
+            try
             {
-                data = OnData(filename, destBase, data);
+                data = ad == null ? OnData(filename, destBase, pd) : await ad(filename, destBase, pd).ConfigureAwait(false);
             }
-            else
+            catch (DirectoryNotFoundException)
             {
-                data = await ad(filename, destBase, data).ConfigureAwait(false);
+                //  The folder was deleted while the process is running (rare), re-create it and retry once (storage-cov-4)
+                await PathExt.EnsureFolderExistAsync(folder).ConfigureAwait(false);
+                data = ad == null ? OnData(filename, destBase, pd) : await ad(filename, destBase, pd).ConfigureAwait(false);
             }
             if (data == null)
                 return pd;
             try
             {
-                using (var o = new FileStream(dataName, FileMode.Create))
-                    await comp.CompressAsync(ser.Serialize(data), o, CompEncoderLevels.Balanced).ConfigureAwait(false);
+                try
+                {
+                    using (var o = new FileStream(dataName, FileMode.Create))
+                        await comp.CompressAsync(ser.Serialize(data), o, CompEncoderLevels.Balanced).ConfigureAwait(false);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    //  The folder was deleted while the process is running (rare), re-create it and retry once (storage-cov-4)
+                    await PathExt.EnsureFolderExistAsync(folder).ConfigureAwait(false);
+                    using (var o = new FileStream(dataName, FileMode.Create))
+                        await comp.CompressAsync(ser.Serialize(data), o, CompEncoderLevels.Balanced).ConfigureAwait(false);
+                }
                 fi.Refresh();
                 cache[dataName] = Tuple.Create(fi.LastWriteTimeUtc, (Object)data);
             }

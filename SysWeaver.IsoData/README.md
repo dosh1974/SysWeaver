@@ -26,7 +26,7 @@ flowchart TB
 
 ## Key features
 
-- `IsoCountry`: ISO 3166 Alpha 2 code, official/common name, main currency, population, land area and spoken languages. Lookup by code (`TryGet`) or fuzzy name/nick name/abbreviation (`TryGetName`, `Aliases`).
+- `IsoCountry`: ISO 3166 Alpha 2 code, official/common name, main currency, population, land area and spoken languages. Lookup by code only (`TryGet`, "Sweden" gives null) or by code and fuzzy name/nick name/abbreviation (`TryGetName`, `Aliases`).
 - `IsoCurrency`: ISO 4217 code and number, symbol, under units, separators and the "biggest" user country. Lookup by code or number (`TryGet`, `Validate`), formatting via `ToString(amount, CurrencyFormatOptions, ...)`, plus `CurrencyGlyphs`/`IsCurrencyGlyph` (all chars needed to render amounts, e.g. for font subsets).
 - `CurrencyFormatOptions`: flags selecting ISO prefix/suffix or symbol style, thousands separator, forced rounding and automatic removal of zero under units.
 - `IsoLanguage`: ISO 639-1/639-2 codes and names. Lookup by code (`TryGet`, also accepts regional codes like `en-GB`), by name (`TryGetName`), normalization (`Validate`), countries using a language (`GetCountries`) and `Common` (languages used in countries with 10M+ people in total, plus languages that were common before the 2026-10-07 population refresh, i.e. `sr`).
@@ -38,8 +38,11 @@ flowchart TB
 
 - Static data compiled into the assembly; updates (new currencies, renamed countries) require a new build.
 - Data is curated rather than authoritative. `IsoCountry` population (number of people) and land area (km²) figures come from the World Bank Open Data API (fetched 2026-10-07; `SP.POP.TOTL` 2025 values and `AG.LND.TOTL.K2` 2023 values); territories the World Bank doesn't cover (ex: AX, FK, GF, RE, TW, VA) keep older, approximate (around 2020) figures, zero when unknown.
-- Validation methods differ in style: `IsoCurrency.Validate` returns null for unknown input, while `IsoLanguage.Validate` and `PhonePrefix.GetValidatedPhoneNumber` throw.
-- `IsoLanguage.TryGet(out country, code)` matches the language part case sensitively (lower case expected), unlike `TryGet(code)`.
+- Validation methods differ in style: `IsoCurrency.Validate` returns null for unknown input, while `IsoLanguage.Validate` and `PhonePrefix.GetValidatedPhoneNumber` throw a `FormatException` with a human readable message (`ArgumentNullException` for a null phone number).
+- Code lookups (`TryGet`) are case insensitive but don't trim; the name lookups (`IsoCountry.TryGetName`) normalize case, diacritics, periods and hyphens and accept abbreviations ("St", "Rep", "Is", "N" / "S" / "E" / "W" for directions).
+- `IsoCurrency.ToString` rounds to the nearest under unit with banker's rounding; without `ApplyThousandsSeparator` the integer part is formatted with the current culture, and negative values use the negative sign of the current culture (not always '-'; `CurrencyGlyphs` contains both '-' and U+2212, the only visible negative signs of the .NET cultures).
+- `IsoLanguage.Common` is a shared mutable array and `GetCountries` returns shared arrays: don't modify them.
+- `PhonePrefix.Identify` matches the longest prefix (country code + region prefix), so a number of a shared country code (ex: +1) whose digits start with a region prefix is attributed to that region.
 
 ## Using it
 

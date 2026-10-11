@@ -6,6 +6,10 @@ using System.Reflection;
 
 namespace SysWeaver.Inspection.Implementation
 {
+    /// <summary>
+    /// Reflection info about the Field / Prop methods of an inspector type (used to compile the type handlers, normally with I = <see cref="IInspector"/>)
+    /// </summary>
+    /// <typeparam name="I">The inspector type</typeparam>
     public static class InspectorInfo<I> where I : IInspector
     {
         public static readonly TypeInfo InspectorTypeInfo = typeof(I).GetTypeInfo();
@@ -34,6 +38,11 @@ namespace SysWeaver.Inspection.Implementation
 
         static readonly ConcurrentDictionary<Type, MethodInfo> Fields = GetFields();
 
+        /// <summary>
+        /// Get the Field(ref T) method for a type: the typed overload if there is one, else the generic Field&lt;T&gt; made for the type
+        /// </summary>
+        /// <param name="t">The type (a by ref type is the same as its element type)</param>
+        /// <returns>The method</returns>
         public static MethodInfo GetRegFieldMethod(Type t)
         {
             t = t.IsByRef ? t.GetElementType() : t;
@@ -45,6 +54,12 @@ namespace SysWeaver.Inspection.Implementation
             }
             return mi;
         }
+        /// <summary>
+        /// Get the Field(ref T) method for a type
+        /// </summary>
+        /// <param name="t">The type (a by ref type is the same as its element type)</param>
+        /// <param name="allowGeneric">False to return null instead of the generic Field&lt;T&gt; (when there is no typed overload)</param>
+        /// <returns>The method or null</returns>
         public static MethodInfo GetRegFieldMethod(Type t, bool allowGeneric)
         {
             MethodInfo mi = GetRegFieldMethod(t);
@@ -79,6 +94,11 @@ namespace SysWeaver.Inspection.Implementation
 
         private static readonly ConcurrentDictionary<Type, MethodInfo> Props = GetProps();
 
+        /// <summary>
+        /// Get the Prop(T, SetProp&lt;T&gt;) method for a type: the typed overload if there is one, else the generic Prop&lt;T&gt; made for the type
+        /// </summary>
+        /// <param name="t">The type (a by ref type is the same as its element type)</param>
+        /// <returns>The method</returns>
         public static MethodInfo GetRegPropMethod(Type t)
         {
             t = t.IsByRef ? t.GetElementType() : t;
@@ -90,6 +110,12 @@ namespace SysWeaver.Inspection.Implementation
             }
             return mi;
         }
+        /// <summary>
+        /// Get the Prop(T, SetProp&lt;T&gt;) method for a type
+        /// </summary>
+        /// <param name="t">The type (a by ref type is the same as its element type)</param>
+        /// <param name="allowGeneric">False to return null instead of the generic Prop&lt;T&gt; (when there is no typed overload)</param>
+        /// <returns>The method or null</returns>
         public static MethodInfo GetRegPropMethod(Type t, bool allowGeneric)
         {
             MethodInfo mi = GetRegPropMethod(t);

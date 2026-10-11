@@ -87,7 +87,7 @@ namespace SysWeaver.OsServices
             { ServiceVerbs.Stop, "Stopping: " },
             { ServiceVerbs.Pause, "Pausing: " },
             { ServiceVerbs.Continue, "Continuing (resuming): " },
-            { ServiceVerbs.Restart, "Restaring: " },
+            { ServiceVerbs.Restart, "Restarting: " },
             { ServiceVerbs.Hash, "Computing hash: " },
 
         }.Freeze();

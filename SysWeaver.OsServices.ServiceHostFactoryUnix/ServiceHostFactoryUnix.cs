@@ -12,12 +12,12 @@ namespace SysWeaver.OsServices
         /// Create a service host for the detected init system.
         /// </summary>
         /// <param name="p">The service parameters.</param>
-        /// <returns>A systemd or SysVinit service host, or null (after writing a message to the console) if the init system isn't supported.</returns>
+        /// <returns>A systemd or SysVinit service host, or null (after writing a message to the console) if the init system isn't supported (or "ps" isn't available).</returns>
         public IServiceHost Create(ServiceParams p)
         {
             if (SystemHelper.Run("systemd-notify --booted") == 0)
                 return new ServiceHostSystemD(p);
-            var serviceSystem = SystemHelper.GetStdOutFrom("ps -p 1 -o comm=").Trim();
+            var serviceSystem = SystemHelper.GetStdOutFrom("ps -p 1 -o comm=")?.Trim() ?? "";
             if (serviceSystem == "systemd")
                 return new ServiceHostSystemD(p);
             if (serviceSystem == "init")

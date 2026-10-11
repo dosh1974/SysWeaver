@@ -8,22 +8,65 @@ using System.Reflection;
 namespace SysWeaver.Inspection.Implementation
 {
 
+    /// <summary>
+    /// The compiled code that inspects values declared as <typeparamref name="T"/> of one runtime type, get instances from <see cref="TypeHandlerCache{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// Types are handled as (first match): a type with a typed IInspector.Field overload (primitives, string, dates, guid),
+    /// <see cref="IDescribable"/>, arrays (any rank, byte arrays as a block), enums (as the underlying type), Nullable&lt;U&gt; (as the value), KeyValuePair&lt;K, V&gt; (key, value),
+    /// IList&lt;E&gt;, ICollection&lt;E&gt;, IList, else all instance fields (including private and inherited fields, except readonly fields).
+    /// Instances are created using (first match): a constructor (IInspector, int, bool) or (IInspector, int) (version, is latest version), a parameterless constructor (any accessibility, then described), the default value of a struct, else <see cref="Activator.CreateInstance(Type)"/>.
+    /// </remarks>
+    /// <typeparam name="T">The declared type</typeparam>
     public sealed class TypeHandler<T>
     {
+        /// <summary>
+        /// Inspect a field (calls the matching IInspectorImplementation method)
+        /// </summary>
         public delegate void HandleField(IInspectorImplementation i, ref T value);
+        /// <summary>
+        /// Inspect a property (calls the matching IInspectorImplementation method)
+        /// </summary>
         public delegate void HandleProp(IInspectorImplementation i, ref T value, SetProp<T> onSet);
 
+        /// <summary>
+        /// Describe the members of an (existing) value at a version
+        /// </summary>
         public delegate void DescribeDelegate(IInspectorImplementation i, ref T value, int version);
+        /// <summary>
+        /// Create a new instance and describe it (used when reading)
+        /// </summary>
         public delegate T CreateDelegate(IInspectorImplementation i, int version, bool isLatestVersion);
 
+        /// <summary>
+        /// True if values of the type can be null (reference types and Nullable&lt;U&gt;)
+        /// </summary>
         public readonly bool Nullable;
+        /// <summary>
+        /// The current version of the type: the <see cref="DescVersionAttribute"/> version of <see cref="IDescribable"/> types (1 without the attribute).
+        /// Else 1 for other types described by the handler of the declared type itself, and 0 for types with a typed IInspector.Field overload and for the handlers of other runtime types (from <see cref="TypeHandlerCache{T}.GetHandler(Type)"/>)
+        /// </summary>
         public readonly int LatestVersion;
+        /// <summary>
+        /// Inspect a field of the type
+        /// </summary>
         public readonly HandleField Field;
+        /// <summary>
+        /// Inspect a property of the type
+        /// </summary>
         public readonly HandleProp Prop;
+        /// <summary>
+        /// A unique index of this handler (see <see cref="StaticTypeHandler.CurrentTypeCount"/>)
+        /// </summary>
         public readonly int TypeIndex;
 
-
+        /// <summary>
+        /// Describe a value, null for types with a typed IInspector.Field overload and for interfaces / abstract types (values are handled by the handler of their runtime type)
+        /// </summary>
         public readonly DescribeDelegate Describe;
+        /// <summary>
+        /// Create a value, null for types with a typed IInspector.Field overload and for interfaces / abstract types
+        /// </summary>
         public readonly CreateDelegate Create;
 
 
@@ -415,7 +458,7 @@ namespace SysWeaver.Inspection.Implementation
             }
             catch (Exception ex)
             {
-                throw new Exception("Failed to create type handler for type \"" + typeof(T).FullName + "\"", ex);
+                throw new Exception("Failed to create type handler for type \"" + typeof(T).FullName + "\" (runtime type \"" + type?.FullName + "\")", ex);
             }
         }
 

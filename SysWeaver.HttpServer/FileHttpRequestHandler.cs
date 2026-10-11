@@ -137,7 +137,7 @@ namespace SysWeaver.Net
         /// Open the file (updating the access time if <see cref="UpdateAccessTime"/> is true).
         /// </summary>
         /// <param name="request">The request (not used)</param>
-        /// <returns>The file data, memory mapped if 1 MiB or smaller, else as a stream</returns>
+        /// <returns>The file data as memory if 1 MiB or smaller (memory mapped on Windows, read into pooled memory on other platforms), else as a stream</returns>
         /// <exception cref="IOException">The file could not be opened (deleted, locked etc)</exception>
         public HttpRequestData Get(HttpServerRequest request)
         {

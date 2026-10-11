@@ -7,7 +7,7 @@ namespace SysWeaver.Data
     /// <summary>
     /// Generic aggregation helpers used by <see cref="InternalTableAggregator"/> (column aggregation, currently not exposed since
     /// <see cref="TableDataEdit.Aggregate(BaseTableData, TableColumnAggregation[])"/> is not implemented).
-    /// All methods take boxed values and return a boxed result; an empty sequence yields the default value (or throws for averages).
+    /// All methods take boxed values and return a boxed result; an empty sequence yields the default value.
     /// </summary>
     static class InternalHelpers
     {

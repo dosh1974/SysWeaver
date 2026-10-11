@@ -12,6 +12,7 @@ namespace SysWeaver.OsServices.ServiceManager
     /// <remarks>
     /// Most operations require administrator rights. Each call opens and closes its own SCM and service handles.
     /// Success is determined from the return values of the API calls, error codes are read using <see cref="Marshal.GetLastWin32Error"/>.
+    /// All string based API calls use the Unicode (W) entry points, so service names, display names and command lines can use any character.
     /// </remarks>
     static class Win32ServiceManager
     {
@@ -709,8 +710,63 @@ namespace SysWeaver.OsServices.ServiceManager
             return SetServiceConfig2(service, SERVICE_CONFIG_DESCRIPTION, t, failSilent);
         }
 
-        static QueryServiceConfig GetServiceConfig(string serviceName, bool failSilent = true)
+        static QueryServiceConfig GetServiceConfig(string serviceName, bool failSilent = true) => GetServiceConfig(serviceName, failSilent, out _);
+
+        /// <summary>
+        /// Read a double null terminated list of strings (ex: QUERY_SERVICE_CONFIG.lpDependencies): strings separated by '\0', ending with an empty string.
+        /// </summary>
+        /// <param name="ptr">Pointer to the first string, may be zero</param>
+        /// <returns>The strings, empty if <paramref name="ptr"/> is zero or the list is empty</returns>
+        internal static string[] ReadMultiString(nint ptr)
         {
+            if (ptr == nint.Zero)
+                return [];
+            int count = 0;
+            var p = ptr;
+            for (; ; )
+            {
+                var l = Marshal.PtrToStringUni(p)?.Length ?? 0;
+                if (l == 0)
+                    break;
+                ++count;
+                p += (l + 1) * sizeof(char);
+            }
+            if (count == 0)
+                return [];
+            var res = new string[count];
+            p = ptr;
+            for (int i = 0; i < count; ++i)
+            {
+                var s = Marshal.PtrToStringUni(p);
+                res[i] = s;
+                p += (s.Length + 1) * sizeof(char);
+            }
+            return res;
+        }
+
+        /// <summary>
+        /// Get the names of the services (and load ordering groups, prefixed with '+') a service depends on (read-only, no elevation needed).
+        /// </summary>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="failSilent">If true, return null on error, else throw exceptions</param>
+        /// <returns>The dependencies in the configured order, empty for none, null on error if <paramref name="failSilent"/></returns>
+        /// <exception cref="Exception">The configuration couldn't be read (the service doesn't exist etc) and <paramref name="failSilent"/> is false.</exception>
+        public static string[] GetDependencies(string serviceName, bool failSilent = false)
+        {
+            GetServiceConfig(serviceName, failSilent, out var dependencies);
+            return dependencies;
+        }
+
+        /// <summary>
+        /// Query the configuration of a service (QueryServiceConfig).
+        /// </summary>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="failSilent">If true, return null on error, else throw exceptions</param>
+        /// <param name="dependencies">The names of the services and groups (prefixed with '+') the service depends on (read from <see cref="QueryServiceConfig.lpDependencies"/> while it's valid), empty for none, null on error</param>
+        /// <returns>The configuration (its <see cref="QueryServiceConfig.lpDependencies"/> is set to zero, the buffer is freed), null on error if <paramref name="failSilent"/></returns>
+        static QueryServiceConfig GetServiceConfig(string serviceName, bool failSilent, out string[] dependencies)
+        {
+            dependencies = null;
             var manager = OpenSCManager(null, null, ServiceManagerRights.GENERIC_READ);
             try
             {
@@ -729,6 +785,9 @@ namespace SysWeaver.OsServices.ServiceManager
                             return ThrowNative<QueryServiceConfig>();
                         QueryServiceConfig descriptionStruct = new QueryServiceConfig();
                         Marshal.PtrToStructure(ptr, descriptionStruct);
+                        //  The dependencies point into the buffer
+                        dependencies = ReadMultiString(descriptionStruct.lpDependencies);
+                        descriptionStruct.lpDependencies = nint.Zero;
                         return descriptionStruct;
                     }
                     finally
@@ -890,14 +949,18 @@ namespace SysWeaver.OsServices.ServiceManager
         const int STANDARD_RIGHTS_REQUIRED = 0xF0000;
         const int SERVICE_WIN32_OWN_PROCESS = 0x00000010;
 
-        [DllImport("advapi32.dll", EntryPoint = "OpenSCManagerA", SetLastError = true)]
+        [DllImport("advapi32.dll", EntryPoint = "OpenSCManagerW", CharSet = CharSet.Unicode, SetLastError = true)]
         static extern nint OpenSCManager(string lpMachineName, string lpDatabaseName, ServiceManagerRights dwDesiredAccess);
 
-        [DllImport("advapi32.dll", EntryPoint = "OpenServiceA", CharSet = CharSet.Ansi, SetLastError = true)]
+        [DllImport("advapi32.dll", EntryPoint = "OpenServiceW", CharSet = CharSet.Unicode, SetLastError = true)]
         static extern nint OpenService(nint hSCManager, string lpServiceName, ServiceRights dwDesiredAccess);
 
-        [DllImport("advapi32.dll", EntryPoint = "CreateServiceA", SetLastError = true)]
-        static extern nint CreateService(nint hSCManager, string lpServiceName, string lpDisplayName, ServiceRights dwDesiredAccess, int dwServiceType, ServiceBootFlag dwStartType, ServiceErrors dwErrorControl, string lpBinaryPathName, string lpLoadOrderGroup, nint lpdwTagId, string lpDependencies, string lp, string lpPassword);
+        /// <summary>
+        /// CreateServiceW.
+        /// lpDependencies is a double null terminated list: null for none, else the names separated by '\0' and ending with '\0' (the marshaller adds the final terminator).
+        /// </summary>
+        [DllImport("advapi32.dll", EntryPoint = "CreateServiceW", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern nint CreateService(nint hSCManager, string lpServiceName, string lpDisplayName, ServiceRights dwDesiredAccess, int dwServiceType, ServiceBootFlag dwStartType, ServiceErrors dwErrorControl, string lpBinaryPathName, string lpLoadOrderGroup, nint lpdwTagId, string lpDependencies, string lpServiceStartName, string lpPassword);
 
         [DllImport("advapi32.dll")]
         static extern int CloseServiceHandle(nint hSCObject);
@@ -911,12 +974,11 @@ namespace SysWeaver.OsServices.ServiceManager
         [DllImport("advapi32.dll")]
         static extern int ControlService(nint hService, ServiceControl dwControl, ServiceStatus lpServiceStatus);
 
-        [DllImport("advapi32.dll", EntryPoint = "StartServiceA")]
-        static extern int StartService(nint hService, int dwNumServiceArgs, int lpServiceArgVectors);
-
-        [DllImport("advapi32", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool ControlService(nint hService, ServiceControl dwControl, ref ServiceStatus lpServiceStatus);
+        /// <summary>
+        /// StartServiceW, lpServiceArgVectors is a pointer to an array of dwNumServiceArgs UTF-16 string pointers (0 for no arguments).
+        /// </summary>
+        [DllImport("advapi32.dll", EntryPoint = "StartServiceW", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern int StartService(nint hService, int dwNumServiceArgs, nint lpServiceArgVectors);
 
         const uint SERVICE_CONFIG_DESCRIPTION = 0x01;
         const uint SERVICE_CONFIG_FAILURE_ACTIONS = 0x02;
@@ -931,6 +993,9 @@ namespace SysWeaver.OsServices.ServiceManager
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "QueryServiceConfig2W")]
         static extern bool QueryServiceConfig2(nint hService, uint dwInfoLevel, nint buffer, uint cbBufSize, out uint pcbBytesNeeded);
 
+        /// <summary>
+        /// ChangeServiceConfigW, lpDependencies: see <see cref="CreateService"/> (null for no change).
+        /// </summary>
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "ChangeServiceConfigW")]
         static extern bool ChangeServiceConfig(nint hService, ServiceTypes dwServiceType, StartTypes dwStartType, ServiceErrors dwErrorControl, string lpBinaryPathName,
             string lpLoadOrderGroup, out uint lpdwTagId, string lpDependencies, string lpServiceStartName, string lpPassword, string lpDisplayName);

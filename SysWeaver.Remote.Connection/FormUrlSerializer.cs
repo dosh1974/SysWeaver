@@ -8,7 +8,7 @@ namespace SysWeaver.Remote
 
     /// <summary>
     /// Write only serializer that produces application/x-www-form-urlencoded data from the public fields and properties of an object (registered with the extension "formUrl").
-    /// Registered automatically by <see cref="RemoteConnectionBase"/> when the corresponding <see cref="RemoteParam"/> serializer name is used.
+    /// Registered automatically (once per process, together with <see cref="IgnoreDefaultsFormUrlSerializer"/>) by the first <see cref="RemoteConnectionBase"/> that uses a form url <see cref="RemoteParam"/> serializer name.
     /// </summary>
     /// <remarks>
     /// Deserialization is not supported (all Create/FromString methods throw <see cref="NotImplementedException"/>). Thread safe.

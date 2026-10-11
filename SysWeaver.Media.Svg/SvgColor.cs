@@ -1,12 +1,28 @@
 ﻿using System;
+using System.Globalization;
 
 namespace SysWeaver.Media
 {
+    /// <summary>
+    /// An immutable RGBA color (components are clamped to [0, 255], alpha to [0, 1]) with a short html / css representation (<see cref="Html"/>)
+    /// </summary>
     public sealed class SvgColor
     {
 
+        /// <summary>
+        /// Linear interpolation between two colors (the rgb components are rounded to the nearest integer)
+        /// </summary>
+        /// <param name="from">The color at distance 0</param>
+        /// <param name="to">The color at distance 1</param>
+        /// <param name="distance">The interpolation factor, values outside [0, 1] extrapolates (the result is clamped)</param>
+        /// <returns>A new color</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="from"/> or <paramref name="to"/> is null (DEBUG builds only)</exception>
         public static SvgColor Lerp(SvgColor from, SvgColor to, double distance)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(from);
+            ArgumentNullException.ThrowIfNull(to);
+#endif//DEBUG
             var r0 = from.R;
             var g0 = from.G;
             var b0 = from.B;
@@ -36,13 +52,13 @@ namespace SysWeaver.Media
 
         static int H(char c)
         {
-            if (c >= '0' && c <= '9') 
+            if (c >= '0' && c <= '9')
                 return c - '0';
             if (c >= 'a' && c <= 'f')
                 return c - 'a' + 10;
             if (c >= 'A' && c <= 'F')
                 return c - 'A' + 10;
-            throw new Exception("Invalid char!");
+            throw new FormatException("Invalid hex char '" + c + "'!");
         }
         static int H1(String s, int pos)
         {
@@ -59,27 +75,40 @@ namespace SysWeaver.Media
             return c;
         }
 
+        /// <summary>
+        /// Parse a color, supported formats: "#rgb", "#rrggbb", "rgb(r, g, b)" and "rgba(r, g, b, a)" (integer components, alpha as a decimal number, invariant culture).
+        /// Color names, percentages and other css formats are not supported.
+        /// </summary>
+        /// <param name="s">The text to parse</param>
+        /// <returns>The color</returns>
+        /// <exception cref="FormatException">The color can't be parsed</exception>
+        /// <exception cref="IndexOutOfRangeException">An rgb / rgba color has too few components</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="s"/> is null (DEBUG builds only)</exception>
         public static SvgColor Parse(String s)
         {
-            if (s.StartsWith("rgb"))
-            {
-                s = s.Substring(3).Trim("() \t".ToCharArray());
-                var vals = s.Split(',');
-                return new SvgColor(
-                    int.Parse(vals[0].Trim()),
-                    int.Parse(vals[1].Trim()),
-                    int.Parse(vals[2].Trim())
-                    );
-            }
-            if (s.StartsWith("rgba"))
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(s);
+#endif//DEBUG
+            var ci = CultureInfo.InvariantCulture;
+            if (s.StartsWith("rgba", StringComparison.Ordinal))
             {
                 s = s.Substring(4).Trim("() \t".ToCharArray());
                 var vals = s.Split(',');
                 return new SvgColor(
-                    int.Parse(vals[0].Trim()),
-                    int.Parse(vals[1].Trim()),
-                    int.Parse(vals[2].Trim()),
-                    double.Parse(vals[3].Trim())
+                    int.Parse(vals[0].Trim(), ci),
+                    int.Parse(vals[1].Trim(), ci),
+                    int.Parse(vals[2].Trim(), ci),
+                    double.Parse(vals[3].Trim(), ci)
+                    );
+            }
+            if (s.StartsWith("rgb", StringComparison.Ordinal))
+            {
+                s = s.Substring(3).Trim("() \t".ToCharArray());
+                var vals = s.Split(',');
+                return new SvgColor(
+                    int.Parse(vals[0].Trim(), ci),
+                    int.Parse(vals[1].Trim(), ci),
+                    int.Parse(vals[2].Trim(), ci)
                     );
             }
             if (s.StartsWith('#'))
@@ -99,22 +128,49 @@ namespace SysWeaver.Media
                         H2(h, 4)
                         );
             }
-            throw new Exception("Names not supported!");
+            throw new FormatException("Unsupported color \"" + s + "\" (names are not supported)!");
         }
 
+        /// <summary>
+        /// The red component [0, 255]
+        /// </summary>
         public readonly int R;
 
+        /// <summary>
+        /// The green component [0, 255]
+        /// </summary>
         public readonly int G;
 
+        /// <summary>
+        /// The blue component [0, 255]
+        /// </summary>
         public readonly int B;
 
+        /// <summary>
+        /// The alpha (opacity) [0, 1]
+        /// </summary>
         public readonly double A;
 
 
+        /// <summary>
+        /// The html / css representation: "transparent" if alpha is 0, "rgba(r,g,b,a)" (invariant culture) if alpha is less than 1,
+        /// else "#rgb" when possible or "#rrggbb" (lower case)
+        /// </summary>
         public readonly String Html;
 
+        /// <summary>
+        /// Same as <see cref="Html"/>
+        /// </summary>
+        /// <returns>The html / css representation</returns>
         public override string ToString() => Html;
 
+        /// <summary>
+        /// Create a color, out of range components are clamped
+        /// </summary>
+        /// <param name="r">The red component [0, 255]</param>
+        /// <param name="g">The green component [0, 255]</param>
+        /// <param name="b">The blue component [0, 255]</param>
+        /// <param name="a">The alpha (opacity) [0, 1]</param>
         public SvgColor(int r, int g, int b, double a = 1.0)
         {
             if (r < 0)
@@ -148,7 +204,7 @@ namespace SysWeaver.Media
             }
             if (a < 1)
             {
-                Html = String.Concat("rgba(", r, ',', g, ',', b, ',', a, ')');
+                Html = String.Concat("rgba(", r, ',', g, ',', b, ',', a.ToString(CultureInfo.InvariantCulture), ')');
                 return;
             }
             var rr = r.ToString("x").PadLeft(2, '0');

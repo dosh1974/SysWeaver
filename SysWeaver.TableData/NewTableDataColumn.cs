@@ -12,11 +12,14 @@ namespace SysWeaver.Data
     {
         /// <summary>
         /// The expression used to compute the value of this column for each row.
-        /// Only evaluated if the column type is supported by the expression evaluator (numeric types), else the default value is used.
+        /// Only supported for numeric column types (an expression on another column type, ex: String, is rejected with an <see cref="ArgumentException"/>),
+        /// the result is converted to the column type.
         /// If null or empty, the default value of the column type will be inserted.
         /// The value of other columns (that can be converted to the column type) can be used as variables in the expression (by using the column Name), ex:
         /// "Min(Col1 + Col2, Col3 * Col4)".
         /// New columns defined earlier in the same operation may also be used.
+        /// Only the referenced columns are used, a referenced column named like an evaluator constant (ex: "E", "PI") is rejected as ambiguous.
+        /// A constant expression (ex: "1 + 2") gives that value on every row.
         /// </summary>
         [EditMin(1)]
         public String Expression;

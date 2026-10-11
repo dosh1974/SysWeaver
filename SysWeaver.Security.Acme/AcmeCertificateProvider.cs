@@ -18,6 +18,16 @@ namespace SysWeaver.Security
 {
 
 
+    /// <summary>
+    /// Provides a certificate for a public domain from an ACME certificate authority (Let's Encrypt by default, using Certes), validated using HTTP-01 challenges.
+    /// </summary>
+    /// <remarks>
+    /// The certificate (pfx, protected by <see cref="CertificateBaseParams.Password"/>, and a PEM ".crt") and the account key are cached on disc.
+    /// <see cref="GetCert"/> uses the cached certificate if it's valid for at least the minimum valid hours, else it logs in to (or creates) the account, orders a new certificate,
+    /// and serves the challenges either as files in the challenge folder or using this module (a temporary HTTP server on port 80 is started if no challenge folder is configured).
+    /// Terms of service changes are accepted automatically.
+    /// When the certificate is about to expire, it's dropped and <see cref="OnChanged"/> is raised (the next <see cref="GetCert"/> orders a new certificate).
+    /// </remarks>
     public sealed class AcmeCertificateProvider : ICertificateProvider, IHttpServerModule, IHaveDefaultInstanceName
     {
 
@@ -82,6 +92,14 @@ namespace SysWeaver.Security
             return certs;
         }
 
+        /// <summary>
+        /// Create an ACME certificate provider, nothing is requested until <see cref="GetCert"/> is called.
+        /// Resolves the file names and creates the folders of the certificate, account key and challenge files (failures are only reported to <paramref name="msg"/>).
+        /// </summary>
+        /// <param name="msg">Optional message host for progress and failures.</param>
+        /// <param name="p">Parameters, null uses the defaults (which throws, since an email and a domain name are required).</param>
+        /// <exception cref="ArgumentException">The email or domain name is missing, or a subject field is invalid (see <see cref="SignedCertificateCreator.ValidateString(string, string)"/>).</exception>
+        /// <exception cref="UriFormatException"><see cref="AcmeCertificateParams.AuthApi"/> isn't a valid absolute uri.</exception>
         public AcmeCertificateProvider(IMessageHost msg = null, AcmeCertificateParams p = null)
         {
             Msg = msg;
@@ -91,7 +109,7 @@ namespace SysWeaver.Security
                 throw new ArgumentException("Must provide a valid email to create an account!", nameof(p.Email));
             var domainName = SignedCertificateCreator.ValidateString(EnvInfo.ResolveText(p.DomainName), nameof(p.DomainName));
             if (String.IsNullOrEmpty(domainName))
-                throw new ArgumentException("Must provide a valid domain name!", nameof(p.Email));
+                throw new ArgumentException("Must provide a valid domain name!", nameof(p.DomainName));
             Names = [domainName];
             Info = new CsrInfo
             {
@@ -111,14 +129,16 @@ namespace SysWeaver.Security
                 { "email", PathExt.SafeFilename(email) },
                 { "hash", hash },
             };
-            var certFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename, extra));
-            var cex = PathExt.EnsureCanWriteFile(certFilename);
+            var certFilename = String.IsNullOrEmpty(p.Filename) ? null : EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename, extra));
+            var cex = certFilename == null ? null : PathExt.EnsureCanWriteFile(certFilename);
             if (cex != null)
                 msg?.AddMessage(Prefix + "Failed to create the folder required to store " + certFilename.ToFilename(), cex, MessageLevels.Warning);
             Filename = certFilename;
             Password = EnvInfo.ResolveText(p.Password);
             MinValidHours = Math.Max(p.MinValidHours, 2);
             RenewBeforeExpirationHours = -Math.Max(p.RenewBeforeExpirationHours, (MinValidHours + 1) >> 1);
+            //  A loaded certificate that is due for renewal must be replaced, else the renewal is re-scheduled in the past (immediately, in a loop) (security-cov-2)
+            MinValidHours = Math.Max(MinValidHours, -RenewBeforeExpirationHours);
             ImportCertFiles = p.ImportCertFiles;
 
             //  Setup challenge folder
@@ -143,6 +163,9 @@ namespace SysWeaver.Security
             msg?.AddMessage(Prefix + "Using API at " + authUrl.ToString().ToQuoted());
         }
 
+        /// <summary>
+        /// The domain name.
+        /// </summary>
         public string DefaultInstanceName => Names[0];
 
 
@@ -155,11 +178,26 @@ namespace SysWeaver.Security
         readonly String ChallengeFolder;
         readonly int MinValidHours;
         readonly int RenewBeforeExpirationHours;
+        /// <summary>
+        /// The resolved full name of the cached certificate (pfx) file, null if caching is disabled (no file name).
+        /// </summary>
         public readonly string Filename;
         readonly string Password;
         readonly IMessageHost Msg;
 
         readonly ConcurrentDictionary<String, Byte[]> Tokens = new ConcurrentDictionary<string, Byte[]>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Get the name of the file that a HTTP-01 challenge key authorization is written to when a challenge folder is used.
+        /// The token comes from the CA, every char that is invalid in a file name (including directory and volume separators) is replaced with a '_' (see <see cref="PathExt.SafeFilename(string)"/>),
+        /// so a malicious token (ex: "..\..\x.aspx") can't write outside of the challenge folder.
+        /// Valid RFC 8555 tokens (base64url chars) are never changed; for a changed token the file has the changed name, so the CA can't fetch it (that challenge fails validation).
+        /// </summary>
+        /// <param name="challengeFolder">The challenge folder.</param>
+        /// <param name="token">The challenge token from the CA.</param>
+        /// <returns>The full name of the challenge file (inside the challenge folder).</returns>
+        public static String GetChallengeFilename(String challengeFolder, String token)
+            => Path.Combine(challengeFolder, PathExt.SafeFilename(token));
 
         IDisposable StartHttpServer()
         {
@@ -236,7 +274,9 @@ namespace SysWeaver.Security
                 String cfile = null;
                 if (cfolder != null)
                 {
-                    cfile = Path.Combine(cfolder, key);
+                    cfile = GetChallengeFilename(cfolder, key);
+                    if (!String.Equals(Path.GetFileName(cfile), key, StringComparison.Ordinal))
+                        msg?.AddMessage(Prefix + "The challenge token " + key.ToQuoted() + " contains invalid file name chars, using the file " + cfile.ToFilename() + " (the challenge validation will probably fail)", MessageLevels.Warning);
                     try
                     {
                         await Retry.OpAsync(() => File.WriteAllTextAsync(cfile, value)).ConfigureAwait(false);
@@ -503,6 +543,11 @@ namespace SysWeaver.Security
             OnChanged?.Invoke(null);
         }
 
+        /// <summary>
+        /// Get the certificate: the cached one if it's valid long enough, else a new certificate is ordered from the certificate authority (this can take a while).
+        /// </summary>
+        /// <returns>The certificate (owned by the provider, do not dispose it).</returns>
+        /// <exception cref="Exception">The account couldn't be created, or ordering / validating / downloading the certificate failed.</exception>
         public async Task<X509Certificate2> GetCert()
         {
             var c = C;
@@ -590,9 +635,17 @@ namespace SysWeaver.Security
 
         static readonly int CdLength = ChallengeDir.Length;
 
+        /// <summary>
+        /// The module only handles requests below ".well-known/acme-challenge/".
+        /// </summary>
         public String[] OnlyForPrefixes { get; } = [ChallengeDir];
 
 
+        /// <summary>
+        /// Serve the key authorization of a pending HTTP-01 challenge (only http requests, and only while challenges are served by this module, i.e. no challenge folder is used).
+        /// </summary>
+        /// <param name="context">The request.</param>
+        /// <returns><see cref="HttpServerTools.AlreadyHandled"/> if the token is known (the response is set), else null.</returns>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var l = context.LocalUrl;
@@ -607,8 +660,15 @@ namespace SysWeaver.Security
             return HttpServerTools.AlreadyHandled;
         }
 
+        /// <summary>
+        /// No end points are listed (challenges are temporary).
+        /// </summary>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
+        /// <summary>
+        /// An event that is fired when the certificate is about to expire.
+        /// The argument is always null and the old certificate has already been disposed, call <see cref="GetCert"/> again to get a renewed certificate.
+        /// </summary>
         public event Action<X509Certificate2> OnChanged;
 
     }

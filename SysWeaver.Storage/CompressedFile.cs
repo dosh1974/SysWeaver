@@ -14,7 +14,8 @@ namespace SysWeaver
     /// </summary>
     /// <remarks>
     /// Used by the HTTP server to serve pre-compressed static files.
-    /// Concurrent requests for the same content are serialized using a <see cref="SystemLock"/>.
+    /// Concurrent requests for the same content, compression type and level are serialized using a <see cref="SystemLock"/>.
+    /// If the cache folder is deleted while the process is running, it's re-created (see <see cref="FileMetaData"/>).
     /// </remarks>
     public static class CompressedFile
     {
@@ -32,7 +33,7 @@ namespace SysWeaver
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
         /// <returns>A read only stream of the cached compressed file, the caller must dispose it.</returns>
-        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
         public static Stream Open(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => new FileStream(GetCompFile(file, compType, level), FileMode.Open, FileAccess.Read, FileShare.Read);
 
@@ -44,7 +45,7 @@ namespace SysWeaver
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
         /// <returns>A read only stream of the cached compressed file, the caller must dispose it.</returns>
-        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
         public static async Task<Stream> OpenAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => new FileStream(await GetCompFileAsync(file, compType, level).ConfigureAwait(false), FileMode.Open, FileAccess.Read, FileShare.Read);
 
@@ -56,7 +57,7 @@ namespace SysWeaver
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
         /// <returns>The compressed data, the caller must dispose it.</returns>
-        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
         public static IUnmanagedReadOnlyMemory<Byte> ReadAllBytes(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => FileReadOnlyMemory.Read(GetCompFile(file, compType, level));
 
@@ -67,7 +68,7 @@ namespace SysWeaver
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
         /// <returns>The compressed data, the caller must dispose it.</returns>
-        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
         public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => FileReadOnlyMemory.Read(await GetCompFileAsync(file, compType, level).ConfigureAwait(false));
 
@@ -75,7 +76,7 @@ namespace SysWeaver
         {
             var fn = new FileInfo(file);
             if (!fn.Exists)
-                throw new Exception("File does not exist!");
+                throw new FileNotFoundException("File " + file.ToFilename() + " does not exist!", file);
             var ext = compType.FileExtensions?.FirstOrDefault() ?? "cmp";
             var suffix = String.Concat('_', compType.HttpCode, '_', level, '.', ext);
             return FileMetaData.Process<CompFile>("CompressedFile", file, (srcFile, compName, existing) =>
@@ -102,7 +103,7 @@ namespace SysWeaver
         {
             var fn = new FileInfo(file);
             if (!fn.Exists)
-                throw new Exception("File does not exist!");
+                throw new FileNotFoundException("File " + file.ToFilename() + " does not exist!", file);
             var ext = compType.FileExtensions?.FirstOrDefault() ?? "cmp";
             var suffix = String.Concat('_', compType.HttpCode, '_', level, '.', ext);
             return (await FileMetaData.ProcessAsync<CompFile>("CompressedFile", file, async (srcFile, compName, existing) =>

@@ -24,7 +24,13 @@ It registers into [SysWeaver.Compression](../SysWeaver.Compression/README.md)'s 
 
 ## Limitations and considerations
 
-- Depends on native binaries, which must match the process architecture and platform.
+- Depends on native binaries, which must match the process architecture and platform. The Brotli.NET package (2.1.1, the latest) only ships
+  win-x64, win-x86, linux-x64, linux-x86 and osx-x64 binaries: there is none for linux-arm64, win-arm64 or osx-arm64.
+  `CompBrotliNativeNET.IsSupported` tells if the native library loads; `Register()` does nothing when it doesn't (the built-in `br` codec is then used),
+  calling the codec directly then throws a `TypeInitializationException`.
+- Linux: the native library only needs libc (tested on Ubuntu 24.04 x64 and Alpine x64). The Brotli.NET loader imports dlopen from "libdl.so",
+  which only exists with the libc6-dev package; this plug-in maps it to "libdl.so.2" / "libc.so.6" (a `NativeLibrary.SetDllImportResolver` for the
+  Brotli.NET assembly, registered when this assembly loads; compression-cov-1). If an application registers its own resolver for Brotli.NET first, that one is used.
 - A native encoder / decoder state is created and destroyed per call (no pooling, no one-shot API).
 - Concatenated Brotli streams are not decoded (data after the first stream is ignored).
 

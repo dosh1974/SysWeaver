@@ -44,7 +44,7 @@ namespace PhotoshopFile.Compression
         var bytesRead = rleReader.Read(buffer, bufferIndex, BytesPerRow);
         if (bytesRead != BytesPerRow)
         {
-          throw new Exception("RLE row decompressed to unexpected length.");
+          throw new RleException("RLE row decompressed to unexpected length.");
         }
         bufferIndex += bytesRead;
       }
@@ -59,7 +59,7 @@ namespace PhotoshopFile.Compression
     {
       if (rleData != null)
       {
-        throw new Exception(
+        throw new InvalidOperationException(
           "Cannot write to RLE image in Decompress mode.");
       }
 

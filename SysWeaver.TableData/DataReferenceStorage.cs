@@ -44,9 +44,13 @@ namespace SysWeaver.Data
         /// <param name="data">The data table to get a reference to, must have columns.</param>
         /// <param name="timeToLiveInSeconds">The number of seconds that this data should live after creation or last use (minimum 10).</param>
         /// <returns>A reference to the data</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is null (DEBUG builds only).</exception>
         /// <exception cref="Exception">The <paramref name="data"/> has no columns.</exception>
         public TableDataReference Add(BaseTableData data, int timeToLiveInSeconds = 5 * 60)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(data);
+#endif//DEBUG
             var g = GetGuid();
             var c = Data;
             var d = new TableDataReference(Scope, g, data, timeToLiveInSeconds, () => c.TryRemove(g, out var _));
@@ -60,8 +64,12 @@ namespace SysWeaver.Data
         /// </summary>
         /// <param name="dataRefId">The id of the data reference, may not be null.</param>
         /// <returns>The reference, or null if not found (or expired) or if it isn't a <see cref="TableDataReference"/>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="dataRefId"/> is null (DEBUG builds only).</exception>
         public TableDataReference GetTable(String dataRefId)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(dataRefId);
+#endif//DEBUG
             var i = dataRefId.IndexOf('@');
             if (i > 0)
                 dataRefId = dataRefId.Substring(0, i);

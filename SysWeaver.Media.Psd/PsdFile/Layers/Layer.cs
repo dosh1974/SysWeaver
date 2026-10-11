@@ -22,6 +22,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace PhotoshopFile
@@ -110,7 +111,19 @@ namespace PhotoshopFile
 
     ///////////////////////////////////////////////////////////////////////////
 
+    /// <summary>
+    /// Create an empty layer (empty rect, no channels, normal blend mode, opacity 0, visible),
+    /// with no masks (an empty <see cref="MaskInfo"/>) and empty <see cref="BlendingRangesData"/>, so it can be saved.
+    /// The layer is not added to <paramref name="psdFile"/>.
+    /// </summary>
     public Layer(PsdFile psdFile)
+      : this(psdFile, true)
+    {
+      Masks = new MaskInfo();
+      BlendingRangesData = new BlendingRanges(this);
+    }
+
+    private Layer(PsdFile psdFile, bool _)
     {
       PsdFile = psdFile;
       Rect = Rectangle.Empty;
@@ -120,7 +133,7 @@ namespace PhotoshopFile
     }
 
     public Layer(PsdBinaryReader reader, PsdFile psdFile)
-      : this(psdFile)
+      : this(psdFile, true)
     {
       Util.DebugMessage(reader.BaseStream, "Load, Begin, Layer");
 
@@ -193,7 +206,11 @@ namespace PhotoshopFile
 
     /// <summary>
     /// Create ImageData for any missing channels.
+    /// Adds a channel for each missing color channel ID (0 to the color mode's channel count - 1),
+    /// with <c>Util.BytesPerRow(Rect.Size, BitDepth) * Rect.Height</c> bytes of ImageData (native byte order), raw compression and no ImageDataRaw.
+    /// The channels are set to the maximum value: all bits set for 1, 8 and 16 bit documents (255 / 65535), 1.0f for 32 bit (float) documents.
     /// </summary>
+    /// <exception cref="PsdInvalidException">The layer rect has a negative size, or is more than 5 times wider or higher than the document (see <see cref="Util.CheckLayerSize"/>).</exception>
     public void CreateMissingChannels()
     {
       var channelCount = this.PsdFile.ColorMode.MinChannelCount();
@@ -201,18 +218,18 @@ namespace PhotoshopFile
       {
         if (!this.Channels.ContainsId(id))
         {
-          var size = this.Rect.Height * this.Rect.Width;
+          var bitDepth = this.PsdFile.BitDepth;
+          Util.CheckLayerSize(this.Rect.Size, this.PsdFile);
+          var longSize = (long)Util.BytesPerRow(this.Rect.Size, bitDepth) * this.Rect.Height;
+          Util.CheckByteArrayLength(longSize);
+          var data = new byte[longSize];
+          if (bitDepth == 32)
+            MemoryMarshal.Cast<byte, float>(data.AsSpan()).Fill(1.0f);
+          else
+            data.AsSpan().Fill(255);
 
           var ch = new Channel(id, this);
-          ch.ImageData = new byte[size];
-          unsafe
-          {
-            fixed (byte* ptr = &ch.ImageData[0])
-            {
-              Util.Fill(ptr, ptr + size, (byte)255);
-            }
-          }
-
+          ch.ImageData = data;
           this.Channels.Add(ch);
         }
       }

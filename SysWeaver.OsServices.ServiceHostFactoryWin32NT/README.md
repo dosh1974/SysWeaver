@@ -35,7 +35,7 @@ sequenceDiagram
 - Service registration (own process, LocalSystem, command line `[exe] daemon`) with display name, description, start-up type (disabled, manual, automatic or delayed automatic) and restart-on-failure actions (restart on 1st/2nd failure after `RestartDelaySeconds`, later failures after `RestartDelayLastSeconds`).
 - Elevation through the standard Windows "run as administrator" mechanism (`runas` verb, UAC prompt).
 - Start/stop/pause/continue mapped onto the service manager (`ServiceBase` pause/continue/stop/shutdown pause, resume or dispose all services).
-- Direct advapi32 interop (`Win32ServiceManager`, internal) for install, uninstall, configuration and control.
+- Direct advapi32 interop (`Win32ServiceManager`, internal) for install, uninstall, configuration and control. Read-only queries (`IsInstalled`, `GetServiceStatus`, `GetStartupType`, `GetDescription`, `GetDelayedStart`, `GetDependencies`: the full list of the services / '+'-prefixed groups a service depends on) don't need elevation.
 
 | Type | Role |
 |---|---|
@@ -49,6 +49,9 @@ sequenceDiagram
 - The service always runs as LocalSystem; change the account in the Services console if needed.
 - `start` does not resume a paused service (use `continue`).
 - `uninstall` marks the service for deletion; Windows removes it once all handles are closed.
+- `status` doesn't need elevation (it opens only this service with query status rights), all changing verbs do (re-run with the `runas` verb). A service that can't be opened (missing, or access denied) is reported as not installed.
+- `pause` of a paused service returns `AlreadyPaused` and `continue` of a running service `AlreadyRunning` (exit code 0, as on Linux).
+- All SCM calls use the Unicode (`...W`) API, so service names, display names and executable paths can use any character.
 
 ## Using it
 

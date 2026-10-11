@@ -3,6 +3,10 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// A web API service that evaluates expressions (without parameters) using the standard evaluators of <see cref="ExpressionEvaluator"/>.
+    /// Invalid expressions throw an <see cref="ArgumentException"/>
+    /// </summary>
     public sealed class CalcService
     {
         public override string ToString() => nameof(CalcService);

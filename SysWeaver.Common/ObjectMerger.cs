@@ -15,7 +15,8 @@ namespace SysWeaver
     /// Property values that are enumerable (strings, arrays, lists etc) are compared element wise (recursively), other property values are compared using their Equals method.
     /// If the object itself is enumerable, it's elements are also part of the identity.
     /// Public fields, non-public properties and static properties are not part of the identity.
-    /// Merged objects are kept in the cache forever (for the lifetime of the process).
+    /// The cache is a least recently used cache (a <see cref="FastMemCache{K, V}"/>): an object that isn't used for <see cref="Timeout"/> (5 minutes) is removed,
+    /// so the memory used is bounded by the objects used recently (expr-cov-15: objects were kept forever). An identical object passed after that becomes the new shared instance.
     /// </remarks>
     public static class ObjectMerger
     {
@@ -178,11 +179,12 @@ namespace SysWeaver
         /// </summary>
         /// <typeparam name="T">Type of the object, only use immutable types!</typeparam>
         /// <param name="obj">The object that should be merged with any other objects representing the same thing</param>
-        /// <returns>The input object or an object representing the same thing (the first instance that was added to the cache)</returns>
+        /// <returns>The input object or an object representing the same thing (the cached instance)</returns>
         /// <exception cref="ArgumentNullException"><paramref name="obj"/> is null</exception>
         /// <exception cref="TargetInvocationException">A property getter of <paramref name="obj"/> threw an exception</exception>
         /// <remarks>
-        /// The cache is global and thread safe, the first instance (with a given identity) that is passed to this method is returned for all subsequent calls with an identical object.
+        /// The cache is global and thread safe, the first instance (with a given identity) that is passed to this method is returned for all subsequent calls with an identical object,
+        /// as long as it's used: an instance that isn't used for <see cref="Timeout"/> is removed (and the next identical object passed becomes the shared instance).
         /// See <see cref="ObjectMerger"/> for a description of what makes two objects identical.
         /// Mutating an object after it have been merged is undefined behavior.
         /// </remarks>
@@ -191,8 +193,16 @@ namespace SysWeaver
             Object o = obj;
             ArgumentNullException.ThrowIfNull(o, nameof(obj));
             var key = new Key(o);
-            if (!SharedObjects.TryGetValue(key, out var shared))
-                shared = SharedObjects.GetOrAdd(key, o);
+            var c = Cache;
+            var e = c.Cache.GetOrUpdate(key, static (_, x) => new Entry(x), o);
+            //  Least recently used: an entry that is used is kept for another timeout (the expiration time is only extended when half of it has passed, to limit the writes)
+            var now = Environment.TickCount64;
+            if ((now - Volatile.Read(ref e.Used)) >= c.RefreshMs)
+            {
+                Volatile.Write(ref e.Used, now);
+                c.Cache.Set(key, e);
+            }
+            var shared = e.Obj;
             //  Value types are copied, so no point in counting them
             if ((!ReferenceEquals(shared, o)) && (!typeof(T).IsValueType))
                 Interlocked.Increment(ref InternalMergeCounter);
@@ -215,7 +225,59 @@ namespace SysWeaver
         }
         private static long InternalMergeCounter;
 
-        private static readonly ConcurrentDictionary<Key, Object> SharedObjects = new ConcurrentDictionary<Key, Object>();
+        /// <summary>
+        /// The time an object is kept in the cache after it was last used (the default is 5 minutes).
+        /// An object is removed when it hasn't been used for this time, an object used within the last half of it is always kept.
+        /// Setting it replaces the cache (all cached objects are dropped); zero or negative: nothing is cached (no objects are merged), <see cref="TimeSpan.MaxValue"/>: objects are kept forever.
+        /// </summary>
+        public static TimeSpan Timeout
+        {
+            get => Cache.Timeout;
+            set => Cache = new SharedCache(value);
+        }
+
+        /// <summary>
+        /// The number of objects in the cache (expired objects are removed on the next cache miss)
+        /// </summary>
+        public static int Count => Cache.Cache.GetCount();
+
+        /// <summary>
+        /// A cached object
+        /// </summary>
+        sealed class Entry
+        {
+            public Entry(Object obj)
+            {
+                Obj = obj;
+                Used = Environment.TickCount64;
+            }
+
+            /// <summary>
+            /// The shared instance
+            /// </summary>
+            public readonly Object Obj;
+
+            /// <summary>
+            /// The time (<see cref="Environment.TickCount64"/>) the expiration time of the entry was last set
+            /// </summary>
+            public long Used;
+        }
+
+        sealed class SharedCache
+        {
+            public SharedCache(TimeSpan timeout)
+            {
+                Timeout = timeout;
+                Cache = new FastMemCache<Key, Entry>(timeout);
+                //  Extend the expiration time when half of the timeout has passed (never for a zero / negative timeout: nothing is cached)
+                RefreshMs = timeout <= TimeSpan.Zero ? long.MaxValue : (long)(timeout.TotalMilliseconds * 0.5);
+            }
+            public readonly TimeSpan Timeout;
+            public readonly FastMemCache<Key, Entry> Cache;
+            public readonly long RefreshMs;
+        }
+
+        static SharedCache Cache = new SharedCache(TimeSpan.FromMinutes(5));
 
     }
 }

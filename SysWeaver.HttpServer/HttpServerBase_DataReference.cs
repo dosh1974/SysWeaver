@@ -125,11 +125,13 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Get the table content from a table data reference.
+        /// At most 100000 rows (TableDataTools.DefaultMaxAllowedRows) can be returned, for a larger table select a range of rows first using EditTableData (SortAndFilterRows with Row and MaxRowCount).
         /// </summary>
         /// <param name="request">The table data reference and if column description is required</param>
         /// <param name="context">The request context</param>
         /// <returns>The content of the table referenced (a clone without columns and title if columns aren't required)</returns>
         /// <exception cref="Exception">Thrown if the reference is invalid or expired</exception>
+        /// <exception cref="InvalidOperationException">The table has more rows than can be returned (see <see cref="TableDataReference.GetForClient(long)"/>), it's never truncated silently</exception>
         [WebApi("{0}")]
         [AiTool("📅🔎")]
         public BaseTableData GetTableData(GetTableDataRequest request, HttpServerRequest context)
@@ -137,7 +139,7 @@ namespace SysWeaver.Net
             var bd = context.GetTableData(request.TableDataRef);
             if (bd == null)
                 throw new Exception("Invalid or expired data reference!");
-            var data = bd.Get();
+            var data = bd.GetForClient();
             if (!request.RequireColumns)
             {
                 data = data.Clone();

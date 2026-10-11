@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Media
 {
+    /// <summary>
+    /// Color space conversions between sRGB, linear RGB, OkLab, OkLch and (partially) OkHsv / OkHsl (based on Björn Ottosson's reference code).
+    /// Hues are in radians, except the hue returned by <see cref="OkLabToOkHsl"/> that is [0, 1).
+    /// </summary>
     public static class ColorSpace
     {
 
@@ -28,7 +32,7 @@ namespace SysWeaver.Media
         /// <param name="il">[0, 1] Luminosity</param>
         /// <param name="ic">[0, 1] Chroma</param>
         /// <param name="ih">[0, 2pi) Hue</param>
-        /// <returns></returns>
+        /// <returns>The color as 0x00rrggbb (each component rounded and clamped to [0, 255])</returns>
         public static UInt32 LightnessChromaHueToUInt32(double il, double ic, double ih)
         {
             LightnessChromaHueToSrgb(out var r, out var g, out var b, il, ic, ih);
@@ -60,9 +64,9 @@ namespace SysWeaver.Media
         /// <summary>
         /// Convert from OkLch to srgb components.
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="g"></param>
-        /// <param name="b"></param>
+        /// <param name="r">The red component (not clamped)</param>
+        /// <param name="g">The green component (not clamped)</param>
+        /// <param name="b">The blue component (not clamped)</param>
         /// <param name="l">[0, 1] Luminosity</param>
         /// <param name="c">[0, 1] Chroma</param>
         /// <param name="h">[0, 2pi) Hue</param>
@@ -94,7 +98,7 @@ namespace SysWeaver.Media
         /// <param name="h">[0, 2pi) Hue</param>
         /// <param name="s">[0, 1] Saturation</param>
         /// <param name="v">[0, 1] Value</param>
-        /// <returns></returns>
+        /// <returns>The color as 0x00rrggbb (each component rounded and clamped to [0, 255])</returns>
         public static UInt32 OkHsvToUInt32(double h, double s, double v)
         {
             OkHsvToSrgb(out var r, out var g, out var b, h, s, v);
@@ -125,11 +129,11 @@ namespace SysWeaver.Media
 
 
         /// <summary>
-        /// Convert from OkLch to srgb components.
+        /// Convert from OkHsv to srgb components (not clamped, for h, s and v in range the components are in [0, 1] up to rounding errors).
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="g"></param>
-        /// <param name="b"></param>
+        /// <param name="r">The red component</param>
+        /// <param name="g">The green component</param>
+        /// <param name="b">The blue component</param>
         /// <param name="h">[0, 2pi) Hue</param>
         /// <param name="s">[0, 1] Saturation</param>
         /// <param name="v">[0, 1] Value</param>
@@ -160,6 +164,16 @@ namespace SysWeaver.Media
         }
 
 
+        /// <summary>
+        /// Convert from OkHsv to OkLab (a port of the reference okhsv_to_srgb, without the final conversion to sRGB).
+        /// v = 0 is black (for any h and s), v = 1 and s = 1 is the most saturated sRGB color of the hue (in gamut, up to rounding errors).
+        /// </summary>
+        /// <param name="ol">Luminosity</param>
+        /// <param name="oa">a (how green/red the color is)</param>
+        /// <param name="ob">b (how blue/yellow the color is)</param>
+        /// <param name="h">[0, 2pi) Hue</param>
+        /// <param name="s">[0, 1] Saturation</param>
+        /// <param name="v">[0, 1] Value</param>
         public static void OkHsvToOkLab(out double ol, out double oa, out double ob, double h, double s, double v)
         {
             var a_ = Math.Cos(h);
@@ -184,22 +198,47 @@ namespace SysWeaver.Media
             var C_vt = C_v * L_vt / L_v;
 
             var L_new = toe_inv(L);
-            C = C * L_new / L;
+            // L = 0 (v = 0) is black (the reference code would divide 0 by 0 here)
+            C = L > 0 ? C * L_new / L : 0;
             L = L_new;
 
+            // finally we scale L and C to compensate for the curved part of the gamut:
+            OkLabToLinearRgb(out var sr, out var sg, out var sb, L_vt, a_ * C_vt, b_ * C_vt);
+            var scale_L = Math.Cbrt(1.0 / Math.Max(Math.Max(sr, sg), Math.Max(sb, 0.0)));
+
+            L *= scale_L;
+            C *= scale_L;
+
             ol = L;
-            oa = a_ * C_vt;
-            ob = b_ * C_vt;
+            oa = a_ * C;
+            ob = b_ * C;
         }
 
 
+        /// <summary>
+        /// Convert from OkLab to OkHsl.
+        /// Gray colors (a = b = 0) have a saturation of 0 (the hue is then undefined, 0 or 0.5 depending on the sign of the zeros).
+        /// </summary>
+        /// <param name="oh">[0, 1) Hue (not radians)</param>
+        /// <param name="os">[0, 1] Saturation</param>
+        /// <param name="ol">[0, 1] Lightness (the toe function applied to L)</param>
+        /// <param name="l">Luminosity</param>
+        /// <param name="a">a (how green/red the color is)</param>
+        /// <param name="b">b (how blue/yellow the color is)</param>
         public static void OkLabToOkHsl(out double oh, out double os, out double ol, double l, double a, double b)
         {
             var C = Math.Sqrt(a * a + b * b);
-            var a_ = a / C;
-            var b_ = b / C;
 
             oh = 0.5 + 0.5 * Math.Atan2(-b, -a) / Math.PI;
+            // Gray: no chroma, the direction (a_, b_) below would be 0 / 0
+            if (C == 0)
+            {
+                os = 0;
+                ol = toe(l);
+                return;
+            }
+            var a_ = a / C;
+            var b_ = b / C;
 
             get_Cs(out var C_0, out var C_mid, out var C_max, l, a_, b_);
 

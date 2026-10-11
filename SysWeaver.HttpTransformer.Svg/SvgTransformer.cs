@@ -18,11 +18,18 @@ namespace SysWeaver.HttpTransformer
         {
             p = p ?? new SvgTransformerParams();
             SvgOpts = p.Svg ?? SvgTransformerParams.GetDefault();
+            //  The minifier version and options are part of the cached file name, so a new minifier version (or other options) builds new files
+            CacheExt = String.Concat('.', SvgOpts.CacheKey, ".svg");
 
             Add("svg", this);
             BuildStrategy = p.BuildDirect ? CachedTransformerBuildStrategies.AlwaysDirect : CachedTransformerBuildStrategies.AlwaysDefer;
         }
         readonly SvgMinifierParams SvgOpts;
+
+        /// <summary>
+        /// The extension of the cached files, ".&lt;SvgMinifierParams.CacheKey&gt;.svg" (+ the compression extension)
+        /// </summary>
+        readonly String CacheExt;
 
         public string Info => "svg minifier";
 
@@ -37,7 +44,7 @@ namespace SysWeaver.HttpTransformer
             var mime = Tuple.Create(info.Mime, false);
             var baseName = info.BaseName;
             var compType = CompType;
-            var name = baseName + ".svg" + CompExt;
+            var name = baseName + CacheExt + CompExt;
             var fi = new FileInfo(name);
             if ((!fi.Exists) || (fi.Length <= 0))
             {
@@ -83,7 +90,7 @@ namespace SysWeaver.HttpTransformer
         {
             var baseName = info.BaseName;
             var compType = CompType;
-            var fi = new FileInfo(baseName + ".svg" + CompExt);
+            var fi = new FileInfo(baseName + CacheExt + CompExt);
             if (!fi.Exists)
                 return null;
             var orgSize = CachedTransformer.ReadOrg(baseName);

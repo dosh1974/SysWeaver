@@ -193,6 +193,9 @@ namespace SysWeaver
                 PathExt.EnsureFolderExist(fp);
                 if (allowAll)
                     PlatformTools.Current.MakeDirectoryAccessableToEveryOne(fp);
+                //  Windows only: on Unix writing the attributes back makes .NET chmod away the write bits (portability-cov-4)
+                if (!OperatingSystem.IsWindows())
+                    continue;
                 var di = new DirectoryInfo(fp);
                 if ((di.Attributes & FileAttributes.NotContentIndexed) == 0)
                 {

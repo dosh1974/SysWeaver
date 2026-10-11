@@ -680,10 +680,14 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
-        /// Use this function to compute a value from some expression.
-        /// Decimal and integer values are supported.
+        /// Use this function to compute a value from a math expression, ex: "Sqrt(2) * 3.5^2 + Max(1, 4)".
+        /// Operators: + - * / % (remainder), ^ (power), parentheses, "," between function arguments, &amp; | ~ (integer bit operators).
+        /// Function and constant names are case sensitive and must be written exactly as listed:
+        /// Abs, Min, Max, Clamp, Floor, Ceiling, Round (halves to even), Truncate, Sqrt, Cbrt, Pow, Exp, Log (Log(x) is the natural log, Log(x, base)), Log10, Log2,
+        /// Sin, Cos, Tan, Asin, Acos, Atan, Atan2, Sinh, Cosh, Tanh (angles in radians), PI, E, Tau.
+        /// Numbers use "." as the decimal separator and no thousands separator, "0x" (hex), "0b" (binary) and "0o" (octal) prefixes are supported.
         /// </summary>
-        /// <param name="expression">Data paramaters</param>
+        /// <param name="expression">The math expression to compute, ex: "(12.5 + 7) * 3" or "Log(8, 2)"</param>
         /// <returns>The value of the expression</returns>
         [AiTool("🧮")]
         Decimal Calculate(String expression)

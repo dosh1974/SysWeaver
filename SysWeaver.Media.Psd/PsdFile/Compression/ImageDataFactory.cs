@@ -27,28 +27,42 @@ namespace PhotoshopFile.Compression
     ///   image data is to be compressed.</param>
     public static ImageData Create(Channel channel, byte[] data)
     {
-      var bitDepth = channel.Layer.PsdFile.BitDepth;
+      return Create(channel.ImageCompression, data, channel.Rect.Size,
+        channel.Layer.PsdFile.BitDepth, channel.RleRowLengths);
+    }
+
+    /// <summary>
+    /// Creates an ImageData object to compress or decompress image data.
+    /// </summary>
+    /// <param name="compression">The compression method.</param>
+    /// <param name="data">The image data to be decompressed, or null if
+    ///   image data is to be compressed.</param>
+    /// <param name="size">The image size in pixels.</param>
+    /// <param name="bitDepth">The bit depth.</param>
+    /// <param name="rleRowLengths">The RLE row lengths (only used for RLE).</param>
+    internal static ImageData Create(ImageCompression compression, byte[] data, Size size, int bitDepth, RleRowLengths rleRowLengths)
+    {
       ImageData imageData;
-      switch (channel.ImageCompression)
+      switch (compression)
       {
         case ImageCompression.Raw:
-          imageData = new RawImage(data, channel.Rect.Size, bitDepth);
+          imageData = new RawImage(data, size, bitDepth);
           break;
 
         case ImageCompression.Rle:
-          imageData = new RleImage(data, channel.RleRowLengths,
-            channel.Rect.Size, bitDepth);
+          imageData = new RleImage(data, rleRowLengths,
+            size, bitDepth);
           break;
 
         case ImageCompression.Zip:
           // Photoshop treats 32-bit Zip as 32-bit ZipPrediction
           imageData = (bitDepth == 32)
-            ? CreateZipPredict(data, channel.Rect.Size, bitDepth)
-            : new ZipImage(data, channel.Rect.Size, bitDepth);
+            ? CreateZipPredict(data, size, bitDepth)
+            : new ZipImage(data, size, bitDepth);
           break;
 
         case ImageCompression.ZipPrediction:
-          imageData = CreateZipPredict(data, channel.Rect.Size, bitDepth);
+          imageData = CreateZipPredict(data, size, bitDepth);
           break;
 
         default:

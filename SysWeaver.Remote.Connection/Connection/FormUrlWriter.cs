@@ -16,7 +16,8 @@ namespace SysWeaver.Remote.Connection
     /// <remarks>
     /// Supported member types: integer types, <see cref="float"/>, <see cref="double"/>, <see cref="decimal"/>, <see cref="TimeSpan"/>, <see cref="DateTime"/>, <see cref="Guid"/>,
     /// <see cref="bool"/>, <see cref="char"/> and <see cref="string"/>; members of other types (including enums and nullables) are silently skipped.
-    /// Only names, strings, chars and <see cref="DateTime"/> values are url escaped. Not thread safe.
+    /// Only names, strings, chars and <see cref="DateTime"/> values are url escaped (and the exponent '+' of <see cref="float"/> / <see cref="double"/> values). Not thread safe.
+    /// Integers are written with an ASCII '-' (culture independent), floating point values use the invariant "r" format, <see cref="bool"/> is "true" / "false".
     /// </remarks>
     sealed class FormUrlWriter
     {
@@ -252,13 +253,15 @@ namespace SysWeaver.Remote.Connection
 
         static void WriteSingle(FormUrlWriter w, Single value)
         {
-            var t = value.ToString("r", CultureInfo.InvariantCulture);
+            //  The "r" format may contain a '+' (exponent) that must be escaped (a '+' is decoded as a space)
+            var t = value.ToString("r", CultureInfo.InvariantCulture).Replace("+", "%2B");
             w.WriteAsciiString(t);
         }
 
         static void WriteDouble(FormUrlWriter w, Double value)
         {
-            var t = value.ToString("r", CultureInfo.InvariantCulture);
+            //  The "r" format may contain a '+' (exponent) that must be escaped (a '+' is decoded as a space)
+            var t = value.ToString("r", CultureInfo.InvariantCulture).Replace("+", "%2B");
             w.WriteAsciiString(t);
         }
 

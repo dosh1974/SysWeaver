@@ -8,8 +8,13 @@ namespace SysWeaver.Geometry
 
     /// <summary>
     /// A list of limited length that remains sorted by <typeparamref name="TPriority"/>.
-    /// Useful for keeping track of items in nearest neighbor searches. Insert is O(log n). Retrieval is O(1)
+    /// Useful for keeping track of items in nearest neighbor searches. Insert is O(n) (binary search + list insert). Retrieval is O(1).
+    /// Items are ordered by ascending priority (index 0 has the smallest priority), items with equal priorities are not ordered.
     /// </summary>
+    /// <remarks>
+    /// This is a struct that references two lists, copies share the same data. A default instance (not created with the constructor) can't be used.
+    /// The min / max properties throw an <see cref="ArgumentOutOfRangeException"/> if the list is empty.
+    /// </remarks>
     /// <typeparam name="TElement">The type of element the list maintains.</typeparam>
     /// <typeparam name="TPriority">The type the elements are prioritized by.</typeparam>
     public struct BoundedPriorityList<TElement, TPriority> : IEnumerable<TElement>
@@ -96,10 +101,11 @@ namespace SysWeaver.Geometry
         /// <summary>
         /// Attempts to add the provided  <paramref name="item"/>. If the list
         /// is currently at maximum capacity and the elements priority is greater
-        /// than or equal to the highest priority, the <paramref name = "item"/> is not inserted. If the
+        /// than the highest priority, the <paramref name = "item"/> is not inserted. If the
         /// <paramref name = "item"/> is eligible for insertion, the upon insertion the <paramref name = "item"/> that previously
-        /// had the largest priority is removed from the list.
-        /// This is an O(log n) operation.
+        /// had the largest priority is removed from the list (so an item with the same priority as the largest priority replaces an item with that priority).
+        /// Nothing is added if the capacity is zero or negative.
+        /// The position is found with a binary search (O(log n)), the insertion itself is O(n).
         /// </summary>
         /// <param name="item">The item to be inserted</param>
         /// <param name="priority">The priority of th given item.</param>
@@ -108,6 +114,8 @@ namespace SysWeaver.Geometry
         {
             if (this.Count >= this.Capacity)
             {
+                if (this.Count <= 0)
+                    return;
                 if (this.priorityList[this.priorityList.Count - 1].CompareTo(priority) < 0)
                 {
                     return;

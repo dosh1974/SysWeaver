@@ -27,15 +27,17 @@ namespace SysWeaver.Security
         /// Create a self-signed certificate provider, no certificate is created until <see cref="GetCert"/> is called.
         /// </summary>
         /// <param name="p">Parameters, null uses the defaults.</param>
-        /// <exception cref="Exception">A subject field contains an invalid character.</exception>
+        /// <exception cref="ArgumentException">A subject field is invalid (see <see cref="SignedCertificateCreator.ValidateString(string, string)"/>).</exception>
         public SelfSignedCertificateProvider(SelfSignedCertificateProviderParams p = null)
         {
             p = p ?? new SelfSignedCertificateProviderParams();
             P = new SignedCertificateCreator(p);
-            Filename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
+            Filename = String.IsNullOrEmpty(p.Filename) ? null : EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
             Password = EnvInfo.ResolveText(p.Password);
             MinValidHours = Math.Max(p.MinValidHours, 2);
             RenewBeforeExpirationHours = -Math.Max(p.RenewBeforeExpirationHours, (MinValidHours + 1) >> 1);
+            //  A loaded certificate that is due for renewal must be replaced, else the renewal is re-scheduled in the past (immediately, in a loop) (security-cov-2)
+            MinValidHours = Math.Max(MinValidHours, -RenewBeforeExpirationHours);
         }
 
         readonly int MinValidHours;

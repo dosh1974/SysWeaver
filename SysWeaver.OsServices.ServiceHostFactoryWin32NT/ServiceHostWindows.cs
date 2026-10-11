@@ -130,27 +130,49 @@ namespace SysWeaver.OsServices
 
         #endregion//Elevation
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Get the status by opening the service (by service name, case insensitive) with query status rights only (<see cref="Win32ServiceManager.GetServiceStatus(string)"/>), doesn't need elevation.
+        /// </summary>
+        /// <returns>The status, <see cref="ServiceStatus.NotInstalled"/> if the service can't be opened (no service with the name exists, or access is denied),
+        /// <see cref="ServiceStatus.Unknown"/> if the SCM or the status couldn't be queried.</returns>
         public ServiceStatus Status()
         {
-            using var s = ServiceController.GetServices().FirstOrDefault(x => String.Equals(x.ServiceName, P.Name, StringComparison.OrdinalIgnoreCase));
-            if (s == null)
-                return ServiceStatus.NotInstalled;
-            switch (s.Status)
+            ServiceState s;
+            try
             {
-                case ServiceControllerStatus.Stopped:
+                s = Win32ServiceManager.GetServiceStatus(P.Name);
+            }
+            catch
+            {
+                return ServiceStatus.Unknown;
+            }
+            return ToServiceStatus(s);
+        }
+
+        /// <summary>
+        /// Map a Windows service state to a <see cref="ServiceStatus"/>.
+        /// </summary>
+        /// <param name="s">The state.</param>
+        /// <returns>The status, <see cref="ServiceStatus.NotInstalled"/> for <see cref="SysWeaver.OsServices.ServiceManager.ServiceState.NotFound"/>, <see cref="ServiceStatus.Unknown"/> for undefined values.</returns>
+        static ServiceStatus ToServiceStatus(ServiceState s)
+        {
+            switch (s)
+            {
+                case ServiceState.NotFound:
+                    return ServiceStatus.NotInstalled;
+                case ServiceState.Stop:
                     return ServiceStatus.Stopped;
-                case ServiceControllerStatus.StartPending:
+                case ServiceState.Starting:
                     return ServiceStatus.StartPending;
-                case ServiceControllerStatus.StopPending:
+                case ServiceState.Stopping:
                     return ServiceStatus.StopPending;
-                case ServiceControllerStatus.Running:
+                case ServiceState.Run:
                     return ServiceStatus.Running;
-                case ServiceControllerStatus.ContinuePending:
+                case ServiceState.Continuing:
                     return ServiceStatus.ContinuePending;
-                case ServiceControllerStatus.PausePending:
+                case ServiceState.Pausing:
                     return ServiceStatus.PausePending;
-                case ServiceControllerStatus.Paused:
+                case ServiceState.Paused:
                     return ServiceStatus.Paused;
             }
             return ServiceStatus.Unknown;
@@ -264,7 +286,12 @@ namespace SysWeaver.OsServices
         }
 
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Stop the service and wait (up to 3 minutes) until it's stopped.
+        /// A starting or continuing service is first waited on; returns <see cref="ServiceResponse.NotRunning"/> if the service is stopped (or was stopping and stopped),
+        /// <see cref="ServiceResponse.NotFound"/> if it doesn't exist (never <see cref="ServiceResponse.AlreadyStopping"/>).
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Stop()
         {
             var p = P;
@@ -299,7 +326,12 @@ namespace SysWeaver.OsServices
             return ServiceResponse.StopFailed;
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Pause the running service and wait (up to 3 minutes) until it's paused.
+        /// Returns <see cref="ServiceResponse.AlreadyPaused"/> if the service is paused, <see cref="ServiceResponse.NotRunning"/> if it's in any other state than running,
+        /// <see cref="ServiceResponse.NotFound"/> if it doesn't exist.
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Pause()
         {
             //  Start
@@ -310,6 +342,8 @@ namespace SysWeaver.OsServices
                 return ServiceResponse.NotFound;
             if (status == ServiceState.Unknown)
                 return ServiceResponse.GenericError;
+            if (status == ServiceState.Paused)
+                return ServiceResponse.AlreadyPaused;
             if (status != ServiceState.Run)
                 return ServiceResponse.NotRunning;
             try
@@ -324,7 +358,12 @@ namespace SysWeaver.OsServices
             return ServiceResponse.PauseFailed;
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Resume the paused service and wait (up to 3 minutes) until it's running.
+        /// Returns <see cref="ServiceResponse.AlreadyRunning"/> if the service is running, <see cref="ServiceResponse.NotPaused"/> if it's in any other state than paused,
+        /// <see cref="ServiceResponse.NotFound"/> if it doesn't exist.
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Continue()
         {
             //  Start
@@ -335,6 +374,8 @@ namespace SysWeaver.OsServices
                 return ServiceResponse.NotFound;
             if (status == ServiceState.Unknown)
                 return ServiceResponse.GenericError;
+            if (status == ServiceState.Run)
+                return ServiceResponse.AlreadyRunning;
             if (status != ServiceState.Paused)
                 return ServiceResponse.NotPaused;
             try

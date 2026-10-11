@@ -106,6 +106,7 @@ namespace SysWeaver.IsoData
         
         /// <summary>
         /// Get information about a country from a two letter ISO 3166-A2 country code (case insensitive, no trimming).
+        /// Only the ISO code is accepted, names are not ("Sweden" gives null): use <see cref="TryGetName(string)"/> to accept ISO codes and names.
         /// Ex:
         ///   "GB" =&gt; United Kingdom
         ///   "se" =&gt; Sweden
@@ -116,6 +117,7 @@ namespace SysWeaver.IsoData
 
         /// <summary>
         /// Get information about a country from a country name, nick name, ISO code or a distinctive word of the name (case and diacritics insensitive).
+        /// Accepts everything <see cref="TryGet(string)"/> accepts (every ISO code gives its own country) plus names.
         /// Ex:
         ///   "United Kingdom" =&gt; "GB"
         ///   "UK" =&gt; "GB"
@@ -143,8 +145,12 @@ namespace SysWeaver.IsoData
         /// </summary>
         /// <param name="name">The name to normalize, must not be null.</param>
         /// <returns>The normalized name.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="name"/> is null (DEBUG builds only).</exception>
         public static String FixName(String name)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(name);
+#endif//DEBUG
             name = name.RemoveDiacritics();
             name = name.Replace('-', ' ');
             name = name.Replace(".", "");
@@ -255,14 +261,14 @@ namespace SysWeaver.IsoData
             foreach (var x in t.ToList())
             {
                 var b = x.Key;
-                b = b.Replace("south", "s");
                 b = b.Replace("southern", "s");
-                b = b.Replace("north", "n");
+                b = b.Replace("south", "s");
                 b = b.Replace("northern", "n");
-                b = b.Replace("west", "w");
+                b = b.Replace("north", "n");
                 b = b.Replace("western", "w");
-                b = b.Replace("east", "e");
+                b = b.Replace("west", "w");
                 b = b.Replace("eastern", "e");
+                b = b.Replace("east", "e");
                 t.TryAdd(b, x.Value);
             }
             NameToInfo = t.Freeze();
@@ -353,7 +359,7 @@ new IsoCountry("FM", "Federated states of Micronesia", "Micronesia", "USD", 1136
 new IsoCountry("FO", "Faroe islands", "Faroe islands", "DKK", 54900, 1370, "", "Faeroe islands"),
 new IsoCountry("FR", "France", "France", "EUR", 68720337, 538950, "fr,br,co,oc,wa"),
 new IsoCountry("GA", "Gabon", "Gabon", "XAF", 2593130, 257670, "fr,kg"),
-new IsoCountry("GB", "United Kingdom of Great Britain and Northern Ireland", "United kingdom", "GBP", 69487000, 241930, "en,kw,gd,cy", "UK,England,Falkland islands"),
+new IsoCountry("GB", "United Kingdom of Great Britain and Northern Ireland", "United kingdom", "GBP", 69487000, 241930, "en,kw,gd,cy", "UK,England"),
 new IsoCountry("GD", "Grenada", "Grenada", "XCD", 117303, 340, "en"),
 new IsoCountry("GE", "Georgia", "Georgia", "GEL", 3935766, 69490, "ka,ab,os"),
 new IsoCountry("GF", "French Guiana", "French Guiana", "EUR", 298682, 822, ""),
@@ -526,7 +532,7 @@ new IsoCountry("YT", "Mayotte", "Mayotte", "EUR", 272815, 375, ""),
 new IsoCountry("XK", "Republic of Kosovo", "Kosovo", "RSD", 1576876, 10887, "sq,sr"),
 new IsoCountry("ZA", "South Africa", "South Africa", "ZAR", 64747319, 1213090, "af,en,nr,st,ss,ts,tn,ve,xh,zu"),
 new IsoCountry("ZM", "Zambia", "Zambia", "ZMW", 21913874, 743390, "en"),
-new IsoCountry("ZW", "Zimbabwe", "Zimbabwe", "ZWD", 16950795, 386850, "ny,en,nd,ts,sn,st,tn,ve,xh"),
+new IsoCountry("ZW", "Zimbabwe", "Zimbabwe", "ZWL",16950795, 386850, "ny,en,nd,ts,sn,st,tn,ve,xh"),
         };
 
 

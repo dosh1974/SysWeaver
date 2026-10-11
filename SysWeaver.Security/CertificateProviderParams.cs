@@ -7,7 +7,8 @@
     {
         /// <summary>
         /// The minimum valid hours for a cached certificate, a cached certificate is replaced with a new one if there is less than this many hours left before expiration.
-        /// Values below 2 are clamped to 2.
+        /// Values below 2 are clamped to 2. For <see cref="SelfSignedCertificateProvider"/> and <see cref="SignedCertificateProvider"/> the effective value is also at least the effective <see cref="RenewBeforeExpirationHours"/>
+        /// (so that a certificate that is due for renewal is never reused).
         /// </summary>
         public int MinValidHours = 3 * 24;
 

@@ -152,7 +152,7 @@ namespace SysWeaver.Remote.Connection
         /// </summary>
         /// <param name="t">On input the method return type, on output the result type (the generic argument, or <c>typeof(void)</c> for non-generic tasks).</param>
         /// <returns>The return type kind.</returns>
-        /// <exception cref="Exception">The return type isn't a Task, Task'1, ValueTask or ValueTask'1.</exception>
+        /// <exception cref="NotSupportedException">The return type isn't a Task, Task'1, ValueTask or ValueTask'1.</exception>
         public static RetTypes GetRetType(ref Type t)
         {
             var o = t;
@@ -166,7 +166,7 @@ namespace SysWeaver.Remote.Connection
                 t = typeof(void);
             }
             if (!TypeMaps.TryGetValue(c, out var r))
-                throw new Exception("Invalid return type \"" + o.FullName + "\", interface must return a Task or Task!");
+                throw new NotSupportedException("Invalid return type \"" + o.FullName + "\", interface methods must return a Task, Task<T>, ValueTask or ValueTask<T>!");
             return r;
         }
 
@@ -219,8 +219,10 @@ namespace SysWeaver.Remote.Connection
     /// Each method declared directly on the interface becomes an end point (members of inherited interfaces other than <see cref="IRemoteApi"/>/<see cref="IDisposable"/> are not implemented).
     /// The end point path is <see cref="RemotePathPrefixAttribute"/> + <see cref="RemoteEndPointAttribute.Path"/> (default the method name);
     /// without a <see cref="RemoteEndPointAttribute"/>, methods without parameters use GET and others POST.
-    /// GET/DELETE format the path as a <see cref="UriParamsEncoder{T}"/> template using the parameter(s); POST/PUT send the parameter(s) as the payload.
-    /// Methods with more than one parameter pass an object[] (or, with <see cref="ParamAsObjectAttribute"/>, a generated object with one field per parameter).
+    /// GET/DELETE format the path as a <see cref="UriParamsEncoder{T}"/> template using the parameter(s); POST/PUT send the parameter(s) as the payload
+    /// (a null object if the method has no parameters, ex: "null" with the json serializer).
+    /// Methods with more than one parameter pass an object[] (or, with <see cref="ParamAsObjectAttribute"/>, a generated object with one field per parameter);
+    /// for GET/DELETE the template variables of an object[] are the parameter names (ex: "{a}") or indices (ex: "{0}"), see <see cref="UriParamsEncoder{T}.Get(string, IReadOnlyList{string})"/>.
     /// <see cref="RemoteCacheAttribute"/> is read from the method, or else from the interface; only method level <see cref="RemoteSerializerAttribute"/> and <see cref="RemoteTimeoutAttribute"/> are read here.
     /// </remarks>
     static class InterfaceTypeCache<T> where T : class, IDisposable
@@ -230,11 +232,12 @@ namespace SysWeaver.Remote.Connection
         {
             var t = typeof(T);
             if (!t.IsInterface)
-                throw new Exception("Only interfaces may be used, type \"" + t.FullName + "\" is NOT an interface!");
-            if (!t.IsPublic)
-                throw new Exception("The interface must be public, type \"" + t.FullName + "\" is NOT public!");
+                throw new NotSupportedException("Only interfaces may be used, type \"" + t.FullName + "\" is NOT an interface!");
+            //  Nested interfaces are accepted if they (and all declaring types) are public
+            if (!t.IsVisible)
+                throw new NotSupportedException("The interface must be public, type \"" + t.FullName + "\" is NOT public!");
             if (!typeof(IDisposable).IsAssignableFrom(t))
-                throw new Exception("The interface must inherit the IDisposable interface, type \"" + t.FullName + "\" do NOT inherit IDisposable!");
+                throw new NotSupportedException("The interface must inherit the IDisposable interface, type \"" + t.FullName + "\" do NOT inherit IDisposable!");
 
             var guid = Guid.NewGuid().ToString().Replace('-', '_');
             var asmName = new AssemblyName(String.Concat("RestApi.", t.Name, '_', guid));
@@ -282,7 +285,7 @@ namespace SysWeaver.Remote.Connection
             foreach (var m in t.GetMembers())
             {
                 if (m.MemberType != MemberTypes.Method)
-                    throw new Exception("Only methods are allowed, member \"" + m.Name + "\" in type \"" + t.FullName + "\" is NOT a method!");
+                    throw new NotSupportedException("Only methods are allowed, member \"" + m.Name + "\" in type \"" + t.FullName + "\" is NOT a method!");
                 var mi = m as MethodInfo;
                 var returnType = mi.ReturnType;
                 var retType = GetRetType(ref returnType);
@@ -400,8 +403,26 @@ namespace SysWeaver.Remote.Connection
                                     il.Emit(OpCodes.Call, baseMethod);
                                 }
                                 break;
+                            case HttpEndPointTypes.Post:
+                            case HttpEndPointTypes.Put:
+                                {
+                                    //  No payload, send a null object (serialized by the post serializer, ex: "null" for json)
+                                    var inputType = typeof(Object);
+                                    il.Emit(OpCodes.Ldarg_0);
+                                    il.Emit(OpCodes.Ldstr, path);
+                                    il.Emit(OpCodes.Ldarg_0);
+                                    il.Emit(OpCodes.Ldfld, metaField);
+                                    il.Emit(OpCodes.Ldnull);
+                                    if (optField != null)
+                                        il.Emit(OpCodes.Ldsfld, optField);
+                                    else
+                                        il.Emit(OpCodes.Ldnull);
+                                    MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex].MakeGenericMethod(inputType) : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
+                                    il.Emit(OpCodes.Call, baseMethod);
+                                }
+                                break;
                             default:
-                                throw new NotImplementedException();
+                                throw new NotSupportedException("Unsupported end point type " + restMethod + ", method \"" + mi.Name + "\" in type \"" + t.FullName + "\"!");
                         }
                         break;
                     case 1:
@@ -415,7 +436,7 @@ namespace SysWeaver.Remote.Connection
                                         var ft = typeof(Func<,>).MakeGenericType(inputType, typeof(string));
                                         var field = typeBuilder.DefineField(sf, ft, FieldAttributes.Static | FieldAttributes.InitOnly | FieldAttributes.Private);
                                         staticIl.Emit(OpCodes.Ldstr, path);
-                                        var encMet = encoderType.MakeGenericType(inputType).GetMethod(nameof(UriParamsEncoder<int>.Get), BindingFlags.Static | BindingFlags.Public);
+                                        var encMet = encoderType.MakeGenericType(inputType).GetMethod(nameof(UriParamsEncoder<int>.Get), BindingFlags.Static | BindingFlags.Public, [typeof(String)]);
                                         staticIl.Emit(OpCodes.Call, encMet);
                                         staticIl.Emit(OpCodes.Stsfld, field);
                                         il.Emit(OpCodes.Ldarg_0);
@@ -455,7 +476,6 @@ namespace SysWeaver.Remote.Connection
                         break;
                     default:
                         {
-                            //  TODO: Support Object[]!?
                             var paramCount = miParams.Length;
                             Action pushData = null;
                             Type inputType = typeof(Object[]);
@@ -472,7 +492,10 @@ namespace SysWeaver.Remote.Connection
                                     foreach (var x in miParams)
                                     {
                                         ++ai;
-                                        var dfi = ntb.DefineField(x.Name, x.ParameterType, FieldAttributes.Public | FieldAttributes.InitOnly);
+                                        //  Named constructor parameters (System.Text.Json rejects types with a constructor that has unnamed parameters)
+                                        con.DefineParameter(ai, ParameterAttributes.None, x.Name);
+                                        //  Not InitOnly: the json serializer ignores read only fields
+                                        var dfi = ntb.DefineField(x.Name, x.ParameterType, FieldAttributes.Public);
                                         conIl.Emit(OpCodes.Ldarg_0);
                                         conIl.Emit(OpCodes.Ldarg, ai);
                                         conIl.Emit(OpCodes.Stfld, dfi);
@@ -505,7 +528,7 @@ namespace SysWeaver.Remote.Connection
                                         il.Emit(OpCodes.Ldc_I4, i);
                                         il.Emit(OpCodes.Ldarg, i + 1);
                                         if (miParams[i].ParameterType.IsValueType)
-                                            il.Emit(OpCodes.Box);
+                                            il.Emit(OpCodes.Box, miParams[i].ParameterType);
                                         il.Emit(OpCodes.Stelem_Ref);
                                     }
                                 };
@@ -519,7 +542,24 @@ namespace SysWeaver.Remote.Connection
                                         var field = typeBuilder.DefineField(sf, ft, FieldAttributes.Static | FieldAttributes.InitOnly | FieldAttributes.Private);
                                         staticIl.Emit(OpCodes.Ldstr, path);
                                         var tt = encoderType.MakeGenericType(inputType);
-                                        var encMet = tt.GetMethod(nameof(UriParamsEncoder<int>.Get), BindingFlags.Static | BindingFlags.Public);
+                                        MethodInfo encMet;
+                                        if (useObject)
+                                        {
+                                            encMet = tt.GetMethod(nameof(UriParamsEncoder<int>.Get), BindingFlags.Static | BindingFlags.Public, [typeof(String)]);
+                                        }else
+                                        {
+                                            //  object[] of the parameters, variables are parameter names ("{a}") or indices ("{0}")
+                                            encMet = tt.GetMethod(nameof(UriParamsEncoder<int>.Get), BindingFlags.Static | BindingFlags.Public, [typeof(String), typeof(IReadOnlyList<String>)]);
+                                            staticIl.Emit(OpCodes.Ldc_I4, paramCount);
+                                            staticIl.Emit(OpCodes.Newarr, typeof(String));
+                                            for (int i = 0; i < paramCount; ++i)
+                                            {
+                                                staticIl.Emit(OpCodes.Dup);
+                                                staticIl.Emit(OpCodes.Ldc_I4, i);
+                                                staticIl.Emit(OpCodes.Ldstr, miParams[i].Name ?? "");
+                                                staticIl.Emit(OpCodes.Stelem_Ref);
+                                            }
+                                        }
                                         staticIl.Emit(OpCodes.Call, encMet);
                                         staticIl.Emit(OpCodes.Stsfld, field);
                                         il.Emit(OpCodes.Ldarg_0);

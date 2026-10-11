@@ -2,15 +2,28 @@
 
 namespace SysWeaver.Security
 {
+    /// <summary>
+    /// Parameters for <see cref="AcmeCertificateProvider"/>.
+    /// The inherited <see cref="CertificateBaseParams.Email"/> (the ACME account contact, required) and the subject fields C, ST, L, O and OU are used for the account and the certificate request,
+    /// the common name is always <see cref="DomainName"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="CertificateBaseParams.Filename"/>, <see cref="AccountFilename"/> and <see cref="ChallengeFolder"/> can also use the variables $(AuthApi), $(Email) and $(DomainName) (made valid file names using PathExt.SafeFilename)
+    /// and $(Hash) (hex MD5 of "[AuthApi]|[DomainName]|[Email]", UTF-16 encoded).
+    /// </remarks>
     public sealed class AcmeCertificateParams : CertificateBaseParams
     {
+        /// <summary>
+        /// Create parameters with the defaults, the certificate is cached as "$(CommonApplicationData)/SysWeaver_AcmeCertificates/$(AuthApi)_$(Email)_$(DomainName)_$(Hash).pfx".
+        /// </summary>
         public AcmeCertificateParams()
         {
             Filename = @"$(CommonApplicationData)/SysWeaver_AcmeCertificates/$(AuthApi)_$(Email)_$(DomainName)_$(Hash).pfx";
         }
 
         /// <summary>
-        /// The base url for the ACME service (directory)
+        /// The base url for the ACME service (directory), default is the Let's Encrypt production directory.
+        /// Must be an absolute uri (the provider constructor throws a UriFormatException otherwise).
         /// </summary>
 //        public String AuthApi = "https://acme-staging-v02.api.letsencrypt.org/directory";
         //public String AuthApi = "https://acme-v02.api.letsencrypt.org/directory";
@@ -18,8 +31,8 @@ namespace SysWeaver.Security
         public String AuthApi = "https://acme-v02.api.letsencrypt.org/directory";
 
         /// <summary>
-        /// Filename for the account key, variables:
-        ///             $(BaseUrl) = Base url of the certificated authority API.
+        /// Filename for the account key (PEM, not encrypted: protect it using file system permissions), variables:
+        ///             $(AuthApi) = Base url of the certificated authority API.
         ///             $(Email) = Email.
         ///             $(DomainName) = Domain name.
         ///             $(Hash) = Hash of the above
@@ -103,11 +116,13 @@ namespace SysWeaver.Security
 
         /// <summary>
         /// The minimum valid hours for a cached certificate, the cached certificate is renewed if there is less than this many hours left before expiration.
+        /// Values below 2 are clamped to 2, and the effective value is at least the effective <see cref="RenewBeforeExpirationHours"/>.
         /// </summary>
         public int MinValidHours = 3 * 24;
 
         /// <summary>
-        /// Notify that a new certificate will have to be created this many hours before expiration
+        /// Notify that a new certificate will have to be created this many hours before expiration (the certificate is dropped and OnChanged is raised).
+        /// The effective value is at least half of <see cref="MinValidHours"/>.
         /// </summary>
         public int RenewBeforeExpirationHours = 48;
     }

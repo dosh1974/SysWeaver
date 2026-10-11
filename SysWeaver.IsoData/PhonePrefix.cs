@@ -239,16 +239,17 @@ namespace SysWeaver
         /// <param name="localNumber">The local number digits</param>
         /// <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
         /// <returns>The phone prefix(es) for this number whose <see cref="LocalCounts"/> accept the number of local digits (at least one).</returns>
-        /// <exception cref="Exception">If <paramref name="internationalNumber"/> is null, no known prefix matches, or the number of local digits isn't valid for any matching prefix.
-        /// The message is human readable (ex: "A Sweden phone number must contain at least 9 digits").</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="internationalNumber"/> is null.</exception>
+        /// <exception cref="FormatException">If no known prefix matches, or the number of local digits isn't valid for any matching prefix.
+        /// The message is human readable (ex: "A Sweden phone number must contain at least 9 digits", the digit counts include the prefix digits).</exception>
         public static IReadOnlyList<PhonePrefix> GetValidatedPhoneNumber(out String prefix, out String localNumber, String internationalNumber)
         {
             if (internationalNumber == null)
-                throw new Exception("The phone number may not be null");
+                throw new ArgumentNullException(nameof(internationalNumber), "The phone number may not be null");
             var pcs = Identify(out var prefixEnd, internationalNumber, true);
             var pcsl = pcs?.Count ?? 0;
             if (pcsl <= 0)
-                throw new Exception("The phone number isn't using a valid international country code prefix");
+                throw new FormatException("The phone number isn't using a valid international country code prefix");
             prefix = GetNumbers(internationalNumber, 0, prefixEnd);
             var preLen = prefix.Length;
             localNumber = GetNumbers(internationalNumber, prefixEnd, internationalNumber.Length);
@@ -262,19 +263,19 @@ namespace SysWeaver
                 void Throw(String s)
                 {
                     if ((pci == pcsl) && (validPcs.Count <= 0))
-                        throw new Exception(s);
+                        throw new FormatException(s);
                 }
                 var pc = pcs[pci];
                 var valid = pc.LocalCounts;
                 if (valid == null)
                 {
-                    Throw(name + " is a reserved an unsupported phone number");
+                    Throw(name + " is a reserved and unsupported phone number");
                     continue;
                 }
                 var vc = valid.Count;
                 if (vc == 0)
-                { 
-                    Throw(name + " is a reserved an unsupported phone number");
+                {
+                    Throw(name + " is a reserved and unsupported phone number");
                     continue;
                 }
                 var min = valid[0];
@@ -323,13 +324,14 @@ namespace SysWeaver
         /// <param name="localNumber">The local number digits</param>
         /// <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
         /// <returns>The country phone prefix(es) for this number, highest <see cref="Rank"/> first</returns>
-        /// <exception cref="Exception">If the number isn't valid (see <see cref="GetValidatedPhoneNumber(out string, out string, string)"/>) or the prefix doesn't belong to a country.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="internationalNumber"/> is null.</exception>
+        /// <exception cref="FormatException">If the number isn't valid (see <see cref="GetValidatedPhoneNumber(out string, out string, string)"/>) or the prefix doesn't belong to a country.</exception>
         public static IReadOnlyList<PhonePrefix> GetValidatedPhoneNumber(out String name, out String isoCountry, out String prefix, out String localNumber, String internationalNumber)
         {
             var pcs = GetValidatedPhoneNumber(out prefix, out localNumber, internationalNumber);
             pcs = pcs.Where(x => x.IsoCountry != null).ToList();
             if (pcs.Count <= 0)
-                throw new Exception("The prefix " + prefix + " is not for a country");
+                throw new FormatException("The prefix " + prefix + " is not for a country");
             isoCountry = pcs.First().IsoCountry;
             name = StringTools.JoinWithSpecialLast(", ", " or ", pcs.Select(x => x.Name));
             return pcs;

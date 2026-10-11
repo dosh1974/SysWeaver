@@ -547,8 +547,9 @@ namespace SysWeaver.MicroService
             if (!fi.Exists)
                 return FileRepoTools.UploadFailed;
             var t = DateTime.UnixEpoch.AddMilliseconds(file.LastModified);
-            fi.LastWriteTimeUtc = t;
+            //  The creation time first: on Linux it can't be set, .NET sets the last write time instead
             fi.CreationTimeUtc = DateTime.UtcNow;
+            fi.LastWriteTimeUtc = t;
             resS = await OnUploaded(fi, prevLength, file, r, context).ConfigureAwait(false);
             if (resS != FileUploadStatus.None)
                 return new FileUploadResult(resS);

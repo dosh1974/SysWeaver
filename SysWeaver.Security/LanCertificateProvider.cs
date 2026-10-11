@@ -16,7 +16,8 @@ namespace SysWeaver.Security
     /// <remarks>
     /// Configuration is typically read from files in the key folder: the server base url (<see cref="LanCertificateProviderParams.ServerConfigFile"/>),
     /// the credentials (<see cref="LanCertificateProviderParams.ServerCreds"/>) and the domain name (<see cref="LanCertificateProviderParams.DomainName"/>).
-    /// The manager is polled every 60 minutes while a server certificate is used, and every 15 minutes while a self-signed fallback is used.
+    /// The manager is polled every 60 minutes while a server certificate is used, and every 15 minutes while a self-signed fallback is used (or after a failed check, failures are reported to the message host).
+    /// Polling stops when the provider is disposed.
     /// A server certificate is never replaced by a self-signed one during renewal.
     /// When the certificate changes, <see cref="OnChanged"/> is raised with the new certificate and the old certificate is disposed.
     /// Thread safe.
@@ -37,7 +38,7 @@ namespace SysWeaver.Security
         public LanCertificateProvider(IMessageHost msg = null, LanCertificateProviderParams p = null)
         {
             p = p ?? new LanCertificateProviderParams();
-            Filename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
+            Filename = String.IsNullOrEmpty(p.Filename) ? null : EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
             Password = EnvInfo.ResolveText(p.Password);
 
             String domainName = EnvInfo.ResolveText(p.DomainName ?? "$(KeyFolder)/LanCertificateProvider_DomainName.txt");
@@ -165,12 +166,20 @@ namespace SysWeaver.Security
             c = p.CreateSelfSigned();
             if (haveFile)
             {
-                var dir = Path.GetDirectoryName(f);
-                if (!Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-                await File.WriteAllBytesAsync(f, c.Export(X509ContentType.Pfx, pw)).ConfigureAwait(false);
-                //await File.WriteAllBytesAsync(Path.ChangeExtension(f, "crt"), c.Export(X509ContentType.Cert, (String)null)).ConfigureAwait(false);
-                await File.WriteAllTextAsync(Path.ChangeExtension(f, "crt"), c.ExportCertificatePem()).ConfigureAwait(false);
+                try
+                {
+                    var dir = Path.GetDirectoryName(f);
+                    if (!Directory.Exists(dir))
+                        Directory.CreateDirectory(dir);
+                    await File.WriteAllBytesAsync(f, c.Export(X509ContentType.Pfx, pw)).ConfigureAwait(false);
+                    //await File.WriteAllBytesAsync(Path.ChangeExtension(f, "crt"), c.Export(X509ContentType.Cert, (String)null)).ConfigureAwait(false);
+                    await File.WriteAllTextAsync(Path.ChangeExtension(f, "crt"), c.ExportCertificatePem()).ConfigureAwait(false);
+                }
+                catch
+                {
+                    c.Dispose();
+                    throw;
+                }
             }
             return ValueTuple.Create(c, CheckSelfSignedCertEveryMinutes);
         }
@@ -197,34 +206,63 @@ namespace SysWeaver.Security
             return c;
         }
 
+        /// <summary>
+        /// Periodic renewal check: get a certificate (from the manager or the self-signed fallback) and replace the current one if it's different and not worse.
+        /// The next check is always scheduled (also if this check failed, using the self-signed check interval), unless the provider is disposed.
+        /// </summary>
         async Task InvokeExpireSoon()
         {
             using var _ = await Lock.Lock().ConfigureAwait(false);
-            var nn = await InternalGetCert().ConfigureAwait(false);
-            var newCert = nn.Item1;
-            var oldCert = C;
-            //  Same cert (or self signed being 
-            bool isWorse = CertificateTools.IsSelfSigned(newCert) && (!CertificateTools.IsSelfSigned(oldCert));
-            if (oldCert.Thumbprint.FastEquals(newCert.Thumbprint) || isWorse)
+            //  Disposed
+            if (C == null)
+                return;
+            var nextCheckMinutes = CheckSelfSignedCertEveryMinutes;
+            X509Certificate2 oldCert = null;
+            try
             {
-                ExpireAction = Scheduler.AddTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon, "Renew LAN cert");
+                var nn = await InternalGetCert(Msg).ConfigureAwait(false);
+                nextCheckMinutes = nn.Item2;
+                var newCert = nn.Item1;
+                oldCert = C;
+                //  Same cert (or a self signed cert replacing a server cert)
+                bool isWorse = CertificateTools.IsSelfSigned(newCert) && (!CertificateTools.IsSelfSigned(oldCert));
+                if (oldCert.Thumbprint.FastEquals(newCert.Thumbprint) || isWorse)
+                {
+                    oldCert = null;
+                    try
+                    {
+                        newCert.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Msg?.AddMessage("Failed to Dispose new certificate " + newCert.Thumbprint, ex, MessageLevels.Warning);
+                    }
+                    return;
+                }
+                oldCert = Interlocked.Exchange(ref C, newCert);
                 try
                 {
-                    newCert.Dispose();
+                    OnChanged?.Invoke(newCert);
                 }
                 catch (Exception ex)
                 {
-                    Msg?.AddMessage("Failed to Dispose new certificate " + newCert.Thumbprint, ex, MessageLevels.Warning);
+                    Msg?.AddMessage("An OnChanged handler failed for the new certificate " + newCert.Thumbprint, ex, MessageLevels.Warning);
                 }
-                return;
             }
-            Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
-            oldCert = Interlocked.Exchange(ref C, newCert);
-            OnChanged?.Invoke(newCert);
-            ExpireAction = Scheduler.AddTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon, "Renew LAN cert");
+            catch (Exception ex)
+            {
+                oldCert = null;
+                Msg?.AddMessage("Failed to renew the Lan cert, retrying in " + nextCheckMinutes + " minutes", ex, MessageLevels.Warning);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref ExpireAction, Scheduler.AddTask(DateTime.UtcNow.AddMinutes(nextCheckMinutes), InvokeExpireSoon, "Renew LAN cert"))?.Dispose();
+            }
+            if (oldCert == null)
+                return;
             try
             {
-                oldCert?.Dispose();
+                oldCert.Dispose();
             }
             catch (Exception ex)
             {

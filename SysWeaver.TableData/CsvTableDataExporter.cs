@@ -13,8 +13,10 @@ namespace SysWeaver.Data
     /// Any occurrence of the separator char in a header or value is replaced by a replacement char (separators are never quoted).
     /// Headers and values containing a line break (CR or LF) or starting with a double quote are wrapped in double quotes (RFC 4180), with any embedded double quotes doubled.
     /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted.
-    /// <see cref="Single"/>, <see cref="Double"/> and <see cref="Decimal"/> values are written using the invariant culture,
-    /// other values using <see cref="Object.ToString"/> (current culture).
+    /// <see cref="Single"/>, <see cref="Double"/> and <see cref="Decimal"/> values (also in nullable columns) are written using the invariant culture,
+    /// other values using <see cref="Object.ToString"/> (current culture, ex: dates). Null values are written as empty texts.
+    /// Values are not quoted for other reasons (ex: leading / trailing spaces, embedded quotes) and no protection against spreadsheet formula injection is done.
+    /// Rows without values (null or empty) are skipped, values beyond the column definitions are written using <see cref="DefToString"/>.
     /// The exporter is stateless and thread safe.
     /// </remarks>
     public sealed class CsvTableDataExporter : ITableDataExporter
@@ -42,7 +44,7 @@ namespace SysWeaver.Data
         /// Semi colon separated values, semi colons in values are replaced with '_'.
         /// </summary>
         public static readonly CsvTableDataExporter SemiColon = new CsvTableDataExporter("CSV (semi colon)", ';', '_', 10002,
-            "A text file where each line is a row.\nColumns are separated by a semia colon [;].");
+            "A text file where each line is a row.\nColumns are separated by a semi colon [;].");
 
 
         /// <summary>
@@ -126,14 +128,18 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Value to text conversions keyed on the full type name of the column, types not found use <see cref="DefToString"/>.
+        /// Value to text conversions keyed on the full type name of the column (<see cref="Single"/>, <see cref="Double"/>, <see cref="Decimal"/> and their nullable versions),
+        /// types not found use <see cref="DefToString"/>.
         /// </summary>
         public static readonly IReadOnlyDictionary<String, Func<Object, String>> DefToStrings = new Dictionary<String, Func<Object, String>>(StringComparer.Ordinal)
         {
             { typeof(Single).FullName, SingleToString },
             { typeof(Double).FullName, DoubleToString },
             { typeof(Decimal).FullName, DecimalToString },
-        }.Freeze(); 
+            { typeof(Single?).FullName, SingleToString },
+            { typeof(Double?).FullName, DoubleToString },
+            { typeof(Decimal?).FullName, DecimalToString },
+        }.Freeze();
 
 
         /// <summary>
@@ -176,7 +182,7 @@ namespace SysWeaver.Data
                 for (int i = 0; i < coll; ++ i)
                 {
                     var col = cols[i];
-                    d.TryGetValue(col.Type, out var fn);
+                    d.TryGetValue(col.Type ?? "", out var fn);
                     colToStrings.Add(fn ?? def);
                     if ((col.Props & TableDataColumnProps.Hide) != 0)
                     {

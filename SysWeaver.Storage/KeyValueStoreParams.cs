@@ -18,11 +18,15 @@ namespace SysWeaver
 
         /// <summary>
         /// The serializer to use (a serializer name known to the serialization manager, ex: "json").
+        /// <see cref="KeyValueStore.Get(KeyValueStoreParams)"/> throws an <see cref="ArgumentException"/> if no serializer is registered with this name.
         /// </summary>
         public String Ser = "json";
 
         /// <summary>
         /// The compression method to use as an HTTP encoding code, ex: "br", "gzip" (can be null to disable compression, can be useful for small data or incompressible data)
+        /// <see cref="KeyValueStore.Get(KeyValueStoreParams)"/> throws an <see cref="ArgumentException"/> if no compression method is registered for a non-empty code.
+        /// Migration note: before 2026-10-10 an unknown code silently disabled compression, a store that was configured with an unknown code holds uncompressed values, so change its code to null (or empty).
+        /// The serializer and the compression method must stay the same for the lifetime of the stored data (they aren't stored with the data, the level may change).
         /// </summary>
         public String Comp = "br";
 

@@ -21,6 +21,8 @@ namespace SysWeaver
     /// Hashes are MD5 hashes of the file content, encoded as 26 char strings (see <see cref="HashTools"/>), typically used as ETags / cache busters, NOT for security.
     /// The disk cache is a small text file per (file name, creation time, last write time, length) key, a file modified without changing any of these returns a stale hash.
     /// Cache files that haven't been accessed for 30 days are deleted when the process exits.
+    /// Cache files are written atomically (a temp file in the same folder renamed to the cache file name), never rewritten in place, so concurrent readers / writers (threads or processes) are safe.
+    /// Files are hashed using <see cref="FileReadOnlyMemory"/> (memory mapped on Windows, read into pooled memory on other platforms).
     /// </remarks>
     public static class FileHash
     {
@@ -67,6 +69,37 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Files larger than this are hashed in chunks instead of from memory (on Windows mapped files of any size are hashed from memory).
+        /// On other platforms the file is read to pooled memory, so the limit keeps the memory use bounded.
+        /// </summary>
+        static int MaxInMemoryHashLength => FileReadOnlyMemory.UsesMemoryMapping ? int.MaxValue : (4 << 20);
+
+        /// <summary>
+        /// Compute the MD5 hash of the remaining data of a stream, reading it in 1 MiB chunks (pooled buffer)
+        /// </summary>
+        /// <param name="s">The stream to read from</param>
+        /// <param name="hash">Receives the hash (16 bytes)</param>
+        static void HashChunked(Stream s, Span<Byte> hash)
+        {
+            using var h = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+            var buf = ArrayPoolStream.Rent(1 << 20);
+            try
+            {
+                for (; ; )
+                {
+                    var r = s.Read(buf, 0, buf.Length);
+                    if (r <= 0)
+                        break;
+                    h.AppendData(buf, 0, r);
+                }
+            }
+            finally
+            {
+                ArrayPoolStream.Return(buf);
+            }
+            h.GetHashAndReset(hash);
+        }
+        /// <summary>
         /// Do never use!
         /// Use GetHash instead, this version don't do any caching or smart stuff
         /// </summary>
@@ -82,7 +115,7 @@ namespace SysWeaver
             var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             try
             {
-                if (FileReadOnlyMemory.TryMap(out var mem, s, true))
+                if (FileReadOnlyMemory.TryMap(out var mem, s, true, MaxInMemoryHashLength))
                 {
                     using (mem)
                     {
@@ -90,7 +123,7 @@ namespace SysWeaver
                         MD5.HashData(mem.Memory.Span, hash);
                     }
                 }else
-                    MD5.HashData(s, hash);
+                    HashChunked(s, hash);
                 return HashTools.GetHashString16(hash);
             }
             finally
@@ -114,7 +147,7 @@ namespace SysWeaver
             var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             try
             {
-                if (FileReadOnlyMemory.TryMap(out var mem, s, true))
+                if (FileReadOnlyMemory.TryMap(out var mem, s, true, MaxInMemoryHashLength))
                 {
                     using (mem)
                     {
@@ -124,7 +157,10 @@ namespace SysWeaver
                         return HashTools.GetHashString16(hash);
                     }
                 }
-                return HashTools.GetHashString16(await MD5.HashDataAsync(s).ConfigureAwait(false));
+                //  Hashed synchronously (as a mapped file), async reads of a sync handle are slow
+                Byte[] h = new Byte[MD5.HashSizeInBytes];
+                HashChunked(s, h);
+                return HashTools.GetHashString16(h);
             }
             finally
             {
@@ -174,21 +210,7 @@ namespace SysWeaver
             {
                 return null;
             }
-            try
-            {
-                File.WriteAllText(fn, text, Encoding.ASCII);
-            }
-            catch
-            {
-                try
-                {
-                    File.Delete(fn);
-                }
-                catch
-                {
-
-                }
-            }
+            WriteCacheFile(fn, text);
             return text;
         }
 
@@ -298,21 +320,7 @@ namespace SysWeaver
             {
                 return null;
             }
-            try
-            {
-                await File.WriteAllTextAsync(fn, text, Encoding.ASCII).ConfigureAwait(false);
-            }
-            catch
-            {
-                try
-                {
-                    File.Delete(fn);
-                }
-                catch
-                {
-
-                }
-            }
+            WriteCacheFile(fn, text);
             return text;
         }
 
@@ -320,6 +328,39 @@ namespace SysWeaver
 
 
         #region Helpers
+
+        /// <summary>
+        /// Write a hash to a cache file atomically: the text is written to a unique temp file ("&lt;cache file&gt;.&lt;guid&gt;.tmp") in the same folder, that is then renamed to the cache file name.
+        /// The cache file is never truncated or rewritten in place, so a reader sees either the old or the new file (on Linux a concurrent reader keeps reading the old file).
+        /// Concurrent writers of the same key are safe (they write the same text, the last rename wins).
+        /// Failures are ignored and the temp file is deleted (ex: on Windows the rename fails while someone else has the cache file open).
+        /// </summary>
+        /// <param name="fn">The cache file name</param>
+        /// <param name="text">The hash to write</param>
+        static void WriteCacheFile(String fn, String text)
+        {
+            var tmp = String.Concat(fn, ".", Guid.NewGuid().ToString("N"), TempExt);
+            try
+            {
+                File.WriteAllText(tmp, text, Encoding.ASCII);
+                File.Move(tmp, fn, true);
+            }
+            catch
+            {
+                try
+                {
+                    File.Delete(tmp);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        /// <summary>
+        /// The extension of temp files (left behind if the process dies between the write and the rename, deleted at process exit after an hour)
+        /// </summary>
+        const String TempExt = ".tmp";
 
 
         /// <summary>
@@ -505,18 +546,35 @@ namespace SysWeaver
             {
                 try
                 {
-                    var killOlderThan = DateTime.UtcNow.AddDays(-30);
+                    var now = DateTime.UtcNow;
+                    var killOlderThan = now.AddDays(-30);
+                    var killTempOlderThan = now.AddHours(-1);
                     foreach (var folder in P)
-                    foreach (var x in Directory.GetFiles(folder, "*.txt", SearchOption.TopDirectoryOnly))
                     {
-                        try
+                        foreach (var x in Directory.GetFiles(folder, "*.txt", SearchOption.TopDirectoryOnly))
                         {
-                            var fi = new FileInfo(x);
-                            if (fi.LastAccessTimeUtc < killOlderThan)
-                                fi.Delete();
+                            try
+                            {
+                                var fi = new FileInfo(x);
+                                if (fi.LastAccessTimeUtc < killOlderThan)
+                                    fi.Delete();
+                            }
+                            catch
+                            {
+                            }
                         }
-                        catch
+                        //  Temp files of interrupted cache writes
+                        foreach (var x in Directory.GetFiles(folder, "*" + TempExt, SearchOption.TopDirectoryOnly))
                         {
+                            try
+                            {
+                                var fi = new FileInfo(x);
+                                if (fi.LastWriteTimeUtc < killTempOlderThan)
+                                    fi.Delete();
+                            }
+                            catch
+                            {
+                            }
                         }
                     }
                 }

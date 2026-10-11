@@ -30,17 +30,18 @@ namespace SysWeaver.Auth
         /// Create an auth manager.
         /// </summary>
         /// <param name="p">Parameters, null uses the defaults.</param>
-        /// <param name="authorizers">The initial authorizers, in priority order.</param>
-        /// <exception cref="Exception">Two authorizers have the same <see cref="AuthorizerBase.GuidPrefix"/>.</exception>
+        /// <param name="authorizers">The initial authorizers, in priority order (an instance that is passed more than once is only added once).</param>
+        /// <exception cref="ArgumentException">Two different authorizers have the same <see cref="AuthorizerBase.GuidPrefix"/>.</exception>
         public AuthManager(AuthManagerParams p, params AuthorizerBase[] authorizers)
         {
             var a = Auths;
             var gp = GuidPrefixMap;
             foreach (var x in authorizers)
             {
-                a.TryAdd(x, Interlocked.Increment(ref AuthIndex));
+                if (!a.TryAdd(x, Interlocked.Increment(ref AuthIndex)))
+                    continue;
                 if (!gp.TryAdd(x.GuidPrefix, x))
-                    throw new Exception("Authorizers must have unique guid prefixes");
+                    throw new ArgumentException("Authorizers must have unique guid prefixes, " + x.GuidPrefix.ToQuoted() + " is used by more than one authorizer", nameof(authorizers));
             }
             p = p ?? new AuthManagerParams();
             Realm = p.Realm ?? EnvInfo.AppAssemblyName;
@@ -91,7 +92,8 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Get authorization from the Authorization HTTP header.
-        /// Supports the "Basic" (user:password, base64 encoded) and "Bearer" / "*key" (token) schemes.
+        /// Supports the "Basic" (user:password, UTF8 + base64 encoded) and "Bearer" / "*key" (token) schemes (scheme names are case insensitive).
+        /// Basic credentials are first validated by the authorizer that knows the user (the one that returns a salt), then by all authorizers in order (using the same hash).
         /// Successful results are cached for <see cref="AuthManagerParams.CacheDuration"/> seconds (keyed by a SHA256 hash of the header value),
         /// failures are never cached (so unauthenticated requests can't grow the cache).
         /// </summary>
@@ -99,11 +101,16 @@ namespace SysWeaver.Auth
         /// <returns>Item1 is the authorization for the given user, null means unknown user, invalid password / token,
         /// an unsupported scheme, malformed basic credentials or a header longer than <see cref="MaxAuthHeaderLength"/> chars.
         /// Item2 is true if the basic scheme was used (so the caller can request basic credentials again).</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="authHeaderString"/> is null (DEBUG builds only).</exception>
         public async Task<Tuple<Authorization, bool>> Http(String authHeaderString)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(authHeaderString);
+#endif//DEBUG
             var s = authHeaderString.Trim();
             var scheme = s.SplitFirst(' ', out var p, false, true);
-            var isBasic = scheme.FastEquals("Basic");
+            //  Auth schemes are case insensitive (RFC 9110)
+            var isBasic = String.Equals(scheme, "Basic", StringComparison.OrdinalIgnoreCase);
             var fail = isBasic ? NoAuthBasic : NoAuth;
             if (s.Length > MaxAuthHeaderLength)
                 return fail;
@@ -147,7 +154,7 @@ namespace SysWeaver.Auth
                         aa = await BasicAuth(username, hash).ConfigureAwait(false);
                 }
             }
-            else if (scheme.FastEquals("Bearer") || scheme.FastEquals("*key"))
+            else if (String.Equals(scheme, "Bearer", StringComparison.OrdinalIgnoreCase) || String.Equals(scheme, "*key", StringComparison.OrdinalIgnoreCase))
             {
                 //  Handling Bearer auth
                 aa = await BearerAuth(p).ConfigureAwait(false);
@@ -261,6 +268,8 @@ namespace SysWeaver.Auth
         /// <param name="oneTimePad">The one time pad used</param>
         /// <returns>The authorization information for the given user, null means unknown user or invalid password</returns>
         /// <exception cref="FormatException"><paramref name="hash"/> isn't valid base64.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="hash"/> is null.</exception>
+        /// <remarks>The pad isn't validated here, the caller must make sure that it was issued by the server and is only used once (ex: the login service consumes it).</remarks>
         public Task<Authorization> UserHash(String username, String hash, String oneTimePad) => GetAuth(username, Convert.FromBase64String(hash), oneTimePad);
 
  
@@ -384,13 +393,16 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="auth">The authorizer to add</param>
         /// <returns>True if added, false if it was already added</returns>
-        /// <exception cref="Exception">Another authorizer have the same <see cref="AuthorizerBase.GuidPrefix"/>.</exception>
+        /// <exception cref="ArgumentException">Another authorizer have the same <see cref="AuthorizerBase.GuidPrefix"/> (the authorizer is not added).</exception>
         public bool AddAuth(AuthorizerBase auth)
         {
             if (!Auths.TryAdd(auth, Interlocked.Increment(ref AuthIndex)))
                 return false;
             if (!GuidPrefixMap.TryAdd(auth.GuidPrefix, auth))
-                throw new Exception("Authorizers must have unique guid prefixes");
+            {
+                Auths.TryRemove(auth, out _);
+                throw new ArgumentException("Authorizers must have unique guid prefixes, " + auth.GuidPrefix.ToQuoted() + " is already used", nameof(auth));
+            }
             UpdateCommonPolicy();
             return true;
         }

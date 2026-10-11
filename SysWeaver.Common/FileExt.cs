@@ -12,7 +12,11 @@ namespace SysWeaver
     /// </summary>
     /// <remarks>
     /// Writes are not atomic, the file is truncated first, so a failed write leaves a partial file (write to a temp file and move it if atomicity is required).
-    /// Reads uses <see cref="FileReadOnlyMemory"/> (memory mapped io when possible).
+    /// Reads uses <see cref="FileReadOnlyMemory"/> (memory mapped io on Windows, read into pooled memory on other platforms).
+    /// The <see cref="FileShare"/> modes ("others can read the file while it's written", "fails while another process has the file open for writing") are only enforced by Windows.
+    /// On Linux (and other Unix platforms) .NET emulates them with advisory locks (flock): <see cref="FileShare.None"/> takes an exclusive lock and every other mode a shared lock,
+    /// so an open only fails if another .NET handle (in any process) has the file open with <see cref="FileShare.None"/> (or if this one uses <see cref="FileShare.None"/> and the file is open by another .NET handle),
+    /// ex: a write succeeds while someone else reads the file with <see cref="FileShare.Read"/>, and processes that don't use flock are never blocked.
     /// </remarks>
     public static class FileExt
     {
@@ -156,7 +160,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Read byte content of a file.
-        /// The file is opened with shared read only (FileShare.Read), so this fails while another process has the file open for writing.
+        /// The file is opened with shared read only (FileShare.Read), so this fails while another process has the file open for writing (Windows only, see the remarks of <see cref="FileExt"/>).
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <returns>The content of the file</returns>
@@ -172,7 +176,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Read byte content of a file.
-        /// The file is opened with shared read only (FileShare.Read), so this fails while another process has the file open for writing.
+        /// The file is opened with shared read only (FileShare.Read), so this fails while another process has the file open for writing (Windows only, see the remarks of <see cref="FileExt"/>).
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <returns>The content of the file</returns>

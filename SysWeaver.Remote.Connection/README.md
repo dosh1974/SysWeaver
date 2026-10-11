@@ -50,17 +50,25 @@ flowchart TB
 | `RemoteAuthMethod` | `HttpAuth` (Bearer / Basic / custom header) or `SysWeaverLogin` |
 | `EndPointOptions` | Per end point serializer / time-out overrides (built from attributes) |
 | `FormUrlSerializer` | Write-only `application/x-www-form-urlencoded` serializer (`formUrl`) |
-| `JsonRequestExt` | `HttpClient` extensions to POST json or raw payloads |
+| `IgnoreDefaultsFormUrlSerializer` | Write-only form serializer that omits members with default values (`formUrlIgnoreDefaults`) |
+| `HttpClientTimeoutHandler` | Delegating handler applying the per request time-out (reported as `TimeoutException`) |
+| `UriParamsEncoder<T>` | Compiles the GET/DELETE url templates |
+| `JsonRequestExt` | `HttpClient` extensions to POST json or raw payloads (non 2xx responses throw `HttpResponseException`, a 2xx other than 200 without a body deserializes to `default`) |
 | `SysWeaverHttpClientExt` | `HttpClient` extensions for SysWeaver login, logout and file upload |
 | `RemoteConnectionExt` | The same SysWeaver actions on a generated remote API instance |
 
 ## Limitations and considerations
 
 - Remote calls have network semantics (latency, failures, time-outs) even though they look like method calls; design interfaces accordingly (coarse-grained, async).
-- Interfaces must be public, inherit `IDisposable` (optionally `IRemoteApi`) and every method must return `Task` or `Task<T>` (`ValueTask` return types are accepted by the generator but not usable).
-- Types crossing the wire must be serializable by the chosen serializer; cached responses are shared between callers, so don't mutate them.
-- A per end point time-out overrides the connection time-out (it can both shorten and extend it), a time-out is reported as a `TimeoutException`. The `HttpClient` time-out is the largest of the connection and per end point time-outs. `RemoteCache` on an interface (rather than a method) is not applied.
+- Interfaces must be public (nested interfaces must only be nested in public types), inherit `IDisposable` (optionally `IRemoteApi`), only declare methods, and every method must return `Task`, `Task<T>`, `ValueTask` or `ValueTask<T>`. An invalid interface fails with a `TypeInitializationException` (the inner exception, typically a `NotSupportedException`, tells why) and keeps failing for that interface.
+- GET/DELETE templates: with one primitive / string parameter every `{x}` is the value, with one object parameter `{Member}` names a public field or property, with several parameters `{parameterName}` (case sensitive) or the parameter index `{0}`, `{1}`, ... (with `ParamAsObject` only `{parameterName}`). Strings, floating point values and `DateTime` are url escaped, numbers are formatted with the invariant culture, `bool` as `True` / `False`. Enums, nullables and `char` are not supported in templates, except with several parameters (without `ParamAsObject`): then the values are formatted at runtime (the same formats, other types with the invariant culture, ex: enums by name) and always url escaped, null is an empty string.
+- POST/PUT end points without parameters send a null object (`null` with the json serializer, an empty body with `formUrl`, with the serializer's content type); SysWeaver API end points without parameters ignore the body. Several parameters are sent as an array (`[1,2]`), or with `ParamAsObject` as an object with one member per parameter. Note that SysWeaver API end points only accept GET and POST.
+- Any 2xx status code is a success: the body is deserialized, except for a 2xx other than 200 without a body (ex: 204 No Content) that returns `default(T)`. Any other status code fails the call with an `HttpResponseException` (`ResponseCode` is the status, the message is the response body for `text/*` responses, else `GET "path", responded with [Status]`). Other failures are wrapped in an `Exception` whose message starts with the verb and the (cleaned) url; a time-out has a `TimeoutException` inner exception, `IRemoteApi.Cancel()` an `OperationCanceledException`.
+- Types crossing the wire must be serializable by the chosen serializer (the default json serializer ignores read only fields); cached responses are shared between callers, so don't mutate them. Only GET/DELETE end points with a return value are cached, every end point has its own cache.
+- A per end point time-out overrides the connection time-out (it can both shorten and extend it). The `HttpClient` time-out is the largest of the connection and per end point time-outs.
+- Serializer names are validated when the type / instance is created (`NotSupportedException` for unknown names); `formUrl` and `formUrlIgnoreDefaults` are write only (use them as the post serializer). The first connection that uses one of them registers both in `SerManager` (once per process, thread safe).
 - With `SysWeaverLogin` the login is performed synchronously when the instance is created.
+- Disposing an instance cancels pending calls; later calls fail (`ObjectDisposedException` inner exception), disposing again does nothing.
 - Runtime code generation requires a runtime that supports dynamic code (not AOT-only environments).
 
 ## Using it

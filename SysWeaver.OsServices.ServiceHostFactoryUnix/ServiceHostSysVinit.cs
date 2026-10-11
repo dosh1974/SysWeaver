@@ -100,25 +100,8 @@ namespace SysWeaver.OsServices
             var name = SName;
             if (IsInstalled())
                 return ServiceResponse.AlreadyInstalled;
-            var temp = new TextTemplate(Template);
             var cmd = ServiceHost.GetCommand();
-            var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
-
-
-            var disp = p.DisplayName ?? p.Name;
-            var desc = p.Description;
-            if (!String.IsNullOrEmpty(desc))
-                disp += "\n# Description:       " + desc.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\n#                    ");
-
-            Dictionary<String, String> vars = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                { "Name",           name },
-                { "DisplayName",    disp },
-                { "Command",        cmd },
-                { "Exe",            exe},
-                { "Args",           args },
-            };
-            var f = temp.Get(vars).Replace("\r", "");
+            var f = CreateScript(name, p.DisplayName ?? p.Name, p.Description, cmd, GetAppDll(cmd, EnvInfo.Executable));
             File.WriteAllText(fn, f);
             File.SetUnixFileMode(fn,
                 UnixFileMode.UserExecute | UnixFileMode.UserRead | UnixFileMode.UserWrite |
@@ -351,7 +334,7 @@ namespace SysWeaver.OsServices
                 return ServiceResponse.ContinueFailed;
             return ServiceResponse.Ok;
         }
-        void WriteStatus(ServiceStatus status) => FileHelper.WriteText(PidName, String.Join(' ', status, Process.GetCurrentProcess().Id));
+        void WriteStatus(ServiceStatus status) => FileHelper.WriteText(PidName, String.Join(' ', status, Environment.ProcessId));
         
         ServiceStatus GetRuntimeStatus() => GetRuntimeStatus(out var _);
 
@@ -365,38 +348,15 @@ namespace SysWeaver.OsServices
                 var t = FileHelper.ReadText(n);
                 if (t == null)
                     return IsInstalled() ? ServiceStatus.Stopped : ServiceStatus.NotInstalled;
-                try
-                {
-                    var kv = t.Split(' ');
-                    if (Enum.TryParse<ServiceStatus>(kv[0], out ServiceStatus status))
-                    {
-                        pid = int.Parse(kv[1]);
-                        if (status == ServiceStatus.Stopped)
-                            return status;
-                        try
-                        {
-                            var p = Process.GetProcessById(pid);
-                            if (p == null)
-                            {
-                                status = ServiceStatus.Stopped;
-                                pid = 0;
-                            }
-                            return status;
-                        }
-                        catch
-                        {
-                            status = ServiceStatus.Stopped;
-                            return status;
-                        }
-                    }
-                }
-                catch
-                {
-                    var s = i + 1;
-                    if (s < retry)
-                        Thread.Sleep(s << 2);
-                }
+                //  The recorded process must be the daemon (the pid may have been reused by another process after the daemon was killed)
+                if (StatusFile.TryGetStatus(t, StatusFile.IsDaemonProcess, out var status, out pid))
+                    return status;
+                //  Probably a partially written file, retry
+                var s = i + 1;
+                if (s < retry)
+                    Thread.Sleep(s << 2);
             }
+            pid = 0;
             return ServiceStatus.Unknown;
         }
 
@@ -456,65 +416,190 @@ namespace SysWeaver.OsServices
             WriteStatus(ServiceStatus.Stopped);
             return 0;
         }
-   
-        static readonly String Template = @"
+
+        /// <summary>
+        /// Quote a value for a POSIX shell (single quotes, an embedded single quote becomes '\''), so that it's never expanded or split.
+        /// </summary>
+        /// <param name="value">The value, null is treated as an empty string.</param>
+        /// <returns>The quoted value, ex: "it's" => "'it'\''s'".</returns>
+        static String ShellQuote(String value) => String.Concat("'", (value ?? "").Replace("'", "'\\''"), "'");
+
+        /// <summary>
+        /// Make a value safe for a single line shell comment (control characters, including line breaks, are replaced by spaces).
+        /// </summary>
+        /// <param name="value">The value, null is treated as an empty string.</param>
+        /// <returns>The single line value.</returns>
+        static String CommentLine(String value)
+        {
+            if (String.IsNullOrEmpty(value))
+                return "";
+            var c = value.ToCharArray();
+            for (int i = 0; i < c.Length; ++i)
+                if (Char.IsControl(c[i]))
+                    c[i] = ' ';
+            return new String(c);
+        }
+
+        /// <summary>
+        /// Create the LSB init script text (LF line endings).
+        /// All values are shell quoted (or put in comments as single lines), so names and paths may contain spaces and shell characters.
+        /// </summary>
+        /// <param name="name">The service name.</param>
+        /// <param name="displayName">The display name (Short-Description and the start / stop log lines).</param>
+        /// <param name="description">The optional description (multiple lines are allowed), put in the LSB header only.</param>
+        /// <param name="cmd">The command that starts the application (as <see cref="ServiceHost.GetCommand(string)"/>), ex: "/usr/bin/dotnet "/opt/my app/MyService.dll"".
+        /// The executable is run by start-stop-daemon, followed by the (single, unquoted) argument if any, followed by "daemon".
+        /// The argument is the application file run by the executable (ex: the .dll run by dotnet), the script checks that it exists like the executable.</param>
+        /// <param name="appDll">The managed entry .dll that an apphost (native executable without argument) loads, the script checks that it exists like the executable
+        /// (APP_DLL); null or empty if there is none (ex: single-file or native AOT publish, or the command already has the .dll as argument), see <see cref="GetAppDll"/>.</param>
+        /// <returns>The script text.</returns>
+        static String CreateScript(String name, String displayName, String description, String cmd, String appDll)
+        {
+            var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
+            //  The argument is a single (quoted if it contains spaces) path, see EnvInfo.ExecCommand
+            if ((args.Length >= 2) && (args[0] == '"') && (args[args.Length - 1] == '"'))
+                args = args.Substring(1, args.Length - 2);
+            var desc = "";
+            if (!String.IsNullOrEmpty(description))
+            {
+                var lines = description.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+                for (int i = 0; i < lines.Length; ++i)
+                    lines[i] = CommentLine(lines[i]);
+                desc = "\n# Description:       " + String.Join("\n#                    ", lines);
+            }
+            Dictionary<String, String> vars = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "HeaderName",         CommentLine(name) },
+                { "HeaderDisplayName",  CommentLine(displayName) },
+                { "HeaderDescription",  desc },
+                { "Name",               ShellQuote(name) },
+                { "DisplayName",        ShellQuote(CommentLine(displayName)) },
+                { "Exe",                ShellQuote(exe) },
+                { "Args",               ShellQuote(args) },
+                { "AppDll",             ShellQuote(appDll) },
+            };
+            return new TextTemplate(Template).Get(vars).Replace("\r", "");
+        }
+
+        /// <summary>
+        /// Get the managed entry .dll that the script must check for an apphost install (the apphost loads it, but it isn't on the command line).
+        /// </summary>
+        /// <param name="cmd">The command that starts the application (as <see cref="ServiceHost.GetCommand(string)"/>).</param>
+        /// <param name="entryAssembly">The entry assembly path (<see cref="EnvInfo.Executable"/>, it's the host executable when there is no separate assembly file).</param>
+        /// <returns>The entry assembly path if the command is a single executable (an apphost, no argument) and the entry assembly is another, existing file;
+        /// else null (ex: "dotnet MyService.dll", where the .dll is the argument, or a single-file / native AOT publish without a separate .dll).</returns>
+        static String GetAppDll(String cmd, String entryAssembly)
+        {
+            var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
+            if (args.Length > 0)
+                return null;
+            if (String.IsNullOrEmpty(entryAssembly) || String.Equals(entryAssembly, exe, StringComparison.Ordinal))
+                return null;
+            return File.Exists(entryAssembly) ? entryAssembly : null;
+        }
+
+        /// <summary>
+        /// The LSB init script, see <see cref="CreateScript"/>.
+        /// Exit codes (LSB): 0 = success (also start of a running and stop of a stopped service), 1 = start / stop / restart failed, 2 = unknown action,
+        /// 5 = the executable, the application file it runs (DAEMON_ARGS, ex: the .dll run by dotnet) or the entry .dll of an apphost (APP_DLL) is missing (stop then exits with 0, status with 4), status = the LSB pidofproc result (0 = running, 1 = dead but the pid file exists,
+        /// 3 = not running, 4 = unknown).
+        /// </summary>
+        static readonly String Template = @"#!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          $(Name)
+# Provides:          $(HeaderName)
 # Required-Start:    $remote_fs $syslog $time
 # Required-Stop:     $remote_fs $syslog $time
 # Should-Start:      $network $named slapd autofs ypbind nscd nslcd winbind sssd
 # Should-Stop:       $network $named slapd autofs ypbind nscd nslcd winbind sssd
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: $(DisplayName)
+# Short-Description: $(HeaderDisplayName)$(HeaderDescription)
 ### END INIT INFO
 
 NAME=$(Name)
+DESC=$(DisplayName)
 DAEMON=$(Exe)
 DAEMON_ARGS=$(Args)
-PIDFILE=/var/run/$(Name).pid
+APP_DLL=$(AppDll)
+PIDFILE=""/var/run/${NAME}.pid""
 
-test -f $DAEMON || exit 0
+# The executable, the application file it runs if any (ex: the .dll run by dotnet) and the managed entry .dll of an apphost if any, must exist
+if [ ! -f ""$DAEMON"" ] || { [ -n ""$DAEMON_ARGS"" ] && [ ! -f ""$DAEMON_ARGS"" ]; } || { [ -n ""$APP_DLL"" ] && [ ! -f ""$APP_DLL"" ]; }; then
+        case ""$1"" in
+          stop) exit 0 ;;
+          status) exit 4 ;;
+          *) exit 5 ;;
+        esac
+fi
 
 
 . /lib/lsb/init-functions
 
-# Start the $(Name) service 
-start() {
-        log_daemon_msg ""Starting service: $(DisplayName)"" ""$(Name)""
+# Start the service, returns 0 = started, 1 = already running, 2 = failed to start
+do_start() {
         start-stop-daemon --start --quiet --pidfile ""$PIDFILE"" --exec ""$DAEMON"" --test > /dev/null || return 1
-        start-stop-daemon --start --background --make-pidfile --pidfile ""$PIDFILE"" --exec ""$DAEMON"" -- $DAEMON_ARGS daemon
-        log_end_msg ""$?""
+        start-stop-daemon --start --background --make-pidfile --pidfile ""$PIDFILE"" --exec ""$DAEMON"" -- ${DAEMON_ARGS:+""$DAEMON_ARGS""} daemon || return 2
+        return 0
 }
 
-# Stop the $(Name) service  
-stop() {
-        log_daemon_msg ""Stopping service: $(DisplayName)"" ""$(Name)""
+# Stop the service, returns 0 = stopped, 1 = wasn't running, 2 = failed to stop
+do_stop() {
         start-stop-daemon --stop --retry=TERM/30/KILL/5 --pidfile ""$PIDFILE"" --exec ""$DAEMON""
-    	RETVAL=""$?""
+        RETVAL=""$?""
+        [ ""$RETVAL"" = 2 ] && return 2
         rm -f ""$PIDFILE""
-        log_end_msg $RETVAL
+        [ ""$RETVAL"" = 0 ] || return 1
+        return 0
 }
 
 # Logic #
 case ""$1"" in
   start)
-        start
+        log_daemon_msg ""Starting service: $DESC"" ""$NAME""
+        do_start
+        case ""$?"" in
+                0|1) log_end_msg 0 ;;
+                *) log_end_msg 1; exit 1 ;;
+        esac
         ;;
   stop)
-        stop
+        log_daemon_msg ""Stopping service: $DESC"" ""$NAME""
+        do_stop
+        case ""$?"" in
+                0|1) log_end_msg 0 ;;
+                *) log_end_msg 1; exit 1 ;;
+        esac
         ;;
   status)
-        status_of_proc -p ""$PIDFILE"" ""$DAEMON"" && exit 0 || exit $?
+        # LSB pidofproc with quoted arguments (Debian's status_of_proc passes them unquoted: a path with spaces fails with ""invalid arguments"")
+        pidofproc -p ""$PIDFILE"" ""$DAEMON"" > /dev/null
+        RETVAL=""$?""
+        case ""$RETVAL"" in
+                0) log_success_msg ""$NAME is running"" ;;
+                4) log_failure_msg ""could not access PID file for $NAME"" ;;
+                *) log_failure_msg ""$NAME is not running"" ;;
+        esac
+        exit ""$RETVAL""
         ;;
-  restart|reload|condrestart)
-        log_daemon_msg ""Restarting service: $(DisplayName)"" ""$(Name)""
-        stop
-        start
+  restart|reload|force-reload|condrestart)
+        log_daemon_msg ""Restarting service: $DESC"" ""$NAME""
+        do_stop
+        if [ ""$?"" = 2 ]; then
+                log_end_msg 1
+                exit 1
+        fi
+        do_start
+        if [ ""$?"" = 0 ]; then
+                log_end_msg 0
+        else
+                log_end_msg 1
+                exit 1
+        fi
         ;;
   *)
         log_action_msg ""Usage: /etc/init.d/${NAME} {start|stop|status|restart|reload|force-reload}""
-        exit 1
+        exit 2
+        ;;
 esac
 
 exit 0

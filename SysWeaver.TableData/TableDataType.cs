@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using SysWeaver.Docs;
 using SysWeaver.Search;
@@ -116,15 +117,20 @@ namespace SysWeaver.Data
                         if (primaryKeys.Add(y))
                             primaryKey.Add(y);
                     if (primaryKey.Count > 7)
-                        throw new Exception("At most 7 columns can be part of the primary key! Found in type " + t.FullName.ToQuoted());
+                        throw new InvalidOperationException("At most 7 columns can be part of the primary key! Found in type " + t.FullName.ToQuoted());
                 }
             }
 
 
+            //  Text search: public string members that are columns (not ignored), plus any string member with a TableDataSearchAttribute (even non-public or ignored ones).
+            //  Compiler generated members (auto property backing fields) are never searched and each member (name) is only searched once.
             List<ValueTuple<double, Expression>> getSearchText = new List<(double, Expression)>();
             var strType = typeof(String);
+            HashSet<String> searchNames = new HashSet<string>(StringComparer.Ordinal);
             foreach (var x in TableDataTools.GetInstanceMembers(t, BindingFlags.Public | BindingFlags.NonPublic))
             {
+                bool isPublic;
+                Expression getText;
                 switch (x.MemberType)
                 {
                     case MemberTypes.Field:
@@ -132,9 +138,8 @@ namespace SysWeaver.Data
                             var ft = x as FieldInfo;
                             if (ft.FieldType != strType)
                                 continue;
-                            var w = x.GetCustomAttribute<TableDataSearchAttribute>()?.Weight ?? 1.0;
-                            if (w > 0.0)
-                                getSearchText.Add((w, Expression.Field(op, ft)));
+                            isPublic = ft.IsPublic;
+                            getText = Expression.Field(op, ft);
                             break;
                         }
                     case MemberTypes.Property:
@@ -142,16 +147,49 @@ namespace SysWeaver.Data
                             var ft = x as PropertyInfo;
                             if (ft.PropertyType != strType)
                                 continue;
-                            var w = x.GetCustomAttribute<TableDataSearchAttribute>()?.Weight ?? 1.0;
-                            if (w > 0.0)
-                                getSearchText.Add((w, Expression.Property(op, ft)));
+                            var getter = ft.GetMethod;
+                            if ((getter == null) || (ft.GetIndexParameters().Length > 0))
+                                continue;
+                            isPublic = getter.IsPublic;
+                            getText = Expression.Property(op, ft);
                             break;
                         }
+                    default:
+                        continue;
                 }
+                if (x.IsDefined(typeof(CompilerGeneratedAttribute), false))
+                    continue;
+                var sa = x.GetCustomAttribute<TableDataSearchAttribute>();
+                if (sa == null)
+                {
+                    if (!isPublic)
+                        continue;
+                    if (x.GetCustomAttribute<TableDataIgnoreAttribute>() != null)
+                        continue;
+                }
+                var w = sa?.Weight ?? 1.0;
+                if (w <= 0.0)
+                    continue;
+                if (!searchNames.Add(x.Name))
+                    continue;
+                getSearchText.Add((w, getText));
             }
             var count = getSearchText.Count;
             if (count > 0)
-                GetTexts = Expression.Lambda<Func<T, String[]>>(Expression.NewArrayInit(strType, getSearchText.OrderByDescending(x => x.Item1).Select(x => x.Item2)), op).Compile();
+            {
+                var ordered = getSearchText.OrderByDescending(x => x.Item1).ToArray();
+                GetTexts = Expression.Lambda<Func<T, String[]>>(Expression.NewArrayInit(strType, ordered.Select(x => x.Item2)), op).Compile();
+                //  The ranker weight of a text is its search weight times 0.95 per preceding searched member (in this order),
+                //  so the attribute weight scales the score and members with equal weights still prefer the first one
+                var weights = new double[count];
+                double decay = 1.0;
+                for (int i = 0; i < count; ++i)
+                {
+                    weights[i] = ordered[i].Item1 * decay;
+                    decay *= 0.95;
+                }
+                SearchWeights = weights;
+            }
             Dictionary<MemberInfo, int> memberCols = new (MemberInfoComparer.Inst);
             foreach (var x in TableDataTools.GetInstanceMembers(t))//t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
             {
@@ -159,7 +197,7 @@ namespace SysWeaver.Data
             }
             //  Have invalid names in primary key
             if (primaryKeys.Count > 0)
-                throw new Exception("The following table data column-names are not available in " + t.FullName.ToQuoted() + ": \"" + String.Join("\", \"", primaryKeys) + "\"");
+                throw new InvalidOperationException("The following table data column-names are not available in " + t.FullName.ToQuoted() + ": \"" + String.Join("\", \"", primaryKeys) + "\"");
             var pc = primaryKey.Count;
             for (int i = 0; i < pc; ++i)
             {
@@ -241,8 +279,10 @@ namespace SysWeaver.Data
         /// <summary>
         /// Build an expression that translates the value at <paramref name="colIndex"/> in the values array (if the member has an <see cref="AutoTranslateAttribute"/>),
         /// including static and dynamic (other column values) contexts from <see cref="AutoTranslateContextAttribute"/>'s.
+        /// A dynamic context gets one format argument per member name: a column value, the value of a static member, or null (an empty text) for other members.
+        /// A null column value or (reference type) static value drops that dynamic context, as does a context where no member can be read.
         /// </summary>
-        /// <returns>An expression returning a <see cref="Task"/>, or null if the member isn't translatable.</returns>
+        /// <returns>An expression returning a <see cref="Task"/> (a completed task for a null cell), or null if the member isn't translatable.</returns>
         static Expression GetTranslateColumnExp(MemberInfo mi, int colIndex, IReadOnlyDictionary<MemberInfo, int> memberCols)
         {
             var attr = mi.GetCustomAttribute<AutoTranslateAttribute>(true);
@@ -280,7 +320,6 @@ namespace SysWeaver.Data
                 }
             }
 
-            List<Expression> dynContexts = new List<Expression>();
             var tempVal = TypeTranslator.TempVal;
             var fmt = TypeTranslator.StringFmt;
             var ns = TypeTranslator.NullString;
@@ -316,25 +355,31 @@ namespace SysWeaver.Data
                     ++argStart;
                     var argEnd = x.IndexOf('}', argStart);
                     if (argEnd < 0)
-                        throw new Exception(String.Concat("Mismatched '{' found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Mismatched '{' found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
                     if (!int.TryParse(x.Substring(argStart, argEnd - argStart), out var ix))
-                        throw new Exception(String.Concat("Invalid argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Invalid argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
                     if (ix < 0)
-                        throw new Exception(String.Concat("Negative argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Negative argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
                     if (ix >= tl)
-                        throw new Exception(String.Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
                     argStart = x.IndexOf('{', argEnd + 1);
                 }
 #endif//DEBUG
 
 
+                //  One format argument per member name (the format indices must be kept):
+                //  a column is read from the row values, a static field / property is read directly (as TypeTranslator does),
+                //  any other member (non column instance member, unknown name in release builds) can't be read from the row and is formatted as an empty text.
                 List<Expression> reads = new (tl);
+                List<bool> checkNull = new (tl);
+                int readCount = 0;
                 for (int i = 0; i < tl; ++i)
                 {
                     var name = t[i];
 
                     var fi = type.GetFieldWithBase(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                     int cIndex = -1;
+                    Expression staticRead = null;
 #if DEBUG
                     bool found = false;
 #endif//DEBUG
@@ -345,6 +390,8 @@ namespace SysWeaver.Data
 #endif//DEBUG
                         if (!memberCols.TryGetValue(fi, out cIndex))
                             cIndex = -1;
+                        if (fi.IsStatic)
+                            staticRead = Expression.Field(null, fi);
                     }
                     else
                     {
@@ -356,22 +403,42 @@ namespace SysWeaver.Data
 #endif//DEBUG
                             if (!memberCols.TryGetValue(pi, out cIndex))
                                 cIndex = -1;
+                            if ((pi.GetMethod?.IsStatic ?? false) && (pi.GetIndexParameters().Length == 0))
+                                staticRead = Expression.Property(null, pi);
                         }
                     }
-                    if (cIndex >= 0)
-                        reads.Add(Expression.ArrayAccess(p, Expression.Constant(cIndex)));
 #if DEBUG
                     if (!found)
-                        throw new Exception(String.Concat("Invalid member name \"", name, "\" found on attribute with text \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                        throw new InvalidOperationException(String.Concat("Invalid member name \"", name, "\" found on attribute with text \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
 #endif//DEBUG
+                    if (cIndex >= 0)
+                    {
+                        reads.Add(Expression.ArrayAccess(p, Expression.Constant(cIndex)));
+                        checkNull.Add(true);
+                        ++readCount;
+                        continue;
+                    }
+                    if (staticRead != null)
+                    {
+                        var isClass = staticRead.Type.IsClass;
+                        reads.Add(Expression.Convert(staticRead, typeof(Object)));
+                        //  Value types are boxed (not checked for null, a null Nullable<T> is formatted as an empty text)
+                        checkNull.Add(isClass);
+                        ++readCount;
+                        continue;
+                    }
+                    reads.Add(Expression.Constant(null, typeof(Object)));
+                    checkNull.Add(false);
                 }
-                tl = reads.Count;
-                if (tl <= 0)
+                //  Nothing can be read: no dynamic context
+                if (readCount <= 0)
                     continue;
                 List<ParameterExpression> dynP = new List<ParameterExpression>(tl);
                 List<Expression> dynProg = new List<Expression>(tl + 1);
                 for (int i = 0; i < tl; ++i)
                 {
+                    if (!checkNull[i])
+                        continue;
                     var r = reads[i];
                     var tp = Expression.Variable(typeof(Object));
                     dynP.Add(tp);
@@ -391,7 +458,9 @@ namespace SysWeaver.Data
                     dynProg.Add(dynE);
                     dynE = Expression.Block(dynP, dynProg);
                 }
-                dynContexts.Add(dynE);
+                //  Dynamic context (formatted using other column values of the row), following constants starts a new context
+                contexts.Add(dynE);
+                prevConstant = null;
             }
 
 
@@ -431,7 +500,8 @@ namespace SysWeaver.Data
                 save,
                 TypeTranslator.ParamEffort, TypeTranslator.ParamRetention
                 );
-            return fnc;
+            //  Null cells are not translated
+            return Expression.Condition(Expression.Equal(value, ns), TypeTranslator.ConstCompletedTask, fnc);
         }
 
         /// <summary>
@@ -529,11 +599,17 @@ namespace SysWeaver.Data
                 }
                 convert = tid.TypeToData;
                 textToObj = tid.StringToData;
+                //  Nullable value types: an empty filter value is null, else the value is parsed as the underlying type
+                if (isNullable && StringToObject.TryGetConverter(mt, out var nullableTextToObj))
+                    textToObj = nullableTextToObj;
             }
             var vt = ee.Type;
             bool canSort = x.GetCustomAttribute<TableDataNoSortAttribute>() == null;
             if (canSort)
-                canSort &= typeof(IComparable<>).MakeGenericType(vt).IsAssignableFrom(vt);
+            {
+                //  A Nullable<T> is sorted and compared by value if T is comparable (Comparer<T?>.Default, null first)
+                canSort &= typeof(IComparable<>).MakeGenericType(baseType).IsAssignableFrom(baseType);
+            }
             bool sortRev = canSort && (x.GetCustomAttribute<TableDataSortDescAttribute>() != null);
             bool hide = x.GetCustomAttribute<TableDataHideAttribute>() != null;
             nameToColumnIndex[name] = cols.Count;
@@ -1003,15 +1079,7 @@ namespace SysWeaver.Data
                 return null;
             data = SortAndFilter(request, data);
             //  Skip
-            var skip = request.Row;
-            while (skip > 0)
-            {
-                var s = skip;
-                if (s > 0x7fff_ffff)
-                    s = 0x7fff_ffff;
-                skip -= s;
-                data = data.Skip((int)s);
-            }
+            data = SkipLong(data, request.Row);
             //  Limit
             var limit = request.MaxRowCount;
             if (limit <= 0)
@@ -1041,15 +1109,7 @@ namespace SysWeaver.Data
                 return null;
             data = Sort(request.Order, data);
             //  Skip
-            var skip = request.Row;
-            while (skip > 0)
-            {
-                var s = skip;
-                if (s > 0x7ffffff)
-                    s = 0x7ffffff;
-                skip -= s;
-                data = data.Skip((int)s);
-            }
+            data = SkipLong(data, request.Row);
             //  Limit
             var limit = request.MaxRowCount;
             if (limit <= 0)
@@ -1137,6 +1197,35 @@ namespace SysWeaver.Data
             return rc > 0 ? rows.ToArray() : EmptyT;
         }
 
+        /// <summary>
+        /// Skip a number of items (lazily).
+        /// Counts above <see cref="int.MaxValue"/> are skipped by enumerating (instead of creating a long chain of Skip iterators, a request with a huge start row would take hours to process).
+        /// </summary>
+        /// <param name="data">The data.</param>
+        /// <param name="skip">The number of items to skip, zero or negative skips nothing.</param>
+        /// <returns>The remaining items.</returns>
+        static IEnumerable<T> SkipLong(IEnumerable<T> data, long skip)
+        {
+            if (skip <= 0)
+                return data;
+            if (skip <= int.MaxValue)
+                return data.Skip((int)skip);
+            return SkipLongIterator(data, skip);
+        }
+
+        static IEnumerable<T> SkipLongIterator(IEnumerable<T> data, long skip)
+        {
+            using var it = data.GetEnumerator();
+            while (skip > 0)
+            {
+                if (!it.MoveNext())
+                    yield break;
+                --skip;
+            }
+            while (it.MoveNext())
+                yield return it.Current;
+        }
+
         static readonly TableDataRow[] Empty = Array.Empty<TableDataRow>();
         static readonly T[] EmptyT = Array.Empty<T>();
 
@@ -1195,10 +1284,19 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Get the searchable texts of a row (all string members with a positive <see cref="TableDataSearchAttribute"/> weight, default 1), ordered by descending weight.
+        /// Get the searchable texts of a row, ordered by descending <see cref="TableDataSearchAttribute"/> weight (default 1, members with a weight of zero or less are excluded):
+        /// the public string fields and properties without a <see cref="TableDataIgnoreAttribute"/> (i.e. the string columns of <typeparamref name="T"/> itself, hidden ones included),
+        /// plus non-public or ignored string members that have a <see cref="TableDataSearchAttribute"/>. Compiler generated members (backing fields) are never searched.
         /// Null if the type has no searchable members.
         /// </summary>
         static readonly Func<T, String[]> GetTexts;
+
+        /// <summary>
+        /// The ranker weight of each text returned by <see cref="GetTexts"/> (same order): the <see cref="TableDataSearchAttribute"/> weight (default 1)
+        /// times 0.95 per preceding searched member, see <see cref="ITextRanker.Rank(double[], string[])"/>.
+        /// Null if the type has no searchable members.
+        /// </summary>
+        static readonly double[] SearchWeights;
 
         /// <summary>
         /// Process a table request: filter, sort, text search (results ordered by rank), skip, limit (with look ahead) and extract rows.
@@ -1229,18 +1327,13 @@ namespace SysWeaver.Data
                     var ranker = (search ?? TableDataTools.DefaultSearch).CreateRanker(st);
                     var gt = GetTexts;
                     if (gt != null)
-                        data = data.Select(x => ValueTuple.Create(ranker.Rank(gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+                    {
+                        var sw = SearchWeights;
+                        data = data.Select(x => ValueTuple.Create(ranker.Rank(sw, gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+                    }
                 }
                 //  Skip
-                var skip = request.Row;
-                while (skip > 0)
-                {
-                    var s = skip;
-                    if (s > 0x7ffffff)
-                        s = 0x7ffffff;
-                    skip -= s;
-                    data = data.Skip((int)s);
-                }
+                data = SkipLong(data, request.Row);
                 CapLimit(request, maxAllowedRows, out var limit, out var lookAhead);
                 rows = ExtractGet(out count, data, limit, lookAhead);
                 count += Math.Max(0, request.Row);
@@ -1282,18 +1375,13 @@ namespace SysWeaver.Data
                     var ranker = (search ?? TableDataTools.DefaultSearch).CreateRanker(st);
                     var gt = GetTexts;
                     if (gt != null)
-                        data = data.Select(x => ValueTuple.Create(ranker.Rank(gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+                    {
+                        var sw = SearchWeights;
+                        data = data.Select(x => ValueTuple.Create(ranker.Rank(sw, gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+                    }
                 }
                 //  Skip
-                var skip = request.Row;
-                while (skip > 0)
-                {
-                    var s = skip;
-                    if (s > 0x7ffffff)
-                        s = 0x7ffffff;
-                    skip -= s;
-                    data = data.Skip((int)s);
-                }
+                data = SkipLong(data, request.Row);
                 CapLimit(request, maxAllowedRows, out var limit, out var lookAhead);
                 rows = ExtractTypedGet(out count, data, limit, lookAhead);
                 count += Math.Max(0, request.Row);

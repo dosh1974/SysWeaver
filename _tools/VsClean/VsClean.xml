@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>VsClean</name>
+    </assembly>
+    <members>
+        <member name="F:VsClean.VsCleanProgram.ExitSuccess">
+            <summary>
+            Exit code: success (also returned when help was requested).
+            </summary>
+        </member>
+        <member name="F:VsClean.VsCleanProgram.ExitGenericError">
+            <summary>
+            Exit code: generic error, an exception.
+            </summary>
+        </member>
+        <member name="F:VsClean.VsCleanProgram.ExitInvalidArguments">
+            <summary>
+            Exit code: invalid command line (no arguments).
+            </summary>
+        </member>
+        <member name="F:VsClean.VsCleanProgram.ExitDeleteFailed">
+            <summary>
+            Exit code: one or more folders couldn't be deleted (the others are deleted).
+            </summary>
+        </member>
+    </members>
+</doc>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Net;
@@ -34,7 +35,7 @@ namespace SysWeaver.Remote
             if (!String.IsNullOrEmpty(b))
                 return String.Concat("Bearer ", b, '@', BaseUrl);
             if (GetUserPassword(out var user, out var _, false))
-                return String.Concat(user, "Basic ", '@', BaseUrl);
+                return String.Concat("Basic ", user, '@', BaseUrl);
             return BaseUrl;
         }
 #endif//DEBUG        
@@ -56,7 +57,8 @@ namespace SysWeaver.Remote
 
         /// <summary>
         /// The default timeout in milliseconds for a request, less or equal to zero to use the <see cref="RemoteTimeoutAttribute"/> on the interface type, or if not present 60 000 ms.
-        /// This is also the upper limit for any per end point timeout.
+        /// A per end point <see cref="RemoteTimeoutAttribute"/> overrides it (it can both shorten and extend it).
+        /// A timeout fails the call with an exception whose <see cref="Exception.InnerException"/> is a <see cref="TimeoutException"/>.
         /// </summary>
         public int TimeoutInMilliSeconds;
 
@@ -160,9 +162,12 @@ namespace SysWeaver.Remote
         /// The implementing type is generated once per interface (on first use) and cached.
         /// </summary>
         /// <typeparam name="T">The public interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions.
-        /// All methods must return <see cref="System.Threading.Tasks.Task"/> or <see cref="System.Threading.Tasks.Task{TResult}"/>.</typeparam>
+        /// All methods must return <see cref="System.Threading.Tasks.Task"/>, <see cref="System.Threading.Tasks.Task{TResult}"/>, <see cref="System.Threading.Tasks.ValueTask"/> or <see cref="System.Threading.Tasks.ValueTask{TResult}"/>.
+        /// The interface may be nested if all declaring types are public.</typeparam>
         /// <returns>An instance of T, the caller owns it and should dispose it.</returns>
-        /// <exception cref="Exception">The interface is invalid, or the connection could not be set up (see <see cref="RemoteConnectionBase"/>).</exception>
+        /// <exception cref="TypeInitializationException">The interface is invalid (the inner exception tells why, typically a <see cref="NotSupportedException"/> or a <see cref="FormatException"/> for an invalid url template).
+        /// The type is only built once, so later calls for the same interface throw the same way.</exception>
+        /// <exception cref="Exception">The connection could not be set up (see the <see cref="RemoteConnectionBase"/> constructor).</exception>
         public T Create<T>() where T : class, IDisposable => InterfaceTypeCache<T>.Create(this, typeof(T));
 
 
@@ -172,6 +177,9 @@ namespace SysWeaver.Remote
         /// </summary>
         /// <param name="t">The type of the interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions</param>
         /// <returns>An instance of the type, must cast to use. The caller owns it and should dispose it.</returns>
+        /// <exception cref="ArgumentException"><paramref name="t"/> doesn't implement <see cref="IDisposable"/> (or is a value type).</exception>
+        /// <exception cref="TypeInitializationException">The interface is invalid, see <see cref="Create{T}"/>.</exception>
+        /// <exception cref="Exception">The connection could not be set up (see the <see cref="RemoteConnectionBase"/> constructor).</exception>
         public IDisposable Create(Type t)
         {
             var c = Cache;
@@ -196,7 +204,8 @@ namespace SysWeaver.Remote
 
 
 
-        static readonly Dictionary<Type, Func<RemoteConnection, IDisposable>> Cache = new ();
+        //  Concurrent: read without the lock (the lock only prevents compiling the same factory twice)
+        static readonly ConcurrentDictionary<Type, Func<RemoteConnection, IDisposable>> Cache = new ();
 
 
     }

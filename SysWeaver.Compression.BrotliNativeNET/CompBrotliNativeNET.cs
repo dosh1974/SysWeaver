@@ -3,6 +3,9 @@ using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Brotli;
 
@@ -19,7 +22,8 @@ namespace SysWeaver.Compression
     /// Uses brotli quality 1 / 4 / 11 for <see cref="CompEncoderLevels.Fast"/> / <see cref="CompEncoderLevels.Balanced"/> / <see cref="CompEncoderLevels.Best"/> with a 2^22 byte window.
     /// A new native encoder / decoder state is created (and destroyed) per call, there is no one-shot api.
     /// Concatenated brotli streams are not supported (data after the first stream is ignored).
-    /// Requires the Brolib native binaries for the current platform and architecture.
+    /// Requires the Brolib native binaries for the current platform and architecture: the Brotli.NET package only ships
+    /// win-x64, win-x86, linux-x64 (glibc), linux-x86 (glibc) and osx-x64 binaries (use <see cref="IsSupported"/>).
     /// </remarks>
     public sealed class CompBrotliNativeNET : ICompType
     {
@@ -41,9 +45,75 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Call once to register this compression type to the compression manager
+        /// Call once to register this compression type to the compression manager.
+        /// Does nothing if the native library can't be loaded on this platform (see <see cref="IsSupported"/>), "br" then uses the built-in codec.
         /// </summary>
-        public static void Register() => CompManager.AddType(Instance);
+        public static void Register()
+        {
+            if (IsSupported)
+                CompManager.AddType(Instance);
+        }
+
+        /// <summary>
+        /// True if the native brotli library of the Brotli.NET package could be loaded on this platform / architecture.
+        /// If false, every compress / decompress call throws (a <see cref="TypeInitializationException"/>).
+        /// </summary>
+        public static bool IsSupported => Support.Value;
+
+        static readonly Lazy<bool> Support = new Lazy<bool>(() =>
+        {
+            try
+            {
+                Brolib.BrotliDecoderVersion();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+
+        /// <summary>
+        /// The Brotli.NET loader imports dlopen / dlsym / dlerror / dlclose from "libdl.so" on Linux (not using the .NET Core loader on .NET 5+),
+        /// that file is only the development symlink (package libc6-dev), runtime systems have "libdl.so.2" (or dlopen in libc since glibc 2.34).
+        /// Registered when this assembly is loaded, so before the Brotli.NET loader is used from here.
+        /// </summary>
+#pragma warning disable CA2255 // The 'ModuleInitializer' attribute should not be used in libraries
+        [ModuleInitializer]
+#pragma warning restore CA2255
+        internal static void InitLinuxLoader()
+        {
+            if (!OperatingSystem.IsLinux())
+                return;
+            try
+            {
+                NativeLibrary.SetDllImportResolver(typeof(Brolib).Assembly, ResolveLibDl);
+            }
+            catch (InvalidOperationException)
+            {
+                //  Someone else already registered a resolver for the Brotli.NET assembly
+            }
+        }
+
+        static IntPtr ResolveLibDl(String libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+        {
+            if (!String.Equals(libraryName, "libdl.so", StringComparison.Ordinal))
+                return IntPtr.Zero;
+            foreach (var name in LibDlNames)
+                if (NativeLibrary.TryLoad(name, out var handle))
+                    return handle;
+            return IntPtr.Zero;
+        }
+
+        /// <summary>
+        /// glibc: "libdl.so.2" (still present after glibc 2.34 as a stub), then libc itself.
+        /// If none loads the default probing is used (musl maps "libdl.so" to libc by itself).
+        /// </summary>
+        static readonly String[] LibDlNames =
+        [
+            "libdl.so.2",
+            "libc.so.6",
+        ];
 
         /// <summary>
         /// The instance of the compressor

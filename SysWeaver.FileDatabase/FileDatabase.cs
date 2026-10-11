@@ -13,9 +13,19 @@ using SysWeaver.Db;
 namespace SysWeaver.FileDatabase
 {
 
+    /// <summary>
+    /// Keeps a database table (of T, one row per file) in sync with the files in some folders (including sub folders).
+    /// <see cref="Init(string[])"/> syncs the table with the file system and starts file system watchers, changes are then applied in the background (every 100 ms).
+    /// Files that were modified during the last 15 seconds are only processed once they are older, or when marked with <see cref="MarkAsCompleted(string)"/>
+    /// </summary>
+    /// <typeparam name="T">The row type, the entry function can fill in extra columns (meta data)</typeparam>
     public sealed class FileDatabase<T> : IDisposable, IHaveStats, IPerfMonitored where T : DbFileData, new()
     {
 
+        /// <summary>
+        /// The system name, and the monitored folders (after <see cref="Init(string[])"/>)
+        /// </summary>
+        /// <returns>A text</returns>
         public override string ToString()
         {
             var f = Folders;
@@ -26,12 +36,22 @@ namespace SysWeaver.FileDatabase
         }
 
         /// <summary>
-        /// Return false to ignore this file (will no be present)
+        /// Called before a file is inserted or updated in the database, can fill in extra columns.
+        /// Return false to skip the insert / update (a new file isn't added)
         /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <param name="data">The row, with the file data filled in</param>
+        /// <returns>True to insert / update the row</returns>
         public delegate Task<bool> UpdateEntry(T data);
 
+        /// <summary>
+        /// Create a file database, call <see cref="Init(string[])"/> to start it
+        /// </summary>
+        /// <param name="msg">Optional message host for logging</param>
+        /// <param name="db">The database to use</param>
+        /// <param name="entryFn">Called before a row is inserted or updated</param>
+        /// <param name="isMetaData">Optional, given a changed file name it returns the name of the file that it's meta data for (or null if it isn't a meta data file).
+        /// When a meta data file changes (or is deleted) the row of the other file is updated</param>
+        /// <param name="instanceName">The instance name used in the system name ("FileDatabase." + instance name), null to use the name of T</param>
         public FileDatabase(IMessageHost msg, DbSimpleStack db, UpdateEntry entryFn, Func<String, String> isMetaData = null, String instanceName = null)
         {
             Db = db;
@@ -43,6 +63,7 @@ namespace SysWeaver.FileDatabase
             PerfMon = new PerfMonitor(SysName);
             Prefix = "[" + name + "] ";
         }
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; init; }
 
         readonly Func<String, String> IsMetaData;
@@ -65,11 +86,39 @@ namespace SysWeaver.FileDatabase
 
 
         /// <summary>
-        /// Must be called once after construction, can be slow since it will bring everything up to date
+        /// Resolves the full paths of the folders (relative ones against the current directory), each with exactly one trailing directory separator
+        /// (a root like "C:\" or "/" stays a root), ordered by length so that a parent folder comes before its sub folders.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="folders">The folders</param>
+        /// <returns>The full folder names, in processing order</returns>
+        internal static String[] GetOrderedFolderNames(String[] folders)
+        {
+            var fc = folders.Length;
+            var names = new String[fc];
+            for (int i = 0; i < fc; ++i)
+            {
+                var full = Path.GetFullPath(folders[i]);
+                names[i] = Path.EndsInDirectorySeparator(full) ? full : (full + Path.DirectorySeparatorChar);
+            }
+            //  Stable sort
+            return names.OrderBy(x => x.Length).ToArray();
+        }
+
+        int InitCalled;
+
+        /// <summary>
+        /// Must be called once after construction, can be slow since it will bring everything up to date:
+        /// creates the table if needed, adds new files, updates changed files (other last write time or size) and deletes rows of files that no longer exist.
+        /// Folders that don't exist or are inside an already added folder are ignored (with a warning).
+        /// The folders are resolved to full paths (relative ones against the current directory) before they are compared.
+        /// </summary>
+        /// <param name="folders">The folders to monitor (including sub folders)</param>
+        /// <returns>The rows that were in the database before the sync</returns>
+        /// <exception cref="InvalidOperationException">Init was already called (also if that call failed).</exception>
         public async Task<List<T>> Init(params String[] folders)
         {
+            if (Interlocked.Exchange(ref InitCalled, 1) != 0)
+                throw new InvalidOperationException(SysName + ": Init can only be called once!");
             using var _ = PerfMon.Track(nameof(Init));
             var msg = Msg;
             List<T> allList = new List<T>();
@@ -168,17 +217,14 @@ namespace SysWeaver.FileDatabase
                         }
                     }
 
-                    foreach (var xx in folders.OrderBy(x => x.Length))
+                    foreach (var folderName in GetOrderedFolderNames(folders))
                     {
-                        var folderName = xx;
-                        var di = new DirectoryInfo(folderName.TrimEnd(Path.DirectorySeparatorChar));
-                        if (!di.Exists)
+                        if (!Directory.Exists(folderName))
                         {
                             msg?.AddMessage(Prefix + "Folder " + folderName.ToQuoted() + " doesn't exist, ignoring!", MessageLevels.Warning);
                             continue;
                         }
-                        var folder = di.FullName;
-                        folderName = folder + Path.DirectorySeparatorChar;
+                        var folder = folderName;
                         if (validFolders != null)
                         {
                             var pex = validFolders.StartsWithAny(folderName);
@@ -361,6 +407,9 @@ namespace SysWeaver.FileDatabase
 
         FileSystemWatcher[] Watchers;
 
+        /// <summary>
+        /// Stop the background processing and the file system watchers
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
@@ -380,6 +429,10 @@ namespace SysWeaver.FileDatabase
         long UpdateCount;
         long InsertCount;
 
+        /// <summary>
+        /// Mark a file as completely written, so that a recent change of it is processed without waiting 15 seconds
+        /// </summary>
+        /// <param name="file">The full path of the file</param>
         public void MarkAsCompleted(String file)
             => CompletedFiles.TryAdd(file, true);
 
@@ -465,7 +518,7 @@ namespace SysWeaver.FileDatabase
                             var data = await c.FirstOrDefaultAsync<T>(x => x.FullPath == fname).ConfigureAwait(false);
                             if (data != null)
                             {
-                                data.LastModified = fi.LastAccessTimeUtc.Ticks;
+                                data.LastModified = fi.LastWriteTimeUtc.Ticks;
                                 data.Size = fi.Length;
                                 data.Changed = DateTime.UtcNow.Ticks;
                                 try
@@ -538,6 +591,7 @@ namespace SysWeaver.FileDatabase
             return true;
         }
 
+        /// <inheritdoc/>
         public IEnumerable<Stats> GetStats()
         {
             var sys = SysName;
@@ -574,9 +628,20 @@ namespace SysWeaver.FileDatabase
         readonly ConcurrentQueue<Update> Updates = new ConcurrentQueue<Update>();
 
 
+        /// <summary>
+        /// Get the rows as table data
+        /// </summary>
+        /// <param name="r">The request (filters, order, paging)</param>
+        /// <param name="refreshRate">The refresh rate to report in the table data</param>
+        /// <returns>The table data</returns>
         public Task<TableData> GetAsTable(TableDataRequest r, int refreshRate) 
             => Db.GetAsTableData<T>(r, refreshRate);
 
+        /// <summary>
+        /// Get the rows matching a table data request
+        /// </summary>
+        /// <param name="r">The request (filters, order, paging)</param>
+        /// <returns>The matching rows</returns>
         public async Task<List<T>> GetFiltered(TableDataRequest r)
         {
             using var c = await Db.GetAsync().ConfigureAwait(false);
@@ -584,9 +649,9 @@ namespace SysWeaver.FileDatabase
         }
 
         /// <summary>
-        /// 
+        /// Get the rows matching a table data request, and the paging values used
         /// </summary>
-        /// <param name="r"></param>
+        /// <param name="r">The request (filters, order, paging)</param>
         /// <returns>Result List, skip, limit, lookAhead</returns>
         public async Task<Tuple<List<T>, long, long, long>> GetFilteredWithParams(TableDataRequest r)
         {

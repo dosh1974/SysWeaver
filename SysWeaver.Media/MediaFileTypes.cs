@@ -4,23 +4,42 @@ using System.Collections.Generic;
 namespace SysWeaver.Media
 {
 
+    /// <summary>
+    /// The type of media a file contains (as classified by <see cref="MediaFileTypes.GetMediaType"/>)
+    /// </summary>
     public enum MediaTypes
     {
+        /// <summary>
+        /// Unknown or not a media file
+        /// </summary>
         None = 0,
+        /// <summary>
+        /// An image
+        /// </summary>
         Image,
+        /// <summary>
+        /// A video
+        /// </summary>
         Video,
+        /// <summary>
+        /// Audio
+        /// </summary>
         Audio,
     }
 
 
+    /// <summary>
+    /// Classify files into media types using a fixed table of (lower case) file extensions
+    /// </summary>
     public static class MediaFileTypes
     {
 
         /// <summary>
         /// Get the type of media for a given file extension
         /// </summary>
-        /// <param name="fileExtension">The file extension</param>
-        /// <returns>The media type</returns>
+        /// <param name="fileExtension">The file extension, with or without leading '.' chars (all are trimmed), case insensitive (invariant). Ex: ".PNG", "mp4".
+        /// This is the extension only, not a file name ("photo.png" returns <see cref="MediaTypes.None"/>)</param>
+        /// <returns>The media type, <see cref="MediaTypes.None"/> if the extension is null, empty or unknown</returns>
         public static MediaTypes GetMediaType(String fileExtension)
         {
             if (String.IsNullOrEmpty(fileExtension))
@@ -175,7 +194,7 @@ namespace SysWeaver.Media
             { "f4v", MediaTypes.Video },
             { "flv", MediaTypes.Video },
             { "gxf", MediaTypes.Video },
-            { "IVF", MediaTypes.Video },
+            { "ivf", MediaTypes.Video },
             { "lsf", MediaTypes.Video },
             { "lsx", MediaTypes.Video },
             { "m1v", MediaTypes.Video },
@@ -220,11 +239,11 @@ namespace SysWeaver.Media
             { "wvx", MediaTypes.Video },
             { "302", MediaTypes.Audio },
             { "aa", MediaTypes.Audio },
-            { "AAC", MediaTypes.Audio },
+            { "aac", MediaTypes.Audio },
             { "aax", MediaTypes.Audio },
             { "ac3", MediaTypes.Audio },
-            { "ADT", MediaTypes.Audio },
-            { "ADTS", MediaTypes.Audio },
+            { "adt", MediaTypes.Audio },
+            { "adts", MediaTypes.Audio },
             { "adx", MediaTypes.Audio },
             { "afc", MediaTypes.Audio },
             { "aif", MediaTypes.Audio },

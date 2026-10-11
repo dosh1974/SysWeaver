@@ -20,7 +20,11 @@ namespace SysWeaver
     /// Meta data is keyed by the content hash of the file (see <see cref="FileHash"/>), so identical files share meta data and any change invalidates it.
     /// The meta data is stored as gzip compressed json in a folder per key type (configurable using "FileMetaDataFolders" and "FileMetaData[KeyType]Folders" in the config),
     /// and is pruned at process exit when it hasn't been used for the configured number of days.
-    /// Processing of a given content hash is serialized across processes using a <see cref="SystemLock"/>.
+    /// Processing of a given content hash is serialized across processes using a <see cref="SystemLock"/> keyed by the key type, the key suffix and the content hash,
+    /// so a process callback may process the same content using another key type or key suffix (ex: using <see cref="CompressedFile"/> on the same file),
+    /// but processing the same content with the same key type and key suffix from inside a callback dead locks (the lock isn't re-entrant).
+    /// The key type folder is created on first use (per process); if it's deleted while the process is running, it's re-created when a write to it fails with a <see cref="DirectoryNotFoundException"/>
+    /// (the failed process callback or meta data write is retried once).
     /// </remarks>
     public static class FileMetaData
     {

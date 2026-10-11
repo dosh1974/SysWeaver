@@ -274,16 +274,23 @@ namespace SysWeaver
         /// Enums use <see cref="Enum.Parse(Type, string)"/> (case sensitive, also accepts numbers and comma separated flags).
         /// Arrays, <see cref="List{T}"/> and <see cref="IEnumerable{T}"/> take a ';' separated list of element values (empty entries are skipped).
         /// Other types use the registered parsers (see <see cref="AddParser(Type, Func{string, object})"/>).
+        /// A collection whose element type has no parser has no parser either. Nullable value types (ex: int?) use the parser of the underlying type
+        /// (the parsed value is never null).
         /// </remarks>
         /// <exception cref="InvalidCastException">No parser exists for <paramref name="type"/> and <paramref name="throwOnError"/> is true.</exception>
         public static Func<String, Object> GetParser(Type type, bool throwOnError = true)
         {
+            var underlying = Nullable.GetUnderlyingType(type);
+            if (underlying != null)
+                type = underlying;
             if (type.IsEnum)
                 return value => Enum.Parse(type, value.Trim());
             if (type.IsArray)
             {
                 var et = type.GetElementType();
                 var ep = GetParser(et, throwOnError);
+                if (ep == null)
+                    return null;
                 return value => MakeTypedArray(et, GetObjects(value, ep));
             }
             if (type.IsGenericType)
@@ -293,11 +300,15 @@ namespace SysWeaver
                 if (bt == typeof(List<>))
                 {
                     var ep = GetParser(et, throwOnError);
+                    if (ep == null)
+                        return null;
                     return value => MakeListT(et, GetObjects(value, ep));
                 }
                 if (bt == typeof(IEnumerable<>))
                 {
                     var ep = GetParser(et, throwOnError);
+                    if (ep == null)
+                        return null;
                     return value => MakeTypedArray(et, GetObjects(value, ep));
                 }
             }
@@ -409,7 +420,12 @@ namespace SysWeaver
         /// </returns>
         /// <remarks>
         /// <para>Option names are the member names. Members whose type has no parser are treated as nested option objects (created with the default constructor if null)
-        /// and their members are exposed as "Member.SubMember".</para>
+        /// and their members are exposed as "Member.SubMember". An object created for a null member is only used to find the options, it is not assigned to <paramref name="o"/>,
+        /// so the setter of such a nested option throws a <see cref="NullReferenceException"/>. A nested member whose type is already on the current nesting path
+        /// (ex: Node.Child of type Node) is skipped, so self-referencing types don't recurse.</para>
+        /// <para>A struct typed nested member must be a field: a struct typed property (without a parser) is skipped, it has no options (a property returns a copy of the struct, so its members can't be assigned through it).
+        /// Using such an option ("-StructProp.Member") throws the <see cref="ArgumentException"/> of an unknown option.</para>
+        /// <para>Indexers and properties without a getter are skipped, so are read-only fields and properties without a setter unless they are nested option objects.</para>
         /// <para>A boolean member that is currently false becomes a flag option (no value, sets it to true); other members take a single "value" argument.</para>
         /// <para>The help text is the member's XML documentation summary. Setters are compiled expressions, so this is relatively expensive; the result is lazily enumerated and not cached.</para>
         /// </remarks>
@@ -419,7 +435,8 @@ namespace SysWeaver
             yield return HelpAction2;
             var obj = Expression.Parameter(typeof(Object), "obj");
             var value = Expression.Parameter(typeof(Object), "value");
-            foreach (var x in InternalGetOptions(o, members, Expression.Convert(obj, o.GetType()), "", obj, value))
+            var path = new HashSet<Type>() { o.GetType() };
+            foreach (var x in InternalGetOptions(o, members, Expression.Convert(obj, o.GetType()), "", obj, value, path))
                 yield return x;
         }
 
@@ -601,7 +618,7 @@ namespace SysWeaver
         /// <param name="options">Receives the populated options object, or null if help was requested.</param>
         /// <param name="commandLineArgs">The tokens (as passed to Main).</param>
         /// <param name="arguments">The valid positional arguments, see <see cref="ParseOptions(string[], IEnumerable{CommandLineArgument}, IEnumerable{CommandLineOption}, StringComparer)"/>.</param>
-        /// <param name="current">The instance to update; its current values are shown as defaults.</param>
+        /// <param name="current">The instance to update; its current values are shown as defaults. Options given before a help option have already been applied to it when help is returned.</param>
         /// <param name="members">Which members of <typeparamref name="T"/> become options.</param>
         /// <returns>The parse result, or null if a help option ("-?" or "-help") was given (the caller should then display the syntax).</returns>
         /// <exception cref="ArgumentException">Invalid command line (unknown option, wrong argument count, parse failure etc).</exception>
@@ -613,7 +630,7 @@ namespace SysWeaver
         /// <param name="options">Receives the populated options object, or null if help was requested.</param>
         /// <param name="commandLineArgs">The tokens (as passed to Main).</param>
         /// <param name="arguments">The valid positional arguments, see <see cref="ParseOptions(string[], IEnumerable{CommandLineArgument}, IEnumerable{CommandLineOption}, StringComparer)"/>.</param>
-        /// <param name="current">The instance to update; its current values are shown as defaults.</param>
+        /// <param name="current">The instance to update; its current values are shown as defaults. Options given before a help option have already been applied to it when help is returned.</param>
         /// <param name="optionsComparer">Comparer used to match option names.</param>
         /// <param name="members">Which members of <typeparamref name="T"/> become options.</param>
         /// <returns>The parse result, or null if a help option ("-?" or "-help") was given (the caller should then display the syntax).</returns>
@@ -642,7 +659,7 @@ namespace SysWeaver
             return t;
         }
 
-        static IEnumerable<Tuple<CommandLineOption, Action<Object, Object>>> InternalGetOptions(Object o, OptionMembers members, Expression instance, String prefix, ParameterExpression obj, ParameterExpression value)
+        static IEnumerable<Tuple<CommandLineOption, Action<Object, Object>>> InternalGetOptions(Object o, OptionMembers members, Expression instance, String prefix, ParameterExpression obj, ParameterExpression value, HashSet<Type> path)
         {
             var type = o.GetType();
             foreach (var p in type.GetMembers(BindingFlags.Public | BindingFlags.Instance))
@@ -652,7 +669,7 @@ namespace SysWeaver
                 Expression nestedValue = null;
                 {
                     var mi = p as PropertyInfo;
-                    if ((mi != null) && (members != OptionMembers.Fields))
+                    if ((mi != null) && (members != OptionMembers.Fields) && (mi.GetIndexParameters().Length == 0))
                     {
                         if (mi.CanRead)
                         {
@@ -662,9 +679,13 @@ namespace SysWeaver
                             var parser = GetParser(mt, false);
                             if (parser == null)
                             {
-                                nested = val;
-                                nestedType = mt;
-                                nestedValue = acc;
+                                //  A struct typed property returns a copy, members assigned through it would be lost (cmdline-cov-7): it has no options
+                                if (!mt.IsValueType)
+                                {
+                                    nested = val;
+                                    nestedType = mt;
+                                    nestedValue = acc;
+                                }
                             }
                             else
                             {
@@ -724,7 +745,7 @@ namespace SysWeaver
                         }
                     }
                 }
-                if (nestedType != null)
+                if ((nestedType != null) && (!path.Contains(nestedType)))
                 {
                     if (nested == null)
                     {
@@ -733,8 +754,17 @@ namespace SysWeaver
                     }
                     if (nested != null)
                     {
-                        foreach (var x in InternalGetOptions(nested, members, nestedValue, String.Concat(prefix, p.Name, '.'), obj, value))
-                            yield return x;
+                        //  Skip types already on the current nesting path (self-referencing types would recurse without end)
+                        var instanceType = nested.GetType();
+                        if (path.Add(instanceType))
+                        {
+                            var added = (instanceType != nestedType) && path.Add(nestedType);
+                            foreach (var x in InternalGetOptions(nested, members, nestedValue, String.Concat(prefix, p.Name, '.'), obj, value, path))
+                                yield return x;
+                            if (added)
+                                path.Remove(nestedType);
+                            path.Remove(instanceType);
+                        }
                     }
                 }
             }
@@ -780,11 +810,16 @@ namespace SysWeaver
         /// Generates help text lines: a syntax line, the arguments with their tags and help, and the options with their arguments.
         /// </summary>
         /// <param name="arguments">The valid positional arguments (a null element means "any number of arguments"), null means any number of arguments.</param>
-        /// <param name="options">The valid options.</param>
+        /// <param name="options">The valid options, must not be null (use an empty list for none).</param>
         /// <param name="commandPrefix">Text starting the syntax line, null for "Use: {executable name} ".</param>
         /// <param name="linePrefix">Text prefixed to every line.</param>
         /// <param name="levelInset">Indentation for each nesting level.</param>
         /// <returns>The help lines, to be written one per line (lazily generated).</returns>
+        /// <remarks>
+        /// Names are padded to the longest argument name / option syntax plus one. Tags are written as "[tag]" (see <see cref="MakeTag(string)"/>),
+        /// multi-line help texts continue on new lines aligned with the help column.
+        /// An option with a single argument is written on one line with the tags of the argument (and the option help if the argument has no help).
+        /// </remarks>
         public static IEnumerable<String> SyntaxOptions(IEnumerable<CommandLineArgument> arguments, IEnumerable<CommandLineOption> options, String commandPrefix = null, String linePrefix = "", String levelInset = "  ")
         {
             commandPrefix = commandPrefix ?? String.Concat("Use: ", Path.GetFileNameWithoutExtension(Executable), ' ');

@@ -78,14 +78,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="p">The store parameters, null uses the defaults (id "Default").</param>
         /// <returns>The store.</returns>
-        /// <exception cref="Exception">The serializer or folders couldn't be resolved, or the store folders couldn't be created.</exception>
+        /// <exception cref="ArgumentException">No serializer is registered for <see cref="KeyValueStoreParams.Ser"/>, or no compression method is registered for a non-empty <see cref="KeyValueStoreParams.Comp"/> (the store isn't created or cached).</exception>
+        /// <exception cref="Exception">The folders couldn't be resolved or created.</exception>
         public static KeyValueStore Get(KeyValueStoreParams p)
         {
             p = p ?? new KeyValueStoreParams();
             var id = p.Id;
             if (String.IsNullOrEmpty(id))
                 id = "Default";
-            var skey = id.FastToLower();
             var s = Stores;
             if (s.TryGetValue(id, out var store))
                 return store;
@@ -95,7 +95,7 @@ namespace SysWeaver
                     return store;
                 store = new KeyValueStore(p);
                 if (!s.TryAdd(id, store))
-                    throw new Exception("Internal error!");
+                    throw new InvalidOperationException("Internal error!");
                 return store;
             }
         }
@@ -373,8 +373,9 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(id))
                 id = "Default";
             Id = id;
-            Ser = SerManager.Get(p.Ser);
-            Comp = String.IsNullOrEmpty(p.Comp) ? null : CompManager.GetFromHttp(p.Comp);
+            //  Fail here instead of with a NullReferenceException on the first read / write
+            Ser = SerManager.Get(p.Ser ?? throw new ArgumentNullException(nameof(p.Ser))) ?? throw new ArgumentException("No serializer is registered for " + p.Ser.ToQuoted() + "!", nameof(p.Ser));
+            Comp = String.IsNullOrEmpty(p.Comp) ? null : (CompManager.GetFromHttp(p.Comp) ?? throw new ArgumentException("No compression method is registered for the http code " + p.Comp.ToQuoted() + "! Use null or an empty string for no compression.", nameof(p.Comp)));
             Level = p.Level;
             var r = p.Redundance;
             if (r < 2)

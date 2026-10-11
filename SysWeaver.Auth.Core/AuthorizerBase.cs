@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -208,7 +209,8 @@ namespace SysWeaver.Auth
             {
                 if (Interlocked.Read(ref RefCount) != 0)
                     return;
-                u.TryRemove(UserGuid, out var userData);
+                //  Only remove this instance (a newer instance may have been added for the same user after this one was released and re-used)
+                u.TryRemove(new KeyValuePair<String, UserData>(UserGuid, this));
             }
         }
 

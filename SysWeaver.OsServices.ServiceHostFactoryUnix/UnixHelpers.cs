@@ -39,14 +39,59 @@ namespace SysWeaver.OsServices
         /// <param name="commandLine">The command line to execute</param>
         /// <param name="terminal">If true the command shares this console, else its stdout is captured (and discarded)</param>
         /// <param name="noWait">Ignored, this method always waits for the process to exit</param>
-        /// <returns>The exit code of the command</returns>
+        /// <returns>The exit code of the command, or 1 (<see cref="ServiceResponseHelper.ExitGenericError"/>) if "sudo" couldn't be started (a message is written to the console,
+        /// ex: "sudo" isn't installed)</returns>
         public static int RunElevated(String commandLine, bool terminal, bool noWait)
         {
             commandLine = "sudo " + commandLine;
+            int r;
             if (terminal)
-                return SystemHelper.Run(commandLine);
-            SystemHelper.GetStdOutFrom(out var r, commandLine);
-            return r;
+                r = SystemHelper.Run(commandLine);
+            else
+                SystemHelper.GetStdOutFrom(out r, commandLine);
+            if (r >= 0)
+                return r;
+            //  The process couldn't be started (Run returns -404, GetStdOutFrom -1)
+            Console.WriteLine(GetElevationFailedMessage(FindInPath("sudo", Environment.GetEnvironmentVariable("PATH")) != null));
+            return ServiceResponseHelper.ExitGenericError;
+        }
+
+        /// <summary>
+        /// Get the message written when "sudo" couldn't be started.
+        /// </summary>
+        /// <param name="sudoFound">True if "sudo" was found in the PATH.</param>
+        /// <returns>The message.</returns>
+        static String GetElevationFailedMessage(bool sudoFound) => sudoFound ?
+            "Failed to run the command elevated: \"sudo\" couldn't be started, run the command as root instead."
+            :
+            "Failed to run the command elevated: \"sudo\" not found (not installed or not in the PATH), install it or run the command as root.";
+
+        /// <summary>
+        /// Find a program in a search path.
+        /// </summary>
+        /// <param name="program">The program file name, ex: "sudo".</param>
+        /// <param name="searchPath">The folders, separated by <see cref="System.IO.Path.PathSeparator"/> (':' on Linux), ex: the PATH environment variable. Null or empty folders are skipped.</param>
+        /// <returns>The full name of the first existing file, or null if not found.</returns>
+        static String FindInPath(String program, String searchPath)
+        {
+            if (String.IsNullOrEmpty(searchPath))
+                return null;
+            foreach (var d in searchPath.Split(System.IO.Path.PathSeparator))
+            {
+                if (d.Length <= 0)
+                    continue;
+                try
+                {
+                    var f = System.IO.Path.Combine(d, program);
+                    if (System.IO.File.Exists(f))
+                        return f;
+                }
+                catch
+                {
+                    //  Invalid folder name, skip
+                }
+            }
+            return null;
         }
 
 

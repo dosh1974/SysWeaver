@@ -29,14 +29,20 @@ flowchart TB
 
 ## Key features
 
-- Classification of files into media types.
-- Image operations and colour-space handling via ImageMagick.
-- Screenshot request/response contracts used by browser-based rendering.
-- The web thumbnail service contract.
+- `MediaFileTypes.GetMediaType`: classification of a file extension (case insensitive, leading dots ignored) into `MediaTypes.Image` / `Video` / `Audio` / `None` using a fixed table.
+- `MediaInfo`: size, duration, fps, a description and an icon (thumbnail) for a media file. `GetAsync` caches the result in a temp folder (`FileMetaDataDbAsync`).
+  Images are read with ImageMagick, videos and audio through `VideoInfo.GetMediaInfo` (SysWeaver.Media.Video) / `AudioInfo.GetMediaInfo` (SysWeaver.Media.Audio), found by reflection.
+  `AddMediaInfoCreator` adds a handler for a file extension that is tried first. The extension is the one of the file name (`Path.GetExtension`), a '.' in a folder name is ignored.
+  There is one cache per icon size and fill flag (cache name `MediaInfo_MediaInfo<w>x<h>`, plus `_fill`).
+- `ImageTools` (ImageMagick): `FillInto` (scale to cover and crop) / `FitInto` (scale to fit, optionally extend with a color), reading images from files, urls and memory, and `ImageData32` conversion / saving.
+- `ColorSpace`: sRGB / linear RGB / OkLab / OkLch conversions (verified against the published reference values), CSS colors from OkLch and OkHsv (`OkHsvToOkLab` follows the reference okhsv_to_srgb: v = 0 is black, s = v = 1 is in the sRGB gamut), and OkLab to OkHsl (the hue is [0, 1), not radians; gray colors have a saturation of 0).
+- Screenshot request/response contracts used by browser-based rendering (`ScreenshotRequest`, `ScreenshotJpegRequest`, `ScreenshotPngRequest`, `ScreenshotImageRequest`, `ScreenshotImageResponse`, namespace `SysWeaver.MicroService`).
+- The web thumbnail service contract (`IThumbnailWebService`).
 
 ## Limitations and considerations
 
 - ImageMagick is a large native dependency; image processing is CPU and memory intensive.
+- `ImageTools.ReadImage` downloads `http(s)://` names; `ReadImageWeb` returns null for unsuccessful status codes.
 
 ## Relationships
 

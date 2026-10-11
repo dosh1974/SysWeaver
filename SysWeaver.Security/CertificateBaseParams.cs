@@ -8,7 +8,8 @@ namespace SysWeaver.Security
     /// where the generated certificate is cached, the password protecting it and the subject fields.
     /// </summary>
     /// <remarks>
-    /// The subject fields are validated by <see cref="SignedCertificateCreator"/>: they may not contain <c>'='</c> or <c>','</c>.
+    /// The subject fields are validated by <see cref="SignedCertificateCreator"/>: they may not contain distinguished name special chars (<c>= , + ; " # &lt; &gt;</c>) or control chars, or start / end with white space
+    /// (see <see cref="SignedCertificateCreator.ValidateString(string, string)"/>).
     /// </remarks>
     public class CertificateBaseParams
     {
@@ -48,8 +49,9 @@ namespace SysWeaver.Security
 
         /// <summary>
         /// Certificate country (C in certificate), can use EnvInfo variables.
-        /// Any value understood by <c>IsoCountry.TryGet</c> is accepted and converted to an ISO 3166 alpha-2 code, unknown values are ignored (no C is added).
-        /// Null or empty uses the region of the current culture.
+        /// A two letter ISO 3166 alpha-2 code or a country name / nick name (case insensitive, ex: "SE", "se", "Sweden", "UK"), it's looked up using <c>IsoCountry.TryGetName</c>
+        /// and the ISO code is used. Unknown values throw an <see cref="ArgumentException"/> when the certificate creator / provider is created.
+        /// Null or empty uses the region of the current culture (no C is added if it's unknown).
         /// </summary>
         public String Country;
 

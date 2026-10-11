@@ -49,6 +49,22 @@ namespace SysWeaver.OsServices
         int Run(Action<ServiceManager> onStart);
 
         /// <summary>
+        /// Called from the daemon process to have the installed service restarted (ex: <see cref="ServiceManager.RestartProcess"/>), or started again
+        /// (the auto recovery after a faulty manifest, the daemon process is about to exit).
+        /// The default implementation starts a new hidden process of this application with the "restart" or "start" verb (see <see cref="ServiceHost.RestartService"/>);
+        /// hosts where that process would be killed by the stop (systemd kills all processes of the unit) let the service system do it.
+        /// </summary>
+        /// <param name="man">The service manager used to log the restart, or null to write to the console.</param>
+        /// <param name="startOnly">True to start the service ("start" verb), false to stop and start it ("restart" verb).</param>
+        void RequestRestart(ServiceManager man, bool startOnly)
+        {
+            if (startOnly)
+                ServiceHost.StartService();
+            else
+                ServiceHost.RestartService(man);
+        }
+
+        /// <summary>
         /// Return status of the service
         /// </summary>
         /// <returns>The current status</returns>

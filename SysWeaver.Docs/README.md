@@ -41,7 +41,10 @@ All SysWeaver projects enable XML documentation generation, which is what makes 
 - Only as good as the comments: undocumented members produce `null`.
 - Requires the `.xml` documentation files to be deployed next to the assemblies; publishing pipelines that drop them (or single-file publishing, where assemblies have no location) silently remove the documentation.
 - Texts are the plain inner text: `<see cref="..."/>` and similar self-closing tags vanish from the sentence, and `<inheritdoc/>` is not resolved.
-- Some signatures are not matched (e.g. types nested more than one level deep, constructors with nested-type parameters), these simply return `null`.
+- Some signatures are not matched (e.g. types nested more than one level deep, conversion operators, multi-dimensional array parameters, static constructors), these simply return `null`.
+- Members of constructed generic types (`List<int>.Add`) and constructed generic methods are looked up on their generic definitions. An undocumented override gets the documentation of the base member.
+- `XmlDoc(MemberInfo)` only handles fields, properties, methods and constructors (a nested type passed as `MemberInfo` returns `null`, use `XmlDoc(Type)`).
+- Members are matched exactly first (the member definition, regardless of the type it was reflected from), so a base member and its documented override (or hiding member) each get their own documentation. Only a member without its own documentation falls back to a same-named (same signature) member of a related type: the closest documented base type (or interface) member, else a derived type's member.
 
 ## Using it
 

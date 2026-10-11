@@ -5,16 +5,28 @@ using System.Text;
 
 namespace SysWeaver.Media
 {
+    /// <summary>
+    /// Creates Code 39 bar codes as svg paths (one closed rectangle sub path per bar, with start / stop chars, no check digit, no quiet zone, no text).
+    /// Supported chars: 0-9, A-Z (upper case), '-', '.', ' ', '$', '/', '+' and '%'.
+    /// </summary>
     public sealed class SvgBarcodeCode39
     {
 
 
+        /// <summary>
+        /// Create a bar code generator
+        /// </summary>
+        /// <param name="width">The width of a narrow bar / space, at least 0.001</param>
+        /// <param name="height">The bar height, at least 4 narrow widths</param>
+        /// <param name="decimalCount">The maximum number of decimals in the path</param>
+        /// <param name="barRatio">The width ratio of a wide bar / space to a narrow, clamped to [2, 3]</param>
         public SvgBarcodeCode39(double width = 1, double height = 32, int decimalCount = 1, double barRatio = 2)
         {
             Width = Math.Max(0.001, width);
             Height = Math.Max(Width * 4, height);
             DecimalMask = decimalCount <= 0 ? "0" : ("0." + new string('#', decimalCount));
             barRatio = Math.Max(2.0, Math.Min(3.0, barRatio));
+            width = Width;
             BarWidths = [0, width, width * barRatio];
 
 /*            List<String> lines = new List<string>();
@@ -32,6 +44,14 @@ namespace SysWeaver.Media
         String S(double v)
             => v.ToString(DecimalMask, CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Get the path of a bar code
+        /// </summary>
+        /// <param name="data">The data to encode</param>
+        /// <param name="offsetX">The left position</param>
+        /// <param name="offsetY">The top position</param>
+        /// <returns>The svg path</returns>
+        /// <exception cref="ArgumentException">The data contains a char that can't be encoded</exception>
         public String GetPath(String data, double offsetX = 0, double offsetY = 0)
         {
             var l = data.Length;
@@ -43,7 +63,7 @@ namespace SysWeaver.Media
             for (int i = 0; i < l; ++i)
             {
                 if (!m.TryGetValue(data[i], out var cl))
-                    throw new Exception("Char '" + data[i] + "' is not valid for Code39!");
+                    throw new ArgumentException("Char '" + data[i] + "' is not valid for Code39!", nameof(data));
                 codes.AddRange(cl);
             }
             AddChecksumAndEnd(codes);
@@ -97,7 +117,13 @@ namespace SysWeaver.Media
 
 
 
+        /// <summary>
+        /// The width of a narrow bar / space
+        /// </summary>
         public readonly double Width;
+        /// <summary>
+        /// The bar height
+        /// </summary>
         public readonly double Height;
 
 
@@ -141,10 +167,11 @@ namespace SysWeaver.Media
             { 'Z', [36] },
             { '-', [37] },
             { '.', [38] },
-            { '$', [39] },
-            { '/', [40] },
-            { '+', [41] },
-            { '%', [42] },
+            { ' ', [39] },
+            { '$', [40] },
+            { '/', [41] },
+            { '+', [42] },
+            { '%', [43] },
         }.Freeze();
 
         static readonly int[] Widths =
@@ -195,6 +222,9 @@ namespace SysWeaver.Media
             0x59995,
         ];
 
+        /// <summary>
+        /// An instance with a narrow width of 1, a height of 32 and a wide / narrow ratio of 2
+        /// </summary>
         public static readonly SvgBarcodeCode39 Default = new();
 
     }

@@ -106,6 +106,7 @@ namespace PhotoshopFile
 
     /// <summary>
     /// Total length of the channel data, including compression headers.
+    /// 0 means no data at all (not even the compression word), see <see cref="CompressImageData"/>.
     /// </summary>
     public long Length { get; set; }
 
@@ -203,8 +204,9 @@ namespace PhotoshopFile
           RleRowLengths = new RleRowLengths(reader, Rect.Height,
             Layer.PsdFile.IsLargeDocument);
           var rleDataLength = (int)(endPosition - reader.BaseStream.Position);
-          Debug.Assert(rleDataLength == RleRowLengths.Total,
-            "RLE row lengths do not sum to length of channel image data.");
+          if (rleDataLength < 0)
+            throw new PsdInvalidException("The RLE row lengths of channel " + ID + " are longer than the channel data.");
+          // The row lengths should sum to rleDataLength, the decoder does not use them (rows are decoded sequentially), so a mismatch is tolerated.
 
           // The PSD specification states that rows are padded to even sizes.
           // However, Photoshop doesn't actually do this.  RLE rows can have
@@ -215,19 +217,27 @@ namespace PhotoshopFile
         case ImageCompression.ZipPrediction:
           ImageDataRaw = reader.ReadBytes(dataLength);
           break;
+
+        default:
+          throw new PsdInvalidException("Unknown image compression method " + (int)ImageCompression + " in channel " + ID + ".");
       }
 
       Util.DebugMessage(reader.BaseStream, $"Load, End, Channel image, {ID}");
-      Debug.Assert(reader.BaseStream.Position == endPosition,
-        "Pixel data was not fully read in.");
     }
 
     /// <summary>
     /// Decodes the raw image data from the compressed on-disk format into
     /// an uncompressed bitmap, in native byte order.
+    /// For raw 1 and 8 bit data, <see cref="ImageData"/> is set to the same array as <see cref="ImageDataRaw"/> (no copy).
     /// </summary>
+    /// <exception cref="PsdInvalidException">The compression method is unknown, or ZIP with prediction is used with a bit depth other than 16 or 32,
+    /// or the channel rect has a negative size or is more than 5 times wider or higher than the document (<see cref="Util.CheckLayerSize"/>, checked before allocating).</exception>
+    /// <exception cref="RleException">The RLE data is corrupt.</exception>
+    /// <exception cref="System.IO.EndOfStreamException">The RLE data is truncated.</exception>
+    /// <exception cref="System.IO.InvalidDataException">The ZIP data is corrupt or truncated.</exception>
     public void DecodeImageData()
     {
+      Util.CheckLayerSize(Rect.Size, Layer.PsdFile);
       if ((ImageCompression == ImageCompression.Raw)
         && (Layer.PsdFile.BitDepth <= 8))
       {
@@ -243,7 +253,10 @@ namespace PhotoshopFile
     }
 
     /// <summary>
-    /// Compresses the image data.
+    /// Compresses the image data (with <see cref="ImageCompression"/>) into <see cref="ImageDataRaw"/> and sets <see cref="Length"/>.
+    /// Nothing is done if <see cref="ImageDataRaw"/> is already set.
+    /// A channel without any data (<see cref="ImageData"/> and <see cref="ImageDataRaw"/> null) gets a <see cref="Length"/> of 0, it is saved without any data
+    /// (not even the compression word) and loaded back as an empty raw channel.
     /// </summary>
     public void CompressImageData()
     {
@@ -252,7 +265,10 @@ namespace PhotoshopFile
         return;
 
       if (ImageData == null)
+      {
+        Length = 0;
         return;
+      }
 
       if (ImageCompression == ImageCompression.Rle)
       {
@@ -275,11 +291,13 @@ namespace PhotoshopFile
     {
       Util.DebugMessage(writer.BaseStream, "Save, Begin, Channel image");
 
-      writer.Write((short)ImageCompression);
-      if (ImageDataRaw == null)
+      // A channel length of 0 means no data at all (LoadPixelData reads nothing either)
+      if ((Length == 0) || (ImageDataRaw == null))
       {
         return;
       }
+
+      writer.Write((short)ImageCompression);
 
       if (ImageCompression == PhotoshopFile.ImageCompression.Rle)
       {

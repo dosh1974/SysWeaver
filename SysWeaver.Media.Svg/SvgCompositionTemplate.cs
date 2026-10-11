@@ -11,9 +11,25 @@ namespace SysWeaver.Media
 
 
 
+    /// <summary>
+    /// A template that composes an svg image from layers of svg / bitmap files selected by variables (see <see cref="MakeComposite"/>).
+    /// Template format (one item per line, lines starting with '#' are comments):
+    /// an optional first line "WxH" with the size (default 256x256), then one line per layer with '@' separated parts:
+    /// "x,y,w,h" the layer box (default: the whole image), "#[var]" a color template (applied to the gray scale colors of the svg, see <see cref="SvgCompositionTemplateCache"/>),
+    /// a 3 char sizing code ("GGS": horizontal and vertical gravity '-' start, '*' center, '+' end, then sizing '-' fit, '*' stretch, '+' fill)
+    /// and a comma separated list of file name templates ("[var]" is replaced by the variable value), the first file that can be resolved is used.
+    /// File names starting with '$' are read using the alternative reader, other names are relative to the base path.
+    /// </summary>
     public sealed partial class SvgCompositionTemplate
     {
 
+        /// <summary>
+        /// Load a template from a file (may be compressed, see <see cref="CompFile"/>)
+        /// </summary>
+        /// <param name="filename">The template file name</param>
+        /// <param name="basePath">The base path of the layer files, null to use the folder of the template file</param>
+        /// <returns>The template, null if the file wasn't found</returns>
+        /// <exception cref="FormatException">The template is invalid</exception>
         public static SvgCompositionTemplate Load(String filename, String basePath = null)
         {
             var lines = CompFile.TryGetNonCommentLines(filename);
@@ -23,6 +39,13 @@ namespace SysWeaver.Media
             return Create(lines, basePath);
         }
 
+        /// <summary>
+        /// Create a template from lines of text (see the class description for the format, comments must already be removed)
+        /// </summary>
+        /// <param name="c">The lines, null or empty creates an empty 256x256 template</param>
+        /// <param name="basePath">The base path of the layer files, null for the current directory</param>
+        /// <returns>The template</returns>
+        /// <exception cref="FormatException">A position doesn't have 4 numbers, or a layer has no file</exception>
         public static SvgCompositionTemplate Create(string[] c, String basePath = null)
         {
             var cl = c?.Length ?? 0;
@@ -87,7 +110,7 @@ namespace SysWeaver.Media
                     {
                         var p = part.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                         if (p.Length != 4)
-                            throw new Exception("Expected 4 variables for position!");
+                            throw new FormatException("Expected 4 variables for position!");
                         x = double.Parse(p[0], ci);
                         y = double.Parse(p[1], ci);
                         w = double.Parse(p[2], ci);
@@ -106,7 +129,7 @@ namespace SysWeaver.Media
                     }
                 }
                 if ((bf?.Length ?? 0) <= 0)
-                    throw new Exception("Expected at least one file!");
+                    throw new FormatException("Expected at least one file!");
                 layers.Add(new SvgLayer(x, y, w, h, bf, color, gravX, gravY, size));
             }
             return new SvgCompositionTemplate(width, height, layers.ToArray(), basePath);
@@ -135,8 +158,17 @@ namespace SysWeaver.Media
             );
 
 
+        /// <summary>
+        /// The width of the composed image
+        /// </summary>
         public readonly double Width;
+        /// <summary>
+        /// The height of the composed image
+        /// </summary>
         public readonly double Height;
+        /// <summary>
+        /// The base path of the layer files (empty for the current directory)
+        /// </summary>
         public readonly String BasePath;
         readonly SvgLayer[] Layers;
 #if DEBUG
@@ -152,6 +184,16 @@ namespace SysWeaver.Media
         }
 
 
+        /// <summary>
+        /// Compose an svg image: for each layer, the first file whose variables all have a non-empty value (and that can be loaded) is added.
+        /// Svg files get their text elements converted to paths (fonts are also searched in the base path and its "Fonts" sub folder, and in the folder of the svg file),
+        /// bitmaps are embedded as data uris.
+        /// </summary>
+        /// <param name="vars">The variable values, the keys must be lower case</param>
+        /// <param name="title">An optional title element</param>
+        /// <param name="altReader">The reader for file names starting with '$', may be null if no such files are used</param>
+        /// <param name="cache">The file cache to use, null for <see cref="SvgCompositionTemplateCache.Default"/></param>
+        /// <returns>The svg document</returns>
         public async Task<String> MakeComposite(IReadOnlyDictionary<String, String> vars, String title = null, SvgTools.FileReader altReader = null, SvgCompositionTemplateCache cache = null)
         {
             cache = cache ?? SvgCompositionTemplateCache.Default;
@@ -165,7 +207,7 @@ namespace SysWeaver.Media
 
             var folders = new HashSet<String>(StringComparer.Ordinal);
             var bp = BasePath;
-            var bpf = Path.GetFullPath(bp);
+            var bpf = Path.GetFullPath(String.IsNullOrEmpty(bp) ? "." : bp);
             var fontPath = Path.Combine(bpf, "Fonts");
             try
             {
@@ -178,7 +220,7 @@ namespace SysWeaver.Media
                         bool ok = true;
                         foreach (var v in f.Vars)
                         {
-                            ok &= !String.IsNullOrEmpty(vars[v]);
+                            ok &= vars.TryGetValue(v, out var vv) && !String.IsNullOrEmpty(vv);
                             if (!ok)
                                 break;
                         }

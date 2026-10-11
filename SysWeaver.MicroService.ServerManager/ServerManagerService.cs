@@ -428,7 +428,7 @@ namespace SysWeaver.MicroService
 
         }
 
-        async Task<int> RunCommand(String cmd, bool silent = false)
+        async Task<int> RunCommand(String cmd, bool silent = false, Action<String> onStdOut = null)
         {
             if (silent)
             {
@@ -451,6 +451,8 @@ namespace SysWeaver.MicroService
                 return await ExternalProcess.RunAsync(exe, args, (text, err) =>
                 {
                     m.AddMessage(LogPrefix + text, err ? MessageLevels.Warning : MessageLevels.Info);
+                    if (!err)
+                        onStdOut?.Invoke(text);
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -460,13 +462,27 @@ namespace SysWeaver.MicroService
             return -42;
         }
 
+        /// <summary>
+        /// Run a service host verb on a managed service, returns the exit code (0 = success).
+        /// The result printed by the service host is used if found (see ServiceResponseHelper.TryParseOutput), so that services built with an older
+        /// SysWeaver.OsServices (that exited with the ServiceResponse value, 1 = Ok) are handled correctly.
+        /// </summary>
+        async Task<int> RunVerb(String exe, String verb)
+        {
+            String output = null;
+            var res = await RunCommand(exe.ToQuoted() + " " + verb, false, text => output = text).ConfigureAwait(false);
+            if (ServiceResponseHelper.TryParseOutput(output, out var response) && Enum.TryParse<ServiceVerbs>(verb, true, out var v))
+                return response.ToExitCode(v);
+            return res;
+        }
+
         async Task<Exception> OnServiceActivate(String name, String path, Func<String, Task<int>> commandRunner)
         {
             var exe = FindServiceExe(path);
             if (exe == null)
                 return null;
-            var res = await RunCommand(exe.ToQuoted() + " start").ConfigureAwait(false);
-            if (res < 0)
+            var res = await RunVerb(exe, "start").ConfigureAwait(false);
+            if (res != 0)
                 return new Exception("Failed to start service \"" + name + "\", error: " + res);
             return null;
         }
@@ -477,8 +493,8 @@ namespace SysWeaver.MicroService
             var exe = FindServiceExe(path);
             if (exe == null)
                 return null;
-            var res = await RunCommand(exe.ToQuoted() + " uninstall").ConfigureAwait(false);
-            if (res < 0)
+            var res = await RunVerb(exe, "uninstall").ConfigureAwait(false);
+            if (res != 0)
                 return new Exception("Failed to uninstall service \"" + name + "\", error: " + res);
             return null;
         }
@@ -1732,9 +1748,9 @@ namespace SysWeaver.MicroService
             var exe = FindServiceExe(info.Syncher.DiscFolder);
             if (exe == null)
                 return null;
-            var res = await RunCommand(exe.ToQuoted() + " " + verb).ConfigureAwait(false);
-            if (res < 0)
-                throw new Exception("Failed to start service \"" + serviceName + "\", error: " + res);
+            var res = await RunVerb(exe, verb).ConfigureAwait(false);
+            if (res != 0)
+                throw new Exception("Failed to " + verb + " service \"" + serviceName + "\", exit code: " + res);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));

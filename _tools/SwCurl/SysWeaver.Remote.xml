@@ -33,13 +33,13 @@
             <summary>
             Callback function for monitoring remote api calls, called when a remote api call begin
             </summary>
-            <param name="id">A unique id for the request (incremental counter), this is matched in the request end callbacks</param>
-            <param name="url">The url of the request</param>
+            <param name="id">A unique id for the request (incremental counter per connection, starting at 1), this is matched in the request end callbacks</param>
+            <param name="url">The absolute url of the request</param>
             <param name="type">The type of request</param>
-            <param name="timeout">The timeout for this request in milli seconds</param>
-            <param name="requestPayloadSerializer">The serializer used to create the payload (only for POST and PUT request)</param>
-            <param name="requestPayload">The request payload (only for POST and PUT)</param>
-            <param name="requestPayloadSize">The size of the request payload, do not use requestPayload.Length (only for POST and PUT)</param>
+            <param name="timeout">The end point timeout in milli seconds (from <see cref="T:SysWeaver.Remote.RemoteTimeoutAttribute"/> on the method), 0 if the connection timeout is used</param>
+            <param name="requestPayloadSerializer">The name of the serializer used to create the payload (only for POST and PUT request, else null)</param>
+            <param name="requestPayload">The request payload as sent (after any compression, only for POST and PUT, else empty)</param>
+            <param name="requestPayloadSize">The size of the request payload, do not use requestPayload.Length (only for POST and PUT, else 0)</param>
         </member>
         <member name="T:SysWeaver.Remote.RemoteApiCallEnd">
             <summary>
@@ -48,8 +48,9 @@
             <param name="id">A unique id for the request (incremental counter), this is matched in the request end callbacks</param>
             <param name="ex">The exception if an error occured, else null</param>
             <param name="statusCode">The HTTP response code or 0 when an exception happened</param>
-            <param name="responsePayloadSerizlier">The serializer used to deserialize the response payload</param>
-            <param name="responsePayload">The response payload</param>
+            <param name="responsePayloadSerizlier">The name of the serializer used to deserialize the response payload (null for errors and methods without a return value)</param>
+            <param name="responsePayload">The response payload (empty when an exception happened and for successful methods without a return value).
+            For a successful call with a return value, the callback may replace it (the replacement is deserialized instead).</param>
         </member>
         <member name="T:SysWeaver.Remote.IRemoteApi">
             <summary>
@@ -59,12 +60,13 @@
         </member>
         <member name="M:SysWeaver.Remote.IRemoteApi.Cancel">
             <summary>
-            Cancels all pending remote api calls on the remote connection.
+            Cancels all pending remote api calls on the remote connection (they fail with an exception wrapping an <see cref="T:System.OperationCanceledException"/>).
+            The connection can still be used for new calls.
             </summary>
         </member>
         <member name="E:SysWeaver.Remote.IRemoteApi.OnCallBegin">
             <summary>
-            Invoked before any remote api call (after any payload serilization).
+            Invoked before any remote api call (after any payload serilization), not invoked for responses served from the response cache.
             </summary>
         </member>
         <member name="E:SysWeaver.Remote.IRemoteApi.OnCallEnd">
@@ -92,7 +94,10 @@
             <summary>
             Defines the end point formatting for an api call and optionally the rest type (verb)
             </summary>
-            <param name="path">The path formatting to use, for GET and PUT calls - method arguments can be inserted using the {arg} syntax, if there is a single argument and that argument is an object, the syntax is {field} or {property}</param>
+            <param name="path">The path formatting to use (relative to the base url and any <see cref="T:SysWeaver.Remote.RemotePathPrefixAttribute"/>, null or empty to use the method name).
+            For GET and DELETE calls the path is a url template: with a single primitive or string argument every {name} is replaced by the value,
+            with a single object argument {field} or {property} names a public member, with several arguments use <see cref="T:SysWeaver.Remote.ParamAsObjectAttribute"/> and {parameterName}.
+            Strings, floating point values and DateTime values are url escaped, use "{{" for a literal '{'. For POST and PUT calls the path is used as is (the arguments are the payload).</param>
             <param name="type">The type of verb to use</param>
         </member>
         <member name="M:SysWeaver.Remote.RemoteEndPointAttribute.#ctor(SysWeaver.Remote.HttpEndPointTypes,System.String)">
@@ -100,7 +105,7 @@
             Defines the rest type (verb) of an api and optionally the end point formatting 
             </summary>
             <param name="type">The type of verb to use</param>
-            <param name="path">The path formatting to use, for GET and PUT calls - method arguments can be inserted using the {arg} syntax, if there is a single argument and that argument is an object, the syntax is {field} or {property}</param>
+            <param name="path">The path formatting to use, null or empty to use the method name, see <see cref="M:SysWeaver.Remote.RemoteEndPointAttribute.#ctor(System.String,SysWeaver.Remote.HttpEndPointTypes)"/>.</param>
         </member>
         <member name="T:SysWeaver.Remote.RemotePathPrefixAttribute">
             <summary>
@@ -180,6 +185,11 @@
             <summary>
             Override the cache behaviour for a specific API call (or calls if placed on an interface)
             </summary>
+            <remarks>
+            Only GET and DELETE end points that return a value are cached, the responses are cached per end point keyed by the relative url (failures are not cached).
+            An attribute on the method takes precedence over one on the interface, without any attribute the connection settings are used.
+            Caching is disabled if both values resolve to 0 (so <c>RemoteCache(0, 0)</c> disables caching even if the connection enables it).
+            </remarks>
         </member>
         <member name="F:SysWeaver.Remote.RemoteCacheAttribute.Disabled">
             <summary>
@@ -193,20 +203,20 @@
         </member>
         <member name="F:SysWeaver.Remote.RemoteCacheAttribute.Duration">
             <summary>
-            Number of seconds that the response can be resued, if 0 or less no time based caching is performed
+            Number of seconds that the response can be resued, if 0 no time based caching is performed, <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/> to use the connection value
             </summary>
         </member>
         <member name="F:SysWeaver.Remote.RemoteCacheAttribute.MaxItems">
             <summary>
-            Maximum number of cached responses, if 0 or less there is no maximum
+            Maximum number of cached responses (LRU), 0 to use the default capacity of the LRU cache (if <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.Duration"/> enables caching), <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/> to use the connection value
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.RemoteCacheAttribute.#ctor(System.Int32,System.Int32)">
             <summary>
             Override the cache behaviour for this specific API call (or calls if placed on an interface)
             </summary>
-            <param name="duration">Number of seconds that the response can be resued, if 0 or less no time based caching is performed</param>
-            <param name="maxItems">Maximum number of cached responses, if 0 or less there is no maximum</param>
+            <param name="duration">Number of seconds that the response can be resued, if 0 no time based caching is performed, -1 (or less) = <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/></param>
+            <param name="maxItems">Maximum number of cached responses, 0 for the default LRU capacity, -1 (or less) = <see cref="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection"/></param>
         </member>
         <member name="T:SysWeaver.Remote.NoRemoteCacheAttribute">
             <summary>

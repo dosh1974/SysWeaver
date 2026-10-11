@@ -8,6 +8,10 @@ namespace SysWeaver.Geometry
     /// Represents a hyper-rectangle. An N-Dimensional rectangle.
     /// </summary>
     /// <typeparam name="T">The type of "dimension" in the metric space in which the hyper-rectangle lives.</typeparam>
+    /// <remarks>
+    /// Setting <see cref="MinPoint"/> / <see cref="MaxPoint"/> copies the array, the getters return the internal array (so the corners can be modified in place).
+    /// A default instance has no corners (null arrays).
+    /// </remarks>
     public struct HyperRect<T>
         where T : IComparable<T>
     {
@@ -63,8 +67,8 @@ namespace SysWeaver.Geometry
         /// Get a hyper rectangle which spans the entire implicit metric space.
         /// </summary>
         /// <param name="dimensions">The number of dimensions in the hyper-rectangle's metric space.</param>
-        /// <param name="positiveInfinity">The smallest possible values in any given dimension.</param>
-        /// <param name="negativeInfinity">The largest possible values in any given dimension.</param>
+        /// <param name="positiveInfinity">The largest possible value in any given dimension (used for <see cref="MaxPoint"/>).</param>
+        /// <param name="negativeInfinity">The smallest possible value in any given dimension (used for <see cref="MinPoint"/>).</param>
         /// <returns>The hyper-rectangle which spans the entire metric space.</returns>
         public static HyperRect<T> Infinite(int dimensions, T positiveInfinity, T negativeInfinity)
         {
@@ -85,8 +89,8 @@ namespace SysWeaver.Geometry
         /// <summary>
         /// Gets the point on the rectangle that is closest to the given point.
         /// If the point is within the rectangle, then the input point is the same as the
-        /// output point.f the point is outside the rectangle then the point on the rectangle
-        /// that is closest to the given point is returned.
+        /// output point. If the point is outside the rectangle then the point on the rectangle
+        /// that is closest to the given point is returned (each coordinate is clamped to [min, max]).
         /// </summary>
         /// <param name="toPoint">We try to find a point in or on the rectangle closest to this point.</param>
         /// <returns>The point on or in the rectangle that is closest to the given point.</returns>
@@ -118,7 +122,7 @@ namespace SysWeaver.Geometry
         /// <summary>
         /// Clones the <see cref="HyperRect{T}"/>.
         /// </summary>
-        /// <returns>A clone of the <see cref="HyperRect{T}"/></returns>
+        /// <returns>A clone of the <see cref="HyperRect{T}"/> (with copies of the corner arrays)</returns>
         public HyperRect<T> Clone()
         {
             // For a discussion of why we don't implement ICloneable
