@@ -33,7 +33,7 @@ namespace SysWeaver.Translation
                         WebTools.GetHttpClient(30, true);
                 }
             }
-            UseTorFor = TimeSpan.FromMinutes(Math.Min(1, p.UseTorFor)).Ticks;
+            UseTorFor = TimeSpan.FromMinutes(Math.Max(1, p.UseTorFor)).Ticks;
             MaxRetry = Math.Max(0, Math.Min(100, p.Retry));
             MemCaches[0] = new FastMemCache<String, String>(TimeSpan.FromSeconds(Math.Max(10, p.ShortMemCacheDuration)));
             MemCaches[1] = new FastMemCache<String, String>(TimeSpan.FromSeconds(Math.Max(10, p.MediumMemCacheDuration)));
@@ -156,7 +156,7 @@ namespace SysWeaver.Translation
             if (i < 0)
                 return false;
             var t = val.Substring(0, i);
-            if (!val.Contains(t))
+            if (!set.Contains(t))
                 return false;
             val = t;
             return true;
@@ -205,7 +205,7 @@ namespace SysWeaver.Translation
 
         String[] ValidateToSingle(String to)
         {
-            if (IsValid(ref to, SourceLangs))
+            if (IsValid(ref to, TargetLangs))
                 return [to];
             var li = IsoLanguage.TryGet(out var lang, to);
             if (li == null)
@@ -598,14 +598,14 @@ namespace SysWeaver.Translation
         /// Return a list of supported source languages
         /// </summary>
         /// <returns>A list of supported source languages</returns>
-        public IReadOnlyList<String> SupportedSourceLanguages() => SourceLangs.ToArray();
+        public IReadOnlyList<String> SupportedSourceLanguages() => SourceLangs?.ToArray() ?? Array.Empty<String>();
 
 
         /// <summary>
         /// Return a list of supported target languages
         /// </summary>
         /// <returns>A list of supported target languages</returns>
-        public IReadOnlyList<String> SupportedTargetLanguages() => TargetLangs.ToArray();
+        public IReadOnlyList<String> SupportedTargetLanguages() => TargetLangs?.ToArray() ?? Array.Empty<String>();
 
         /// <summary>
         /// Return a list of supported source languages

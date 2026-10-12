@@ -14,6 +14,7 @@ namespace SysWeaver.AI
         Medium,
         High,
         ExtraHigh,
+        Max,
     }
 
 

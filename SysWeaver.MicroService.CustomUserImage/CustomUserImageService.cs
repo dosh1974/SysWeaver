@@ -1,8 +1,10 @@
 ﻿using ImageMagick;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Compression;
 using SysWeaver.Media;
@@ -118,10 +120,9 @@ namespace SysWeaver.MicroService
             if (len != 1)
                 return ArrayExt.Create(len, FileRepoTools.MultipleFilesNotAllowed);
             var fi = info[0];
-            if (fi.Length > (10 << 20))
-                return [FileRepoTools.RefuseSize];
-            if (!SupportedImageFiles.Contains(fi.GetExtension().FastToLower()))
-                return [FileRepoTools.RefuseExtension];
+            var check = CheckFile(fi);
+            if (check != null)
+                return [check];
             var name = r.Session.Auth.Guid.ToHex();
             var folders = DataFolders;
             var fl = folders.Count;
@@ -155,15 +156,158 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// The max size of an image file in bytes
+        /// </summary>
+        const int MaxFileLength = 10 << 20;
+
+        /// <summary>
+        /// Check the announced size and the extension of a file
+        /// </summary>
+        /// <param name="file">The file</param>
+        /// <returns>null if the file can be uploaded, else the refusal</returns>
+        static FileUploadResult CheckFile(FileUploadInfo file)
+        {
+            if (file.Length > MaxFileLength)
+                return FileRepoTools.RefuseSize;
+            if (!SupportedImageFiles.Contains(file.GetExtension().FastToLower()))
+                return FileRepoTools.RefuseExtension;
+            return null;
+        }
+
         public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
+            //  Never trust that CanFileBeUploaded was called (or that the client obeyed it)
+            var check = CheckFile(file);
+            if (check != null)
+                return check;
             var uid = r.Session.Auth.Guid;
             var name = uid.ToHex();
             if (!SystemLock.TryGet("SysWeaver.CustomUserImages." + name, out var ldisp))
                 return FileRepoTools.OperationInProgress;
             using var x = ldisp;
-            using var dataU = await s.ReadAllUnmanagedMemoryAsync().ConfigureAwait(false);
-            var data = dataU.Memory;
+            //  Never read more than the announced (and accepted) length, decompressed if the data is compressed
+            var length = (int)Math.Max(file.Length, 0);
+            var buffer = ArrayPool<Byte>.Shared.Rent(length + 1);
+            try
+            {
+                var used = await ReadLimited(s, decoder, buffer, length).ConfigureAwait(false);
+                if (used < 0)
+                    return FileRepoTools.RefuseSize;
+                return await Upload(new ReadOnlyMemory<Byte>(buffer, 0, used), file, r, uid, name).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<Byte>.Shared.Return(buffer);
+            }
+        }
+
+        /// <summary>
+        /// Read (and decompress) all data of a stream into a buffer, the stream is disposed
+        /// </summary>
+        /// <param name="s">The stream to read from</param>
+        /// <param name="decoder">The decoder of compressed data, null if the data isn't compressed</param>
+        /// <param name="buffer">The buffer to read into, at least max + 1 bytes</param>
+        /// <param name="max">The max number of bytes to read</param>
+        /// <returns>The number of bytes read, -1 if there are more than max bytes</returns>
+        static async ValueTask<int> ReadLimited(Stream s, ICompDecoder decoder, Byte[] buffer, int max)
+        {
+            using (s)
+            {
+                if (decoder != null)
+                {
+                    var ls = new LimitedMemoryWriteStream(buffer, max);
+                    try
+                    {
+                        await decoder.DecompressAsync(s, ls).ConfigureAwait(false);
+                    }
+                    catch when (ls.Exceeded)
+                    {
+                        return -1;
+                    }
+                    return ls.Written;
+                }
+                int used = 0;
+                for (; ; )
+                {
+                    //  Read one byte more than the max, to detect a stream that is too long
+                    var r = await s.ReadAsync(buffer.AsMemory(used, max + 1 - used)).ConfigureAwait(false);
+                    if (r <= 0)
+                        return used;
+                    used += r;
+                    if (used > max)
+                        return -1;
+                }
+            }
+        }
+
+        /// <summary>
+        /// A write only stream that writes to a byte array, throwing an IOException (and setting Exceeded) if more than a given number of bytes are written.
+        /// </summary>
+        sealed class LimitedMemoryWriteStream : Stream
+        {
+            public LimitedMemoryWriteStream(Byte[] buffer, int max)
+            {
+                Buffer = buffer;
+                Max = max;
+            }
+            readonly Byte[] Buffer;
+            readonly int Max;
+
+            /// <summary>
+            /// The number of bytes written
+            /// </summary>
+            public int Written;
+
+            /// <summary>
+            /// True if a write was refused because the max length was exceeded
+            /// </summary>
+            public bool Exceeded;
+
+            int Add(int count)
+            {
+                var w = Written;
+                if (count > (Max - w))
+                {
+                    Exceeded = true;
+                    throw new IOException("The data is larger than the max allowed size of " + Max + " bytes!");
+                }
+                Written = w + count;
+                return w;
+            }
+
+            public override bool CanRead => false;
+            public override bool CanSeek => false;
+            public override bool CanWrite => true;
+            public override long Length => Written;
+            public override long Position { get => Written; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count) => Write(new ReadOnlySpan<Byte>(buffer, offset, count));
+
+            public override void Write(ReadOnlySpan<byte> buffer) => buffer.CopyTo(Buffer.AsSpan(Add(buffer.Length)));
+
+            public override void WriteByte(byte value) => Buffer[Add(1)] = value;
+
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                Write(new ReadOnlySpan<Byte>(buffer, offset, count));
+                return Task.CompletedTask;
+            }
+
+            public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                Write(buffer.Span);
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        async Task<FileUploadResult> Upload(ReadOnlyMemory<Byte> data, FileUploadInfo file, HttpServerRequest r, String uid, String name)
+        {
             var info = new MagickImageInfo(data.Span);
             switch (info.Format)
             {
@@ -265,7 +409,11 @@ namespace SysWeaver.MicroService
             var saveExt = SaveExt;
             var ex = await PathExt.TryDeleteFileAsync(pathPrefix + ".txt").ConfigureAwait(false);
             foreach (var size in Sizes)
-                ex = ex ?? (await PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt)).ConfigureAwait(false));
+            {
+                //  Always try to delete all files, return the first error
+                var e = await PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt)).ConfigureAwait(false);
+                ex ??= e;
+            }
             return ex == null;
         }
 

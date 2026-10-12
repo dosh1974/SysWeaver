@@ -60,7 +60,7 @@ namespace SysWeaver.Net.IconModule
         {
             var pp = p ?? new IconHttpServerModuleParams();
             var root = pp.UriRoot;
-            PerfMon.Enabled = p.PerMon;
+            PerfMon.Enabled = pp.PerMon;
             Data = dataModule;
             var rp = HttpServerTools.CombinePathsAndAddTrailingSlash(root);
             BasePath = rp;

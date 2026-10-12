@@ -60,23 +60,12 @@ namespace SysWeaver.MicroService.Media
         {
             if (other == null)
                 return false;
-            var c = Crop;
-            if (c == null)
-                if (other.Crop != null)
-                    return false;
-                else
-                if (!c.Equals(other.Crop))
-                    return false;
+            if (!Equals(Crop, other.Crop))
+                return false;
             if (Effect != other.Effect)
                 return false;
-
-            var e = EffectParams;
-            if (e == null)
-                if (other.EffectParams != null)
-                    return false;
-                else
-                if (!e.Equals(other.EffectParams))
-                    return false;
+            if (!Equals(EffectParams, other.EffectParams))
+                return false;
             if (Transparent != other.Transparent)
                 return false;
             return Duration == other.Duration;

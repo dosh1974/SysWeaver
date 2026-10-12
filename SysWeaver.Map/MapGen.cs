@@ -81,7 +81,7 @@ namespace SysWeaver.Map
                 {
                     setDefault(classAttr);
                 }
-                var e = prop.Extrude;
+                var e = prop?.Extrude ?? 0;
 
                 var pp = path.Attribute("d").Value;
                 if (baseEx > 0)
@@ -126,7 +126,7 @@ namespace SysWeaver.Map
                 }
                 if (path.Parent != null)
                 {
-                    var title = prop.ToolTip;
+                    var title = prop?.ToolTip;
                     if (!String.IsNullOrEmpty(title))
                     {
                         var ts = new XElement(ns.GetName("title"));
@@ -134,7 +134,7 @@ namespace SysWeaver.Map
                         path.AddFirst(ts);
                     }
                 }
-                var text = prop.Text;
+                var text = prop?.Text;
                 if (!String.IsNullOrEmpty(text))
                     texts.Add(Tuple.Create(ex, ey, regInfo, prop, special));
             }
@@ -256,7 +256,7 @@ namespace SysWeaver.Map
                         rs.WriteTextCss(css, cn, bs);
                     ts.SetAttributeValue("class", cn);
 
-                    var title = rs.TextToolTip ?? rs.ToolTip ?? bs.TextToolTip ?? bs.ToolTip;
+                    var title = rs.TextToolTip ?? rs.ToolTip ?? bs?.TextToolTip ?? bs?.ToolTip;
                     if (!String.IsNullOrEmpty(title))
                     {
                         var tts = new XElement(ns.GetName("title"));
@@ -381,7 +381,7 @@ namespace SysWeaver.Map
             if (minMax == cropState)
             {
                 var s = new XElement(ns.GetName("g"));
-                foreach (var pp in svgElement.Descendants().ToList())
+                foreach (var pp in svgElement.Elements().ToList())
                 {
                     pp.Remove();
                     s.Add(pp);

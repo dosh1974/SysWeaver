@@ -338,7 +338,9 @@ namespace SysWeaver.MicroService
                 }
             //  Get name and parent
                 var id = GetId(out var parentId, item.Key);
-                var parentNode = parentId == null ? root : nodes[parentId];
+                var parentNode = root;
+                if ((parentId != null) && !nodes.TryGetValue(parentId, out parentNode))
+                    continue;
                 var dit = await val.Get(id, context).ConfigureAwait(false);
                 if (dit == null)
                     continue;

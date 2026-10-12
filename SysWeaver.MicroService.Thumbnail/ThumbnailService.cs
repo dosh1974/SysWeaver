@@ -34,6 +34,7 @@ namespace SysWeaver.MicroService
         public ThumbnailService(ServiceManager manager, ThumbnailParams p = null)
         {
             p = p ?? new ThumbnailParams();
+            CachedAsyncHandler = HandleAsync;
             PerfMon.Enabled = p.PerMon;
             IconModule = manager.Get<IconHttpServerModule>();
             var fs = manager.Get<FileHttpServerModule>();
@@ -101,13 +102,12 @@ namespace SysWeaver.MicroService
         IHttpRequestHandler GetIcon(String key, String mimeCode)
         {
             var mon = PerfMon;
-            var monPre = key + ".";
-            using (mon.Track(monPre + "Icon"))
+            using (mon.Track(String.Concat(key, ".Icon")))
             {
                 var cache = MimeCache;
                 if (cache.TryGetValue(mimeCode, out var f))
                     return f;
-                using (mon.Track(monPre + "Icon.Build"))
+                using (mon.Track(String.Concat(key, ".Icon.Build")))
                 {
                     var options = Options;
                     var data = IconModule.GetFromMime(mimeCode);
@@ -159,30 +159,54 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// An optional async handler
         /// </summary>
-        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler => async context =>
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler => CachedAsyncHandler;
+
+        readonly Func<HttpServerRequest, Task<IHttpRequestHandler>> CachedAsyncHandler;
+
+        /// <summary>
+        /// Get the resolution name from a local url "thumbnail/{name}.png"
+        /// </summary>
+        /// <param name="url">The local url</param>
+        /// <returns>The resolution name or null if the url is invalid</returns>
+        static String GetResolutionName(String url)
         {
-            var url = context.LocalUrl;
             //if (!url.FastStartsWith("thumbnail/"))
                 //return null;
-            var name = url.Substring(10);
-            var ext = name.Split('.');
-            if (ext.Length != 2)
+            var name = url.AsSpan(10);
+            var d = name.IndexOf('.');
+            if (d < 0)
                 return null;
-            if (ext[1] != "png")
+            if (!name.Slice(d + 1).SequenceEqual("png"))
                 return null;
-            var rname = ext[0];
-            var src = HttpUtility.UrlDecode(context.Url.Substring(context.QueryStringStart));
-            var sl = src.Length;
+            return name.Slice(0, d).ToString();
+        }
+
+        async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
+        {
+            var rname = GetResolutionName(context.LocalUrl);
+            if (rname == null)
+                return null;
+            //  The query string is the source url (Url is already decoded), QueryStringStart is 0 if there is no query
+            var qs = context.QueryStringStart;
+            if (qs <= 0)
+                return null;
+            var url = context.Url;
+            var sl = url.Length - qs;
             if (sl <= 0)
                 return null;
-            var f = src[0];
+            var f = url[qs];
+            String src;
             if ((f == '"') || (f == '\''))
             {
                 if (sl <= 2)
                     return null;
-                if (src[sl - 1] != f)
+                if (url[url.Length - 1] != f)
                     return null;
-                src = src.Substring(1, sl - 2);
+                src = url.Substring(qs + 1, sl - 2);
+            }
+            else
+            {
+                src = url.Substring(qs);
             }
             if (!FileHash.IsWeb(src))
                 return null;
@@ -192,7 +216,7 @@ namespace SysWeaver.MicroService
             if (m.IconFile == null)
                 return null;
             return new FileHttpRequestHandler(PngMime, new FileInfo(m.IconFile), Options, false, null);
-        };
+        }
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
@@ -203,6 +227,7 @@ namespace SysWeaver.MicroService
         /// <param name="height">The max height in pixels</param>
         /// <param name="key">An optional key</param>
         /// <returns>The key to use to get this thumbnail "?Key", ex: "?Thumb64x64"</returns>
+        /// <exception cref="ArgumentException">The key is already registered with another size</exception>
         public String AddThumbSize(int width, int height, String key = null)
         {
             var c = MapRes;
@@ -211,7 +236,10 @@ namespace SysWeaver.MicroService
             {
                 if (c.TryGetValue(key, out var existing))
                 {
-                    c[key] = Tuple.Create(width, height, existing.Item3 + 1, new FastMemCache<string, MediaInfo>(CacheDuration, StringComparer.Ordinal));
+                    //  Keep the existing registration (and its cached items), the size must match
+                    if ((existing.Item1 != width) || (existing.Item2 != height))
+                        throw new ArgumentException(String.Concat("The thumbnail key \"", key, "\" is already registered with the size ", existing.Item1, 'x', existing.Item2, ", can't register it with the size ", width, 'x', height, '!'), nameof(key));
+                    c[key] = Tuple.Create(existing.Item1, existing.Item2, existing.Item3 + 1, existing.Item4);
                 }
                 else
                 {
@@ -258,14 +286,26 @@ namespace SysWeaver.MicroService
         public async Task<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic)
         {
             var mon = PerfMon;
-            var monPre = key + ".";
-            using (mon.Track(monPre + "All"))
+            using (mon.Track(String.Concat(key, ".All")))
             {
                 var m = await GetMediaInfo(key, fi.FullName, false).ConfigureAwait(false);
                 if (m?.IconFile != null)
                     return new FileHttpRequestHandler(PngMime, new FileInfo(m.IconFile), options, false, null, updateAccessTime, isDynamic);
-                return GetIcon(key, mime.Item1.Split(';')[0].TrimEnd());
+                return GetIcon(key, GetMimeCode(mime.Item1));
             }
+        }
+
+        /// <summary>
+        /// Get the mime type without any parameters, ex: "text/plain; charset=UTF-8" => "text/plain"
+        /// </summary>
+        /// <param name="mime">The mime type</param>
+        /// <returns>The part before the first ';' with trailing white spaces removed</returns>
+        static String GetMimeCode(String mime)
+        {
+            var i = mime.IndexOf(';');
+            if (i < 0)
+                return mime.TrimEnd();
+            return mime.AsSpan(0, i).TrimEnd().ToString();
         }
 
         public IEnumerable<Stats> GetStats()

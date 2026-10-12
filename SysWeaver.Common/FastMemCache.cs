@@ -1615,7 +1615,20 @@ namespace SysWeaver
         /// <returns>An enumerator of (expiration time, key, value) tuples.
         /// Includes expired items that haven't been pruned yet, items that are being created (pending entries without a value) are skipped</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public IEnumerator<(DateTime, K, V)> GetEnumerator() => C.Where(x => x.Value.Item3 == null).Select(x => (x.Value.Item1, x.Key, x.Value.Item2)).GetEnumerator();
+        public IEnumerator<(DateTime, K, V)> GetEnumerator() => Enumerate(C);
+
+        /// <summary>
+        /// Enumerate the items that have a value (lazily, same as C.Where(x => x.Value.Item3 == null).Select(x => (x.Value.Item1, x.Key, x.Value.Item2)) without the delegates)
+        /// </summary>
+        static IEnumerator<(DateTime, K, V)> Enumerate(ConcurrentDictionary<K, (DateTime, V, Task<V>)> c)
+        {
+            foreach (var x in c)
+            {
+                var v = x.Value;
+                if (v.Item3 == null)
+                    yield return (v.Item1, x.Key, v.Item2);
+            }
+        }
 
         /// <inheritdoc/>
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

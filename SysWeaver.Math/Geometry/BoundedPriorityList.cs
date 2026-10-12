@@ -124,11 +124,16 @@ namespace SysWeaver.Geometry
                 var index = this.priorityList.BinarySearch(priority);
                 index = index >= 0 ? index : ~index;
 
+                //  Remove the last item before inserting (the lists never grow beyond the capacity, and one less item is moved),
+                //  inserting at the end and removing the last item would leave the list unchanged
+                var last = this.priorityList.Count - 1;
+                if (index > last)
+                    return;
+                this.priorityList.RemoveAt(last);
+                this.elementList.RemoveAt(last);
+
                 this.priorityList.Insert(index, priority);
                 this.elementList.Insert(index, item);
-
-                this.priorityList.RemoveAt(this.priorityList.Count - 1);
-                this.elementList.RemoveAt(this.elementList.Count - 1);
             }
             else
             {

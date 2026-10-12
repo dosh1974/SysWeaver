@@ -167,7 +167,13 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="paths">The paths to merge, if a path is null or empty it's ignored</param>
         /// <returns>The merged path</returns>
-        public static String CombinePaths(params String[] paths) => String.Join('/', paths.Where(x => !String.IsNullOrEmpty(x)));
+        public static String CombinePaths(params String[] paths)
+        {
+            //  Same exception as the enumeration of a null array
+            ArgumentNullException.ThrowIfNull(paths);
+            //  Same result as joining the non empty paths: "" if there are none, the path itself if there is one, else one new string (no enumerator, no join buffer)
+            return StringExt.JoinNonEmpty("/", paths);
+        }
 
 
         /// <summary>
@@ -179,27 +185,121 @@ namespace SysWeaver.Net
         /// <exception cref="Exception">Thrown if a "../" segment goes above the start of the path</exception>
         public static String CleanupPaths(String p)
         {
-            var ps = p.Split('/');
-            var l = ps.Length;
-            int o = 0;
-            for (int i = 0; i < l; ++i)
-            {
-                var t = ps[i];
-                if (t == ".")
-                    continue;
-                if (t == "..")
-                {
-                    if (o == 0)
-                        throw new Exception("Invalid path " + p.ToQuoted());
-                    --o;
-                    continue;
-                }
-                ps[o] = t;
-                ++o;
-            }
-            if (o == l)
+            //  Only a "." or ".." segment can change the path, most paths have none (no allocation)
+            if (!HaveDotSegment(p))
                 return p;
-            return String.Join('/', ps, 0, o);
+            //  The segments are resolved in place (no split), the kept segments (start, length) are tracked in a stack (or pooled) buffer, only the result is allocated
+            var s = p.AsSpan();
+            var max = s.Count('/') + 1;
+            int[] rented = null;
+            //  Exact sizes (a stack buffer is zero initialized)
+            Span<int> seg = max <= MaxStackSegments ? stackalloc int[max + max] : (rented = ArrayPool<int>.Shared.Rent(max + max));
+            try
+            {
+                int o = 0;
+                int total = 0;
+                int start = 0;
+                for (; ; )
+                {
+                    var e = s.Slice(start).IndexOf('/');
+                    var len = e < 0 ? s.Length - start : e;
+                    if ((len != 1) || (s[start] != '.'))
+                    {
+                        if ((len == 2) && (s[start] == '.') && (s[start + 1] == '.'))
+                        {
+                            if (o == 0)
+                                throw new Exception("Invalid path " + p.ToQuoted());
+                            --o;
+                            total -= seg[o + o + 1];
+                        }
+                        else
+                        {
+                            seg[o + o] = start;
+                            seg[o + o + 1] = len;
+                            total += len;
+                            ++o;
+                        }
+                    }
+                    if (e < 0)
+                        break;
+                    start += e + 1;
+                }
+                //  Joined with '/' (as String.Join, nothing left is an empty string)
+                if (o <= 0)
+                    return String.Empty;
+                total += o - 1;
+                return String.Create(total, new KeptSegments(s, seg.Slice(0, o + o)), static (d, state) =>
+                {
+                    var src = state.Path;
+                    var seg = state.Segments;
+                    var sl = seg.Length;
+                    int w = 0;
+                    for (int i = 0; i < sl; i += 2)
+                    {
+                        if (i > 0)
+                        {
+                            d[w] = '/';
+                            ++w;
+                        }
+                        var l = seg[i + 1];
+                        src.Slice(seg[i], l).CopyTo(d.Slice(w));
+                        w += l;
+                    }
+                });
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<int>.Shared.Return(rented);
+            }
+        }
+
+        /// <summary>
+        /// The kept segments of a path (pairs of start and length), the state when building a cleaned up path
+        /// </summary>
+        readonly ref struct KeptSegments
+        {
+            public KeptSegments(ReadOnlySpan<Char> path, ReadOnlySpan<int> segments)
+            {
+                Path = path;
+                Segments = segments;
+            }
+            public readonly ReadOnlySpan<Char> Path;
+            public readonly ReadOnlySpan<int> Segments;
+        }
+
+        /// <summary>
+        /// Paths with at most this many segments are cleaned up using a stack buffer by <see cref="CleanupPaths(string)"/>
+        /// </summary>
+        const int MaxStackSegments = 64;
+
+        /// <summary>
+        /// Check if a path have a "." or ".." segment (a segment is the text between '/', or the start / end of the path)
+        /// </summary>
+        /// <param name="p">The path, a null path throws a NullReferenceException (as splitting it)</param>
+        /// <returns>True if the path have a "." or ".." segment</returns>
+        static bool HaveDotSegment(String p)
+        {
+            var s = p.AsSpan(0, p.Length);
+            var l = s.Length;
+            int i = 0;
+            for (; ; )
+            {
+                var d = s.Slice(i).IndexOf('.');
+                if (d < 0)
+                    return false;
+                d += i;
+                //  A '.' that starts a segment, followed by the end of the segment or by a '.' and the end of the segment
+                if ((d == 0) || (s[d - 1] == '/'))
+                {
+                    var n = d + 1;
+                    if ((n < l) && (s[n] == '.'))
+                        ++n;
+                    if ((n == l) || (s[n] == '/'))
+                        return true;
+                }
+                i = d + 1;
+            }
         }
 
 
@@ -210,8 +310,30 @@ namespace SysWeaver.Net
         /// <returns>The merged path</returns>
         public static String CombinePathsAndAddTrailingSlash(params String[] paths)
         {
-            var t = CombinePaths(paths);
-            return t.Length <= 0 ? t : (t + '/');
+            //  Same exception as the enumeration of a null array
+            ArgumentNullException.ThrowIfNull(paths);
+            //  Same result as joining the non empty paths and adding a '/' (nothing if there are no paths), built as a single new string
+            int total = 0;
+            foreach (var p in paths)
+            {
+                if (!String.IsNullOrEmpty(p))
+                    total += p.Length + 1;
+            }
+            if (total <= 0)
+                return String.Empty;
+            return String.Create(total, paths, static (dst, ps) =>
+            {
+                int o = 0;
+                foreach (var p in ps)
+                {
+                    if (String.IsNullOrEmpty(p))
+                        continue;
+                    p.AsSpan().CopyTo(dst.Slice(o));
+                    o += p.Length;
+                    dst[o] = '/';
+                    ++o;
+                }
+            });
         }
 
         /// <summary>
@@ -278,14 +400,17 @@ namespace SysWeaver.Net
         {
             var num = Interlocked.Increment(ref CacheUrl);
             var chars = CacheChars;
-            var b = new StringBuilder(32);
-            b.Append(':');
+            //  ':' and at most 11 base 64 digits (64 bits), built on the stack (only the result is allocated)
+            Span<Char> b = stackalloc Char[12];
+            b[0] = ':';
+            int o = 1;
             while (num > 0)
             {
-                b.Append(chars[(int)(num & 63)]);
+                b[o] = chars[(int)(num & 63)];
+                ++o;
                 num >>= 6;
             }
-            return ValueTask.FromResult(b.ToString());
+            return ValueTask.FromResult(new String(b.Slice(0, o)));
         }
 
 

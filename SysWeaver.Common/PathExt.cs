@@ -1004,9 +1004,7 @@ namespace SysWeaver
                 Exception ex = null;
                 foreach (var dir in dirs)
                 {
-                    if (Directory.GetFiles(dir, "*").Length > 0)
-                        continue;
-                    if (Directory.GetDirectories(dir, "*").Length > 0)
+                    if (HaveEntries(dir))
                         continue;
                     var e = TryDeleteDirectory(dir, true, retryCount, delayInMs);
                     ex = ex ?? e;
@@ -1040,9 +1038,7 @@ namespace SysWeaver
                 Exception ex = null;
                 foreach (var dir in dirs)
                 {
-                    if (Directory.GetFiles(dir, "*").Length > 0)
-                        continue;
-                    if (Directory.GetDirectories(dir, "*").Length > 0)
+                    if (HaveEntries(dir))
                         continue;
                     var e = await TryDeleteDirectoryAsync(dir, true, retryCount, delayInMs).ConfigureAwait(false);
                     ex = ex ?? e;
@@ -1053,6 +1049,17 @@ namespace SysWeaver
             {
                 return ex;
             }
+        }
+
+        /// <summary>
+        /// Check if a directory contains any file or directory (stops at the first entry, same entries as Directory.GetFiles(dir, "*") and Directory.GetDirectories(dir, "*"))
+        /// </summary>
+        /// <param name="dir">The directory</param>
+        /// <returns>True if the directory have any files or sub directories</returns>
+        static bool HaveEntries(String dir)
+        {
+            using var e = Directory.EnumerateFileSystemEntries(dir, "*").GetEnumerator();
+            return e.MoveNext();
         }
 
 

@@ -93,7 +93,9 @@ namespace SysWeaver.MicroService
         public HttpRequestData Get(HttpServerRequest request)
         {
             using var p = Perf.Track(Uri);
-            var data = HttpUtility.UrlDecode(request.Url.Substring(request.QueryStringStart));
+            //  The query string is the payload (Url is already decoded), QueryStringStart is 0 if there is no query
+            var qs = request.QueryStringStart;
+            var data = qs > 0 ? request.Url.Substring(qs) : "";
             using var qrGenerator = new QRCodeGenerator();
             using var qrCodeData = qrGenerator.CreateQrCode(data, QRCodeGenerator.ECCLevel.Q);
             var height = qrCodeData.ModuleMatrix.Count;

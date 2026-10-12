@@ -110,7 +110,8 @@ namespace SysWeaver.TextMessage
                         {
                             var mp = MaxPoll;
                             var maxAge = DateTime.UtcNow.AddMinutes(-5);
-                            var newLast = lastId;
+                            //  The newest message, everything up to it has been scanned when no message is returned
+                            var newLast = inc.First.Value.Id;
                             List<IncomingTextMessage> msgs = new(mp);
                             foreach (var x in inc)
                             {
@@ -118,7 +119,6 @@ namespace SysWeaver.TextMessage
                                     break;
                                 if (anySystem || x.System.FastEquals(system))
                                     msgs.Add(x.Clone());
-                                newLast = lastId;
                                 if (x.Time < maxAge)
                                     break;
                                 if (msgs.Count >= mp)

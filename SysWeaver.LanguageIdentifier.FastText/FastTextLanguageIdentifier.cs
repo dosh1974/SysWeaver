@@ -58,8 +58,15 @@ namespace SysWeaver.LanguageIdentifier
 
         readonly ExceptionTracker Errors = new ExceptionTracker();
 
+        //  The cache keys, the same text as String.Join("\n\r\t", ..) (current culture, null = empty) without the params array and the boxing
+        static String GetKey(String text, String userLanguge, double userLanguageBias, double minConfidence)
+            => $"{text}\n\r\t{userLanguge}\n\r\t{userLanguageBias}\n\r\t{minConfidence}";
+
+        static String GetKey(String text, int numberOfResults, String userLanguge, double userLanguageBias)
+            => $"{text}\n\r\t{numberOfResults}\n\r\t{userLanguge}\n\r\t{userLanguageBias}";
+
         public ValueTask<string> Identify(string text, string userLanguge = null, double userLanguageBias = 0.2, double minConfidence = 0.05)
-            => Cache.GetOrUpdate(String.Join("\n\r\t", text, userLanguge, userLanguageBias, minConfidence), f =>
+            => Cache.GetOrUpdate(GetKey(text, userLanguge, userLanguageBias, minConfidence), f =>
             {
                 using var __ = PerfMon.Track(nameof(Identify));
                 try
@@ -72,6 +79,8 @@ namespace SysWeaver.LanguageIdentifier
                     else
                     {
                         var t = FT.PredictMultiple(text, MaxChecked);
+                        if (t.Length <= 0)
+                            return TaskExt.NullStringValueTask;
                         res = t[0];
                         if (!res.Label.FastEndsWith(userLanguge))
                         {
@@ -108,14 +117,14 @@ namespace SysWeaver.LanguageIdentifier
 
 
         public ValueTask<IdentifiedLanguage[]> Identify(String text, int numberOfResults, String userLanguge = null, double userLanguageBias = 0.2)
-            => CacheList.GetOrUpdate(String.Join("\n\r\t", text, numberOfResults, userLanguge, userLanguageBias), f =>
+            => CacheList.GetOrUpdate(GetKey(text, numberOfResults, userLanguge, userLanguageBias), f =>
             {
                 using var __ = PerfMon.Track(nameof(Identify));
                 try
                 {
                     var t = FT.PredictMultiple(text, numberOfResults).Select(x => new IdentifiedLanguage(IsoLanguage.TryGet(x.Label.Substring(9))?.Iso639_1, x.Probability)).Where(x => x.Language != null).ToList();
-                    if (t == null)
-                        return NoTask;
+                    if (t.Count <= 0)
+                        return ValueTask.FromResult(Array.Empty<IdentifiedLanguage>());
                     if (userLanguge != null)
                     { 
                         if (!t[0].Language.FastEquals(userLanguge))

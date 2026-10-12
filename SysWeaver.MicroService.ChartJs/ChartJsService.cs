@@ -562,7 +562,16 @@ namespace SysWeaver.MicroService
 
 
         static double DefVal(Object o, GetValState s)
-            => (Double)Convert.ChangeType(o, typeof(Double));
+        {
+            //  Fast paths for the most common boxed types (same result as Convert.ChangeType)
+            if (o is Double d)
+                return d;
+            if (o is Int64 l)
+                return l;
+            if (o is Int32 i)
+                return i;
+            return (Double)Convert.ChangeType(o, typeof(Double));
+        }
 
         static IReadOnlyDictionary<Type, ValTypes> GetDataConverters()
         {
@@ -582,9 +591,12 @@ namespace SysWeaver.MicroService
                 { typeof(Double), new ValTypes(DefVal, -2) },
                 { typeof(Decimal), new ValTypes(DefVal, -2) },
 
-                { typeof(Boolean), new ValTypes((o, s) => (Boolean)o ? 0.0 : 1.0) },
+                { typeof(Boolean), new ValTypes((o, s) => (Boolean)o ? 1.0 : 0.0) },
                 { typeof(TimeSpan), new ValTypes((o, s) =>
                 {
+                    //  A boxed value (data that wasn't passed through json)
+                    if (o is TimeSpan ts)
+                        return ts.TotalSeconds;
                     var valStr = o as String;
                     if (String.IsNullOrEmpty(valStr))
                         return 0;
@@ -664,49 +676,61 @@ namespace SysWeaver.MicroService
                     throw new Exception("API " + p.TableApi.ToQuoted() + " doesn't return table data!");
                 data = TableDataTools.FromTypedData(tableType, ser, res.Span);
             }
+            return ChartSerialize(CreateTableChart(p, data, DateTime.UtcNow));
+        }
 
-
-            Dictionary<String, Tuple<TableDataColumn, int>> colMap = new Dictionary<string, Tuple<TableDataColumn, int>>(StringComparer.Ordinal);
+        /// <summary>
+        /// Create the chart for some table data.
+        /// </summary>
+        /// <param name="p">The chart parameters</param>
+        /// <param name="data">The table data</param>
+        /// <param name="now">The time to compute ages (DateTime values) from</param>
+        /// <returns>The chart</returns>
+        static ChartJsConfig CreateTableChart(TableChartParams p, TableData data, DateTime now)
+        {
             var cols = data.Cols;
             var cc = cols.Length;
+            Dictionary<String, int> colMap = new Dictionary<string, int>(cc, StringComparer.Ordinal);
             for (int i = 0; i < cc; ++ i)
-            {
-                var col = cols[i];
-                colMap[col.Name] = Tuple.Create(col, i);
-            }
-            List<Tuple<TableDataColumn, int>> keys = new List<Tuple<TableDataColumn, int>>(cc);
-            List<Tuple<TableDataColumn, int>> values = new List<Tuple<TableDataColumn, int>>(cc);
-            var usedColumns = new HashSet<int>();
+                colMap[cols[i].Name] = i;
+            //  Column indices (a column can only be used once, so at most cc keys + values)
+            var keys = new int[cc];
+            var values = new int[cc];
+            var usedColumns = new bool[cc];
+            int keyCount = 0;
             foreach (var key in p.Keys)
             {
                 if (key == null)
                     continue;
                 var col = colMap[key];
-                if (!usedColumns.Add(col.Item2))
+                if (usedColumns[col])
                     throw new Exception("Key " + key.ToQuoted() + " is used more than once!");
-                keys.Add(col);
+                usedColumns[col] = true;
+                keys[keyCount] = col;
+                ++keyCount;
             }
+            int setCount = 0;
             foreach (var key in p.Values)
             {
                 var col = colMap[key];
-                if (!usedColumns.Add(col.Item2))
+                if (usedColumns[col])
                     throw new Exception("Value" + key.ToQuoted() + " have already been used!");
-                values.Add(col);
+                usedColumns[col] = true;
+                values[setCount] = col;
+                ++setCount;
             }
             var rows = data.Rows;
             var rowCount = rows.Length;
-            var keyCount = keys.Count;
-            var setCount = values.Count;
             if (keyCount <= 0)
                 throw new Exception("No keys!");
             if (setCount <= 0)
                 throw new Exception("No values!");
 
 
-            String[] labelTemp = new string[keyCount];
             String[] labels = new string[rowCount];
             ChartJsDataSet[] dataSets = new ChartJsDataSet[setCount];
             GetValDel[] getData = new GetValDel[setCount];
+            double[][] setData = new double[setCount][];
 
             var seed = String.Join('|', p.TableApi, p.Title, String.Join('|', p.Keys), String.Join('|', p.Values));
             var setGrad = setCount > 1;
@@ -717,7 +741,7 @@ namespace SysWeaver.MicroService
             int precision = -2;
             for (int i = 0; i < setCount; ++i)
             {
-                var col = values[i].Item1;
+                var col = cols[values[i]];
                 var t = Type.GetType(col.Type);
                 if (t == null)
                     throw new Exception("Invalid type found for column: " + col.Name.ToQuoted());
@@ -732,34 +756,52 @@ namespace SysWeaver.MicroService
                 {
                     bool pre = precision < 0;
                     if (pre)
-                        precision -= precision;
+                        precision = -precision;
                     bool newPre = newP < 0;
                     if (newPre)
-                        newP -= newP;
+                        newP = -newP;
                     if (newP > precision)
                         precision = newP;
                     if ((pre == newPre) && pre)
                         precision = -precision;
                 }
+                var sd = new double[rowCount];
+                setData[i] = sd;
                 dataSets[i] = new ChartJsDataSet
                 {
                     label = GetColumnName(col),
-                    data = new double[rowCount],
+                    data = sd,
                     backgroundColor = setGrad ? [grad[i]] : grad,
                     borderColor = setGrad ? [gradBorder[i]] : gradBorder,
                 };
             }
 
-            var state = new GetValState(DateTime.UtcNow);
-
-            for (int ri = 0; ri < rowCount; ++ri)
+            var state = new GetValState(now);
+            if (keyCount == 1)
             {
-                var src = rows[ri].Values;
-                for (int i = 0; i < keyCount; ++i)
-                    labelTemp[i] = src[keys[i].Item2]?.ToString();
-                labels[ri] = String.Join(p.KeySeparator, labelTemp);
-                for (int i = 0; i < setCount; ++i)
-                    dataSets[i].data[ri] = getData[i](src[values[i].Item2], state);
+                //  Single key, String.Join of one value is the value (or empty)
+                var key = keys[0];
+                for (int ri = 0; ri < rowCount; ++ri)
+                {
+                    var src = rows[ri].Values;
+                    labels[ri] = src[key]?.ToString() ?? String.Empty;
+                    for (int i = 0; i < setCount; ++i)
+                        setData[i][ri] = getData[i](src[values[i]], state);
+                }
+            }
+            else
+            {
+                String[] labelTemp = new string[keyCount];
+                var sep = p.KeySeparator;
+                for (int ri = 0; ri < rowCount; ++ri)
+                {
+                    var src = rows[ri].Values;
+                    for (int i = 0; i < keyCount; ++i)
+                        labelTemp[i] = src[keys[i]]?.ToString();
+                    labels[ri] = String.Join(sep, labelTemp);
+                    for (int i = 0; i < setCount; ++i)
+                        setData[i][ri] = getData[i](src[values[i]], state);
+                }
             }
             var title = p.Title;
             var haveTitle = !String.IsNullOrEmpty(title);
@@ -791,7 +833,7 @@ namespace SysWeaver.MicroService
                     maintainAspectRatio = false,
                 }
             };
-            return ChartSerialize(config);
+            return config;
         }
 
         #region Chart exporters

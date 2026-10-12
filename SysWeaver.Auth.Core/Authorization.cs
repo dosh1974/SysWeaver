@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using SysWeaver.Data;
 
@@ -80,20 +81,77 @@ namespace SysWeaver.Auth
         {
             if (requiredTokens == null)
                 return null;
-            requiredTokens = requiredTokens.Trim();
-            if (requiredTokens.Length <= 0)
+            var s = requiredTokens.AsSpan().Trim();
+            if (s.Length <= 0)
                 return AuthTools.Empty;
-            if (requiredTokens == "-")
+            if ((s.Length == 1) && (s[0] == '-'))
                 return AuthTools.NoAuth;
-            var t = requiredTokens.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var tl = t.Length;
-            HashSet<String> tokens = new HashSet<string>(tl, StringComparer.Ordinal);
-            for (int i = 0; i < tl; ++ i)
+            return GetUniqueTokens(requiredTokens);
+        }
+
+        /// <summary>
+        /// Above this many (possible) tokens a hash set is used to find duplicates, else a linear search
+        /// </summary>
+        const int MaxLinearUniqueSearch = 8;
+
+        /// <summary>
+        /// Split a comma separated token list into unique lower case tokens, white space is trimmed and empty tokens are removed.
+        /// Same result as Split(',', RemoveEmptyEntries | TrimEntries), FastToLower on every token and a HashSet (first occurrence order), but only the result is allocated.
+        /// </summary>
+        /// <param name="requiredTokens">The comma separated tokens</param>
+        /// <returns>The unique tokens, in the order they first occur</returns>
+        static String[] GetUniqueTokens(String requiredTokens)
+        {
+            var s = requiredTokens.AsSpan();
+            // The number of tokens is at most the number of separators + 1
+            var t = new String[s.Count(',') + 1];
+            var seen = t.Length > MaxLinearUniqueSearch ? new HashSet<String>(t.Length, StringComparer.Ordinal) : null;
+            int n = 0;
+            int start = 0;
+            for (; ; )
             {
-                var tt = t[i].FastToLower();
-                tokens.Add(tt);
+                var rest = s.Slice(start);
+                var e = rest.IndexOf(',');
+                var end = e < 0 ? rest.Length : e;
+                int a = 0;
+                while ((a < end) && Char.IsWhiteSpace(rest[a]))
+                    ++a;
+                while ((end > a) && Char.IsWhiteSpace(rest[end - 1]))
+                    --end;
+                if (end > a)
+                {
+                    var token = LowerToken(requiredTokens, start + a, end - a);
+                    if ((seen == null) ? (Array.IndexOf(t, token, 0, n) < 0) : seen.Add(token))
+                        t[n++] = token;
+                }
+                if (e < 0)
+                    break;
+                start += e + 1;
             }
-            return tokens.ToArray();
+            if (n == t.Length)
+                return t;
+            if (n <= 0)
+                return [];
+            return t.AsSpan(0, n).ToArray();
+        }
+
+        /// <summary>
+        /// Lower case a part of a string, exactly as Substring(start, length).FastToLower() (same as ToLowerInvariant):
+        /// the string itself if the whole string is used and no char changes
+        /// </summary>
+        static String LowerToken(String s, int start, int length)
+        {
+            if (length == s.Length)
+                return s.FastToLower();
+            //  Lower cased while copying (one allocation instead of a substring and a lower cased copy).
+            //  The lambda is static (cached by the compiler), a static delegate field could be null when static fields that parse tokens are initialized
+            return String.Create(length, (s, start), static (dst, state) =>
+            {
+                var src = state.s.AsSpan(state.start, dst.Length);
+                //  ASCII (the common case) using SIMD, the rest (if any) using the invariant culture
+                if (Ascii.ToLower(src, dst, out var done) != System.Buffers.OperationStatus.Done)
+                    src[done..].ToLowerInvariant(dst[done..]);
+            });
         }
 
         /// <summary>
@@ -341,24 +399,60 @@ namespace SysWeaver.Auth
         {
             if (requiredTokens == null)
                 return true;
-            requiredTokens = requiredTokens.Trim();
-            if (requiredTokens == "-")
+            var s = requiredTokens.AsSpan();
+            var trimmed = s.Trim();
+            if ((trimmed.Length == 1) && (trimmed[0] == '-'))
                 return false;
             if (auth == null)
                 return false;
-            var t = requiredTokens.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            var tl = t.Length;
-            if (tl <= 0)
-                return true;
-            var ts = auth.Tokens;
-            if (ts == null)
-                return false;
-            for (int i = 0; i < tl; ++i)
+            //  The tokens are parsed in place (no split array), only a token that isn't the whole (lower case) string is allocated
+            IReadOnlySet<String> ts = null;
+            int start = 0;
+            for (; ; )
             {
-                if (ts.Contains(t[i].FastToLower()))
-                    return true;
+                var rest = s.Slice(start);
+                var e = rest.IndexOf(',');
+                var end = e < 0 ? rest.Length : e;
+                int a = 0;
+                while ((a < end) && Char.IsWhiteSpace(rest[a]))
+                    ++a;
+                while ((end > a) && Char.IsWhiteSpace(rest[end - 1]))
+                    --end;
+                if (end > a)
+                {
+                    //  No tokens means any logged in user, so the user tokens are only needed for the first token
+                    if (ts == null)
+                    {
+                        ts = auth.Tokens;
+                        if (ts == null)
+                            return false;
+                    }
+                    if (ts.Contains(LowerToken(requiredTokens, start + a, end - a)))
+                        return true;
+                }
+                if (e < 0)
+                    return ts == null;
+                start += e + 1;
             }
-            return false;
+        }
+
+        /// <summary>
+        /// Lower case a part of a string, exactly as Substring(start, length).FastToLower() (same as ToLowerInvariant):
+        /// the string itself if the whole string is used and no char changes
+        /// </summary>
+        static String LowerToken(String s, int start, int length)
+        {
+            if (length == s.Length)
+                return s.FastToLower();
+            //  Lower cased while copying (one allocation instead of a substring and a lower cased copy).
+            //  The lambda is static (cached by the compiler), a static delegate field could be null when static fields that parse tokens are initialized
+            return String.Create(length, (s, start), static (dst, state) =>
+            {
+                var src = state.s.AsSpan(state.start, dst.Length);
+                //  ASCII (the common case) using SIMD, the rest (if any) using the invariant culture
+                if (Ascii.ToLower(src, dst, out var done) != System.Buffers.OperationStatus.Done)
+                    src[done..].ToLowerInvariant(dst[done..]);
+            });
         }
 
         /// <summary>

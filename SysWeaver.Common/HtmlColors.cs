@@ -176,32 +176,62 @@ namespace SysWeaver
                 if (name.Length < htmlColor.Length)
                     htmlColor = name;
             }
-            var a0 = argb & 0x0f0f0f;
-            var a1 = (argb >> 4) & 0x0f0f0f;
-            var hex = Hex;
-            if (a0 == a1)
-            {
-                var temp = "#"
-                    + hex[(argb >> 16) & 0xf]
-                    + hex[(argb >> 8) & 0xf]
-                    + hex[argb & 0xf];
-                if (temp.Length <= htmlColor.Length)
-                    htmlColor = temp;
-            }
-            else
-            {
-                var temp = "#"
-                    + hex[(argb >> 20) & 0xf]
-                    + hex[(argb >> 16) & 0xf]
-                    + hex[(argb >> 12) & 0xf]
-                    + hex[(argb >> 8) & 0xf]
-                    + hex[(argb >> 4) & 0xf]
-                    + hex[argb & 0xf];
-                if (temp.Length <= htmlColor.Length)
-                    htmlColor = temp;
-            }
+            //  The hex string is only created if it's used
+            if (HexLength(argb) <= htmlColor.Length)
+                htmlColor = ToHex(argb);
             return htmlColor;
         }
+
+        /// <summary>
+        /// The length of the string returned by ToHex
+        /// </summary>
+        /// <param name="rgb">0xrrggbb</param>
+        /// <returns>4 if the color can be written as "#rgb", else 7</returns>
+        static int HexLength(uint rgb)
+            => ((rgb & 0x0f0f0f) == ((rgb >> 4) & 0x0f0f0f)) ? 4 : 7;
+
+        /// <summary>
+        /// Get the shortest hex version of a color, "#rgb" if possible, else "#rrggbb" (lower case)
+        /// </summary>
+        /// <param name="rgb">0xrrggbb</param>
+        /// <returns>The hex color</returns>
+        static String ToHex(uint rgb)
+        {
+            if (HexLength(rgb) == 4)
+                return String.Create(4, rgb, static (dst, v) =>
+                {
+                    dst[0] = '#';
+                    dst[1] = LowerHexChars[(int)((v >> 16) & 0xf)];
+                    dst[2] = LowerHexChars[(int)((v >> 8) & 0xf)];
+                    dst[3] = LowerHexChars[(int)(v & 0xf)];
+                });
+            return String.Create(7, rgb, static (dst, v) =>
+            {
+                dst[0] = '#';
+                for (int i = 6; i > 0; --i)
+                {
+                    dst[i] = LowerHexChars[(int)(v & 0xf)];
+                    v >>= 4;
+                }
+            });
+        }
+
+        /// <summary>
+        /// Get the shortest of a color name (if any) and the shortest hex version of a color (the hex string is only created if it's used)
+        /// </summary>
+        /// <param name="name">The name of the color, can be null</param>
+        /// <param name="rgb">0xrrggbb</param>
+        /// <returns>The name if it's shorter than the hex string, else the hex string</returns>
+        static String SelShortest(String name, uint rgb)
+            => ((name != null) && (name.Length < HexLength(rgb))) ? name : ToHex(rgb);
+
+        /// <summary>
+        /// Get a "rgba(r,g,b,a)" color string (invariant culture)
+        /// </summary>
+        static String ToRgba(uint r, uint g, uint b, double a)
+            => String.Create(CultureInfo.InvariantCulture, $"rgba({r},{g},{b},{a})");
+
+        const String LowerHexChars = "0123456789abcdef";
 
 
         /// <summary>
@@ -221,20 +251,11 @@ namespace SysWeaver
             b = b < 0 ? 0 : (b > 255 ? 255 : b);
             if (a >= 1)
             {
-                var key = (r << 16) | (g << 8) | b;
-                HexToName.TryGetValue((uint)key, out var name);
-                var h = Hex;
-                var ru = r >> 4;
-                var gu = g >> 4;
-                var bu = b >> 4;
-                var rl = r & 0xf;
-                var gl = g & 0xf;
-                var bl = b & 0xf;
-                if ((rl == ru) && (gl == gu) && (bl == bu))
-                    return SelShortest(name, String.Concat('#', h[ru], h[gu], h[bu]));
-                return SelShortest(name, String.Concat('#', h[ru], h[rl], h[gu], h[gl], h[bu], h[bl]));
+                var key = (uint)((r << 16) | (g << 8) | b);
+                HexToName.TryGetValue(key, out var name);
+                return SelShortest(name, key);
             }
-            return String.Concat("rgba(", r, ',', g, ',', b, ',', a.ToString(CultureInfo.InvariantCulture), ')');
+            return ToRgba((uint)r, (uint)g, (uint)b, a);
         }
 
 
@@ -251,25 +272,14 @@ namespace SysWeaver
             var r = (rgb >> 16) & 0xff;
             var g = (rgb >> 8) & 0xff;
             var b = rgb & 0xff;
-            if (a >= 1) 
+            if (a >= 1)
             {
-                r = r < 0 ? 0 : (r > 255 ? 255 : r);
-                g = g < 0 ? 0 : (g > 255 ? 255 : g);
-                b = b < 0 ? 0 : (b > 255 ? 255 : b);
-                var key = (r << 16) | (g << 8) | b;
-                HexToName.TryGetValue((uint)key, out var name);
-                var h = Hex;
-                var ru = r >> 4;
-                var gu = g >> 4;
-                var bu = b >> 4;
-                var rl = r & 0xf;
-                var gl = g & 0xf;
-                var bl = b & 0xf;
-                if ((rl == ru) && (gl == gu) && (bl == bu))
-                    return SelShortest(name, String.Concat('#', h[ru], h[gu], h[bu]));
-                return SelShortest(name, String.Concat('#', h[ru], h[rl], h[gu], h[gl], h[bu], h[bl]));
+                //  Every component is already in [0, 255]
+                var key = rgb & 0xffffff;
+                HexToName.TryGetValue(key, out var name);
+                return SelShortest(name, key);
             }
-            return String.Concat("rgba(", r, ',', g, ',', b, ',', a.ToString(CultureInfo.InvariantCulture), ')');
+            return ToRgba(r, g, b, a);
         }
 
         /// <summary>
@@ -383,8 +393,6 @@ namespace SysWeaver
             return HsvToHtml(h, s, v * adjust, a);
         }
 
-
-        static readonly char[] Hex = "0123456789abcdef".ToCharArray();
 
 
         static readonly Dictionary<String, uint> Names = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
@@ -562,15 +570,6 @@ namespace SysWeaver
         }
 
         static readonly IReadOnlyDictionary<uint, String> HexToName = GetHexToName();
-
-        static String SelShortest(String a, String b)
-        {
-            if (a == null)
-                return b;
-            if (b == null)
-                return a;
-            return a.Length < b.Length ? a : b;
-        }
 
 
 

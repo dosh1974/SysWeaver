@@ -100,7 +100,7 @@ namespace SysWeaver.Net
         /// Create the exception.
         /// </summary>
         /// <param name="id">The id of the removed user</param>
-        public UserNoLongerExistException(long id) : base("User #" + id + "do not exist anymore!")
+        public UserNoLongerExistException(long id) : base("User #" + id + " does not exist anymore!")
         {
         }
     }

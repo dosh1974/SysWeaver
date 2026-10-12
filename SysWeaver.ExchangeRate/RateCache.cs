@@ -20,7 +20,7 @@ namespace SysWeaver.ExchangeRate
             var t = new Dictionary<String, Decimal>(StringComparer.Ordinal);
             foreach (var x in rates.From.Nullable())
                 t[x.I.FastToUpper()] = x.R;
-            foreach (var y in oldToNewMap?.Nullable())
+            foreach (var y in oldToNewMap.Nullable())
             {
                 var old = y.Key.FastToUpper();
                 var nw = y.Value.FastToUpper();

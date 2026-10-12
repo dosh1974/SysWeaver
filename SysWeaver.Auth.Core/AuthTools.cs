@@ -216,11 +216,50 @@ namespace SysWeaver.Auth
         {
             if (tokens == null)
                 return null;
-            var t = new HashSet<String>(StringComparer.Ordinal);
-            foreach (var x in tokens.Split(','))
-                t.Add(x.FastTrimToLower());
-            return t.ToArray();
+            //  Same result as Split(','), FastTrimToLower on every token and a HashSet (first occurrence order), but the tokens are parsed in place (only the result is allocated)
+            var s = tokens.AsSpan();
+            var t = new String[s.Count(',') + 1];
+            var seen = t.Length > MaxLinearUniqueSearch ? new HashSet<String>(t.Length, StringComparer.Ordinal) : null;
+            int n = 0;
+            int start = 0;
+            for (; ; )
+            {
+                var rest = s.Slice(start);
+                var e = rest.IndexOf(',');
+                var entryLen = e < 0 ? rest.Length : e;
+                var end = entryLen;
+                int a = 0;
+                while ((a < end) && Char.IsWhiteSpace(rest[a]))
+                    ++a;
+                while ((end > a) && Char.IsWhiteSpace(rest[end - 1]))
+                    --end;
+                var l = end - a;
+                //  Exactly as FastTrimToLower of the entry (same as ToLowerInvariant): the whole string if it's untrimmed and no char changes, else lower cased while copying (one allocation).
+                //  The lambda is static (cached by the compiler), a static delegate field would be null when the token fields below are initialized
+                String token;
+                if (l == tokens.Length)
+                    token = tokens.FastToLower();
+                else
+                    token = l <= 0 ? String.Empty : String.Create(l, (tokens, start + a), static (dst, state) =>
+                    {
+                        var src = state.tokens.AsSpan(state.Item2, dst.Length);
+                        //  ASCII (the common case) using SIMD, the rest (if any) using the invariant culture
+                        if (Ascii.ToLower(src, dst, out var done) != OperationStatus.Done)
+                            src[done..].ToLowerInvariant(dst[done..]);
+                    });
+                if ((seen == null) ? (Array.IndexOf(t, token, 0, n) < 0) : seen.Add(token))
+                    t[n++] = token;
+                if (e < 0)
+                    break;
+                start += e + 1;
+            }
+            return n == t.Length ? t : t.AsSpan(0, n).ToArray();
         }
+
+        /// <summary>
+        /// Above this many (possible) tokens a hash set is used to find duplicates, else a linear search
+        /// </summary>
+        const int MaxLinearUniqueSearch = 8;
 
         /// <summary>
         /// The tokens of <see cref="Roles.Debug"/>.

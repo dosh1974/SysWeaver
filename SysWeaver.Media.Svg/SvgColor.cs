@@ -204,19 +204,34 @@ namespace SysWeaver.Media
             }
             if (a < 1)
             {
-                Html = String.Concat("rgba(", r, ',', g, ',', b, ',', a.ToString(CultureInfo.InvariantCulture), ')');
+                Html = String.Create(CultureInfo.InvariantCulture, $"rgba({r},{g},{b},{a})");
                 return;
             }
-            var rr = r.ToString("x").PadLeft(2, '0');
-            var gg = g.ToString("x").PadLeft(2, '0');
-            var bb = b.ToString("x").PadLeft(2, '0');
-            if ((rr[0] == rr[1]) && (gg[0] == gg[1]) && (bb[0] == bb[1]))
+            //  The components are in [0, 255], "#rgb" if every component has two equal hex digits, else "#rrggbb" (lower case)
+            var rgb = (r << 16) | (g << 8) | b;
+            if (((rgb >> 4) & 0x0f0f0f) == (rgb & 0x0f0f0f))
             {
-                Html = String.Concat('#', rr[0], gg[0], bb[0]);
+                Html = String.Create(4, rgb, static (dst, v) =>
+                {
+                    dst[0] = '#';
+                    dst[1] = LowerHexChars[(v >> 16) & 15];
+                    dst[2] = LowerHexChars[(v >> 8) & 15];
+                    dst[3] = LowerHexChars[v & 15];
+                });
                 return;
             }
-            Html = String.Concat('#', rr, gg, bb);
+            Html = String.Create(7, rgb, static (dst, v) =>
+            {
+                dst[0] = '#';
+                for (int i = 6; i > 0; --i)
+                {
+                    dst[i] = LowerHexChars[v & 15];
+                    v >>= 4;
+                }
+            });
         }
+
+        const String LowerHexChars = "0123456789abcdef";
     }
 
 

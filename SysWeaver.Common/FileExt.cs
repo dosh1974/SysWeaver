@@ -274,7 +274,8 @@ namespace SysWeaver
         /// <exception cref="NullReferenceException"><paramref name="t"/> is null.</exception>
         public static bool IsCommentOrBlank(ref String t, bool trimComment)
         {
-            var tt = t.Trim();
+            //  Tested on a trimmed span (no allocation), t.Length throws the NullReferenceException for a null line
+            var tt = t.AsSpan(0, t.Length).Trim();
             if (tt.Length <= 0)
                 return true;
             var ci = tt.IndexOf('#');
@@ -283,7 +284,7 @@ namespace SysWeaver
             if (ci <= 0)
                 return true;
             if (trimComment)
-                t = t.Substring(0, t.IndexOf('#')).TrimEnd();
+                t = new String(t.AsSpan(0, t.IndexOf('#')).TrimEnd());
             return false;
         }
 

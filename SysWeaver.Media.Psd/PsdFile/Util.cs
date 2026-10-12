@@ -48,15 +48,21 @@ namespace PhotoshopFile
         /// </summary>
         unsafe static public void Fill(byte* ptr, byte* ptrEnd, byte value)
         {
-            while (ptr < ptrEnd)
-            {
-                *ptr = value;
-                ptr++;
-            }
+            //  Vectorized, nothing is written if the end is at or before the start
+            if (ptrEnd > ptr)
+                NativeMemory.Fill(ptr, (nuint)(ptrEnd - ptr), value);
         }
 
         unsafe static public void Invert(byte* ptr, byte* ptrEnd)
         {
+            //  Vectorized (xor with 0xff is the same as a bitwise complement), then the remaining bytes
+            var vc = System.Numerics.Vector<byte>.Count;
+            while ((ptrEnd - ptr) >= vc)
+            {
+                var v = System.Runtime.CompilerServices.Unsafe.ReadUnaligned<System.Numerics.Vector<byte>>(ptr);
+                System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ptr, ~v);
+                ptr += vc;
+            }
             while (ptr < ptrEnd)
             {
                 *ptr = (byte)(*ptr ^ 0xff);
@@ -97,16 +103,9 @@ namespace PhotoshopFile
         /// </summary>
         unsafe static public void SwapBytes(byte* ptr, int nLength)
         {
-            var hl = nLength >> 1;
-            byte* e = ptr + nLength;
-            for (int i = 0; i < hl; ++i)
-            {
-                --e;
-                var t = *(ptr);
-                *(ptr) = *(e);
-                *(e) = t;
-                ++ptr;
-            }
+            //  Vectorized reverse, nothing is changed for a length less than 2 (also negative)
+            if (nLength > 1)
+                new Span<byte>(ptr, nLength).Reverse();
         }
 
         ///////////////////////////////////////////////////////////////////////////

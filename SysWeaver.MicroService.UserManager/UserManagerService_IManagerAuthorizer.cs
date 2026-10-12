@@ -128,9 +128,11 @@ namespace SysWeaver.MicroService
         public long GetUserId(String userGuid)
         {
             var prefix = GuidPrefix;
-            if (!userGuid.FastStartsWith(prefix))
+            var pl = prefix.Length;
+            //  "prefix:id", the ':' first (cheap, and the length check of the prefix test)
+            if ((userGuid.Length <= pl) || (userGuid[pl] != ':') || !userGuid.AsSpan(0, pl).SequenceEqual(prefix))
                 return 0;
-            var id = HashTools.ParseCompactInt64(userGuid.Substring(prefix.Length + 1));
+            var id = HashTools.ParseCompactInt64(userGuid.AsSpan(pl + 1));
             return id;
         }
 
@@ -177,6 +179,19 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
+        /// Constant time compare of a stored password hash (base64) and a hash (the stored hash is password equivalent)
+        /// </summary>
+        static bool IsSamePasswordHash(String storedPwd, byte[] hash)
+        {
+            if (storedPwd == null)
+                return false;
+            var h = AuthTools.HashToString(hash);
+            return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(storedPwd.AsSpan()),
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(h.AsSpan()));
+        }
+
+        /// <summary>
         /// Authorize a user
         /// </summary>
         /// <param name="userName">The user name (email)</param>
@@ -197,7 +212,7 @@ namespace SysWeaver.MicroService
                 var auth = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
                 if (auth == null)
                     return null;
-                if (auth.Pwd != AuthTools.HashToString(hash))
+                if (!IsSamePasswordHash(auth.Pwd, hash))
                     return null;
                 var a = await InternalAuthUser(c, id).ConfigureAwait(false);
                 if (a == null)

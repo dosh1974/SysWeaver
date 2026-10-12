@@ -279,8 +279,16 @@ namespace SysWeaver.Net
             var look = DiscToWeb;
             if (!look.TryGetValue(p, out var web))
                 return null;
-            var webName = web + localFile.Substring(p.Length).Replace('\\', '/'); ;
-            return webName;
+            //  Same as web + localFile.Substring(p.Length).Replace('\\', '/') using a single allocation
+            web ??= "";
+            var offset = p.Length;
+            return String.Create(web.Length + localFile.Length - offset, (web, localFile, offset), static (dst, s) =>
+            {
+                s.web.CopyTo(dst);
+                var rest = dst.Slice(s.web.Length);
+                s.localFile.AsSpan(s.offset).CopyTo(rest);
+                rest.Replace('\\', '/');
+            });
 
             /*foreach (var x in Repos)
             {

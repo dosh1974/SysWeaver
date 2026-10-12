@@ -273,6 +273,18 @@
         <member name="M:SysWeaver.Serialization.NetXmlSerializer.Create``1(System.ReadOnlyMemory{System.Byte})">
             <inheritdoc/>
         </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.GetSerializer``1">
+            <summary>
+            Get the (thread safe) XmlSerializer for a type, it's created once per type (a failed creation is not cached, so it throws every time, as before)
+            </summary>
+            <typeparam name="T">The type to serialize</typeparam>
+            <returns>The serializer</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.NetXmlSerializer.XmlSerializerCache`1">
+            <summary>
+            A cached XmlSerializer per type (no static initializer, so creation exceptions aren't wrapped in a TypeInitializationException)
+            </summary>
+        </member>
         <member name="T:SysWeaver.Serialization.SerializerOptions">
             <summary>
             Output style requested from a serializer.

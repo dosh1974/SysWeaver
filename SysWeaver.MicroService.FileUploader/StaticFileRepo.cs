@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.HighPerformance;
 using SysWeaver.Compression;
@@ -365,9 +366,9 @@ namespace SysWeaver.MicroService
             var orr = await OnRequest(r, false).ConfigureAwait(false);
             var resS = orr.Item1;
             var l = info.Length;
-            var s = GC.AllocateUninitializedArray<FileUploadResult>(l);
             if (resS != FileUploadStatus.None)
                 return ArrayExt.Create(l, new FileUploadResult(resS));
+            var s = GC.AllocateUninitializedArray<FileUploadResult>(l);
             var context = orr.Item2;
             using var __x = context as IDisposable;
             var e = ValidExtensions;
@@ -377,7 +378,7 @@ namespace SysWeaver.MicroService
                 var f = info[i];
                 if (ml > 0)
                 {
-                    if (info.Length > ml)
+                    if (f.Length > ml)
                     {
                         s[i] = FileRepoTools.RefuseSize;
                         continue;
@@ -439,7 +440,7 @@ namespace SysWeaver.MicroService
                     {
                         var dir = Path.GetDirectoryName(fullName);
                         EnsureFolder(dir);
-                        var comp = Directory.GetFiles(dir, Path.GetFileName(fullName) + ".*", SearchOption.TopDirectoryOnly).FirstOrDefault(x => CompManager.GetFromExt(Path.GetExtension(x)) != null);
+                        var comp = Directory.EnumerateFiles(dir, Path.GetFileName(fullName) + ".*", SearchOption.TopDirectoryOnly).FirstOrDefault(x => CompManager.GetFromExt(Path.GetExtension(x)) != null);
                         if (comp != null)
                         {
                             var hash = FileRepoTools.FormatAsFileHash(f.Hash);
@@ -505,6 +506,20 @@ namespace SysWeaver.MicroService
                 return new FileUploadResult(resS);
             var context = orr.Item2;
             using var __x = context as IDisposable;
+            //  Never trust that CanFileBeUploaded was called (or that the client obeyed it)
+            var length = file.Length;
+            var ml = MaxLength;
+            if ((ml > 0) && (length > ml))
+                return FileRepoTools.RefuseSize;
+            var e = ValidExtensions;
+            if (e != null)
+            {
+                var n = file.Name;
+                var extP = n.LastIndexOf('.');
+                var ext = extP < 0 ? "" : n.FastToLower(extP + 1);
+                if (!e.Contains(ext))
+                    return FileRepoTools.RefuseExtension;
+            }
             var fileName = GetFullFilename(out resS, out var uri, file, r, context);
             if (resS != FileUploadStatus.None)
                 return new FileUploadResult(resS);
@@ -512,6 +527,7 @@ namespace SysWeaver.MicroService
             if (!SystemLock.TryGet("SysWeaver.MediaUpload." + fileName.ToLower(), out var ldisp))
                 return FileRepoTools.OperationInProgress;
             using var __y = ldisp;
+            ICompDecoder decompress = null;
             if (ChunkCache.TryGet(file.ChunkCacheKey, out var chunks))
             {
                 if (await ContentDependentChunking.AddChunkList(s).ConfigureAwait(false) < 0)
@@ -529,19 +545,38 @@ namespace SysWeaver.MicroService
                     }
                     else
                     {
-                        var raw = await decoder.GetDecompressedAsync(s).ConfigureAwait(false);
-                        await s.DisposeAsync().ConfigureAwait(false);
-                        s = raw.AsStream();
+                        //  Decompress while writing, so that the size limit applies to the decompressed data
+                        decompress = decoder;
                     }
                 }
             }
             var prev = new FileInfo(fileName);
             var prevLength = prev.Exists ? prev.Length : 0;
+            bool tooLarge = false;
             using (s)
             {
                 EnsureFolder(Path.GetDirectoryName(fileName));
                 using (var fs = new FileStream(fileName, FileMode.Create, FileAccess.Write))
-                    await s.CopyToAsync(fs).ConfigureAwait(false);
+                {
+                    //  Never write more than the announced (and accepted) length (pre compressed data is smaller, the client only compresses if it's smaller)
+                    var ls = new MaxLengthWriteStream(fs, length);
+                    try
+                    {
+                        if (decompress != null)
+                            await decompress.DecompressAsync(s, ls).ConfigureAwait(false);
+                        else
+                            await s.CopyToAsync(ls).ConfigureAwait(false);
+                    }
+                    catch when (ls.Exceeded)
+                    {
+                        tooLarge = true;
+                    }
+                }
+            }
+            if (tooLarge)
+            {
+                await PathExt.TryDeleteFileAsync(fileName).ConfigureAwait(false);
+                return FileRepoTools.RefuseSize;
             }
             var fi = new FileInfo(fileName);
             if (!fi.Exists)
@@ -557,6 +592,78 @@ namespace SysWeaver.MicroService
             if (ServeFiles)
                 url = String.Join('/', WebFolder, uri);
             return new FileUploadResult(resS, url);
+        }
+
+        /// <summary>
+        /// A write only stream that forwards writes to another stream, throwing an IOException (and setting Exceeded) if more than a given number of bytes are written.
+        /// </summary>
+        sealed class MaxLengthWriteStream : Stream
+        {
+            public MaxLengthWriteStream(Stream inner, long max)
+            {
+                Inner = inner;
+                Max = max;
+            }
+            readonly Stream Inner;
+            readonly long Max;
+            long Written;
+
+            /// <summary>
+            /// True if a write was refused because the max length was exceeded
+            /// </summary>
+            public bool Exceeded;
+
+            void Add(int count)
+            {
+                var w = Written + count;
+                if (w > Max)
+                {
+                    Exceeded = true;
+                    throw new IOException("The data is larger than the max allowed size of " + Max + " bytes!");
+                }
+                Written = w;
+            }
+
+            public override bool CanRead => false;
+            public override bool CanSeek => false;
+            public override bool CanWrite => true;
+            public override long Length => Written;
+            public override long Position { get => Written; set => throw new NotSupportedException(); }
+            public override void Flush() => Inner.Flush();
+            public override Task FlushAsync(CancellationToken cancellationToken) => Inner.FlushAsync(cancellationToken);
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                Add(count);
+                Inner.Write(buffer, offset, count);
+            }
+
+            public override void Write(ReadOnlySpan<byte> buffer)
+            {
+                Add(buffer.Length);
+                Inner.Write(buffer);
+            }
+
+            public override void WriteByte(byte value)
+            {
+                Add(1);
+                Inner.WriteByte(value);
+            }
+
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                Add(count);
+                return Inner.WriteAsync(buffer, offset, count, cancellationToken);
+            }
+
+            public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                Add(buffer.Length);
+                return Inner.WriteAsync(buffer, cancellationToken);
+            }
         }
 
 

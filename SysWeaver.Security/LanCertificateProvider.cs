@@ -25,7 +25,7 @@ namespace SysWeaver.Security
     public sealed class LanCertificateProvider : ICertificateProvider, IDisposable, IPerfMonitored
     {
         /// <inheritdoc/>
-        public override string ToString() => String.Concat(DomainName, " from ", Server, " cached in \"", Filename, '"');
+        public override string ToString() => String.Concat([DomainName, " from ", Server, " cached in \"", Filename, "\""]);
 
 
         /// <summary>

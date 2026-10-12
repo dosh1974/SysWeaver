@@ -161,12 +161,30 @@ namespace SysWeaver.Net
                 var s = parts[i];
                 if (s.Length <= 0)
                     continue;
-                foreach (var x in s.Split('\\'))
-                    if (x.FastEquals(".") || x.FastEquals(".."))
-                        throw new HttpResponseException(400, "Bad Request - Relative path segments are not allowed [400]");
+                if (HaveDotSegment(s))
+                    throw new HttpResponseException(400, "Bad Request - Relative path segments are not allowed [400]");
                 parts[i] = Uri.EscapeDataString(s);
             }
             return String.Join('/', parts);
+        }
+
+        /// <summary>
+        /// Check if any '\' separated part of a path segment is "." or ".." (same as s.Split('\\') without the allocations)
+        /// </summary>
+        /// <param name="s">The path segment</param>
+        /// <returns>True if any part is "." or ".."</returns>
+        static bool HaveDotSegment(ReadOnlySpan<Char> s)
+        {
+            for (; ; )
+            {
+                var k = s.IndexOf('\\');
+                var x = k < 0 ? s : s.Slice(0, k);
+                if (x is "." or "..")
+                    return true;
+                if (k < 0)
+                    return false;
+                s = s.Slice(k + 1);
+            }
         }
 
         /// <inheritdoc/>

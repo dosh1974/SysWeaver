@@ -186,6 +186,26 @@ namespace SysWeaver
         };
 
         /// <summary>
+        /// Change the casing of a first letter outside the BMP (a surrogate pair)
+        /// </summary>
+        /// <param name="str">The text, starts with a surrogate</param>
+        /// <param name="upper">True to upper case, false to lower case (invariant culture)</param>
+        /// <returns>The original string (an invalid pair or nothing changes) or a new string</returns>
+        static String ChangeFirstRune(String str, bool upper)
+        {
+            if (Rune.DecodeFromUtf16(str, out var r, out var n) != OperationStatus.Done)
+                return str;
+            var c = upper ? Rune.ToUpperInvariant(r) : Rune.ToLowerInvariant(r);
+            if (c == r)
+                return str;
+            return String.Create(str.Length - n + c.Utf16SequenceLength, (str, c, n), static (d, st) =>
+            {
+                var w = st.c.EncodeToUtf16(d);
+                st.str.AsSpan(st.n).CopyTo(d.Slice(w));
+            });
+        }
+
+        /// <summary>
         /// Make sure that the first character is an uppercase letter (if it's a letter).
         /// Examples:
         /// "hello" becomes "Hello".
@@ -196,7 +216,7 @@ namespace SysWeaver
         /// <returns>The original string (also if null or empty) or a new string with the first letter uppercased (invariant culture)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeFirstUppercase(this String str)
-            => (String.IsNullOrEmpty(str) || str[0].FastIsUpperOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstUpperAction);
+            => String.IsNullOrEmpty(str) ? str : Char.IsSurrogate(str[0]) ? ChangeFirstRune(str, true) : str[0].FastIsUpperOrNonLetter() ? str : String.Create(str.Length, str, CreateFirstUpperAction);
 
         /// <summary>
         /// Make sure that the first character in each word is an uppercase letter (if it's a letter).
@@ -256,7 +276,7 @@ namespace SysWeaver
         /// <returns>The original string (also if null or empty) or a new string with the first letter lowercased (invariant culture)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeFirstLowercase(this String str)
-            => (String.IsNullOrEmpty(str) || str[0].FastIsLowerOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstLowerAction);
+            => String.IsNullOrEmpty(str) ? str : Char.IsSurrogate(str[0]) ? ChangeFirstRune(str, false) : str[0].FastIsLowerOrNonLetter() ? str : String.Create(str.Length, str, CreateFirstLowerAction);
 
         /// <summary>
         /// Take a camel cased string and convert it to a space separated string.
@@ -2080,6 +2100,9 @@ namespace SysWeaver
             // Empty lines must be removed after the '\r' is removed
             if (removeEmpty && !trim)
                 return GetLines(s.AsSpan(), false, true);
+            //  Same result as the string version for non-empty text (one allocation per line, no Split + Trim('\r') copies), it returns no lines for an empty text
+            if (s.Length > 0)
+                return GetLines(s, trim, removeEmpty);
             var opt = StringSplitOptions.None;
             if (trim)
                 opt |= StringSplitOptions.TrimEntries;

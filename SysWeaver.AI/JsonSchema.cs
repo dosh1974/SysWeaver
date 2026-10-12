@@ -13,8 +13,9 @@ namespace SysWeaver.AI
     {
 
 
-        static readonly ConcurrentDictionary<Tuple<Type, String, bool>, JsonSchemaParam> Cache = new();
-        static readonly ConcurrentDictionary<Tuple<Type, String, bool>, String> StringCache = new();
+        //  Value tuple keys, no allocation per lookup (same equality as the Tuple keys)
+        static readonly ConcurrentDictionary<(Type, String, bool), JsonSchemaParam> Cache = new();
+        static readonly ConcurrentDictionary<(Type, String, bool), String> StringCache = new();
 
         const String OptPrefix = "[Optional] ";
 
@@ -23,7 +24,7 @@ namespace SysWeaver.AI
             var cache = Cache;
             if (isOptional)
                 description = String.IsNullOrEmpty(description) ? OptPrefix : String.Join(" \n", OptPrefix, description);
-            var key = Tuple.Create(type, description, isOutput);
+            var key = (type, description, isOutput);
             if (cache.TryGetValue(key, out var s))
                 return s;
             s = BuildRec(type, isOutput, description);
@@ -50,7 +51,7 @@ namespace SysWeaver.AI
         public static String GetString(Type type, bool isOutput, String description = null)
         {
             var cache = StringCache;
-            var key = Tuple.Create(type, description, isOutput);
+            var key = (type, description, isOutput);
             if (cache.TryGetValue(key, out var s))
                 return s;
             var v = Get(type, isOutput, description);
@@ -248,7 +249,8 @@ namespace SysWeaver.AI
         public static BinaryData GetBinaryDataParam(Type type, String paramName, bool isOutput, String description = null)
         {
             var cache = BinaryDataCache;
-            var key = Tuple.Create(type, description);
+            //  The parameter name and the direction are part of the schema
+            var key = (type, paramName, isOutput, description);
             if (cache.TryGetValue(key, out var s))
                 return s;
             var v = JsonSchema.Get(type, isOutput);
@@ -272,7 +274,7 @@ namespace SysWeaver.AI
             return s;
         }
 
-        static readonly ConcurrentDictionary<Tuple<Type, String>, BinaryData> BinaryDataCache = new();
+        static readonly ConcurrentDictionary<(Type, String, bool, String), BinaryData> BinaryDataCache = new();
 
     }
 }

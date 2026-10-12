@@ -34,7 +34,7 @@ namespace SysWeaver.MicroService
             DbCacheDurations[1] = TimeSpan.FromHours(Math.Max(1, p.MediumDbCacheDuration)).Ticks;
             DbCacheDurations[2] = TimeSpan.FromHours(Math.Max(1, p.LongDbCacheDuration)).Ticks;
             RebuildInputs = p.RebuildInputs;
-            MaxRandom = TimeSpan.FromHours(Math.Min(1, p.RandomizeExpiration)).Ticks;
+            MaxRandom = TimeSpan.FromHours(Math.Max(0, p.RandomizeExpiration)).Ticks;
             MaxRandomMask = MaxRandom.MaxMask();
 
             T = manager.Get<IInternalTranslator>(p.TranslatorInstance);
@@ -329,6 +329,9 @@ namespace SysWeaver.MicroService
 
         long GetRandomTicks()
         {
+            //  RandomizeExpiration = 0 disables the randomization (GetInt64Max throws for a max of 0)
+            if (MaxRandom <= 0)
+                return 0;
             using var s = SecureRng.Get();
             return s.GetInt64Max(MaxRandom, MaxRandomMask);
         }

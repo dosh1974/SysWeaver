@@ -451,6 +451,7 @@ namespace SysWeaver.AI
                 "medium" => AiReasoning.Medium,
                 "high" => AiReasoning.High,
                 "xhigh" => AiReasoning.ExtraHigh,
+                "max" => AiReasoning.Max,
                 _ => throw HostException.BadRequest("Unknown reasoning effort " + effort.ToQuoted(), param),
             };
 

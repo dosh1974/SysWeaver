@@ -21,7 +21,7 @@ namespace SysWeaver.ExchangeRate
             Manager = manager;
 
             Dictionary<String, String> newToOldMap = new(StringComparer.Ordinal);
-            foreach (var x in p.OldToNewRateMap?.Nullable())
+            foreach (var x in p.OldToNewRateMap.Nullable())
             {
                 var kv = x?.Trim();
                 if (String.IsNullOrEmpty(kv))

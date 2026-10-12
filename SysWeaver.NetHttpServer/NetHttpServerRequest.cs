@@ -71,9 +71,6 @@ namespace SysWeaver.Net
         {
             ResContentType = mime;
             Res.ContentType = mime;
-            if (mime.FastEquals("image/png") && LocalUrl.FastEquals("Hypnos/Api/MemberCard.svg"))
-                mime = null;
-
         }
 
         public override String ProtocolVersion => Req.ProtocolVersion.ToString();

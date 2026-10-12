@@ -102,13 +102,42 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public T FromString<T>(ReadOnlySpan<char> text)
         {
-            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(Encoding.UTF8.GetBytes(new String(text)));
+            return DeserializeChars<T>(text);
         }
 
         /// <inheritdoc/>
         public T FromString<T>(string text)
         {
-            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(Encoding.UTF8.GetBytes(text));
+            //  Null throws as before
+            if (text == null)
+                return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(Encoding.UTF8.GetBytes(text));
+            return DeserializeChars<T>(text);
+        }
+
+        /// <summary>
+        /// The maximum number of UTF-8 bytes to encode on the stack
+        /// </summary>
+        const int MaxStackBytes = 4096;
+
+        /// <summary>
+        /// Deserialize some json text, the text is UTF-8 encoded on the stack if it's small (else to a new array), same bytes as Encoding.UTF8.GetBytes(new String(text))
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize</typeparam>
+        /// <param name="text">The json text</param>
+        /// <returns>The deserialized object</returns>
+        static T DeserializeChars<T>(ReadOnlySpan<char> text)
+        {
+            var enc = Encoding.UTF8;
+            var n = enc.GetByteCount(text);
+            if (n > MaxStackBytes)
+            {
+                var a = new Byte[n];
+                enc.GetBytes(text, a);
+                return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(a);
+            }
+            Span<Byte> b = stackalloc Byte[n];
+            enc.GetBytes(text, b);
+            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(b);
         }
     }
 }

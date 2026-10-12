@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FastText.NetWrapper;
 
@@ -35,7 +36,7 @@ public partial class FastTextWrapper : IDisposable
 				config.CreateMap<QuantizedSupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<UnsupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<AutotuneArgs, AutotuneArgsStruct>();
-			}, null)
+			}, loggerFactory ?? NullLoggerFactory.Instance) // AutoMapper 16 throws a NullReferenceException for a null logger factory
 			.CreateMapper();
 
 		_fastText = CreateFastText();
@@ -64,7 +65,7 @@ public partial class FastTextWrapper : IDisposable
 				config.CreateMap<QuantizedSupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<UnsupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<AutotuneArgs, AutotuneArgsStruct>();
-			}, null)
+			}, loggerFactory ?? NullLoggerFactory.Instance) // AutoMapper 16 throws a NullReferenceException for a null logger factory
 			.CreateMapper();
 
 		_fastText = CreateFastText();
@@ -369,16 +370,7 @@ public partial class FastTextWrapper : IDisposable
 		IntPtr vecPtr;
 		int dim = CheckForErrors(GetSentenceVector(_fastText, _utf8.GetBytes(text), new IntPtr(&vecPtr)));
 
-		var result = new float[dim];
-		long sz = sizeof(float) * dim;
-		fixed (void* resPtr = &result[0])
-		{
-			Buffer.MemoryCopy(vecPtr.ToPointer(), resPtr, sz, sz);
-		}
-
-		DestroyVector(vecPtr);
-
-		return result;
+		return CopyAndDestroyVector(vecPtr, dim);
 	}
 
 	/// <summary>
@@ -393,16 +385,31 @@ public partial class FastTextWrapper : IDisposable
 		IntPtr vecPtr;
 		int dim = CheckForErrors(GetWordVector(_fastText, _utf8.GetBytes(word), new IntPtr(&vecPtr)));
 
-		var result = new float[dim];
-		long sz = sizeof(float) * dim;
-		fixed (void* resPtr = &result[0])
+		return CopyAndDestroyVector(vecPtr, dim);
+	}
+
+	/// <summary>
+	/// Copies a native vector to a new array and always destroys the native vector (also on an exception or a zero dimension).
+	/// </summary>
+	private static unsafe float[] CopyAndDestroyVector(IntPtr vecPtr, int dim)
+	{
+		try
 		{
-			Buffer.MemoryCopy(vecPtr.ToPointer(), resPtr, sz, sz);
+			var result = new float[dim];
+			if (dim > 0)
+			{
+				long sz = sizeof(float) * (long)dim;
+				fixed (void* resPtr = result)
+				{
+					Buffer.MemoryCopy(vecPtr.ToPointer(), resPtr, sz, sz);
+				}
+			}
+			return result;
 		}
-
-		DestroyVector(vecPtr);
-
-		return result;
+		finally
+		{
+			DestroyVector(vecPtr);
+		}
 	}
 
 	#endregion

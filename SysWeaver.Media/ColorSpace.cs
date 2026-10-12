@@ -23,8 +23,30 @@ namespace SysWeaver.Media
         /// <returns>A css color, ex: #12aa42</returns>
         public static String LightnessChromaHueToCss(double il, double ic, double ih)
         {
-            return "#" + LightnessChromaHueToUInt32(il, ic, ih).ToString("x").PadLeft(6, '0');
+            return ToCss(LightnessChromaHueToUInt32(il, ic, ih));
         }
+
+        /// <summary>
+        /// Same as "#" + rgb.ToString("x").PadLeft(6, '0') using a single allocation
+        /// </summary>
+        /// <param name="rgb">0x00rrggbb</param>
+        /// <returns>A css color, ex: #12aa42</returns>
+        static String ToCss(UInt32 rgb)
+        {
+            if (rgb > 0xffffff)
+                return "#" + rgb.ToString("x");
+            return String.Create(7, rgb, static (dst, v) =>
+            {
+                dst[0] = '#';
+                for (int i = 6; i > 0; --i)
+                {
+                    dst[i] = LowerHexChars[(int)(v & 15)];
+                    v >>= 4;
+                }
+            });
+        }
+
+        const String LowerHexChars = "0123456789abcdef";
 
         /// <summary>
         /// Convert from OkLch to a 0x00rrggbb value encoded in an UInt32
@@ -89,7 +111,7 @@ namespace SysWeaver.Media
         /// <returns>A css color, ex: #12aa42</returns>
         public static String OkHsvToCss(double h, double s, double v)
         {
-            return "#" + OkHsvToUInt32(h, s, v).ToString("x").PadLeft(6, '0');
+            return ToCss(OkHsvToUInt32(h, s, v));
         }
 
         /// <summary>

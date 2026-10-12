@@ -636,13 +636,10 @@ namespace SysWeaver.Auth
                     for (int i = 0; i < tl; ++i)
                     {
                         var tt = t[i];
-                        if (tt.FastStartsWith(keyName))
+                        if ((tt.Length > kl) && (tt[kl] == ':') && tt.FastStartsWith(keyName))
                         {
-                            if (tt[kl] == ':')
-                            {
-                                del = i;
-                                break;
-                            }
+                            del = i;
+                            break;
                         }
                     }
 
@@ -704,11 +701,8 @@ namespace SysWeaver.Auth
                     for (int i = 0; i < tl; ++i)
                     {
                         var tt = t[i];
-                        if (tt.FastStartsWith(keyName))
-                        {
-                            if (tt[kl] == ':')
-                                return null;
-                        }
+                        if ((tt.Length > kl) && (tt[kl] == ':') && tt.FastStartsWith(keyName))
+                            return null;
                     }
                 }
                 //  May not collide with an existing user (would replace it, same name => same guid)

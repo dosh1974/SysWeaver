@@ -116,6 +116,10 @@ namespace SysWeaver.MicroService
                         d.WebFolder = String.Concat(fn, '_', version);
                         fm.AddFolder(d);
                     }
+                    //  The version is known now, redirect to it
+                    var httpServer = HttpServer;
+                    if ((swapMethod == WebFolderSwapMethods.HttpRedirect) && (httpServer != null) && !String.IsNullOrEmpty(f.Version))
+                        RemoteOnHttpServerAdd(httpServer, f, true);
                 }else
                 {
                     fm.AddFolder(d);
@@ -154,7 +158,7 @@ namespace SysWeaver.MicroService
                 if (swapMethod != WebFolderSwapMethods.None)
                 {
                     d.WebFolder = String.Concat(fn, '_', f.Version);
-                    fm.AddFolder(d);
+                    fm.RemoveFolder(d);
                     foreach (var versionFolder in Directory.GetDirectories(Path.GetDirectoryName(folder), Path.GetFileName(folder) + "_*", SearchOption.TopDirectoryOnly))
                     {
                         var version = versionFolder.Substring(versionFolder.LastIndexOf('_') + 1);
@@ -169,6 +173,8 @@ namespace SysWeaver.MicroService
                         d.WebFolder = String.Concat(fn, '_', version);
                         fm.RemoveFolder(d);
                     }
+                    if (swapMethod == WebFolderSwapMethods.HttpRedirect)
+                        HttpServer?.RemoveFolderRedirect(fn + '/');
                 }
                 else
                 {
@@ -212,6 +218,9 @@ namespace SysWeaver.MicroService
             foreach (var f in RemoteFolders.Values)
             {
                 if (f.SwapMethod != WebFolderSwapMethods.HttpRedirect)
+                    continue;
+                //  The version isn't known yet (being added), AddRemoteFolder adds the redirect
+                if ((f.WebFolder == null) || String.IsNullOrEmpty(f.Version))
                     continue;
                 RemoteOnHttpServerAdd(server, f);
             }

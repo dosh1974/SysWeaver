@@ -24,8 +24,8 @@ namespace SysWeaver.ReverseProxy
             foreach (var x in p.AllButDomains.Nullable())
             {
                 var t = x?.Trim();
-                if (!String.IsNullOrEmpty(x))
-                    ignoreDomains.Add(x.FastToLower());
+                if (!String.IsNullOrEmpty(t))
+                    ignoreDomains.Add(t.FastToLower());
             }
             bool haveDomains = ignoreDomains.Count > 0;
             var baseUrl = p.BaseUrl?.Trim('/');
@@ -83,7 +83,6 @@ namespace SysWeaver.ReverseProxy
             //  Sub path switch
             var clientUrl = localUrl.Substring(baseUrlLen);
             clientId = clientUrl.SplitFirst('/', out clientUrl);
-            var referrer = String.Concat(r.Host, clientId, '/');
             if (String.IsNullOrEmpty(clientId))
                 throw new HttpResponseException(404);
             if (String.IsNullOrEmpty(clientUrl))

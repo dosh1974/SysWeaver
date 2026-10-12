@@ -245,6 +245,49 @@ namespace SysWeaver.Db
     {
 
         /// <summary>
+        /// The parameter names of the first parameters ("p0", "p1" ..)
+        /// </summary>
+        static readonly String[] ParamNames = CreateParamNames(32);
+
+        static String[] CreateParamNames(int count)
+        {
+            var names = new String[count];
+            for (int i = 0; i < count; ++i)
+                names[i] = "p" + i;
+            return names;
+        }
+
+        /// <summary>
+        /// Create a command with parameters named p0, p1 and so on.
+        /// The command is disposed if the parameters can't be added
+        /// </summary>
+        static DbCommand CreateCommand(OrmConnection con, String command, object[] args)
+        {
+            var cmd = con.CreateCommand();
+            try
+            {
+                cmd.CommandText = command;
+                var al = args.Length;
+                var names = ParamNames;
+                var nl = names.Length;
+                var ps = cmd.Parameters;
+                for (int index = 0; index < al; ++index)
+                {
+                    var a = cmd.CreateParameter();
+                    a.ParameterName = index < nl ? names[index] : ("p" + index);
+                    a.Value = args[index];
+                    ps.Add(a);
+                }
+                return cmd;
+            }
+            catch
+            {
+                cmd.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Execute a custom command with paramaters
         /// </summary>
         /// <param name="con"></param>
@@ -252,19 +295,23 @@ namespace SysWeaver.Db
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A reader</returns>
         public static Task<DbDataReader> ReaderCommandAsync(this OrmConnection con, String command, params object[] args)
+            => ExecuteReaderAsync(CreateCommand(con, command, args));
+
+        /// <summary>
+        /// Execute the command, the command is disposed with the returned reader (or on failure)
+        /// </summary>
+        static async Task<DbDataReader> ExecuteReaderAsync(DbCommand cmd)
         {
-            using var cmd = con.CreateCommand();
-            cmd.CommandText = command;
-            var al = args.Length;
-            for (int index = 0; index < al; ++ index)
+            try
             {
-                String name = "p" + index;
-                var a = cmd.CreateParameter();
-                a.ParameterName = name;
-                a.Value = args[index];
-                cmd.Parameters.Add(a);
+                var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+                return new CommandDataReader(cmd, reader);
             }
-            return cmd.ExecuteReaderAsync();
+            catch
+            {
+                cmd.Dispose();
+                throw;
+            }
         }
 
         /// <summary>
@@ -274,19 +321,12 @@ namespace SysWeaver.Db
         /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         public static Task CommandAsync(this OrmConnection con, String command, params object[] args)
+            => ExecuteNonQueryAsync(CreateCommand(con, command, args));
+
+        static async Task<int> ExecuteNonQueryAsync(DbCommand cmd)
         {
-            using var cmd = con.CreateCommand();
-            cmd.CommandText = command;
-            var al = args.Length;
-            for (int index = 0; index < al; ++index)
-            {
-                String name = "p" + index;
-                var a = cmd.CreateParameter();
-                a.ParameterName = name;
-                a.Value = args[index];
-                cmd.Parameters.Add(a);
-            }
-            return cmd.ExecuteNonQueryAsync();
+            using (cmd)
+                return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
 
@@ -298,19 +338,108 @@ namespace SysWeaver.Db
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A scale value</returns>
         public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params object[] args)
+            => ExecuteScalarAsync(CreateCommand(con, command, args));
+
+        static async Task<Object> ExecuteScalarAsync(DbCommand cmd)
         {
-            using var cmd = con.CreateCommand();
-            cmd.CommandText = command;
-            var al = args.Length;
-            for (int index = 0; index < al; ++index)
+            using (cmd)
+                return await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        }
+
+
+        /// <summary>
+        /// A reader that disposes the command that created it when disposed
+        /// </summary>
+        sealed class CommandDataReader : DbDataReader, IDbColumnSchemaGenerator
+        {
+            public CommandDataReader(DbCommand cmd, DbDataReader reader)
             {
-                String name = "p" + index;
-                var a = cmd.CreateParameter();
-                a.ParameterName = name;
-                a.Value = args[index];
-                cmd.Parameters.Add(a);
+                Cmd = cmd;
+                Reader = reader;
             }
-            return cmd.ExecuteScalarAsync();
+
+            readonly DbCommand Cmd;
+            readonly DbDataReader Reader;
+
+            public override Object this[int ordinal] => Reader[ordinal];
+            public override Object this[String name] => Reader[name];
+            public override int Depth => Reader.Depth;
+            public override int FieldCount => Reader.FieldCount;
+            public override bool HasRows => Reader.HasRows;
+            public override bool IsClosed => Reader.IsClosed;
+            public override int RecordsAffected => Reader.RecordsAffected;
+            public override int VisibleFieldCount => Reader.VisibleFieldCount;
+
+            public override bool GetBoolean(int ordinal) => Reader.GetBoolean(ordinal);
+            public override byte GetByte(int ordinal) => Reader.GetByte(ordinal);
+            public override long GetBytes(int ordinal, long dataOffset, byte[] buffer, int bufferOffset, int length) => Reader.GetBytes(ordinal, dataOffset, buffer, bufferOffset, length);
+            public override char GetChar(int ordinal) => Reader.GetChar(ordinal);
+            public override long GetChars(int ordinal, long dataOffset, char[] buffer, int bufferOffset, int length) => Reader.GetChars(ordinal, dataOffset, buffer, bufferOffset, length);
+            public override String GetDataTypeName(int ordinal) => Reader.GetDataTypeName(ordinal);
+            public override DateTime GetDateTime(int ordinal) => Reader.GetDateTime(ordinal);
+            public override decimal GetDecimal(int ordinal) => Reader.GetDecimal(ordinal);
+            public override double GetDouble(int ordinal) => Reader.GetDouble(ordinal);
+            public override Type GetFieldType(int ordinal) => Reader.GetFieldType(ordinal);
+            public override float GetFloat(int ordinal) => Reader.GetFloat(ordinal);
+            public override Guid GetGuid(int ordinal) => Reader.GetGuid(ordinal);
+            public override short GetInt16(int ordinal) => Reader.GetInt16(ordinal);
+            public override int GetInt32(int ordinal) => Reader.GetInt32(ordinal);
+            public override long GetInt64(int ordinal) => Reader.GetInt64(ordinal);
+            public override String GetName(int ordinal) => Reader.GetName(ordinal);
+            public override int GetOrdinal(String name) => Reader.GetOrdinal(name);
+            public override String GetString(int ordinal) => Reader.GetString(ordinal);
+            public override Object GetValue(int ordinal) => Reader.GetValue(ordinal);
+            public override int GetValues(Object[] values) => Reader.GetValues(values);
+            public override bool IsDBNull(int ordinal) => Reader.IsDBNull(ordinal);
+            public override T GetFieldValue<T>(int ordinal) => Reader.GetFieldValue<T>(ordinal);
+            public override Task<T> GetFieldValueAsync<T>(int ordinal, CancellationToken cancellationToken) => Reader.GetFieldValueAsync<T>(ordinal, cancellationToken);
+            public override Task<bool> IsDBNullAsync(int ordinal, CancellationToken cancellationToken) => Reader.IsDBNullAsync(ordinal, cancellationToken);
+            public override System.IO.Stream GetStream(int ordinal) => Reader.GetStream(ordinal);
+            public override System.IO.TextReader GetTextReader(int ordinal) => Reader.GetTextReader(ordinal);
+            public override Type GetProviderSpecificFieldType(int ordinal) => Reader.GetProviderSpecificFieldType(ordinal);
+            public override Object GetProviderSpecificValue(int ordinal) => Reader.GetProviderSpecificValue(ordinal);
+            public override int GetProviderSpecificValues(Object[] values) => Reader.GetProviderSpecificValues(values);
+            public override System.Data.DataTable GetSchemaTable() => Reader.GetSchemaTable();
+            public override Task<System.Data.DataTable> GetSchemaTableAsync(CancellationToken cancellationToken = default) => Reader.GetSchemaTableAsync(cancellationToken);
+            public override Task<System.Collections.ObjectModel.ReadOnlyCollection<DbColumn>> GetColumnSchemaAsync(CancellationToken cancellationToken = default) => Reader.GetColumnSchemaAsync(cancellationToken);
+            public System.Collections.ObjectModel.ReadOnlyCollection<DbColumn> GetColumnSchema() => Reader.GetColumnSchema();
+
+            public override bool NextResult() => Reader.NextResult();
+            public override Task<bool> NextResultAsync(CancellationToken cancellationToken) => Reader.NextResultAsync(cancellationToken);
+            public override bool Read() => Reader.Read();
+            public override Task<bool> ReadAsync(CancellationToken cancellationToken) => Reader.ReadAsync(cancellationToken);
+            public override System.Collections.IEnumerator GetEnumerator() => ((System.Collections.IEnumerable)Reader).GetEnumerator();
+
+            public override void Close() => Reader.Close();
+            public override Task CloseAsync() => Reader.CloseAsync();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    try
+                    {
+                        Reader.Dispose();
+                    }
+                    finally
+                    {
+                        Cmd.Dispose();
+                    }
+                }
+            }
+
+            public override async ValueTask DisposeAsync()
+            {
+                try
+                {
+                    await Reader.DisposeAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    await Cmd.DisposeAsync().ConfigureAwait(false);
+                }
+                GC.SuppressFinalize(this);
+            }
         }
 
 

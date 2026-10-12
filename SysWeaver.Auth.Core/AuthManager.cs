@@ -108,9 +108,8 @@ namespace SysWeaver.Auth
             ArgumentNullException.ThrowIfNull(authHeaderString);
 #endif//DEBUG
             var s = authHeaderString.Trim();
-            var scheme = s.SplitFirst(' ', out var p, false, true);
-            //  Auth schemes are case insensitive (RFC 9110)
-            var isBasic = String.Equals(scheme, "Basic", StringComparison.OrdinalIgnoreCase);
+            //  The token is only allocated if it's needed (not for cached results)
+            var isBasic = ParseScheme(s, out var isBearer, out var tokenStart);
             var fail = isBasic ? NoAuthBasic : NoAuth;
             if (s.Length > MaxAuthHeaderLength)
                 return fail;
@@ -127,6 +126,7 @@ namespace SysWeaver.Auth
                 }
             }
             Authorization aa = null;
+            var p = (isBasic || isBearer) ? GetToken(s, tokenStart) : null;
             if (isBasic)
             {
                 //  Handling basic auth
@@ -154,7 +154,7 @@ namespace SysWeaver.Auth
                         aa = await BasicAuth(username, hash).ConfigureAwait(false);
                 }
             }
-            else if (String.Equals(scheme, "Bearer", StringComparison.OrdinalIgnoreCase) || String.Equals(scheme, "*key", StringComparison.OrdinalIgnoreCase))
+            else if (isBearer)
             {
                 //  Handling Bearer auth
                 aa = await BearerAuth(p).ConfigureAwait(false);
@@ -177,6 +177,45 @@ namespace SysWeaver.Auth
             }
             return auth;
         }
+
+        /// <summary>
+        /// Get the auth scheme of a (trimmed) header value, same as s.SplitFirst(' ', out var token, false, true) without any allocations.
+        /// Auth schemes are case insensitive (RFC 9110).
+        /// </summary>
+        /// <param name="s">The trimmed header value</param>
+        /// <param name="isBearer">True if the scheme is "Bearer" or "*key" (and not "Basic")</param>
+        /// <param name="tokenStart">The start of the token (after the first space and any white space following it), or -1 if there is no space (no token)</param>
+        /// <returns>True if the scheme is "Basic"</returns>
+        static bool ParseScheme(String s, out bool isBearer, out int tokenStart)
+        {
+            var sp = s.IndexOf(' ');
+            var schemeEnd = s.Length;
+            tokenStart = -1;
+            if (sp >= 0)
+            {
+                var rs = sp + 1;
+                var l = s.Length;
+                while ((rs < l) && Char.IsWhiteSpace(s[rs]))
+                    ++rs;
+                tokenStart = rs;
+                schemeEnd = sp;
+                while ((schemeEnd > 0) && Char.IsWhiteSpace(s[schemeEnd - 1]))
+                    --schemeEnd;
+            }
+            var scheme = s.AsSpan(0, schemeEnd);
+            var isBasic = scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase);
+            isBearer = !isBasic && (scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) || scheme.Equals("*key", StringComparison.OrdinalIgnoreCase));
+            return isBasic;
+        }
+
+        /// <summary>
+        /// Get the token found by <see cref="ParseScheme"/> (same as the right part of SplitFirst)
+        /// </summary>
+        /// <param name="s">The trimmed header value</param>
+        /// <param name="tokenStart">The start of the token, -1 if there is no token</param>
+        /// <returns>The token, null if there was no space, empty if there is nothing after the space</returns>
+        static String GetToken(String s, int tokenStart)
+            => tokenStart < 0 ? null : (tokenStart < s.Length ? s.Substring(tokenStart) : String.Empty);
 
         /// <summary>
         /// Authorization headers longer than this (in chars) are rejected without any processing.

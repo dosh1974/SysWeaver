@@ -98,15 +98,10 @@ namespace SysWeaver.Collections
         {
             var al = a.Length;
             var bl = b.Length;
-            var l = al < bl ? al : bl;
-            for (int i = 0; i < l; ++ i)
-            {
-                int aa = a[i];
-                int bb = b[i];
-                var d = aa - bb;
-                if (d != 0)
-                    return d;
-            }
+            //  Vectorized search for the first difference, the result is the same as before (the char difference or the length difference)
+            var i = a.AsSpan().CommonPrefixLength(b);
+            if (i < al && i < bl)
+                return a[i] - b[i];
             return al - bl;
         }
 
@@ -133,85 +128,94 @@ namespace SysWeaver.Collections
             if (HavePartial)
                 FixPartial();
             var sl = s.Length;
+            //  Chars outside [32, 255] can't be in the set (and must not be truncated to a byte)
+            if (s.AsSpan().ContainsAnyExceptInRange((Char)32, (Char)255))
+                return -1;
             var pool = ArrayPool<Byte>.Shared;
-            var r = pool.Rent(sl);
+            Byte[] r = null;
+            Byte[] t = null;
             try
             {
-                int i;
-                for (i = 0; i < sl; ++i)
-                {
-                    int c = s[i];
-                    //  Chars outside [32, 255] can't be in the set (and must not be truncated to a byte)
-                    if ((uint)(c - 32) > (255 - 32))
-                        return -1;
-                    r[i] = (Byte)c;
-                }
-                var mem = new ReadOnlyMemory<Byte>(r, 0, sl);
-                var cmp = ReadOnlyMemoryComparer.GetComparer<Byte>();
+                Span<Byte> mem = sl <= MaxStackBytes ? stackalloc Byte[sl] : (r = pool.Rent(sl)).AsSpan(0, sl);
+                for (int x = 0; x < sl; ++x)
+                    mem[x] = (Byte)s[x];
+                //  Find the first block with a first string that is greater or equal (same as BinarySearch.Lower with a lexicographic comparer)
                 var blocks = Blocks;
                 var blockSize = BlockSize;
-                var blockIndex = BinarySearch.Lower(0, blocks.Count, mem, bi =>
+                var count = blocks.Count;
+                int min = 0;
+                int max = count - 1;
+                while (min <= max)
                 {
-                    var block = blocks[(int)bi];
-                    var bl = block.Length;
-                    for (int i = 0; i < bl; ++i)
-                    {
-                        if (block[i] < 32)
-                            return new ReadOnlyMemory<Byte>(block, 0, i);
-                    }
-                    return block;
-                }, cmp);
-                if (blockIndex >= 0)
-                    return blockIndex * blockSize;
-                blockIndex = ~blockIndex;
+                    var mid = min + ((max - min) >> 1);
+                    if (FirstString(blocks[mid]).SequenceCompareTo(mem) < 0)
+                        min = mid + 1;
+                    else
+                        max = mid - 1;
+                }
+                if ((min < count) && (FirstString(blocks[min]).SequenceCompareTo(mem) == 0))
+                    return min * blockSize;
+                var blockIndex = min;
                 if (blockIndex == 0)
                     return -1;
                 --blockIndex;
                 var baseIndex = blockIndex * blockSize;
-                var t = pool.Rent(MaxStringLength);
-                try
+                var ml = MaxStringLength;
+                Span<Byte> temp = ml <= MaxStackBytes ? stackalloc Byte[MaxStackBytes] : (t = pool.Rent(ml));
+                var b = blocks[blockIndex];
+                var l = b.Length;
+                int common = 0;
+                int index = 0;
+                int i = 0;
+                while (i < l)
                 {
-
-                    var b = blocks[blockIndex];
-                    var l = b.Length;
-                    int common = 0;
-                    int index = 0;
-                    i = 0;
-                    while (i < l)
+                    var c = b[i];
+                    if (c < 32)
                     {
-                        var c = b[i];
-                        if (c < 32)
+                        if (index > 0)
                         {
-                            if (index > 0)
-                            {
-                                var res = cmp.Compare(mem, new ReadOnlyMemory<byte>(t, 0, common));
-                                if (res == 0)
-                                    return baseIndex + index;
-                                if (res < 0)
-                                    return -1;
-                            }
-                            ++index;
-                            ++i;
-                            common = c;
-                            continue;
+                            var res = ((ReadOnlySpan<Byte>)mem).SequenceCompareTo(temp.Slice(0, common));
+                            if (res == 0)
+                                return baseIndex + index;
+                            if (res < 0)
+                                return -1;
                         }
-                        t[common] = c;
+                        ++index;
                         ++i;
-                        ++common;
+                        common = c;
+                        continue;
                     }
-                    if (cmp.Compare(mem, new ReadOnlyMemory<byte>(t, 0, common)) == 0)
-                        return baseIndex + index;
-                    return -1;
+                    temp[common] = c;
+                    ++i;
+                    ++common;
                 }
-                finally
-                {
-                    pool.Return(t);
-                }
+                if (((ReadOnlySpan<Byte>)mem).SequenceEqual(temp.Slice(0, common)))
+                    return baseIndex + index;
+                return -1;
             }
             finally
             {
-                pool.Return(r);
+                if (t != null)
+                    pool.Return(t);
+                if (r != null)
+                    pool.Return(r);
             }
+        }
+
+        /// <summary>
+        /// The largest number of bytes to use on the stack (else a pooled array is used)
+        /// </summary>
+        const int MaxStackBytes = 256;
+
+        /// <summary>
+        /// Get the first (uncompressed) string of a block, the bytes before the first byte that is less than 32 (or the whole block)
+        /// </summary>
+        /// <param name="block">The block</param>
+        /// <returns>The bytes of the first string</returns>
+        static ReadOnlySpan<Byte> FirstString(Byte[] block)
+        {
+            var i = block.AsSpan().IndexOfAnyInRange((Byte)0, (Byte)31);
+            return i < 0 ? block : block.AsSpan(0, i);
         }
 
         /// <summary>

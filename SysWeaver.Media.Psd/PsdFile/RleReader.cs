@@ -90,13 +90,8 @@ namespace PhotoshopFile
             if (runLength > bytesLeft)
               throw new RleException("RLE packet overruns the decode window.");
 
-            byte* ptr = ptrBuffer + bufferIdx;
-            byte* ptrEnd = ptr + runLength;
-            while (ptr < ptrEnd)
-            {
-              *ptr = byteValue;
-              ptr++;
-            }
+            //  Vectorized fill (the run length is 2..128 and inside the decode window)
+            new Span<byte>(ptrBuffer + bufferIdx, runLength).Fill(byteValue);
 
             bufferIdx += runLength;
             bytesLeft -= runLength;

@@ -1,5 +1,7 @@
 ﻿using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using SimpleStack.Orm.Logging;
 
 namespace SimpleStack.Orm
@@ -100,6 +102,30 @@ namespace SimpleStack.Orm
             _logger.LogDebug("Executing ExecuteScalar: {0}", CommandText);
             var res = _command.ExecuteScalar();
             _logger.LogDebug("ExecuteScalar complete with result '{0}'", res);
+            return res;
+        }
+
+        protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+        {
+            _logger.LogDebug("Executing ExecuteReaderAsync : {0}", CommandText);
+            var res = await _command.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug("ExecuteReaderAsync complete");
+            return res;
+        }
+
+        public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
+        {
+            _logger.LogDebug("Executing ExecuteNonQueryAsync : {0}", CommandText);
+            var res = await _command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug("ExecuteNonQueryAsync complete with result '{0}'", res);
+            return res;
+        }
+
+        public override async Task<object> ExecuteScalarAsync(CancellationToken cancellationToken)
+        {
+            _logger.LogDebug("Executing ExecuteScalarAsync: {0}", CommandText);
+            var res = await _command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug("ExecuteScalarAsync complete with result '{0}'", res);
             return res;
         }
 

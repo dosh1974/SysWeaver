@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Buffers;
 using System.Linq;
@@ -91,7 +92,7 @@ namespace SysWeaver
             Dictionary<String, Tuple<String, Func<String, String>>> transformedVars = null;
             if (allowTransforms)
                 transformedVars = caseInSensitive ? new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.Ordinal);
-            var fmt = Transforms;
+            var fmt = TransformsLookup;
             int search = 0;
             while (search < len)
             {
@@ -106,16 +107,17 @@ namespace SysWeaver
                 String name = key;
                 if (allowTransforms)
                 {
+                    //  Look up the transform prefixes without allocating them
                     var kl = key.Length;
                     if (kl > 1)
                     {
-                        if (fmt.TryGetValue(key.Substring(0, 2), out format))
+                        if (fmt.TryGetValue(key.AsSpan(0, 2), out format))
                         {
                             name = key.Substring(2);
                         }
                         else
                         {
-                            if (fmt.TryGetValue(key.Substring(0, 1), out format))
+                            if (fmt.TryGetValue(key.AsSpan(0, 1), out format))
                             {
                                 name = key.Substring(1);
                             }
@@ -124,7 +126,7 @@ namespace SysWeaver
                     {
                         if (kl > 0)
                         {
-                            if (fmt.TryGetValue(key.Substring(0, 1), out format))
+                            if (fmt.TryGetValue(key.AsSpan(0, 1), out format))
                             {
                                 name = key.Substring(1);
                             }
@@ -554,6 +556,11 @@ namespace SysWeaver
             { "~¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(x.RemoveCamelCase()), true) },
             { "~*", x => PathExt.SafeFilename(x.RemoveCamelCase()) },
         }.Freeze();
+
+        /// <summary>
+        /// The <see cref="Transforms"/>, looked up using a span (ordinal)
+        /// </summary>
+        static readonly FrozenDictionary<String, Func<String, String>>.AlternateLookup<ReadOnlySpan<Char>> TransformsLookup = Transforms.ToFrozenDictionary(StringComparer.Ordinal).GetAlternateLookup<ReadOnlySpan<Char>>();
 
         static Dictionary<String, Tuple<String, Func<String, String>>> AddTransforms(ref StringTree tree, IEnumerable<String> replace, bool caseInSensitive, bool allowFormatting)
         {

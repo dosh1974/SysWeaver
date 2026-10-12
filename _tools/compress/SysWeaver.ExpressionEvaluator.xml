@@ -249,6 +249,18 @@
             <returns>A function that evaluates the expression, the result is a boxed T</returns>
             <exception cref="T:System.ArgumentException">The expression is invalid (usually an <see cref="T:SysWeaver.Parser.ExpressionParserException"/> with the position of the error), or a parameter name is invalid, used twice or the name of a function / constant</exception>
         </member>
+        <member name="F:SysWeaver.Parser.ExpressionEvaluator`1.IsBuiltInValueType">
+            <summary>
+            True if T is a primitive type or decimal (Convert.ChangeType returns the same value if the value already is a T)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ConvertParameter(System.Object)">
+            <summary>
+            Same as (T)Convert.ChangeType(value, typeof(T)), but values that already are a (built in) T are just unboxed
+            </summary>
+            <param name="value">The value</param>
+            <returns>The value as a T</returns>
+        </member>
         <member name="M:SysWeaver.Parser.ExpressionEvaluator`1.ObjectEvaluator(System.String,System.String[])">
             <summary>
             Compile an expression to a function taking the parameter values as objects.

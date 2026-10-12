@@ -335,9 +335,8 @@ namespace SysWeaver
             var n = node.Nodes;
             if (n == null)
                 return;
-            foreach (var x in n.OrderBy(x => x.Key))
+            foreach (var next in GetSortedNodes(n, false))
             {
-                var next = x.Value;
                 var val = next.Leaf;
                 if (val != null)
                     found.Add(val);
@@ -369,19 +368,55 @@ namespace SysWeaver
         /// <returns>The value lists (the internal lists, must not be modified), lazily enumerated (recursive)</returns>
         public IEnumerable<IReadOnlyList<T>> GetAll()
         {
+            //  Depth first (pre-order) using an explicit stack, nested iterators would cost O(depth) per value list
             var n = Nodes;
-            if (n != null)
+            if (n == null)
+                yield break;
+            var stack = new Stack<Dictionary<Char, StringTreeList<T>>.Enumerator>();
+            var e = n.GetEnumerator();
+            for (; ; )
             {
-                foreach (var x in n)
+                if (!e.MoveNext())
                 {
-                    var next = x.Value;
-                    var val = next.Leaf;
-                    if (val != null)
-                        yield return val;
-                    foreach (var r in next.GetAll())
-                        yield return r;
+                    if (!stack.TryPop(out e))
+                        yield break;
+                    continue;
+                }
+                var next = e.Current.Value;
+                var val = next.Leaf;
+                if (val != null)
+                    yield return val;
+                var cn = next.Nodes;
+                if (cn != null)
+                {
+                    stack.Push(e);
+                    e = cn.GetEnumerator();
                 }
             }
+        }
+
+        /// <summary>
+        /// Get the child nodes ordered by their char (same order as OrderBy(x => x.Key), the keys are unique)
+        /// </summary>
+        /// <param name="nodes">The child nodes</param>
+        /// <param name="descending">True to get the nodes in descending order</param>
+        /// <returns>The child nodes</returns>
+        static StringTreeList<T>[] GetSortedNodes(Dictionary<Char, StringTreeList<T>> nodes, bool descending)
+        {
+            var c = nodes.Count;
+            var keys = new Char[c];
+            var values = new StringTreeList<T>[c];
+            int i = 0;
+            foreach (var x in nodes)
+            {
+                keys[i] = x.Key;
+                values[i] = x.Value;
+                ++i;
+            }
+            Array.Sort(keys, values);
+            if (descending)
+                Array.Reverse(values);
+            return values;
         }
 
         /// <summary>
@@ -390,17 +425,33 @@ namespace SysWeaver
         /// <returns>The value lists (the internal lists, must not be modified), lazily enumerated (recursive)</returns>
         public IEnumerable<IReadOnlyList<T>> GetAllInOrder()
         {
+            //  Depth first (pre-order) using an explicit stack, the children of a node are sorted when the node is entered
             var n = Nodes;
-            if (n != null)
+            if (n == null)
+                yield break;
+            var stack = new Stack<(StringTreeList<T>[], int)>();
+            var items = GetSortedNodes(n, false);
+            int i = 0;
+            for (; ; )
             {
-                foreach (var x in n.OrderBy(x => x.Key))
+                if (i >= items.Length)
                 {
-                    var next = x.Value;
-                    var val = next.Leaf;
-                    if (val != null)
-                        yield return val;
-                    foreach (var r in next.GetAllInOrder())
-                        yield return r;
+                    if (!stack.TryPop(out var f))
+                        yield break;
+                    (items, i) = f;
+                    continue;
+                }
+                var next = items[i];
+                ++i;
+                var val = next.Leaf;
+                if (val != null)
+                    yield return val;
+                var cn = next.Nodes;
+                if (cn != null)
+                {
+                    stack.Push((items, i));
+                    items = GetSortedNodes(cn, false);
+                    i = 0;
                 }
             }
         }
@@ -411,18 +462,41 @@ namespace SysWeaver
         /// <returns>The value lists (the internal lists, must not be modified), lazily enumerated (recursive)</returns>
         public IEnumerable<IReadOnlyList<T>> GetAllInReverseOrder()
         {
+            //  Depth first (post-order) using an explicit stack, the children of a node are sorted when the node is entered,
+            //  the values of a node (read before its children) are returned after the values of its children
             var n = Nodes;
-            if (n != null)
+            if (n == null)
+                yield break;
+            var stack = new Stack<(StringTreeList<T>[], int, List<T>)>();
+            var items = GetSortedNodes(n, true);
+            int i = 0;
+            List<T> pending = null;
+            for (; ; )
             {
-                foreach (var x in n.OrderByDescending(x => x.Key))
+                if (i >= items.Length)
                 {
-                    var next = x.Value;
-                    var val = next.Leaf;
-                    foreach (var r in next.GetAllInReverseOrder())
-                        yield return r;
-                    if (val != null)
-                        yield return val;
+                    if (!stack.TryPop(out var f))
+                        yield break;
+                    var leaf = pending;
+                    (items, i, pending) = f;
+                    if (leaf != null)
+                        yield return leaf;
+                    continue;
                 }
+                var next = items[i];
+                ++i;
+                var val = next.Leaf;
+                var cn = next.Nodes;
+                if (cn != null)
+                {
+                    stack.Push((items, i, pending));
+                    items = GetSortedNodes(cn, true);
+                    i = 0;
+                    pending = val;
+                    continue;
+                }
+                if (val != null)
+                    yield return val;
             }
         }
 

@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
 using SysWeaver.Data;
 using SysWeaver.Net;
 
@@ -15,11 +18,27 @@ namespace SysWeaver.Chat
         {
             if (session == null)
                 return "Anonymous";
-            var t = String.GetHashCode(session.DeviceId);
-            if (t < 0)
-                t = -t;
-            return "Anonymous" + t;
+            //  A stable hash (String.GetHashCode is randomized per process and the name is persisted)
+            var id = session.DeviceId.AsSpan();
+            uint t;
+            if (id.Length <= MaxStackChars)
+            {
+                Span<Byte> b = stackalloc Byte[MaxStackChars * 3];
+                t = XxHash32.HashToUInt32(b.Slice(0, Encoding.UTF8.GetBytes(id, b)));
+            }
+            else
+            {
+                t = XxHash32.HashToUInt32(Encoding.UTF8.GetBytes(session.DeviceId));
+            }
+            //  "Anonymous" + t, one allocation
+            Span<char> c = stackalloc char[AnonymousPrefix.Length + 10];
+            AnonymousPrefix.CopyTo(c);
+            t.TryFormat(c.Slice(AnonymousPrefix.Length), out var n, default, CultureInfo.InvariantCulture);
+            return new String(c.Slice(0, AnonymousPrefix.Length + n));
         }
+
+        const String AnonymousPrefix = "Anonymous";
+        const int MaxStackChars = 128;
 
         /// <summary>
         /// Get the user name from a session

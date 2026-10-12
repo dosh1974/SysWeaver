@@ -69,7 +69,7 @@
         <Link>runtimes\$([System.IO.Path]::GetFileName($([System.String]::Copy('%(Directory)').TrimEnd('\'))))\%(Filename)</Link>
       </FfmpegPacked>
       <FfmpegPacked Update="@(FfmpegPacked)">
-        <Destination>$(MSBuildProjectDirectory)\$(IntermediateOutputPath)%(Link)</Destination>
+        <Destination>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', '%(Link)'))</Destination>
       </FfmpegPacked>
     </ItemGroup>
   </Target>

@@ -1,4 +1,4 @@
-using OpenAI.Responses;
+﻿using OpenAI.Responses;
 using System;
 using System.ClientModel;
 using System.ClientModel.Primitives;
@@ -32,7 +32,7 @@ namespace SysWeaver.AI
         {
             CanReason = o.CanReason;
             if (CanReason)
-                ReasonigLevel = OpenAiModels.ResponseReasoningLevels[(int)(p.Reasoning ?? AiReasoning.Low)];
+                ReasonigLevel = OpenAiModels.ResponseReasoningLevels[(int)o.GetReasoning(p.Reasoning ?? AiReasoning.Low)];
             if (o.HaveTiers)
                 Tier = OpenAiModels.ResponseTiers[(int)(p.Tier ?? OpenAiServiceTier.Auto)];
             Client = c;

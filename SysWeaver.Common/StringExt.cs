@@ -79,8 +79,16 @@ namespace SysWeaver
             // Non ASCII chars, check them one by one (ASCII chars are known to be ok)
             for (int i = nonAscii; i < s.Length; ++i)
             {
-                if (!s[i].FastIsLowerOrNonLetter())
+                var c = s[i];
+                if (!c.FastIsLowerOrNonLetter())
                     return false;
+                // A surrogate pair (a letter outside the BMP) can change even though its single chars don't
+                if (Char.IsHighSurrogate(c) && ((i + 1) < s.Length) && Char.IsLowSurrogate(s[i + 1]))
+                {
+                    var r = new Rune(c, s[++i]);
+                    if (Rune.ToLowerInvariant(r) != r)
+                        return false;
+                }
             }
             return true;
         }
@@ -121,7 +129,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Lower case chars (same as calling FastToLower for every char), ASCII is converted using SIMD
+        /// Lower case chars (same as ToLowerInvariant), ASCII is converted using SIMD, the rest (if any) char by char, text with a surrogate is converted again with the invariant culture span method (surrogate pairs included)
         /// </summary>
         /// <param name="source">The source chars</param>
         /// <param name="destination">The destination, same length as the source</param>
@@ -129,14 +137,32 @@ namespace SysWeaver
         {
             if (Ascii.ToLower(source, destination, out var done) == OperationStatus.Done)
                 return;
-            // A non ASCII char, convert the rest one by one
+            // A non ASCII char, convert the rest one by one (faster than the span method), a surrogate pair needs the span method (rare)
             var l = source.Length;
             for (int i = done; i < l; ++i)
                 destination[i] = source[i].FastToLower();
+            CasePairs(source.Slice(done), destination.Slice(done), false);
         }
 
         /// <summary>
-        /// Upper case chars (same as calling FastToUpper for every char), ASCII is converted using SIMD
+        /// Convert the text again with the invariant culture span method if it has a surrogate (a letter outside the BMP, the char methods never change it)
+        /// </summary>
+        /// <param name="source">The source chars</param>
+        /// <param name="destination">The destination, same length as the source</param>
+        /// <param name="upper">True to upper case, false to lower case</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void CasePairs(ReadOnlySpan<Char> source, Span<Char> destination, bool upper)
+        {
+            if (!source.ContainsAnyInRange('\uD800', '\uDFFF'))
+                return;
+            if (upper)
+                source.ToUpperInvariant(destination);
+            else
+                source.ToLowerInvariant(destination);
+        }
+
+        /// <summary>
+        /// Upper case chars (same as ToUpperInvariant), ASCII is converted using SIMD, the rest (if any) char by char, text with a surrogate is converted again with the invariant culture span method (surrogate pairs included)
         /// </summary>
         /// <param name="source">The source chars</param>
         /// <param name="destination">The destination, same length as the source</param>
@@ -144,10 +170,11 @@ namespace SysWeaver
         {
             if (Ascii.ToUpper(source, destination, out var done) == OperationStatus.Done)
                 return;
-            // A non ASCII char, convert the rest one by one
+            // A non ASCII char, convert the rest one by one (faster than the span method), a surrogate pair needs the span method (rare)
             var l = source.Length;
             for (int i = done; i < l; ++i)
                 destination[i] = source[i].FastToUpper();
+            CasePairs(source.Slice(done), destination.Slice(done), true);
         }
 
         /// <summary>
@@ -324,8 +351,16 @@ namespace SysWeaver
             // Non ASCII chars, check them one by one (ASCII chars are known to be ok)
             for (int i = nonAscii; i < s.Length; ++i)
             {
-                if (!s[i].FastIsUpperOrNonLetter())
+                var c = s[i];
+                if (!c.FastIsUpperOrNonLetter())
                     return false;
+                // A surrogate pair (a letter outside the BMP) can change even though its single chars don't
+                if (Char.IsHighSurrogate(c) && ((i + 1) < s.Length) && Char.IsLowSurrogate(s[i + 1]))
+                {
+                    var r = new Rune(c, s[++i]);
+                    if (Rune.ToUpperInvariant(r) != r)
+                        return false;
+                }
             }
             return true;
         }

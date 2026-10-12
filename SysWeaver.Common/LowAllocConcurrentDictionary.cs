@@ -1492,7 +1492,22 @@ namespace SysWeaver
         /// </summary>
         /// <returns>A new array with the items</returns>
         public KeyValuePair<TKey, TValue>[] ToArray()
-            => ToList().ToArray();
+        {
+            //  Enumerate directly into an array (no list copy), grows if items are added while enumerating
+            var a = new KeyValuePair<TKey, TValue>[Count];
+            int n = 0;
+            foreach (var p in this)
+            {
+                if (n == a.Length)
+                    Array.Resize(ref a, Math.Max(4, n * 2));
+                a[n++] = p;
+            }
+            if (n == 0)
+                return Array.Empty<KeyValuePair<TKey, TValue>>();
+            if (n != a.Length)
+                Array.Resize(ref a, n);
+            return a;
+        }
 
         /// <summary>
         /// Copy a snapshot of the items to an array

@@ -1216,9 +1216,9 @@ namespace SysWeaver.Net
             var l = url.Length;
             if ((url[0] <= ' ') || (url[l - 1] <= ' '))
                 return false;
-            foreach (var c in url)
-                if ((c < ' ') || (c == '\x7f'))
-                    return false;
+            //  Vectorized search for control chars (less than ' ' or DEL)
+            if (url.AsSpan().ContainsAny(RedirectControlChars))
+                return false;
             var c0 = url[0];
             if ((c0 == '/') || (c0 == '\\'))
                 return (l < 2) || ((url[1] != '/') && (url[1] != '\\'));
@@ -1230,6 +1230,11 @@ namespace SysWeaver.Net
                 return false;
             return IsSameOrigin(target, prefix) || IsSameOrigin(target, externalRootUri);
         }
+
+        /// <summary>
+        /// The control chars that make a redirect url invalid (0 - 31 and DEL)
+        /// </summary>
+        static readonly SearchValues<Char> RedirectControlChars = SearchValues.Create([.. Enumerable.Range(0, 32).Select(x => (Char)x), (Char)0x7f]);
 
         static bool IsSameOrigin(Uri target, String root)
         {

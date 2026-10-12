@@ -64,9 +64,25 @@ namespace SysWeaver.MicroService
 
         readonly String GoogleMapsKey;
         
+        /// <summary>
+        /// Get the file extension (including the '.') of the path of an url, ignoring the query and fragment
+        /// </summary>
+        /// <param name="url">The url</param>
+        /// <returns>The extension, ex: ".png", or an empty string if the path has no extension</returns>
+        static String GetUrlExtension(String url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var u))
+                return Path.GetExtension(u.AbsolutePath);
+            var e = url.AsSpan();
+            var i = e.IndexOfAny('?', '#');
+            if (i >= 0)
+                e = e.Slice(0, i);
+            return Path.GetExtension(e).ToString();
+        }
+
         public async Task<StaticMemoryHttpRequestHandler> GetProxiedUrl(String url)
         {
-            var ext = url.Substring(url.LastIndexOf('.'));
+            var ext = GetUrlExtension(url);
             String newUrl;
             using (var rng = SecureRng.Get())
                 newUrl = rng.GetGuid24();
@@ -139,7 +155,11 @@ namespace SysWeaver.MicroService
             if (ext[1] != "png")
                 return null;
             var rname = ext[0];
-            var src = HttpUtility.UrlDecode(context.Url.Substring(context.QueryStringStart));
+            //  The query string is the source url (Url is already decoded), QueryStringStart is 0 if there is no query
+            var qs = context.QueryStringStart;
+            if (qs <= 0)
+                return null;
+            var src = context.Url.Substring(qs);
             var sl = src.Length;
             if (sl <= 0)
                 return null;
@@ -252,7 +272,7 @@ namespace SysWeaver.MicroService
                 }
                 if (a.Error != null)
                 {
-                    n.Desc = "CORS";
+                    n.Desc = "Error: " + a.Error; 
                     M.AddMessage(prefix + "Got an error: " + a.Error, MessageLevels.Debug);
                     return Tuple.Create(data, n);
                 }
@@ -297,14 +317,25 @@ namespace SysWeaver.MicroService
         {
             var url = InternalGetMediaUrl(r, context);
             var x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
-            if (x.Item2?.Desc.FastEquals("CORS") ?? false)
+            var desc = x.Item2?.Desc ?? "";
+            if (desc.FastStartsWith("Error:"))
             {
-                var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
-                if (h != null)
+                if (desc.FastToLower().FastIndexOf("cors") >0)
                 {
-                    r.Url = "../" + h.Uri;
-                    url = InternalGetMediaUrl(r, context);
-                    x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
+                    var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
+                    if (h != null)
+                    {
+                        r.Url = "../" + h.Uri;
+                        url = InternalGetMediaUrl(r, context);
+                        x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, format, quality, false, r.ExtraDelayMs).ConfigureAwait(false);
+                        desc = x.Item2?.Desc ?? "";
+                        if (desc.FastStartsWith("Error:"))
+                            throw new Exception(desc);
+                    }
+                }
+                else
+                {
+                    throw new Exception(desc);
                 }
             }
             return new ScreenshotImageResponse
@@ -318,14 +349,25 @@ namespace SysWeaver.MicroService
         {
             var url = InternalGetMediaUrl(r, context);
             var x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, ScreenshotImageFormats.Png, 70, false, r.ExtraDelayMs).ConfigureAwait(false);
-            if (x.Item2?.Desc.FastEquals("CORS") ?? false)
+            var desc = x.Item2?.Desc ?? "";
+            if (desc.FastStartsWith("Error:"))
             {
-                var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
-                if (h != null)
+                if (desc.FastToLower().FastIndexOf("cors") > 0)
                 {
-                    r.Url = "../" + h.Uri;
-                    url = InternalGetMediaUrl(r, context);
-                    x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, ScreenshotImageFormats.Png, 70, false, r.ExtraDelayMs).ConfigureAwait(false);
+                    var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
+                    if (h != null)
+                    {
+                        r.Url = "../" + h.Uri;
+                        url = InternalGetMediaUrl(r, context);
+                        x = await GetAdaptiveImageAsync(url, r.Width, r.Height, 1, ScreenshotImageFormats.Png, 70, false, r.ExtraDelayMs).ConfigureAwait(false);
+                        desc = x.Item2?.Desc ?? "";
+                        if (desc.FastStartsWith("Error:"))
+                            throw new Exception(desc);
+                    }
+                }
+                else
+                {
+                    throw new Exception(desc);
                 }
             }
             return x.Item1;

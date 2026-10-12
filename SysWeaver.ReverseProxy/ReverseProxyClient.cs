@@ -38,7 +38,7 @@ namespace SysWeaver.ReverseProxy
         public static String SanitizeClientId(String s)
         {
             var l = s.Length;
-            Span<Char> temp = stackalloc Char[l];
+            Span<Char> temp = l <= 1024 ? stackalloc Char[l] : new Char[l];
             int o = 0;
             for (int i = 0; i < l; ++ i)
             {

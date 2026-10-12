@@ -277,7 +277,7 @@ namespace SysWeaver.FolderSync
             long fileCount = 0;
             long fileSize = 0;
             long payloadSize = 0;
-            useCdc = res.Cdc.FastEquals(props.Key);
+            useCdc = useCdc && res.Cdc.FastEquals(props.Key);
             if (useCdc)
             {
                 long chunkCount = 0;
@@ -611,7 +611,7 @@ namespace SysWeaver.FolderSync
                 {
                     if (needActivate && switchTo)
                     {
-                        var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, fn => onBackupCopy(fn, version)).ConfigureAwait(false);
+                        var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, onBackupCopy == null ? null : fn => onBackupCopy(fn, version)).ConfigureAwait(false);
                         if (ex != null)
                             throw ex;
                     }
@@ -644,7 +644,7 @@ namespace SysWeaver.FolderSync
             {
                 if (needActivate && switchTo)
                 {
-                    var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, fn => onBackupCopy(fn, version)).ConfigureAwait(false);
+                    var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, onBackupCopy == null ? null : fn => onBackupCopy(fn, version)).ConfigureAwait(false);
                     if (ex != null)
                         throw ex;
                 }
@@ -703,7 +703,7 @@ namespace SysWeaver.FolderSync
                         await ContentDependentChunking.Add(dst, props).ConfigureAwait(false);
                     return ReadOnlyMemory<Byte>.Empty;
                 }
-                useCdc = res.Cdc != null;
+                useCdc = useCdc && (res.Cdc != null);
                 await dls.ProcessAsyncValue(async dl =>
                 {
                     var x = dl.Name;
@@ -726,19 +726,19 @@ namespace SysWeaver.FolderSync
                         var cl = chunkHashes.Length;
                         var hs = props.HashSize;
                         transferBytes = cl;
-                        chunkTotalCount += (cl / hs);
+                        Interlocked.Add(ref chunkTotalCount, cl / hs);
                         var missing = ContentDependentChunking.GetMissingChunks(chunkHashes);
                         var ml = missing.Length;
                         if (ml > 0)
                         {
-                            missingChunkCount += (ml / hs);
+                            Interlocked.Add(ref missingChunkCount, ml / hs);
                             var mem = await client.PostRawRequestRaw(baseUrl + nameof(IFolderSyncEndPoints.GetChunks), missing);
                             using (var ms = mem.AsStream())
                                 if (await ContentDependentChunking.AddChunkList(ms, props).ConfigureAwait(false) < 0)
                                     throw new Exception("Failed to add missing chunks!");
                             cl = mem.Length;
                             transferBytes += cl;
-                            missingChunkBytes += cl;
+                            Interlocked.Add(ref missingChunkBytes, cl);
                         }
                         using var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write);
                         await ContentDependentChunking.WriteChunks(dest, chunkHashes, props).ConfigureAwait(false);
@@ -810,7 +810,7 @@ namespace SysWeaver.FolderSync
             await WriteRemoteManifest(downloadFolder, ret, start).ConfigureAwait(false);
             if (switchTo)
             {
-                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, fn => onBackupCopy(fn, oldVersion)).ConfigureAwait(false);
+                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, onBackupCopy == null ? null : fn => onBackupCopy(fn, oldVersion)).ConfigureAwait(false);
                 if (ex != null)
                     throw ex;
             }

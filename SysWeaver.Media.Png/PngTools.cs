@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using SysWeaver.IO;
 
@@ -101,6 +104,29 @@ namespace SysWeaver.Media.Png
         }
 
         /// <summary>
+        /// The tables for a "slicing by 8" crc computation (8 bytes per step): 8 tables of 256 entries, the first one is <see cref="CrcTable"/>,
+        /// table k is the crc of a byte followed by k zero bytes
+        /// </summary>
+        static readonly uint[] CrcSlice8Table = GetCrcSlice8Table();
+
+        static uint[] GetCrcSlice8Table()
+        {
+            var t = new uint[8 * 256];
+            var t0 = CrcTable;
+            t0.CopyTo(t, 0);
+            for (int k = 1; k < 8; ++k)
+            {
+                var o = k << 8;
+                for (int n = 0; n < 256; ++n)
+                {
+                    var p = t[o - 256 + n];
+                    t[o + n] = (p >> 8) ^ t0[p & 255];
+                }
+            }
+            return t;
+        }
+
+        /// <summary>
         /// Helper method to compute the Crc32 checksum (the standard CRC-32 used by png and zip, polynomial 0xEDB88320).
         /// </summary>
         /// <param name="data">Data</param>
@@ -111,6 +137,10 @@ namespace SysWeaver.Media.Png
         public static uint CalcCrc32(Byte[] data, long offset, long len, uint crc = 0)
         {
             var end = offset + Math.Max(0, Math.Min(data.LongLength - offset, len));
+            //  A valid range is computed 8 bytes at a time
+            if ((offset >= 0) && (end > offset))
+                return CalcCrc32(new ReadOnlySpan<Byte>(data, (int)offset, (int)(end - offset)), crc);
+            //  Nothing to compute, or a negative offset (throws an IndexOutOfRangeException as before)
             var c = crc ^ 0xffffffff;
             while (offset < end)
             {
@@ -130,8 +160,25 @@ namespace SysWeaver.Media.Png
         public static uint CalcCrc32(ReadOnlySpan<Byte> data, uint crc = 0)
         {
             var c = crc ^ 0xffffffff;
+            //  "Slicing by 8": 8 table lookups per 8 bytes instead of one dependent lookup per byte (same result).
+            //  The indices are masked (always inside the table), so the lookups are done without bounds checks
+            ref uint t = ref MemoryMarshal.GetArrayDataReference(CrcSlice8Table);
+            while (data.Length >= 8)
+            {
+                var lo = BinaryPrimitives.ReadUInt32LittleEndian(data) ^ c;
+                var hi = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(4));
+                c = Unsafe.Add(ref t, (7 << 8) + (int)(lo & 255))
+                  ^ Unsafe.Add(ref t, (6 << 8) + (int)((lo >> 8) & 255))
+                  ^ Unsafe.Add(ref t, (5 << 8) + (int)((lo >> 16) & 255))
+                  ^ Unsafe.Add(ref t, (4 << 8) + (int)(lo >> 24))
+                  ^ Unsafe.Add(ref t, (3 << 8) + (int)(hi & 255))
+                  ^ Unsafe.Add(ref t, (2 << 8) + (int)((hi >> 8) & 255))
+                  ^ Unsafe.Add(ref t, (1 << 8) + (int)((hi >> 16) & 255))
+                  ^ Unsafe.Add(ref t, (int)(hi >> 24));
+                data = data.Slice(8);
+            }
             foreach (var b in data)
-                c = CrcTable[(c ^ b) & 255] ^ ((c >> 8) & 0xFFFFFF);
+                c = Unsafe.Add(ref t, (int)((c ^ b) & 255)) ^ (c >> 8);
             return c ^ 0xffffffff;
         }
 
@@ -146,6 +193,9 @@ namespace SysWeaver.Media.Png
         public static uint CalcAdler32(ReadOnlySpan<Byte> data, int offset, int len, uint crc = 1)
         {
             var end = offset + Math.Max(0, Math.Min(data.Length - offset, len));
+            if ((offset >= 0) && (end > offset))
+                return Adler32Blocks(data.Slice(offset, end - offset), crc);
+            //  Nothing to compute (the initial value is returned as is) or a negative offset (throws as before)
             var s1 = crc & 0xffff;
             var s2 = (crc >> 16) & 0xffff;
             while (offset < end)
@@ -165,13 +215,56 @@ namespace SysWeaver.Media.Png
         /// <param name="crc">Initial checksum, pass the result of a previous call to continue a computation (1 to start a new one)</param>
         /// <returns>The Adler32 checksum for the data</returns>
         public static uint CalcAdler32(ReadOnlySpan<Byte> data, uint crc = 1)
-        { 
+        {
+            if (!data.IsEmpty)
+                return Adler32Blocks(data, crc);
+            //  The initial value is returned as is (not reduced)
             var s1 = crc & 0xffff;
             var s2 = (crc >> 16) & 0xffff;
-            foreach (var b in data)
+            return (s2 << 16) + s1;
+        }
+
+        /// <summary>
+        /// The largest number of bytes that can be added before the sums must be reduced (modulo 65521) without overflowing 32 bits,
+        /// also when the initial sums are not reduced (up to 65535): 65535 + 5552 * 65535 + 255 * 5552 * 5553 / 2 = 4294773495 (the zlib NMAX)
+        /// </summary>
+        const int AdlerMaxBlock = 5552;
+
+        /// <summary>
+        /// Compute the Adler32 checksum of some (non-empty) data, the modulo is only computed once per block of <see cref="AdlerMaxBlock"/> bytes,
+        /// the result is the same as reducing the sums after every byte (the reduced sums are returned)
+        /// </summary>
+        /// <param name="data">Data, must not be empty</param>
+        /// <param name="crc">Initial checksum</param>
+        /// <returns>The Adler32 checksum</returns>
+        static uint Adler32Blocks(ReadOnlySpan<Byte> data, uint crc)
+        {
+            var s1 = crc & 0xffff;
+            var s2 = (crc >> 16) & 0xffff;
+            while (!data.IsEmpty)
             {
-                s1 = (s1 + (uint)b) % 65521;
-                s2 = (s2 + s1) % 65521;
+                var n = Math.Min(data.Length, AdlerMaxBlock);
+                ref var p = ref MemoryMarshal.GetReference(data);
+                int i = 0;
+                for (var e = n - 3; i < e; i += 4)
+                {
+                    s1 += Unsafe.Add(ref p, i);
+                    s2 += s1;
+                    s1 += Unsafe.Add(ref p, i + 1);
+                    s2 += s1;
+                    s1 += Unsafe.Add(ref p, i + 2);
+                    s2 += s1;
+                    s1 += Unsafe.Add(ref p, i + 3);
+                    s2 += s1;
+                }
+                for (; i < n; ++i)
+                {
+                    s1 += Unsafe.Add(ref p, i);
+                    s2 += s1;
+                }
+                s1 %= 65521;
+                s2 %= 65521;
+                data = data.Slice(n);
             }
             return (s2 << 16) + s1;
         }
@@ -542,9 +635,17 @@ namespace SysWeaver.Media.Png
         /// <exception cref="IndexOutOfRangeException">The data is too short</exception>
         public static Byte[] GetFilters(Byte[] imageData, PngImageInfo info, int offset = 0)
         {
-            var pitch = info.Pitch;
             var pitchFilter = info.Pitch + 1;
-            return Enumerable.Range(0, info.Height).Select(x => imageData[offset + pitchFilter * x]).ToArray();
+            var h = info.Height;
+            //  Same exception as Enumerable.Range
+            if (h < 0)
+                throw new ArgumentOutOfRangeException("count");
+            if (h == 0)
+                return Array.Empty<Byte>();
+            var d = new Byte[h];
+            for (int x = 0; x < h; ++x)
+                d[x] = imageData[offset + pitchFilter * x];
+            return d;
         }
 
         /// <summary>
@@ -1022,6 +1123,16 @@ namespace SysWeaver.Media.Png
                 //  Sub
                 case 1:
                     {
+                        //  Vectorized if all ranges are valid (and source and destination differs), else the original loop (same partial result and exception)
+                        if ((bytesPerPixel > 0) && InRange(dest, destOffset, pixelBytes) && InRange(src, srcOffset, pixelBytes) && !ReferenceEquals(dest, src))
+                        {
+                            var first = Math.Min(bytesPerPixel, pixelBytes);
+                            Buffer.BlockCopy(src, srcOffset, dest, destOffset, first);
+                            var rest = pixelBytes - first;
+                            if (rest > 0)
+                                SubtractBytes(dest.AsSpan(destOffset + first, rest), src.AsSpan(srcOffset + first, rest), src.AsSpan(srcOffset, rest));
+                            break;
+                        }
                         for (int i = 0; i < pixelBytes; ++i)
                         {
                             var di = i - bytesPerPixel;
@@ -1037,6 +1148,12 @@ namespace SysWeaver.Media.Png
                     if (y == 0)
                     {
                         Buffer.BlockCopy(src, srcOffset, dest, destOffset, pixelBytes);
+                        break;
+                    }
+                    //  Vectorized if all ranges are valid (and source and destination differs), else the original loop (same partial result and exception)
+                    if (InRange(dest, destOffset, pixelBytes) && InRange(src, srcOffset, pixelBytes) && InRange(src, (long)srcOffset - srcPitch, pixelBytes) && !ReferenceEquals(dest, src))
+                    {
+                        SubtractBytes(dest.AsSpan(destOffset, pixelBytes), src.AsSpan(srcOffset, pixelBytes), src.AsSpan(srcOffset - srcPitch, pixelBytes));
                         break;
                     }
                     for (int i = 0; i < pixelBytes; ++i)
@@ -1128,6 +1245,26 @@ namespace SysWeaver.Media.Png
                 default:
                     throw new ArgumentOutOfRangeException(nameof(filter), filter, "Invalid filter, must be [0, 4]!");
             }
+        }
+
+        /// <summary>
+        /// Check if a non-empty range is inside an array
+        /// </summary>
+        static bool InRange(Byte[] data, long offset, int count)
+            => (data != null) && (count > 0) && (offset >= 0) && ((offset + count) <= data.Length);
+
+        /// <summary>
+        /// d[i] = (Byte)(a[i] - b[i]) (wrapping), vectorized
+        /// </summary>
+        static void SubtractBytes(Span<Byte> d, ReadOnlySpan<Byte> a, ReadOnlySpan<Byte> b)
+        {
+            int i = 0;
+            var l = d.Length;
+            var vc = System.Numerics.Vector<Byte>.Count;
+            for (var e = l - vc; i <= e; i += vc)
+                (new System.Numerics.Vector<Byte>(a.Slice(i)) - new System.Numerics.Vector<Byte>(b.Slice(i))).CopyTo(d.Slice(i));
+            for (; i < l; ++i)
+                d[i] = (Byte)(a[i] - b[i]);
         }
 
         static void FilterNone(Image image)

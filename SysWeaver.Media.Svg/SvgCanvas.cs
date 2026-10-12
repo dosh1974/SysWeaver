@@ -456,7 +456,12 @@ namespace SysWeaver.Media
                     return svg.LinearGradientDef(ParseNumber(p[1]), ParseNumber(p[2]), ParseNumber(p[3]), ParseNumber(p[4]), stops);
                 }
             },
-        }; 
+        };
+
+        /// <summary>
+        /// The lengths of the <see cref="ColorParsers"/> keys
+        /// </summary>
+        static readonly HashSet<int> ColorParserKeyLengths = ColorParsers.Keys.Select(x => x.Length).ToHashSet();
 
         /// <summary>
         /// Resolve a color specification (space separated):
@@ -469,6 +474,10 @@ namespace SysWeaver.Media
         {
             if (String.IsNullOrEmpty(color))
                 return null;
+            //  FastToLower keeps the length, so the first part can only be a parser key if it has the length of a key (no split for plain colors)
+            var sp = color.IndexOf(' ');
+            if (!ColorParserKeyLengths.Contains(sp < 0 ? color.Length : sp))
+                return color;
             var cols = color.Split(' ');
             if (ColorParsers.TryGetValue(cols[0].FastToLower(), out var fn))
                 return fn(this, cols);
@@ -554,7 +563,7 @@ namespace SysWeaver.Media
 
         /// <summary>
         /// Insert a drop shadow filter (feDropShadow) first in the svg element (not in the defs).
-        /// Attributes with the svg default value are left out (black color, opacity 1, dx / dy 2, std deviation 2 is always written unless 0).
+        /// Attributes with the svg default value are left out (black color, opacity 1, dx / dy 2, std deviation 2).
         /// </summary>
         /// <param name="id">The id of the filter</param>
         /// <param name="color">The shadow color (shortened using <see cref="HtmlColors.GetShortest"/>)</param>
@@ -573,7 +582,7 @@ namespace SysWeaver.Media
             b.Add(d);
             if (!color.FastEquals("#000"))
                 d.SetAttributeValue("flood-color", color);
-            if (stdDeviation != 0)
+            if (stdDeviation != 2)
                 d.SetAttributeValue("stdDeviation", Value(stdDeviation));
             if (opacity != 1)
                 d.SetAttributeValue("flood-opacity", Value(opacity));
@@ -757,7 +766,7 @@ namespace SysWeaver.Media
             if (dy != 2)
                 ds.SetAttributeValue("dy", Value(dy));
             if (stdDeviation != 2)
-                ds.SetAttributeValue("stdDeviation", stdDeviation);
+                ds.SetAttributeValue("stdDeviation", Value(stdDeviation));
             ds.SetAttributeValue("flood-color", color ?? "#000");
             if (opacity < 1)
                 ds.SetAttributeValue("flood-opacity", Value(opacity));

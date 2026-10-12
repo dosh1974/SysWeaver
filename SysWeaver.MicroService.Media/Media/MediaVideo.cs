@@ -47,13 +47,8 @@ namespace SysWeaver.MicroService.Media
         {
             if (!base.Equals(other))
                 return false;
-            var c = Crop;
-            if (c == null)
-                if (other.Crop != null)
-                    return false;
-                else
-                if (!c.Equals(other.Crop))
-                    return false;
+            if (!Equals(Crop, other.Crop))
+                return false;
             if (Transparent != other.Transparent)
                 return false;
             return Stream == other.Stream;
