@@ -32,15 +32,26 @@ namespace SysWeaver
         /// </summary>
         readonly IReadOnlyDictionary<String, ManagedMailMessage> Mails;
 
+        /// <summary>
+        /// Notification messages (markdown for web)
+        /// </summary>
+        readonly IReadOnlyDictionary<String, ManagedMarkDownMessage> Notifications;
+
 
         /// <summary>
         /// All text messages, key is the lower cased message name.
         /// </summary>
         public IEnumerable<KeyValuePair<String, ManagedTextMessage>> AllTexts => Texts;
+
         /// <summary>
         /// All mail messages, key is the lower cased message name.
         /// </summary>
         public IEnumerable<KeyValuePair<String, ManagedMailMessage>> AllMail => Mails;
+
+        /// <summary>
+        /// All notification (markdown for web) messages, key is the lower cased message name.
+        /// </summary>
+        public IEnumerable<KeyValuePair<String, ManagedMarkDownMessage>> AllNotifications => Notifications;
 
         /// <summary>
         /// Get the mail message for a given key.
@@ -58,6 +69,13 @@ namespace SysWeaver
         public ManagedTextMessage GetText(String key)
             => Texts.TryGetValue(key.FastToLower(), out var v) ? v : null;
 
+        /// <summary>
+        /// Get the notification (markdown for web) message for a given key.
+        /// </summary>
+        /// <param name="key">The key (one of the names supplied to <see cref="ManagedMessages"/>, including any leading '*', case insensitive)</param>
+        /// <returns>null if not found, else the text message template</returns>
+        public ManagedMarkDownMessage GetNotification(String key)
+            => Notifications.TryGetValue(key.FastToLower(), out var v) ? v : null;
 
         /// <summary>
         /// Create the messages of a language.
@@ -65,14 +83,16 @@ namespace SysWeaver
         /// <param name="language">The language</param>
         /// <param name="texts">The text messages, keys must be lower case</param>
         /// <param name="mails">The mail messages, keys must be lower case</param>
-        public ManagedLanguageMessages(String language, IReadOnlyDictionary<string, ManagedTextMessage> texts, IReadOnlyDictionary<string, ManagedMailMessage> mails)
+        /// <param name="notifications">The web notifications messages, keys must be lower case</param>
+        public ManagedLanguageMessages(String language, IReadOnlyDictionary<string, ManagedTextMessage> texts, IReadOnlyDictionary<string, ManagedMailMessage> mails, IReadOnlyDictionary<string, ManagedMarkDownMessage> notifications)
         {
             Language = language;
             Texts = texts;
             Mails = mails;
+            Notifications = notifications;
         }
 
-        
+
 
         /// <summary>
         /// Create a copy (sharing the messages) with a different <see cref="IsFallback"/> value.
@@ -85,6 +105,7 @@ namespace SysWeaver
             Language = copy.Language;
             Texts = copy.Texts;
             Mails = copy.Mails;
+            Notifications = copy.Notifications;
         }
 
 

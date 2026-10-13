@@ -4,9 +4,32 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Folder Name="/External/">
-    <Project Path="_external/simplestack.orm/src/SimpleStack.Orm.MySQLConnector/SimpleStack.Orm.MySQLConnector.csproj" />
-    <Project Path="_external/simplestack.orm/src/SimpleStack.Orm/SimpleStack.Orm.csproj" />
+  <Folder Name="/Communication/">
+    <Project Path="Communication/SysWeaver.Email.AmazonSes/SysWeaver.Email.AmazonSes.csproj" />
+    <Project Path="Communication/SysWeaver.Email.Fake/SysWeaver.Email.Fake.csproj" />
+    <Project Path="Communication/SysWeaver.Email.MicrosoftAcs/SysWeaver.Email.MicrosoftAcs.csproj" />
+    <Project Path="Communication/SysWeaver.Email.Smtp/SysWeaver.Email.Smtp.csproj" />
+    <Project Path="Communication/SysWeaver.EmailReader.Imap/SysWeaver.EmailReader.Imap.csproj" />
+    <Project Path="Communication/SysWeaver.EmailReader.Pop3/SysWeaver.EmailReader.Pop3.csproj" />
+    <Project Path="Communication/SysWeaver.TextMessage.AmazonEndUserMessaging/SysWeaver.TextMessage.AmazonEndUserMessaging.csproj" />
+    <Project Path="Communication/SysWeaver.TextMessage.Fake/SysWeaver.TextMessage.Fake.csproj" />
+    <Project Path="Communication/SysWeaver.TextMessage.Router/SysWeaver.TextMessage.Router.csproj" />
+    <Project Path="Communication/SysWeaver.TextMessage.Twilio/SysWeaver.TextMessage.Twilio.csproj" />
+    <Project Path="Communication/SysWeaver.TextMessage.WhatsApp/SysWeaver.TextMessage.WhatsApp.csproj" />
+  </Folder>
+  <Folder Name="/Compression/">
+    <Project Path="Compression/SysWeaver.Compression.BrotliNativeNET/SysWeaver.Compression.BrotliNativeNET.csproj" />
+    <Project Path="Compression/SysWeaver.Compression.ZstdSharp/SysWeaver.Compression.ZstdSharp.csproj" />
+  </Folder>
+  <Folder Name="/Internet/">
+    <Project Path="Internet/SysWeaver.WebBrowser.Cef/SysWeaver.WebBrowser.Cef.csproj" />
+    <Project Path="Internet/SysWeaver.WebBrowser.WebView2/SysWeaver.WebBrowser.WebView2.csproj" />
+  </Folder>
+  <Folder Name="/Platform/">
+    <Project Path="Platform/SysWeaver.Common.Linux/SysWeaver.Common.Linux.csproj" />
+    <Project Path="Platform/SysWeaver.Common.Windows/SysWeaver.Common.Windows.csproj" />
+    <Project Path="Platform/SysWeaver.OsServices.ServiceHostFactoryUnix/SysWeaver.OsServices.ServiceHostFactoryUnix.csproj" />
+    <Project Path="Platform/SysWeaver.OsServices.ServiceHostFactoryWin32NT/SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj" />
   </Folder>
   <Folder Name="/Serialization/">
     <Project Path="Serialization/SysWeaver.Serialization.CompactJson/SysWeaver.Serialization.CompactJson.csproj" />
@@ -14,11 +37,15 @@
     <Project Path="Serialization/SysWeaver.Serialization.NewtonsoftBson/SysWeaver.Serialization.NewtonsoftBson.csproj" />
     <Project Path="Serialization/SysWeaver.Serialization.NewtonsoftJson/SysWeaver.Serialization.NewtonsoftJson.csproj" />
     <Project Path="Serialization/SysWeaver.Serialization.ProtobufNet/SysWeaver.Serialization.ProtobufNet.csproj" />
+    <Project Path="Serialization/SysWeaver.Serialization.SafeJson/SysWeaver.Serialization.SafeJson.csproj" />
     <Project Path="Serialization/SysWeaver.Serialization.SpanJson/SysWeaver.Serialization.SpanJson.csproj" />
     <Project Path="Serialization/SysWeaver.Serialization.SwBinary/SysWeaver.Serialization.SwBinary.csproj" />
     <Project Path="Serialization/SysWeaver.Serialization.SwJson/SysWeaver.Serialization.SwJson.csproj" />
     <Project Path="Serialization/SysWeaver.Serialization.Utf8Json/SysWeaver.Serialization.Utf8Json.csproj" />
-    <Project Path="SysWeaver.Serialization.SafeJson/SysWeaver.Serialization.SafeJson.csproj" />
+  </Folder>
+  <Folder Name="/_external/">
+    <Project Path="_external/simplestack.orm/src/SimpleStack.Orm.MySQLConnector/SimpleStack.Orm.MySQLConnector.csproj" />
+    <Project Path="_external/simplestack.orm/src/SimpleStack.Orm/SimpleStack.Orm.csproj" />
   </Folder>
   <Project Path="SysWeaver.AI.ComfyUi/SysWeaver.AI.ComfyUi.csproj" />
   <Project Path="SysWeaver.AI.Google/SysWeaver.AI.Google.csproj" />
@@ -33,11 +60,7 @@
   <Project Path="SysWeaver.Chat.MySql/SysWeaver.Chat.MySql.csproj" />
   <Project Path="SysWeaver.Chat/SysWeaver.Chat.csproj" />
   <Project Path="SysWeaver.CommandLine/SysWeaver.CommandLine.csproj" />
-  <Project Path="SysWeaver.Common.Linux/SysWeaver.Common.Linux.csproj" />
-  <Project Path="SysWeaver.Common.Windows/SysWeaver.Common.Windows.csproj" />
   <Project Path="SysWeaver.Common/SysWeaver.Common.csproj" />
-  <Project Path="SysWeaver.Compression.BrotliNativeNET/SysWeaver.Compression.BrotliNativeNET.csproj" />
-  <Project Path="SysWeaver.Compression.ZstdSharp/SysWeaver.Compression.ZstdSharp.csproj" />
   <Project Path="SysWeaver.Compression/SysWeaver.Compression.csproj" />
   <Project Path="SysWeaver.DbSimpleStack.MySql/SysWeaver.DbSimpleStack.MySql.csproj" />
   <Project Path="SysWeaver.DbSimpleStack/SysWeaver.DbSimpleStack.csproj" />
@@ -87,7 +110,6 @@
   <Project Path="SysWeaver.MicroService.Media/SysWeaver.MicroService.Media.csproj" />
   <Project Path="SysWeaver.MicroService.MediaThumbnail/SysWeaver.MicroService.MediaThumbnail.csproj" />
   <Project Path="SysWeaver.MicroService.MySqlAudit/SysWeaver.MicroService.MySqlAudit.csproj" />
-  <Project Path="SysWeaver.MicroService.Net/SysWeaver.MicroService.Net.csproj" />
   <Project Path="SysWeaver.MicroService.NetHttpServer/SysWeaver.MicroService.NetHttpServer.csproj" />
   <Project Path="SysWeaver.MicroService.PassKey/SysWeaver.MicroService.PassKey.csproj" />
   <Project Path="SysWeaver.MicroService.QR/SysWeaver.MicroService.QR.csproj" />
@@ -103,8 +125,6 @@
   <Project Path="SysWeaver.MicroServices/SysWeaver.MicroServices.csproj" />
   <Project Path="SysWeaver.Minifier.Svg/SysWeaver.Minifier.Svg.csproj" />
   <Project Path="SysWeaver.NetHttpServer/SysWeaver.NetHttpServer.csproj" />
-  <Project Path="SysWeaver.OsServices.ServiceHostFactoryUnix/SysWeaver.OsServices.ServiceHostFactoryUnix.csproj" />
-  <Project Path="SysWeaver.OsServices.ServiceHostFactoryWin32NT/SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj" />
   <Project Path="SysWeaver.OsServices/SysWeaver.OsServices.csproj" />
   <Project Path="SysWeaver.Remote.Connection/SysWeaver.Remote.Connection.csproj" />
   <Project Path="SysWeaver.Remote.Services/SysWeaver.Remote.Services.csproj" />
@@ -117,10 +137,7 @@
   <Project Path="SysWeaver.Storage.Cdc/SysWeaver.Storage.Cdc.csproj" />
   <Project Path="SysWeaver.Storage/SysWeaver.Storage.csproj" />
   <Project Path="SysWeaver.TableData/SysWeaver.TableData.csproj" />
-  <Project Path="SysWeaver.TextMessage.Fake/SysWeaver.TextMessage.Fake.csproj" />
   <Project Path="SysWeaver.Tor/SysWeaver.Tor.csproj" />
   <Project Path="SysWeaver.Translation.Google/SysWeaver.Translation.Google.csproj" />
-  <Project Path="SysWeaver.WebBrowser.Cef/SysWeaver.WebBrowser.Cef.csproj" />
-  <Project Path="SysWeaver.WebBrowser.WebView2/SysWeaver.WebBrowser.WebView2.csproj" />
   <Project Path="SysWeaver.WebBrowser/SysWeaver.WebBrowser.csproj" />
 </Solution>

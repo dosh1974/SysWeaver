@@ -12,7 +12,7 @@
 
 ## Purpose
 
-Wraps the widely used Newtonsoft.Json library, including a custom member resolver and a formatted-output helper. It is the *reading* half of [SysWeaver.Serialization.SafeJson](../../SysWeaver.Serialization.SafeJson/README.md) and is used by projects that need Newtonsoft features (e.g. Chart.js configuration objects).
+Wraps the widely used Newtonsoft.Json library, including a custom member resolver and a formatted-output helper. It is the *reading* half of [SysWeaver.Serialization.SafeJson](../SysWeaver.Serialization.SafeJson/README.md) and is used by projects that need Newtonsoft features (e.g. Chart.js configuration objects).
 
 ## How it fits into SysWeaver
 
@@ -56,4 +56,4 @@ Or register it from code at startup: `SysWeaver.Serialization.NewtonsoftJsonSeri
 
 - **Project:** [`SysWeaver.Serialization.NewtonsoftJson.csproj`](SysWeaver.Serialization.NewtonsoftJson.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
-- **Used by:** [SysWeaver.MicroService.ChartJs](../../SysWeaver.MicroService.ChartJs/README.md), [SysWeaver.Serialization.SafeJson](../../SysWeaver.Serialization.SafeJson/README.md)
+- **Used by:** [SysWeaver.MicroService.ChartJs](../../SysWeaver.MicroService.ChartJs/README.md), [SysWeaver.Serialization.SafeJson](../SysWeaver.Serialization.SafeJson/README.md)

@@ -243,6 +243,8 @@ namespace SysWeaver.MicroService
             //File.WriteAllText("LogoGradient.html", HtmlLogoGradient);
 
             Messages = String.IsNullOrEmpty(p.LocalizedMessages) ? null : new ManagedMessages(p.LocalizedMessages, EnvInfo.AppLanguage ?? "en-US", true,
+                ManagedMessageTypes.Text | ManagedMessageTypes.Email,
+                0,
                 "AddPassword",
                 "DeletePassword",
                 "DeleteUser",

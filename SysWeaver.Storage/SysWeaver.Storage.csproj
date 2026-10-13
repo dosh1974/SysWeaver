@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SysWeaver.Common.Linux\SysWeaver.Common.Linux.csproj" />
-    <ProjectReference Include="..\SysWeaver.Common.Windows\SysWeaver.Common.Windows.csproj" />
+    <ProjectReference Include="..\Platform\SysWeaver.Common.Linux\SysWeaver.Common.Linux.csproj" />
+    <ProjectReference Include="..\Platform\SysWeaver.Common.Windows\SysWeaver.Common.Windows.csproj" />
     <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
     <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
     <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />

@@ -26,7 +26,7 @@ flowchart LR
 
 ## Limitations and considerations
 
-- Requires a headless browser implementation, which is Windows-oriented in this repository ([SysWeaver.WebBrowser.Cef](../SysWeaver.WebBrowser.Cef/README.md), [SysWeaver.WebBrowser.WebView2](../SysWeaver.WebBrowser.WebView2/README.md)).
+- Requires a headless browser implementation, which is Windows-oriented in this repository ([SysWeaver.WebBrowser.Cef](../Internet/SysWeaver.WebBrowser.Cef/README.md), [SysWeaver.WebBrowser.WebView2](../Internet/SysWeaver.WebBrowser.WebView2/README.md)).
 - Rendering arbitrary URLs has security implications (server-side request forgery); restrict access through its runtime-configurable auth.
 - Concurrency is limited; rendering is slow compared to image processing.
 

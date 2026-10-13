@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net10.0-windows</TargetFramework>
+	  <UseWindowsForms>true</UseWindowsForms>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <RootNamespace>SysWeaver.MicroService</RootNamespace>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nito.AsyncEx.Context" Version="5.1.2" />
+    <PackageReference Include="WebView2.Runtime.X64" Version="154.0.4258.53" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />
+  </ItemGroup>
+
+	<Target Name="RemoveWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences" Condition="'$(UseWPF)' != 'true'">
+		<ItemGroup>
+			<_WebView2WpfReference Include="@(Reference)" Condition="'%(FileName)' == 'Microsoft.Web.WebView2.Wpf'" />
+			<Reference Remove="@(_WebView2WpfReference)" />
+		</ItemGroup>
+	</Target>
+
+</Project>
