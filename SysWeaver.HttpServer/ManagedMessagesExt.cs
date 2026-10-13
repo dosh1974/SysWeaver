@@ -130,6 +130,17 @@ namespace SysWeaver
             dest[key] = x;
         }
 
+        static async Task DoMarkDown(ConcurrentDictionary<string, ManagedMarkDownMessage> dest, String key, ITranslator tr, String defLang, String to, ManagedMarkDownMessage text)
+        {
+            var body = text.GetBody().Template;
+            var x = new ManagedMarkDownMessage(text.Vars)
+            {
+                Headline = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is a wen notification header line (a one liner). Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".").ConfigureAwait(false),
+                Body = await (tr.TranslateSafeMD(body, to, defLang, "This is a web notification body. Text between [ and ] that are not part of the regular .md flow are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".")).ConfigureAwait(false),
+            };
+            dest[key] = x;
+        }
+
         static async Task DoSMS(ConcurrentDictionary<string, ManagedTextMessage> dest, String key, ITranslator tr, String defLang, String to, ManagedTextMessage text)
         {
             var x = new ManagedTextMessage(text.Vars)
@@ -177,13 +188,16 @@ namespace SysWeaver
             var defLang = lang.Language;
             var texts = new ConcurrentDictionary<string, ManagedTextMessage>(StringComparer.Ordinal);
             var mails = new ConcurrentDictionary<string, ManagedMailMessage>(StringComparer.Ordinal);
+            var notifications = new ConcurrentDictionary<string, ManagedMarkDownMessage>(StringComparer.Ordinal);
             List<Task> tasks = new List<Task>();
             foreach (var m in lang.AllMail)
                 tasks.Add(DoEmail(mails, m.Key, tr, defLang, l, m.Value));
             foreach (var m in lang.AllTexts)
                 tasks.Add(DoSMS(texts, m.Key, tr, defLang, l, m.Value));
+            foreach (var m in lang.AllNotifications)
+                tasks.Add(DoMarkDown(notifications, m.Key, tr, defLang, l, m.Value));
             await Task.WhenAll(tasks).ConfigureAwait(false);
-            lang = new ManagedLanguageMessages(l, texts.Freeze(), mails.Freeze());
+            lang = new ManagedLanguageMessages(l, texts.Freeze(), mails.Freeze(), notifications.Freeze());
             if (!msg.TryAddTranslatedLanguage(l, lang))
                 lang = msg.GetLang(l);
             return lang;

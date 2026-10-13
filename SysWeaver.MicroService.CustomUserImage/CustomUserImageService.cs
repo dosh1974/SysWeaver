@@ -328,7 +328,7 @@ namespace SysWeaver.MicroService
             if ((!AllowTransparent) && (img.HasAlpha))
             {
                 img.BackgroundColor = Background;
-                img.Alpha(AlphaOption.Remove);
+                img.Alpha(AlphaAction.Remove);
             }
             for (int i = 0; i < ss; ++ i)
             {

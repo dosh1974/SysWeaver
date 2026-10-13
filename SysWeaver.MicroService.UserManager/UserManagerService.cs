@@ -37,7 +37,7 @@ namespace SysWeaver.MicroService
     [WebMenuPath("User", "User/Management", "Management", "User management tools, manage other users", null, 100000)]
     [WebMenuEmbedded("User", "User/Management/InviteUser", "Invite user", "auth/InviteUser.html", "Click to invite a user to join this site", "IconInvite", 0, UserManagerRoles.InviteUser)]
     [IsMicroService]
-    [RequiredDep<IEmailService>]
+    [RequiredDep<IEmailSender>]
     public sealed partial class UserManagerService : AuthorizerBase, IDisposable
     {
         #region Dynamic menu
@@ -243,6 +243,8 @@ namespace SysWeaver.MicroService
             //File.WriteAllText("LogoGradient.html", HtmlLogoGradient);
 
             Messages = String.IsNullOrEmpty(p.LocalizedMessages) ? null : new ManagedMessages(p.LocalizedMessages, EnvInfo.AppLanguage ?? "en-US", true,
+                ManagedMessageTypes.Text | ManagedMessageTypes.Email,
+                0,
                 "AddPassword",
                 "DeletePassword",
                 "DeleteUser",

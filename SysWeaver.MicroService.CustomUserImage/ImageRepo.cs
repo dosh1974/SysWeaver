@@ -60,7 +60,7 @@ namespace SysWeaver.MicroService
                 if ((!size.AllowTransparent) && (img.HasAlpha))
                 {
                     img.BackgroundColor = bgCol;
-                    img.Alpha(AlphaOption.Remove);
+                    img.Alpha(AlphaAction.Remove);
                 }
 
                 int w = (int)resized.Width;

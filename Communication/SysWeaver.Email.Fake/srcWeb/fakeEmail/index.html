@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fake Mail</title>
+    <link rel="stylesheet" href="email.css">
+    <script src="email.js" defer></script>
+</head>
+<body>
+    <header class="top">
+        <div class="brand">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <div>
+                <h1>Fake Mail</h1>
+                <span id="fromAddress" class="muted" title="The address that the system sends emails from"></span>
+            </div>
+        </div>
+        <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input id="search" type="search" placeholder="Search emails  ( / )" autocomplete="off">
+        </label>
+        <div class="actions">
+            <span id="status" class="status" title="Connecting..."></span>
+            <button id="theme" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="layout">
+        <nav class="side">
+            <button id="compose" class="primary compose-btn" title="Fake an email from a user to the system  ( c )">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                <span>Compose</span>
+            </button>
+            <ul id="folders" class="folders">
+                <li data-folder="all"><span class="dot all"></span>All mail<span class="count" data-count="all"></span></li>
+                <li data-folder="out"><span class="dot out"></span>Sent by system<span class="count" data-count="out"></span></li>
+                <li data-folder="in"><span class="dot in"></span>Received by system<span class="count" data-count="in"></span></li>
+                <li data-folder="failed"><span class="dot failed"></span>Failed<span class="count" data-count="failed"></span></li>
+            </ul>
+            <div id="systemsBox" class="systems" hidden>
+                <h3>Systems</h3>
+                <ul id="systems" class="folders"></ul>
+            </div>
+            <div class="side-foot">
+                <button id="markAllRead" class="link-btn">Mark all as read</button>
+                <button id="clearAll" class="link-btn danger">Delete all</button>
+            </div>
+        </nav>
+
+        <section class="list-pane">
+            <div class="list-head">
+                <h2 id="folderTitle">All mail</h2>
+                <span id="listInfo" class="muted"></span>
+            </div>
+            <ul id="list" class="list" tabindex="0" aria-label="Emails"></ul>
+            <div id="empty" class="empty" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6H3v-6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                <p id="emptyText">No emails yet</p>
+                <p class="muted">Emails sent by the system shows up here instantly.</p>
+            </div>
+        </section>
+
+        <section id="reader" class="reader">
+            <div id="readerEmpty" class="empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                <p>Select an email to read it</p>
+                <p class="muted kbd-help"><kbd>j</kbd>/<kbd>k</kbd> navigate &middot; <kbd>r</kbd> reply &middot; <kbd>c</kbd> compose &middot; <kbd>Del</kbd> delete</p>
+            </div>
+            <article id="mail" class="mail" hidden>
+                <div class="mail-toolbar">
+                    <button id="back" class="icon-btn back" title="Back" aria-label="Back">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <div class="seg" id="viewMode" role="tablist">
+                        <button data-view="render" class="on">Rendered</button>
+                        <button data-view="source">Source</button>
+                    </div>
+                    <span class="grow"></span>
+                    <button id="reply" title="Fake a reply from the user  ( r )">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8 4 13l6 5v-3.5c5 0 8 1.5 10 5-1-5-4-9.5-10-10z" fill="currentColor"/></svg>
+                        <span>Reply</span>
+                    </button>
+                    <button id="openTab" class="icon-btn" title="Open the body in a new tab" aria-label="Open in new tab">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button id="delete" class="icon-btn" title="Delete  ( Del )" aria-label="Delete">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>
+                <h2 id="mailSubject" class="mail-subject"></h2>
+                <div class="mail-head">
+                    <div id="mailAvatar" class="avatar big"></div>
+                    <div class="mail-meta">
+                        <div><strong id="mailFromName"></strong> <span id="mailFrom" class="muted"></span></div>
+                        <div class="muted">to <span id="mailTo"></span></div>
+                        <div id="mailTags" class="tags"></div>
+                    </div>
+                    <time id="mailTime" class="muted"></time>
+                </div>
+                <div id="mailError" class="error-box" hidden></div>
+                <div id="mailBody" class="mail-body"></div>
+            </article>
+        </section>
+    </div>
+
+    <dialog id="composer" class="composer">
+        <form id="composeForm" method="dialog">
+            <div class="composer-head">
+                <div class="seg" id="composeMode">
+                    <button type="button" data-mode="in" class="on" title="Fake an email that a user sends to the system">User &rarr; System</button>
+                    <button type="button" data-mode="out" title="Send an email as the system (using the email service)">System &rarr; User</button>
+                </div>
+                <span class="grow"></span>
+                <button type="button" id="composeClose" class="icon-btn" aria-label="Close">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+            <div class="fields">
+                <label class="in-only"><span>From</span><input id="cFrom" type="email" placeholder="user@example.com" autocomplete="email"></label>
+                <label class="in-only"><span>Name</span><input id="cName" type="text" placeholder="Fake user"></label>
+                <label><span>To</span><input id="cTo" type="email" placeholder="user@example.com"></label>
+                <label><span>Subject</span><input id="cSubject" type="text"></label>
+                <label class="in-only"><span>System</span><input id="cSystem" type="text" placeholder="(optional)"></label>
+            </div>
+            <div class="body-tools">
+                <div class="seg" id="composeFormat">
+                    <button type="button" data-format="text" class="on">Plain text</button>
+                    <button type="button" data-format="html">HTML</button>
+                </div>
+                <span class="grow"></span>
+                <button type="button" id="cPreviewBtn" class="link-btn" hidden>Preview</button>
+            </div>
+            <textarea id="cBody" rows="12" placeholder="Write your message..."></textarea>
+            <iframe id="cPreview" class="preview" sandbox="allow-popups allow-popups-to-escape-sandbox" hidden title="Preview"></iframe>
+            <input id="cReplyTo" type="hidden">
+            <div class="composer-foot">
+                <span id="composeHint" class="muted"></span>
+                <span class="grow"></span>
+                <button type="button" id="composeCancel">Cancel</button>
+                <button type="submit" class="primary" id="composeSend">Send <kbd>Ctrl+Enter</kbd></button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>

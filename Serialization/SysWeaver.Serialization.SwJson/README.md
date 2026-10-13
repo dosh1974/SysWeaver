@@ -12,7 +12,7 @@
 
 ## Purpose
 
-The framework's own, dependency-free JSON implementation. It has the highest priority of the plain JSON serializers, so registering it makes it the default JSON implementation (for example for web API responses). It is also the *writing* half of [SysWeaver.Serialization.SafeJson](../../SysWeaver.Serialization.SafeJson/README.md).
+The framework's own, dependency-free JSON implementation. It has the highest priority of the plain JSON serializers, so registering it makes it the default JSON implementation (for example for web API responses). It is also the *writing* half of [SysWeaver.Serialization.SafeJson](../SysWeaver.Serialization.SafeJson/README.md).
 
 ## How it fits into SysWeaver
 
@@ -64,4 +64,4 @@ Or register it from code at startup: `SysWeaver.Serialization.SysWeaverJsonSeria
 
 - **Project:** [`SysWeaver.Serialization.SwJson.csproj`](SysWeaver.Serialization.SwJson.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
-- **Used by:** [SysWeaver.Serialization.SafeJson](../../SysWeaver.Serialization.SafeJson/README.md)
+- **Used by:** [SysWeaver.Serialization.SafeJson](../SysWeaver.Serialization.SafeJson/README.md)

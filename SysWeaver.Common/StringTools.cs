@@ -2297,9 +2297,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool)"/>
+        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool, bool)"/>
         /// </summary>
-        static readonly SearchValues<Char> EscapeChars = SearchValues.Create(
+        static readonly SearchValues<Char> MdEscapeChars = SearchValues.Create(
             [
                 '\\',
                 '`',
@@ -2323,15 +2323,44 @@ namespace SysWeaver
                 '|'
             ]);
 
+
+        /// <summary>
+        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool, bool)"/>
+        /// </summary>
+        static readonly SearchValues<Char> MdEscapeCharsAll = SearchValues.Create(
+            [
+                '\\',
+                '`',
+                '*',
+                '_',
+                '&',
+                '{',
+                '}',
+                '[',
+                ']',
+                '<',
+                '>',
+                '(',
+                ')',
+                '#',
+                '$',
+                '+',
+                '-',
+                '.',
+                '!',
+                '|'
+            ]);
+
         /// <summary>
         /// Escape some text to work inside mark down, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
-        /// Doesn't escape +, - and .
+        /// Doesn't escape +, - and . unless all is true
         /// A text that starts with the char 1 is considered to be markdown already, it's returned as is (without the first char).
         /// </summary>
         /// <param name="text">The text to escape</param>
         /// <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping, if false any non breaking spaces are converted to spaces</param>
+        /// <param name="all">If true, +, - and . are also escaped</param>
         /// <returns>Escaped text, an empty string if the text is null or empty, the input instance if nothing changed</returns>
-        public static String EscapeMD(String text, bool nbsp = false)
+        public static String EscapeMD(String text, bool nbsp = false, bool all = false)
         {
             if (String.IsNullOrEmpty(text))
                 return "";
@@ -2339,7 +2368,8 @@ namespace SysWeaver
                 return text.Substring(1);
             var s = text.AsSpan();
             // Find the first char to escape (vectorized search, most texts doesn't have any)
-            var first = s.IndexOfAny(EscapeChars);
+            var e = all ? MdEscapeCharsAll : MdEscapeChars;
+            var first = s.IndexOfAny(e);
             var from = nbsp ? ' ' : (Char)0xa0;
             if (first < 0)
             {
@@ -2348,7 +2378,6 @@ namespace SysWeaver
                 first = s.Length;
             }
             // Count the chars to escape (escape chars are often frequent, a per char lookup is faster than restarting a vectorized search)
-            var e = EscapeChars;
             int escapes = 0;
             var l = s.Length;
             for (int i = first; i < l; ++i)
@@ -2357,10 +2386,10 @@ namespace SysWeaver
                     ++escapes;
             }
             // Escape and replace in a single pass, only the result is allocated
-            return String.Create(l + escapes, (text, nbsp, first), EscapeMDAction);
+            return String.Create(l + escapes, (text, nbsp, first, e), MdEscapeAction);
         }
 
-        static readonly SpanAction<Char, (String Text, bool Nbsp, int First)> EscapeMDAction = (d, st) =>
+        static readonly SpanAction<Char, (String Text, bool Nbsp, int First, SearchValues<Char> E)> MdEscapeAction = (d, st) =>
         {
             var s = st.Text.AsSpan();
             var from = st.Nbsp ? ' ' : (Char)0xa0;
@@ -2369,7 +2398,7 @@ namespace SysWeaver
             // Before the first escaped char, only replace
             s[..first].CopyTo(d);
             d[..first].Replace(from, to);
-            var e = EscapeChars;
+            var e = st.E;
             var l = s.Length;
             int o = first;
             for (int i = first; i < l; ++i)

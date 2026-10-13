@@ -13,9 +13,9 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
     /// <summary>
-    /// Helpers to create and share http clients
+    /// Helpers to create and share http clients, and to create html
     /// </summary>
-    public static class WebTools
+    public static partial class WebTools
     {
         /// <summary>
         /// User agent to use for HttpClient's

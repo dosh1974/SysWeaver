@@ -39,4 +39,4 @@ flowchart LR
 
 - **Project:** [`SysWeaver.MicroService.MySqlAudit.csproj`](SysWeaver.MicroService.MySqlAudit.csproj)
 - **Builds on:** [SysWeaver.DbSimpleStack.MySql](../SysWeaver.DbSimpleStack.MySql/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Used by:** [SysWeaver.WebBrowser.Cef](../SysWeaver.WebBrowser.Cef/README.md)
+- **Used by:** [SysWeaver.WebBrowser.Cef](../Internet/SysWeaver.WebBrowser.Cef/README.md)
