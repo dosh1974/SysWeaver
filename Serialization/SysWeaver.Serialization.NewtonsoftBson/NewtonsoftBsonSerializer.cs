@@ -16,6 +16,7 @@ namespace SysWeaver.Serialization
     /// Deserialization honors "$type" (<see cref="TypeNameHandling.Auto"/>) and resolves names with <see cref="TypeNameResolver.GetForData"/>,
     /// so only types allowed by the <see cref="DataTypePolicy"/> (and assignable to the declared type) can be instantiated.
     /// Global <see cref="JsonConvert.DefaultSettings"/> are not applied.
+    /// Serializers and deserializers are pooled (<see cref="LimitedObjectPool{T}"/>, one call at a time per instance) so concurrent calls are safe.
     /// BSON requires an object or array at the root: root values that aren't (null, primitives, strings, enums, dates, Guid, byte[] etc) are written wrapped in a document with a single "$swRootValue" member
     /// (and unwrapped when read), objects and collections are written as is. Root arrays/collections are read back (as arrays, or as "$type" / "$values" objects when written with type information).
     /// </remarks>
@@ -95,6 +96,50 @@ namespace SysWeaver.Serialization
             SerializationBinder = SerializationBinder.Instance,
         };
 
+        /// <summary>
+        /// A <see cref="JsonSerializer"/> that returns itself to its pool when disposed.
+        /// A serializer keeps no state between calls (the reference resolver and the serialization stack are created per call, no events are set), so it can be reused, one call at a time.
+        /// </summary>
+        sealed class PooledSerializer : JsonSerializer, IDisposable
+        {
+            public PooledSerializer(Action<PooledSerializer> onDispose)
+            {
+                OnDispose = onDispose;
+            }
+
+            public void Dispose()
+                => OnDispose(this);
+
+            readonly Action<PooledSerializer> OnDispose;
+        }
+
+        /// <summary>
+        /// Create a pool of serializers configured like JsonSerializer.Create(settings) (only the settings used by <see cref="Formats"/> and <see cref="DeserFormats"/> are copied)
+        /// </summary>
+        static LimitedObjectPool<PooledSerializer> CreatePool(JsonSerializerSettings s)
+            => new(d =>
+            {
+                var ser = new PooledSerializer(d);
+                ser.Formatting = s.Formatting;
+                ser.TypeNameHandling = s.TypeNameHandling;
+                ser.ObjectCreationHandling = s.ObjectCreationHandling;
+                if (s.ContractResolver != null)
+                    ser.ContractResolver = s.ContractResolver;
+                if (s.SerializationBinder != null)
+                    ser.SerializationBinder = s.SerializationBinder;
+                return ser;
+            }, 64);
+
+        /// <summary>
+        /// Pooled serializers per <see cref="SerializerOptions"/> (same order as <see cref="Formats"/>)
+        /// </summary>
+        static readonly LimitedObjectPool<PooledSerializer>[] SerPools = [CreatePool(Formats[0]), CreatePool(Formats[1]), CreatePool(Formats[2])];
+
+        /// <summary>
+        /// Pooled deserializers (configured like <see cref="DeserFormats"/>)
+        /// </summary>
+        static readonly LimitedObjectPool<PooledSerializer> DeSerPool = CreatePool(DeserFormats);
+
         /// <inheritdoc/>
         /// <remarks>
         /// Values that BSON can't hold at the root (null, primitives, strings, enums, dates, Guid, byte[] etc) are written wrapped as {"$swRootValue": value}, see <see cref="SerializeWrapped"/>.
@@ -103,7 +148,7 @@ namespace SysWeaver.Serialization
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
             var s = Formats[(int)options];
-            var ser = JsonSerializer.Create(s);
+            using var ser = SerPools[(int)options].Get();
             if (!IsValueRoot(ser, s, obj))
             {
                 using var ms = new MemoryStream();
@@ -225,7 +270,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlySpan<byte> data)
         {
-            var ser = JsonSerializer.Create(DeserFormats);
+            using var ser = DeSerPool.Get();
             fixed (byte* bp = data)
             {
                 using var ms = new UnmanagedMemoryStream(bp, data.Length);
@@ -237,7 +282,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlyMemory<byte> data)
         {
-            var ser = JsonSerializer.Create(DeserFormats);
+            using var ser = DeSerPool.Get();
             fixed (byte* bp = data.Span)
             {
                 using var ms = new UnmanagedMemoryStream(bp, data.Length);

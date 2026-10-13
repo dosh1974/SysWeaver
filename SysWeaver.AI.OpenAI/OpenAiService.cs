@@ -77,7 +77,7 @@ namespace SysWeaver.AI
                         }
                         else
                         {
-                            msg?.AddMessage("Cached TikToken for " + t.ToQuoted(), MessageLevels.Debug);
+                            msg?.AddMessage(MessageLevels.Debug, $"Cached TikToken for {t.ToQuoted()}");
                         }
                     }
                 }

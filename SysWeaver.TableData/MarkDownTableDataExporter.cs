@@ -118,38 +118,68 @@ namespace SysWeaver.Data
         /// <see cref="TableDataExportOptions.Custom"/> is used as a prefix for every line (ex: for indentation or quoting),
         /// <see cref="TableDataExportOptions.NoHeaders"/> only removes the header emphasis, a header line is always written (required by Markdown).</param>
         /// <returns>The Markdown text.</returns>
-        /// <remarks>Missing values (rows shorter than the column count, or rows without values) are written as empty cells, values beyond the column count are ignored.</remarks>
+        /// <remarks>Missing values (rows shorter than the column count, or rows without values) are written as empty cells, values beyond the column count are ignored.
+        /// Every cell is formatted once (the text used to measure the column width is the text written).</remarks>
         public String GetMarkDownText(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
+            => Build(tableData, options).ToString();
+
+        /// <summary>
+        /// Append a text padded with spaces to a width (as PadLeft / PadRight)
+        /// </summary>
+        static void AppendPadded(StringBuilder sb, String text, int width, bool rightAlign)
+        {
+            var pad = width - text.Length;
+            if (pad <= 0)
+            {
+                sb.Append(text);
+                return;
+            }
+            if (rightAlign)
+                sb.Append(' ', pad).Append(text);
+            else
+                sb.Append(text).Append(' ', pad);
+        }
+
+        /// <summary>
+        /// Build the Markdown text (see GetMarkDownText).
+        /// Every cell is formatted once: the texts of the measure pass are kept and written (with formatters that return the same text for the same value, the result is the same as formatting twice).
+        /// </summary>
+        static StringBuilder Build(BaseTableData tableData, TableDataExportOptions options)
         {
             //  Measure and get data
             options = options ?? new TableDataExportOptions();
             String linePrefix = options?.Custom ?? "";
-            List<ValueTuple<TableDataExporterTools.Formatter, bool>> colToStrings = new();
-            HashSet<int> hide = new HashSet<int>();
             var cols = tableData.Cols;
             var hs = options.NoHeaders ? "" : ColHeaderStyle;
-            List<String> colTitles = new List<string>();
+            ValueTuple<TableDataExporterTools.Formatter, bool>[] colToStrings;
+            bool[] hide;
+            String[] colTitles;
             bool[] colNbsps;
             int coll;
+            int visible = 0;
             //  Get column titles, functions and son
             if (cols != null)
             {
                 //  With meta data
                 coll = cols.Length;
                 colNbsps = new bool[coll];
+                colToStrings = new ValueTuple<TableDataExporterTools.Formatter, bool>[coll];
+                hide = new bool[coll];
+                colTitles = new String[coll];
                 for (int i = 0; i < coll; ++i)
                 {
                     var col = cols[i];
-                    colToStrings.Add(TableDataExporterTools.Get(col.Type, col.Format, Formatters));
+                    colToStrings[i] = TableDataExporterTools.Get(col.Type, col.Format, Formatters);
                     if ((col.Props & TableDataColumnProps.Hide) != 0)
                     {
-                        hide.Add(i);
+                        hide[i] = true;
                         continue;
                     }
                     var title = col.Title;
                     if (String.IsNullOrEmpty(title))
-                        title = (colTitles.Count + 1).ToString();
-                    colTitles.Add(title);
+                        title = (visible + 1).ToString();
+                    colTitles[visible] = title;
+                    ++visible;
                     colNbsps[i] = (col.Props & TableDataColumnProps.WordWrap) == 0;
                 }
             }
@@ -158,24 +188,30 @@ namespace SysWeaver.Data
                 //  Without meta data
                 coll = tableData.Rows?.FirstOrDefault()?.Values?.Length ?? 0;
                 colNbsps = new bool[coll];
+                colToStrings = new ValueTuple<TableDataExporterTools.Formatter, bool>[coll];
+                hide = new bool[coll];
+                colTitles = new String[coll];
                 for (int i = 0; i < coll; ++i)
                 {
-                    colToStrings.Add((null, false));
-                    var title = (colTitles.Count + 1).ToString();
-                    colTitles.Add(title);
+                    colTitles[i] = (i + 1).ToString();
                     colNbsps[i] = true;
                 }
+                visible = coll;
             }
 
-            // Measure columns widths
+            // Measure columns widths, keep the cell texts
+            var rows = tableData.Rows;
+            var rowCount = rows?.Length ?? 0;
+            var cells = new String[(long)rowCount * visible];
             Span<int> colWidths = stackalloc int[coll];
-            foreach (var row in tableData.Rows.Nullable())
+            int ci = 0;
+            for (int r = 0; r < rowCount; ++r)
             {
-                var rowValues = row.Values;
+                var rowValues = rows[r].Values;
                 var rowLen = rowValues?.Length ?? 0;
                 for (int i = 0; i < coll; ++i)
                 {
-                    if (hide.Contains(i))
+                    if (hide[i])
                         continue;
 
                     var ni = i + 1;
@@ -185,7 +221,8 @@ namespace SysWeaver.Data
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
                     var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i]), colNbsps[i]).Replace("\r", "").Replace("\n", "<br>");
-
+                    cells[ci] = valueText;
+                    ++ci;
                     var strLen = valueText.Length;
                     if (strLen > colWidths[i])
                         colWidths[i] = strLen;
@@ -204,15 +241,16 @@ namespace SysWeaver.Data
             sb.Append(linePrefix);
             for (int i = 0, t = 0; i < coll; ++i)
             {
-                if (hide.Contains(i))
+                if (hide[i])
                     continue;
                 var title = String.Concat(hs, StringTools.EscapeMD(colTitles[t], true), hs);
                 ++t;
                 var mxLen = Math.Max(colWidths[i], title.Length);
                 colWidths[i] = mxLen;
-                var (fmt, rightAlign) = colToStrings[i];
-
-                sb.Append("| ").Append(rightAlign ? title.PadLeft(mxLen) : title.PadRight(mxLen)).Append(' ');
+                var rightAlign = colToStrings[i].Item2;
+                sb.Append("| ");
+                AppendPadded(sb, title, mxLen, rightAlign);
+                sb.Append(' ');
             }
             sb.AppendLine("|");
 
@@ -220,40 +258,41 @@ namespace SysWeaver.Data
             sb.Append(linePrefix);
             for (int i = 0; i < coll; ++i)
             {
-                if (hide.Contains(i))
+                if (hide[i])
                     continue;
                 var mxLen = colWidths[i] + 2;
-                var (fmt, rightAlign) = colToStrings[i];
-
-                sb.Append("|").Append(rightAlign ? ":".PadLeft(mxLen, '-') : ":".PadRight(mxLen, '-'));
+                var rightAlign = colToStrings[i].Item2;
+                sb.Append('|');
+                if (rightAlign)
+                    sb.Append('-', mxLen - 1).Append(':');
+                else
+                    sb.Append(':').Append('-', mxLen - 1);
             }
             sb.AppendLine("|");
 
             //  Rows
-            foreach (var row in tableData.Rows.Nullable())
+            ci = 0;
+            for (int r = 0; r < rowCount; ++r)
             {
-                var rowValues = row.Values;
+                var rowValues = rows[r].Values;
                 var rowLen = rowValues?.Length ?? 0;
                 sb.Append(linePrefix);
                 for (int i = 0; i < coll; ++i)
                 {
-                    if (hide.Contains(i))
+                    if (hide[i])
                         continue;
-
-                    var ni = i + 1;
-                    var value = i < rowLen ? rowValues[i] : null;
-                    var nextValue = (ni < coll) && (ni < rowLen) ? rowValues[ni] : null;
                     var (fmt, rightAlign) = colToStrings[i];
+                    //  The alignment of a cell without a column formatter depends on the value type
                     if (fmt == null)
-                        (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
-                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i]), colNbsps[i]).Replace("\r", "").Replace("\n", "<br>");
-
-                    var mxLen = colWidths[i];
-                    sb.Append("| ").Append(rightAlign ? valueText.PadLeft(mxLen) : valueText.PadRight(mxLen)).Append(' ');
+                        rightAlign = TableDataExporterTools.GetDefault(i < rowLen ? rowValues[i] : null).Item2;
+                    sb.Append("| ");
+                    AppendPadded(sb, cells[ci], colWidths[i], rightAlign);
+                    ++ci;
+                    sb.Append(' ');
                 }
                 sb.AppendLine("|");
             }
-            return sb.ToString();
+            return sb;
         }
 
         /// <summary>
@@ -266,9 +305,9 @@ namespace SysWeaver.Data
         public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             options = options ?? new TableDataExportOptions();
-            var text = GetMarkDownText(tableData, context, options);
+            var text = Build(tableData, options);
             var name = String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename;
-            return Task.FromResult(new MemoryFile(name + ".md", Mimes.MarkdownText, Encoding.UTF8.GetBytes(text)));
+            return Task.FromResult(new MemoryFile(name + ".md", Mimes.MarkdownText, TableDataExporterTools.GetUtf8Bytes(text)));
         }
     }
 

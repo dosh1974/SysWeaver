@@ -79,7 +79,9 @@ namespace SysWeaver.Db
         {
             Db = db;
             var t = "DbTableCache_" + typeof(T).Name + (tableName != null ? (" @ " + tableName.ToQuoted()) : "");
-            PerfNamePrefix = perfMon == null ? "" : (t + '.');
+            var perfNamePrefix = perfMon == null ? "" : (t + '.');
+            PerfSyncName = perfNamePrefix + nameof(SyncNow);
+            PerfSyncEventsName = String.Concat(perfNamePrefix, nameof(SyncNow), ".Events");
             PerfMon = perfMon ?? new PerfMonitor(t);
             ExtractKey = extractKey;
             Comparer = comparer ?? EqualityComparer<K>.Default;
@@ -164,7 +166,7 @@ namespace SysWeaver.Db
         public async Task SyncNow(OrmConnection c)
         {
             using var _ = await SyncLock.Lock().ConfigureAwait(false);
-            using var __ = PerfMon.Track(PerfNamePrefix + nameof(SyncNow));
+            using var __ = PerfMon.Track(PerfSyncName);
             var d = new Dictionary<K, T>(Comparer);
             var extractKey = ExtractKey;
             var dp = c.DialectProvider;
@@ -189,7 +191,7 @@ namespace SysWeaver.Db
             var osa = OnSyncedAsync;
             if ((os != null) || (osa != null))
             {
-                using var ___ = PerfMon.Track(String.Concat(PerfNamePrefix, nameof(SyncNow), ".Events"));
+                using var ___ = PerfMon.Track(PerfSyncEventsName);
                 try
                 {
                     os?.Invoke(newVal);
@@ -217,7 +219,10 @@ namespace SysWeaver.Db
         }
 
         PeriodicTask UpdateTask;
-        readonly String PerfNamePrefix;
+        /// <summary>
+        /// The perf monitor names of the syncs, built once
+        /// </summary>
+        readonly String PerfSyncName, PerfSyncEventsName;
         readonly Func<T, K> ExtractKey;
         readonly Action<TypedSelectStatement<T>, IDialectProvider> RefineSelect;
         readonly DbSimpleStack Db;
@@ -260,7 +265,7 @@ namespace SysWeaver.Db
 
         async Task InternalSyncNow()
         {
-            using var _ = PerfMon.Track(PerfNamePrefix + nameof(SyncNow));
+            using var _ = PerfMon.Track(PerfSyncName);
             var d = new Dictionary<K, T>(Comparer);
             var extractKey = ExtractKey;
             DateTime start;
@@ -290,7 +295,7 @@ namespace SysWeaver.Db
             var osa = OnSyncedAsync;
             if ((os != null) || (osa != null))
             {
-                using var __ = PerfMon.Track(String.Concat(PerfNamePrefix, nameof(SyncNow), ".Events"));
+                using var __ = PerfMon.Track(PerfSyncEventsName);
                 os.RaiseEvents(newVal);
                 await osa.RaiseEvents(newVal).ConfigureAwait(false);
             }

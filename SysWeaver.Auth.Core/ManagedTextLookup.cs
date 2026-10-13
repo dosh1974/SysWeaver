@@ -78,7 +78,7 @@ namespace SysWeaver
             var t = GetTemplates();
             if (t == null)
                 return null;
-            return t.TryGetValue(key.FastToLower(), out var s) ? s : null;
+            return t.TryGetValueLower(key, out var s) ? s : null;
         }
 
         /// <summary>

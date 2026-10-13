@@ -162,7 +162,7 @@ namespace SysWeaver.Auth
             var msg = Msg;
             try
             {
-                msg?.AddMessage(LogPrefix + "Updating users", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Updating users");
                 using var _ = msg?.Tab();
                 Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> changed = new (StringComparer.Ordinal);
                 //  Serialize updates, so that a concurrent update (file change vs api key change) can't publish a stale snapshot
@@ -179,13 +179,13 @@ namespace SysWeaver.Auth
                     Dictionary<String, Task<Authorization>> bearerAuths = new(StringComparer.Ordinal);
                     if ((p.Users?.Length ?? 0) > 0)
                     {
-                        msg?.AddMessage(LogPrefix + "Adding users from service config", MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Adding users from service config");
                         using (msg?.Tab())
                             AddUsers(a, guidMap, p.Users, aba);
                     }
                     if ((FileLines?.Length ?? 0) > 0)
                     {
-                        msg?.AddMessage(LogPrefix + "Adding users from file", MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Adding users from file");
                         using (msg?.Tab())
                             AddUsers(a, guidMap, FileLines, aba);
                     }
@@ -194,7 +194,7 @@ namespace SysWeaver.Auth
                         var apiKeys = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
                         if ((apiKeys?.Length ?? 0) > 0)
                         {
-                            msg?.AddMessage(LogPrefix + "Adding users from stored api keys", MessageLevels.Debug);
+                            msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Adding users from stored api keys");
                             using var __ = msg?.Tab();
                             apiKeyAuth = ":" + apiKeyAuth;
                             //  Api keys may not replace configured users (same name => same user and guid)
@@ -255,7 +255,7 @@ namespace SysWeaver.Auth
                 }
                 return;
             }
-            msg?.AddMessage(LogPrefix + "Users updated", MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Users updated");
         }
 
         void AddUsers(Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> a, Dictionary<String, AuthorizationInfo> guidMap, IEnumerable<String> users, bool allowBasicAuth, bool ignorePolicy = false)
@@ -338,7 +338,7 @@ namespace SysWeaver.Auth
             }
             guidMap[guid] = info;
             a[ul] = new Tuple<byte[], Authorization, String, Authorization>(Convert.FromBase64String(hash), auth, hash, basicAuth);
-            Msg?.AddMessage(String.Concat(LogPrefix, "Added user \"", user, '"'), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Added user \"{user}\"");
             return basicAuth ?? auth;
         }
         const String LogPrefix = "[Auth] ";

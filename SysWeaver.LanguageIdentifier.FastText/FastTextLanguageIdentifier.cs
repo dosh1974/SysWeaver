@@ -102,7 +102,7 @@ namespace SysWeaver.LanguageIdentifier
                     }
                     if (res.Probability < minConfidence)
                         return TaskExt.NullStringValueTask;
-                    var lang = IsoLanguage.TryGet(res.Label.Substring(9))?.Iso639_1;
+                    var lang = IsoLanguage.TryGet(res.Label.AsSpan(9))?.Iso639_1;
                     return ValueTask.FromResult(lang);
                 }
                 catch (Exception ex)
@@ -122,7 +122,7 @@ namespace SysWeaver.LanguageIdentifier
                 using var __ = PerfMon.Track(nameof(Identify));
                 try
                 {
-                    var t = FT.PredictMultiple(text, numberOfResults).Select(x => new IdentifiedLanguage(IsoLanguage.TryGet(x.Label.Substring(9))?.Iso639_1, x.Probability)).Where(x => x.Language != null).ToList();
+                    var t = FT.PredictMultiple(text, numberOfResults).Select(x => new IdentifiedLanguage(IsoLanguage.TryGet(x.Label.AsSpan(9))?.Iso639_1, x.Probability)).Where(x => x.Language != null).ToList();
                     if (t.Count <= 0)
                         return ValueTask.FromResult(Array.Empty<IdentifiedLanguage>());
                     if (userLanguge != null)

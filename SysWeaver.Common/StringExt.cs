@@ -835,9 +835,16 @@ namespace SysWeaver
         /// <param name="texts">The texts to join</param>
         /// <returns>null if texts is null, else the joined string (String.Empty if no text is non empty, the text itself if only one is non empty)</returns>
         public static String JoinNonEmpty(String separator, params String[] texts)
+            => texts == null ? null : JoinNonEmpty(separator, (ReadOnlySpan<String>)texts);
+
+        /// <summary>
+        /// Similar to String.Join but excludes all null or empty texts
+        /// </summary>
+        /// <param name="separator">The separator to insert between the texts (null is the same as empty)</param>
+        /// <param name="texts">The texts to join</param>
+        /// <returns>The joined string (String.Empty if no text is non empty, the text itself if only one is non empty)</returns>
+        public static String JoinNonEmpty(String separator, params ReadOnlySpan<String> texts)
         {
-            if (texts == null)
-                return null;
             int count = 0;
             int total = 0;
             String single = null;
@@ -854,13 +861,27 @@ namespace SysWeaver
             if (count == texts.Length)
                 return String.Join(separator, texts);
             total += (separator?.Length ?? 0) * (count - 1);
-            return String.Create(total, (separator, texts), JoinNonEmptyAction);
+            return String.Create(total, new JoinNonEmptyState(separator, texts), JoinNonEmptyAction);
+        }
+
+        /// <summary>
+        /// The separator and texts of <see cref="JoinNonEmpty(string, ReadOnlySpan{string})"/>, the state when building the string
+        /// </summary>
+        readonly ref struct JoinNonEmptyState
+        {
+            public JoinNonEmptyState(String separator, ReadOnlySpan<String> texts)
+            {
+                Separator = separator;
+                Texts = texts;
+            }
+            public readonly String Separator;
+            public readonly ReadOnlySpan<String> Texts;
         }
 
         /// <summary>
         /// Writes the non empty texts (with separators) into a new string
         /// </summary>
-        static readonly SpanAction<Char, (String Separator, String[] Texts)> JoinNonEmptyAction = (dst, state) =>
+        static readonly SpanAction<Char, JoinNonEmptyState> JoinNonEmptyAction = (dst, state) =>
         {
             var sep = state.Separator.AsSpan();
             bool first = true;

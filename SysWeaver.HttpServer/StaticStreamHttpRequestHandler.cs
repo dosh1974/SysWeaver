@@ -172,10 +172,24 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request (not used)</param>
         /// <returns>The stream data (owned by the caller)</returns>
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
-            return new HttpRequestData(await OpenStreamAsync().ConfigureAwait(false));
+            //  Not an async method: a stream factory that completes synchronously needs no state machine, exceptions are returned in the task
+            try
+            {
+                var t = OpenStreamAsync();
+                if (t.IsCompletedSuccessfully)
+                    return Task.FromResult(new HttpRequestData(t.Result));
+                return WhenOpened(t);
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<HttpRequestData>(ex);
+            }
         }
+
+        static async Task<HttpRequestData> WhenOpened(Task<Stream> t)
+            => new HttpRequestData(await t.ConfigureAwait(false));
 
         /// <inheritdoc/>
         public String Uri { get; private set; }

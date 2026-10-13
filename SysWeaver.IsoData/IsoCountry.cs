@@ -113,7 +113,12 @@ namespace SysWeaver.IsoData
         /// </summary>
         /// <param name="iso3166a2">A two letter ISO 3166-A2 country code, may be null.</param>
         /// <returns>Information about the country if it's known, or null if it's unknown</returns>
-        public static IsoCountry TryGet(String iso3166a2) => IsoToInfo.TryGetValue(iso3166a2?.FastToLower() ?? "", out var i) ? i : null;
+        public static IsoCountry TryGet(String iso3166a2) => IsoToInfo.TryGetValueLower(iso3166a2 ?? "", out var i) ? i : null;
+
+        /// <summary>
+        /// The same as <see cref="TryGet(string)"/> for a span (no allocation)
+        /// </summary>
+        internal static IsoCountry TryGet(ReadOnlySpan<Char> iso3166a2) => IsoToInfo.TryGetValueLower(iso3166a2, out var i) ? i : null;
 
         /// <summary>
         /// Get information about a country from a country name, nick name, ISO code or a distinctive word of the name (case and diacritics insensitive).

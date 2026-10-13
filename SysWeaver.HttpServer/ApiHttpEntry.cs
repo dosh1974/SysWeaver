@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 
 
@@ -847,7 +848,6 @@ namespace SysWeaver.Net
             ServiceRateLimiter = serviceRateLimiter;
             SessionRateLimiterParams = sessionRateLimiterParams;
             Mi = mi;
-            Mon = mon;
             Location = location;
             Uri = url;
             GetAsync = getAsync;
@@ -860,8 +860,8 @@ namespace SysWeaver.Net
             ClientCacheDuration = clientCacheDuration;
             RequestCacheDuration = requestCacheDuration;
             Compression = HttpCompressionPriority.GetSupportedEncoders(compression);
-            GetKey = url + " [GET]";
-            PostKey = url + " [POST]";
+            GetTracker = mon?.GetTracker(url + " [GET]");
+            PostTracker = mon?.GetTracker(url + " [POST]");
             Pi = pi;
             Ri = ri;
             ArgType = argType;
@@ -966,9 +966,8 @@ namespace SysWeaver.Net
         /// The result type (unwrapped from <see cref="Task{TResult}"/> / <see cref="ValueTask{TResult}"/>), null if the method doesn't return a value.
         /// </summary>
         public readonly Type RetType;
-        readonly PerfMonitor Mon;
-        readonly String GetKey;
-        readonly String PostKey;
+        readonly PerfTracker GetTracker;
+        readonly PerfTracker PostTracker;
         readonly IInvokeApi GetAsync;
         readonly IInvokeApi PostAsync;
         readonly bool HaveArgs;
@@ -984,7 +983,7 @@ namespace SysWeaver.Net
         public Task<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
         {
             request.Custom = UnmanagedMemory.Create(data);
-            return PostAsync.Run(this, request);
+            return PostAsync.Run(this, request).AsTask();
         }
 
         /// <inheritdoc/>
@@ -1075,11 +1074,38 @@ namespace SysWeaver.Net
         /// <returns>For GET (or methods without input): url and Accept header. For POST with input: the base64 encoded body, local url, Content-Encoding, Content-Type and Accept headers;
         /// <see cref="HttpServerTools.PreventCacheKey"/> if the body is larger than 4096 bytes.</returns>
         /// <remarks>For POST with input the body is read here and stored in <see cref="HttpServerRequest.Custom"/> so the invoker can reuse it (disposed with the request).</remarks>
-        public async ValueTask<String> GetCacheKey(HttpServerRequest request)
+        public ValueTask<String> GetCacheKey(HttpServerRequest request)
         {
-            var accept = request.GetReqHeader("Accept");
-            if ((request.HttpMethod != HttpServerMethods.POST) || (!HaveArgs))
-                return String.Join('\r', request.Url, accept);
+            String accept;
+            try
+            {
+                accept = request.GetReqHeader("Accept");
+                if ((request.HttpMethod != HttpServerMethods.POST) || (!HaveArgs))
+                    return new ValueTask<String>(String.Concat(request.Url, "\r", accept));
+            }
+            catch (Exception ex)
+            {
+                return GetCacheKeyThrow(ExceptionDispatchInfo.Capture(ex));
+            }
+            return GetPostCacheKey(request, accept);
+        }
+
+        /// <summary>
+        /// Return a value task for an exception thrown synchronously (the same as the async method before the GET fast path).
+        /// </summary>
+#pragma warning disable CS1998 // Async method lacks 'await' operators (the async method builder creates the task)
+        static async ValueTask<String> GetCacheKeyThrow(ExceptionDispatchInfo ex)
+        {
+            ex.Throw();
+            return null;
+        }
+#pragma warning restore CS1998
+
+        /// <summary>
+        /// The POST part of <see cref="GetCacheKey(HttpServerRequest)"/> (the body is read).
+        /// </summary>
+        async ValueTask<String> GetPostCacheKey(HttpServerRequest request, String accept)
+        {
             var memP = await Input_POST_Read(this, request).ConfigureAwait(false);
             var mem = memP.Memory;
             request.Custom = memP;
@@ -1148,16 +1174,52 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>The response body.</returns>
-        async Task<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
+        /// <remarks>
+        /// An invoker that completes synchronously (a synchronous API method, no translation) doesn't need an async state machine:
+        /// the measurement is ended and a completed task is returned.
+        /// Anything else (pending, faulted, canceled or a synchronous throw) is completed by an async method, so the returned task is the same as before.
+        /// </remarks>
+        Task<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
-            if (request.HttpMethod == HttpServerMethods.GET)
+            PerfMesurement m = default;
+            ValueTask<ReadOnlyMemory<Byte>> t;
+            try
             {
-                using (Mon?.Track(GetKey))
-                    return new HttpRequestData(await GetAsync.Run(this, request).ConfigureAwait(false));
+                var isGet = request.HttpMethod == HttpServerMethods.GET;
+                m = (isGet ? GetTracker : PostTracker).Track();
+                t = (isGet ? GetAsync : PostAsync).Run(this, request);
             }
-            using (Mon?.Track(PostKey))
-                return new HttpRequestData(await PostAsync.Run(this, request).ConfigureAwait(false));
+            catch (Exception ex)
+            {
+                return GetAsyncThrow(m, ExceptionDispatchInfo.Capture(ex));
+            }
+            if (!t.IsCompletedSuccessfully)
+                return GetAsyncAwait(m, t);
+            var res = t.Result;
+            m.Dispose();
+            return Task.FromResult(new HttpRequestData(res));
         }
+
+        /// <summary>
+        /// Await a pending (or failed) invoker, then end the measurement (the same as a using block around the await).
+        /// </summary>
+        static async Task<HttpRequestData> GetAsyncAwait(PerfMesurement m, ValueTask<ReadOnlyMemory<Byte>> t)
+        {
+            using (m)
+                return new HttpRequestData(await t.ConfigureAwait(false));
+        }
+
+        /// <summary>
+        /// Return a task for an exception thrown synchronously by an invoker (the same task as an async method would return, ex: canceled for an <see cref="OperationCanceledException"/>).
+        /// </summary>
+#pragma warning disable CS1998 // Async method lacks 'await' operators (the async method builder creates the task)
+        static async Task<HttpRequestData> GetAsyncThrow(PerfMesurement m, ExceptionDispatchInfo ex)
+        {
+            using (m)
+                ex.Throw();
+            return null;
+        }
+#pragma warning restore CS1998
 
 
         /// <summary>
@@ -1275,7 +1337,7 @@ namespace SysWeaver.Net
         /// <exception cref="Exception">Unknown Content-Encoding or Content-Type.</exception>
         /// <exception cref="HttpResponseException">A 413 response if the body exceeds <see cref="ApiIoParams.MaxRequestSize"/> or decompresses to more than <see cref="ApiIoParams.MaxDecompressedSize"/>.</exception>
         /// <remarks>If reading or deserializing fails for an audited API, the failure is audited (see <see cref="AuditInputFailed"/>).</remarks>
-        static async Task<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
+        static async ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             try
             {
@@ -1288,7 +1350,8 @@ namespace SysWeaver.Net
             }
         }
 
-        static async Task<T> Input_POST_Deserialize<T>(ApiHttpEntry api, HttpServerRequest request)
+        /// <remarks>A value task: the body is usually already read by <see cref="GetCacheKey(HttpServerRequest)"/>, so this completes synchronously.</remarks>
+        static async ValueTask<T> Input_POST_Deserialize<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             IUnmanagedReadOnlyMemory<Byte> dataMem = null;
             var c = request.Custom;

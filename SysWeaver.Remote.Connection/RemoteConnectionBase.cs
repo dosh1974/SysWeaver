@@ -131,6 +131,34 @@ namespace SysWeaver.Remote
         public PerfMonitor PerfMon { get; private set; }
 
         /// <summary>
+        /// Start tracking an end point call (named <see cref="ApiMeta.Name"/>), using the tracker cached in the meta data
+        /// </summary>
+        PerfMesurement TrackEndPoint(ApiMeta meta)
+        {
+            var pm = PerfMon;
+            if (pm == null)
+                return default;
+            var t = meta.Tracker;
+            if ((t == null) || (t.Monitor != pm))
+                meta.Tracker = t = pm.GetTracker(meta.Name);
+            return t.Track();
+        }
+
+        /// <summary>
+        /// Start tracking a cache lookup of an end point (named "Cache " + <see cref="ApiMeta.Name"/>), using the tracker cached in the meta data
+        /// </summary>
+        PerfMesurement TrackCache(ApiMeta meta)
+        {
+            var pm = PerfMon;
+            if (pm == null)
+                return default;
+            var t = meta.CacheTracker;
+            if ((t == null) || (t.Monitor != pm))
+                meta.CacheTracker = t = pm.GetTracker("Cache " + meta.Name);
+            return t.Track();
+        }
+
+        /// <summary>
         /// Returns failure statistics (exception counts) per HTTP method, using the system name "Remote " + <see cref="UrlBase"/>.
         /// </summary>
         /// <returns>The stats, lazily enumerated.</returns>
@@ -362,13 +390,13 @@ namespace SysWeaver.Remote
             var cache = meta.Cache;
             if (cache != null)
             {
-                using (PerfMon.Track("Cache " + meta.Name))
+                using (TrackCache(meta))
                 {
                     if (cache.TryGet(url, out var val))
                         return val;
                 }
             }
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -408,13 +436,13 @@ namespace SysWeaver.Remote
             var cache = meta.Cache;
             if (cache != null)
             {
-                using (PerfMon.Track("Cache " + meta.Name))
+                using (TrackCache(meta))
                 {
                     if (cache.TryGet(url, out var val))
                         return val;
                 }
             }
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -453,7 +481,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Post<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -491,7 +519,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Put<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -535,13 +563,13 @@ namespace SysWeaver.Remote
             var cache = meta.Cache;
             if (cache != null)
             {
-                using (PerfMon.Track("Cache " + meta.Name))
+                using (TrackCache(meta))
                 {
                     if (cache.TryGet(url, out var val))
                         return val;
                 }
             }
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -581,13 +609,13 @@ namespace SysWeaver.Remote
             var cache = meta.Cache;
             if (cache != null)
             {
-                using (PerfMon.Track("Cache " + meta.Name))
+                using (TrackCache(meta))
                 {
                     if (cache.TryGet(url, out var val))
                         return val;
                 }
             }
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -626,7 +654,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValuePost<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -664,7 +692,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValuePut<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -708,7 +736,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -740,7 +768,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -774,7 +802,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -812,7 +840,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -854,7 +882,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -886,7 +914,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -920,7 +948,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try
@@ -958,7 +986,7 @@ namespace SysWeaver.Remote
         /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
-            using (PerfMon.Track(meta.Name))
+            using (TrackEndPoint(meta))
             {
                 var apiUrl = UrlBase + url;
                 try

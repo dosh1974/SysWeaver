@@ -169,7 +169,7 @@ namespace SysWeaver.MicroService
             if (transformService != null)
             {
                 if (s.UnregisterTransformerService(transformService))
-                    m.AddMessage(MsgPrefix + "Unregistered transformer service \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Debug);
+                    m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Unregistered transformer service \"{transformService.GetType()}\" ({transformService})");
                 else
                     m.AddMessage(MsgPrefix + "Failed to unregister transformer service! Already unregistered? Type \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Warning);
             }
@@ -179,7 +179,7 @@ namespace SysWeaver.MicroService
             {
                 if (s.RemoveRawModule(rawModule))
                 {
-                    m.AddMessage(MsgPrefix + "Removed raw module of type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Debug);
+                    m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Removed raw module of type \"{rawModule.GetType()}\" ({rawModule})");
                 }
                 else
                 {
@@ -191,7 +191,7 @@ namespace SysWeaver.MicroService
             {
                 if (s.RemoveModule(module))
                 {
-                    m.AddMessage(MsgPrefix + "Removed module of type \"" + module.GetType() + "\" (" + module + ")", MessageLevels.Debug);
+                    m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Removed module of type \"{module.GetType()}\" ({module})");
                 }
                 else
                 {
@@ -238,7 +238,7 @@ namespace SysWeaver.MicroService
             {
                 if (s.AddModule(module))
                 {
-                    m.AddMessage(MsgPrefix + "Added module of type \"" + module.GetType() + "\" (" + module + ")", MessageLevels.Debug);
+                    m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Added module of type \"{module.GetType()}\" ({module})");
                 }
                 else
                 {
@@ -251,7 +251,7 @@ namespace SysWeaver.MicroService
             {
                 if (s.AddRawModule(rawModule))
                 {
-                    m.AddMessage(MsgPrefix + "Added raw module of type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Debug);
+                    m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Added raw module of type \"{rawModule.GetType()}\" ({rawModule})");
                 }
                 else
                 {
@@ -261,7 +261,7 @@ namespace SysWeaver.MicroService
             var transformService = instance as IHttpTransformerService;
             if (transformService != null) {
                 s.RegisterTransformerService(transformService);
-                m.AddMessage(MsgPrefix + "Registered transformer service \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Debug);
+                m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Registered transformer service \"{transformService.GetType()}\" ({transformService})");
             }
         }
 

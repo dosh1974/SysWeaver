@@ -72,9 +72,9 @@ namespace SysWeaver.Data
         public static bool DefaultMakeFn(Type type)
         {
             var ns = type.Namespace ?? "";
-            if (ns.StartsWith("System."))
+            if (ns.FastStartsWith("System."))
                 return false;
-            if (ns.StartsWith("Microsoft."))
+            if (ns.FastStartsWith("Microsoft."))
                 return false;
             if (ns.FastEquals("System"))
                 return false;

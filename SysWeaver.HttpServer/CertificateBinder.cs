@@ -59,38 +59,38 @@ namespace SysWeaver.Net
                         if (isNew)
                         {
                             string removeArgs = "http delete sslcert " + bind;
-                            msg?.AddMessage(logPrefix + "Running command: \"netsh " + removeArgs + "\"", MessageLevels.Debug);
+                            msg?.AddMessage(MessageLevels.Debug, $"{logPrefix}Running command: \"netsh {removeArgs}\"");
                             ExternalProcess.Run("netsh", removeArgs, (text, wrn) =>
                             {
-                                msg?.AddMessage(logPrefix + "[RemoveCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
+                                msg?.AddMessage(wrn ? MessageLevels.Warning : MessageLevels.Debug, $"{logPrefix}[RemoveCert] {text}");
                             });
                         }
                         string updateArgs = "http update sslcert " + bind + store + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
-                        msg?.AddMessage(logPrefix + "Running command: \"netsh " + updateArgs + "\"", MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"{logPrefix}Running command: \"netsh {updateArgs}\"");
                         var r = ExternalProcess.Run("netsh", updateArgs, (text, wrn) =>
                         {
-                            msg?.AddMessage(logPrefix + "[UpdateCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
+                            msg?.AddMessage(wrn ? MessageLevels.Warning : MessageLevels.Debug, $"{logPrefix}[UpdateCert] {text}");
                         });
                         if (r != 0)
                         {
                             string addArgs = "http add sslcert " + bind + store + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
-                            msg?.AddMessage(logPrefix + "Running command: \"netsh " + addArgs + "\"", MessageLevels.Debug);
+                            msg?.AddMessage(MessageLevels.Debug, $"{logPrefix}Running command: \"netsh {addArgs}\"");
                             r = ExternalProcess.Run("netsh", addArgs, (text, wrn) =>
                             {
-                                msg?.AddMessage(logPrefix + "[AddCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
+                                msg?.AddMessage(wrn ? MessageLevels.Warning : MessageLevels.Debug, $"{logPrefix}[AddCert] {text}");
                             });
                             if (r != 0)
                             {
                                 string removeArgs = "http delete sslcert " + bind;
-                                msg?.AddMessage(logPrefix + "Running command: \"netsh " + removeArgs + "\"", MessageLevels.Debug);
+                                msg?.AddMessage(MessageLevels.Debug, $"{logPrefix}Running command: \"netsh {removeArgs}\"");
                                 r = ExternalProcess.Run("netsh", removeArgs, (text, wrn) =>
                                 {
-                                    msg?.AddMessage(logPrefix + "[RemoveCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
+                                    msg?.AddMessage(wrn ? MessageLevels.Warning : MessageLevels.Debug, $"{logPrefix}[RemoveCert] {text}");
                                 });
-                                msg?.AddMessage(logPrefix + "Running command: \"netsh " + addArgs + "\"", MessageLevels.Debug);
+                                msg?.AddMessage(MessageLevels.Debug, $"{logPrefix}Running command: \"netsh {addArgs}\"");
                                 r = ExternalProcess.Run("netsh", addArgs, (text, wrn) =>
                                 {
-                                    msg?.AddMessage(logPrefix + "[AddCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
+                                    msg?.AddMessage(wrn ? MessageLevels.Warning : MessageLevels.Debug, $"{logPrefix}[AddCert] {text}");
                                 });
                             }
                         }

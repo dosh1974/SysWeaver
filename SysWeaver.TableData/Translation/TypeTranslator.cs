@@ -261,6 +261,15 @@ namespace SysWeaver.Translation
         /// <param name="contexts">The contexts to merge, null and empty strings are skipped</param>
         /// <returns>The merged context, null if there are no non-empty contexts</returns>
         public static String MergeContexts(params String[] contexts)
+            //  contexts.Length: a null array throws a NullReferenceException (as before)
+            => MergeContexts(new ReadOnlySpan<String>(contexts, 0, contexts.Length));
+
+        /// <summary>
+        /// Merge multiple translation context texts into a single text, separated by new lines ('\n').
+        /// </summary>
+        /// <param name="contexts">The contexts to merge, null and empty strings are skipped</param>
+        /// <returns>The merged context, null if there are no non-empty contexts</returns>
+        public static String MergeContexts(params ReadOnlySpan<String> contexts)
         {
             var c = contexts.Length;
             int l = 0;
@@ -281,7 +290,7 @@ namespace SysWeaver.Translation
             return String.Create(l, contexts, StringMergerAction);
         }
 
-        static void StringMerger(Span<Char> to, String[] contexts)
+        static void StringMerger(Span<Char> to, ReadOnlySpan<String> contexts)
         {
             var c = contexts.Length;
             int l = 0;
@@ -303,9 +312,9 @@ namespace SysWeaver.Translation
             }
         }
 
-        static readonly SpanAction<char, String[]> StringMergerAction = StringMerger;
+        static readonly SpanAction<char, ReadOnlySpan<String>> StringMergerAction = StringMerger;
 
-        internal static readonly MethodInfo MergeContextsMethod = typeof(TypeTranslator).GetMethod(nameof(MergeContexts), BindingFlags.Static | BindingFlags.Public);
+        internal static readonly MethodInfo MergeContextsMethod = typeof(TypeTranslator).GetMethod(nameof(MergeContexts), BindingFlags.Static | BindingFlags.Public, [typeof(String[])]);
         internal static readonly MethodInfo ListAddMethod = typeof(List<Task>).GetMethod(nameof(List<Task>.Add), BindingFlags.Instance| BindingFlags.Public, [typeof(Task)]);
         internal static readonly MethodInfo TaskWhenAllMethod = typeof(Task).GetMethod(nameof(Task.WhenAll), BindingFlags.Static| BindingFlags.Public, [typeof(IEnumerable<Task>)]);
         internal static readonly MethodInfo TaskWhenAllArrayMethod = typeof(Task).GetMethod(nameof(Task.WhenAll), BindingFlags.Static | BindingFlags.Public, [typeof(Task[])]);

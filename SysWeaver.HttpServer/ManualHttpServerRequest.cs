@@ -178,7 +178,7 @@ namespace SysWeaver.Net
                     set(to, vals);
                     continue;
                 }
-                if (!ProxyTools.AllowMultipleHeaders.Contains(k.FastToLower()))
+                if (!ProxyTools.AllowMultipleHeaders.ContainsLower(k))
                     ResHeaders.Remove(k);
                 ResHeaders.TryAddWithoutValidation(k, vals);
             }

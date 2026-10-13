@@ -134,7 +134,7 @@ namespace SysWeaver.Net
         /// <returns>The UTF-8 encoded result</returns>
         public ReadOnlyMemory<Byte> ApplyTemplate(TextTemplate template, IReadOnlyDictionary<String, String> vars, IReadOnlyDictionary<String, String> extra)
         {
-            using (PerfMon.Track(nameof(ApplyTemplate)))
+            using (TrackApplyTemplate.Track())
             {
                 String getVar(String key)
                 {
@@ -235,8 +235,8 @@ namespace SysWeaver.Net
             }
             else
             {
-                using var _ = PerfMon.Track(nameof(GetTranslationVars));
-                using var __ = PerfMon.Track(String.Concat(nameof(GetTranslationVars), '.', language));
+                using var _ = TrackGetTranslationVars.Track();
+                using var __ = TranslationVarsTrackers.Track(language);
                 var trs = await v.ConvertAsync(d => tr.TranslateSafe(d.Text, language, "en", d.Context)).ConfigureAwait(false);
                 for (int i = 0; i < l; ++i)
                     r.Add(v[i].VarName, trs[i]);

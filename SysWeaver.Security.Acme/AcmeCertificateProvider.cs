@@ -202,7 +202,7 @@ namespace SysWeaver.Security
         IDisposable StartHttpServer()
         {
             var msg = Msg;
-            msg?.AddMessage(Prefix + "Starting a http server at port 80", MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Starting a http server at port 80");
             NetHttpServer server;
             try
             {
@@ -230,7 +230,7 @@ namespace SysWeaver.Security
             msg?.AddMessage(Prefix + "Started a http server at port 80");
             return new AsDisposable(() =>
             {
-                msg?.AddMessage(Prefix + "Stopping the http server at port 80", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Stopping the http server at port 80");
                 server.Dispose();
                 msg?.AddMessage(Prefix + "Stopped the http server at port 80");
             });
@@ -240,7 +240,7 @@ namespace SysWeaver.Security
         {
             var msg = Msg;
             //  Create an order
-            msg?.AddMessage(Prefix + "Creating a new order for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Creating a new order for: {String.Join(", ", Names.Select(x => x.ToQuoted()))}");
             IOrderContext orderContext;
             try
             {
@@ -292,7 +292,7 @@ namespace SysWeaver.Security
                     tokens[key] = Encoding.UTF8.GetBytes(value);
                 }
                 challenges.Add(Tuple.Create(challangeContext, key, cfile));
-                msg?.AddMessage(Prefix + "Created a http challenge using: " + key.ToQuoted() + " = " + value.ToQuoted(), MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Created a http challenge using: {key.ToQuoted()} = {value.ToQuoted()}");
             }
             //  Start http server if none is running
             IDisposable server = null;
@@ -380,7 +380,7 @@ namespace SysWeaver.Security
                 msg?.AddMessage(Prefix + "Failed to finalize order", ex, MessageLevels.Warning);
                 throw;
             }
-            msg?.AddMessage(Prefix + "Download the certificate", MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Download the certificate");
             CertificateChain certChain;
             try
             {
@@ -391,7 +391,7 @@ namespace SysWeaver.Security
                 msg?.AddMessage(Prefix + "Failed to download new certificate chain for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), ex, MessageLevels.Warning);
                 throw;
             }
-            msg?.AddMessage(Prefix + "Building certificate from downloaded data", MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Building certificate from downloaded data");
             try
             {
                 var pfxBuilder = certChain.ToPfx(certKey);
@@ -402,7 +402,7 @@ namespace SysWeaver.Security
                 var cert = pfxBuilder.Build("SysWeaver ACME " + Info.CommonName, pwd);
                 var fs = X509CertificateLoader.LoadPkcs12(cert, pwd, CertificateTools.InMemoryKeyStorageFlags);
                 //var fs = new X509Certificate2(cert, pwd, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
-                msg?.AddMessage(Prefix + "Certificate is built successfully", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Certificate is built successfully");
                 return fs;
             }
             catch (Exception ex)
@@ -500,7 +500,7 @@ namespace SysWeaver.Security
                 }
             }
         //  Create new account
-            msg?.AddMessage(Prefix + "Creating a new account using mail " + mail.ToMail(), MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Creating a new account using mail {mail.ToMail()}");
             context = new AcmeContext(baseUrl);
             try
             {
@@ -512,7 +512,7 @@ namespace SysWeaver.Security
                 throw;
             }
             //  Make sure destination folder exists
-            msg?.AddMessage(Prefix + "Saving account key to " + accountFile.ToFilename(), MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Saving account key to {accountFile.ToFilename()}");
             accountKey = context.AccountKey;
             var pex = PathExt.EnsureCanWriteFile(accountFile);
             if (pex != null)
@@ -595,7 +595,7 @@ namespace SysWeaver.Security
 
                 if (haveFile)
                 {
-                    msg?.AddMessage(Prefix + "Saving certificate file " + f.ToFilename(), MessageLevels.Debug);
+                    msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Saving certificate file {f.ToFilename()}");
                     var pex = PathExt.EnsureCanWriteFile(f);
                     if (pex != null)
                         msg?.AddMessage(Prefix + "Failed to create folder required to save " + f.ToFilename(), pex, MessageLevels.Warning);
@@ -608,7 +608,7 @@ namespace SysWeaver.Security
                         msg?.AddMessage(Prefix + "Failed to save certificate file " + f.ToFilename(), ex, MessageLevels.Warning);
                     }
                     var crtFile = Path.ChangeExtension(f, "crt");
-                    msg?.AddMessage(Prefix + "Saving public certificate file " + crtFile.ToFilename(), MessageLevels.Debug);
+                    msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Saving public certificate file {crtFile.ToFilename()}");
                     try
                     {
                         await Retry.OpAsync(() => File.WriteAllTextAsync(crtFile, c.ExportCertificatePem())).ConfigureAwait(false);

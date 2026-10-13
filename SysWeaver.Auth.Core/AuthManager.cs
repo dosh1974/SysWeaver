@@ -48,6 +48,7 @@ namespace SysWeaver.Auth
             var cacheMs = Math.Max(1, p.CacheDuration) * 1000;
             CacheDurationMs = cacheMs;
             MaxCachedHeaders = p.MaxCachedHeaders;
+            HttpCacheLookup = HttpCache.GetAlternateLookup<ReadOnlySpan<Byte>>();
             UpdateCommonPolicy();
             RetryAuth = new PeriodicTask(PruneCache, cacheMs);
         }
@@ -64,8 +65,8 @@ namespace SysWeaver.Auth
             var t = userGuid.IndexOf(':');
             if (t < 0)
                 return TaskExt<AuthorizationInfo>.NullTask;
-            var pre = userGuid.Substring(0, t);
-            if (!GuidPrefixMap.TryGetValue(pre, out var auth))
+            //  The prefix is looked up with a span (no substring)
+            if (!GuidPrefixMap.TryGetValueSpan(userGuid.AsSpan(0, t), out var auth))
                 return TaskExt<AuthorizationInfo>.NullTask;
             return auth.FindUserFromGuid(userGuid);
         }
@@ -102,29 +103,39 @@ namespace SysWeaver.Auth
         /// an unsupported scheme, malformed basic credentials or a header longer than <see cref="MaxAuthHeaderLength"/> chars.
         /// Item2 is true if the basic scheme was used (so the caller can request basic credentials again).</returns>
         /// <exception cref="ArgumentNullException"><paramref name="authHeaderString"/> is null (DEBUG builds only).</exception>
-        public async Task<Tuple<Authorization, bool>> Http(String authHeaderString)
+        public Task<Tuple<Authorization, bool>> Http(String authHeaderString)
+        {
+            //  A null header fails in HttpAsync (the same exception, in the returned task)
+            if (authHeaderString == null)
+                return HttpAsync(null, null);
+            var s = authHeaderString.Trim();
+            //  A cache hit returns the completed task of the entry (no allocation)
+            Byte[] cacheKey = null;
+            if ((s.Length <= MaxAuthHeaderLength) && (MaxCachedHeaders > 0))
+            {
+                var cached = GetCached(s, out cacheKey);
+                if (cached != null)
+                    return cached.Result;
+            }
+            return HttpAsync(s, cacheKey);
+        }
+
+        /// <summary>
+        /// The part of <see cref="Http"/> after the cache lookup
+        /// </summary>
+        /// <param name="s">The trimmed header value</param>
+        /// <param name="cacheKey">The cache key, null if the cache is disabled or the header is too long</param>
+        async Task<Tuple<Authorization, bool>> HttpAsync(String s, Byte[] cacheKey)
         {
 #if DEBUG
-            ArgumentNullException.ThrowIfNull(authHeaderString);
+            ArgumentNullException.ThrowIfNull(s, "authHeaderString");
 #endif//DEBUG
-            var s = authHeaderString.Trim();
             //  The token is only allocated if it's needed (not for cached results)
             var isBasic = ParseScheme(s, out var isBearer, out var tokenStart);
             var fail = isBasic ? NoAuthBasic : NoAuth;
             if (s.Length > MaxAuthHeaderLength)
                 return fail;
             var maxCached = MaxCachedHeaders;
-            Byte[] cacheKey = null;
-            if (maxCached > 0)
-            {
-                cacheKey = SHA256.HashData(MemoryMarshal.AsBytes(s.AsSpan()));
-                if (HttpCache.TryGetValue(cacheKey, out var e) && (e.ExpiresAt > Environment.TickCount64))
-                {
-                    var c = e.Auth.Item1;
-                    if (c.Cc == c.Auth.ChangeCounter)
-                        return e.Auth;
-                }
-            }
             Authorization aa = null;
             var p = (isBasic || isBearer) ? GetToken(s, tokenStart) : null;
             if (isBasic)
@@ -179,6 +190,31 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
+        /// Get a valid cached result for a (trimmed) header value.
+        /// The SHA256 key is computed on the stack and looked up by span, so a cache hit doesn't allocate.
+        /// </summary>
+        /// <param name="s">The trimmed header value</param>
+        /// <param name="cacheKey">The cache key: the stored key if there is an entry (valid or not), else a new array</param>
+        /// <returns>The cache entry, null if there is no valid entry</returns>
+        HttpCacheEntry GetCached(String s, out Byte[] cacheKey)
+        {
+            Span<Byte> hash = stackalloc Byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(MemoryMarshal.AsBytes(s.AsSpan()), hash);
+            if (HttpCacheLookup.TryGetValue(hash, out cacheKey, out var e))
+            {
+                if (e.ExpiresAt > Environment.TickCount64)
+                {
+                    var c = e.Auth.Item1;
+                    if (c.Cc == c.Auth.ChangeCounter)
+                        return e;
+                }
+                return null;
+            }
+            cacheKey = hash.ToArray();
+            return null;
+        }
+
+        /// <summary>
         /// Get the auth scheme of a (trimmed) header value, same as s.SplitFirst(' ', out var token, false, true) without any allocations.
         /// Auth schemes are case insensitive (RFC 9110).
         /// </summary>
@@ -227,7 +263,13 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="Auth">The successful result</param>
         /// <param name="ExpiresAt">When the entry expires (<see cref="Environment.TickCount64"/>)</param>
-        sealed record HttpCacheEntry(Tuple<Authorization, bool> Auth, long ExpiresAt);
+        sealed record HttpCacheEntry(Tuple<Authorization, bool> Auth, long ExpiresAt)
+        {
+            /// <summary>
+            /// A completed task with the result (returned by cache hits, so they don't allocate)
+            /// </summary>
+            public readonly Task<Tuple<Authorization, bool>> Result = Task.FromResult(Auth);
+        }
 
 
 
@@ -489,6 +531,11 @@ namespace SysWeaver.Auth
         /// Successful Authorization header results, keyed by the SHA256 hash of the header value (so no credentials are kept in memory)
         /// </summary>
         readonly LowAllocConcurrentDictionary<Byte[], HttpCacheEntry> HttpCache = new (ByteArrayEqualityComparer.Instance);
+
+        /// <summary>
+        /// Span lookups of <see cref="HttpCache"/> (keys hashed on the stack)
+        /// </summary>
+        readonly LowAllocConcurrentDictionary<Byte[], HttpCacheEntry>.AlternateLookup<ReadOnlySpan<Byte>> HttpCacheLookup;
 
         /// <summary>
         /// How long a successful Authorization header result is cached, in ms

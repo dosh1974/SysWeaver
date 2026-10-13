@@ -46,7 +46,7 @@ namespace SysWeaver.Knowledge
     {
         public const String Group = "Series";
 
-        public static bool TryGet(String name, out Serie info) => Tags.TryGetValue(name.FastToLower(), out info);
+        public static bool TryGet(String name, out Serie info) => Tags.TryGetValueLower(name, out info);
 
         public static IEnumerable<KeyValuePair<String, Serie>> All => Tags;
 

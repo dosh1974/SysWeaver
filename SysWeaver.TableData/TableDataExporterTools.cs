@@ -301,6 +301,48 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Get the UTF-8 bytes of the text in a string builder, the same bytes as Encoding.UTF8.GetBytes(sb.ToString()) (invalid surrogates are replaced with U+FFFD),
+        /// without creating the string (the chunks are counted, then encoded into an exactly sized array).
+        /// </summary>
+        /// <param name="sb">The string builder</param>
+        /// <returns>The UTF-8 bytes</returns>
+        internal static Byte[] GetUtf8Bytes(StringBuilder sb)
+        {
+            var enc = Encoding.UTF8;
+            //  Count, a surrogate pair split between two chunks is counted as 3 + 3 bytes (two replacement chars) instead of 4
+            long count = 0;
+            bool prevHigh = false;
+            foreach (var c in sb.GetChunks())
+            {
+                var s = c.Span;
+                var sl = s.Length;
+                if (sl <= 0)
+                    continue;
+                count += enc.GetByteCount(s);
+                if (prevHigh && Char.IsLowSurrogate(s[0]))
+                    count -= 2;
+                prevHigh = Char.IsHighSurrogate(s[sl - 1]);
+            }
+            if (count > Array.MaxLength)
+                return enc.GetBytes(sb.ToString());
+            var data = GC.AllocateUninitializedArray<Byte>((int)count);
+            //  Encode, the encoder keeps a high surrogate at the end of a chunk until the next chunk
+            var encoder = enc.GetEncoder();
+            var d = data.AsSpan();
+            foreach (var c in sb.GetChunks())
+            {
+                var w = encoder.GetBytes(c.Span, d, false);
+                d = d.Slice(w);
+            }
+            var e = encoder.GetBytes(ReadOnlySpan<Char>.Empty, d, true);
+            d = d.Slice(e);
+            if (d.Length != 0)
+                return enc.GetBytes(sb.ToString());
+            return data;
+        }
+
+
     }
 
 }

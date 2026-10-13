@@ -48,7 +48,7 @@ namespace SysWeaver
         /// <param name="key">The key (one of the names supplied to <see cref="ManagedMessages"/>, including any leading '*', case insensitive)</param>
         /// <returns>null if not found, else the mail message template</returns>
         public ManagedMailMessage GetMail(String key)
-            => Mails.TryGetValue(key.FastToLower(), out var v) ? v : null;
+            => Mails.TryGetValueLower(key, out var v) ? v : null;
 
         /// <summary>
         /// Get the text message for a given key.
@@ -56,7 +56,7 @@ namespace SysWeaver
         /// <param name="key">The key (one of the names supplied to <see cref="ManagedMessages"/>, including any leading '*', case insensitive)</param>
         /// <returns>null if not found, else the text message template</returns>
         public ManagedTextMessage GetText(String key)
-            => Texts.TryGetValue(key.FastToLower(), out var v) ? v : null;
+            => Texts.TryGetValueLower(key, out var v) ? v : null;
 
 
         /// <summary>

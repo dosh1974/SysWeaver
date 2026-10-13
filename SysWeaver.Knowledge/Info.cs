@@ -38,13 +38,14 @@ namespace SysWeaver.Knowledge
 
         public static Info GetInfo(out bool wasNew, string name, string desc, string category, Info[] parent = null, bool isName = false)
         {
-            var key = name.FastToLower();
             var c = Cache;
-            if (c.TryGetValue(key, out var i))
+            //  The lower case key is only created on a miss
+            if (c.TryGetValueLower(name, out var i))
             {
                 wasNew = false;
                 return i;
             }
+            var key = name.FastToLower();
             i = new Info(name, desc, category, parent, isName);
             wasNew = c.TryAdd(key, i);
             if (wasNew)

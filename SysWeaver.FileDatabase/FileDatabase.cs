@@ -235,7 +235,7 @@ namespace SysWeaver.FileDatabase
                             }
                         }
 #if DEBUG
-                        msg?.AddMessage(Prefix + "Syncing folder " + folderName.ToQuoted(), MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Syncing folder {folderName.ToQuoted()}");
 #endif//DEBUG
 
                         validFolders = StringTree.Add(folderName, false, validFolders);
@@ -301,7 +301,7 @@ namespace SysWeaver.FileDatabase
         private void W_Error(object sender, ErrorEventArgs e)
         {
 #if DEBUG
-            Msg?.AddMessage(Prefix + "File watch error: " + e.GetException(), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}File watch error: {e.GetException()}");
 #endif//DEBUG
             GenericFails.OnException(e.GetException());
         }
@@ -320,7 +320,7 @@ namespace SysWeaver.FileDatabase
                     bool doCreate = valid.StartsWithAny(name + Path.DirectorySeparatorChar) != null;
                     bool doDelete = valid.StartsWithAny(oname + Path.DirectorySeparatorChar) != null;
 #if DEBUG
-                    Msg?.AddMessage(Prefix + "Renamed directory " + name.ToQuoted() + " from " + oname.ToQuoted(), MessageLevels.Debug);
+                    Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Renamed directory {name.ToQuoted()} from {oname.ToQuoted()}");
 #endif//DEBUG
                     var dl = name.Length + 1;
                     foreach (var file in Directory.GetFiles(name, "*", SearchOption.AllDirectories))
@@ -333,7 +333,7 @@ namespace SysWeaver.FileDatabase
                     return;
                 }
 #if DEBUG
-                Msg?.AddMessage(Prefix + "Renamed file " + name.ToQuoted() + " from " + oname.ToQuoted(), MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Renamed file {name.ToQuoted()} from {oname.ToQuoted()}");
 #endif//DEBUG
                 if (valid.StartsWithAny(oname) != null)
                     Updates.Enqueue(new Update(oname, true));
@@ -352,7 +352,7 @@ namespace SysWeaver.FileDatabase
             {
                 var name = e.FullPath;
 #if DEBUG
-                Msg?.AddMessage(Prefix + "Deleted file (or folder) " + name.ToQuoted(), MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Deleted file (or folder) {name.ToQuoted()}");
 #endif//DEBUG
                 Updates.Enqueue(new Update(e.FullPath, true));
             }
@@ -370,14 +370,14 @@ namespace SysWeaver.FileDatabase
                 if ((File.GetAttributes(name) & FileAttributes.Directory) != 0)
                 {
 #if DEBUG
-                    Msg?.AddMessage(Prefix + "Created folder " + name.ToQuoted(), MessageLevels.Debug);
+                    Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Created folder {name.ToQuoted()}");
 #endif//DEBUG
                     foreach (var x in Directory.GetFiles(name, "*", SearchOption.AllDirectories))
                         Updates.Enqueue(new Update(x, false));
                     return;
                 }
 #if DEBUG
-                Msg?.AddMessage(Prefix + "Created file " + name.ToQuoted(), MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Created file {name.ToQuoted()}");
 #endif//DEBUG
                 Updates.Enqueue(new Update(name, false));
             }
@@ -395,7 +395,7 @@ namespace SysWeaver.FileDatabase
                 if ((File.GetAttributes(name) & FileAttributes.Directory) != 0)
                     return;
 #if DEBUG
-                Msg?.AddMessage(Prefix + "Changed file " + name.ToQuoted(), MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Changed file {name.ToQuoted()}");
 #endif//DEBUG
                 Updates.Enqueue(new Update(name, false));
             }

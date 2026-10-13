@@ -252,7 +252,6 @@ namespace SysWeaver
             var c = CachedCleanTypename;
             if (c.TryGetValue(type, out var v))
                 return v;
-            var test = type.FullName;
             var rt = type.GetGenericTypeDefinition();
             v = String.Concat(rt.FullName, '[', String.Join(", ", type.GetGenericArguments().Select(x => String.Concat('[', CleanTypename(x), ']'))), ']');
             c.TryAdd(type, v);

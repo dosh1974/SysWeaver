@@ -1037,7 +1037,7 @@ namespace SysWeaver.MicroService
         static readonly IEnumerable<ManagedFolderData> Empty = Array.Empty<ManagedFolderData>();
 
         public IEnumerable<ManagedFolderData> GetManagedFolders(String syncName)
-            => ManagedFolders.TryGetValue(syncName.FastToLower(), out var f) ? GetManagedFolders(f) : Empty;
+            => ManagedFolders.TryGetValueLower(syncName, out var f) ? GetManagedFolders(f) : Empty;
 
         public IEnumerable<ManagedFolderData> GetManagedFolders()
             => ManagedFolders.Values.SelectMany(GetManagedFolders);

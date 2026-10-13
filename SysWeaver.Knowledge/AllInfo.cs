@@ -13,7 +13,7 @@ namespace SysWeaver.Knowledge
         /// <param name="keyword">The keyword, preferable lowercased</param>
         /// <param name="info">Information if any is found</param>
         /// <returns>True if any information is found about the keyword</returns>
-        public static bool TryGet(String keyword, out Info info) => Tags.TryGetValue(keyword.FastToLower(), out info);
+        public static bool TryGet(String keyword, out Info info) => Tags.TryGetValueLower(keyword, out info);
 
 
         /// <summary>

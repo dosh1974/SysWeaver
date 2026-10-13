@@ -81,6 +81,24 @@ namespace SysWeaver.Chat
         static readonly ICompType CompType = CompManager.GetFromHttp("br") ?? CompManager.GetFromHttp("deflate") ?? CompManager.GetFromHttp("gzip");
 
         public String AddFileData(String mime, String data, String providerName, String providerChatId, IReadOnlyList<String> auth, HttpServerRequest request, String filename)
+            => AddFile(mime, data, default, false, providerName, providerChatId, auth, filename);
+
+        /// <summary>
+        /// Add a file from bytes, same as calling <see cref="AddFileData(string, string, string, string, IReadOnlyList{string}, HttpServerRequest, string)"/> with the data url of the bytes
+        /// ("data:" + mime + ";base64," + base64 data) without the base64 encoding and decoding
+        /// </summary>
+        /// <param name="mime">The mime type</param>
+        /// <param name="data">The data (copied)</param>
+        /// <param name="providerName">The provider name (part of the url)</param>
+        /// <param name="providerChatId">The provider chat id (part of the url)</param>
+        /// <param name="auth">The auth required to get the file</param>
+        /// <param name="request">The request (not used)</param>
+        /// <param name="filename">The file name</param>
+        /// <returns>The local url of the file</returns>
+        public String AddFileData(String mime, ReadOnlyMemory<Byte> data, String providerName, String providerChatId, IReadOnlyList<String> auth, HttpServerRequest request, String filename)
+            => AddFile(mime, null, data, true, providerName, providerChatId, auth, filename);
+
+        String AddFile(String mime, String data, ReadOnlyMemory<Byte> bytes, bool isBytes, String providerName, String providerChatId, IReadOnlyList<String> auth, String filename)
         {
             var f = Interlocked.Increment(ref FileId).ToString();
             MimeTypeMap.TryGetExtensions(mime, out var exts);
@@ -97,7 +115,9 @@ namespace SysWeaver.Chat
                 name += ext;
             ReadOnlyMemory<Byte>? mem = null;
             ICompType comp = null;
-            if (data.FastStartsWith("data:"))
+            if (isBytes)
+                mem = bytes;
+            else if (data.FastStartsWith("data:"))
             {
                 var t = data.FastIndexOf("base64,");
                 if (t > 0)
@@ -113,6 +133,11 @@ namespace SysWeaver.Chat
                 comp = CompType;
                 var m = mem ?? ReadOnlyMemory<Byte>.Empty;
                 mem = comp.GetCompressed(m.Span, m.Length > 8192 ? CompEncoderLevels.Balanced : CompEncoderLevels.Best);
+            }
+            else if (isBytes)
+            {
+                //  A copy (the caller may reuse its memory, the data url path decoded into a new array)
+                mem = bytes.ToArray();
             }
             var now = DateTime.UtcNow;
             var rh = new StaticMemoryHttpRequestHandler("chat/" + name, filename, mem ?? ReadOnlyMemory<Byte>.Empty, mime, Comp, 30, 15, now, null, comp, auth, 0, false);

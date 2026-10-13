@@ -45,7 +45,7 @@ namespace SysWeaver
             {
                 if (name != EnvInfo.AppName)
                 {
-                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppName), " changed to ", name.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}{nameof(EnvInfo)}.{nameof(EnvInfo.AppName)} changed to {name.ToQuoted()}");
                     EnvInfo.AppName = name;
                     dispName = dispName ?? StringTools.RemoveCamelCase(name, ' ', true);
                 }
@@ -54,7 +54,7 @@ namespace SysWeaver
             {
                 if (dispName != EnvInfo.AppDisplayName)
                 {
-                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppDisplayName), " changed to ", dispName.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}{nameof(EnvInfo)}.{nameof(EnvInfo.AppDisplayName)} changed to {dispName.ToQuoted()}");
                     EnvInfo.AppDisplayName = dispName;
                 }
             }
@@ -62,7 +62,7 @@ namespace SysWeaver
             {
                 if (desc != EnvInfo.AppDescription)
                 {
-                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppDescription), " changed to ", desc.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}{nameof(EnvInfo)}.{nameof(EnvInfo.AppDescription)} changed to {desc.ToQuoted()}");
                     EnvInfo.AppDescription = desc;
                 }
             }
@@ -70,7 +70,7 @@ namespace SysWeaver
             {
                 if (lang != EnvInfo.AppLanguage)
                 {
-                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppLanguage), " changed to ", lang.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}{nameof(EnvInfo)}.{nameof(EnvInfo.AppLanguage)} changed to {lang.ToQuoted()}");
                     EnvInfo.AppLanguage = lang;
                 }
             }

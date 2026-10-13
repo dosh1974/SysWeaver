@@ -778,7 +778,9 @@ namespace SysWeaver.AI
                         if (request != null)
                         {
                             request.Properties[OpenAiToolExt.RequestAiToolContext] = new AiToolContext(s, link,
-                                (mime, data, filename) => m.AddFileData(mime, data, Name, providerChatId, s.JoinAuth, request, filename),
+                                new AiFileSaver(
+                                    (mime, data, filename) => m.AddFileData(mime, data, Name, providerChatId, s.JoinAuth, request, filename),
+                                    (mime, data, filename) => m.AddFileData(mime, data, Name, providerChatId, s.JoinAuth, request, filename)).Save,
                                 data => m.AddData(data, Name, providerChatId, request));
                         }
                         try
@@ -899,18 +901,31 @@ namespace SysWeaver.AI
                             }
                             return Task.CompletedTask;
                         },
-                            (mime, data, filename) =>
-                            {
-                                lock (m)
+                            new AiFileSaver(
+                                (mime, data, filename) =>
                                 {
-                                    if (m.Data == loadingData)
+                                    lock (m)
                                     {
-                                        m.Text += "💾 ";
-                                        didChange = true;
+                                        if (m.Data == loadingData)
+                                        {
+                                            m.Text += "💾 ";
+                                            didChange = true;
+                                        }
+                                        return m.AddFileData(mime, data, Name, providerChatId, s.JoinAuth, request, filename);
                                     }
-                                    return m.AddFileData(mime, data, Name, providerChatId, s.JoinAuth, request, filename);
-                                }
-                            },
+                                },
+                                (mime, data, filename) =>
+                                {
+                                    lock (m)
+                                    {
+                                        if (m.Data == loadingData)
+                                        {
+                                            m.Text += "💾 ";
+                                            didChange = true;
+                                        }
+                                        return m.AddFileData(mime, data, Name, providerChatId, s.JoinAuth, request, filename);
+                                    }
+                                }).Save,
                             data => m.AddData(data, Name, providerChatId, request),
                             (toolCode) =>
                             {

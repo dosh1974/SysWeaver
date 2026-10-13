@@ -879,7 +879,7 @@ namespace SysWeaver
         public static bool TryGetString(String key, out String value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseString(x.Item1, x.Item2, out value);
         }
@@ -902,7 +902,7 @@ namespace SysWeaver
         public static bool TryGetBoolean(String key, out Boolean value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseBoolean(x.Item1, x.Item2, out value);
         }
@@ -925,7 +925,7 @@ namespace SysWeaver
         public static bool TryGetInt32(String key, out Int32 value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseInt32(x.Item1, x.Item2, out value);
         }
@@ -948,7 +948,7 @@ namespace SysWeaver
         public static bool TryGetUInt32(String key, out UInt32 value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseUInt32(x.Item1, x.Item2, out value);
         }
@@ -971,7 +971,7 @@ namespace SysWeaver
         public static bool TryGetInt64(String key, out Int64 value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseInt64(x.Item1, x.Item2, out value);
         }
@@ -994,7 +994,7 @@ namespace SysWeaver
         public static bool TryGetUInt64(String key, out UInt64 value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseUInt64(x.Item1, x.Item2, out value);
         }
@@ -1017,7 +1017,7 @@ namespace SysWeaver
         public static bool TryGetDecimal(String key, out Decimal value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseDecimal(x.Item1, x.Item2, out value);
         }
@@ -1040,7 +1040,7 @@ namespace SysWeaver
         public static bool TryGetDouble(String key, out Double value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseDouble(x.Item1, x.Item2, out value);
         }
@@ -1063,7 +1063,7 @@ namespace SysWeaver
         public static bool TryGetSingle(String key, out Single value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseSingle(x.Item1, x.Item2, out value);
         }
@@ -1087,7 +1087,7 @@ namespace SysWeaver
         public static bool TryGetArray<T>(String key, out T[] value)
         {
             value = default;
-            if (!Keys.TryGetValue(key.FastToLower(), out var x))
+            if (!Keys.TryGetValueLower(key, out var x))
                 return false;
             return TryParseArray<T>(x.Item1, x.Item2, out value);
         }

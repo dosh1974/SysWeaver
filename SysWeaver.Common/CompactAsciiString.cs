@@ -236,6 +236,134 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// The maximum number of chars of an encoded 64-bit value (base 2), a destination of this length is large enough for any value and alphabet
+        /// </summary>
+        public const int MaxEncodedLength = 64;
+
+        /// <summary>
+        /// Encode a 64-bit unsigned integer into a span, the same chars as <see cref="Encode(ulong)"/>.
+        /// </summary>
+        /// <param name="value">The value to encode</param>
+        /// <param name="destination">The destination (<see cref="MaxEncodedLength"/> chars are always enough)</param>
+        /// <param name="charsWritten">The number of chars written (at least one), 0 if the destination is too short</param>
+        /// <returns>True if the value was written, false if the destination is too short (the content of the destination is undefined)</returns>
+        public bool TryEncode(UInt64 value, Span<Char> destination, out int charsWritten)
+        {
+            var v = ValidChars;
+            ulong vl = Base;
+            for (int i = 0; i < destination.Length;)
+            {
+                var n = value / vl;
+                destination[i] = v[(int)(value - (n * vl))];
+                ++i;
+                if (n == 0)
+                {
+                    charsWritten = i;
+                    return true;
+                }
+                value = n;
+            }
+            charsWritten = 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Encode a 64-bit unsigned integer into a span, the same chars as <see cref="Encode(ulong)"/>.
+        /// </summary>
+        /// <param name="value">The value to encode</param>
+        /// <param name="destination">The destination (<see cref="MaxEncodedLength"/> chars are always enough)</param>
+        /// <returns>The number of chars written (at least one)</returns>
+        /// <exception cref="ArgumentException"><paramref name="destination"/> is too short</exception>
+        public int Encode(UInt64 value, Span<Char> destination)
+        {
+            if (!TryEncode(value, destination, out var l))
+                throw new ArgumentException("The destination is too short!", nameof(destination));
+            return l;
+        }
+
+        /// <summary>
+        /// Decode a compact string to the 64-bit unsigned integer that it represents, without exceptions (same value as <see cref="DecodeUInt64(string)"/>).
+        /// </summary>
+        /// <param name="compactString">The compact value representation</param>
+        /// <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+        /// <returns>True if all chars are valid, else false</returns>
+        /// <remarks>Not canonical and no overflow checks, see <see cref="DecodeUInt64(string)"/></remarks>
+        public bool TryDecodeUInt64(ReadOnlySpan<Char> compactString, out UInt64 value)
+        {
+            var lookup = Lookup;
+            ulong vl = Base;
+            UInt64 r = 0;
+            for (var l = compactString.Length - 1; l >= 0; --l)
+            {
+                uint c = compactString[l];
+                uint v = c < 128 ? lookup[c] : InvalidChar;
+                if (v == InvalidChar)
+                {
+                    value = 0;
+                    return false;
+                }
+                r = r * vl + v;
+            }
+            value = r;
+            return true;
+        }
+
+        /// <summary>
+        /// Decode a compact string to the 64-bit signed integer that it represents, without exceptions (same value as <see cref="DecodeInt64(string)"/>).
+        /// </summary>
+        /// <param name="compactString">The compact value representation</param>
+        /// <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+        /// <returns>True if all chars are valid, else false</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryDecodeInt64(ReadOnlySpan<Char> compactString, out Int64 value)
+        {
+            var ok = TryDecodeUInt64(compactString, out var v);
+            value = (Int64)v;
+            return ok;
+        }
+
+        /// <summary>
+        /// Decode a compact string to the 32-bit unsigned integer that it represents, without exceptions (same value as <see cref="DecodeUInt32(string)"/>).
+        /// </summary>
+        /// <param name="compactString">The compact value representation</param>
+        /// <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+        /// <returns>True if all chars are valid, else false</returns>
+        /// <remarks>Not canonical and no overflow checks, see <see cref="DecodeUInt32(string)"/></remarks>
+        public bool TryDecodeUInt32(ReadOnlySpan<Char> compactString, out UInt32 value)
+        {
+            var lookup = Lookup;
+            var vl = Base;
+            UInt32 r = 0;
+            for (var l = compactString.Length - 1; l >= 0; --l)
+            {
+                uint c = compactString[l];
+                uint v = c < 128 ? lookup[c] : InvalidChar;
+                if (v == InvalidChar)
+                {
+                    value = 0;
+                    return false;
+                }
+                r = r * vl + v;
+            }
+            value = r;
+            return true;
+        }
+
+        /// <summary>
+        /// Decode a compact string to the 32-bit signed integer that it represents, without exceptions (same value as <see cref="DecodeInt32(string)"/>).
+        /// </summary>
+        /// <param name="compactString">The compact value representation</param>
+        /// <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+        /// <returns>True if all chars are valid, else false</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryDecodeInt32(ReadOnlySpan<Char> compactString, out Int32 value)
+        {
+            var ok = TryDecodeUInt32(compactString, out var v);
+            value = (Int32)v;
+            return ok;
+        }
+
+        /// <summary>
         /// Decode a compact string to the 64-bit signed integer that it represents.
         /// </summary>
         /// <param name="compactString">The compact value representation</param>

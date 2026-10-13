@@ -75,7 +75,7 @@ namespace SysWeaver.AI
                 sm.OnServiceAdded += Sm_OnServiceAdded;
                 sm.OnServiceRemoved += Sm_OnServiceRemoved;
             }
-            Msg?.AddMessage(LogPrefix + "Serving MCP at " + url.ToQuoted() + " with " + Tools.Count + " tool(s)", MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Serving MCP at {url.ToQuoted()} with {Tools.Count} tool(s)");
         }
 
         public void Dispose()
@@ -135,9 +135,39 @@ namespace SysWeaver.AI
         readonly String DefaultToolAuth;
 
         /// <summary>
-        /// The names of all registered tools
+        /// The names of all registered tools (a shared snapshot, rebuilt when a tool is added or removed, don't modify it)
         /// </summary>
-        public IReadOnlyCollection<String> ToolNames => Tools.Keys.ToArray();
+        public IReadOnlyCollection<String> ToolNames
+        {
+            get
+            {
+                var v = Volatile.Read(ref ToolsVersion);
+                var c = ToolNamesCache;
+                if ((c != null) && (c.Version == v))
+                    return c.Names;
+                c = new ToolNamesSnapshot(v, Tools.Keys.ToArray());
+                ToolNamesCache = c;
+                return c.Names;
+            }
+        }
+
+        /// <summary>
+        /// Incremented after every change of Tools (invalidates ToolNamesCache)
+        /// </summary>
+        int ToolsVersion;
+
+        sealed class ToolNamesSnapshot
+        {
+            public ToolNamesSnapshot(int version, String[] names)
+            {
+                Version = version;
+                Names = names;
+            }
+            public readonly int Version;
+            public readonly String[] Names;
+        }
+
+        volatile ToolNamesSnapshot ToolNamesCache;
 
         /// <summary>
         /// Register a method as a tool, the tool is described in the same way as AI chat tools (XML documentation, AiToolNameAttribute, AiToolPrefixAttribute, WebApiAuthAttribute etc).
@@ -162,10 +192,11 @@ namespace SysWeaver.AI
             }
             if (!Tools.TryAdd(tool.Name, tool))
             {
-                Msg?.AddMessage(LogPrefix + "A tool named " + tool.Name.ToQuoted() + " already exists, ignoring the method " + method.Name.ToQuoted() + " of " + method.DeclaringType?.Name.ToQuoted(), MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}A tool named {tool.Name.ToQuoted()} already exists, ignoring the method {method.Name.ToQuoted()} of {(method.DeclaringType?.Name.ToQuoted())}");
                 return false;
             }
-            Msg?.AddMessage(LogPrefix + "Added tool " + tool.Name.ToQuoted(), MessageLevels.Debug);
+            Interlocked.Increment(ref ToolsVersion);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Added tool {tool.Name.ToQuoted()}");
             return true;
         }
 
@@ -204,7 +235,12 @@ namespace SysWeaver.AI
         /// <param name="name">The name of the tool</param>
         /// <returns>True if the tool was removed</returns>
         public bool RemoveTool(String name)
-            => Tools.TryRemove(name, out var _);
+        {
+            if (!Tools.TryRemove(name, out var _))
+                return false;
+            Interlocked.Increment(ref ToolsVersion);
+            return true;
+        }
 
         /// <summary>
         /// Unregister all tools of an instance
@@ -632,7 +668,7 @@ namespace SysWeaver.AI
                 {
                     while (((ex is TargetInvocationException) || (ex is AggregateException)) && (ex.InnerException != null))
                         ex = ex.InnerException;
-                    Msg?.AddMessage(LogPrefix + "Tool " + name.ToQuoted() + " failed", ex, MessageLevels.Debug);
+                    Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Tool {name.ToQuoted()} failed", ex);
                     //  The error is sent to the MCP client, so sensitive information is removed
                     text = ex.SafeMessage();
                     isError = true;

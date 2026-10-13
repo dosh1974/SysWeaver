@@ -56,6 +56,10 @@ namespace SysWeaver.AI
         /// <returns>The local url to the file</returns>
         public String AddMessageFile(String mime, ReadOnlyMemory<Byte> data, String filename)
         {
+            //  Without a data url (base64 encoding and decoding) if the save function can save bytes
+            var saveBytes = SaveBytes;
+            if (saveBytes != null)
+                return saveBytes(mime, data, filename);
             return SaveFile(mime, ToDataUrl(mime, data), filename);
         }
 
@@ -97,15 +101,52 @@ namespace SysWeaver.AI
 
         readonly StringBuilder Link;
         readonly Func<String, String, String, String> SaveFile;
+        readonly Func<String, ReadOnlyMemory<Byte>, String, String> SaveBytes;
         readonly Func<Object, String> SaveData;
         internal AiToolContext(IAiChatSession session, StringBuilder link, Func<String, String, String, String> saveFile, Func<Object, String> saveData)
         {
             Session = session;
             Link = link;
             SaveFile = saveFile;
+            SaveBytes = (saveFile?.Target as AiFileSaver)?.SaveBytes;
             SaveData = saveData;
         }
 
+    }
+
+    /// <summary>
+    /// A file save function that can also save bytes.
+    /// The <see cref="Save"/> method is passed as the (data url or text based) save file delegate (ex: to <see cref="IAiChatSession.CompleteUpdate"/>),
+    /// the <see cref="AiToolContext"/> uses <see cref="SaveBytes"/> for binary data (no base64 encoding and decoding).
+    /// </summary>
+    sealed class AiFileSaver
+    {
+        /// <summary>
+        /// Create a file saver
+        /// </summary>
+        /// <param name="saveText">Save a file from a data url or text (mime, data, filename), returns an url</param>
+        /// <param name="saveBytes">Save a file from bytes (mime, data, filename), returns an url, must give the same result as saving the data url of the bytes</param>
+        public AiFileSaver(Func<String, String, String, String> saveText, Func<String, ReadOnlyMemory<Byte>, String, String> saveBytes)
+        {
+            SaveText = saveText;
+            SaveBytes = saveBytes;
+        }
+
+        readonly Func<String, String, String, String> SaveText;
+
+        /// <summary>
+        /// Save a file from bytes (mime, data, filename), returns an url
+        /// </summary>
+        public readonly Func<String, ReadOnlyMemory<Byte>, String, String> SaveBytes;
+
+        /// <summary>
+        /// Save a file from a data url or text
+        /// </summary>
+        /// <param name="mime">The mime type</param>
+        /// <param name="data">A data url or text</param>
+        /// <param name="filename">The file name</param>
+        /// <returns>The url</returns>
+        public String Save(String mime, String data, String filename) => SaveText(mime, data, filename);
     }
 
 }

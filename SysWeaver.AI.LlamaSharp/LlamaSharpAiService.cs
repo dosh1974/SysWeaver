@@ -80,7 +80,7 @@ namespace SysWeaver.AI
                         {
                             var m = new LlamaSharpModel(l, fileName, msg);
                             models.Add(name, m);
-                            msg?.AddMessage(String.Concat("Loaded ", name.ToQuoted(), " from ", m.LoadedFilePath.ToQuoted(), ", context size: ", m.ContextSize.ToString()), MessageLevels.Debug);
+                            msg?.AddMessage(MessageLevels.Debug, $"Loaded {name.ToQuoted()} from {m.LoadedFilePath.ToQuoted()}, context size: {m.ContextSize.ToString()}");
                         }
                         catch (Exception ex)
                         {

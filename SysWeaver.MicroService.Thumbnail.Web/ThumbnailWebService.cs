@@ -234,17 +234,17 @@ namespace SysWeaver.MicroService
             String prefix = "[ThumbnailWeb " + Interlocked.Increment(ref PC) + "] ";
             using var _ = await MaxScreenShotLock.Lock().ConfigureAwait(false);
             using var __ = PerfMon.Track(nameof(GetAdaptiveImageAsync));
-            M.AddMessage(prefix + "Creating browser", MessageLevels.Debug);
+            M.AddMessage(MessageLevels.Debug, $"{prefix}Creating browser");
             using var b = await Browser.OpenWindow().ConfigureAwait(false);
             using var a = new AdaptiveSize(M, prefix, format, quality, optimizeForSpeed, extraDelayMs);
             await b.AddJsObject("ScreenShotHost", a).ConfigureAwait(false);
             var error = new TextResult();
             await b.AddJsObject("ErrorText", error).ConfigureAwait(false);
-            M.AddMessage(prefix + "Resizing window to " + initWidth + "x" + initHeight, MessageLevels.Debug);
+            M.AddMessage(MessageLevels.Debug, $"{prefix}Resizing window to {initWidth}x{initHeight}");
             await b.Resize(initWidth, initHeight, scale).ConfigureAwait(false);
             //M.AddMessage(prefix + "Wait for resize to take effect");
             //await Task.Delay(100).ConfigureAwait(false);
-            M.AddMessage(prefix + "Loading url " + url.ToQuoted(), MessageLevels.Debug);
+            M.AddMessage(MessageLevels.Debug, $"{prefix}Loading url {url.ToQuoted()}");
             a.Win = b;
             await b.LoadUrl(url).ConfigureAwait(false);
             await b.WaitLoaded().ConfigureAwait(false);
@@ -259,7 +259,7 @@ namespace SysWeaver.MicroService
             if (a.JsIsInControl)
             {
                 Interlocked.Increment(ref JsInControlCount);
-                M.AddMessage(prefix + "Page is aware, wait for page to take the screen shot", MessageLevels.Debug);
+                M.AddMessage(MessageLevels.Debug, $"{prefix}Page is aware, wait for page to take the screen shot");
                 a.AllowJsControl();
                 data = await a.WaitScreenShot(10000).ConfigureAwait(false);
                 if (data != null)
@@ -273,13 +273,13 @@ namespace SysWeaver.MicroService
                 if (a.Error != null)
                 {
                     n.Desc = "Error: " + a.Error; 
-                    M.AddMessage(prefix + "Got an error: " + a.Error, MessageLevels.Debug);
+                    M.AddMessage(MessageLevels.Debug, $"{prefix}Got an error: {a.Error}");
                     return Tuple.Create(data, n);
                 }
             }
             if (data == null)
             {
-                M.AddMessage(prefix + "Taking screen shot", MessageLevels.Debug);
+                M.AddMessage(MessageLevels.Debug, $"{prefix}Taking screen shot");
                 switch (format)
                 {
                     default:
@@ -296,7 +296,7 @@ namespace SysWeaver.MicroService
                 M.AddMessage(prefix + "Failed: " + et, MessageLevels.Warning);
                 throw new Exception(et);
             }
-            M.AddMessage(prefix + "All done", MessageLevels.Debug);
+            M.AddMessage(MessageLevels.Debug, $"{prefix}All done");
             return Tuple.Create(data, n);
         }
 

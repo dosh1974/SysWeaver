@@ -443,11 +443,11 @@ namespace SysWeaver
                     cache[template] = t;
                 }
                 var x = caseInSensitive ? TextVarsCaseInsensitive : TextVars;
-                return t.Get(v =>
+                return t.Get((Vars: x, Extra: extra), static (s, v) =>
                 {
-                    if (x.TryGetValue(v, out var value))
+                    if (s.Vars.TryGetValue(v, out var value))
                         return value;
-                    extra.TryGetValue(v, out value);
+                    s.Extra.TryGetValue(v, out value);
                     return value;
                 });
             }

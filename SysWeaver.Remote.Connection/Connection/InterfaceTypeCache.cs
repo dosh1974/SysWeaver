@@ -35,6 +35,11 @@ namespace SysWeaver.Remote.Connection
         /// The end point name, "METHOD path" (ex: "GET Api/GetUser"), used for perf tracking.
         /// </summary>
         public readonly String Name;
+
+        /// <summary>
+        /// The perf trackers of <see cref="Name"/> and "Cache " + <see cref="Name"/>, created on first use (see RemoteConnectionBase.TrackEndPoint / TrackCache)
+        /// </summary>
+        internal PerfTracker Tracker, CacheTracker;
     }
 
     /// <summary>

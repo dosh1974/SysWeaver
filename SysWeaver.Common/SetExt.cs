@@ -133,7 +133,8 @@ namespace SysWeaver
         /// The implementation is chosen from the content and the comparer:
         /// a shared (cached per comparer) empty set, a single item set, a vectorized set for 2-8 keys of a 4 or 8 byte integer / enum type (default comparer),
         /// an open addressing table for more such keys, a fingerprint based set for ordinal string keys (<see cref="StringComparer.Ordinal"/> or the default string comparer),
-        /// else a <see cref="FrozenSet{T}"/>.
+        /// else a <see cref="FrozenSet{T}"/> (for ordinal string keys wrapped with a cached span lookup).
+        /// The sets with ordinal string keys implement <see cref="IReadOnlySpanKeySet"/> (see <see cref="SpanKeyLookupExt"/>).
         /// The returned sets are thread safe for reads.
         /// Freezing allocates a copy, it's intended for data that is created once and read many times.
         /// </remarks>
@@ -173,9 +174,12 @@ namespace SysWeaver
             // String keys (ordinal): a lookup on a fingerprint of the keys (a few chars where the keys differ), faster than a FrozenSet
             if (OrdinalStringKeys.IsOrdinal(comparer))
             {
-                var s = OrdinalStringKeys.TryCreateSet((IReadOnlySet<string>)(object)d, (IEqualityComparer<string>)(object)comparer);
-                if (s != null)
-                    return (IReadOnlySet<K>)(object)s;
+                var sd = (IReadOnlySet<string>)(object)d;
+                var sc = (IEqualityComparer<string>)(object)comparer;
+                var s = OrdinalStringKeys.TryCreateSet(sd, sc);
+                // No good fingerprint: a FrozenSet with a cached span lookup
+                s ??= new FrozenOrdinalStringSet(sd.ToFrozenSet(sc), sc);
+                return (IReadOnlySet<K>)(object)s;
             }
             return d.ToFrozenSet(comparer);
         }
@@ -347,6 +351,30 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(K key)
             => IsKey(key);
+
+        /// <summary>
+        /// A lookup with a span (string keys only, if the comparer supports span lookups)
+        /// </summary>
+        /// <returns>False if a span lookup isn't supported</returns>
+        internal bool TryContains(ReadOnlySpan<char> key, out bool found)
+        {
+            if (typeof(K) == typeof(string))
+            {
+                var k = (string)(object)Key;
+                if (OrdinalStringKeys.IsOrdinal(Comp))
+                {
+                    found = (k != null) && key.SequenceEqual(k);
+                    return true;
+                }
+                if (Comp is IAlternateEqualityComparer<ReadOnlySpan<char>, string> a)
+                {
+                    found = (k != null) && a.Equals(key, k);
+                    return true;
+                }
+            }
+            found = false;
+            return false;
+        }
 
         public IEnumerator<K> GetEnumerator() => ((IEnumerable<K>)(Ke ??= [Key])).GetEnumerator();
 

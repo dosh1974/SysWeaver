@@ -83,6 +83,35 @@ namespace SysWeaver
             return t.Freeze();
         }
 
+        /// <summary>
+        /// Create a read only (frozen) set from some data
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="comparer">The comparer to use, if null the default comparer is used</param>
+        /// <param name="data">The elements to add to the set, duplicates (according to the comparer) are ignored</param>
+        /// <returns>A read only set containing the unique elements</returns>
+        public static IReadOnlySet<T> Set<T>(IEqualityComparer<T> comparer, params ReadOnlySpan<T> data)
+        {
+            var t = new HashSet<T>(data.Length, comparer);
+            foreach (var x in data)
+                t.Add(x);
+            return t.Freeze(t.Comparer);
+        }
+
+        /// <summary>
+        /// Create a read only (frozen) set from some data, using the default comparer
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="data">The elements to add to the set, duplicates are ignored</param>
+        /// <returns>A read only set containing the unique elements</returns>
+        public static IReadOnlySet<T> Set<T>(params ReadOnlySpan<T> data)
+        {
+            var t = new HashSet<T>(data.Length);
+            foreach (var x in data)
+                t.Add(x);
+            return t.Freeze();
+        }
+
 
         /// <summary>
         /// Create a read only (frozen) dictionary from some key-value pairs

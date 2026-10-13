@@ -93,7 +93,7 @@ namespace SysWeaver
         public static bool TryGetMimeType(string str, out Tuple<string, bool> mimeType, bool withCharset = true)
         {
             ArgumentNullException.ThrowIfNull(str);
-            return (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out mimeType);
+            return (withCharset ? MapWithCharSet : Map).TryGetValueLower(str, out mimeType);
         }
 
         /// <summary>
@@ -108,7 +108,7 @@ namespace SysWeaver
         public static Tuple<string, bool> GetMimeType(string str, bool withCharset = true)
         {
             ArgumentNullException.ThrowIfNull(str);
-            (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out var result);
+            (withCharset ? MapWithCharSet : Map).TryGetValueLower(str, out var result);
             return result ?? DefaultMimeType;
         }
 
@@ -124,7 +124,7 @@ namespace SysWeaver
         /// <remarks>
         /// The query string ('?') and the fragment ('#') are ignored.
         /// Only the text after the last '.' in the last path segment is used, so multi part extensions such as ".dll.config" resolves to ".config".
-        /// The lookup is case insensitive, at most one allocation is made (the lower cased extension).
+        /// The lookup is case insensitive and doesn't allocate.
         /// </remarks>
         public static Tuple<string, bool> GetMimeFromUrl(string url, bool withCharset = true)
         {
@@ -141,13 +141,8 @@ namespace SysWeaver
             //  An extension can't contain a '/' (the dot is in a directory name or the extension would match a mime type)
             if ((el <= 0) || (el > MaxExtLength) || (s.Slice(ep).IndexOf('/') >= 0))
                 return DefaultMimeType;
-            var ext = String.Create(el, (url, ep), static (dst, state) =>
-            {
-                var src = state.url.AsSpan(state.ep, dst.Length);
-                if (Ascii.ToLower(src, dst, out var done) != OperationStatus.Done)
-                    src.Slice(done).ToLowerInvariant(dst.Slice(done));
-            });
-            (withCharset ? MapWithCharSet : Map).TryGetValue(ext, out var result);
+            //  The extension is lower cased on the stack (no allocation)
+            (withCharset ? MapWithCharSet : Map).TryGetValueLower(s.Slice(ep), out var result);
             return result ?? DefaultMimeType;
         }
 

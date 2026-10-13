@@ -23,7 +23,7 @@ namespace SysWeaver.Net
         /// </summary>
         public HttpServerMethods Method;
         /// <summary>
-        /// The headers as "Name:value" strings (see <see cref="ProxyTools.EncodeHeaders{T}"/>), may be null.
+        /// The headers as "Name:value" strings (see <see cref="ProxyTools.EncodeHeaders{T}(ReadOnlySpan{IEnumerable{KeyValuePair{string, T}}})"/>), may be null.
         /// </summary>
         public String[] Headers;
         /// <summary>
@@ -121,6 +121,17 @@ namespace SysWeaver.Net
         /// <param name="headers">The header collections, null collections are skipped</param>
         /// <returns>The encoded headers</returns>
         public static String[] EncodeHeaders<T>(params IEnumerable<KeyValuePair<string, T>>[] headers) where T : IEnumerable<String>
+            //  headers.Length: a null array throws a NullReferenceException (as before)
+            => EncodeHeaders<T>(new ReadOnlySpan<IEnumerable<KeyValuePair<string, T>>>(headers, 0, headers.Length));
+
+        /// <summary>
+        /// Encode header collections into "Name:value" strings, ignored headers (host etc) are skipped.
+        /// Multiple values are joined with ',' except for headers in <see cref="AllowMultipleHeaders"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of the header values</typeparam>
+        /// <param name="headers">The header collections, null collections are skipped</param>
+        /// <returns>The encoded headers</returns>
+        public static String[] EncodeHeaders<T>(params ReadOnlySpan<IEnumerable<KeyValuePair<string, T>>> headers) where T : IEnumerable<String>
         {
             List<String> h = new List<string>(16);
             var l = headers.Length;
@@ -134,10 +145,10 @@ namespace SysWeaver.Net
                 foreach (var kv in hlist)
                 {
                     var key = kv.Key;
-                    var kl = key.FastToLower();
-                    if (ih.Contains(kl))
+                    //  Lower cased on the stack (no lower case string per header)
+                    if (ih.ContainsLower(key))
                         continue;
-                    if (am.Contains(kl))
+                    if (am.ContainsLower(key))
                     {
                         foreach (var v in kv.Value)
                             h.Add(String.Concat(key, ':', v));
@@ -237,7 +248,7 @@ namespace SysWeaver.Net
                 foreach (var x in data.Headers.Nullable())
                 {
                     var key = x.SplitFirst(':', out var value);
-                    if (ch.Contains(key.FastToLower()))
+                    if (ch.ContainsLower(key))
                         content?.Headers?.TryAddWithoutValidation(key, value);
                     else
                         h.TryAddWithoutValidation(key, value);

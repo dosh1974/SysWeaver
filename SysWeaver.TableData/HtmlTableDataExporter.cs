@@ -229,28 +229,31 @@ namespace SysWeaver.Data
         {
             options = options ?? new TableDataExportOptions();
             StringBuilder rowsBuilder = new StringBuilder();
-            List<ValueTuple<TableDataExporterTools.Formatter, bool>> colToStrings = new();
-            List<String> classes = new List<string>();
-
-            HashSet<int> hide = new HashSet<int>();
+            var cols = tableData.Cols;
+            var colMax = cols?.Length ?? 0;
+            var colToStrings = new ValueTuple<TableDataExporterTools.Formatter, bool>[colMax];
+            //  The cell classes of a column: [0] = left aligned, [1] = right aligned
+            var classes = new String[colMax * 2];
+            var hide = new bool[colMax];
             Dictionary<String, String> vals = new Dictionary<string, string>(StringComparer.Ordinal);
             var dc = Classes;
-            var cols = tableData.Cols;
             var headers = !options.NoHeaders;
+            var rowBuilder = new StringBuilder();
             if (cols != null)
             {
                 var coll = cols.Length;
-                var rowBuilder = new StringBuilder();
                 for (int i = 0; i < coll; ++i)
                 {
                     var col = cols[i];
                     var colFmt = TableDataExporterTools.Get(col.Type, col.Format, Formatters);
-                    colToStrings.Add(colFmt);
+                    colToStrings[i] = colFmt;
                     dc.TryGetValue(col.Type ?? "", out var cl);
-                    classes.Add(cl ?? "");
+                    var wcl = ((col.Props & TableDataColumnProps.WordWrap) != 0) ? ("w " + cl) : (cl ?? "");
+                    classes[i * 2] = wcl;
+                    classes[i * 2 + 1] = "r " + wcl;
                     if ((col.Props & TableDataColumnProps.Hide) != 0)
                     {
-                        hide.Add(i);
+                        hide[i] = true;
                         continue;
                     }
                     if (headers)
@@ -268,7 +271,6 @@ namespace SysWeaver.Data
                 }
             }
 
-            var colMax = colToStrings.Count;
             var rows = tableData.Rows;
             if (rows != null)
             {
@@ -277,29 +279,39 @@ namespace SysWeaver.Data
                     var t = row.Values;
                     if (t != null)
                     {
-                        var rowBuilder = new StringBuilder();
                         var tl = t.Length;
                         if (tl > 0)
                         {
+                            rowBuilder.Clear();
                             for (int x = 0; x < tl; ++x)
                             {
-                                if (hide.Contains(x))
-                                    continue;
                                 var ni = x + 1;
                                 var value = t[x];
                                 var nextValue = ni < tl ? t[ni] : null;
-                                var (fmt, rightAlign) = x < colMax ? colToStrings[x] : (null, false);
+                                TableDataExporterTools.Formatter fmt;
+                                bool rightAlign;
+                                TableDataColumn col;
+                                if (x < colMax)
+                                {
+                                    if (hide[x])
+                                        continue;
+                                    (fmt, rightAlign) = colToStrings[x];
+                                    col = cols[x];
+                                }
+                                else
+                                {
+                                    fmt = null;
+                                    rightAlign = false;
+                                    col = null;
+                                }
                                 if (fmt == null)
                                     (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
-                                var cl = x < colMax ? classes[x] : "";
-                                var col = (cols != null) && (x < cols.Length) ? cols[x] : null;
                                 var valueText = fmt(value, nextValue, col);
                                 var isFormatted = (!String.IsNullOrEmpty(valueText)) && (valueText[0] == 1);
-                                var wordWrap = col != null && ((col.Props & TableDataColumnProps.WordWrap) != 0);
                                 vals["Title"] = value?.ToString() ?? "";
                                 vals["Text"] = isFormatted ? "" : (valueText ?? "");
                                 vals["TextFmt"] = isFormatted ? valueText.Substring(1) : "";
-                                vals["Class"] = (rightAlign ? "r " : "") + (wordWrap ? "w " : "") + cl ?? "";
+                                vals["Class"] = x < colMax ? classes[x * 2 + (rightAlign ? 1 : 0)] : (rightAlign ? "r " : "");
                                 rowBuilder.Append(Cell.Get(vals));
                             }
                             vals["Cells"] = rowBuilder.ToString().TrimEnd();

@@ -226,7 +226,7 @@ namespace SysWeaver.MicroService
             manager.OnServiceAdded += Manager_OnServiceAdded;
 
             SystemString = new ManagedString(PathTemplate.Resolve(p.System));
-            manager.AddMessage("Message system: " + SystemString.Value.ToQuoted(), MessageLevels.Debug);
+            manager.AddMessage(MessageLevels.Debug, $"Message system: {SystemString.Value.ToQuoted()}");
 
 
             Manager = manager;
@@ -338,6 +338,16 @@ namespace SysWeaver.MicroService
             }
         }
         public Dictionary<String, String> GetMessageParams(HttpServerRequest context, params String[] add)
+            //  A null array is the same as no additional parameters
+            => GetMessageParams(context, (ReadOnlySpan<String>)add);
+
+        /// <summary>
+        /// Get the variables used by the message templates
+        /// </summary>
+        /// <param name="context">The request (used for the root and the origin), null to use the external root</param>
+        /// <param name="add">Additional variables, as name, value pairs (an odd last name is ignored)</param>
+        /// <returns>A new dictionary with the variables</returns>
+        public Dictionary<String, String> GetMessageParams(HttpServerRequest context, params ReadOnlySpan<String> add)
         {
             var cols = HashColors.AppColors;
             var d = new Dictionary<String, String>(StringComparer.Ordinal)
@@ -367,12 +377,9 @@ namespace SysWeaver.MicroService
             {
                 d["[Origin]"] = HttpUtility.HtmlEncode(EnvInfo.AppDisplayName);
             }
-            if (add != null)
-            {
-                var al = add.Length & ~1;
-                for (int i = 0; i < al; i += 2)
-                    d[add[i]] = add[i + 1];
-            }
+            var al = add.Length & ~1;
+            for (int i = 0; i < al; i += 2)
+                d[add[i]] = add[i + 1];
             return d;
         }
 

@@ -1635,6 +1635,48 @@ namespace SysWeaver
         public static ValueTask<T[]> WhenAll<T>(params ValueTask<T>[] tasks)
             => WhenAll(tasks as IReadOnlyList<ValueTask<T>>);
 
+        /// <summary>
+        /// Creates a task that will complete when all of the supplied tasks have completed.
+        /// </summary>
+        /// <typeparam name="T">The result type of the tasks</typeparam>
+        /// <param name="tasks">The tasks to wait on for completion.</param>
+        /// <returns>A task that represents the completion of all of the supplied tasks, the result contains the results of the tasks in the same order as the supplied tasks.</returns>
+        /// <remarks>
+        /// <para>
+        /// If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+        /// where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+        /// </para>
+        /// <para>
+        /// If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+        /// </para>
+        /// <para>
+        /// If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+        /// </para>
+        /// <para>
+        /// If the supplied span contains no tasks, or all tasks are already completed successfully, the returned task is completed synchronously (no task is allocated).
+        /// Else the tasks are copied to an array.
+        /// </para>
+        /// </remarks>
+        public static ValueTask<T[]> WhenAll<T>(params ReadOnlySpan<ValueTask<T>> tasks)
+        {
+            var tl = tasks.Length;
+            if (tl <= 0)
+                return TaskExt<T>.EmptyArrayValueTask;
+            // We don't allocate the list if no task throws
+            var results = GC.AllocateUninitializedArray<T>(tl);
+            for (var i = 0; i < tl; i++)
+            {
+                var t = tasks[i];
+                if (!t.IsCompletedSuccessfully)
+                {
+                    //  The async method can't keep the span (the consumed tasks before i are not read again)
+                    return InternalWhenAll(tasks.ToArray(), results, i, tl);
+                }
+                results[i] = t.GetAwaiter().GetResult();
+            }
+            return ValueTask.FromResult(results);
+        }
+
 
 
 

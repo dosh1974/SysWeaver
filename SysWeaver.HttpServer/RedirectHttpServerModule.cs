@@ -162,7 +162,7 @@ namespace SysWeaver.Net
             var cs = CaseSensitive;
             var cmp = cs ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
             var d = new Dictionary<string, Tuple<string, int>>(cmp);
-            msg?.AddMessage(Prefix + "Parsing redirect file " + filename.ToQuoted(), MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Parsing redirect file {filename.ToQuoted()}");
             try
             {
                 if (!File.Exists(filename))
@@ -211,7 +211,7 @@ namespace SysWeaver.Net
                     }
                     d[f] = Tuple.Create(t, code);
                     using (msg?.Tab())
-                        msg?.AddMessage(Prefix + "Found redirect " + f.ToQuoted() + " => " + t.ToQuoted() + " using code " + code, MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Found redirect {f.ToQuoted()} => {t.ToQuoted()} using code {code}");
                 }
             }
             catch (Exception ex)

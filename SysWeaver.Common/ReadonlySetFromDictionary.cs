@@ -348,7 +348,8 @@ namespace SysWeaver
         /// The implementation is chosen from the content and the comparer:
         /// a shared (cached per comparer) empty dictionary, a single entry dictionary, a vectorized dictionary for 2-8 keys of a 4 or 8 byte integer / enum type (default comparer),
         /// an open addressing table for more such keys, a fingerprint based dictionary for ordinal string keys (<see cref="StringComparer.Ordinal"/> or the default string comparer),
-        /// else a <see cref="FrozenDictionary{TKey, TValue}"/>.
+        /// else a <see cref="FrozenDictionary{TKey, TValue}"/> (for ordinal string keys wrapped with a cached span lookup).
+        /// The dictionaries with ordinal string keys implement <see cref="IReadOnlySpanKeyDictionary{V}"/> (see <see cref="SpanKeyLookupExt"/>).
         /// The returned dictionaries are thread safe for reads.
         /// Freezing allocates a copy, it's intended for data that is created once and read many times (see also <see cref="SemiFrozenDictionary{TKey, TValue}"/>).
         /// A null key throws <see cref="ArgumentNullException"/> on lookups (the indexer, ContainsKey and TryGetValue) for all implementations (like a <see cref="Dictionary{TKey, TValue}"/>), including the empty and single entry dictionaries.
@@ -388,9 +389,12 @@ namespace SysWeaver
             // String keys (ordinal): a lookup on a fingerprint of the keys (a few chars where the keys differ), faster than a FrozenDictionary
             if (OrdinalStringKeys.IsOrdinal(comparer))
             {
-                var s = OrdinalStringKeys.TryCreateDictionary((IReadOnlyDictionary<string, V>)(object)d, (IEqualityComparer<string>)(object)comparer);
-                if (s != null)
-                    return (IReadOnlyDictionary<K, V>)(object)s;
+                var sd = (IReadOnlyDictionary<string, V>)(object)d;
+                var sc = (IEqualityComparer<string>)(object)comparer;
+                var s = OrdinalStringKeys.TryCreateDictionary(sd, sc);
+                // No good fingerprint: a FrozenDictionary with a cached span lookup
+                s ??= new FrozenOrdinalStringDictionary<V>(sd.ToFrozenDictionary(sc), sc);
+                return (IReadOnlyDictionary<K, V>)(object)s;
             }
             return d.ToFrozenDictionary(comparer);
         }
@@ -682,6 +686,33 @@ namespace SysWeaver
                 return true;
             }
             value = default;
+            return false;
+        }
+
+        /// <summary>
+        /// A lookup with a span (string keys only, if the comparer supports span lookups)
+        /// </summary>
+        /// <returns>False if a span lookup isn't supported</returns>
+        internal bool TryGetValue(ReadOnlySpan<char> key, out V value, out bool found)
+        {
+            if (typeof(K) == typeof(string))
+            {
+                var k = (string)(object)Key;
+                if (OrdinalStringKeys.IsOrdinal(Comp))
+                    found = (k != null) && key.SequenceEqual(k);
+                else if (Comp is IAlternateEqualityComparer<ReadOnlySpan<char>, string> a)
+                    found = (k != null) && a.Equals(key, k);
+                else
+                {
+                    value = default;
+                    found = false;
+                    return false;
+                }
+                value = found ? Value : default;
+                return true;
+            }
+            value = default;
+            found = false;
             return false;
         }
 

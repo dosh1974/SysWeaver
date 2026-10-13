@@ -261,12 +261,22 @@ namespace SysWeaver.Db
         /// Create a command with parameters named p0, p1 and so on.
         /// The command is disposed if the parameters can't be added
         /// </summary>
+        /// <exception cref="NullReferenceException">Thrown (after the command is created and disposed, as reading the length of a null array) if <paramref name="args"/> is null</exception>
         static DbCommand CreateCommand(OrmConnection con, String command, object[] args)
+            => CreateCommand(con, command, args, args == null);
+
+        /// <summary>
+        /// Create a command with parameters named p0, p1 and so on.
+        /// The command is disposed if the parameters can't be added
+        /// </summary>
+        static DbCommand CreateCommand(OrmConnection con, String command, ReadOnlySpan<object> args, bool nullArgs = false)
         {
             var cmd = con.CreateCommand();
             try
             {
                 cmd.CommandText = command;
+                if (nullArgs)
+                    throw new NullReferenceException();
                 var al = args.Length;
                 var names = ParamNames;
                 var nl = names.Length;
@@ -298,6 +308,16 @@ namespace SysWeaver.Db
             => ExecuteReaderAsync(CreateCommand(con, command, args));
 
         /// <summary>
+        /// Execute a custom command with paramaters
+        /// </summary>
+        /// <param name="con"></param>
+        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
+        /// <returns>A reader</returns>
+        public static Task<DbDataReader> ReaderCommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
+            => ExecuteReaderAsync(CreateCommand(con, command, args));
+
+        /// <summary>
         /// Execute the command, the command is disposed with the returned reader (or on failure)
         /// </summary>
         static async Task<DbDataReader> ExecuteReaderAsync(DbCommand cmd)
@@ -323,6 +343,15 @@ namespace SysWeaver.Db
         public static Task CommandAsync(this OrmConnection con, String command, params object[] args)
             => ExecuteNonQueryAsync(CreateCommand(con, command, args));
 
+        /// <summary>
+        /// Execute a custom command with paramaters
+        /// </summary>
+        /// <param name="con"></param>
+        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
+        public static Task CommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
+            => ExecuteNonQueryAsync(CreateCommand(con, command, args));
+
         static async Task<int> ExecuteNonQueryAsync(DbCommand cmd)
         {
             using (cmd)
@@ -338,6 +367,16 @@ namespace SysWeaver.Db
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A scale value</returns>
         public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params object[] args)
+            => ExecuteScalarAsync(CreateCommand(con, command, args));
+
+        /// <summary>
+        /// Execute a custom command with paramaters
+        /// </summary>
+        /// <param name="con"></param>
+        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
+        /// <returns>A scale value</returns>
+        public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
             => ExecuteScalarAsync(CreateCommand(con, command, args));
 
         static async Task<Object> ExecuteScalarAsync(DbCommand cmd)

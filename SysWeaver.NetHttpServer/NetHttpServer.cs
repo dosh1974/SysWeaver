@@ -247,7 +247,7 @@ namespace SysWeaver.Net
             {
                 if (IsListening != null)
                     return false;
-                Msg?.AddMessage(Prefix + "Starting", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Starting");
                 IsListening = new SemaphoreSlim(0, 1);
                 Listener.Start();
                 IsPaused = false;
@@ -263,7 +263,7 @@ namespace SysWeaver.Net
                 var l = IsListening;
                 if (l == null)
                     return false;
-                Msg?.AddMessage(Prefix + "Stopping", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Stopping");
                 //  No new reuests accepeted
                 IsPaused = true;
                 //  Telling ongoing requests that they should stop ASAP
@@ -281,7 +281,7 @@ namespace SysWeaver.Net
                 l.Wait();
                 IsListening = null;
             }
-            Msg?.AddMessage(Prefix + "Stopped", MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Stopped");
             return true;
         }
 
@@ -294,7 +294,7 @@ namespace SysWeaver.Net
                     return;
                 if (IsListening == null)
                     return;
-                Msg?.AddMessage(Prefix + "Pausing", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Pausing");
                 RunBeforePause();
                 IsPaused = true;
                 InvokeCancel();
@@ -310,7 +310,7 @@ namespace SysWeaver.Net
                 if (!IsPaused)
                     return;
                 Start();
-                Msg?.AddMessage(Prefix + "Resuming", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Resuming");
                 IsPaused = false;
                 RunAfterContinue();
             }
@@ -337,7 +337,7 @@ namespace SysWeaver.Net
         /// <returns></returns>
         async Task Dispatcher()
         {
-            Msg?.AddMessage(Prefix + "Started", MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Started");
             var l = Listener;
             while (l.IsListening)
             {
@@ -444,7 +444,7 @@ namespace SysWeaver.Net
             {
                 RequestExceptions.OnException(ex);
 #if DEBUG
-                    Msg?.AddMessage(Prefix + "Request failed!", ex, MessageLevels.Debug);
+                    Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Request failed!", ex);
 #endif//DEBUG
                 try
                 {
@@ -470,7 +470,7 @@ namespace SysWeaver.Net
                 {
                     RequestExceptions.OnException(ex);
 #if DEBUG
-                        Msg?.AddMessage(Prefix + "Closing the response for \"" + url + "\" failed!", ex, MessageLevels.Debug);
+                        Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Closing the response for \"{url}\" failed!", ex);
 #endif//DEBUG
                 }
                 if (Interlocked.Decrement(ref ReqCounter) == 0)

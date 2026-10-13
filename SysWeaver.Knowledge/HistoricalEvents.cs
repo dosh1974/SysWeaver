@@ -34,7 +34,7 @@ namespace SysWeaver.Knowledge
     {
         public const String Group = "Historical events";
 
-        public static bool TryGet(String name, out HistoricalEvent info) => Tags.TryGetValue(name.FastToLower(), out info);
+        public static bool TryGet(String name, out HistoricalEvent info) => Tags.TryGetValueLower(name, out info);
 
         public static IEnumerable<KeyValuePair<String, HistoricalEvent>> All => Tags;
 

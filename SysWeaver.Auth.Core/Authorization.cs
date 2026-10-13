@@ -405,7 +405,7 @@ namespace SysWeaver.Auth
                 return false;
             if (auth == null)
                 return false;
-            //  The tokens are parsed in place (no split array), only a token that isn't the whole (lower case) string is allocated
+            //  The tokens are parsed in place (no split array) and looked up with spans (no allocation)
             IReadOnlySet<String> ts = null;
             int start = 0;
             for (; ; )
@@ -427,32 +427,15 @@ namespace SysWeaver.Auth
                         if (ts == null)
                             return false;
                     }
-                    if (ts.Contains(LowerToken(requiredTokens, start + a, end - a)))
+                    //  Lower cased on the stack and looked up with a span (the same chars as LowerToken, no allocation for the frozen sets)
+                    //  A single token (the whole string) uses the string overload (an already lower case token is looked up as is)
+                    if ((end - a) == requiredTokens.Length ? ts.ContainsLower(requiredTokens) : ts.ContainsLower(s.Slice(start + a, end - a)))
                         return true;
                 }
                 if (e < 0)
                     return ts == null;
                 start += e + 1;
             }
-        }
-
-        /// <summary>
-        /// Lower case a part of a string, exactly as Substring(start, length).FastToLower() (same as ToLowerInvariant):
-        /// the string itself if the whole string is used and no char changes
-        /// </summary>
-        static String LowerToken(String s, int start, int length)
-        {
-            if (length == s.Length)
-                return s.FastToLower();
-            //  Lower cased while copying (one allocation instead of a substring and a lower cased copy).
-            //  The lambda is static (cached by the compiler), a static delegate field could be null when static fields that parse tokens are initialized
-            return String.Create(length, (s, start), static (dst, state) =>
-            {
-                var src = state.s.AsSpan(state.start, dst.Length);
-                //  ASCII (the common case) using SIMD, the rest (if any) using the invariant culture
-                if (Ascii.ToLower(src, dst, out var done) != System.Buffers.OperationStatus.Done)
-                    src[done..].ToLowerInvariant(dst[done..]);
-            });
         }
 
         /// <summary>

@@ -357,9 +357,8 @@ namespace SysWeaver.Db
                         if (String.IsNullOrEmpty(o))
                             continue;
                         bool desc = o[0] == '-';
-                        if (desc)
-                            o = o.Substring(1);
-                        if (MemberNameToColumn.TryGetValue(o, out var ci))
+                        //  The name after the '-' is looked up with a span (no substring)
+                        if (MemberNameToColumn.TryGetValueSpan(desc ? o.AsSpan(1) : o, out var ci))
                         {
                             if (allowNonIndexed)
                             {

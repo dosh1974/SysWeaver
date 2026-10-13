@@ -35,7 +35,11 @@ namespace SysWeaver.MicroService
         {
             p = p ?? new ThumbnailParams();
             CachedAsyncHandler = HandleAsync;
-            PerfMon.Enabled = p.PerMon;
+            var pm = PerfMon;
+            pm.Enabled = p.PerMon;
+            IconTrackers = new PerfTrackers(pm, null, ".Icon");
+            IconBuildTrackers = new PerfTrackers(pm, null, ".Icon.Build");
+            AllTrackers = new PerfTrackers(pm, null, ".All");
             IconModule = manager.Get<IconHttpServerModule>();
             var fs = manager.Get<FileHttpServerModule>();
             Fs = fs;
@@ -99,15 +103,19 @@ namespace SysWeaver.MicroService
 
         static readonly Task<MediaInfo> NoInfoTask = Task.FromResult((MediaInfo)null);
 
+        /// <summary>
+        /// Perf trackers: key + ".Icon", key + ".Icon.Build", key + ".All"
+        /// </summary>
+        readonly PerfTrackers IconTrackers, IconBuildTrackers, AllTrackers;
+
         IHttpRequestHandler GetIcon(String key, String mimeCode)
         {
-            var mon = PerfMon;
-            using (mon.Track(String.Concat(key, ".Icon")))
+            using (IconTrackers.Track(key))
             {
                 var cache = MimeCache;
                 if (cache.TryGetValue(mimeCode, out var f))
                     return f;
-                using (mon.Track(String.Concat(key, ".Icon.Build")))
+                using (IconBuildTrackers.Track(key))
                 {
                     var options = Options;
                     var data = IconModule.GetFromMime(mimeCode);
@@ -285,8 +293,7 @@ namespace SysWeaver.MicroService
 
         public async Task<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic)
         {
-            var mon = PerfMon;
-            using (mon.Track(String.Concat(key, ".All")))
+            using (AllTrackers.Track(key))
             {
                 var m = await GetMediaInfo(key, fi.FullName, false).ConfigureAwait(false);
                 if (m?.IconFile != null)

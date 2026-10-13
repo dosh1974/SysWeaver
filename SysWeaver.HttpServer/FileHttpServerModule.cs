@@ -63,6 +63,7 @@ namespace SysWeaver.Net
         /// </remarks>
         public FileHttpServerModule(FileHttpServerModuleParams p = null)
         {
+            FileTransformersLookup = FileTransformers.GetAlternateLookup<ReadOnlySpan<Char>>();
             p = p ?? new FileHttpServerModuleParams();
             PerfMon.Enabled = p.PerMon;
             var f = p.Folders;
@@ -74,7 +75,7 @@ namespace SysWeaver.Net
             var c = p.CacheSeconds;
             if (c > 0)
             {
-                Cache = new(TimeSpan.FromSeconds(c), StringComparer.Ordinal);
+                Cache = new(TimeSpan.FromSeconds(c));
                 AsyncHandler = InternalCachedHandler;
             }else
             {
@@ -141,14 +142,14 @@ namespace SysWeaver.Net
         volatile bool HavePreCompressed;
 
         /// <summary>
-        /// Get a key for the encodings accepted by the client, only the supported encodings are included (the others doesn't affect the selection in <see cref="GetSmallestPreComp"/>).
+        /// Get a bit mask of the encodings accepted by the client, only the supported encodings are included (the others doesn't affect the selection in <see cref="GetSmallestPreComp"/>).
         /// </summary>
         /// <param name="acceptedEncoders">The encodings accepted by the client</param>
-        /// <returns>The key (a bit mask of the accepted supported encodings in hex)</returns>
-        static String GetAcceptedKey(IReadOnlySet<String> acceptedEncoders)
+        /// <returns>A bit mask of the accepted supported encodings (bit i = <see cref="CompManager.HttpCodes"/>[i])</returns>
+        static ulong GetAcceptedMask(IReadOnlySet<String> acceptedEncoders)
         {
             if ((acceptedEncoders == null) || (acceptedEncoders.Count <= 0))
-                return "0";
+                return 0;
             ulong mask = 0;
             int bit = 0;
             foreach (var code in CompManager.HttpCodes)
@@ -160,8 +161,18 @@ namespace SysWeaver.Net
                     mask |= 1UL << bit;
                 ++bit;
             }
-            return mask.ToString("x");
+            return mask;
         }
+
+        /// <summary>
+        /// The key of a cached handler lookup: the local url, the key of the file transformer selected by the query string (null for none)
+        /// and, when any disc folder is pre-compressed (<see cref="WithMask"/>), the encodings accepted by the client.
+        /// </summary>
+        /// <remarks>
+        /// Equivalent to the string key url + ["?" + ftKey] + ["\n" + mask in hex] (a local url never contains a '?', the query string starts at the first '?' of the decoded url,
+        /// and the hex mask never contains a '\n', so two requests share a string key exactly when they share this key), without allocating a string per request.
+        /// </remarks>
+        readonly record struct CacheKey(String Url, String FtKey, bool WithMask, ulong Mask);
 
         /// <summary>
         /// Add a folder (prefer to add folders using the constructor params).
@@ -336,36 +347,168 @@ namespace SysWeaver.Net
             public readonly ICompDecoder Decoder;
         }
 
-        readonly FastMemCache<String, CachedFile> Cache;
+        readonly FastMemCache<CacheKey, CachedFile> Cache;
 
 
-        async Task<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
+        /// <summary>
+        /// A completed task with a null handler (the request isn't handled by this module).
+        /// </summary>
+        static readonly Task<IHttpRequestHandler> NullHandlerTask = Task.FromResult((IHttpRequestHandler)null);
+
+        /// <summary>
+        /// Creates the cache entry of a local url on a cache miss (static, the url and the request are passed as the state, no closure per request).
+        /// </summary>
+        static readonly Func<CacheKey, FileHttpServerModule, ValueTuple<String, HttpServerRequest>, Task<CachedFile>> FindFileFn =
+            static (_, m, s) => Task.FromResult(m.FindFile(s.Item1, s.Item2));
+
+        /// <summary>
+        /// Span lookup of <see cref="FileTransformers"/>, the query string is only allocated if it selects a transformer.
+        /// </summary>
+        readonly ConcurrentDictionary<String, FtDel>.AlternateLookup<ReadOnlySpan<Char>> FileTransformersLookup;
+
+        /// <summary>
+        /// Look up the file transformer selected by the query string of a request.
+        /// </summary>
+        /// <param name="ftKey">The registered key of the transformer (equals the query string), null if no transformer was selected</param>
+        /// <param name="context">The request</param>
+        /// <returns>The file transformer, or null if there is no query string or it doesn't select a transformer</returns>
+        FtDel GetFileTransformer(out String ftKey, HttpServerRequest context)
         {
-            if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
-                return null;
-            var url = context.LocalUrl;
-            //  The handler depends on the file transformer (selected by the query string), so include the query in the key when it selects one (the local url never contains a '?')
             //  QueryStringStart is 0 when there is no query string
             var qs = context.QueryStringStart;
-            var cacheKey = url;
-            String ftKey = null;
-            FtDel fileTransformer = null;
-            if (qs > 0)
+            if ((qs > 0) && FileTransformersLookup.TryGetValue(context.Url.AsSpan(qs), out ftKey, out var ft))
+                return ft;
+            ftKey = null;
+            return null;
+        }
+
+        /// <summary>
+        /// Invoke a file transformer, the returned task is faulted if the transformer throws (like awaiting it in an async method).
+        /// </summary>
+        static Task<IHttpRequestHandler> Transform(FtDel ft, String ftKey, Tuple<String, bool> mime, FileInfo fi, DiscFolder df, bool isAccepted, ICompDecoder decoder)
+        {
+            try
             {
-                ftKey = context.Url.Substring(qs);
-                if (FileTransformers.TryGetValue(ftKey, out fileTransformer))
-                    cacheKey = String.Concat(url, "?", ftKey);
+                return ft(ftKey, mime, fi, df, isAccepted, decoder, df.UpdateAccessTime, df.IsDynamic) ?? Task.FromException<IHttpRequestHandler>(new NullReferenceException());
             }
-            fileTransformer = fileTransformer ?? NoFT;
-            //  The pre-compressed file to serve is selected using the encodings accepted by the client
-            if (HavePreCompressed)
-                cacheKey = String.Concat(cacheKey, "\n", GetAcceptedKey(context.AcceptedEncoders));
-            //  Only the location of the file is cached, the handler is created per request, since a FileInfo only reads the file state (time and size, used for the etag) once
-            var cf = await Cache.GetOrUpdateAsync(cacheKey, _ => Task.FromResult(FindFile(url, context))).ConfigureAwait(false);
+            catch (Exception ex)
+            {
+                return Task.FromException<IHttpRequestHandler>(ex);
+            }
+        }
+
+        Task<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
+        {
+            //  Not an async method: a cache hit completes synchronously (no state machine, closure or delegate per request), exceptions are returned in the task
+            try
+            {
+                if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
+                    return NullHandlerTask;
+                var url = context.LocalUrl;
+                //  The handler depends on the file transformer (selected by the query string), so include the query in the key when it selects one (the local url never contains a '?')
+                var fileTransformer = GetFileTransformer(out var ftKey, context);
+                //  The pre-compressed file to serve is selected using the encodings accepted by the client
+                var withMask = HavePreCompressed;
+                //  A null url was a null string key only without a mask and a transformer (ArgumentNullException), else it was concatenated as ""
+                var cacheKey = new CacheKey(url ?? (withMask || (ftKey != null) ? "" : throw new ArgumentNullException("key")), ftKey, withMask, withMask ? GetAcceptedMask(context.AcceptedEncoders) : 0);
+                fileTransformer ??= NoFT;
+                //  Only the location of the file is cached, the handler is created per request, since a FileInfo only reads the file state (time and size, used for the etag) once
+                var t = Cache.GetOrUpdateAsync(cacheKey, FindFileFn, this, ValueTuple.Create(url, context));
+                if (!t.IsCompletedSuccessfully)
+                    return CachedHandlerAsync(t, fileTransformer, ftKey);
+                return GetHandler(t.Result, fileTransformer, ftKey);
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<IHttpRequestHandler>(ex);
+            }
+        }
+
+        static Task<IHttpRequestHandler> GetHandler(CachedFile cf, FtDel fileTransformer, String ftKey)
+        {
             if (cf == null)
-                return null;
-            var df = cf.Folder;
-            return await fileTransformer(ftKey, cf.Mime, new FileInfo(cf.Path), df, cf.IsAccepted, cf.Decoder, df.UpdateAccessTime, df.IsDynamic).ConfigureAwait(false);
+                return NullHandlerTask;
+            return Transform(fileTransformer, ftKey, cf.Mime, new FileInfo(cf.Path), cf.Folder, cf.IsAccepted, cf.Decoder);
+        }
+
+        static async Task<IHttpRequestHandler> CachedHandlerAsync(ValueTask<CachedFile> t, FtDel fileTransformer, String ftKey)
+        {
+            var cf = await t.ConfigureAwait(false);
+            return await GetHandler(cf, fileTransformer, ftKey).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get the relative disc path of a local url (from an index), with the '/' replaced by the directory separator, using at most one allocation.
+        /// </summary>
+        static String GetLocalDiscPath(String url, int start)
+        {
+            var c = Path.DirectorySeparatorChar;
+            if ((c == '/') || (url.IndexOf('/', start) < 0))
+                return url.Substring(start);
+            return String.Create(url.Length - start, (url, start, c), static (dst, s) =>
+            {
+                s.url.AsSpan(s.start).CopyTo(dst);
+                dst.Replace('/', s.c);
+            });
+        }
+
+        /// <summary>
+        /// Find the file (or pre-compressed variant) that a local url maps to.
+        /// </summary>
+        /// <param name="mime">The mime type of the requested file</param>
+        /// <param name="discFolder">The disc folder of the file</param>
+        /// <param name="isAccepted">True if the file isn't pre-compressed or if the pre-compressed format is accepted by the client</param>
+        /// <param name="decoder">Non-null if the file is pre-compressed</param>
+        /// <param name="url">The local url</param>
+        /// <param name="context">The request</param>
+        /// <returns>The (existing) file, null if not found</returns>
+        FileInfo FindFileInfo(out Tuple<String, bool> mime, out DiscFolder discFolder, out bool isAccepted, out ICompDecoder decoder, String url, HttpServerRequest context)
+        {
+            var f = OrderedFolders;
+            if (f != null)
+            {
+                foreach (var webFolder in f)
+                {
+                    var rootFolder = webFolder.Key;
+                    if (!url.FastStartsWith(rootFolder))
+                        continue;
+                    var localDiscPath = GetLocalDiscPath(url, rootFolder.Length);
+                    foreach (var df in webFolder.Value.DiscFolders)
+                    {
+                        var absPath = SafeCombine(df.Path, localDiscPath);
+                        if (absPath == null)
+                            continue;
+                        var fi = new FileInfo(absPath);
+                        var ext = fi.Extension;
+                        decoder = null;
+                        isAccepted = true;
+                        if (df.AssumePreCompressed)
+                        {
+                            var ti = GetSmallestPreComp(out decoder, out isAccepted, absPath, context.AcceptedEncoders, fi.Exists ? fi.LastWriteTimeUtc : null);
+                            if ((ti != null) && ((!fi.Exists) || (ti.Length < fi.Length)))
+                            {
+                                fi = ti;
+                            }
+                            else
+                            {
+                                decoder = null;
+                                isAccepted = ti == null;
+                            }
+                        }
+                        if (!fi.Exists)
+                            continue;
+                        //  GetMimeType lower cases the extension (on the stack)
+                        mime = MimeTypeMap.GetMimeType(ext);
+                        discFolder = df;
+                        return fi;
+                    }
+                }
+            }
+            mime = null;
+            discFolder = null;
+            isAccepted = false;
+            decoder = null;
+            return null;
         }
 
         /// <summary>
@@ -376,96 +519,27 @@ namespace SysWeaver.Net
         /// <returns>The file location, null if not found</returns>
         CachedFile FindFile(String url, HttpServerRequest context)
         {
-            var f = OrderedFolders;
-            if (f == null)
-                return null;
-            var toDiscPath = ToDiscPath;
-            foreach (var webFolder in f)
-            {
-                var rootFolder = webFolder.Key;
-                if (!url.FastStartsWith(rootFolder))
-                    continue;
-                var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
-                foreach (var discFolder in webFolder.Value.DiscFolders)
-                {
-                    var absPath = SafeCombine(discFolder.Path, localDiscPath);
-                    if (absPath == null)
-                        continue;
-                    var fi = new FileInfo(absPath);
-                    var ext = fi.Extension;
-                    ICompDecoder decoder = null;
-                    bool isAccepted = true;
-                    if (discFolder.AssumePreCompressed)
-                    {
-                        var ti = GetSmallestPreComp(out decoder, out isAccepted, absPath, context.AcceptedEncoders, fi.Exists ? fi.LastWriteTimeUtc : null);
-                        if ((ti != null) && ((!fi.Exists) || (ti.Length < fi.Length)))
-                        {
-                            fi = ti;
-                        }
-                        else
-                        {
-                            decoder = null;
-                            isAccepted = ti == null;
-                        }
-                    }
-                    if (!fi.Exists)
-                        continue;
-                    return new CachedFile(fi.FullName, MimeTypeMap.GetMimeType(ext.FastToLower()), discFolder, isAccepted, decoder);
-                }
-            }
-            return null;
+            var fi = FindFileInfo(out var mime, out var df, out var isAccepted, out var decoder, url, context);
+            return fi == null ? null : new CachedFile(fi.FullName, mime, df, isAccepted, decoder);
         }
 
-        async Task<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
+        Task<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
         {
-            if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
-                return null;
-            var url = context.LocalUrl;
-            var f = OrderedFolders;
-            if (f == null)
-                return null;
-            var toDiscPath = ToDiscPath;
-            foreach (var webFolder in f)
+            //  Not an async method (no state machine per request), exceptions are returned in the task
+            try
             {
-                var rootFolder = webFolder.Key;
-                if (!url.FastStartsWith(rootFolder))
-                    continue;
-                var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
-                foreach (var discFolder in webFolder.Value.DiscFolders)
-                {
-                    var absPath = SafeCombine(discFolder.Path, localDiscPath);
-                    if (absPath == null)
-                        continue;
-                    var fi = new FileInfo(absPath);
-                    var ext = fi.Extension;
-                    ICompDecoder decoder = null;
-                    bool isAccepted = true;
-                    if (discFolder.AssumePreCompressed)
-                    {
-                        var ti = GetSmallestPreComp(out decoder, out isAccepted, absPath, context.AcceptedEncoders, fi.Exists ? fi.LastWriteTimeUtc : null);
-                        if ((ti != null) && ((!fi.Exists) || (ti.Length < fi.Length)))
-                        {
-                            fi = ti;
-                        }
-                        else
-                        {
-                            decoder = null;
-                            isAccepted = ti == null;
-                        }
-                    }
-                    if (!fi.Exists)
-                        continue;
-                    var mime = MimeTypeMap.GetMimeType(ext.FastToLower());
-                    //  QueryStringStart is 0 when there is no query string
-                    var ftKey = context.QueryStringStart > 0 ? context.Url.Substring(context.QueryStringStart) : null;
-                    FtDel fileTransformer = null;
-                    if (ftKey != null)
-                        FileTransformers.TryGetValue(ftKey, out fileTransformer);
-                    fileTransformer = fileTransformer ?? NoFT;
-                    return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime, discFolder.IsDynamic).ConfigureAwait(false);
-                }
+                if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
+                    return NullHandlerTask;
+                var fi = FindFileInfo(out var mime, out var df, out var isAccepted, out var decoder, context.LocalUrl, context);
+                if (fi == null)
+                    return NullHandlerTask;
+                var fileTransformer = GetFileTransformer(out var ftKey, context) ?? NoFT;
+                return Transform(fileTransformer, ftKey, mime, fi, df, isAccepted, decoder);
             }
-            return null;
+            catch (Exception ex)
+            {
+                return Task.FromException<IHttpRequestHandler>(ex);
+            }
         }
 
         /// <summary>

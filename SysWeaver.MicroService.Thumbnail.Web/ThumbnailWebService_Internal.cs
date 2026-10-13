@@ -57,7 +57,7 @@ namespace SysWeaver.MicroService
                 await b.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    M.AddMessage(Prefix + "Page is changing size to " + width + "x" + height, MessageLevels.Debug);
+                    M.AddMessage(MessageLevels.Debug, $"{Prefix}Page is changing size to {width}x{height}");
                     await Win.Resize(width, height, scale).ConfigureAwait(false);
                 }
                 finally
@@ -89,10 +89,10 @@ namespace SysWeaver.MicroService
                     Dead = true;
                     if (ExtraDelay > 0)
                     {
-                        M.AddMessage(String.Concat(Prefix, "Waiting for ", ExtraDelay, " ms"), MessageLevels.Debug);
+                        M.AddMessage(MessageLevels.Debug, $"{Prefix}Waiting for {ExtraDelay} ms");
                         await Task.Delay(ExtraDelay).ConfigureAwait(false);
                     }
-                    M.AddMessage(Prefix + "Page is taking a screen shot", MessageLevels.Debug);
+                    M.AddMessage(MessageLevels.Debug, $"{Prefix}Page is taking a screen shot");
                     switch (Format)
                     {
                         default:

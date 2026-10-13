@@ -327,7 +327,7 @@ namespace SysWeaver.MicroService
                         if (d == null)
                             continue;
                         d.Dispose();
-                        AddMessage(String.Join(" Disposed service of type ", Tag, ServiceName(i, info)), MessageLevels.Debug);
+                        AddMessage(MessageLevels.Debug, $"{Tag} Disposed service of type {ServiceName(i, info)}");
                     }
                     catch (Exception e)
                     {
@@ -385,7 +385,8 @@ namespace SysWeaver.MicroService
             var info = new ServiceInfo(instance, instanceName ?? (instance as IHaveDefaultInstanceName)?.DefaultInstanceName ?? "", giveOwnershipToTheServiceManager, paramType);
             if (!Instances.TryAdd(instance, info))
                 throw new Exception("An instance may only be registered once!");
-            AddMessage(String.Join(" Registering instance of type ", Tag, ServiceName(instance, info, true)), MessageLevels.Debug);
+            Interlocked.Increment(ref InstancesVersion);
+            AddMessage(MessageLevels.Debug, $"{Tag} Registering instance of type {ServiceName(instance, info, true)}");
             using (Tab())
             {
                 var type = instance.GetType();
@@ -840,6 +841,7 @@ namespace SysWeaver.MicroService
         {
             if (!Instances.TryRemove(instance, out var info))
                 throw new Exception("The supplied instance isn't registered!");
+            Interlocked.Increment(ref InstancesVersion);
 
             RemoveHaveStats(instance as IHaveStats);
             RemoveHavePerfMonitor(instance as IPerfMonitored);
@@ -1353,12 +1355,66 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all unique registered instances in the order that they where registered
         /// </summary>
-        public IEnumerable<Object> OrderedUniqueInstances => Instances.OrderBy(x => x.Value.Order).Select(x => x.Key);
+        public IEnumerable<Object> OrderedUniqueInstances
+        {
+            get
+            {
+                //  Lazy: the instances are read when the enumeration starts (as the OrderBy that this replaces)
+                foreach (var x in GetOrderedInstances())
+                    yield return x.Key;
+            }
+        }
 
         /// <summary>
         /// Get all unique registered instances in the order that they where registered, and the associated information about them
         /// </summary>
-        public IEnumerable<KeyValuePair<Object, ServiceInfo>> OrderedUniqueInfoInstances => Instances.OrderBy(x => x.Value.Order);
+        public IEnumerable<KeyValuePair<Object, ServiceInfo>> OrderedUniqueInfoInstances
+        {
+            get
+            {
+                //  Lazy: the instances are read when the enumeration starts (as the OrderBy that this replaces)
+                foreach (var x in GetOrderedInstances())
+                    yield return x;
+            }
+        }
+
+        /// <summary>
+        /// Incremented after every change of Instances (invalidates OrderedInstancesCache)
+        /// </summary>
+        int InstancesVersion;
+
+        sealed class OrderedInstances
+        {
+            public OrderedInstances(int version, KeyValuePair<Object, ServiceInfo>[] items)
+            {
+                Version = version;
+                Items = items;
+            }
+            public readonly int Version;
+            public readonly KeyValuePair<Object, ServiceInfo>[] Items;
+        }
+
+        volatile OrderedInstances OrderedInstancesCache;
+
+        /// <summary>
+        /// Get the current instances sorted by ServiceInfo.Order (registration order), the array is cached until an instance is registered or unregistered.
+        /// Don't modify the returned array.
+        /// </summary>
+        KeyValuePair<Object, ServiceInfo>[] GetOrderedInstances()
+        {
+            var v = Volatile.Read(ref InstancesVersion);
+            var c = OrderedInstancesCache;
+            if ((c != null) && (c.Version == v))
+                return c.Items;
+            var l = new List<KeyValuePair<Object, ServiceInfo>>(Instances.Count);
+            foreach (var x in Instances)
+                l.Add(x);
+            var a = l.ToArray();
+            //  Order is unique per instance, an unstable sort gives the same order as OrderBy
+            Array.Sort(a, static (x, y) => x.Value.Order.CompareTo(y.Value.Order));
+            OrderedInstancesCache = new OrderedInstances(v, a);
+            return a;
+        }
 
         #endregion//Info
 
@@ -1531,9 +1587,10 @@ namespace SysWeaver.MicroService
                 if (IsPaused)
                     return false;
                 AddMessage("Service pausing");
-                foreach (var o in Instances.OrderByDescending(x => x.Value.Order))
-                { 
-                    var p = o.Key as IServicePausable;
+                var a = GetOrderedInstances();
+                for (int i = a.Length - 1; i >= 0; --i)
+                {
+                    var p = a[i].Key as IServicePausable;
                     p?.Pause();
                 }
                 IsPaused = true;
@@ -1549,7 +1606,7 @@ namespace SysWeaver.MicroService
                 if (!IsPaused)
                     return false;
                 AddMessage("Service is resuming");
-                foreach (var o in Instances.OrderBy(x => x.Value.Order))
+                foreach (var o in GetOrderedInstances())
                 {
                     var p = o.Key as IServicePausable;
                     p?.Continue();
@@ -1624,7 +1681,7 @@ namespace SysWeaver.MicroService
                     var fn = baseName + "_Stats.html";
                     try
                     {
-                        AddMessage("Dumping stats to \"" + fn + "\"", MessageLevels.Debug);
+                        AddMessage(MessageLevels.Debug, $"Dumping stats to \"{fn}\"");
                         var t = TableDataTools.Get(new TableDataRequest
                         {
                             MaxRowCount = 10000,
@@ -1648,7 +1705,7 @@ namespace SysWeaver.MicroService
                     try
                     {
                         var ss = s.SelectMany(y => y.Value).Concat(PerfMon);
-                        AddMessage("Dumping peformance stats to \"" + fn + "\"", MessageLevels.Debug);
+                        AddMessage(MessageLevels.Debug, $"Dumping peformance stats to \"{fn}\"");
                         var t = TableDataTools.Get(new TableDataRequest
                         {
                             MaxRowCount = 10000,

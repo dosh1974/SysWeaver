@@ -259,10 +259,10 @@ namespace SysWeaver.Db
                         if (DateTime.UtcNow > end)
                             throw;
                     await Task.Delay(1000).ConfigureAwait(false);
-                    m?.AddMessage(LogPrefix + "Retrying connection", MessageLevels.Debug);
+                    m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Retrying connection");
                 }
             }
-            m?.AddMessage(LogPrefix + "Connected!", MessageLevels.Debug);
+            m?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Connected!");
         }
 
         public String[] Partitions { get; protected set; }

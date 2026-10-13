@@ -97,6 +97,19 @@ namespace SysWeaver.Net
         protected HttpServerBase(IMessageHost msg, ITranslator translator, IApiAuditService audit, AuthManager auth, IFirewallHandler firewallHandler, HttpServerBaseParams p, Type listenerExceptionType)
         {
             p = p ?? new HttpServerBaseParams();
+            var pm = PerfMon;
+            HandleTrackers = new PerfTrackers(pm, nameof(Handle) + ".");
+            HandleRawTrackers = new PerfTrackers(pm, nameof(HandleRaw) + ".");
+            TrackGetHandler = pm.GetTracker(nameof(GetHandler));
+            TrackHandleRaw = pm.GetTracker(nameof(HandleRaw));
+            TrackHandleAuth = pm.GetTracker(nameof(HandleAuth));
+            TrackSendCached = pm.GetTracker(nameof(HttpCacheEntry.SendCached));
+            TrackDecompress = pm.GetTracker(nameof(Decompress));
+            TrackCompress = pm.GetTracker(nameof(Compress));
+            TrackGetSession = pm.GetTracker(nameof(GetSession));
+            TrackApplyTemplate = pm.GetTracker(nameof(ApplyTemplate));
+            TrackGetTranslationVars = pm.GetTracker(nameof(GetTranslationVars));
+            TranslationVarsTrackers = new PerfTrackers(pm, nameof(GetTranslationVars) + ".");
             Msg = msg;
             Auth = auth;
             BaseParams = p;
@@ -803,9 +816,8 @@ namespace SysWeaver.Net
 
         async Task<bool> HandleRaw(HttpServerRequest data)
         {
-            var pm = PerfMon;
-            using var _ = pm.Track(nameof(HandleRaw));
-            var n = nameof(HandleRaw) + ".";
+            using var _ = TrackHandleRaw.Track();
+            var trackers = HandleRawTrackers;
             var prefixes = PrefixRawMods;
             if (prefixes != null)
             {
@@ -819,7 +831,7 @@ namespace SysWeaver.Net
                     for (int mi = 0; mi < moduleLen; ++mi)
                     {
                         var module = modules[mi];
-                        using var __ = pm.Track(n + module.Name);
+                        using var __ = trackers.Track(module.Name);
                         try
                         {
                             if (await module.Handle(data).ConfigureAwait(false))
@@ -838,7 +850,7 @@ namespace SysWeaver.Net
             for (int mi = 0; mi < oml; ++mi)
             {
                 var module = orderedMods[mi];
-                using var __ = pm.Track(n + module.Name);
+                using var __ = trackers.Track(module.Name);
                 try
                 {
                     if (await module.Handle(data).ConfigureAwait(false))
@@ -969,7 +981,7 @@ namespace SysWeaver.Net
         /// </summary>
         ValueTask<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
         {
-            var tracker = PerfMon.Track(nameof(GetHandler));
+            var tracker = TrackGetHandler.Track();
             try
             {
                 var prefixes = PrefixMods;
@@ -1377,7 +1389,7 @@ namespace SysWeaver.Net
         /// <returns>True if the request have been handled to completion, false if the request is allowed to continue</returns>
         async Task<bool> HandleAuth(IReadOnlyList<String> auth, HttpServerRequest data, HttpSession session, String localUrl, String url, bool isHead)
         {
-            using var _ = PerfMon.Track(nameof(HandleAuth));
+            using var _ = TrackHandleAuth.Track();
             var user = session.Auth;
             if (user == null)
             {
@@ -1492,31 +1504,31 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Perf monitor names for handlers ("Handle." + handler name), cached so that a request doesn't allocate a new name
+        /// Perf trackers for handlers ("Handle." + handler name), cached so that a request doesn't allocate a new name or look up the name in the monitor
         /// </summary>
-        readonly LowAllocConcurrentDictionary<String, String> HandlePerfNames = new(64, StringComparer.Ordinal);
+        readonly PerfTrackers HandleTrackers;
+
+        /// <summary>
+        /// Perf trackers for raw modules ("HandleRaw." + module name)
+        /// </summary>
+        readonly PerfTrackers HandleRawTrackers;
+
+        readonly PerfTracker TrackGetHandler;
+        readonly PerfTracker TrackHandleRaw;
+        readonly PerfTracker TrackHandleAuth;
+        readonly PerfTracker TrackSendCached;
+        readonly PerfTracker TrackDecompress;
+        readonly PerfTracker TrackCompress;
+        readonly PerfTracker TrackGetSession;
+        readonly PerfTracker TrackApplyTemplate;
+        readonly PerfTracker TrackGetTranslationVars;
+        readonly PerfTrackers TranslationVarsTrackers;
 
         /// <summary>
         /// Start tracking a handler, nothing is computed if perf monitoring is disabled
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        PerfMesurement TrackHandle(String handlerName)
-        {
-            var pm = PerfMon;
-            if ((pm == null) || (!PerfMonitor.EnableAny) || (!pm.Enabled))
-                return default;
-            return pm.Track(GetHandlePerfName(handlerName ?? String.Empty));
-        }
-
-        String GetHandlePerfName(String handlerName)
-        {
-            var names = HandlePerfNames;
-            if (names.TryGetValue(handlerName, out var name))
-                return name;
-            name = String.Concat(nameof(Handle), ".", handlerName);
-            names.TryAdd(handlerName, name);
-            return name;
-        }
+        PerfMesurement TrackHandle(String handlerName) => HandleTrackers.Track(handlerName);
 
         /// <summary>
         /// Lower cased file extensions, keyed by the extension as found in the url (so that a request doesn't allocate a new extension string)
@@ -1810,7 +1822,7 @@ namespace SysWeaver.Net
                             if ((nowT < ce.Expires) && ce.ETag.FastEquals(etag))
                             {
                                 Interlocked.Exchange(ref ce.LastUsed, nowT);
-                                using (PerfMon.Track(nameof(HttpCacheEntry.SendCached)))
+                                using (TrackSendCached.Track())
                                     await ce.SendCached(data, isHead).ConfigureAwait(false);
                                 Interlocked.Increment(ref CacheHit);
                                 return;
@@ -2028,7 +2040,7 @@ namespace SysWeaver.Net
                             else
                             {
                                 //  Decompress to output directly if we shouldn't cache or compress
-                                using (PerfMon.Track(nameof(Decompress)))
+                                using (TrackDecompress.Track())
                                     await Decompress(dec, i, data.OutputStream).ConfigureAwait(false);
                                 return;
                             }
@@ -2068,7 +2080,7 @@ namespace SysWeaver.Net
                             //  Compress to output directly if we shouldn't cache
                             var encoder = comp.Item1;
                             data.SetResHeader("Content-Encoding", encoder.HttpCode);
-                            using (PerfMon.Track(nameof(Compress)))
+                            using (TrackCompress.Track())
                                 await Compress(encoder, comp.Item2, i, data.OutputStream).ConfigureAwait(false);
                             return;
                         }
@@ -2290,7 +2302,7 @@ namespace SysWeaver.Net
                 {
                     HandlerExceptions.OnException(ex);
 #if DEBUG
-                    Msg?.AddMessage(Prefix + "Handler for \"" + data.Url + "\" failed!", ex, MessageLevels.Debug);
+                    Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Handler for \"{data.Url}\" failed!", ex);
 #endif//DEBUG
                     data.SetResStatusCode(500);
                     //  Sensitive information (paths, connection strings, private ips, sql etc) is removed from the message
@@ -2858,7 +2870,7 @@ namespace SysWeaver.Net
 
         ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
-            using var _ = PerfMon.Track(nameof(GetSession));
+            using var _ = TrackGetSession.Track();
             var sn = SessionCookieName;
             if (sn == null)
             {

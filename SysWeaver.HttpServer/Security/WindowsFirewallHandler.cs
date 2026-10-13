@@ -48,7 +48,7 @@ namespace SysWeaver.Security
             var p = messagePrefix ?? FirewallHandler.Prefix;
             var qn = ruleName.ToQuoted();
             var name = qn + " for " + StringTools.RemoveCamelCase(direction.ToString()).FastToLower() + " " + StringTools.RemoveCamelCase(protocol.ToString()).FastToLower() + " traffic on port " + port;
-            msg?.AddMessage(p + "Checking if firewall rule " + name + " exists", MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{p}Checking if firewall rule {name} exists");
             var args = "advfirewall firewall show rule name=" + qn;
             List<String> log = new List<string>();
             var r = ExternalProcess.Run("netsh", args, (text, wrn) => log.Add(text));
@@ -58,7 +58,7 @@ namespace SysWeaver.Security
             var ports = port.ToString();
             if (r != 1)
             {
-                msg?.AddMessage(p + "Validating existing firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Validating existing firewall rule {name}");
                 //  Check existing
                 Dictionary<String, String> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var t in log)
@@ -104,7 +104,7 @@ namespace SysWeaver.Security
                     msg?.AddMessage(p + qn + " exists and is valid");
                     return true;
                 }
-                msg?.AddMessage(p + "Updating existing firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Updating existing firewall rule {name}");
                 //  Must update
                 args = "advfirewall firewall set rule name=" + qn + " new dir=" + dirs + " protocol=" + prots + " localport=" + ports + " profile=any localip=any remoteip=any remoteport=any action=allow enable=yes";
                 log.Clear();
@@ -133,7 +133,7 @@ namespace SysWeaver.Security
                 Remove(ruleName, msg, messagePrefix);
             }
             // Add rule
-            msg?.AddMessage(p + "Adding new firewall rule " + name, MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{p}Adding new firewall rule {name}");
             args = "advfirewall firewall add rule name=" + qn + " dir=" + dirs + " protocol=" + prots + " localport=" + ports + " profile=any localip=any remoteip=any remoteport=any action=allow enable=yes";
             log.Clear();
             r = ExternalProcess.Run("netsh", args, (text, wrn) =>
@@ -174,7 +174,7 @@ namespace SysWeaver.Security
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
             var qn = ruleName.ToQuoted();
-            msg?.AddMessage(p + "Deleting rule " + qn, MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{p}Deleting rule {qn}");
             var args = "advfirewall firewall delete rule name=" + qn;
             List<String> log = new List<string>();
             var r = ExternalProcess.Run("netsh", args, (text, wrn) => log.Add(text));
@@ -186,7 +186,7 @@ namespace SysWeaver.Security
             //  Failed, check if a rule with that name exists at all
             if (ExternalProcess.Run("netsh", "advfirewall firewall show rule name=" + qn) == 1)
             {
-                msg?.AddMessage(p + "Firewall rule " + qn + " doesn't exist", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Firewall rule {qn} doesn't exist");
                 return true;
             }
             if (msg != null)

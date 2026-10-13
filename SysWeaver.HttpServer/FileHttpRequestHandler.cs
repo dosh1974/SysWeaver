@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -132,43 +133,13 @@ namespace SysWeaver.Net
             //  (LastWriteTimeUtc is always UTC, so ToEtag doesn't convert it)
             var time = (UInt64)fi.LastWriteTimeUtc.Ticks;
             var length = (UInt64)fi.Length;
-            Span<Char> temp = stackalloc Char[EtagMaxDigits + 1 + EtagMaxDigits];
-            var l = EncodeEtagDigits(time, temp);
+            var e = CompactAsciiString.Secure;
+            Span<Char> temp = stackalloc Char[CompactAsciiString.MaxEncodedLength + 1 + CompactAsciiString.MaxEncodedLength];
+            e.TryEncode(time, temp, out var l);
             temp[l] = ' ';
             ++l;
-            l += EncodeEtagDigits(length, temp.Slice(l));
-            return new String(temp.Slice(0, l));
-        }
-
-        /// <summary>
-        /// The digits used by <see cref="CompactAsciiString.Secure"/> (used by <see cref="HttpServerTools.ToEtag(long)"/>)
-        /// </summary>
-        static readonly Char[] EtagDigits = [.. CompactAsciiString.Secure.Valid];
-
-        /// <summary>
-        /// The maximum number of digits of a 64-bit value (base 2 or more)
-        /// </summary>
-        const int EtagMaxDigits = 64;
-
-        /// <summary>
-        /// Write the same chars as CompactAsciiString.Secure.Encode(value) (least significant digit first, at least one digit)
-        /// </summary>
-        /// <param name="value">The value to encode</param>
-        /// <param name="dst">The destination, must be at least <see cref="EtagMaxDigits"/> chars</param>
-        /// <returns>The number of chars written</returns>
-        static int EncodeEtagDigits(UInt64 value, Span<Char> dst)
-        {
-            var v = EtagDigits;
-            var vl = (UInt64)v.Length;
-            for (int i = 0; ;)
-            {
-                var n = value / vl;
-                dst[i] = v[(int)(value - (n * vl))];
-                ++i;
-                if (n == 0)
-                    return i;
-                value = n;
-            }
+            e.TryEncode(length, temp.Slice(l), out var l2);
+            return new String(temp.Slice(0, l + l2));
         }
 
 
@@ -306,11 +277,33 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request</param>
         /// <returns>The response body</returns>
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        /// <remarks>A body that is already available completes without an async state machine, anything else (pending, faulted, canceled or a synchronous throw) gives the same task as an async method.</remarks>
+        public Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
-            return new HttpRequestData(await GetBody(request).ConfigureAwait(false));
-
+            Task<ReadOnlyMemory<Byte>> t;
+            try
+            {
+                t = GetBody(request);
+            }
+            catch (Exception ex)
+            {
+                return GetAsyncThrow(ExceptionDispatchInfo.Capture(ex));
+            }
+            if ((t != null) && t.IsCompletedSuccessfully)
+                return Task.FromResult(new HttpRequestData(t.Result));
+            return GetAsyncAwait(t);
         }
+
+        static async Task<HttpRequestData> GetAsyncAwait(Task<ReadOnlyMemory<Byte>> t)
+            => new HttpRequestData(await t.ConfigureAwait(false));
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators (the async method builder creates the task)
+        static async Task<HttpRequestData> GetAsyncThrow(ExceptionDispatchInfo ex)
+        {
+            ex.Throw();
+            return null;
+        }
+#pragma warning restore CS1998
 
     }
 

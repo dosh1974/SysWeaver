@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
@@ -17,6 +18,11 @@ namespace SysWeaver
     interface IStringFingerprint
     {
         static abstract ulong Get(ref char s, int length, int offset);
+
+        /// <summary>
+        /// The same fingerprint for a span: a span has no null terminator, a char read at the length is 0 (like the terminator of a string)
+        /// </summary>
+        static abstract ulong Get(ReadOnlySpan<char> s, int offset);
     }
 
     /// <summary>
@@ -39,12 +45,48 @@ namespace SysWeaver
         static ulong Read1(ref char s, int offset) => Unsafe.Add(ref s, offset);
 
         /// <summary>
+        /// Read 1, 2 or 4 chars of a span (like Read1 / Read2 / Read4), the chars at or after the end of the span are read as 0 (the null terminator of a string).
+        /// The start is never negative (the caller checked the length against the min length of the keys).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong ReadSpan(ReadOnlySpan<char> s, int offset, int width)
+        {
+            ref var c = ref MemoryMarshal.GetReference(s);
+            if ((uint)(offset + width) <= (uint)s.Length)
+                return width switch
+                {
+                    4 => Read4(ref c, offset),
+                    2 => Read2(ref c, offset),
+                    _ => Read1(ref c, offset),
+                };
+            return ReadSpanPadded(s, offset, width);
+        }
+
+        /// <summary>
+        /// The chars past the end of the span are 0 (only the last char read can be past the end)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static ulong ReadSpanPadded(ReadOnlySpan<char> s, int offset, int width)
+        {
+            ulong v = 0;
+            for (int i = width - 1; i >= 0; --i)
+            {
+                var j = offset + i;
+                v = (v << 16) | ((uint)j < (uint)s.Length ? s[j] : 0u);
+            }
+            return v;
+        }
+
+        /// <summary>
         /// 4 chars starting at offset
         /// </summary>
         public struct Left4 : IStringFingerprint
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => Read4(ref s, offset) + (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => ReadSpan(s, offset, 4) + (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
@@ -54,6 +96,9 @@ namespace SysWeaver
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => Read4(ref s, length - offset) + (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => ReadSpan(s, s.Length - offset, 4) + (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
@@ -63,6 +108,9 @@ namespace SysWeaver
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => Read2(ref s, offset) + (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => ReadSpan(s, offset, 2) + (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
@@ -72,6 +120,9 @@ namespace SysWeaver
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => Read2(ref s, length - offset) + (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => ReadSpan(s, s.Length - offset, 2) + (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
@@ -81,6 +132,9 @@ namespace SysWeaver
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => Read1(ref s, offset) + (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => ReadSpan(s, offset, 1) + (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
@@ -90,6 +144,9 @@ namespace SysWeaver
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => Read1(ref s, length - offset) + (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => ReadSpan(s, s.Length - offset, 1) + (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
@@ -99,10 +156,42 @@ namespace SysWeaver
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static ulong Get(ref char s, int length, int offset) => (ulong)length * LengthMul;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => (ulong)s.Length * LengthMul;
         }
 
         /// <summary>
-        /// The fingerprint readers, the most selective first (the order candidates are tried in)
+        /// A hash of all chars (and the length), the last resort when no window of chars separates the keys (ex: mixed keys like file extensions and mime types).
+        /// Slower than a window for long keys (all chars are read), but still a single pass without a comparer call.
+        /// </summary>
+        public struct Hash : IStringFingerprint
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ref char s, int length, int offset) => HashChars(ref s, length);
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong Get(ReadOnlySpan<char> s, int offset) => HashChars(ref MemoryMarshal.GetReference(s), s.Length);
+        }
+
+        /// <summary>
+        /// Hash the chars (4 at a time, then the rest one by one, never past the length).
+        /// An 8 char step (two lanes) was measured: faster for 24+ chars, but slower for the short keys that are the common case (file extensions).
+        /// </summary>
+        static ulong HashChars(ref char s, int length)
+        {
+            ulong h = (ulong)length * LengthMul;
+            int i = 0;
+            for (int e = length - 4; i <= e; i += 4)
+                h = BitOperations.RotateLeft((h ^ Read4(ref s, i)) * 0xFF51AFD7ED558CCDUL, 31);
+            for (; i < length; ++i)
+                h = BitOperations.RotateLeft((h ^ Read1(ref s, i)) * 0xC4CEB9FE1A85EC53UL, 27);
+            return h;
+        }
+
+        /// <summary>
+        /// The fingerprint readers, the most selective first (the order candidates are tried in).
+        /// <see cref="Kind.Hash"/> is only tried if no other kind is good enough.
         /// </summary>
         public enum Kind
         {
@@ -113,6 +202,7 @@ namespace SysWeaver
             Left1,
             Right1,
             Length,
+            Hash,
         }
 
         /// <summary>
@@ -130,6 +220,7 @@ namespace SysWeaver
                 Kind.Right2 => Right2.Get(ref c, l, offset),
                 Kind.Left1 => Left1.Get(ref c, l, offset),
                 Kind.Right1 => Right1.Get(ref c, l, offset),
+                Kind.Hash => Hash.Get(ref c, l, offset),
                 _ => Length.Get(ref c, l, offset),
             };
         }
@@ -226,7 +317,15 @@ namespace SysWeaver
                         return true;
                 }
             }
-            return best <= maxDuplicates;
+            if (best <= maxDuplicates)
+                return true;
+            // No window of chars separates the keys: a hash of all chars (only tried here, so the key sets that have a window keep it)
+            var hd = CountDuplicates(keys, Kind.Hash, 0, table, used, maxDuplicates + 1);
+            if (hd > maxDuplicates)
+                return false;
+            kind = Kind.Hash;
+            offset = 0;
+            return true;
         }
 
         /// <summary>
@@ -373,6 +472,21 @@ namespace SysWeaver
                 return -1;
             return OrdinalStringKeys.KeyEquals(Unsafe.Add(ref Unsafe.AsRef(in Keys[0]), i), key) ? i : -1;
         }
+
+        /// <summary>
+        /// Find a key (ordinal compare of the chars)
+        /// </summary>
+        /// <returns>The index of the key, -1 if not found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int IndexOf(ReadOnlySpan<char> key)
+        {
+            if ((uint)(key.Length - MinLength) > LengthRange)
+                return -1;
+            var i = SmallValueKeys<ulong>.IndexOf(ref Unsafe.AsRef(in Fingerprints[0]), TFp.Get(key, Offset));
+            if (i < 0)
+                return -1;
+            return key.SequenceEqual(Unsafe.Add(ref Unsafe.AsRef(in Keys[0]), i)) ? i : -1;
+        }
     }
 
     /// <summary>
@@ -493,6 +607,31 @@ namespace SysWeaver
                         if ((e.Hash == h) && OrdinalStringKeys.KeyEquals(e.Key, key))
                             return ref e;
                     }
+                }
+            }
+            return ref Unsafe.NullRef<StringKeyEntry<V>>();
+        }
+
+        /// <summary>
+        /// Find a key (ordinal compare of the chars)
+        /// </summary>
+        /// <returns>A reference to the entry, a null reference if not found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref StringKeyEntry<V> Find(ReadOnlySpan<char> key)
+        {
+            if ((uint)(key.Length - MinLength) <= LengthRange)
+            {
+                var x = StringFingerprint.Mix(TFp.Get(key, Offset));
+                ref var s = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Starts), (nint)(x >> Shift));
+                var i = s;
+                var end = Unsafe.Add(ref s, 1);
+                var h = (uint)x;
+                ref var entries = ref MemoryMarshal.GetArrayDataReference(Entries);
+                for (; i < end; ++i)
+                {
+                    ref var e = ref Unsafe.Add(ref entries, i);
+                    if ((e.Hash == h) && key.SequenceEqual(e.Key))
+                        return ref e;
                 }
             }
             return ref Unsafe.NullRef<StringKeyEntry<V>>();
@@ -623,7 +762,8 @@ namespace SysWeaver
                 StringFingerprint.Kind.Right2 => Dictionary<V, StringFingerprint.Right2>(keys, values, comparer, kind, offset, min, max),
                 StringFingerprint.Kind.Left1 => Dictionary<V, StringFingerprint.Left1>(keys, values, comparer, kind, offset, min, max),
                 StringFingerprint.Kind.Right1 => Dictionary<V, StringFingerprint.Right1>(keys, values, comparer, kind, offset, min, max),
-                _ => Dictionary<V, StringFingerprint.Length>(keys, values, comparer, kind, offset, min, max),
+                StringFingerprint.Kind.Hash => Dictionary<V, StringFingerprint.Hash>(keys, values, comparer, kind, offset, min, max),
+                _ =>Dictionary<V, StringFingerprint.Length>(keys, values, comparer, kind, offset, min, max),
             };
         }
 
@@ -674,7 +814,8 @@ namespace SysWeaver
                 StringFingerprint.Kind.Right2 => Set<StringFingerprint.Right2>(keys, comparer, kind, offset, min, max),
                 StringFingerprint.Kind.Left1 => Set<StringFingerprint.Left1>(keys, comparer, kind, offset, min, max),
                 StringFingerprint.Kind.Right1 => Set<StringFingerprint.Right1>(keys, comparer, kind, offset, min, max),
-                _ => Set<StringFingerprint.Length>(keys, comparer, kind, offset, min, max),
+                StringFingerprint.Kind.Hash => Set<StringFingerprint.Hash>(keys, comparer, kind, offset, min, max),
+                _ =>Set<StringFingerprint.Length>(keys, comparer, kind, offset, min, max),
             };
         }
 
@@ -740,7 +881,7 @@ namespace SysWeaver
     /// <summary>
     /// A frozen dictionary with a few (2 to 8) string keys using the ordinal comparer (see <see cref="SmallStringKeys{TFp}"/>)
     /// </summary>
-    sealed class SmallStringKeyReadonlyDictionary<V, TFp> : IReadOnlyDictionary<string, V>, IHaveComparere<string> where TFp : struct, IStringFingerprint
+    sealed class SmallStringKeyReadonlyDictionary<V, TFp> : IReadOnlyDictionary<string, V>, IHaveComparere<string>, IReadOnlySpanKeyDictionary<V> where TFp : struct, IStringFingerprint
     {
         /// <param name="keys">The analyzed keys</param>
         /// <param name="values">The values, in the same order as the keys</param>
@@ -815,6 +956,19 @@ namespace SysWeaver
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetValue(ReadOnlySpan<char> key, [MaybeNullWhen(false)] out V value)
+        {
+            var i = K.IndexOf(key);
+            if (i < 0)
+            {
+                value = default;
+                return false;
+            }
+            value = Unsafe.Add(ref Unsafe.AsRef(in ValueSlots[0]), i);
+            return true;
+        }
+
         public IEnumerator<KeyValuePair<string, V>> GetEnumerator()
         {
             for (int i = 0; i < K.Count; ++i)
@@ -827,7 +981,7 @@ namespace SysWeaver
     /// <summary>
     /// A frozen set with a few (2 to 8) string keys using the ordinal comparer (see <see cref="SmallStringKeys{TFp}"/>)
     /// </summary>
-    sealed class SmallStringKeyReadonlySet<TFp> : StringKeyReadonlySetBase where TFp : struct, IStringFingerprint
+    sealed class SmallStringKeyReadonlySet<TFp> : StringKeyReadonlySetBase, IReadOnlySpanKeySet where TFp : struct, IStringFingerprint
     {
         public SmallStringKeyReadonlySet(in SmallStringKeys<TFp> keys)
         {
@@ -848,12 +1002,15 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Contains(string item) => K.IndexOf(item) >= 0;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(ReadOnlySpan<char> item) => K.IndexOf(item) >= 0;
     }
 
     /// <summary>
     /// A frozen dictionary with string keys using the ordinal comparer (see <see cref="StringKeyTable{TFp, V}"/>)
     /// </summary>
-    sealed class StringKeyTableReadonlyDictionary<V, TFp> : IReadOnlyDictionary<string, V>, IHaveComparere<string> where TFp : struct, IStringFingerprint
+    sealed class StringKeyTableReadonlyDictionary<V, TFp> : IReadOnlyDictionary<string, V>, IHaveComparere<string>, IReadOnlySpanKeyDictionary<V> where TFp : struct, IStringFingerprint
     {
         /// <param name="table">The table with the keys and values</param>
         /// <param name="comparer">The ordinal comparer the keys were frozen with (reported by Comp)</param>
@@ -923,6 +1080,19 @@ namespace SysWeaver
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetValue(ReadOnlySpan<char> key, [MaybeNullWhen(false)] out V value)
+        {
+            ref var e = ref T.Find(key);
+            if (Unsafe.IsNullRef(ref e))
+            {
+                value = default;
+                return false;
+            }
+            value = e.Value;
+            return true;
+        }
+
         public IEnumerator<KeyValuePair<string, V>> GetEnumerator()
         {
             foreach (var e in T.Entries)
@@ -933,9 +1103,77 @@ namespace SysWeaver
     }
 
     /// <summary>
+    /// A <see cref="FrozenDictionary{TKey, TValue}"/> with ordinal string keys (used when no good fingerprint was found), with a cached span lookup
+    /// (getting the alternate lookup of a FrozenDictionary per lookup is slow: a cast to a contravariant interface)
+    /// </summary>
+    sealed class FrozenOrdinalStringDictionary<V> : IReadOnlyDictionary<string, V>, IHaveComparere<string>, IReadOnlySpanKeyDictionary<V>
+    {
+        public FrozenOrdinalStringDictionary(FrozenDictionary<string, V> d, IEqualityComparer<string> comparer)
+        {
+            D = d;
+            L = d.GetAlternateLookup<ReadOnlySpan<char>>();
+            Comp = comparer;
+        }
+
+        readonly FrozenDictionary<string, V> D;
+        readonly FrozenDictionary<string, V>.AlternateLookup<ReadOnlySpan<char>> L;
+
+        public IEqualityComparer<string> Comp { get; }
+
+        public V this[string key] => D[key];
+
+        public IEnumerable<string> Keys => D.Keys;
+
+        public IEnumerable<V> Values => D.Values;
+
+        public int Count => D.Count;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ContainsKey(string key) => D.ContainsKey(key);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetValue(string key, [MaybeNullWhen(false)] out V value) => D.TryGetValue(key, out value);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetValue(ReadOnlySpan<char> key, [MaybeNullWhen(false)] out V value) => L.TryGetValue(key, out value);
+
+        public IEnumerator<KeyValuePair<string, V>> GetEnumerator() => ((IEnumerable<KeyValuePair<string, V>>)D).GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    /// <summary>
+    /// A <see cref="FrozenSet{T}"/> with ordinal string keys (used when no good fingerprint was found), with a cached span lookup
+    /// </summary>
+    sealed class FrozenOrdinalStringSet : StringKeyReadonlySetBase, IReadOnlySpanKeySet
+    {
+        public FrozenOrdinalStringSet(FrozenSet<string> s, IEqualityComparer<string> comparer)
+        {
+            S = s;
+            L = s.GetAlternateLookup<ReadOnlySpan<char>>();
+            Comp = comparer;
+        }
+
+        readonly FrozenSet<string> S;
+        readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> L;
+
+        public override IEqualityComparer<string> Comp { get; }
+
+        public override int Count => S.Count;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Contains(string item) => S.Contains(item);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(ReadOnlySpan<char> item) => L.Contains(item);
+
+        public override IEnumerator<string> GetEnumerator() => ((IEnumerable<string>)S).GetEnumerator();
+    }
+
+    /// <summary>
     /// A frozen set with string keys using the ordinal comparer (see <see cref="StringKeyTable{TFp, V}"/>)
     /// </summary>
-    sealed class StringKeyTableReadonlySet<TFp> : StringKeyReadonlySetBase where TFp : struct, IStringFingerprint
+    sealed class StringKeyTableReadonlySet<TFp> : StringKeyReadonlySetBase, IReadOnlySpanKeySet where TFp : struct, IStringFingerprint
     {
         /// <param name="table">The table with the keys</param>
         /// <param name="comparer">The ordinal comparer the keys were frozen with (reported by Comp)</param>
@@ -953,6 +1191,9 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Contains(string item) => !Unsafe.IsNullRef(ref T.Find(item));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(ReadOnlySpan<char> item) => !Unsafe.IsNullRef(ref T.Find(item));
 
         public override IEnumerator<string> GetEnumerator()
         {

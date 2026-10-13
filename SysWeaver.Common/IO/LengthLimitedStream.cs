@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SysWeaver.IO
 {
@@ -117,6 +119,68 @@ namespace SysWeaver.IO
             if (count <= 0)
                 return 0;
             return S.Read(buffer, offset, count);
+        }
+
+        /// <summary>
+        /// Read bytes from the underlying stream, without reading past the max length
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
+        public override int Read(Span<byte> buffer)
+        {
+            var count = (int)Math.Min(MaxLength - Position, buffer.Length);
+            if (count <= 0)
+                return 0;
+            return S.Read(buffer.Slice(0, count));
+        }
+
+        /// <summary>
+        /// Read a byte from the underlying stream, without reading past the max length
+        /// </summary>
+        /// <returns>The byte, or -1 at the end of this view (or of the underlying stream)</returns>
+        public override int ReadByte()
+        {
+            if (MaxLength - Position <= 0)
+                return -1;
+            return S.ReadByte();
+        }
+
+        /// <summary>
+        /// Read bytes from the underlying stream asynchronously, without reading past the max length
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return ValueTask.FromCanceled<int>(cancellationToken);
+            try
+            {
+                var count = (int)Math.Min(MaxLength - Position, buffer.Length);
+                if (count <= 0)
+                    return ValueTask.FromResult(0);
+                return S.ReadAsync(buffer.Slice(0, count), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                //  Exceptions are returned in the task (like the base implementation)
+                return ValueTask.FromException<int>(ex);
+            }
+        }
+
+        /// <summary>
+        /// Read bytes from the underlying stream asynchronously, without reading past the max length
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <param name="offset">The offset in the buffer to write the first byte to</param>
+        /// <param name="count">The max number of bytes to read</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            ValidateBufferArguments(buffer, offset, count);
+            return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
         }
 
         /// <summary>

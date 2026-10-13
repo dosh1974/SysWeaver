@@ -98,9 +98,23 @@ namespace SysWeaver.AI
             {
                 var i = data.IndexOf(b64, StringComparison.Ordinal);
                 if (i > 0)
-                    return Convert.FromBase64String(data.Substring(i + b64.Length));
+                    return FromBase64(data, i + b64.Length);
             }
             return Encoding.UTF8.GetBytes(data);
+        }
+
+        /// <summary>
+        /// Same bytes as Convert.FromBase64String(data.Substring(start)) without the copy of the payload (the result may be a part of a slightly larger array)
+        /// </summary>
+        static ReadOnlyMemory<Byte> FromBase64(String data, int start)
+        {
+            var s = data.AsSpan(start);
+            //  Valid base64 has a multiple of 4 non white space chars, so the decoded length is at most (length / 4) * 3
+            var b = new Byte[(s.Length >> 2) * 3];
+            if (Convert.TryFromBase64Chars(s, b, out var w))
+                return new ReadOnlyMemory<Byte>(b, 0, w);
+            //  Invalid data (throws the same exception)
+            return Convert.FromBase64String(data.Substring(start));
         }
 
         public void SetProperty<T>(String key, T value)

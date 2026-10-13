@@ -162,10 +162,11 @@ namespace SysWeaver
                 staticLen += flen;
             }
             KeepUnresolved = true;
-            BuildAction = Build;
             Template = text;
             TransformedVars = transformedVars.Freeze();
             VarsAndFrequency = vars.Freeze();
+            VarList = VarsAndFrequency.ToArray();
+            TransformedList = (TransformedVars?.Count ?? 0) > 0 ? TransformedVars.ToArray() : null;
             Blocks = blocks;
             StaticLen = staticLen;
         }
@@ -202,7 +203,6 @@ namespace SysWeaver
             Dictionary<String, Tuple<String, Func<String, String>>> transformedVars = null;
             if (allowTransforms)
                 transformedVars = caseInSensitive ? new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.Ordinal);
-            BuildAction = Build;
             Template = text;
 
             List<Block> blocks = new();
@@ -238,9 +238,10 @@ namespace SysWeaver
             }
             KeepUnresolved = true;
             TransformedVars = transformedVars.Freeze();
-            BuildAction = Build;
             Template = text;
             VarsAndFrequency = vars.Freeze();
+            VarList = VarsAndFrequency.ToArray();
+            TransformedList = (TransformedVars?.Count ?? 0) > 0 ? TransformedVars.ToArray() : null;
             Blocks = blocks;
             StaticLen = staticLen;
         }
@@ -281,7 +282,6 @@ namespace SysWeaver
                 transformDefaults = new Dictionary<string, string>(caseInSensitive ? StringComparer.InvariantCultureIgnoreCase : StringComparer.Ordinal);
             }
 
-            BuildAction = Build;
             Template = text;
 
             List<Block> blocks = new();
@@ -323,11 +323,12 @@ namespace SysWeaver
                 blocks.Add(new Block(start, flen));
                 staticLen += flen;
             }
-            BuildAction = Build;
             Template = text;
             TransformedVars = transformedVars.Freeze();
             TransformDefaults = transformDefaults.Freeze();
             VarsAndFrequency = vars.Freeze();
+            VarList = VarsAndFrequency.ToArray();
+            TransformedList = (TransformedVars?.Count ?? 0) > 0 ? TransformedVars.ToArray() : null;
             Blocks = blocks;
             StaticLen = staticLen;
         }
@@ -338,7 +339,7 @@ namespace SysWeaver
         /// <param name="vars">A dictionary containing the variables to replace and the value to replace it with.
         /// For templates with begin / end tokens the keys are the names without the tokens, else the full strings.</param>
         /// <returns>A string with the specified replacements done</returns>
-        public String Get(IReadOnlyDictionary<String, String> vars) => Get(x => vars.TryGetValue(x, out var v) ? v : null);
+        public String Get(IReadOnlyDictionary<String, String> vars) => Get(vars, static (d, x) => d.TryGetValue(x, out var v) ? v : null);
 
         /// <summary>
         /// Get a string from the template with the specified replacements
@@ -348,23 +349,21 @@ namespace SysWeaver
         /// <param name="rest">If the variable isn't found in the second dictionary, try these in order</param>
         /// <returns>A string with the specified replacements done</returns>
         public String Get(IReadOnlyDictionary<String, String> first, IReadOnlyDictionary<String, String> second, params IReadOnlyDictionary<String, String>[] rest)
-        {
-            var l = rest?.Length ?? 0;
-            Func<String, String> f = k =>
+            => Get((first, second, rest), static (s, k) =>
             {
-                if (first.TryGetValue(k, out var v))
+                if (s.first.TryGetValue(k, out var v))
                     return v;
-                if (second.TryGetValue(k, out v))
+                if (s.second.TryGetValue(k, out v))
                     return v;
+                var rest = s.rest;
+                var l = rest?.Length ?? 0;
                 for (int i = 0; i <l; ++ i)
                 {
                     if (rest[i].TryGetValue(k, out v))
                         return v;
                 }
                 return null;
-            };
-            return Get(f);
-        }
+            });
 
         /// <summary>
         /// Get a string from the template with the specified replacements
@@ -373,21 +372,30 @@ namespace SysWeaver
         /// Called multiple times for the same key, so it must be deterministic (else the result is truncated or an exception is thrown).</param>
         /// <returns>A string with the specified replacements done</returns>
         /// <exception cref="ArgumentException"><paramref name="getVars"/> returned a longer value for a key on a later call (the computed length is exceeded).</exception>
-        public String Get(Func<String, String> getVars)
+        public String Get(Func<String, String> getVars) => Get(getVars, static (f, k) => f(k));
+
+        /// <summary>
+        /// Get a string from the template with the specified replacements, the values are looked up using a state (use a static lambda to avoid allocating a closure per call)
+        /// </summary>
+        /// <typeparam name="TState">The type of the state</typeparam>
+        /// <param name="state">The state passed to <paramref name="getVars"/></param>
+        /// <param name="getVars">A function that returns the value for the given state and key, if not found return null.
+        /// Called multiple times for the same key, so it must be deterministic (else the result is truncated or an exception is thrown).</param>
+        /// <returns>A string with the specified replacements done</returns>
+        /// <exception cref="ArgumentException"><paramref name="getVars"/> returned a longer value for a key on a later call (the computed length is exceeded).</exception>
+        public String Get<TState>(TState state, Func<TState, String, String> getVars)
         {
-            var eVars = VarsAndFrequency;
+            var eVars = VarList;
             int len = StaticLen;
             Dictionary<String, String> transformed = null;
-            Func<String, String> getTrans = null;
-            var tr = TransformedVars;
+            var tr = TransformedList;
             if (tr != null)
             {
-                transformed = new Dictionary<string, string>(tr.GetComparer());
-                getTrans = kk => transformed.TryGetValue(kk, out var t) ? t : null;
+                transformed = new Dictionary<string, string>(TransformedVars.GetComparer());
                 var defs = TransformDefaults;
                 foreach (var x in tr)
                 {
-                    var v = getVars(x.Value.Item1);
+                    var v = getVars(state, x.Value.Item1);
                     //  Unresolved: use the default (dictionary constructor) or the variable name
                     if (v == null)
                         v = defs == null ? x.Key : (defs.TryGetValue(x.Value.Item1, out var dv) ? dv : null) ?? String.Empty;
@@ -398,7 +406,7 @@ namespace SysWeaver
             foreach (var x in eVars)
             {
                 var k = x.Key;
-                var v = (x.Value.Item3 ? getTrans : getVars)(k);
+                var v = x.Value.Item3 ? (transformed.TryGetValue(k, out var t) ? t : null) : getVars(state, k);
                 //  Unresolved: the original text of each occurrence, or the default
                 if ((v == null) && KeepUnresolved)
                 {
@@ -408,7 +416,7 @@ namespace SysWeaver
                 var val = v ?? x.Value.Item2 ?? String.Empty;
                 len += (x.Value.Item1 * val.Length);
             }
-            var str = String.Create(len, new ValueTuple<Func<String, String>, Func<String, String>>(getVars, getTrans), BuildAction);
+            var str = String.Create(len, new BuildState<TState>(this, state, getVars, transformed), static (dest, s) => s.Template.Build(dest, s));
 #if DEBUG
             if (str.Length != len)
                 throw new Exception("Internal error!");
@@ -503,6 +511,16 @@ namespace SysWeaver
 
 
         readonly IReadOnlyDictionary<String, Tuple<int, String, bool, int>> VarsAndFrequency;
+
+        /// <summary>
+        /// The <see cref="VarsAndFrequency"/> (in the same order), enumerated by Get without an enumerator allocation
+        /// </summary>
+        readonly KeyValuePair<String, Tuple<int, String, bool, int>>[] VarList;
+
+        /// <summary>
+        /// The <see cref="TransformedVars"/> (in the same order), enumerated by Get without an enumerator allocation, null if there are none (no dictionary of transformed values is needed)
+        /// </summary>
+        readonly KeyValuePair<String, Tuple<String, Func<String, String>>>[] TransformedList;
 
         readonly IReadOnlyDictionary<String, Tuple<String, Func<String, String>>> TransformedVars;
 
@@ -623,9 +641,29 @@ namespace SysWeaver
         readonly int StaticLen;
 
         readonly IReadOnlyList<Block> Blocks;
-        readonly SpanAction<Char, ValueTuple<Func<String, String>, Func<String, String>>> BuildAction;
 
-        void Build(Span<Char> dest, ValueTuple<Func<String, String>, Func<String, String>> vars)
+        /// <summary>
+        /// The state of <see cref="Build{TState}(Span{char}, in BuildState{TState})"/>
+        /// </summary>
+        readonly struct BuildState<TState>
+        {
+            public BuildState(TextTemplate template, TState state, Func<TState, String, String> getVars, Dictionary<String, String> transformed)
+            {
+                Template = template;
+                State = state;
+                GetVars = getVars;
+                Transformed = transformed;
+            }
+            public readonly TextTemplate Template;
+            public readonly TState State;
+            public readonly Func<TState, String, String> GetVars;
+            /// <summary>
+            /// The values of the transformed variables (null if there are none)
+            /// </summary>
+            public readonly Dictionary<String, String> Transformed;
+        }
+
+        void Build<TState>(Span<Char> dest, in BuildState<TState> vars)
         {
             var blocks = Blocks;
             var bc = blocks.Count;
@@ -638,7 +676,7 @@ namespace SysWeaver
                 var v = block.Var;
                 if (v != null)
                 {
-                    var val = (block.Transform ? vars.Item2 : vars.Item1)(v);
+                    var val = block.Transform ? (vars.Transformed.TryGetValue(v, out var t) ? t : null) : vars.GetVars(vars.State, v);
                     if (val == null)
                     {
                         //  Unresolved: left as is (the original text) or the default

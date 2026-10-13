@@ -77,7 +77,15 @@ namespace SysWeaver.IsoData
         /// </summary>
         /// <param name="iso639">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, may be null.</param>
         /// <returns>Information about the language if it's known, or null if it's unknown</returns>
-        public static IsoLanguage TryGet(String iso639) => IsoToInfo.TryGetValue(iso639?.FastToLower() ?? "", out var i) ? i : null;
+        public static IsoLanguage TryGet(String iso639) => IsoToInfo.TryGetValueLower(iso639 ?? "", out var i) ? i : null;
+
+        /// <summary>
+        /// Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code (case insensitive, no trimming).
+        /// The same as <see cref="TryGet(string)"/>, without allocations (ex: for a part of a string).
+        /// </summary>
+        /// <param name="iso639">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code.</param>
+        /// <returns>Information about the language if it's known, or null if it's unknown</returns>
+        public static IsoLanguage TryGet(ReadOnlySpan<Char> iso639) => IsoToInfo.TryGetValueLower(iso639, out var i) ? i : null;
 
         /// <summary>
         /// Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code.
@@ -101,12 +109,13 @@ namespace SysWeaver.IsoData
             var t = regionalCode.IndexOf('-');
             if (t > 0)
             {
-                country = IsoCountry.TryGet(regionalCode.Substring(t + 1));
+                //  Both parts are looked up with spans (no substrings, no lower case strings)
+                country = IsoCountry.TryGet(regionalCode.AsSpan(t + 1));
                 if (country == null)
                     return null;
-                regionalCode = regionalCode.Substring(0, t);
+                return IsoToInfo.TryGetValueLower(regionalCode.AsSpan(0, t), out var l) ? l : null;
             }
-            return IsoToInfo.TryGetValue(regionalCode.FastToLower(), out var i) ? i : null;
+            return IsoToInfo.TryGetValueLower(regionalCode, out var i) ? i : null;
         }
 
         /// <summary>
@@ -123,25 +132,15 @@ namespace SysWeaver.IsoData
         {
             var ni = NameToInfo;
             name ??= "";
-            if (ni.TryGetValue(name.FastTrimToLower(), out var i))
+            //  Exactly as FastTrimToLower (the same chars as ToLowerInvariant of the trimmed text), lower cased on the stack (no allocation)
+            if (ni.TryGetValueLower(name.AsSpan().Trim(), out var i))
                 return i;
             //  The text before the first hyphen, without a hyphen that's the whole text (the same lookup as above, so it's not found either)
             var h = name.IndexOf('-');
             if (h < 0)
                 return null;
-            //  Exactly as FastTrimToLower of the text before the hyphen (no split array, same as ToLowerInvariant),
-            //  lower cased while copying into a single new string (no substring)
-            var t = name.AsSpan(0, h).TrimStart();
-            var start = h - t.Length;
-            var len = t.TrimEnd().Length;
-            var key = len <= 0 ? String.Empty : String.Create(len, (name, start), static (dst, state) =>
-            {
-                var src = state.name.AsSpan(state.start, dst.Length);
-                //  ASCII (the common case) using SIMD, the rest (if any) using the invariant culture
-                if (System.Text.Ascii.ToLower(src, dst, out var done) != System.Buffers.OperationStatus.Done)
-                    src[done..].ToLowerInvariant(dst[done..]);
-            });
-            return ni.TryGetValue(key, out i) ? i : null;
+            //  Exactly as FastTrimToLower of the text before the hyphen (no split array, no substring)
+            return ni.TryGetValueLower(name.AsSpan(0, h).Trim(), out i) ? i : null;
         }
 
 
@@ -481,7 +480,7 @@ namespace SysWeaver.IsoData
         /// Ordered by a score based on population, where the language's position in the country's language list reduces the score
         /// (primary language full population, second 3%, then halved for each further language).</returns>
         /// <remarks>The returned array is shared, do not modify it.</remarks>
-        public static String[] GetCountries(String language) => CountryMap.TryGetValue((language ?? "").FastToLower(), out var countries) ? countries : [];
+        public static String[] GetCountries(String language) => CountryMap.TryGetValueLower(language ?? "", out var countries) ? countries : [];
 
 
         static readonly IReadOnlyDictionary<String, String[]> CountryMap;

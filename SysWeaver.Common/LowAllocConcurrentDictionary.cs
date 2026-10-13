@@ -1188,7 +1188,9 @@ namespace SysWeaver
 
         /// <summary>
         /// Get a lookup that uses an alternate key type, like ReadOnlySpan&lt;char&gt; for string keys (lookups without allocating a string).
-        /// The comparer of the dictionary must implement IAlternateEqualityComparer&lt;TAlternate, TKey&gt; (StringComparer.Ordinal and the default string comparer does for ReadOnlySpan&lt;char&gt;).
+        /// The comparer of the dictionary must implement IAlternateEqualityComparer&lt;TAlternate, TKey&gt;, ex:
+        /// StringComparer.Ordinal / OrdinalIgnoreCase and the default string comparer for ReadOnlySpan&lt;char&gt;,
+        /// <see cref="ByteArrayEqualityComparer"/> for ReadOnlySpan&lt;byte&gt; (byte array keys).
         /// </summary>
         /// <typeparam name="TAlternate">The alternate key type</typeparam>
         /// <returns>The lookup</returns>
@@ -1257,12 +1259,18 @@ namespace SysWeaver
             public bool ContainsKey(TAlternate key) => Dictionary.TryGetValueAlternate(key, AltComparer, out _, out _);
 
             /// <summary>
-            /// Get or set a value (setting creates a key from the alternate key if needed)
+            /// Get or set a value (setting overwrites the value of an existing key, or adds a key created from the alternate key)
             /// </summary>
+            /// <exception cref="KeyNotFoundException">Thrown by the getter if the key doesn't exist</exception>
             public TValue this[TAlternate key]
             {
                 get => TryGetValue(key, out var value) ? value : throw new KeyNotFoundException();
-                set => Dictionary[AltComparer.Create(key)] = value;
+                set
+                {
+                    // An existing key is reused (no allocation), if it's removed concurrently it's added again (an equal key)
+                    var d = Dictionary;
+                    d[d.TryGetValueAlternate(key, AltComparer, out var actualKey, out _) ? actualKey : AltComparer.Create(key)] = value;
+                }
             }
 
             /// <summary>
@@ -1280,14 +1288,21 @@ namespace SysWeaver
             /// Remove a key
             /// </summary>
             /// <returns>True if the key was removed</returns>
-            public bool TryRemove(TAlternate key, [MaybeNullWhen(false)] out TValue value)
+            public bool TryRemove(TAlternate key, [MaybeNullWhen(false)] out TValue value) => TryRemove(key, out _, out value);
+
+            /// <summary>
+            /// Remove a key, and get the actual key that was stored in the dictionary
+            /// </summary>
+            /// <returns>True if the key was removed</returns>
+            public bool TryRemove(TAlternate key, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value)
             {
                 // Find the actual key and remove it (retry if it was removed or replaced concurrently)
-                while (Dictionary.TryGetValueAlternate(key, AltComparer, out var actualKey, out _))
+                while (Dictionary.TryGetValueAlternate(key, AltComparer, out actualKey, out _))
                 {
                     if (Dictionary.TryRemove(actualKey, out value))
                         return true;
                 }
+                actualKey = default;
                 value = default;
                 return false;
             }
@@ -1370,11 +1385,64 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Lookup using an alternate key, lock free (validated using the segment version, like <see cref="TryGetValueInline"/>)
+        /// Lookup using an alternate key, lock free (validated using the segment version).
+        /// The fast path is the same as <see cref="TryGetValueInline"/>: a single lock free attempt, only checking the home block (where almost all keys are),
+        /// everything else is done by <see cref="TryGetValueAlternateSlow"/>.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool TryGetValueAlternate<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
         {
             var h = GetAlternateHash(key, comparer);
+            if (Vector128.IsHardwareAccelerated)
+            {
+                ref var seg = ref GetSegment(h);
+                int version = Volatile.Read(ref seg.Version);
+                var table = GetTable(ref seg);
+                // Randomized tables use another hash for the slots (the slow path)
+                if (!table.Randomized)
+                {
+                    nuint first = GetHomeSlot(h, table.Blocks);
+                    var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(table.Tags), first);
+                    uint matches = Vector128.Equals(loaded, GetKeyTagVector(h)).ExtractMostSignificantBits();
+                    while (matches != 0)
+                    {
+                        ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), first + (uint)BitOperations.TrailingZeroCount(matches));
+                        var k = e.Key;
+                        // A concurrent remove may have cleared the key (lock free read), the read is retried in that case
+                        if (!IsNull(k) && AlternateEquals(comparer, key, k))
+                        {
+                            actualKey = k;
+                            value = e.Value;
+                            // Make sure that all reads above are done before validating the version
+                            Volatile.ReadBarrier();
+                            if (IsValid(ref seg, version))
+                                return true;
+                            goto slow;
+                        }
+                        matches &= matches - 1;
+                    }
+                    if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                    {
+                        Volatile.ReadBarrier();
+                        if (IsValid(ref seg, version))
+                        {
+                            actualKey = default;
+                            value = default;
+                            return false;
+                        }
+                    }
+                }
+            }
+        slow:
+            return TryGetValueAlternateSlow(key, comparer, h, out actualKey, out value);
+        }
+
+        /// <summary>
+        /// The key wasn't in its home block, the table is randomized or a write happened during the lock free read: search the whole probe sequence, retry (and eventually read under the lock)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool TryGetValueAlternateSlow<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, ulong h, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
+        {
             ref var seg = ref GetSegment(h);
             for (int attempt = 0; attempt < MaxOptimisticReads; ++attempt)
             {
@@ -1714,15 +1782,38 @@ namespace SysWeaver
         public static ulong GetHash(ReadOnlySpan<char> s) => GetHash(ref MemoryMarshal.GetReference(s), s.Length);
 
         /// <summary>
+        /// Get a 64 bit hash of the bytes (all bits are well mixed)
+        /// </summary>
+        /// <param name="s">The bytes to hash</param>
+        /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        public static ulong GetHash(ReadOnlySpan<byte> s)
+        {
+            ref byte p = ref MemoryMarshal.GetReference(s);
+            nuint len = (nuint)s.Length;
+            if (len >= 4)
+                return GetHash(ref p, len);
+            // 0 - 3 bytes: the first, middle and last byte (an odd length can't be reached from chars, the char path reads 0 or 2 bytes)
+            ulong a = len > 0 ? ((ulong)p << 16) | ((ulong)Unsafe.Add(ref p, len >> 1) << 8) | Unsafe.Add(ref p, len - 1) : 0UL;
+            return Mum(S2 ^ len, Mum(a ^ S1, S0 ^ len));
+        }
+
+        /// <summary>
         /// Get a 64 bit hash of the chars (all bits are well mixed)
         /// </summary>
         /// <param name="c">The first char</param>
         /// <param name="length">The number of chars</param>
         /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
-        static ulong GetHash(ref char c, int length)
+        static ulong GetHash(ref char c, int length) => GetHash(ref Unsafe.As<char, byte>(ref c), (nuint)length << 1);
+
+        /// <summary>
+        /// Get a 64 bit hash of a number of bytes (all bits are well mixed)
+        /// </summary>
+        /// <param name="p">The first byte</param>
+        /// <param name="len">The number of bytes, an even number or at least 4 (0 - 3 bytes are only handled for 0 and 2 bytes)</param>
+        /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong GetHash(ref byte p, nuint len)
         {
-            ref byte p = ref Unsafe.As<char, byte>(ref c);
-            nuint len = (nuint)length << 1;
             ulong h = S0 ^ len;
             ulong a, b;
             if (len <= 16)

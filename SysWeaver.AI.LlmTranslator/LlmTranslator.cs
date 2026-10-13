@@ -20,6 +20,7 @@ namespace SysWeaver.AI
         public LlmTranslator(ServiceManager manager, LlmTranslatorParams p = null)
         {
             p = p ?? new LlmTranslatorParams();
+            QueryTrackers = new PerfTrackers(PerfMon, "Query.");
             RetryCount = Math.Max(0, p.RetryCount);
             Llm = manager.Get<OpenAiService>(p.AiInstance);
             CountTokensTasks[0] = CountTokens0;
@@ -62,6 +63,11 @@ namespace SysWeaver.AI
 
 
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(LlmTranslator));
+
+        /// <summary>
+        /// Perf trackers: "Query." + effort
+        /// </summary>
+        readonly PerfTrackers QueryTrackers;
 
 
 
@@ -398,7 +404,7 @@ namespace SysWeaver.AI
             String res;
             for (int retry = 0; ; ++retry)
             {
-                using (var x = PerfMon.Track("Query." + effort))
+                using (var x = QueryTrackers.Track(effort.ToString()))
                     res = await client.Query(text, null, CountTokensTasks[(int)effort]).ConfigureAwait(false);
                 if (res != null)
                     return res.Trim();

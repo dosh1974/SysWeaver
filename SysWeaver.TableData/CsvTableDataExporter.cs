@@ -169,12 +169,13 @@ namespace SysWeaver.Data
             var sep = Sep;
             var rep = Rep;
 
-            List<Func<Object, String>> colToStrings = new List<Func<object, string>>();
-            HashSet<int> hide = new HashSet<int>();
             var cols = tableData.Cols;
             var def = DefToString;
             var d = DefToStrings;
             var headers = !options.NoHeaders;
+            var colMax = cols?.Length ?? 0;
+            var colToStrings = colMax > 0 ? new Func<Object, String>[colMax] : Array.Empty<Func<Object, String>>();
+            var hide = colMax > 0 ? new bool[colMax] : Array.Empty<bool>();
             if (cols != null)
             {
                 bool didFirst = false;
@@ -183,10 +184,10 @@ namespace SysWeaver.Data
                 {
                     var col = cols[i];
                     d.TryGetValue(col.Type ?? "", out var fn);
-                    colToStrings.Add(fn ?? def);
+                    colToStrings[i] = fn ?? def;
                     if ((col.Props & TableDataColumnProps.Hide) != 0)
                     {
-                        hide.Add(i);
+                        hide[i] = true;
                         continue;
                     }
                     if (headers)
@@ -200,7 +201,6 @@ namespace SysWeaver.Data
                 if (headers)
                     sb.AppendLine();
             }
-            var colMax = colToStrings.Count;
             var rows = tableData.Rows;
             if (rows != null)
             {
@@ -215,12 +215,20 @@ namespace SysWeaver.Data
                             bool didFirst = false;
                             for (int x = 0; x < tl; ++ x)
                             {
-                                if (hide.Contains(x))
-                                    continue;
+                                Func<Object, String> fn;
+                                if (x < colMax)
+                                {
+                                    if (hide[x])
+                                        continue;
+                                    fn = colToStrings[x];
+                                }
+                                else
+                                {
+                                    fn = def;
+                                }
                                 if (didFirst)
                                     sb.Append(sep);
                                 didFirst = true;
-                                var fn = x < colMax ? colToStrings[x] : def;
                                 sb.Append(Escape(fn(t[x]).Replace(sep, rep)));
                             }
                             sb.AppendLine();
@@ -230,7 +238,7 @@ namespace SysWeaver.Data
 
             }
             var name = String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename;
-            return Task.FromResult(new MemoryFile(name + ".csv", Mimes.Utf8PlainText, Encoding.UTF8.GetBytes(sb.ToString())));
+            return Task.FromResult(new MemoryFile(name + ".csv", Mimes.Utf8PlainText, TableDataExporterTools.GetUtf8Bytes(sb)));
         }
     }
 

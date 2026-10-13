@@ -173,7 +173,7 @@ namespace SysWeaver.IsoData
         /// </summary>
         /// <param name="iso4217">The ISO 4217 currency code, ex: "USD", may be null.</param>
         /// <returns>Currency information or null if an unknown (or null) currency code was specified.</returns>
-        public static IsoCurrency TryGet(String iso4217) => IsoToInfo.TryGetValue(iso4217?.FastToLower() ?? "", out var i) ? i : null;
+        public static IsoCurrency TryGet(String iso4217) => IsoToInfo.TryGetValueLower(iso4217 ?? "", out var i) ? i : null;
 
         /// <summary>
         /// Get currency information given an ISO 4217 number, ex: 840
@@ -192,13 +192,14 @@ namespace SysWeaver.IsoData
         /// <returns>The normalized (upper case) ISO 4217 currency code, or null if the input is null, empty or not a known currency.</returns>
         public static String Validate(string currency)
         {
-            currency = currency?.Trim();
-            if (String.IsNullOrEmpty(currency))
+            //  Trimmed and lower cased on the stack (the same chars as Trim + FastToLower, no allocation)
+            var c = currency.AsSpan().Trim();
+            if (c.IsEmpty)
                 return null;
-            currency = currency.FastToLower();
-            if (IsoToInfo.TryGetValue(currency, out var i))
+            if (IsoToInfo.TryGetValueLower(c, out var i))
                 return i?.Iso4217;
-            if (!int.TryParse(currency, out var num))
+            //  Lower casing doesn't change digits, signs or white space
+            if (!int.TryParse(c, out var num))
                 return null;
             NumberToInfo.TryGetValue(num, out i);
             return i?.Iso4217;

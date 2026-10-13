@@ -86,7 +86,7 @@ namespace SysWeaver.MicroService
                     using var __ = Manager.Tab();
                     var res = await syncer.PullFolder(RemoteName, DestPath, true, true, (e, s) =>
                     {
-                        m.AddMessage(String.Concat(Prefix, e, ": ", s), MessageLevels.Debug);
+                        m.AddMessage(MessageLevels.Debug, $"{Prefix}{e}: {s}");
                     },
                     async (bak, oldVersion) =>
                     {

@@ -229,13 +229,13 @@ namespace SysWeaver.AI
                 var fn = Directory.EnumerateFiles(folder, "*.json").FirstOrDefault(x => String.Equals(Path.GetFileNameWithoutExtension(x), name, StringComparison.OrdinalIgnoreCase));
                 if (fn != null)
                 {
-                    Msg?.AddMessage(MsgPrefix + "Using UI workflow " + fn.ToFilename() + " to annotate subgraph inputs of " + name.ToQuoted(), MessageLevels.Debug);
+                    Msg?.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Using UI workflow {fn.ToFilename()} to annotate subgraph inputs of {name.ToQuoted()}");
                     return await File.ReadAllBytesAsync(fn).ConfigureAwait(false);
                 }
             }
             if (!FetchUiWorkflows)
             {
-                Msg?.AddMessage(MsgPrefix + "No UI workflow found for " + name.ToQuoted() + ", subgraph inputs are not annotated", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{MsgPrefix}No UI workflow found for {name.ToQuoted()}, subgraph inputs are not annotated");
                 return null;
             }
             //  The user's saved workflows, ex: "/api/userdata/workflows%2Fmy_workflow.json"
@@ -245,7 +245,7 @@ namespace SysWeaver.AI
             using var resp = await Http.SendAsync(req).ConfigureAwait(false);
             if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                Msg?.AddMessage(MsgPrefix + "No UI workflow named " + name.ToQuoted() + " found on the server, subgraph inputs are not annotated", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{MsgPrefix}No UI workflow named {name.ToQuoted()} found on the server, subgraph inputs are not annotated");
                 return null;
             }
             if (!resp.IsSuccessStatusCode)
@@ -262,7 +262,7 @@ namespace SysWeaver.AI
             {
                 return null;
             }
-            Msg?.AddMessage(MsgPrefix + "Using UI workflow " + name.ToQuoted() + " from the server to annotate subgraph inputs", MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Using UI workflow {name.ToQuoted()} from the server to annotate subgraph inputs");
             return data;
         }
 
@@ -331,7 +331,7 @@ namespace SysWeaver.AI
             req.Content = new ReadOnlyMemoryContent(buf.WrittenMemory);
             req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             using var doc = await Send(req, wf.Name, cancel).ConfigureAwait(false);
-            Msg?.AddMessage(MsgPrefix + "Uploaded workflow " + wf.Name.ToQuoted() + " from " + wf.FileName.ToFilename(), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Uploaded workflow {wf.Name.ToQuoted()} from {wf.FileName.ToFilename()}");
         }
 
         #endregion//Workflows

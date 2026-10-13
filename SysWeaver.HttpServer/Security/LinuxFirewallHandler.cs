@@ -609,7 +609,7 @@ namespace SysWeaver.Security
                 msg?.AddMessage(p + "Can't add firewall rule " + name + " to " + used.Kind + ", root is required!", MessageLevels.Warning);
                 return false;
             }
-            msg?.AddMessage(p + "Checking if " + used.Kind + " firewall rule " + name + " exists", MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{p}Checking if {used.Kind} firewall rule {name} exists");
             switch (used.Kind)
             {
                 case LinuxFirewallKinds.Ufw:
@@ -645,7 +645,7 @@ namespace SysWeaver.Security
             var used = d.Used;
             if (used == null)
             {
-                msg?.AddMessage(p + "No active firewall found" + (d.IsCertain ? "" : " (probably)") + ", firewall rule " + qn + " doesn't need to be removed", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}No active firewall found{(d.IsCertain ? "" : " (probably)")}, firewall rule {qn} doesn't need to be removed");
                 return true;
             }
             if (!d.IsRoot)
@@ -653,7 +653,7 @@ namespace SysWeaver.Security
                 msg?.AddMessage(p + "Can't remove firewall rule " + qn + " from " + used.Kind + ", root is required!", MessageLevels.Warning);
                 return false;
             }
-            msg?.AddMessage(p + "Deleting " + used.Kind + " rule " + qn, MessageLevels.Debug);
+            msg?.AddMessage(MessageLevels.Debug, $"{p}Deleting {used.Kind} rule {qn}");
             switch (used.Kind)
             {
                 case LinuxFirewallKinds.Ufw:
@@ -852,7 +852,7 @@ namespace SysWeaver.Security
                 var r = Exec(ufw, UfwDeleteArgs(t));
                 if (r.ExitCode == 0)
                 {
-                    msg?.AddMessage(p + "Deleted ufw rule " + qn + " (" + t + ")", MessageLevels.Debug);
+                    msg?.AddMessage(MessageLevels.Debug, $"{p}Deleted ufw rule {qn} ({t})");
                     continue;
                 }
                 LogFailure(msg, p, "Failed to delete ufw rule " + qn + " (" + t + ")", r);
@@ -887,7 +887,7 @@ namespace SysWeaver.Security
             var update = (v4.Count + v6.Count) > 0;
             if (update)
             {
-                msg?.AddMessage(p + "Updating existing firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Updating existing firewall rule {name}");
                 UfwDelete(ufw, v4.Concat(v6), msg, p, qn);
             }
             var need4 = !covered4;
@@ -898,7 +898,7 @@ namespace SysWeaver.Security
                 return true;
             }
             if (!update)
-                msg?.AddMessage(p + "Adding new firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Adding new firewall rule {name}");
             //  Only add the address family that isn't covered by a foreign rule (adding "any" would take over the foreign rule)
             var addr = (need4 && (need6 || !ipv6)) ? "any" : (need4 ? "0.0.0.0/0" : "::/0");
             if ((addr != "any") && (msg != null))
@@ -932,7 +932,7 @@ namespace SysWeaver.Security
                 return false;
             if ((v4.Count + v6.Count) <= 0)
             {
-                msg?.AddMessage(p + "Firewall rule " + qn + " doesn't exist", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Firewall rule {qn} doesn't exist");
                 return true;
             }
             //  Delete the IPv6 rules first: deleting an IPv4 spec never touches IPv6 rules (and vice versa), the order doesn't matter
@@ -1000,7 +1000,7 @@ namespace SysWeaver.Security
                     return true;
                 }
                 update = true;
-                msg?.AddMessage(p + "Updating existing firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Updating existing firewall rule {name}");
                 foreach (var x in ports)
                 {
                     if (expected.Contains(x))
@@ -1028,7 +1028,7 @@ namespace SysWeaver.Security
             }
             else
             {
-                msg?.AddMessage(p + "Adding new firewall rule " + name + " (service " + svc.ToQuoted() + ")", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Adding new firewall rule {name} (service {svc.ToQuoted()})");
                 List<String[]> cmds =
                 [
                     ["--permanent", "--new-service=" + svc],
@@ -1093,7 +1093,7 @@ namespace SysWeaver.Security
             var runZones = r.ExitCode == 0 ? FirewalldZonesWithService(r.Output, svc) : new HashSet<String>();
             if ((!exists) && (permZones.Count <= 0) && (runZones.Count <= 0))
             {
-                msg?.AddMessage(p + "Firewall rule " + qn + " doesn't exist", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Firewall rule {qn} doesn't exist");
                 return true;
             }
             bool ok = true;
@@ -1345,13 +1345,13 @@ namespace SysWeaver.Security
             var update = mine.Count > 0;
             if (update)
             {
-                msg?.AddMessage(p + "Updating existing firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Updating existing firewall rule {name}");
                 if (!NftDelete(nft, mine, msg, p, qn))
                     return false;
             }
             else
             {
-                msg?.AddMessage(p + "Adding new firewall rule " + name, MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Adding new firewall rule {name}");
             }
             var comment = "\"" + ruleName + "\"";
             foreach (var e in expected)
@@ -1375,7 +1375,7 @@ namespace SysWeaver.Security
             var mine = rules.Where(x => String.Equals(x.Comment, ruleName, StringComparison.Ordinal)).ToList();
             if (mine.Count <= 0)
             {
-                msg?.AddMessage(p + "Firewall rule " + qn + " doesn't exist", MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{p}Firewall rule {qn} doesn't exist");
                 return true;
             }
             if (!NftDelete(nft, mine, msg, p, qn))

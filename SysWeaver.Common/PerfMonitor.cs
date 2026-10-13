@@ -1,6 +1,7 @@
 using SysWeaver.Data;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -86,7 +87,14 @@ namespace SysWeaver
         {
             Interlocked.Exchange(ref Start, Stopwatch.GetTimestamp());
             Entries.Clear();
+            //  After the clear: a tracker that cached an entry before (or during) the clear sees a new generation and looks up its entry again
+            Interlocked.Increment(ref Generation);
         }
+
+        /// <summary>
+        /// Incremented by every <see cref="Reset"/> (after the entries are removed), the entries cached by <see cref="PerfTracker"/> instances are only used while it's unchanged
+        /// </summary>
+        int Generation;
 
         /// <summary>
         /// Create a new performance tracker
@@ -141,11 +149,46 @@ namespace SysWeaver
             var e = Entries;
             if (e.TryGetValue(name, out var entry))
                 return entry;
-            entry = new PerfTrackerEntry(System, name);
-            if (!e.TryAdd(name, entry))
-                entry = e[name];
+            var newEntry = new PerfTrackerEntry(System, name);
+            //  Retry: a concurrent Reset may remove the entry added by another thread between TryAdd and the lookup
+            for (; ; )
+            {
+                if (e.TryAdd(name, newEntry))
+                    return newEntry;
+                if (e.TryGetValue(name, out entry))
+                    return entry;
+            }
+        }
+
+        /// <summary>
+        /// Get the entry of a tracker, the cached entry if no reset happened since it was looked up
+        /// </summary>
+        /// <param name="tracker">The tracker (of this monitor)</param>
+        /// <returns>The entry, or null if monitoring is disabled</returns>
+        internal PerfTrackerEntry Begin(PerfTracker tracker)
+        {
+            if (!EnableAny)
+                return null;
+            if (!InternalEnable)
+                return null;
+            //  The generation is read before the cached entry, an entry looked up after reading a generation is valid for that generation
+            var gen = Volatile.Read(ref Generation);
+            var c = tracker.Cached;
+            if ((c != null) && (c.Generation == gen))
+                return c.Entry;
+            var entry = Begin(tracker.Name);
+            if (entry != null)
+                tracker.Cached = new PerfTracker.CachedEntry(entry, gen);
             return entry;
         }
+
+        /// <summary>
+        /// Get a tracker for a name, keep it (in a field) and call <see cref="PerfMonitorEx.Track(PerfTracker)"/> to measure an operation without looking up the name.
+        /// </summary>
+        /// <param name="name">The name of the operation (case sensitive)</param>
+        /// <returns>A tracker, measurements using it are identical to <see cref="PerfMonitorEx.Track(PerfMonitor, string)"/> with the same name (also after a <see cref="Reset"/>)</returns>
+        /// <remarks>Creating a tracker doesn't create an entry, the entry is created on the first measurement (like <see cref="PerfMonitorEx.Track(PerfMonitor, string)"/>)</remarks>
+        public PerfTracker GetTracker(String name) => new PerfTracker(this, name);
 
         #region Tools
 
@@ -218,6 +261,135 @@ namespace SysWeaver
                 return default;
             return new PerfMesurement(e);
         }
+
+        /// <summary>
+        /// Start measuring an operation, dispose the returned value (typically with a using statement) when the operation completes.
+        /// Identical to <see cref="Track(PerfMonitor, string)"/> with the name of the tracker, without looking up the name.
+        /// </summary>
+        /// <param name="tracker">The tracker, may be null (nothing is measured)</param>
+        /// <returns>A measurement, a default (no-op) measurement if <paramref name="tracker"/> is null or monitoring is disabled</returns>
+        public static PerfMesurement Track(this PerfTracker tracker)
+        {
+            if (tracker == null)
+                return default;
+            var e = tracker.Monitor.Begin(tracker);
+            if (e == null)
+                return default;
+            return new PerfMesurement(e);
+        }
+    }
+
+
+    /// <summary>
+    /// A cached handle for a named operation of a <see cref="PerfMonitor"/> (see <see cref="PerfMonitor.GetTracker(string)"/>),
+    /// use <see cref="PerfMonitorEx.Track(PerfTracker)"/> to measure an operation without looking up the name.
+    /// </summary>
+    /// <remarks>Thread safe, the measurements are identical to <see cref="PerfMonitorEx.Track(PerfMonitor, string)"/> with the same name (the entry is looked up again after a <see cref="PerfMonitor.Reset"/>).</remarks>
+    public sealed class PerfTracker
+    {
+        internal PerfTracker(PerfMonitor monitor, String name)
+        {
+            Monitor = monitor;
+            Name = name;
+        }
+
+        /// <summary>
+        /// The performance monitor
+        /// </summary>
+        public readonly PerfMonitor Monitor;
+
+        /// <summary>
+        /// The name of the operation
+        /// </summary>
+        public readonly String Name;
+
+        /// <summary>
+        /// The entry and the generation of the monitor it was looked up in (one instance, so that both are read and written atomically)
+        /// </summary>
+        internal sealed class CachedEntry
+        {
+            public CachedEntry(PerfTrackerEntry entry, int generation)
+            {
+                Entry = entry;
+                Generation = generation;
+            }
+            public readonly PerfTrackerEntry Entry;
+            public readonly int Generation;
+        }
+
+        internal CachedEntry Cached;
+    }
+
+
+    /// <summary>
+    /// Trackers for names that share a prefix and / or a suffix (ex: "Build." + mime type, or key + ".Icon"),
+    /// use <see cref="Get(string)"/> to get the tracker of a variable part without building the name per call.
+    /// </summary>
+    /// <remarks>Thread safe, one tracker is kept per variable part (the monitor also keeps one entry per name).</remarks>
+    public sealed class PerfTrackers
+    {
+        /// <summary>
+        /// Create a tracker set
+        /// </summary>
+        /// <param name="monitor">The performance monitor, may be null (<see cref="Get(string)"/> returns null, nothing is measured)</param>
+        /// <param name="prefix">The start of the names (null is the same as an empty string)</param>
+        /// <param name="suffix">The end of the names (null is the same as an empty string)</param>
+        public PerfTrackers(PerfMonitor monitor, String prefix, String suffix = null)
+        {
+            Monitor = monitor;
+            Prefix = prefix ?? String.Empty;
+            Suffix = suffix ?? String.Empty;
+        }
+
+        /// <summary>
+        /// The performance monitor (may be null)
+        /// </summary>
+        public readonly PerfMonitor Monitor;
+
+        /// <summary>
+        /// The start of the names
+        /// </summary>
+        public readonly String Prefix;
+
+        /// <summary>
+        /// The end of the names
+        /// </summary>
+        public readonly String Suffix;
+
+        readonly ConcurrentDictionary<String, PerfTracker> Trackers = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Get the tracker of the name <see cref="Prefix"/> + <paramref name="name"/> + <see cref="Suffix"/>
+        /// </summary>
+        /// <param name="name">The variable part of the name (null is the same as an empty string)</param>
+        /// <returns>The tracker (always the same instance for a name), null if <see cref="Monitor"/> is null</returns>
+        public PerfTracker Get(String name)
+        {
+            var m = Monitor;
+            if (m == null)
+                return null;
+            name ??= String.Empty;
+            var t = Trackers;
+            if (t.TryGetValue(name, out var tracker))
+                return tracker;
+            tracker = new PerfTracker(m, String.Concat(Prefix, name, Suffix));
+            if (!t.TryAdd(name, tracker))
+                tracker = t[name];
+            return tracker;
+        }
+
+        /// <summary>
+        /// Start measuring the operation named <see cref="Prefix"/> + <paramref name="name"/> + <see cref="Suffix"/> (see <see cref="PerfMonitorEx.Track(PerfTracker)"/>)
+        /// </summary>
+        /// <param name="name">The variable part of the name (null is the same as an empty string)</param>
+        /// <returns>A measurement, a default (no-op) measurement if <see cref="Monitor"/> is null or monitoring is disabled (no tracker is created)</returns>
+        public PerfMesurement Track(String name)
+        {
+            var m = Monitor;
+            if ((m == null) || (!PerfMonitor.EnableAny) || (!m.Enabled))
+                return default;
+            return Get(name).Track();
+        }
     }
 
 
@@ -279,7 +451,8 @@ namespace SysWeaver
             Interlocked.Decrement(ref e.InProgress);
             Interlocked.Add(ref e.Total, took);
             Interlocked.Increment(ref e.Count);
-            Interlocked.Exchange(ref e.Last, DateTime.UtcNow.Ticks);
+            //  The stopwatch time stamp, converted to a DateTime when read (no DateTime.UtcNow per measurement)
+            Interlocked.Exchange(ref e.Last, tc);
             Interlocked.Exchange(ref e.LastDuration, took);
             InterlockedEx.Max(ref e.Max, took);
             InterlockedEx.Min(ref e.Min, took);
@@ -342,8 +515,12 @@ namespace SysWeaver
         TimeSpan LastDuration { get; }
 
         /// <summary>
-        /// When the "method" was last executed (completed).
+        /// When the "method" was last executed (completed), UTC, <see cref="DateTime"/>.Ticks == 0 if it was never executed.
         /// </summary>
+        /// <remarks>
+        /// Measured with the <see cref="Stopwatch"/> and converted to a <see cref="DateTime"/> when the monitor is enumerated (relative to <see cref="DateTime.UtcNow"/> at that time),
+        /// so it can differ from the system clock at the end of the measurement by the drift / adjustments of the system clock since then.
+        /// </remarks>
         DateTime LastExecution { get; }
 
         /// <summary>
@@ -375,6 +552,9 @@ namespace SysWeaver
         internal long Count;
         internal long Total;
         internal long LastDuration;
+        /// <summary>
+        /// The <see cref="Stopwatch"/> time stamp of the end of the last measurement, 0 if there is none (converted to <see cref="LastExecution"/> by <see cref="Update"/>)
+        /// </summary>
         internal long Last;
         internal int MaxConcurrency;
         internal int InProgress;
@@ -402,7 +582,14 @@ namespace SysWeaver
 
         TimeSpan IPerfEntry.LastDuration => IntLastDuration ?? TimeSpan.Zero;
 
-        public DateTime LastExecution => IntLastExecution ?? DateTime.MinValue;
+        public DateTime LastExecution
+        {
+            get
+            {
+                var t = Volatile.Read(ref IntLastExecution);
+                return t < 0 ? DateTime.MinValue : new DateTime(t, DateTimeKind.Utc);
+            }
+        }
 
         public float Percentage => IntPercentage;
 
@@ -435,7 +622,17 @@ namespace SysWeaver
             IntMin = TimeSpan.FromTicks(min >= long.MaxValue ? 0 : getTicks(min));
             IntMax = TimeSpan.FromTicks(getTicks(max));
             IntLastDuration = TimeSpan.FromTicks(getTicks(lastDuration));
-            IntLastExecution = new DateTime(last, DateTimeKind.Utc);
+            //  The last execution was stored as a stopwatch time stamp, it's converted using a (UtcNow, stopwatch) pair taken now (after reading it, so that the elapsed time isn't negative):
+            //  the result is the time of the end of the measurement, up to the clock drift / adjustments of the system clock since then
+            //  (the time stamp is re-based on every read, no drift accumulates over the life time of the monitor).
+            long lastUtc = 0;
+            if (last != 0)
+            {
+                var nowUtc = DateTime.UtcNow.Ticks;
+                var nowTs = Stopwatch.GetTimestamp();
+                lastUtc = Math.Clamp(nowUtc - getTicks(nowTs - last), 0, DateTime.MaxValue.Ticks);
+            }
+            Volatile.Write(ref IntLastExecution, lastUtc);
 
             //  Avoid a division by zero if enumerated in the same stopwatch tick as the creation / reset
             if (runningFor <= 0)
@@ -463,7 +660,10 @@ namespace SysWeaver
         TimeSpan? IntMin;
         TimeSpan? IntMax;
         TimeSpan? IntLastDuration;
-        DateTime? IntLastExecution;
+        /// <summary>
+        /// The UTC ticks of <see cref="LastExecution"/> (0 if never executed), -1 until the first <see cref="Update"/> (<see cref="DateTime.MinValue"/>), one 64 bit value read / written atomically
+        /// </summary>
+        long IntLastExecution = -1;
 
         float IntPercentage;
         float IntCountPerMinute;

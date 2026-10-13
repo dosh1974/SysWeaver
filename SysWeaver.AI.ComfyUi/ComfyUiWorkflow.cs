@@ -142,7 +142,7 @@ namespace SysWeaver.AI
                         if (!subgraphInputs.TryGetValue(a.AliasTag, out var si))
                             subgraphInputs.Add(a.AliasTag, si = new Dictionary<String, String>(StringComparer.Ordinal));
                         si.TryAdd(a.AliasInput, String.Concat(a.Tag, '.', a.Input));
-                        msg?.AddMessage(String.Concat(prefix, "Subgraph input ", (a.AliasTag + '.' + a.AliasInput).ToQuoted(), " => ", (a.Tag + '.' + a.Input).ToQuoted(), " (node ", String.Join(", ", a.NodeIds), ")"), MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"{prefix}Subgraph input {(a.AliasTag + '.' + a.AliasInput).ToQuoted()} => {(a.Tag + '.' + a.Input).ToQuoted()} (node {String.Join(", ", a.NodeIds)})");
                     }
                 }
             }

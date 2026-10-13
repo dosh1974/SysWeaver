@@ -122,7 +122,12 @@ namespace SysWeaver.Net
             MD5.HashData(data, hash);
             var l0 = BitConverter.ToUInt64(hash[..8]);
             var l1 = BitConverter.ToUInt64(hash[8..]);
-            return CompactAsciiString.Secure.Encode(l0) + CompactAsciiString.Secure.Encode(l1);
+            //  Same as Secure.Encode(l0) + Secure.Encode(l1) using a single allocation
+            var e = CompactAsciiString.Secure;
+            Span<Char> temp = stackalloc Char[CompactAsciiString.MaxEncodedLength * 2];
+            e.TryEncode(l0, temp, out var l);
+            e.TryEncode(l1, temp.Slice(l), out var l2);
+            return new String(temp.Slice(0, l + l2));
         }
 
 
@@ -134,21 +139,24 @@ namespace SysWeaver.Net
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static DateTime? TryGetDateTimeFromETag(String lm)
         {
-            try
-            {
-                var l = CompactAsciiString.Secure.DecodeInt64(lm.SplitFirst(' '));
-                var dt = new DateTime(l, DateTimeKind.Utc);
-                var y = dt.Year;
-                if (y < 1900)
-                    return null;
-                if (y > 2500)
-                    return null;
-                return dt;
-            }
-            catch
-            {
+            if (lm == null)
                 return null;
-            }
+            var s = lm.AsSpan();
+            var p = s.IndexOf(' ');
+            if (p >= 0)
+                s = s.Slice(0, p);
+            if (!CompactAsciiString.Secure.TryDecodeInt64(s, out var l))
+                return null;
+            //  Outside of the DateTime range (also negative values)
+            if ((UInt64)l > (UInt64)DateTime.MaxValue.Ticks)
+                return null;
+            var dt = new DateTime(l, DateTimeKind.Utc);
+            var y = dt.Year;
+            if (y < 1900)
+                return null;
+            if (y > 2500)
+                return null;
+            return dt;
         }
 
 
@@ -171,9 +179,17 @@ namespace SysWeaver.Net
         {
             //  Same exception as the enumeration of a null array
             ArgumentNullException.ThrowIfNull(paths);
-            //  Same result as joining the non empty paths: "" if there are none, the path itself if there is one, else one new string (no enumerator, no join buffer)
-            return StringExt.JoinNonEmpty("/", paths);
+            return CombinePaths((ReadOnlySpan<String>)paths);
         }
+
+        /// <summary>
+        /// Merges url paths, ignoring empty parts
+        /// </summary>
+        /// <param name="paths">The paths to merge, if a path is null or empty it's ignored</param>
+        /// <returns>The merged path</returns>
+        public static String CombinePaths(params ReadOnlySpan<String> paths)
+            //  Same result as joining the non empty paths: "" if there are none, the path itself if there is one, else one new string (no enumerator, no join buffer)
+            => StringExt.JoinNonEmpty("/", paths);
 
 
         /// <summary>
@@ -312,6 +328,16 @@ namespace SysWeaver.Net
         {
             //  Same exception as the enumeration of a null array
             ArgumentNullException.ThrowIfNull(paths);
+            return CombinePathsAndAddTrailingSlash((ReadOnlySpan<String>)paths);
+        }
+
+        /// <summary>
+        /// Merges url paths, ignoring empty parts, and adds a trailing '/' if the result isn't empty.
+        /// </summary>
+        /// <param name="paths">The paths to merge, if a path is null or empty it's ignored</param>
+        /// <returns>The merged path</returns>
+        public static String CombinePathsAndAddTrailingSlash(params ReadOnlySpan<String> paths)
+        {
             //  Same result as joining the non empty paths and adding a '/' (nothing if there are no paths), built as a single new string
             int total = 0;
             foreach (var p in paths)

@@ -60,7 +60,7 @@ namespace SysWeaver.Chat
                         continue;
                     var rm = new Room(room);
                     if (rooms.TryAdd(rn, rm))
-                        msg?.AddMessage("Added chat room " + rn.ToQuoted() + " open to " + rm.AuthString, MessageLevels.Debug);
+                        msg?.AddMessage(MessageLevels.Debug, $"Added chat room {rn.ToQuoted()} open to {rm.AuthString}");
                     else
                         msg?.AddMessage("Failed to add chat room " + rn.ToQuoted() + ", already registered?", MessageLevels.Warning);
                 }

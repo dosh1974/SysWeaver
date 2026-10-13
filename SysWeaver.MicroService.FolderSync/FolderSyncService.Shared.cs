@@ -33,7 +33,7 @@ namespace SysWeaver.MicroService
                     try
                     {
                         if (await x.UpdateFiles().ConfigureAwait(false))
-                            Manager.AddMessage(String.Concat(LogPrefix, "Change detected in shared folder \"", x.DestPath, "\", new version = ", x.Files.Item1), MessageLevels.Debug);
+                            Manager.AddMessage(MessageLevels.Debug, $"{LogPrefix}Change detected in shared folder \"{x.DestPath}\", new version = {x.Files.Item1}");
                     }
                     catch
                     {

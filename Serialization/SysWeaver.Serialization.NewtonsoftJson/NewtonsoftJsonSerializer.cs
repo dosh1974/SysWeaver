@@ -17,7 +17,8 @@ namespace SysWeaver.Serialization
     /// Deserialization honors "$type" (<see cref="TypeNameHandling.Auto"/>) and resolves names with <see cref="TypeNameResolver.GetForData"/>,
     /// so only types allowed by the <see cref="DataTypePolicy"/> (and assignable to the declared type) can be instantiated.
     /// A json null is read as NaN into a (not nullable) float / double (SysWeaver.Json writes NaN and infinities as null), see <see cref="NullAsNaNConverter"/>.
-    /// Deserializers are pooled (<see cref="LimitedObjectPool{T}"/>) so concurrent calls are safe.
+    /// Serializers and deserializers are pooled (<see cref="LimitedObjectPool{T}"/>, one call at a time per instance) so concurrent calls are safe; the text is written into a pooled buffer and UTF-8 encoded from it (no intermediate string).
+    /// Global <see cref="JsonConvert.DefaultSettings"/> are applied when serializing (like JsonConvert.SerializeObject, then without pooling).
     /// </remarks>
     public sealed class NewtonsoftJsonSerializer : ITextSerializerType
     {
@@ -99,7 +100,57 @@ namespace SysWeaver.Serialization
 
         /// <inheritdoc/>
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
-            => ToString(obj, options).ToUTF8();
+        {
+            //  JsonConvert.SerializeObject applies the global default settings, keep that path when they are set
+            if (JsonConvert.DefaultSettings != null)
+                return ToString(obj, options).ToUTF8();
+            using var w = new CharBufferWriter();
+            Write(w, obj, options);
+            return ToUTF8(w.Written);
+        }
+
+        /// <summary>
+        /// Factory for pooled serializers configured like JsonSerializer.CreateDefault(Formats[i]) without global default settings (only the settings used by <see cref="Formats"/> are copied).
+        /// A serializer keeps no state between calls (the reference resolver and the serialization stack are created per call, no events are set), so it can be reused, one call at a time.
+        /// </summary>
+        static LimitedObjectPool<PooledJsonSerializer> CreateSerPool(JsonSerializerSettings s)
+            => new(d =>
+            {
+                var ser = new PooledJsonSerializer(d);
+                ser.Formatting = s.Formatting;
+                ser.TypeNameHandling = s.TypeNameHandling;
+                ser.ContractResolver = s.ContractResolver;
+                return ser;
+            }, 64);
+
+        /// <summary>
+        /// Pooled serializers per <see cref="SerializerOptions"/> (same order as <see cref="Formats"/>)
+        /// </summary>
+        static readonly LimitedObjectPool<PooledJsonSerializer>[] SerPools = [CreateSerPool(Formats[0]), CreateSerPool(Formats[1]), CreateSerPool(Formats[2])];
+
+        /// <summary>
+        /// Serialize like JsonConvert.SerializeObject(obj, Formats[options]) (without global default settings) into a char buffer
+        /// </summary>
+        static void Write(CharBufferWriter w, Object obj, SerializerOptions options)
+        {
+            using var ser = SerPools[(int)options].Get();
+            using var jw = new JsonTextWriter(w);
+            jw.CloseOutput = false;
+            jw.ArrayPool = SharedCharArrayPool.Instance;
+            jw.Formatting = ser.Formatting;
+            ser.Serialize(jw, obj);
+        }
+
+        /// <summary>
+        /// The same as <see cref="SerTools.ToUTF8(string)"/> for a span: the same bytes (invalid surrogates are replaced with U+FFFD, no BOM) in a new array of the exact size
+        /// </summary>
+        static ReadOnlyMemory<Byte> ToUTF8(ReadOnlySpan<Char> st)
+        {
+            var enc = Encoding.UTF8;
+            var buf = GC.AllocateUninitializedArray<Byte>(enc.GetByteCount(st));
+            enc.GetBytes(st, buf);
+            return buf;
+        }
 
 
         /// <summary>
@@ -196,7 +247,14 @@ namespace SysWeaver.Serialization
 
         /// <inheritdoc/>
         public string ToString<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
-            => JsonConvert.SerializeObject(obj, Formats[(int)options]);
+        {
+            //  JsonConvert.SerializeObject applies the global default settings, keep that path when they are set
+            if (JsonConvert.DefaultSettings != null)
+                return JsonConvert.SerializeObject(obj, Formats[(int)options]);
+            using var w = new CharBufferWriter();
+            Write(w, obj, options);
+            return new String(w.Written);
+        }
 
         /// <inheritdoc/>
         public T FromString<T>(ReadOnlySpan<char> text)

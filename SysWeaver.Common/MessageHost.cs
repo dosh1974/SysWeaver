@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 
 namespace SysWeaver
@@ -96,6 +97,31 @@ namespace SysWeaver
         {
             if (level > AcceptMessageAbove)
                 Process(new Message(message, ex, level, Interlocked.Increment(ref CurrentId), InternalTabSpaces));
+        }
+
+        /// <summary>
+        /// Add a new message, the interpolated text is only formatted if the message is accepted (<paramref name="level"/> is above <see cref="AcceptMessageAbove"/>).
+        /// </summary>
+        /// <param name="level">The message level</param>
+        /// <param name="message">The interpolated text: <c>AddMessage(MessageLevels.Debug, $"Loaded {name}")</c>.
+        /// A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+        public void AddMessage(MessageLevels level, [InterpolatedStringHandlerArgument("", nameof(level))] ref MessageTextHandler message)
+        {
+            if (message.Enabled)
+                AddMessage(message.ToStringAndClear(), level);
+        }
+
+        /// <summary>
+        /// Add a new message with an exception, the interpolated text is only formatted if the message is accepted (<paramref name="level"/> is above <see cref="AcceptMessageAbove"/>).
+        /// </summary>
+        /// <param name="level">The message level</param>
+        /// <param name="message">The interpolated text: <c>AddMessage(MessageLevels.Debug, $"Request {url} failed", ex)</c>.
+        /// A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+        /// <param name="ex">An exception (may be null), inner exceptions are included when rendered</param>
+        public void AddMessage(MessageLevels level, [InterpolatedStringHandlerArgument("", nameof(level))] ref MessageTextHandler message, Exception ex)
+        {
+            if (message.Enabled)
+                AddMessage(message.ToStringAndClear(), ex, level);
         }
 
         void Process(Message m)

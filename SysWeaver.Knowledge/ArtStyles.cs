@@ -34,7 +34,7 @@ namespace SysWeaver.Knowledge
     {
         public const String Group = "Art styles";
 
-        public static bool TryGet(String name, out ArtStyle info) => Tags.TryGetValue(name.FastToLower(), out info);
+        public static bool TryGet(String name, out ArtStyle info) => Tags.TryGetValueLower(name, out info);
 
         public static IEnumerable<KeyValuePair<String, ArtStyle>> All => Tags;
 

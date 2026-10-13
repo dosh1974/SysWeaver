@@ -41,9 +41,9 @@ namespace SysWeaver.MicroService
                 if (sliceCount > 1)
                 {
                     var sliceIndex = p.SliceIndex % sliceCount;
-                    manager.AddMessage(Prefix + "Core slicing is used, slice affinity masks:", MessageLevels.Debug);
+                    manager.AddMessage(MessageLevels.Debug, $"{Prefix}Core slicing is used, slice affinity masks:");
                     for (int i = 0; i < sliceCount; ++ i)
-                        manager.AddMessage(Prefix + (i == sliceIndex ? "==> " : "    ") + i.ToString().PadLeft(2) + ": " + GetSliceAffinity(i, sliceCount, coreCount).AsBinary(coreCount), MessageLevels.Debug);
+                        manager.AddMessage(MessageLevels.Debug, $"{Prefix}{(i == sliceIndex ? "==> " : "    ")}{i.ToString().PadLeft(2)}: {GetSliceAffinity(i, sliceCount, coreCount).AsBinary(coreCount)}");
                     affinity = GetSliceAffinity(sliceIndex, sliceCount, coreCount);
                 }
             }

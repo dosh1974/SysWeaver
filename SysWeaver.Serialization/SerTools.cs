@@ -16,22 +16,19 @@ namespace SysWeaver.Serialization
         /// Encode a string as UTF-8.
         /// </summary>
         /// <param name="st">The string to encode, must not be null.</param>
-        /// <returns>The UTF-8 bytes, as a slice of a newly allocated (possibly larger) array.</returns>
+        /// <returns>The UTF-8 bytes, a newly allocated array of the exact size.</returns>
         /// <remarks>
-        /// Starts with a buffer of 2 bytes per char (+64), if that is too small (text with many non-ASCII chars) the exact size is computed and a new buffer is allocated.
-        /// Invalid surrogates are replaced with U+FFFD.
+        /// Invalid surrogates are replaced with U+FFFD, no BOM is written.
         /// </remarks>
         public static ReadOnlyMemory<Byte> ToUTF8(this String st)
         {
-            var l = st.Length << 1;
-            l += 64;
-            var buf = GC.AllocateUninitializedArray<Byte>(l);
-            if (!Encoding.UTF8.TryGetBytes(st, buf, out var bufUse))
-            {
-                buf = GC.AllocateUninitializedArray<Byte>(Encoding.UTF8.GetByteCount(st));
-                bufUse = Encoding.UTF8.GetBytes(st, buf);
-            }
-            return new ReadOnlyMemory<byte>(buf, 0, bufUse);
+            //  Null throws a NullReferenceException (as before)
+            if (st.Length == 0)
+                return Array.Empty<Byte>();
+            var enc = Encoding.UTF8;
+            var buf = GC.AllocateUninitializedArray<Byte>(enc.GetByteCount(st));
+            enc.GetBytes(st, buf);
+            return buf;
         }
 
 

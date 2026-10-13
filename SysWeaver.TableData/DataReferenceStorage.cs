@@ -71,10 +71,18 @@ namespace SysWeaver.Data
             ArgumentNullException.ThrowIfNull(dataRefId);
 #endif//DEBUG
             var i = dataRefId.IndexOf('@');
+            DataReference d;
             if (i > 0)
-                dataRefId = dataRefId.Substring(0, i);
-            if (!Data.TryGetValue(dataRefId, out var d))
-                return null;
+            {
+                //  The text before the '@' is looked up with a span (no substring)
+                if (!Data.TryGetValueSpan(dataRefId.AsSpan(0, i), out d))
+                    return null;
+            }
+            else
+            {
+                if (!Data.TryGetValue(dataRefId, out d))
+                    return null;
+            }
             d.Renew();
             return d as TableDataReference;
         }

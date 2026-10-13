@@ -515,6 +515,42 @@ namespace SysWeaver.Translation
         HashSet<String> SourceLangs;
         HashSet<String> TargetLangs;
 
+        /// <summary>
+        /// The (shared, read only) result of SupportedSourceLanguages / SupportedTargetLanguages for a language set (the sets are replaced, never modified, when the languages are updated)
+        /// </summary>
+        sealed class LangList
+        {
+            public LangList(HashSet<String> set)
+            {
+                Set = set;
+                List = set.ToArray();
+                Task = System.Threading.Tasks.Task.FromResult<IReadOnlyList<String>>(List);
+            }
+            public readonly HashSet<String> Set;
+            public readonly String[] List;
+            public readonly Task<IReadOnlyList<String>> Task;
+        }
+
+        static readonly Task<IReadOnlyList<String>> EmptyLangTask = Task.FromResult<IReadOnlyList<String>>(Array.Empty<String>());
+
+        LangList SourceLangList;
+        LangList TargetLangList;
+
+        /// <summary>
+        /// Get the cached list of a language set (created on the first use of a new set)
+        /// </summary>
+        static LangList GetLangList(HashSet<String> set, ref LangList cache)
+        {
+            if (set == null)
+                return null;
+            var c = Volatile.Read(ref cache);
+            if ((c != null) && ReferenceEquals(c.Set, set))
+                return c;
+            c = new LangList(set);
+            Volatile.Write(ref cache, c);
+            return c;
+        }
+
 
         /// <summary>
         /// Parse languages from retruned html
@@ -597,29 +633,29 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Return a list of supported source languages
         /// </summary>
-        /// <returns>A list of supported source languages</returns>
-        public IReadOnlyList<String> SupportedSourceLanguages() => SourceLangs?.ToArray() ?? Array.Empty<String>();
+        /// <returns>A list of supported source languages (shared, don't modify it)</returns>
+        public IReadOnlyList<String> SupportedSourceLanguages() => GetLangList(SourceLangs, ref SourceLangList)?.List ?? Array.Empty<String>();
 
 
         /// <summary>
         /// Return a list of supported target languages
         /// </summary>
-        /// <returns>A list of supported target languages</returns>
-        public IReadOnlyList<String> SupportedTargetLanguages() => TargetLangs?.ToArray() ?? Array.Empty<String>();
+        /// <returns>A list of supported target languages (shared, don't modify it)</returns>
+        public IReadOnlyList<String> SupportedTargetLanguages() => GetLangList(TargetLangs, ref TargetLangList)?.List ?? Array.Empty<String>();
 
         /// <summary>
         /// Return a list of supported source languages
         /// </summary>
-        /// <returns>A list of supported source languages</returns>
+        /// <returns>A list of supported source languages (shared, don't modify it)</returns>
         public Task<IReadOnlyList<String>> GetSupportedSourceLanguages()
-            => Task.FromResult(SupportedSourceLanguages());
+            => GetLangList(SourceLangs, ref SourceLangList)?.Task ?? EmptyLangTask;
 
         /// <summary>
         /// Return a list of supported target languages
         /// </summary>
-        /// <returns>A list of supported target languages</returns>
+        /// <returns>A list of supported target languages (shared, don't modify it)</returns>
         public Task<IReadOnlyList<String>> GetSupportedTargetLanguages()
-            => Task.FromResult(SupportedTargetLanguages());
+            => GetLangList(TargetLangs, ref TargetLangList)?.Task ?? EmptyLangTask;
 
         /// <summary>
         /// Returns a formatted from language if it's valid, else null

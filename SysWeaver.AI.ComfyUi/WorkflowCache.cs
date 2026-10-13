@@ -372,9 +372,9 @@ namespace SysWeaver.AI
             if (msg != null)
             {
                 foreach (var x in inputMaps)
-                    msg.AddMessage(String.Concat(prefix, "Input ", (x.Tag + '.' + x.Input).ToQuoted(), " <= ", MemberName(type, x.Member)), MessageLevels.Debug);
+                    msg.AddMessage(MessageLevels.Debug, $"{prefix}Input {(x.Tag + '.' + x.Input).ToQuoted()} <= {MemberName(type, x.Member)}");
                 foreach (var x in tagMaps)
-                    msg.AddMessage(String.Concat(prefix, "Bypass ", x.Tag.ToQuoted(), " <= ", MemberName(type, x.Member)), MessageLevels.Debug);
+                    msg.AddMessage(MessageLevels.Debug, $"{prefix}Bypass {x.Tag.ToQuoted()} <= {MemberName(type, x.Member)}");
             }
 
             //  Build the writer, the payload is: { "tag": { "input": value, .. } | false, .. }
@@ -498,14 +498,14 @@ namespace SysWeaver.AI
                     msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to the output ", tag.ToQuoted(), " that is also mapped by ", MemberName(type, prev)), MessageLevels.Info);
                 else
                     used.Add(tag, m);
-                msg?.AddMessage(String.Concat(prefix, "Output ", tag.ToQuoted(), " => ", MemberName(type, m)), MessageLevels.Debug);
+                msg?.AddMessage(MessageLevels.Debug, $"{prefix}Output {tag.ToQuoted()} => {MemberName(type, m)}");
                 body.Add(Expression.Assign(Expression.MakeMemberAccess(rv, m), read));
             }
             if (msg != null)
             {
                 foreach (var x in wf.Outputs)
                     if (!used.ContainsKey(x))
-                        msg.AddMessage(String.Concat(prefix, "The output ", x.ToQuoted(), " isn't used by ", type.Name.ToQuoted()), MessageLevels.Debug);
+                        msg.AddMessage(MessageLevels.Debug, $"{prefix}The output {x.ToQuoted()} isn't used by {type.Name.ToQuoted()}");
             }
             body.Add(rv);
             return Expression.Lambda<Func<JsonElement, R>>(Expression.Block([rv], body), ep).Compile();

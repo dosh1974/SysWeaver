@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 namespace SysWeaver
 {
@@ -70,6 +73,7 @@ namespace SysWeaver
         /// <remarks>
         /// Lookup order: special folders (<see cref="Environment.SpecialFolder"/> names), then <paramref name="extra"/>, then env info variables.
         /// Only defined special folder names are resolved as folders (numeric values are not).
+        /// The special folder paths are read once per process (cached on first use), a folder that is changed (redirected) while the process runs is not seen.
         /// How unknown variables are handled is defined by <see cref="TextTemplate"/>.
         /// Parsed templates are cached per template string (thread safe, unbounded), the variables are evaluated on every call.
         /// </remarks>
@@ -92,27 +96,27 @@ namespace SysWeaver
             //  extra and env
                 if (caseInSensitive)
                 {
-                    return t.Get(key =>
+                    return t.Get((Extra: extra, Env: env), static (s, key) =>
                     {
                         if (TryGetFolder(key, true, out var folder))
                             return folder;
                         var lk = key.FastToLower();
-                        if (extra.TryGetValue(lk, out var val))
+                        if (s.Extra.TryGetValue(lk, out var val))
                             return val;
-                        if (env.TryGetValue(lk, out val))
+                        if (s.Env.TryGetValue(lk, out val))
                             return val;
                         return null;
                     });
                 }
                 else
                 {
-                    return t.Get(key =>
+                    return t.Get((Extra: extra, Env: env), static (s, key) =>
                     {
                         if (TryGetFolder(key, false, out var folder))
                             return folder;
-                        if (extra.TryGetValue(key, out var val))
+                        if (s.Extra.TryGetValue(key, out var val))
                             return val;
-                        if (env.TryGetValue(key, out val))
+                        if (s.Env.TryGetValue(key, out val))
                             return val;
                         return null;
                     });
@@ -124,22 +128,22 @@ namespace SysWeaver
                 //  env
                 if (caseInSensitive)
                 {
-                    return t.Get(key =>
+                    return t.Get(env, static (vars, key) =>
                     {
                         if (TryGetFolder(key, true, out var folder))
                             return folder;
-                        if (env.TryGetValue(key.FastToLower(), out var val))
+                        if (vars.TryGetValue(key.FastToLower(), out var val))
                             return val;
                         return null;
                     });
                 }
                 else
                 {
-                    return t.Get(key =>
+                    return t.Get(env, static (vars, key) =>
                     {
                         if (TryGetFolder(key, false, out var folder))
                             return folder;
-                        if (env.TryGetValue(key, out var val))
+                        if (vars.TryGetValue(key, out var val))
                             return val;
                         return null;
                     });
@@ -150,22 +154,22 @@ namespace SysWeaver
                 //  extra
                 if (caseInSensitive)
                 {
-                    return t.Get(key =>
+                    return t.Get(extra, static (vars, key) =>
                     {
                         if (TryGetFolder(key, true, out var folder))
                             return folder;
-                        if (extra.TryGetValue(key.FastToLower(), out var val))
+                        if (vars.TryGetValue(key.FastToLower(), out var val))
                             return val;
                         return null;
                     });
                 }
                 else
                 {
-                    return t.Get(key =>
+                    return t.Get(extra, static (vars, key) =>
                     {
                         if (TryGetFolder(key, false, out var folder))
                             return folder;
-                        if (extra.TryGetValue(key, out var val))
+                        if (vars.TryGetValue(key, out var val))
                             return val;
                         return null;
                     });
@@ -199,13 +203,91 @@ namespace SysWeaver
             var k = key.AsSpan().TrimStart();
             if ((k.Length <= 0) || !Char.IsLetter(k[0]))
                 return false;
+            //  A single name without surrounding white space: Enum.TryParse only accepts the exact name (ordinal, or ordinal ignore case), a frozen lookup gives the same result.
+            //  Else (white space to trim, comma separated combinations) the original parse
+            var kl = key.Length;
+            if ((key.IndexOf(',') < 0) && !Char.IsWhiteSpace(key[0]) && !Char.IsWhiteSpace(key[kl - 1]))
+            {
+                if (!(ignoreCase ? FoldersIgnoreCase : Folders).TryGetValue(key, out var f))
+                    return false;
+                folder = GetFolder(f);
+                return true;
+            }
             if (!Enum.TryParse<Environment.SpecialFolder>(key, ignoreCase, out var e))
                 return false;
             if (!Enum.IsDefined(e))
                 return false;
-            folder = e == Environment.SpecialFolder.CommonApplicationData ? CommonApplicationData : Environment.GetFolderPath(e);
+            folder = GetFolder(e);
             return true;
         }
+
+        /// <summary>
+        /// Get the path of a special folder (<see cref="Environment.GetFolderPath(Environment.SpecialFolder)"/>, <see cref="CommonApplicationData"/> for CommonApplicationData), cached for the process.
+        /// </summary>
+        /// <remarks>
+        /// The path is read at most once per folder (lock free after that): a folder that is changed (redirected) after its first use is not seen.
+        /// An empty path (a folder that doesn't exist on this OS) is cached too.
+        /// </remarks>
+        /// <param name="f">A defined special folder</param>
+        /// <returns>The path of the folder, empty if the folder doesn't exist on this OS</returns>
+        static String GetFolder(Environment.SpecialFolder f)
+        {
+            var i = (uint)(int)f;
+            var c = FolderPaths;
+            String p;
+            if (i >= (uint)c.Length)
+            {
+                var s = SparseFolderPaths;
+                if (s.TryGetValue(f, out p))
+                    return p;
+                lock (c)
+                {
+                    if (!s.TryGetValue(f, out p))
+                    {
+                        p = ReadFolder(f);
+                        s[f] = p;
+                    }
+                }
+                return p;
+            }
+            p = Volatile.Read(ref c[i]);
+            if (p != null)
+                return p;
+            //  Only one thread reads a path (GetFolderPath runs at most once per folder)
+            lock (c)
+            {
+                p = c[i];
+                if (p == null)
+                {
+                    p = ReadFolder(f);
+                    Volatile.Write(ref c[i], p);
+                }
+            }
+            return p;
+        }
+
+        static String ReadFolder(Environment.SpecialFolder f)
+            => f == Environment.SpecialFolder.CommonApplicationData ? CommonApplicationData : Environment.GetFolderPath(f);
+
+        /// <summary>
+        /// The cached special folder paths, indexed by the enum value (null = not read yet)
+        /// </summary>
+        static readonly String[] FolderPaths = new String[Enum.GetValues<Environment.SpecialFolder>().Max(x => Math.Max((int)x, 0)) + 1];
+
+        /// <summary>
+        /// Cached paths of special folders with a value outside <see cref="FolderPaths"/> (not used by the current .NET values)
+        /// </summary>
+        static readonly ConcurrentDictionary<Environment.SpecialFolder, String> SparseFolderPaths = new();
+
+        /// <summary>
+        /// All special folder names (including names that share a value, ex: Personal / MyDocuments), case sensitive (as Enum.TryParse)
+        /// </summary>
+        static readonly FrozenDictionary<String, Environment.SpecialFolder> Folders = Enum.GetNames<Environment.SpecialFolder>().ToFrozenDictionary(x => x, Enum.Parse<Environment.SpecialFolder>, StringComparer.Ordinal);
+
+        /// <summary>
+        /// All special folder names, case in-sensitive (as Enum.TryParse with ignoreCase)
+        /// </summary>
+        static readonly FrozenDictionary<String, Environment.SpecialFolder> FoldersIgnoreCase = Folders.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         static readonly ConcurrentDictionary<String, TextTemplate> Cache = new ConcurrentDictionary<String, TextTemplate>(StringComparer.Ordinal);
         static readonly ConcurrentDictionary<String, TextTemplate> CachInSens = new ConcurrentDictionary<String, TextTemplate>(StringComparer.Ordinal);

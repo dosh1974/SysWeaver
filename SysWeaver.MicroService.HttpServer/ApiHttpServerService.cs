@@ -20,13 +20,13 @@ namespace SysWeaver.MicroService
             using (manager.Tab())
             {
                 if (mod.AddObject(manager))
-                    manager.AddMessage(MsgPrefix + "Added API methods from type \"" + manager.GetType() + "\" (" + manager + ")", MessageLevels.Debug);
+                    manager.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Added API methods from type \"{manager.GetType()}\" ({manager})");
                 using (manager.Tab())
                 {
                     foreach (var o in manager.GetAll(ServiceInstanceTypes.LocalOnly))
                     {
                         if (mod.AddObject(o))
-                            manager.AddMessage(MsgPrefix + "Added API methods from type \"" + o.GetType() + "\" (" + o + ")", MessageLevels.Debug);
+                            manager.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Added API methods from type \"{o.GetType()}\" ({o})");
                     }
                 }
             }
@@ -47,7 +47,7 @@ namespace SysWeaver.MicroService
         {
             var mod = Mod;
             if (mod.RemoveObject(instance))
-                Manager.AddMessage(MsgPrefix + "Removed API methods from type \"" + instance.GetType() + "\" (" + instance + ")", MessageLevels.Debug);
+                Manager.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Removed API methods from type \"{instance.GetType()}\" ({instance})");
             var x = instance as IApiAuditService;
             if (x != null)
             {
@@ -61,7 +61,7 @@ namespace SysWeaver.MicroService
         {
             var mod = Mod;
             if (mod.AddObject(instance))
-                Manager.AddMessage(MsgPrefix + "Added API methods from type \"" + instance.GetType() + "\" (" + instance + ")", MessageLevels.Debug);
+                Manager.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Added API methods from type \"{instance.GetType()}\" ({instance})");
             var x = instance as IApiAuditService;
             if (x != null)
             {

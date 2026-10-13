@@ -1,5 +1,4 @@
-﻿using System;
-using System.Buffers.Binary;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
@@ -8,8 +7,9 @@ namespace SysWeaver
     /// <summary>
     /// An equality comparer for byte array content.
     /// Null arrays are supported by Equals (two null arrays are equal), use <see cref="FastByteArrayEqualityComparer"/> if arrays are never null and always at least 4 bytes long.
+    /// Supports lookups by <see cref="ReadOnlySpan{T}"/> of bytes (alternate lookups of Dictionary, ConcurrentDictionary, HashSet and <see cref="LowAllocConcurrentDictionary{TKey, TValue}"/>).
     /// </summary>
-    public sealed class ByteArrayEqualityComparer : IEqualityComparer<Byte[]>
+    public sealed class ByteArrayEqualityComparer : IEqualityComparer<Byte[]>, IAlternateEqualityComparer<ReadOnlySpan<Byte>, Byte[]>
     {
         ByteArrayEqualityComparer()
         {
@@ -32,34 +32,49 @@ namespace SysWeaver
                 return true;
             if ((x == null) || (y == null))
                 return false;
-            return SpanExt.ContentEqual(x.AsSpan(), y.AsSpan()); 
+            return SpanExt.ContentEqual(x.AsSpan(), y.AsSpan());
         }
 
         /// <summary>
         /// Get a hash code for the content of a byte array.
-        /// The hash code is built from (up to) the first 4 bytes of the array (big endian), arrays with the same content always have the same hash code.
+        /// All bytes are hashed (a fast seeded hash), arrays with the same content always have the same hash code.
+        /// The hash code is randomized per process (like string hash codes), never persist it.
         /// </summary>
         /// <param name="obj">The array to get the hash code for</param>
-        /// <returns>The hash code, 0 for an empty array</returns>
+        /// <returns>The hash code</returns>
         /// <exception cref="ArgumentNullException">If <paramref name="obj"/> is null</exception>
         public int GetHashCode([DisallowNull] byte[] obj)
         {
             ArgumentNullException.ThrowIfNull(obj);
-            var l = obj.Length;
-            if (l >= 4)
-                return BinaryPrimitives.ReadInt32BigEndian(obj);
-            switch (l)
-            {
-                case 1:
-                    return obj[0];
-                case 2:
-                    return (((int)obj[0]) << 8) | (int)obj[1];
-                case 3:
-                    return (((int)obj[0]) << 16) | (((int)obj[1]) << 8) | (int)obj[2];
-                default:
-                    return 0;
-            }
+            return GetHashCode(obj.AsSpan());
         }
+
+        /// <summary>
+        /// Determines whether a span has the same content as a byte array
+        /// </summary>
+        /// <param name="alternate">The bytes</param>
+        /// <param name="other">The array, may be null (never equal to a span)</param>
+        /// <returns>True if the array isn't null and has the same content</returns>
+        public bool Equals(ReadOnlySpan<Byte> alternate, Byte[] other)
+            => (other != null) && SpanExt.ContentEqual(alternate, other.AsSpan());
+
+        /// <summary>
+        /// Get a hash code for the bytes, the same as for an array with the same content
+        /// </summary>
+        /// <param name="alternate">The bytes</param>
+        /// <returns>The hash code</returns>
+        public int GetHashCode(ReadOnlySpan<Byte> alternate)
+        {
+            var h = LowAllocStringHash.GetHash(alternate);
+            return (int)h ^ (int)(h >> 32);
+        }
+
+        /// <summary>
+        /// Create an array with the bytes (used when an alternate lookup adds a key)
+        /// </summary>
+        /// <param name="alternate">The bytes</param>
+        /// <returns>A new array</returns>
+        public Byte[] Create(ReadOnlySpan<Byte> alternate) => alternate.ToArray();
     }
 
 }

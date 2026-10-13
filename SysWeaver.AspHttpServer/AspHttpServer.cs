@@ -372,7 +372,7 @@ namespace SysWeaver.Net
             {
                 if (IsRunning)
                     return false;
-                Msg?.AddMessage(Prefix + "Starting", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Starting");
                 var serviceProvider = ServiceList.BuildServiceProvider();
                 Prov = serviceProvider;
                 Factory = serviceProvider.GetRequiredService<IHttpContextFactory>();
@@ -432,7 +432,7 @@ namespace SysWeaver.Net
             {
                 if (!IsRunning)
                     return false;
-                Msg?.AddMessage(Prefix + "Stopping", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Stopping");
                 //  No new requests accepeted
                 IsPaused = true;
                 //  Telling ongoing requests that they should stop ASAP
@@ -452,7 +452,7 @@ namespace SysWeaver.Net
                 (Interlocked.Exchange(ref Prov, null) as IDisposable)?.Dispose();
                 IsRunning = false;
             }
-            Msg?.AddMessage(Prefix + "Stopped", MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Stopped");
             return true;
         }
 
@@ -465,7 +465,7 @@ namespace SysWeaver.Net
                     return;
                 if (!IsRunning)
                     return;
-                Msg?.AddMessage(Prefix + "Pausing", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Pausing");
                 RunBeforePause();
                 Stop();
             }
@@ -478,7 +478,7 @@ namespace SysWeaver.Net
                 if (!IsPaused)
                     return;
                 Start();
-                Msg?.AddMessage(Prefix + "Resuming", MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Resuming");
                 IsPaused = false;
                 RunAfterContinue();
             }
@@ -583,7 +583,7 @@ namespace SysWeaver.Net
             {
                 RequestExceptions.OnException(ex);
 #if DEBUG
-                Msg?.AddMessage(Prefix + "Request failed!", ex, MessageLevels.Debug);
+                Msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Request failed!", ex);
 #endif//DEBUG
                 try
                 {

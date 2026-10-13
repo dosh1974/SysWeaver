@@ -23,10 +23,11 @@ namespace SysWeaver
         /// <returns>The full path of the folder</returns>
         public static String Get(String keyType, int cacheExpirationDays = 30)
         {
-            var key = keyType.FastToLower();
             var c = CleansUps;
-            if (c.TryGetValue(key, out var cc))
+            //  The lower case key is only created on a miss
+            if (c.TryGetValueLower(keyType, out var cc))
                 return cc.P;
+            var key = keyType.FastToLower();
             lock (c)
             {
                 if (c.TryGetValue(key, out cc))
