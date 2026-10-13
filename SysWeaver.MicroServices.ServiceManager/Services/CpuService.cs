@@ -22,9 +22,7 @@ namespace SysWeaver.MicroService
             var process = Process.GetCurrentProcess();
             var coreCount = Environment.ProcessorCount;
             manager.AddMessage(Prefix + "The system have " + coreCount + " logical cores");
-            var coreMask = (1UL << coreCount) - 1;
-            if (coreMask == 0)
-                coreMask = ~0UL;
+            var coreMask = GetCoreMask(coreCount);
             ulong affinity = coreMask;
             if (!String.IsNullOrEmpty(p.AffinityMask))
             {
@@ -155,19 +153,31 @@ namespace SysWeaver.MicroService
         long PrevAffinity;
         ProcessPriorityClass? PrevPritority;
 
+        /// <summary>
+        /// The affinity mask of all cores (the shift count is masked to 6 bits, so 64 or more cores use all bits)
+        /// </summary>
+        static ulong GetCoreMask(int coreCount)
+        {
+            if (coreCount >= 64)
+                return ~0UL;
+            var coreMask = (1UL << coreCount) - 1;
+            return coreMask == 0 ? ~0UL : coreMask;
+        }
+
+        /// <summary>
+        /// The affinity mask of a slice (only the first 64 cores are sliced, the affinity mask has 64 bits)
+        /// </summary>
         static ulong GetSliceAffinity(int sliceIndex, int sliceCount, int coreCount)
         {
             sliceCount = Math.Max(1, sliceCount);
-            coreCount = Math.Max(1, coreCount);
+            coreCount = Math.Clamp(coreCount, 1, 64);
             sliceIndex = Math.Max(0, Math.Min(sliceCount - 1, sliceIndex));
             int uniquePerSlice = coreCount / sliceCount;
             if (uniquePerSlice <= 0)
                 return 1UL << ((sliceIndex * coreCount) / sliceCount);
-            sliceIndex = sliceIndex % sliceCount;
             int sliceStart = sliceIndex * uniquePerSlice;
-            var affinity = 0UL;
-            for (int i = 0; i < uniquePerSlice; ++i)
-                affinity |= (1UL << (i + sliceStart));
+            //  uniquePerSlice bits from sliceStart (all bits for 64, a shift count of 64 is masked to 0)
+            var affinity = (uniquePerSlice >= 64 ? ~0UL : ((1UL << uniquePerSlice) - 1)) << sliceStart;
             int reminderStart = (uniquePerSlice * sliceCount);
             int reminder = coreCount - reminderStart;
             if (reminder > 0)

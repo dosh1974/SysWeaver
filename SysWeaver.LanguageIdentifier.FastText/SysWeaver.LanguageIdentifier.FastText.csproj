@@ -32,6 +32,8 @@
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\* .\data" />
 		<ItemGroup>
 			<EmbeddedResource Include="data\**\*.br" Visible="false" />
+			<!-- The quantized model doesn't compress, Compress.exe copies it as is -->
+			<EmbeddedResource Include="data\**\*.ftz" Visible="false" />
 		</ItemGroup>
 	</Target>
 

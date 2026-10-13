@@ -36,6 +36,14 @@ namespace SysWeaver.AI
             /// Thinking levels: low, high (Gemini 3 pro)
             /// </summary>
             LowHighLevels,
+            /// <summary>
+            /// Thinking levels: low, medium, high (Gemini 3.1 pro, Gemini 3.8 flash)
+            /// </summary>
+            LowMediumHighLevels,
+            /// <summary>
+            /// Thinking levels: minimal, high (Gemini 3.1 flash lite image)
+            /// </summary>
+            MinimalHighLevels,
         }
 
         internal sealed class Opt
@@ -71,7 +79,26 @@ namespace SysWeaver.AI
         [
             new Opt { Model = "gemma", System = false, PTools = null },
             //  Gemini 3 strongly recommends keeping the default temperature (1.0)
+            //  Order matters (prefix match), more specific names must come first
+            new Opt { Model = "gemini-3.8-flash-lite-tts", Temp = false },
+            new Opt { Model = "gemini-3.8-flash-tts", Temp = false },
+            new Opt { Model = "gemini-3.8-flash", Temp = false, Thinking = ThinkingTypes.LowMediumHighLevels },
+            new Opt { Model = "gemini-3.8-live-extended-thinking", Temp = false },
+            new Opt { Model = "gemini-3.8-live", Temp = false },
+            new Opt { Model = "gemini-3.6-flash", Temp = false, Thinking = ThinkingTypes.Levels },
+            new Opt { Model = "gemini-3.5-flash-lite", Temp = false, Thinking = ThinkingTypes.Levels },
+            new Opt { Model = "gemini-3.5-transcribe", Temp = false },
+            new Opt { Model = "gemini-3.5-live-translate", Temp = false },
+            new Opt { Model = "gemini-3.1-pro", Temp = false, Thinking = ThinkingTypes.LowMediumHighLevels },
+            new Opt { Model = "gemini-3.1-flash-lite-image", Temp = false, Thinking = ThinkingTypes.MinimalHighLevels },
+            new Opt { Model = "gemini-3.1-flash-lite", Temp = false, Thinking = ThinkingTypes.Levels },
+            new Opt { Model = "gemini-3.1-flash-image", Temp = false },
+            new Opt { Model = "gemini-3.1-flash-live", Temp = false },
+            new Opt { Model = "gemini-3.1-flash-tts", Temp = false },
+            new Opt { Model = "gemini-nano-banana", Temp = false },
+            new Opt { Model = "gemini-3-pro-image", Temp = false },
             new Opt { Model = "gemini-3-pro", Temp = false, Thinking = ThinkingTypes.LowHighLevels },
+            new Opt { Model = "gemini-3-flash", Temp = false, Thinking = ThinkingTypes.Levels },
             new Opt { Model = "gemini-3", Temp = false, Thinking = ThinkingTypes.Levels },
             new Opt { Model = "gemini-2.5-pro", Thinking = ThinkingTypes.BudgetNoDisable },
             new Opt { Model = "gemini-2.5", Thinking = ThinkingTypes.Budget },
@@ -93,6 +120,9 @@ namespace SysWeaver.AI
                         AiReasoning.Low => 1024,
                         AiReasoning.Medium => 4096,
                         AiReasoning.High => 16384,
+                        //  Max budget is 24576 for flash and 32768 for pro
+                        AiReasoning.ExtraHigh => 24576,
+                        AiReasoning.Max => t == ThinkingTypes.Budget ? 24576 : 32768,
                         _ => -1,
                     };
                     return new ThinkingConfig { ThinkingBudget = budget };
@@ -112,6 +142,23 @@ namespace SysWeaver.AI
                     return new ThinkingConfig
                     {
                         ThinkingLevel = r < AiReasoning.Medium ? ThinkingLevel.Low : ThinkingLevel.High,
+                    };
+                case ThinkingTypes.LowMediumHighLevels:
+                    return new ThinkingConfig
+                    {
+                        ThinkingLevel = r switch
+                        {
+                            AiReasoning.None => ThinkingLevel.Low,
+                            AiReasoning.Minimal => ThinkingLevel.Low,
+                            AiReasoning.Low => ThinkingLevel.Low,
+                            AiReasoning.Medium => ThinkingLevel.Medium,
+                            _ => ThinkingLevel.High,
+                        }
+                    };
+                case ThinkingTypes.MinimalHighLevels:
+                    return new ThinkingConfig
+                    {
+                        ThinkingLevel = r < AiReasoning.Medium ? ThinkingLevel.Minimal : ThinkingLevel.High,
                     };
             }
             return null;

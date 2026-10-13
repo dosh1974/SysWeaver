@@ -115,9 +115,10 @@ namespace SysWeaver
             language = language.FastToLower();
             if (l.TryGetValue(language, out var x))
                 return x;
-            var s = language.Split('-');
-            if (s.Length > 1)
-                if (l.TryGetValue(s[0], out x))
+            //  The neutral language (the text before the first '-'), looked up without allocating it (the languages use an ordinal comparer)
+            var i = language.IndexOf('-');
+            if (i >= 0)
+                if (l.GetAlternateLookup<ReadOnlySpan<Char>>().TryGetValue(language.AsSpan(0, i), out x))
                     return x;
             return Default;
         }
@@ -136,9 +137,10 @@ namespace SysWeaver
             language = language.FastToLower();
             if (l.TryGetValue(language, out var x))
                 return x;
-            var s = language.Split('-');
-            if (s.Length > 1)
-                if (l.TryGetValue(s[0], out x))
+            //  The neutral language (the text before the first '-'), looked up without allocating it (the languages use an ordinal comparer)
+            var i = language.IndexOf('-');
+            if (i >= 0)
+                if (l.GetAlternateLookup<ReadOnlySpan<Char>>().TryGetValue(language.AsSpan(0, i), out x))
                     return x;
             return null;
         }

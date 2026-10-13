@@ -35,15 +35,7 @@ namespace SysWeaver.MicroService.ExtensionHandlers
 
 
         public static String HtmlAttributeDecode(String text)
-        {
-            text = text.Replace("&amp;", "&");
-            text = text.Replace("&lt;", "<");
-            text = text.Replace("&gt;", ">");
-            text = text.Replace("&quot;", "\"");
-            text = text.Replace("&apos;", "'");
-            text = HttpUtility.HtmlDecode(text);
-            return text;
-        }
+            => HttpUtility.HtmlDecode(text);
 
     }
 }

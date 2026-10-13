@@ -570,6 +570,31 @@ namespace SysWeaver.Chat
         }
 
         /// <summary>
+        /// Get the local url (relative to the server prefix) of an absolute url on this server.
+        /// The url may omit the port of the prefix (ex: "https://host/a" for the prefix "https://host:8443/").
+        /// </summary>
+        /// <param name="prefix">The server prefix (ex: "https://host:8443/")</param>
+        /// <param name="url">An absolute url</param>
+        /// <returns>The url relative to the prefix</returns>
+        /// <exception cref="Exception">The url isn't on this server</exception>
+        static String GetLocalUrl(String prefix, String url)
+        {
+            if (url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return url.Substring(prefix.Length);
+            var i = prefix.IndexOf(':', prefix.IndexOf(':') + 1);
+            if (i >= 0)
+            {
+                //  The prefix without the port
+                var e = prefix.IndexOf('/', i);
+                var rest = e < 0 ? ReadOnlySpan<char>.Empty : prefix.AsSpan(e);
+                var us = url.AsSpan();
+                if ((us.Length >= (i + rest.Length)) && us.StartsWith(prefix.AsSpan(0, i), StringComparison.OrdinalIgnoreCase) && us.Slice(i).StartsWith(rest, StringComparison.OrdinalIgnoreCase))
+                    return url.Substring(i + rest.Length);
+            }
+            throw new Exception("The url \"" + url + "\" is not on this server");
+        }
+
+        /// <summary>
         /// Create a persistent link to some URL, save it and any files required to the user's storage.
         /// When a user want to store something, this is what you want unless the user explicitly instructs you to save it as a file.
         /// </summary>
@@ -585,18 +610,7 @@ namespace SysWeaver.Chat
             var us = UserStore;
             if (us == null)
                 return null;
-            var prefix = context.Prefix;
-            var rurl = Uri.UnescapeDataString(request.Url);
-            var i = prefix.IndexOf(':', prefix.IndexOf(':') + 1);
-            if (i >= 0)
-            {
-                if (rurl[i] != ':')
-                {
-                    var e = prefix.IndexOf('/', i);
-                    prefix = prefix.Substring(0, i) + prefix.Substring(e);
-                }
-            }
-            var l = context.MakeRequestAbsolute(rurl).Substring(prefix.Length);
+            var l = GetLocalUrl(context.Prefix, context.MakeRequestAbsolute(Uri.UnescapeDataString(request.Url)));
             foreach (var x in LinkHandlers)
             {
                 var r = await x.Key.HandleLink(us, l, request.Scope, context).ConfigureAwait(false);

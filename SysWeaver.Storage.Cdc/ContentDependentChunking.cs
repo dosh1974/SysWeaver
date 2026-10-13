@@ -147,6 +147,14 @@ namespace SysWeaver
             return new CdcFileData(c, w, a, attr, d);
         }
 
+        static async Task<CdcFileData[]> ReadFiles(Stream s, int count, int hashSize)
+        {
+            var datas = new CdcFileData[count];
+            for (int i = 0; i < count; ++i)
+                datas[i] = await ReadFile(s, hashSize).ConfigureAwait(false);
+            return datas;
+        }
+
 
 
         static bool IsHeader(ReadOnlySpan<Byte> t)
@@ -342,7 +350,7 @@ namespace SysWeaver
                         for (int i = 0; i < sl; i += hashSize)
                         {
                             var str = chunks.Span.Slice(i, hashSize).ToHexString();
-                            ++chunkCount;
+                            Interlocked.Increment(ref chunkCount);
                             ++fileChunkCount;
                             localUnique.TryAdd(str, 0);
                             var p = d.Position;
@@ -367,8 +375,9 @@ namespace SysWeaver
             }
             if (files != null)
             {
-                //  Folder, process files in parallel
-                await files.ProcessAsyncValue(async f => await DoOne(Path.Combine(destName, f), await ReadFile(s, hashSize).ConfigureAwait(false)).ConfigureAwait(false)).ConfigureAwait(false);
+                //  Folder, read the chunk lists sequentially (one stream), then process files in parallel
+                var datas = await ReadFiles(s, files.Length, hashSize).ConfigureAwait(false);
+                await files.ProcessAsyncValue((f, i) => DoOne(Path.Combine(destName, f), datas[i])).ConfigureAwait(false);
             }
             else
             {
@@ -447,13 +456,14 @@ namespace SysWeaver
                         for (int i = 0; i < sl; i += hashSize)
                         {
                             var str = chunks.Span.Slice(i, hashSize).ToHexString();
-                            ++chunkCount;
+                            Interlocked.Increment(ref chunkCount);
                             ++fileChunkCount;
                             localUnique.TryAdd(str, 0);
                             var p = d.Position;
                             var l = await TryDecompressChunk(d, str, props).ConfigureAwait(false);
                             if (l <= 0)
                             {
+                                ++fileMissingCount;
                                 Interlocked.Increment(ref missingCount);
                                 missingChunks.TryAdd(str, 0);
                                 missingFiles.TryAdd(file, 0);
@@ -486,7 +496,9 @@ namespace SysWeaver
 
             if (files != null)
             {
-                await files.ProcessAsyncValue(async f => await DoOne(Path.Combine(destName, f), await ReadFile(s, hashSize).ConfigureAwait(false)).ConfigureAwait(false)).ConfigureAwait(false);
+                //  Folder, read the chunk lists sequentially (one stream), then process files in parallel
+                var datas = await ReadFiles(s, files.Length, hashSize).ConfigureAwait(false);
+                await files.ProcessAsyncValue((f, i) => DoOne(Path.Combine(destName, f), datas[i])).ConfigureAwait(false);
             }
             else
             {
@@ -811,7 +823,7 @@ namespace SysWeaver
             using var s = TryOpenCompressedChunk(hashStr, props);
             if (s == null)
                 return false;
-            await dest.CopyToAsync(dest).ConfigureAwait(false);   
+            await s.CopyToAsync(dest).ConfigureAwait(false);
             return true;
         }
 

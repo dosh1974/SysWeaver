@@ -109,12 +109,32 @@ namespace SysWeaver.MicroService
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(FolderSyncService));
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
+            => IsApiOrExplore(context.LocalUrl) ? null : this;
+
+        /// <summary>
+        /// Check if a local url is an api call or an explore request (handled by the api / explore modules), same as the original:
+        /// localUrl.SplitFirst('/', out var r); var f = r.SplitFirst('?').SplitFirst('/'); var l = r.SplitLast('/'); return Apis.Contains(f) || l.FastEquals("explore");
+        /// but without allocating any sub strings
+        /// </summary>
+        /// <param name="localUrl">The local url</param>
+        /// <returns>True if it's an api call or an explore request</returns>
+        static bool IsApiOrExplore(String localUrl)
         {
-            context.LocalUrl.SplitFirst('/', out var r);
-            var f = r.SplitFirst('?', out var rest);
-            var l = r.SplitLast('/');
-            f = f.SplitFirst('/');
-            return Apis.Contains(f) || l.FastEquals("explore") ? null : this;
+            var p = String.IsNullOrEmpty(localUrl) ? -1 : localUrl.IndexOf('/');
+            //  No '/' gives a null api name (and no explore)
+            if (p < 0)
+                return Apis.Contains(null);
+            var r = localUrl.AsSpan(p + 1);
+            var q = r.IndexOf('?');
+            var f = q < 0 ? r : r.Slice(0, q);
+            var s = f.IndexOf('/');
+            if (s >= 0)
+                f = f.Slice(0, s);
+            if (ApisLookup.Contains(f))
+                return true;
+            var ls = r.LastIndexOf('/');
+            var l = ls < 0 ? r : r.Slice(ls + 1);
+            return l.SequenceEqual("explore");
         }
 
         static readonly IReadOnlySet<String> Apis = ReadOnlyData.Set(StringComparer.Ordinal,
@@ -135,6 +155,11 @@ namespace SysWeaver.MicroService
             nameof(WaitUntilSharedFolderHasChanged),
             ""
             );
+
+        /// <summary>
+        /// The <see cref="Apis"/>, looked up using a span (ordinal)
+        /// </summary>
+        static readonly System.Collections.Frozen.FrozenSet<String>.AlternateLookup<ReadOnlySpan<Char>> ApisLookup = System.Collections.Frozen.FrozenSet.ToFrozenSet(Apis, StringComparer.Ordinal).GetAlternateLookup<ReadOnlySpan<Char>>();
 
         #endregion//IHttpServerModule
 

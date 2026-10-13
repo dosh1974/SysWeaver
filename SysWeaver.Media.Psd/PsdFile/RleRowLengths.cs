@@ -29,7 +29,19 @@ namespace PhotoshopFile
     /// <summary>
     /// The sum of all row lengths.
     /// </summary>
-    public long Total => Values.Sum(x => (long)x);
+    public long Total => Sum(Values);
+
+    /// <summary>
+    /// Same as values.Sum(x => (long)x) (checked, null throws an ArgumentNullException) without the delegate
+    /// </summary>
+    static long Sum(int[] values)
+    {
+      ArgumentNullException.ThrowIfNull(values, "source");
+      long s = 0;
+      foreach (var x in values)
+        s = checked(s + x);
+      return s;
+    }
 
     public int this[int i]
     {

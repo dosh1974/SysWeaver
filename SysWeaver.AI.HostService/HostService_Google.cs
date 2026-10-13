@@ -362,7 +362,11 @@ namespace SysWeaver.AI
                     return AiReasoning.Low;
                 if (b <= 8192)
                     return AiReasoning.Medium;
-                return AiReasoning.High;
+                if (b <= 16384)
+                    return AiReasoning.High;
+                if (b < 32768)
+                    return AiReasoning.ExtraHigh;
+                return AiReasoning.Max;
             }
             return null;
         }

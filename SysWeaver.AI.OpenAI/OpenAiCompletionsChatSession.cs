@@ -1,4 +1,4 @@
-using OpenAI.Chat;
+﻿using OpenAI.Chat;
 using System;
 using System.ClientModel;
 using System.ClientModel.Primitives;
@@ -27,9 +27,9 @@ namespace SysWeaver.AI
         OpenAiCompletionsChatSession(bool isPrivate, ChatClient c, OpenAiSessionParams p, OpenAiModels.Opt o, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
             : base(isPrivate, p.Model, o.Temp, o.System, o.PTools, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, OpenAiService.ServiceName + ".svg")
         {
-            CanReason = o.CanReason;
-            if (CanReason)
-                ReasonigLevel = OpenAiModels.ChatReasoningLevels[(int)(p.Reasoning ?? AiReasoning.Low)];
+            CanDisableReasoning = o.CanDisableReasoning;
+            if (o.CanReason)
+                ReasonigLevel = OpenAiModels.ChatReasoningLevels[(int)o.GetReasoning(p.Reasoning ?? AiReasoning.Low)];
             if (o.HaveTiers)
                 Tier = OpenAiModels.ChatTiers[(int)(p.Tier ?? OpenAiServiceTier.Auto)];
             Client = c;
@@ -43,7 +43,7 @@ namespace SysWeaver.AI
 
 #pragma warning disable OPENAI001
 
-        readonly bool CanReason;
+        readonly bool CanDisableReasoning;
         readonly ChatReasoningEffortLevel? ReasonigLevel;
         readonly ChatServiceTier? Tier;
 
@@ -57,7 +57,7 @@ namespace SysWeaver.AI
             var options = Options;
             if (options != null)
                 return options;
-            options = OpenAiModels.CreateChatOptions(GetTools(), HaveTemperature, Temperature, CanReason, ReasonigLevel, Tier, SupportParallelToolCalls);
+            options = OpenAiModels.CreateChatOptions(GetTools(), HaveTemperature, Temperature, CanDisableReasoning, ReasonigLevel, Tier, SupportParallelToolCalls);
             Options = options;
             return options;
         }

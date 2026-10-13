@@ -105,8 +105,8 @@ namespace SysWeaver.MicroService.Media
             MarginTopP = f < 0 ? 0 : f > 100 ? 100 : f;
             f = MarginRightP;
             MarginRightP = f < 0 ? 0 : f > 100 ? 100 : f;
-            f = MarginTopP;
-            MarginTopP = f < 0 ? 0 : f > 100 ? 100 : f;
+            f = MarginBottomP;
+            MarginBottomP = f < 0 ? 0 : f > 100 ? 100 : f;
             f = MarginLeftP;
             MarginLeftP = f < 0 ? 0 : f > 100 ? 100 : f;
         }

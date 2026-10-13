@@ -176,8 +176,9 @@ namespace SysWeaver.Net
                 var h = headers[i];
                 if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
                 {
-                    var t = h.Substring(8).Trim().Substring(pl);
-                    headers[i] = "Referer:" + t;
+                    //  One allocation (an invalid prefix length throws the same exception as before)
+                    var t = h.AsSpan(8).Trim();
+                    headers[i] = ((uint)pl <= (uint)t.Length) ? String.Concat("Referer:", t.Slice(pl)) : ("Referer:" + h.Substring(8).Trim().Substring(pl));
                 }
             }
             return new ProxyData(m, headers, data);

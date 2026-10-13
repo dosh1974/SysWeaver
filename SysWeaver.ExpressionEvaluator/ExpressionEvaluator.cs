@@ -333,11 +333,24 @@ namespace SysWeaver.Parser
                 {
                     temp = new T[l];
                     for (int i = 0; i < l; ++i)
-                        temp[i] = (T)Convert.ChangeType(p[i], typeof(T));
+                        temp[i] = ConvertParameter(p[i]);
                 }
                 return ev(temp);
             };
         }
+
+        /// <summary>
+        /// True if T is a primitive type or decimal (Convert.ChangeType returns the same value if the value already is a T)
+        /// </summary>
+        static readonly bool IsBuiltInValueType = typeof(T).IsPrimitive || (typeof(T) == typeof(Decimal));
+
+        /// <summary>
+        /// Same as (T)Convert.ChangeType(value, typeof(T)), but values that already are a (built in) T are just unboxed
+        /// </summary>
+        /// <param name="value">The value</param>
+        /// <returns>The value as a T</returns>
+        static T ConvertParameter(Object value)
+            => (IsBuiltInValueType && (value != null) && (value.GetType() == typeof(T))) ? (T)value : (T)Convert.ChangeType(value, typeof(T));
 
 
         /// <summary>
@@ -359,7 +372,7 @@ namespace SysWeaver.Parser
                 {
                     temp = new T[l];
                     for (int i = 0; i < l; ++i)
-                        temp[i] = (T)Convert.ChangeType(p[i], typeof(T));
+                        temp[i] = ConvertParameter(p[i]);
                 }
                 return ev(temp);
             };

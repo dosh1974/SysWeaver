@@ -128,7 +128,47 @@ namespace SysWeaver.Net
             useAsync = false;
             request.SetResMime(Mime);
             var fi = Fi;
-            return String.Concat(HttpServerTools.ToEtag(fi.LastWriteTimeUtc), ' ', HttpServerTools.ToEtag(fi.Length));
+            //  Same as String.Concat(HttpServerTools.ToEtag(fi.LastWriteTimeUtc), ' ', HttpServerTools.ToEtag(fi.Length)) using a single allocation
+            //  (LastWriteTimeUtc is always UTC, so ToEtag doesn't convert it)
+            var time = (UInt64)fi.LastWriteTimeUtc.Ticks;
+            var length = (UInt64)fi.Length;
+            Span<Char> temp = stackalloc Char[EtagMaxDigits + 1 + EtagMaxDigits];
+            var l = EncodeEtagDigits(time, temp);
+            temp[l] = ' ';
+            ++l;
+            l += EncodeEtagDigits(length, temp.Slice(l));
+            return new String(temp.Slice(0, l));
+        }
+
+        /// <summary>
+        /// The digits used by <see cref="CompactAsciiString.Secure"/> (used by <see cref="HttpServerTools.ToEtag(long)"/>)
+        /// </summary>
+        static readonly Char[] EtagDigits = [.. CompactAsciiString.Secure.Valid];
+
+        /// <summary>
+        /// The maximum number of digits of a 64-bit value (base 2 or more)
+        /// </summary>
+        const int EtagMaxDigits = 64;
+
+        /// <summary>
+        /// Write the same chars as CompactAsciiString.Secure.Encode(value) (least significant digit first, at least one digit)
+        /// </summary>
+        /// <param name="value">The value to encode</param>
+        /// <param name="dst">The destination, must be at least <see cref="EtagMaxDigits"/> chars</param>
+        /// <returns>The number of chars written</returns>
+        static int EncodeEtagDigits(UInt64 value, Span<Char> dst)
+        {
+            var v = EtagDigits;
+            var vl = (UInt64)v.Length;
+            for (int i = 0; ;)
+            {
+                var n = value / vl;
+                dst[i] = v[(int)(value - (n * vl))];
+                ++i;
+                if (n == 0)
+                    return i;
+                value = n;
+            }
         }
 
 

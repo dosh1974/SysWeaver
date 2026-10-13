@@ -10,10 +10,12 @@ namespace SysWeaver.MicroService
         public ImageRepoService(ImageRepoParams p)
         {
             Repos = p?.Repos;
-            foreach (var r in p?.Repos.Nullable())
+            foreach (var r in (p?.Repos).Nullable())
             {
+                if (r == null)
+                    continue;
                 HashSet<String> seen = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var x in r?.Sizes.Nullable())
+                foreach (var x in r.Sizes.Nullable())
                 {
                     var name = x.Name;
                     if (String.IsNullOrEmpty(name))

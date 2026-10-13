@@ -222,7 +222,7 @@ namespace SysWeaver.Chart
                     {
                         ++row;
                         c = dataPage.Rows[row].Cells[i + 1];
-                        c.Style.NumberFormat = t;
+                        c.Style.NumberFormat = numberFormat;
                     }
                 }
             }
@@ -289,9 +289,9 @@ namespace SysWeaver.Chart
                 for (int di = 0; di < dpl; ++ di)
                 {
                     var dp = dps[di];
-                    if (ExcelTools.TryGetWebColor(fl > 0 ? fillColors[di <= fl ? di : fl] : null, out var fc))
+                    if (ExcelTools.TryGetWebColor(fl >= 0 ? fillColors[di <= fl ? di : fl] : null, out var fc))
                         dp.Fill.SetSolid(fc);
-                    if (ExcelTools.TryGetWebColor(ol > 0 ? outlineColors[di <= ol ? di : ol] : null, out var oc))
+                    if (ExcelTools.TryGetWebColor(ol >= 0 ? outlineColors[di <= ol ? di : ol] : null, out var oc))
                         dp.Outline.Fill.SetSolid(oc);
                 }
             }

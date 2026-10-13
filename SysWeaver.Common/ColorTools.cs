@@ -71,13 +71,14 @@ namespace SysWeaver
 
                 var u = HsvToRgb(hh, ss, vv);
                 var oo = opacity1 * i + opacity;
+                //  HsvToRgb clamps every channel to [0, 255]
                 if (oo >= 1)
                 {
-                    t[i] = "#" + u.ToString("x").PadLeft(6, '0');
+                    t[i] = ToHex6(u);
                 }
                 else
                 {
-                    t[i] = String.Concat("rgba(", (u >> 16) & 0xff, ',', (u >> 8) & 0xff, ',', u & 0xff, ',', oo.ToString(CultureInfo.InvariantCulture), ')');
+                    t[i] = String.Create(CultureInfo.InvariantCulture, $"rgba({(u >> 16) & 0xff},{(u >> 8) & 0xff},{u & 0xff},{oo})");
                 }
             }
             return t;
@@ -299,14 +300,32 @@ namespace SysWeaver
             var g = ToClampedInt(g1);
             var b = ToClampedInt(b1);
             if (a1 >= 255)
-                return String.Concat('#', r.ToString("x").PadLeft(2, '0'), g.ToString("x").PadLeft(2, '0'), b.ToString("x").PadLeft(2, '0'));
+                return ToHex6((r << 16) | (g << 8) | b);
             a1 *= (1.0 / 255.0);
             if (a1 < 0)
                 a1 = 0;
             if (a1 > 1)
                 a1 = 1;
-            return String.Concat("rgba(", r, ',', g, ',', b, ',', a1.ToString("0.00000", CultureInfo.InvariantCulture), ')');
+            return String.Create(CultureInfo.InvariantCulture, $"rgba({r},{g},{b},{a1:0.00000})");
         }
+
+        /// <summary>
+        /// Get a lower case "#rrggbb" string (same as "#" + rgb.ToString("x").PadLeft(6, '0') for values up to 0xffffff)
+        /// </summary>
+        /// <param name="rgb">0xrrggbb, must be less than 0x1000000</param>
+        /// <returns>The hex color</returns>
+        static String ToHex6(uint rgb)
+            => String.Create(7, rgb, static (dst, v) =>
+            {
+                dst[0] = '#';
+                for (int i = 6; i > 0; --i)
+                {
+                    dst[i] = LowerHexChars[(int)(v & 15)];
+                    v >>= 4;
+                }
+            });
+
+        const String LowerHexChars = "0123456789abcdef";
 
 
 

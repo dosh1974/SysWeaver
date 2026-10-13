@@ -115,6 +115,9 @@ namespace SysWeaver.Db
             var t = BlobSer.Serialize(data);
             var cl = compLevel ?? (t.Length <= levelSize ? CompEncoderLevels.Best : CompEncoderLevels.Balanced);
             var c = BlobComp.GetCompressed(t.Span, cl);
+            //  GetCompressed returns a new array of the exact size (owned by the caller), avoid copying it again
+            if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray<Byte>(c, out var seg) && (seg.Offset == 0) && (seg.Count == seg.Array.Length))
+                return seg.Array;
             return c.ToArray();
         }
 

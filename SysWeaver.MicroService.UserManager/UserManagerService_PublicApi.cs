@@ -297,10 +297,13 @@ namespace SysWeaver.MicroService
             if (s == null)
                 throw new NoSessionException();
             var token = login.Token;
-            var dataD = await GetAction<InternalNewPasswordData>(token, DbAction.ResetPassword, context).ConfigureAwait(false);
+            //  The type of the matched action, it must be deleted
+            var actionType = DbAction.ResetPassword;
+            var dataD = await GetAction<InternalNewPasswordData>(token, actionType, context).ConfigureAwait(false);
             if (dataD == null)
             {
-                dataD = await GetAction<InternalNewPasswordData>(token, DbAction.AddPassword, context).ConfigureAwait(false);
+                actionType = DbAction.AddPassword;
+                dataD = await GetAction<InternalNewPasswordData>(token, actionType, context).ConfigureAwait(false);
                 if (dataD == null)
                     throw new TokenExpiredException();
             }
@@ -336,7 +339,7 @@ namespace SysWeaver.MicroService
                 auth = await InternalAuthUser(c, id).ConfigureAwait(false);
                 if (auth == null)
                     throw new UserNoLongerExistException(id);
-                await DeleteAction(c, token, DbAction.ResetPassword, context).ConfigureAwait(false);
+                await DeleteAction(c, token, actionType, context).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
             var ret = new UserLoginResponse
@@ -544,9 +547,8 @@ namespace SysWeaver.MicroService
                 //var authData = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == userId).ConfigureAwait(false);
                 targets = await GetUserComTargets(c, userId).ConfigureAwait(false);
                 existingEmail = targets.FirstOrDefault(x => am.ValidateEmailAddress(x, false));
-                if (existingEmail != null)
-                    if (existingEmail.ToLower().FastEquals(newEmail.ToLower()))
-                        throw new EmailAlreadyAssignedException(newEmail);
+                if (IsSameComTarget(existingEmail, newEmail))
+                    throw new EmailAlreadyAssignedException(newEmail);
                 if (await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.Email == newEmail).ConfigureAwait(false) != null)
                     throw new EmailInUseException(newEmail);
             }
@@ -567,12 +569,24 @@ namespace SysWeaver.MicroService
                     "[UserName]", userName,
                     "[Email]", ma,
                     "[Link]", link,
-                    "[Origin]", origin.Replace("[Color]", HashColors.AppColors.Acc1)
+                    "[Origin]", GetOriginParam(origin)
                 );
             }).ConfigureAwait(false);
             return sentTo;
 
         }
+
+        /// <summary>
+        /// True if the existing communication target (email / phone) is the same as the new one (culture invariant, case insensitive), false if there is no existing target
+        /// </summary>
+        static bool IsSameComTarget(String existing, String newTarget)
+            => (existing != null) && existing.FastToLower().FastEquals(newTarget?.FastToLower());
+
+        /// <summary>
+        /// The [Origin] message parameter, empty for a null origin
+        /// </summary>
+        static String GetOriginParam(String origin)
+            => origin?.Replace("[Color]", HashColors.AppColors.Acc1) ?? "";
 
 
         async Task<String[]> InternalAddChangeEmailRequest(SetEmailRequest request, bool isChanged, HttpServerRequest context)
@@ -594,7 +608,7 @@ namespace SysWeaver.MicroService
                 var existingEmail = targets.FirstOrDefault(x => am.ValidateEmailAddress(x, false));
                 if (isChanged)
                 {
-                    if (existingEmail.ToLower().FastEquals(newEmail.ToLower()))
+                    if (IsSameComTarget(existingEmail, newEmail))
                         throw new EmailAlreadyAssignedException(newEmail);
                 }
                 else
@@ -806,7 +820,7 @@ namespace SysWeaver.MicroService
                 var existingPhone = targets.FirstOrDefault(x => am.ValidatePhoneNumber(ref x, false));
                 if (isChanged)
                 {
-                    if (existingPhone.ToLower().FastEquals(newPhone.ToLower()))
+                    if (IsSameComTarget(existingPhone, newPhone))
                         throw new PhoneAlreadyAssignedException(newPhone);
                 }
                 else

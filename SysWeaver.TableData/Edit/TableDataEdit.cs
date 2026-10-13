@@ -283,10 +283,8 @@ namespace SysWeaver.Data
             var dc = drows.Length;
             var sc = srows.Length;
             var newRows = new TableDataRow[dc + sc];
-            for (int i = 0; i < dc; ++i)
-                newRows[i] = drows[i];
-            for (int i = 0; i < sc; ++i)
-                newRows[i + dc] = srows[i];
+            Array.Copy(drows, 0, newRows, 0, dc);
+            Array.Copy(srows, 0, newRows, dc, sc);
             return new BaseTableData
             {
                 Cols = dcols,

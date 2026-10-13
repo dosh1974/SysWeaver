@@ -56,8 +56,35 @@ namespace SysWeaver.AI
         /// <returns>The local url to the file</returns>
         public String AddMessageFile(String mime, ReadOnlyMemory<Byte> data, String filename)
         {
-            var x = String.Concat("data:", mime, ";base64," + Convert.ToBase64String(data.Span));
-            return SaveFile(mime, x, filename);
+            return SaveFile(mime, ToDataUrl(mime, data), filename);
+        }
+
+        const String DataUrlPrefix = "data:";
+        const String DataUrlBase64 = ";base64,";
+
+        /// <summary>
+        /// Same as String.Concat("data:", mime, ";base64," + Convert.ToBase64String(data.Span)) using a single allocation (the data can be large)
+        /// </summary>
+        /// <param name="mime">The mime type (null is treated as empty)</param>
+        /// <param name="data">The data</param>
+        /// <returns>A data url</returns>
+        static String ToDataUrl(String mime, ReadOnlyMemory<Byte> data)
+        {
+            mime ??= "";
+            var len = (long)DataUrlPrefix.Length + mime.Length + DataUrlBase64.Length + ((data.Length + 2L) / 3) * 4;
+            //  Convert.ToBase64String throws an OutOfMemoryException if the result is too large
+            if (len > int.MaxValue)
+                throw new OutOfMemoryException();
+            return String.Create((int)len, (mime, data), static (d, s) =>
+            {
+                DataUrlPrefix.CopyTo(d);
+                var p = DataUrlPrefix.Length;
+                s.mime.CopyTo(d.Slice(p));
+                p += s.mime.Length;
+                DataUrlBase64.CopyTo(d.Slice(p));
+                p += DataUrlBase64.Length;
+                Convert.TryToBase64Chars(s.data.Span, d.Slice(p), out _);
+            });
         }
 
         /// <summary>

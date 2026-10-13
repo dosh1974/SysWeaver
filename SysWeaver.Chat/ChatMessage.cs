@@ -101,7 +101,7 @@ namespace SysWeaver.Chat
             {
                 var t = data.FastIndexOf("base64,");
                 if (t > 0)
-                    mem = Convert.FromBase64String(data.Substring(t + 7));
+                    mem = FromBase64(data, t + 7);
             }
             if (mem == null)
             {
@@ -118,6 +118,30 @@ namespace SysWeaver.Chat
             var rh = new StaticMemoryHttpRequestHandler("chat/" + name, filename, mem ?? ReadOnlyMemory<Byte>.Empty, mime, Comp, 30, 15, now, null, comp, auth, 0, false);
             Files.TryAdd(f, rh);
             return name;
+        }
+
+        /// <summary>
+        /// Same as Convert.FromBase64String(data.Substring(start)) without the copy of the payload (if the decoded length is exact, i.e. no white space).
+        /// </summary>
+        static Byte[] FromBase64(String data, int start)
+        {
+            var s = data.AsSpan(start);
+            var l = s.Length;
+            if ((l > 0) && ((l & 3) == 0))
+            {
+                var n = (l >> 2) * 3;
+                if (s[l - 1] == '=')
+                {
+                    --n;
+                    if (s[l - 2] == '=')
+                        --n;
+                }
+                var b = new Byte[n];
+                if (Convert.TryFromBase64Chars(s, b, out var w) && (w == n))
+                    return b;
+            }
+            //  White space, invalid data (throws the same exception) or empty
+            return Convert.FromBase64String(data.Substring(start));
         }
 
         public String AddData(Object o, String providerName, String providerChatId, HttpServerRequest request)

@@ -533,7 +533,19 @@ namespace SysWeaver.Data
         public static TypedTableData<T> RemoveColumn<T>(this TypedTableData<T> data, String name)
         {
             var cols = data.Cols;
-            var index = cols == null ? -1 : Array.FindIndex(cols, c => c.Name == name);
+            //  Same as Array.FindIndex(cols, c => c.Name == name), without the closure
+            var index = -1;
+            if (cols != null)
+            {
+                for (int i = 0; i < cols.Length; ++i)
+                {
+                    if (cols[i].Name == name)
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+            }
             if (index >= 0)
                 return RemoveColumnIndex(data, index);
             if (!TableDataType<T>.NameToColumnIndex.ContainsKey(name))
@@ -1053,9 +1065,17 @@ namespace SysWeaver.Data
         /// <returns>The shared column array, clone before modifying.</returns>
         public static TableDataColumn[] GetCols(Type t)
         {
+            //  The static readonly field value never changes, cache it per type (weak, so that collectible types can be unloaded), exceptions are never cached
+            if ((t != null) && ColsCache.TryGetValue(t, out var cached))
+                return cached;
             var gt = (TableDataColumn[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.Cols), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
+            ColsCache.AddOrUpdate(t, gt);
             return gt;
         }
+
+        static readonly ConditionalWeakTable<Type, TableDataColumn[]> ColsCache = new();
+        static readonly ConditionalWeakTable<Type, TableDataColumn[]> TypedColsCache = new();
+        static readonly ConditionalWeakTable<Type, Type[]> ColTypesCache = new();
 
 
         /// <summary>
@@ -1065,7 +1085,10 @@ namespace SysWeaver.Data
         /// <returns>The shared column array, clone before modifying.</returns>
         public static TableDataColumn[] GetTypedCols(Type t)
         {
+            if ((t != null) && TypedColsCache.TryGetValue(t, out var cached))
+                return cached;
             var gt = (TableDataColumn[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.TypedCols), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
+            TypedColsCache.AddOrUpdate(t, gt);
             return gt;
         }
 
@@ -1076,7 +1099,10 @@ namespace SysWeaver.Data
         /// <returns>The shared array of types, in column order.</returns>
         public static Type[] GetColTypes(Type t)
         {
+            if ((t != null) && ColTypesCache.TryGetValue(t, out var cached))
+                return cached;
             var gt = (Type[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.ColTypes), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
+            ColTypesCache.AddOrUpdate(t, gt);
             return gt;
         }
 

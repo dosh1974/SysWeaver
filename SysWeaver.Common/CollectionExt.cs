@@ -199,6 +199,14 @@ namespace SysWeaver
             ArgumentNullException.ThrowIfNull(col);
 #endif//DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(keepAtLeast);
+            if (keepAtLeast == 0)
+            {
+                //  Count is relatively expensive (snapshots the segments), dequeue until it's empty
+                while (col.TryDequeue(out var _))
+                {
+                }
+                return;
+            }
             while (col.Count > keepAtLeast)
                 col.TryDequeue(out var _);
         }

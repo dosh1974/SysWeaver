@@ -3477,6 +3477,18 @@
             <returns>The zero based index of the string or -1 if it's not in the set (also if it contains chars outside [32, 255], those can't be added)</returns>
             <exception cref="T:System.Exception">DEBUG builds only: The string is empty</exception>
         </member>
+        <member name="F:SysWeaver.Collections.CompactAsciiStringSet.MaxStackBytes">
+            <summary>
+            The largest number of bytes to use on the stack (else a pooled array is used)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Collections.CompactAsciiStringSet.FirstString(System.Byte[])">
+            <summary>
+            Get the first (uncompressed) string of a block, the bytes before the first byte that is less than 32 (or the whole block)
+            </summary>
+            <param name="block">The block</param>
+            <returns>The bytes of the first string</returns>
+        </member>
         <member name="M:SysWeaver.Collections.CompactAsciiStringSet.Add(System.String)">
             <summary>
             Add a string to the set, empty strings and null may not be present.
@@ -3585,6 +3597,13 @@
             <param name="toRgba">The end color, 0xrrggbbaa.</param>
             <param name="fraction">The interpolation fraction, clamped to [0, 1] (0 = <paramref name="fromRgba"/>, 1 = <paramref name="toRgba"/>).</param>
             <returns>"#rrggbb" if the interpolated alpha is opaque, else "rgba(r,g,b,a)".</returns>
+        </member>
+        <member name="M:SysWeaver.ColorTools.ToHex6(System.UInt32)">
+            <summary>
+            Get a lower case "#rrggbb" string (same as "#" + rgb.ToString("x").PadLeft(6, '0') for values up to 0xffffff)
+            </summary>
+            <param name="rgb">0xrrggbb, must be less than 0x1000000</param>
+            <returns>The hex color</returns>
         </member>
         <member name="T:SysWeaver.CompactAsciiString">
             <summary>
@@ -9876,6 +9895,11 @@
             <returns>An enumerator of (expiration time, key, value) tuples.
             Includes expired items that haven't been pruned yet, items that are being created (pending entries without a value) are skipped</returns>
         </member>
+        <member name="M:SysWeaver.FastMemCache`2.Enumerate(System.Collections.Concurrent.ConcurrentDictionary{`0,System.ValueTuple{System.DateTime,`1,System.Threading.Tasks.Task{`1}}})">
+            <summary>
+            Enumerate the items that have a value (lazily, same as C.Where(x => x.Value.Item3 == null).Select(x => (x.Value.Item1, x.Key, x.Value.Item2)) without the delegates)
+            </summary>
+        </member>
         <member name="M:SysWeaver.FastMemCache`2.System#Collections#IEnumerable#GetEnumerator">
             <inheritdoc/>
         </member>
@@ -11625,6 +11649,11 @@
             <returns>A seed value (can be any int, including 0 and negative values)</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="text"/> is null</exception>
         </member>
+        <member name="F:SysWeaver.HashColors.MaxStackSeedChars">
+            <summary>
+            Texts with at most this many chars are UTF-8 encoded on the stack by <see cref="M:SysWeaver.HashColors.SeedFromString(System.String)"/> (at most 3 bytes per char)
+            </summary>
+        </member>
         <member name="P:SysWeaver.HashColors.AppColors">
             <summary>
             The colors for the current application (based on <see cref="P:SysWeaver.EnvInfo.AppName"/> and <see cref="P:SysWeaver.EnvInfo.AppSeed"/>).
@@ -11750,6 +11779,13 @@
             <param name="value">The value (brightness) [0, 1], larger values are clamped per channel</param>
             <param name="alpha">The opacity [0, 1]</param>
             <returns>A "#rrggbb" color if alpha &gt;= 1, "transparent" if alpha &lt;= 0, else an "rgba(r,g,b,a)" color (invariant culture)</returns>
+        </member>
+        <member name="M:SysWeaver.HashColors.ToRgba(System.UInt32,System.Double)">
+            <summary>
+            Get a "rgba(r,g,b,a)" color string (invariant culture)
+            </summary>
+            <param name="col">0xrrggbb</param>
+            <param name="alpha">The opacity</param>
         </member>
         <member name="M:SysWeaver.HashColors.GetWeb(System.String,System.Double)">
             <summary>
@@ -11998,6 +12034,33 @@
             </summary>
             <param name="htmlColor">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
             <returns>The shortest version of the color</returns>
+        </member>
+        <member name="M:SysWeaver.HtmlColors.HexLength(System.UInt32)">
+            <summary>
+            The length of the string returned by ToHex
+            </summary>
+            <param name="rgb">0xrrggbb</param>
+            <returns>4 if the color can be written as "#rgb", else 7</returns>
+        </member>
+        <member name="M:SysWeaver.HtmlColors.ToHex(System.UInt32)">
+            <summary>
+            Get the shortest hex version of a color, "#rgb" if possible, else "#rrggbb" (lower case)
+            </summary>
+            <param name="rgb">0xrrggbb</param>
+            <returns>The hex color</returns>
+        </member>
+        <member name="M:SysWeaver.HtmlColors.SelShortest(System.String,System.UInt32)">
+            <summary>
+            Get the shortest of a color name (if any) and the shortest hex version of a color (the hex string is only created if it's used)
+            </summary>
+            <param name="name">The name of the color, can be null</param>
+            <param name="rgb">0xrrggbb</param>
+            <returns>The name if it's shorter than the hex string, else the hex string</returns>
+        </member>
+        <member name="M:SysWeaver.HtmlColors.ToRgba(System.UInt32,System.UInt32,System.UInt32,System.Double)">
+            <summary>
+            Get a "rgba(r,g,b,a)" color string (invariant culture)
+            </summary>
         </member>
         <member name="M:SysWeaver.HtmlColors.MakeHtmlColor(System.Int32,System.Int32,System.Int32,System.Double)">
             <summary>
@@ -15050,6 +15113,15 @@
             </remarks>
             <exception cref="T:System.IndexOutOfRangeException"><paramref name="style"/> is not a defined <see cref="T:SysWeaver.Message.TextStyles"/> value.</exception>
         </member>
+        <member name="M:SysWeaver.Message.AppendIndented(System.Text.StringBuilder,System.String,System.Int32)">
+            <summary>
+            Append a text with leading and trailing new line chars ('\n' and '\r') removed, every new line ('\n') is followed by an indentation.
+            Same as sb.Append(text.Trim('\n', '\r').Replace("\n", "\n" + new String(' ', indent))) without the temporary strings.
+            </summary>
+            <param name="sb">The string builder to append to</param>
+            <param name="text">The text, must not be null (a NullReferenceException is thrown, same as text.Trim)</param>
+            <param name="indent">The number of spaces to add after every new line</param>
+        </member>
         <member name="T:SysWeaver.MessageHandler">
             <summary>
             Base class for message handlers, an output (console, debug output, file etc) that receives messages from a <see cref="T:SysWeaver.MessageHost"/>.
@@ -17287,6 +17359,13 @@
             <param name="delayInMs">Number of milli seconds to wait between any retries</param>
             <remarks>This method never throws, any exception is returned instead.</remarks>
             <returns>Null if the clean up was successful, else the first exception (an exception is returned if the directory doesn't exist)</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.HaveEntries(System.String)">
+            <summary>
+            Check if a directory contains any file or directory (stops at the first entry, same entries as Directory.GetFiles(dir, "*") and Directory.GetDirectories(dir, "*"))
+            </summary>
+            <param name="dir">The directory</param>
+            <returns>True if the directory have any files or sub directories</returns>
         </member>
         <member name="M:SysWeaver.PathExt.IsWeb(System.String)">
             <summary>
@@ -20834,14 +20913,22 @@
         </member>
         <member name="M:SysWeaver.StringExt.LowerInto(System.ReadOnlySpan{System.Char},System.Span{System.Char})">
             <summary>
-            Lower case chars (same as calling FastToLower for every char), ASCII is converted using SIMD
+            Lower case chars (same as ToLowerInvariant), ASCII is converted using SIMD, the rest (if any) char by char, text with a surrogate is converted again with the invariant culture span method (surrogate pairs included)
             </summary>
             <param name="source">The source chars</param>
             <param name="destination">The destination, same length as the source</param>
         </member>
+        <member name="M:SysWeaver.StringExt.CasePairs(System.ReadOnlySpan{System.Char},System.Span{System.Char},System.Boolean)">
+            <summary>
+            Convert the text again with the invariant culture span method if it has a surrogate (a letter outside the BMP, the char methods never change it)
+            </summary>
+            <param name="source">The source chars</param>
+            <param name="destination">The destination, same length as the source</param>
+            <param name="upper">True to upper case, false to lower case</param>
+        </member>
         <member name="M:SysWeaver.StringExt.UpperInto(System.ReadOnlySpan{System.Char},System.Span{System.Char})">
             <summary>
-            Upper case chars (same as calling FastToUpper for every char), ASCII is converted using SIMD
+            Upper case chars (same as ToUpperInvariant), ASCII is converted using SIMD, the rest (if any) char by char, text with a surrogate is converted again with the invariant culture span method (surrogate pairs included)
             </summary>
             <param name="source">The source chars</param>
             <param name="destination">The destination, same length as the source</param>
@@ -21659,6 +21746,14 @@
             Writes the counted up string (the state is the string and the start and end of the last number)
             </summary>
         </member>
+        <member name="M:SysWeaver.StringTools.ChangeFirstRune(System.String,System.Boolean)">
+            <summary>
+            Change the casing of a first letter outside the BMP (a surrogate pair)
+            </summary>
+            <param name="str">The text, starts with a surrogate</param>
+            <param name="upper">True to upper case, false to lower case (invariant culture)</param>
+            <returns>The original string (an invalid pair or nothing changes) or a new string</returns>
+        </member>
         <member name="M:SysWeaver.StringTools.MakeFirstUppercase(System.String)">
             <summary>
             Make sure that the first character is an uppercase letter (if it's a letter).
@@ -22373,6 +22468,14 @@
             </summary>
             <returns>The strings</returns>
         </member>
+        <member name="M:SysWeaver.StringTree.GetSortedNodes(System.Collections.Generic.Dictionary{System.Char,SysWeaver.StringTree},System.Boolean)">
+            <summary>
+            Get the child nodes ordered by their char (same order as OrderBy(x => x.Key), the keys are unique)
+            </summary>
+            <param name="nodes">The child nodes</param>
+            <param name="descending">True to get the nodes in descending order</param>
+            <returns>The child nodes</returns>
+        </member>
         <member name="M:SysWeaver.StringTree.GetAllInOrder">
             <summary>
             Get all strings contained in the string tree, ordered by char (ordinal, of the upper cased chars for case in-sensitive trees), a string comes before the strings that it's a prefix of
@@ -22623,6 +22726,14 @@
             Get the values of all strings contained in the tree, in any order
             </summary>
             <returns>The value lists (the internal lists, must not be modified), lazily enumerated (recursive)</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.GetSortedNodes(System.Collections.Generic.Dictionary{System.Char,SysWeaver.StringTreeList{`0}},System.Boolean)">
+            <summary>
+            Get the child nodes ordered by their char (same order as OrderBy(x => x.Key), the keys are unique)
+            </summary>
+            <param name="nodes">The child nodes</param>
+            <param name="descending">True to get the nodes in descending order</param>
+            <returns>The child nodes</returns>
         </member>
         <member name="M:SysWeaver.StringTreeList`1.GetAllInOrder">
             <summary>
@@ -24358,6 +24469,11 @@
         <member name="F:SysWeaver.TextTemplate.TransformDefaults">
             <summary>
             Default values of the (untransformed) variables used by transformed variables, only set by the dictionary constructor (else null).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.TransformsLookup">
+            <summary>
+            The <see cref="F:SysWeaver.TextTemplate.Transforms"/>, looked up using a span (ordinal)
             </summary>
         </member>
         <member name="T:SysWeaver.TorService">

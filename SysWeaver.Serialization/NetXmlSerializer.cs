@@ -62,7 +62,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
-            var s = new XmlSerializer(typeof(T));
+            var s = GetSerializer<T>();
             using (var ms = new MemoryStream())
             {
                 s.Serialize(ms, obj);
@@ -85,7 +85,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public string ToString<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
-            var s = new XmlSerializer(typeof(T));
+            var s = GetSerializer<T>();
             using var sb = new Utf8StringWriter();
             s.Serialize(sb, obj);
             return sb.ToString();
@@ -95,7 +95,7 @@ namespace SysWeaver.Serialization
         public T FromString<T>(ReadOnlySpan<char> text)
         {
             var t = new String(text);
-            var s = new XmlSerializer(typeof(T));
+            var s = GetSerializer<T>();
             using var sb = new StringReader(t);
             return (T)s.Deserialize(sb);
         }
@@ -103,7 +103,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public T FromString<T>(string text)
         {
-            var s = new XmlSerializer(typeof(T));
+            var s = GetSerializer<T>();
             using var sb = new StringReader(text);
             return (T)s.Deserialize(sb);
         }
@@ -111,7 +111,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlySpan<byte> data)
         {
-            var s = new XmlSerializer(typeof(T));
+            var s = GetSerializer<T>();
             fixed (byte* bp = data)
             {
                 using var ms = new UnmanagedMemoryStream(bp, data.Length);
@@ -122,7 +122,7 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlyMemory<byte> data)
         {
-            var s = new XmlSerializer(typeof(T));
+            var s = GetSerializer<T>();
             fixed (byte* bp = data.Span)
             {
                 using var ms = new UnmanagedMemoryStream(bp, data.Length);
@@ -130,6 +130,21 @@ namespace SysWeaver.Serialization
             }
         }
 
+        /// <summary>
+        /// Get the (thread safe) XmlSerializer for a type, it's created once per type (a failed creation is not cached, so it throws every time, as before)
+        /// </summary>
+        /// <typeparam name="T">The type to serialize</typeparam>
+        /// <returns>The serializer</returns>
+        static XmlSerializer GetSerializer<T>()
+            => XmlSerializerCache<T>.Serializer ??= new XmlSerializer(typeof(T));
+
+        /// <summary>
+        /// A cached XmlSerializer per type (no static initializer, so creation exceptions aren't wrapped in a TypeInitializationException)
+        /// </summary>
+        static class XmlSerializerCache<T>
+        {
+            public static XmlSerializer Serializer;
+        }
 
     }
 

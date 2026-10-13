@@ -138,10 +138,10 @@ namespace SysWeaver.Map
             sb.Append('.');
             sb.Append(className);
             sb.Append("{fill:");
-            var col = ExtrudeFillColor ?? baseStyle?.ExtrudeFillColor ?? HtmlColors.MakeTransparentLerp(FillColor ?? baseStyle?.FillColor ?? "#444", baseStyle.ShadowColor ?? "#000", baseStyle.ShadowFillStrength);
+            var col = ExtrudeFillColor ?? baseStyle?.ExtrudeFillColor ?? HtmlColors.MakeTransparentLerp(FillColor ?? baseStyle?.FillColor ?? "#444", baseStyle?.ShadowColor ?? "#000", baseStyle?.ShadowFillStrength ?? 0.4);
             sb.Append(col);
             sb.Append(";stroke:");
-            col = ExtrudeStrokeColor ?? baseStyle?.ExtrudeStrokeColor ?? HtmlColors.MakeTransparentLerp(FillColor ?? baseStyle?.FillColor ?? "#444", baseStyle.ShadowColor ?? "#000", baseStyle.ShadowStrokeStrength);
+            col = ExtrudeStrokeColor ?? baseStyle?.ExtrudeStrokeColor ?? HtmlColors.MakeTransparentLerp(FillColor ?? baseStyle?.FillColor ?? "#444", baseStyle?.ShadowColor ?? "#000", baseStyle?.ShadowStrokeStrength ?? 0.3);
             sb.Append(col);
             sb.Append(";stroke-width:");
             sb.Append((ExtrudeStrokeWidth ?? StrokeWidth ?? baseStyle?.ExtrudeStrokeWidth ?? baseStyle?.StrokeWidth ?? 0.25).ToString("0.###", CultureInfo.InvariantCulture));

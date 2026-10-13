@@ -135,7 +135,7 @@ namespace SysWeaver.Net.ExploreModule
                     BaseUrl = baseUrl,
                 };
                 var s = ToJson.ToString(data);
-                request.SetResMime("text/html;charset=UTF8-8");
+                request.SetResMime(Mimes.HtmlText);
                 var bn = basePath + Name + "/" + Name;
                 Dictionary<String, String> vars = new Dictionary<String, String>(StringComparer.Ordinal)
             {

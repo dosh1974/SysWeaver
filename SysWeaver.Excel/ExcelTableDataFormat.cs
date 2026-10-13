@@ -45,15 +45,18 @@ namespace SysWeaver.Excel
             if (String.IsNullOrEmpty(text))
                 return text;
             var tl = text.Length;
-            var o = new Char[tl + tl];
-            for (int i = 0, d = 0; i < tl; ++i)
+            //  Written directly into the new string (no temporary char array)
+            return String.Create(tl + tl, text, static (o, src) =>
             {
-                o[d] = '\\';
-                ++d;
-                o[d] = text[i];
-                ++d;
-            }
-            return new string(o);
+                var tl = src.Length;
+                for (int i = 0, d = 0; i < tl; ++i)
+                {
+                    o[d] = '\\';
+                    ++d;
+                    o[d] = src[i];
+                    ++d;
+                }
+            });
         }
 
         delegate FormatCellDelegate FormatDelegate(Type dataType, TableDataFormats fmt, String[] options);

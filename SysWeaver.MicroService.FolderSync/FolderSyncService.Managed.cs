@@ -861,12 +861,14 @@ namespace SysWeaver.MicroService
                         {
                             var ex = await PathExt.EnsureFolderExistAsync(newFolderName).ConfigureAwait(false);
                             if (ex == null)
+                            {
+                                PathExt.AllowAllAccess(newFolderName);
+                                PathExt.DisableIndexing(newFolderName);
                                 break;
+                            }
                             if (ret > 10)
                                 throw ex;
                         }
-                        PathExt.AllowAllAccess(newFolderName);
-                        PathExt.DisableIndexing(newFolderName);
                     }
                     await Task.Delay(1).ConfigureAwait(false);
                 }
@@ -904,10 +906,11 @@ namespace SysWeaver.MicroService
                     }
                     else
                     {
-                        var exx = await PathExt.TryMoveFolderAsync(newFolderName, String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId)).ConfigureAwait(false);
+                        var syncedFolderName = String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId);
+                        var exx = await PathExt.TryMoveFolderAsync(newFolderName, syncedFolderName).ConfigureAwait(false);
                         if (exx == null)
                         {
-                            new DirectoryInfo(newFolderName).LastAccessTimeUtc = DateTime.UtcNow;
+                            new DirectoryInfo(syncedFolderName).LastAccessTimeUtc = DateTime.UtcNow;
                             context.Server.InvalidateCache();
                             Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Synced folder \"", target.Name, "\""));
                         }
@@ -1076,13 +1079,14 @@ namespace SysWeaver.MicroService
         {
             var f = folder.Split('/');
             var folderName = f[0].FastToLower();
-            var ff = f[1];
+            var ff = f.Length == 2 ? f[1] : null;
             if (!ManagedFolders.TryGetValue(folderName, out var data))
                 throw new Exception("Unknown folder id");
             var target = data.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var fname = Path.GetFileName(target);
             var parent = Path.GetDirectoryName(target);
-            if (!ff.StartsWith(fname))
+            //  Must be a sibling folder of the managed folder (no separators or "..")
+            if ((ff == null) || (!ff.FastStartsWith(fname)) || (ff.AsSpan().IndexOfAny('\\', '/', Path.DirectorySeparatorChar) >= 0) || ff.Contains("..", StringComparison.Ordinal))
                 throw new Exception("Invalid folder version name");
             var name = Path.Combine(parent, ff, ManifestName);
             return await FileExt.ReadBytesAsync(name).ConfigureAwait(false);

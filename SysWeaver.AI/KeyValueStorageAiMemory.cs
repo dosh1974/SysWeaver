@@ -35,6 +35,9 @@ namespace SysWeaver.AI
             if (mem.M != null)
                 return mem;
             using var l = await mem.Lock.Lock().ConfigureAwait(false);
+            //  Loaded by another call while waiting for the lock (loading again would drop the changes made since)
+            if (mem.M != null)
+                return mem;
             //  Load from disc
             var d = await KeyValueStore.AllApp.TryGetAsync<MemEntry[]>(BuildKey(session)).ConfigureAwait(false);
             mem.M = d == null ? new (StringComparer.Ordinal) : d.ToDictionary(x => x.H.Key, StringComparer.Ordinal);
@@ -63,16 +66,12 @@ namespace SysWeaver.AI
                 throw new Exception("The value is too long (" + value.Length + " chars), maximum length is " + AiMemoryLimits.MaxContentLen + " chars");
             var mem = await GetMem(session).ConfigureAwait(false);
             using var l = await mem.Lock.Lock().ConfigureAwait(false);
-            var me = new MemEntry(key, desc, value);
-            if (!mem.M.TryAdd(key, me))
-            {
-                mem.M[key] = me;
-                await KeyValueStore.AllApp.SetAsync(BuildKey(session), mem.M.Values.ToArray()).ConfigureAwait(false);
-                return true;
-            }
-            if (mem.M.Count >= AiMemoryLimits.MaxRecords)
+            var m = mem.M;
+            //  Check the limit before adding (a rejected entry must not stay), updating an existing entry is always allowed
+            if ((m.Count >= AiMemoryLimits.MaxRecords) && !m.ContainsKey(key))
                 throw new Exception("Too many memory records, the maximum number of memory records is " + AiMemoryLimits.MaxRecords + ", remove some old or update an existing");
-            await KeyValueStore.AllApp.SetAsync(BuildKey(session), mem.M.Values.ToArray()).ConfigureAwait(false);
+            m[key] = new MemEntry(key, desc, value);
+            await KeyValueStore.AllApp.SetAsync(BuildKey(session), m.Values.ToArray()).ConfigureAwait(false);
             return true;
         }
 
@@ -101,6 +100,10 @@ namespace SysWeaver.AI
 
         public async Task<bool> SetMemory(HttpSession session, string key, string value)
         {
+            if (String.IsNullOrEmpty(value))
+                throw new Exception("Please provide some value");
+            if (value.Length > AiMemoryLimits.MaxContentLen)
+                throw new Exception("The value is too long (" + value.Length + " chars), maximum length is " + AiMemoryLimits.MaxContentLen + " chars");
             var mem = await GetMem(session).ConfigureAwait(false);
             using var l = await mem.Lock.Lock().ConfigureAwait(false);
             if (!mem.M.TryGetValue(key, out var r))

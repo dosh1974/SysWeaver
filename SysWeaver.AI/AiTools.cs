@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
@@ -55,21 +56,54 @@ namespace SysWeaver.AI
 
 
 
-        public static readonly IReadOnlySet<Char> MdEscapeChars = ReadOnlyData.Set(@"\`*_{}[]<>()#+-!|".ToCharArray());
+        /// <summary>
+        /// The chars escaped by <see cref="MdEscape(string)"/>
+        /// </summary>
+        const String MdEscapeCharList = @"\`*_{}[]<>()#+-!|";
+
+        public static readonly IReadOnlySet<Char> MdEscapeChars = ReadOnlyData.Set(MdEscapeCharList.ToCharArray());
+
+        /// <summary>
+        /// The same chars as <see cref="MdEscapeChars"/>, for vectorized searches
+        /// </summary>
+        static readonly SearchValues<Char> MdEscapeSearch = SearchValues.Create(MdEscapeCharList);
 
         public static String MdEscape(String s)
         {
-            var l = s.Length;
-            var t = new StringBuilder(l + l);
-            var es = MdEscapeChars;
-            for (int i = 0; i < l; ++i)
+            //  Vectorized search for the first char to escape, most texts are returned as is (no allocation)
+            var v = s.AsSpan(0, s.Length);
+            var first = v.IndexOfAny(MdEscapeSearch);
+            if (first < 0)
+                return s;
+            //  Count the escapes, then escape into the new string (the only allocation)
+            var es = MdEscapeSearch;
+            var l = v.Length;
+            int count = 1;
+            for (int i = first + 1; i < l; ++i)
             {
-                char c = s[i];
-                if (es.Contains(c))
-                    t.Append('\\');
-                t.Append(c);
+                if (es.Contains(v[i]))
+                    ++count;
             }
-            return t.Length == l ? s : t.ToString();
+            return String.Create(l + count, (s, first), static (dst, state) =>
+            {
+                var src = state.s.AsSpan();
+                var es = MdEscapeSearch;
+                var f = state.first;
+                src.Slice(0, f).CopyTo(dst);
+                var l = src.Length;
+                int o = f;
+                for (int i = f; i < l; ++i)
+                {
+                    var c = src[i];
+                    if (es.Contains(c))
+                    {
+                        dst[o] = '\\';
+                        ++o;
+                    }
+                    dst[o] = c;
+                    ++o;
+                }
+            });
         }
 
 

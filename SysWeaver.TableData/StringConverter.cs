@@ -23,7 +23,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static SByte ToSByte(String value)
         {
-            return ((value != null) && SByte.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && SByte.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -34,7 +34,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Int16 ToInt16(String value)
         {
-            return ((value != null) && Int16.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && Int16.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Int32 ToInt32(String value)
         {
-            return ((value != null) && Int32.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && Int32.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Int64 ToInt64(String value)
         {
-            return ((value != null) && Int64.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && Int64.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -67,7 +67,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Byte ToByte(String value)
         {
-            return ((value != null) && Byte.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && Byte.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -78,7 +78,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static UInt16 ToUInt16(String value)
         {
-            return ((value != null) && UInt16.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && UInt16.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -89,7 +89,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static UInt32 ToUInt32(String value)
         {
-            return ((value != null) && UInt32.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && UInt32.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -100,7 +100,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static UInt64 ToUInt64(String value)
         {
-            return ((value != null) && UInt64.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && UInt64.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -111,7 +111,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Single ToSingle(String value)
         {
-            return ((value != null) && Single.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && Single.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -122,7 +122,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Double ToDouble(String value)
         {
-            return ((value != null) && Double.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && Double.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -133,7 +133,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Decimal ToDecimal(String value)
         {
-            return ((value != null) && Decimal.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && Decimal.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -144,7 +144,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static DateTime ToDateTime(String value)
         {
-            return ((value != null) && DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && DateTime.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -155,7 +155,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static TimeSpan ToTimeSpan(String value)
         {
-            return ((value != null) && TimeSpan.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && TimeSpan.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -166,7 +166,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static DateOnly ToDateOnly(String value)
         {
-            return ((value != null) && DateOnly.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && DateOnly.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -177,7 +177,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static TimeOnly ToTimeOnly(String value)
         {
-            return ((value != null) && TimeOnly.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && TimeOnly.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -188,7 +188,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Guid ToGuid(String value)
         {
-            return ((value != null) && Guid.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : default;
+            return ((value != null) && Guid.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : default;
         }
 
         /// <summary>
@@ -199,7 +199,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static Boolean ToBoolean(String value)
         {
-            return ((value != null) && Boolean.TryParse(value.Trim(), out var val)) ? val : default;
+            return ((value != null) && Boolean.TryParse(value.AsSpan().Trim(),out var val)) ? val : default;
         }
 
         /// <summary>
@@ -211,7 +211,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or <c>default</c>.</returns>
         public static T ToEnum<T>(String value) where T : struct
         {
-            return ((value != null) && Enum.TryParse<T>(value.Trim(), true, out var val)) ? val : default;
+            return ((value != null) && Enum.TryParse<T>(value.AsSpan().Trim(), true, out var val)) ? val : default;
         }
 
         #region Nullable
@@ -224,7 +224,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static SByte? ToNullableSByte(String value)
         {
-            return ((value != null) && SByte.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && SByte.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -235,7 +235,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Int16? ToNullableInt16(String value)
         {
-            return ((value != null) && Int16.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && Int16.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -246,7 +246,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Int32? ToNullableInt32(String value)
         {
-            return ((value != null) && Int32.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && Int32.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -257,7 +257,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Int64? ToNullableInt64(String value)
         {
-            return ((value != null) && Int64.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && Int64.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -268,7 +268,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Byte? ToNullableByte(String value)
         {
-            return ((value != null) && Byte.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && Byte.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -279,7 +279,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static UInt16? ToNullableUInt16(String value)
         {
-            return ((value != null) && UInt16.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && UInt16.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -290,7 +290,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static UInt32? ToNullableUInt32(String value)
         {
-            return ((value != null) && UInt32.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && UInt32.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -301,7 +301,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static UInt64? ToNullableUInt64(String value)
         {
-            return ((value != null) && UInt64.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && UInt64.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -312,7 +312,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Single? ToNullableSingle(String value)
         {
-            return ((value != null) && Single.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && Single.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -323,7 +323,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Double? ToNullableDouble(String value)
         {
-            return ((value != null) && Double.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && Double.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -334,7 +334,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Decimal? ToNullableDecimal(String value)
         {
-            return ((value != null) && Decimal.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && Decimal.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -345,7 +345,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static DateTime? ToNullableDateTime(String value)
         {
-            return ((value != null) && DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && DateTime.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -356,7 +356,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static TimeSpan? ToNullableTimeSpan(String value)
         {
-            return ((value != null) && TimeSpan.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && TimeSpan.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -367,7 +367,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static DateOnly? ToNullableDateOnly(String value)
         {
-            return ((value != null) && DateOnly.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && DateOnly.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -378,7 +378,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static TimeOnly? ToNullableTimeOnly(String value)
         {
-            return ((value != null) && TimeOnly.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && TimeOnly.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -389,7 +389,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Guid? ToNullableGuid(String value)
         {
-            return ((value != null) && Guid.TryParse(value.Trim(), CultureInfo.InvariantCulture, out var val)) ? val : null;
+            return ((value != null) && Guid.TryParse(value.AsSpan().Trim(),CultureInfo.InvariantCulture, out var val)) ? val : null;
         }
 
         /// <summary>
@@ -400,7 +400,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static Boolean? ToNullableBoolean(String value)
         {
-            return ((value != null) && Boolean.TryParse(value.Trim(), out var val)) ? val : null;
+            return ((value != null) && Boolean.TryParse(value.AsSpan().Trim(),out var val)) ? val : null;
         }
 
         /// <summary>
@@ -412,7 +412,7 @@ namespace SysWeaver.Data
         /// <returns>The parsed value or null.</returns>
         public static T? ToNullableEnum<T>(String value) where T : struct
         {
-            return ((value != null) && Enum.TryParse<T>(value.Trim(), true, out var val)) ? val : null;
+            return ((value != null) && Enum.TryParse<T>(value.AsSpan().Trim(), true, out var val)) ? val : null;
         }
 
         #endregion//Nullable

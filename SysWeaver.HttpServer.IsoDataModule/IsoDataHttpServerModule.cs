@@ -686,13 +686,16 @@ namespace SysWeaver.Net.IsoDataModule
         {
             //if (!context.LocalUrl.FastStartsWith("iso_data/"))
                 //return null;
-            var url = context.LocalUrl.Substring(9);
-            if (url.FastStartsWith("country/"))
-                return HandleCountry(url.Substring(8));
-            if (url.FastStartsWith("language/"))
-                return HandleLanguage(url.Substring(9));
-            if (url.FastStartsWith("phone_prefix/"))
-                return HandlePhonePrefix(url.Substring(13));
+            //  Same as context.LocalUrl.Substring(9) and ordinal starts with tests, only the final sub path is allocated
+            var localUrl = context.LocalUrl;
+            //  Substring throws the same exception as before if the url is too short
+            var url = localUrl.Length >= 9 ? localUrl.AsSpan(9) : localUrl.Substring(9);
+            if (url.StartsWith("country/"))
+                return HandleCountry(localUrl.Substring(17));
+            if (url.StartsWith("language/"))
+                return HandleLanguage(localUrl.Substring(18));
+            if (url.StartsWith("phone_prefix/"))
+                return HandlePhonePrefix(localUrl.Substring(22));
             return null;
         }
 

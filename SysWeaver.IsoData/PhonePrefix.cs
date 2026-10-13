@@ -123,15 +123,15 @@ namespace SysWeaver
                 ? (
                     RegionPrefix == null 
                         ? 
-                        String.Concat('+', CountryCode, ' ', Name) 
-                        : 
-                        String.Concat('+', CountryCode, " (", RegionPrefix, ") ", Name)
+                        String.Concat("+", CountryCode, " ", Name)
+                        :
+                        String.Concat(["+", CountryCode, " (", RegionPrefix, ") ", Name])
                 ) :(
                     RegionPrefix == null
                         ?
-                        String.Concat('+', CountryCode, ' ', Name, " [", IsoCountry, ']')
+                        String.Concat(["+", CountryCode, " ", Name, " [", IsoCountry, "]"])
                         :
-                        String.Concat('+', CountryCode, " (", RegionPrefix, ") ", Name, " [", IsoCountry, ']')
+                        String.Concat(["+", CountryCode, " (", RegionPrefix, ") ", Name, " [", IsoCountry, "]"])
                 );
 
 

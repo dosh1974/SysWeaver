@@ -911,6 +911,61 @@ namespace SysWeaver.MicroService
             OrderNewest,
         };
 
+        /// <summary>
+        /// Get the first instance of a sequence in an order, same as the first item of Orders[order](c) but without sorting (a single pass):
+        /// the sort is stable, so it's the first instance with the lowest (Oldest) / highest (Newest) order, or the first instance (Any)
+        /// </summary>
+        /// <param name="first">The first instance (if any)</param>
+        /// <param name="c">The instances</param>
+        /// <param name="order">The order, an invalid value throws an IndexOutOfRangeException (as the Orders lookup)</param>
+        /// <returns>True if the sequence isn't empty</returns>
+        static bool TryGetFirstInOrder(out KeyValuePair<Object, ServiceInfo> first, IEnumerable<KeyValuePair<Object, ServiceInfo>> c, ServiceInstanceOrders order)
+        {
+            _ = Orders[(int)order];
+            using var e = c.GetEnumerator();
+            if (!e.MoveNext())
+            {
+                first = default;
+                return false;
+            }
+            var best = e.Current;
+            switch (order)
+            {
+                case ServiceInstanceOrders.Oldest:
+                    {
+                        var o = best.Value.Order;
+                        while (e.MoveNext())
+                        {
+                            var x = e.Current;
+                            var xo = x.Value.Order;
+                            if (xo < o)
+                            {
+                                best = x;
+                                o = xo;
+                            }
+                        }
+                    }
+                    break;
+                case ServiceInstanceOrders.Newest:
+                    {
+                        var o = best.Value.Order;
+                        while (e.MoveNext())
+                        {
+                            var x = e.Current;
+                            var xo = x.Value.Order;
+                            if (xo > o)
+                            {
+                                best = x;
+                                o = xo;
+                            }
+                        }
+                    }
+                    break;
+            }
+            first = best;
+            return true;
+        }
+
         #endregion//Orders
 
 
@@ -982,17 +1037,16 @@ namespace SysWeaver.MicroService
                 throw new Exception("No instance of type \"" + t.FullName + "\" is registered!");
             IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
             d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
             if (String.IsNullOrEmpty(instanceName))
             {
-                using var e = d.GetEnumerator();
-                if (!e.MoveNext())
+                //  Only the first instance is needed, so it's found without sorting
+                if (!TryGetFirstInOrder(out var v, d, order))
                     throw new Exception("No instance of type \"" + t.FullName + "\" is registered!");
-                var v = e.Current;
                 info = v.Value;
                 info.OnUse();
                 return (T)v.Key;
             }
+            d = Orders[(int)order](d);
             foreach (var v in d)
             {
                 info = v.Value;
@@ -1020,17 +1074,16 @@ namespace SysWeaver.MicroService
                 throw new Exception("No instance of type \"" + t.FullName + "\" is registered!");
             IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
             d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
             if (String.IsNullOrEmpty(instanceName))
             {
-                using var e = d.GetEnumerator();
-                if (!e.MoveNext())
+                //  Only the first instance is needed, so it's found without sorting
+                if (!TryGetFirstInOrder(out var v, d, order))
                     throw new Exception("No instance of type \"" + t.FullName + "\" is registered!");
-                var v = e.Current;
                 info = v.Value;
                 info.OnUse();
                 return v.Key;
             }
+            d = Orders[(int)order](d);
             foreach (var v in d)
             {
                 info = v.Value;
@@ -1079,18 +1132,12 @@ namespace SysWeaver.MicroService
                 return null;
             IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
             d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            using (var e = d.GetEnumerator())
-            {
-                if (!e.MoveNext())
-                    return null;
-                var v = e.Current;
-//                if (e.MoveNext())
-//                    return null;
-                info = v.Value;
-                info.OnUse();
-                return (T)v.Key;
-            }
+            //  Only the first instance is needed, so it's found without sorting
+            if (!TryGetFirstInOrder(out var v, d, order))
+                return null;
+            info = v.Value;
+            info.OnUse();
+            return (T)v.Key;
         }
 
         /// <summary>
@@ -1156,18 +1203,12 @@ namespace SysWeaver.MicroService
                 return null;
             IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
             d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            using (var e = d.GetEnumerator())
-            {
-                if (!e.MoveNext())
-                    return null;
-                var v = e.Current;
-//                if (e.MoveNext())
-//                    return null;
-                info = v.Value;
-                info.OnUse();
-                return v.Key;
-            }
+            //  Only the first instance is needed, so it's found without sorting
+            if (!TryGetFirstInOrder(out var v, d, order))
+                return null;
+            info = v.Value;
+            info.OnUse();
+            return v.Key;
         }
 
         #endregion//Single instance
@@ -2161,8 +2202,8 @@ namespace SysWeaver.MicroService
                         var l = o.Length;
                         if ((l > 0) && (o[l - 1] != '&'))
                             f.OpenParams += '&';
-                        yield return f;
                     }
+                    yield return f;
                 }
             }
         }
@@ -2184,6 +2225,9 @@ namespace SysWeaver.MicroService
                     continue;
                 foreach (var f in t.GetTextFiles())
                 {
+                    //  Only the requested file, with it's own auth
+                    if (!String.Equals(f.Name, name, StringComparison.Ordinal))
+                        continue;
                     if (!a.IsValid(f.Auth))
                         continue;
                     try
@@ -2196,6 +2240,7 @@ namespace SysWeaver.MicroService
                     {
                         fe.OnException(ex);
                     }
+                    break;
                 }
             }
             return ReadOnlyMemory<Byte>.Empty;

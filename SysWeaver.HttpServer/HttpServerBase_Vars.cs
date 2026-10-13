@@ -54,7 +54,8 @@ namespace SysWeaver.Net
             if (TempVars.ContainsKey(name) || DynamicVarNames.Contains(name))
                 return true;
             var k = name.IndexOf('.');
-            return (k > 0) && TempVarGroups.ContainsKey(name.Substring(0, k));
+            //  The groups use an ordinal comparer, look up the group name without allocating it
+            return (k > 0) && TempVarGroups.GetAlternateLookup<ReadOnlySpan<Char>>().ContainsKey(name.AsSpan(0, k));
         }
 
         bool IsDynamic(String s)

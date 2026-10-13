@@ -787,7 +787,9 @@ namespace SysWeaver
         /// <param name="separator">The separator to insert between values.</param>
         /// <param name="values">The values.</param>
         /// <returns>The joined string.</returns>
-        public static String JoinNonEmpty(String separator, params String[] values) => String.Join(separator, values.Where(x => !String.IsNullOrEmpty(x)));
+        public static String JoinNonEmpty(String separator, params String[] values)
+            //  Same result (and the same exception as Enumerable.Where for null values), exact sized
+            => values == null ? throw new ArgumentNullException("source") : StringExt.JoinNonEmpty(separator, values);
 
         static String FormatHelp(String help, int pad)
         {

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,7 +26,37 @@ namespace SysWeaver
         /// <returns>A seed value (can be any int, including 0 and negative values)</returns>
         /// <exception cref="ArgumentNullException"><paramref name="text"/> is null</exception>
         public static int SeedFromString(String text)
-            => BitConverter.ToInt32(MD5.HashData(Encoding.UTF8.GetBytes(text)));
+        {
+            ArgumentNullException.ThrowIfNull(text);
+            //  The UTF-8 bytes are encoded on the stack (or a pooled buffer) and hashed into a stack buffer, nothing is allocated
+            Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
+            var enc = Encoding.UTF8;
+            var tl = text.Length;
+            if (tl <= MaxStackSeedChars)
+            {
+                Span<Byte> data = stackalloc Byte[MaxStackSeedChars * 3];
+                MD5.HashData(data.Slice(0, enc.GetBytes(text, data)), hash);
+            }
+            else
+            {
+                var len = enc.GetByteCount(text);
+                var rented = ArrayPool<Byte>.Shared.Rent(len);
+                try
+                {
+                    MD5.HashData(rented.AsSpan(0, enc.GetBytes(text, rented)), hash);
+                }
+                finally
+                {
+                    ArrayPool<Byte>.Shared.Return(rented);
+                }
+            }
+            return BitConverter.ToInt32(hash);
+        }
+
+        /// <summary>
+        /// Texts with at most this many chars are UTF-8 encoded on the stack by <see cref="SeedFromString(string)"/> (at most 3 bytes per char)
+        /// </summary>
+        const int MaxStackSeedChars = 256;
 
         /// <summary>
         /// The colors for the current application (based on <see cref="EnvInfo.AppName"/> and <see cref="EnvInfo.AppSeed"/>).
@@ -228,7 +259,18 @@ namespace SysWeaver
         /// <param name="value">The value (brightness) [0, 1], larger values are clamped per channel</param>
         /// <returns>A lower case "#rrggbb" color</returns>
         public static String GetWeb(double hue, double saturation, double value)
-            => "#" + ColorTools.HsvToRgb(hue, saturation, value).ToString("x").PadLeft(6, '0');
+            => String.Create(7, ColorTools.HsvToRgb(hue, saturation, value), static (dst, rgb) =>
+            {
+                //  Every channel is clamped to [0, 255], so the value is always written as exactly 6 lower case hex digits (same as ToString("x").PadLeft(6, '0'))
+                dst[0] = '#';
+                for (int i = 6; i > 0; --i)
+                {
+                    dst[i] = LowerHexChars[(int)(rgb & 15)];
+                    rgb >>= 4;
+                }
+            });
+
+        const String LowerHexChars = "0123456789abcdef";
 
         /// <summary>
         /// Get a web color from HSV and alpha
@@ -244,13 +286,16 @@ namespace SysWeaver
                 return GetWeb(hue, saturation, value);
             if (alpha <= 0)
                 return "transparent";
-            var col = ColorTools.HsvToRgb(hue, saturation, value);
-            var r = col >> 16;
-            var g = (col >> 8) & 0xff;
-            var b = col & 0xff;
-            return String.Concat("rgba(", r, ',', g, ',', b, ',', alpha.ToString(CultureInfo.InvariantCulture), ')');
+            return ToRgba(ColorTools.HsvToRgb(hue, saturation, value), alpha);
         }
 
+        /// <summary>
+        /// Get a "rgba(r,g,b,a)" color string (invariant culture)
+        /// </summary>
+        /// <param name="col">0xrrggbb</param>
+        /// <param name="alpha">The opacity</param>
+        static String ToRgba(uint col, double alpha)
+            => String.Create(CultureInfo.InvariantCulture, $"rgba({col >> 16},{(col >> 8) & 0xff},{col & 0xff},{alpha})");
 
 
 
@@ -264,7 +309,7 @@ namespace SysWeaver
         public static String GetWeb(String text, double value = 0.8)
         {
             GetRandom(out var h, out var s, SeedFromString(text));
-            return "#" + ColorTools.HsvToRgb(h, s, value).ToString("x").PadLeft(6, '0');
+            return GetWeb(h, s, value);
         }
 
         /// <summary>
@@ -282,11 +327,7 @@ namespace SysWeaver
             if (alpha <= 0)
                 return "transparent";
             GetRandom(out var h, out var s, SeedFromString(text));
-            var col = ColorTools.HsvToRgb(h, s, value);
-            var r = col >> 16;
-            var g = (col >> 8) & 0xff;
-            var b = col & 0xff;
-            return String.Concat("rgba(", r, ',', g, ',', b, ',', alpha.ToString(CultureInfo.InvariantCulture), ')');
+            return ToRgba(ColorTools.HsvToRgb(h, s, value), alpha);
         }
 
         /// <summary>

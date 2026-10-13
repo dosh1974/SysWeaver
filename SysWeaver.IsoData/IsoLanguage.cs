@@ -122,9 +122,26 @@ namespace SysWeaver.IsoData
         public static IsoLanguage TryGetName(String name)
         {
             var ni = NameToInfo;
-            if (ni.TryGetValue((name ?? "").FastTrimToLower(), out var i))
+            name ??= "";
+            if (ni.TryGetValue(name.FastTrimToLower(), out var i))
                 return i;
-            return ni.TryGetValue((name ?? "").Split('-')[0].FastTrimToLower(), out i) ? i : null;
+            //  The text before the first hyphen, without a hyphen that's the whole text (the same lookup as above, so it's not found either)
+            var h = name.IndexOf('-');
+            if (h < 0)
+                return null;
+            //  Exactly as FastTrimToLower of the text before the hyphen (no split array, same as ToLowerInvariant),
+            //  lower cased while copying into a single new string (no substring)
+            var t = name.AsSpan(0, h).TrimStart();
+            var start = h - t.Length;
+            var len = t.TrimEnd().Length;
+            var key = len <= 0 ? String.Empty : String.Create(len, (name, start), static (dst, state) =>
+            {
+                var src = state.name.AsSpan(state.start, dst.Length);
+                //  ASCII (the common case) using SIMD, the rest (if any) using the invariant culture
+                if (System.Text.Ascii.ToLower(src, dst, out var done) != System.Buffers.OperationStatus.Done)
+                    src[done..].ToLowerInvariant(dst[done..]);
+            });
+            return ni.TryGetValue(key, out i) ? i : null;
         }
 
 

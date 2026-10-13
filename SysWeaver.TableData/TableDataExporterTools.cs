@@ -73,35 +73,46 @@ namespace SysWeaver.Data
             if (link == null)
                 return false;
             //  Browsers ignore leading control chars / spaces and any tab or new line in an url
+            //  Only schemes of length 1 (drive letters) or 4 - 6 (http, https, mailto, file) are safe, so only the first chars of the scheme are kept (on the stack)
+            Span<Char> scheme = stackalloc Char[MaxSafeSchemeLength];
+            int sl = 0;
             var l = link.Length;
-            var sb = new StringBuilder(l);
             for (int i = 0; i < l; ++i)
             {
                 var c = link[i];
                 if ((c == '\t') || (c == '\r') || (c == '\n'))
                     continue;
-                if ((sb.Length == 0) && (c <= ' '))
+                if ((sl == 0) && (c <= ' '))
                     continue;
                 if ((c == '/') || (c == '?') || (c == '#') || (c == '\\'))
                     return true;
                 if (c == ':')
                 {
-                    var scheme = sb.ToString();
-                    if ((scheme.Length == 1) && Char.IsAsciiLetter(scheme[0]))
+                    if (sl > MaxSafeSchemeLength)
+                        return false;
+                    var s = scheme.Slice(0, sl);
+                    if ((sl == 1) && Char.IsAsciiLetter(s[0]))
                         return true;
                     return
-                        scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+                        s.Equals("http", StringComparison.OrdinalIgnoreCase)
                         ||
-                        scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
+                        s.Equals("https", StringComparison.OrdinalIgnoreCase)
                         ||
-                        scheme.Equals("mailto", StringComparison.OrdinalIgnoreCase)
+                        s.Equals("mailto", StringComparison.OrdinalIgnoreCase)
                         ||
-                        scheme.Equals("file", StringComparison.OrdinalIgnoreCase);
+                        s.Equals("file", StringComparison.OrdinalIgnoreCase);
                 }
-                sb.Append(c);
+                if (sl < MaxSafeSchemeLength)
+                    scheme[sl] = c;
+                ++sl;
             }
             return true;
         }
+
+        /// <summary>
+        /// The length of the longest safe scheme ("mailto")
+        /// </summary>
+        const int MaxSafeSchemeLength = 6;
 
         static String ApplyTextFormat(String s, Object nextValue, TableDataColumn col)
         {

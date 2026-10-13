@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -320,8 +321,22 @@ namespace SysWeaver.MicroService
             return null;
         }
 
+        /// <summary>
+        /// The chars that can't be in a file name (folder separators, drive / stream separators and the invalid chars of the platform)
+        /// </summary>
+        static readonly SearchValues<Char> InvalidNameChars = SearchValues.Create(new String(Path.GetInvalidFileNameChars()) + "/\\:");
+
+        /// <summary>
+        /// Test if a name is a plain file name (no folder part, not absolute, not "." or "..")
+        /// </summary>
+        static bool IsPlainFileName(String name)
+            => !(String.IsNullOrEmpty(name) || (name.AsSpan().IndexOfAny(InvalidNameChars) >= 0) || name.FastEquals(".") || name.FastEquals(".."));
+
         static bool IsValidConfigName(String filename)
         {
+            //  Only a file name, the callers combine it with a service folder (optpass-68: "..\\" names reached other folders)
+            if (!IsPlainFileName(filename))
+                return false;
             var ext = Path.GetExtension(filename).FastToLower();
             if (!ValidConfigExt.Contains(ext))
                 return false;
@@ -2232,6 +2247,8 @@ namespace SysWeaver.MicroService
                 throw new Exception("Invalid config name!");
             if (!ServiceHost.IsConfigBackupName(sname, out var dname))
                 throw new Exception("Config is not a backup!");
+            if (!IsPlainFileName(dname))
+                throw new Exception("Invalid config name!");
            
             sname = Path.Combine(bin, sname);
             dname = Path.Combine(bin, dname);
@@ -2698,12 +2715,7 @@ namespace SysWeaver.MicroService
                 if ((fn != null) && File.Exists(fn))
                     return await FileExt.TryReadBytesAsync(fn).ConfigureAwait(false);
             }
-            if (name.FastEquals("hosts"))
-            {
-                var fn = GetHostsFile();
-                if ((fn != null) && File.Exists(fn))
-                    return await FileExt.TryReadBytesAsync(fn).ConfigureAwait(false);
-            }
+            //  The hosts file is only available if it's a text file (AllowHosts)
             return null;
         }
 

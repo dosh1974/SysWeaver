@@ -1012,7 +1012,6 @@ namespace SysWeaver.Media
                     b.Append(str);
                 }
             }
-            List<String> o = new List<string>(gl);
             for (int i = 0; i < gl; ++i)
             {
                 b.Clear();
@@ -1366,7 +1365,6 @@ namespace SysWeaver.Media
                     b.Append(str);
                 }
             }
-            List<String> o = new List<string>(gl);
             for (int i = 0; i < gl; ++i)
             {
                 b.Clear();

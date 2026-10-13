@@ -197,67 +197,99 @@ namespace SysWeaver.Db
                 src.From(sourceTableName);
             var selState = dp.ToSelectStatement(src.Statement, CommandFlags.Pipelined, default, 7 * 24 * 60 * 60);
             ConcurrentQueue<List<T>> queue = new ConcurrentQueue<List<T>>();
+            // Number of batches that are queued or being written
             long queueLen = 0;
             long quit = 0;
+            long failed = 0;
             async Task ProcessOne(List<T> data, OrmConnection cc)
             {
                 await BulkUpsert(cc, data, destTableName, maxBatchSize).ConfigureAwait(false);
             }
             long rowCount = 0;
-            long procCount = 0;
             async Task Processor(OrmConnection c = null)
             {
-                Interlocked.Increment(ref procCount);
-                using var cc = c == null ? (await dest.GetAsync().ConfigureAwait(false)) : null;
-                c = c ?? cc;
-                for (; ;)
+                try
                 {
-                    if (!queue.TryDequeue(out var batch))
+                    using var cc = c == null ? (await dest.GetAsync().ConfigureAwait(false)) : null;
+                    c = c ?? cc;
+                    for (; ; )
                     {
-                        if (Interlocked.Read(ref quit) != 0)
-                            break;
-                        await Task.Delay(1).ConfigureAwait(false);
-                        continue;
+                        if (!queue.TryDequeue(out var batch))
+                        {
+                            if (Interlocked.Read(ref quit) != 0)
+                                break;
+                            await Task.Delay(1).ConfigureAwait(false);
+                            continue;
+                        }
+                        try
+                        {
+                            await ProcessOne(batch, c).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            Interlocked.Decrement(ref queueLen);
+                        }
                     }
-                    Interlocked.Decrement(ref queueLen);
-                    await ProcessOne(batch, c).ConfigureAwait(false);
                 }
-                Interlocked.Decrement(ref procCount);
+                catch
+                {
+                    Interlocked.Exchange(ref failed, 1);
+                    throw;
+                }
             }
+            if (writerCount < 0)
+                writerCount = 0;
             int maxInMem = (writerCount + 1) << 3;
+            var workers = new Task[writerCount + 1];
             for (int i = 0; i < writerCount; ++i)
-                TaskExt.StartNewAsyncChain(() => Processor().ConfigureAwait(false));
-            using var con = await source.GetAsync().ConfigureAwait(false);
-            using var reader = await con.ExecuteReaderAsync(selState).ConfigureAwait(false);
-            List<T> batch = new List<T>();
-            while (await reader.ReadAsync().ConfigureAwait(false))
+                workers[i] = Task.Run(() => Processor());
+            try
             {
-                var row = new T();
-                reader.CopyToObject(row);
-                batch.Add(row);
-                if (batch.Count >= maxBatchSize)
+                using var con = await source.GetAsync().ConfigureAwait(false);
+                using var reader = await con.ExecuteReaderAsync(selState).ConfigureAwait(false);
+                List<T> batch = new List<T>();
+                while (await reader.ReadAsync().ConfigureAwait(false))
                 {
-                    rowCount += batch.Count;
-                    if (Interlocked.Increment(ref queueLen) > maxInMem)
+                    var row = new T();
+                    reader.CopyToObject(row);
+                    batch.Add(row);
+                    if (batch.Count >= maxBatchSize)
                     {
-                        Interlocked.Decrement(ref queueLen);
-                        await ProcessOne(batch, c).ConfigureAwait(false);
-                    }else
-                    {
-                        queue.Enqueue(batch);
+                        // A writer failed, stop reading (the exception is thrown below)
+                        if (Interlocked.Read(ref failed) != 0)
+                            break;
+                        rowCount += batch.Count;
+                        if (Interlocked.Increment(ref queueLen) > maxInMem)
+                        {
+                            Interlocked.Decrement(ref queueLen);
+                            await ProcessOne(batch, c).ConfigureAwait(false);
+                        }else
+                        {
+                            queue.Enqueue(batch);
+                        }
+                        batch = new List<T>();
                     }
-                    batch = new List<T>();
+                }
+                if ((batch.Count > 0) && (Interlocked.Read(ref failed) == 0))
+                {
+                    Interlocked.Increment(ref queueLen);
+                    queue.Enqueue(batch);
+                    rowCount += batch.Count;
                 }
             }
-            if (batch.Count > 0)
+            catch
             {
-                queue.Enqueue(batch);
-                rowCount += batch.Count;
+                // Don't write more rows of a failed copy
+                queue.Clear();
+                throw;
             }
-            Interlocked.Exchange(ref quit, 1);
-            await Processor(c).ConfigureAwait(false);
-            while (Interlocked.Read(ref queueLen) > 0)
-                await Task.Delay(1).ConfigureAwait(false);
+            finally
+            {
+                // Stop the writers when the queue is empty, write with this connection too and wait for all writes to complete (throws the first writer exception)
+                Interlocked.Exchange(ref quit, 1);
+                workers[writerCount] = Processor(c);
+                await Task.WhenAll(workers).ConfigureAwait(false);
+            }
             return rowCount;
         }
 
@@ -306,12 +338,21 @@ namespace SysWeaver.Db
             var c = CachedGetBulkUpsertCommand;
 
             var pCount = rowCount * columnCount;
-            var ps = CachedCommandArgNames;
-            var prev = ps?.Length ?? 0;
-            if (prev < pCount)
+            var ps = Volatile.Read(ref CachedCommandArgNames);
+            for (; ; )
             {
-                ps = ArrayExt.Create((int)pCount, i => i < prev ? ps[i] : "p" + i);
-                Interlocked.Exchange(ref CachedCommandArgNames, ps);
+                var prev = ps?.Length ?? 0;
+                if (prev >= pCount)
+                    break;
+                // Grow the shared cache, never replace it with a smaller array
+                var old = ps;
+                var n = ArrayExt.Create((int)pCount, i => i < prev ? old[i] : "p" + i);
+                ps = Interlocked.CompareExchange(ref CachedCommandArgNames, n, old);
+                if (ps == old)
+                {
+                    ps = n;
+                    break;
+                }
             }
             pnames = ps;
             var key = rowCount;
@@ -356,66 +397,96 @@ namespace SysWeaver.Db
             String[] paramNames = null;
             var pool = ArrayPool<Object>.Shared;
             var sb = new StringBuilder();
-            for (int i = 0; i < l;)
+            Object[] ps = null;
+            try
             {
-                var left = l - i;
-                var count = left;
-                if (count > maxBatchSize)
+                for (int i = 0; i < l;)
                 {
-                    count = maxBatchSize;
-                }else
-                {
-                    if (count > 256)
+                    var left = l - i;
+                    var count = left;
+                    if (count > maxBatchSize)
                     {
-                        count = left.EnsurePow2();
-                        if (count > left)
-                            count >>= 1;
+                        count = maxBatchSize;
+                    }else
+                    {
+                        if (count > 256)
+                        {
+                            count = left.EnsurePow2();
+                            if (count > left)
+                                count >>= 1;
+                        }
                     }
+                    sb.Clear();
+                    sb.Append(us[0]);
+                    sb.Append(GetBulkUpsertCommand(out var pn, count, fl));
+                    // Keep the longest names (used by all batches)
+                    if ((paramNames == null) || (pn.Length > paramNames.Length))
+                        paramNames = pn;
+                    int pCount = count * fl;
+                    ps = pool.Rent(pCount);
+                    int pi = 0;
+                    while (count > 0)
+                    {
+                        var dd = data[i];
+                        for (int j = 0; j < fl; ++j, ++pi)
+                            ps[pi] = fis[j].GetValueFn(dd);
+                        ++i;
+                        --count;
+                    }
+                    if (!useInsert)
+                        sb.Append(us[1]);
+                    var cmd = sb.ToString();
+                    cmds.Add(ValueTuple.Create(cmd, pCount, ps));
+                    ps = null;
                 }
-                sb.Clear();
-                sb.Append(us[0]);
-                sb.Append(GetBulkUpsertCommand(out paramNames, count, fl));
-                int pCount = count * fl;
-                var ps = pool.Rent(pCount);
-                int pi = 0;
-                while (count > 0)
-                {
-                    var dd = data[i];
-                    for (int j = 0; j < fl; ++j, ++pi)
-                        ps[pi] = fis[j].GetValueFn(dd);
-                    ++i;
-                    --count;
-                }
-                if (!useInsert)
-                    sb.Append(us[1]);
-                var cmd = sb.ToString();
-                cmds.Add(ValueTuple.Create(cmd, pCount, ps));
+            }
+            catch
+            {
+                if (ps != null)
+                    pool.Return(ps, true);
+                foreach (var x in cmds)
+                    pool.Return(x.Item3, true);
+                throw;
             }
             return new Func<OrmConnection, Task>(async con =>
             {
+                // The values are returned to the pool, so the upsert can only be executed once
+                var cl = Interlocked.Exchange(ref cmds, null);
+                if (cl == null)
+                    throw new InvalidOperationException("The bulk upsert of table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).CleanTypename().ToQuoted() + " has already been executed");
                 Interlocked.Add(ref InternalRowsScheuled, l);
-                var cc = cmds.Count;
-                for (int i = 0; i < cc; ++ i)
+                var cc = cl.Count;
+                int i = 0;
+                try
                 {
-                    var c = cmds[i];
-                    var cmd = c.Item1;
-                    var vl = c.Item2;
-                    var values = c.Item3;
-                    var dyn = new DynamicParameters();
-                    for (int j = 0; j < vl; ++ j)
-                        dyn.Add(paramNames[j], values[j]);
-                    pool.Return(values);
-                    var cmdDef = new CommandDefinition(cmd, dyn, flags: CommandFlags.None);
-                    try
+                    while (i < cc)
                     {
-                        await con.ExecuteAsync(cmdDef).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new Exception("Table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).CleanTypename().ToQuoted(), ex);
+                        var c = cl[i];
+                        var cmd = c.Item1;
+                        var vl = c.Item2;
+                        var values = c.Item3;
+                        var dyn = new DynamicParameters();
+                        for (int j = 0; j < vl; ++ j)
+                            dyn.Add(paramNames[j], values[j]);
+                        ++i;
+                        pool.Return(values, true);
+                        var cmdDef = new CommandDefinition(cmd, dyn, flags: CommandFlags.None);
+                        try
+                        {
+                            await con.ExecuteAsync(cmdDef).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new Exception("Table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).CleanTypename().ToQuoted(), ex);
+                        }
                     }
                 }
-                cmds = null;
+                finally
+                {
+                    // Return the values of the batches that weren't executed
+                    while (i < cc)
+                        pool.Return(cl[i++].Item3, true);
+                }
                 Interlocked.Add(ref InternalRowsCompleted, l);
             });
         }

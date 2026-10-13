@@ -252,6 +252,13 @@ namespace SysWeaver
         public String GetDate(String prev)
         {
             var localTime = Time.ToLocalTime();
+            //  Format on the stack, a string is only created if the date differs (it's the same for almost all messages)
+            Span<Char> buf = stackalloc Char[16];
+            if (localTime.TryFormat(buf, out var n, "yyyy-MM-dd", CultureInfo.InvariantCulture))
+            {
+                var d = buf.Slice(0, n);
+                return ((prev != null) && d.SequenceEqual(prev)) ? null : new String(d);
+            }
             var s = localTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             return s == prev ? null : s;
         }
@@ -292,33 +299,62 @@ namespace SysWeaver
                 {
                     headerWidth += 8;
                     var localTime = Time.ToLocalTime();
-                    var timeStamp = localTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-                    sb.Append(timeStamp);
+                    sb.Append(CultureInfo.InvariantCulture, $"{localTime:HH:mm:ss}");
                     if (style >= TextStyles.Debug)
                     {
-                        sb.Append(String.Format(" #{0,-7} 0x{1:x4}", Id, ThreadId));
+                        //  Current culture (same as String.Format)
+                        sb.Append($" #{Id,-7} 0x{ThreadId:x4}");
                         headerWidth += 16;
                     }
                     sb.Append(' ');
-                    sb.Append(Level.ToString().PadRight(8));
+                    var level = Level.ToString();
+                    sb.Append(level);
+                    if (level.Length < 8)
+                        sb.Append(' ', 8 - level.Length);
                     headerWidth += 9;
                 }
-                var tab = new String(' ', headerWidth);
                 var pre = Prefix;
-                var newLine = "\n" + new String(' ', headerWidth + pre.Length);
+                var indent = headerWidth + pre.Length;
                 sb.Append(pre);
-                sb.Append(Text.Trim('\n', '\r').Replace("\n", newLine));
-                sb.Append("\n");
+                AppendIndented(sb, Text, indent);
+                sb.Append('\n');
                 while (e != null)
                 {
-                    sb.AppendLine(String.Concat(tab, pre, e.Message.Trim('\n', '\r').Replace("\n", newLine)));
-                    sb.AppendLine(String.Concat(tab, pre, e.StackTrace?.Trim('\n', '\r')?.Replace("\n", newLine)));
+                    sb.Append(' ', headerWidth).Append(pre);
+                    AppendIndented(sb, e.Message, indent);
+                    sb.AppendLine();
+                    sb.Append(' ', headerWidth).Append(pre);
+                    var stack = e.StackTrace;
+                    if (stack != null)
+                        AppendIndented(sb, stack, indent);
+                    sb.AppendLine();
                     e = e.InnerException;
                 }
                 st = sb.ToString();
                 t[si] = st;
                 return st;
             }
+        }
+
+        /// <summary>
+        /// Append a text with leading and trailing new line chars ('\n' and '\r') removed, every new line ('\n') is followed by an indentation.
+        /// Same as sb.Append(text.Trim('\n', '\r').Replace("\n", "\n" + new String(' ', indent))) without the temporary strings.
+        /// </summary>
+        /// <param name="sb">The string builder to append to</param>
+        /// <param name="text">The text, must not be null (a NullReferenceException is thrown, same as text.Trim)</param>
+        /// <param name="indent">The number of spaces to add after every new line</param>
+        static void AppendIndented(StringBuilder sb, String text, int indent)
+        {
+            var s = text.AsSpan(0, text.Length).Trim("\n\r");
+            for (; ; )
+            {
+                var i = s.IndexOf('\n');
+                if (i < 0)
+                    break;
+                sb.Append(s.Slice(0, i)).Append('\n').Append(' ', indent);
+                s = s.Slice(i + 1);
+            }
+            sb.Append(s);
         }
 
 

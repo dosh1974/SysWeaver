@@ -1087,7 +1087,35 @@ namespace SysWeaver.Net
                 return HttpServerTools.PreventCacheKey;
             var ce = request.GetReqHeader("Content-Encoding");
             var ct = request.GetReqHeader("Content-Type");
-            return String.Join('\r', Convert.ToBase64String(mem.Span), request.LocalUrl, ce, ct, accept);
+            return PostCacheKey(mem, request.LocalUrl, ce, ct, accept);
+        }
+
+        /// <summary>
+        /// Same as String.Join('\r', Convert.ToBase64String(body.Span), localUrl, contentEncoding, contentType, accept) without the temporary base64 string (null values are empty)
+        /// </summary>
+        static String PostCacheKey(ReadOnlyMemory<Byte> body, String localUrl, String contentEncoding, String contentType, String accept)
+        {
+            localUrl ??= "";
+            contentEncoding ??= "";
+            contentType ??= "";
+            accept ??= "";
+            //  The body is at most 4096 bytes, so the length can't overflow
+            var len = ((body.Length + 2) / 3) * 4 + 4 + localUrl.Length + contentEncoding.Length + contentType.Length + accept.Length;
+            return String.Create(len, (body, localUrl, contentEncoding, contentType, accept), static (dst, s) =>
+            {
+                Convert.TryToBase64Chars(s.body.Span, dst, out var p);
+                dst[p++] = '\r';
+                s.localUrl.CopyTo(dst.Slice(p));
+                p += s.localUrl.Length;
+                dst[p++] = '\r';
+                s.contentEncoding.CopyTo(dst.Slice(p));
+                p += s.contentEncoding.Length;
+                dst[p++] = '\r';
+                s.contentType.CopyTo(dst.Slice(p));
+                p += s.contentType.Length;
+                dst[p++] = '\r';
+                s.accept.CopyTo(dst.Slice(p));
+            });
         }
 
         /// <summary>
