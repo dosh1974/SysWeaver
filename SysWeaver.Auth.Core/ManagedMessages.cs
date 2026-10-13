@@ -134,7 +134,7 @@ namespace SysWeaver
                 {
                     var isOptional = name.FastStartsWith("*");
                     var n = isOptional ? name.Substring(1) : name;
-                    var key = n.FastToLower();
+                    var key = name.FastToLower();
                     if ((comb & ManagedMessageTypes.Email) != 0)
                     {
                         var mm = new ManagedMailMessage(vars)
