@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
-    public interface IEmailService
+    public interface IEmailSender : IDisposable
     {
         /// <summary>
         /// Send a message
@@ -17,10 +17,6 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         Task Send(String to, String subject, String message, bool isHtml = false);
 
-        /// <summary>
-        /// The from address when sending emails using this instance
-        /// </summary>
-        String From { get; }
     }
 
 

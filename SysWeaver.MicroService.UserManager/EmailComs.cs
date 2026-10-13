@@ -27,7 +27,7 @@ namespace SysWeaver.MicroService
                 WhiteListPrefixes = wl;
             }
 
-            Email = manager.Get<IEmailService>(p.Instance);
+            Email = manager.Get<IEmailSender>(p.Instance);
             var m = Messages;
             m[(int)UserManagerComOps.Invite] = p.Invite ?? new();
             m[(int)UserManagerComOps.SignUp] = p.SignUp ?? new();
@@ -165,7 +165,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        readonly IEmailService Email;
+        readonly IEmailSender Email;
         readonly ManagedMailMessage[] Messages = new ManagedMailMessage[(int)UserManagerComOps.Count];
         readonly ManagedMailMessage Header;
         readonly ManagedMailMessage Footer;

@@ -10,7 +10,7 @@ namespace SysWeaver.Email
 
     [WebApiUrl("fakeEmail")]
     [WebMenuLink(null, "Debug/FakeEmail", "Fake email", "fakeEmail/index.html", "Show the fake email inbox")]
-    public sealed class FakeEmailService : IEmailService, IEmailReceiverService, IDisposable
+    public sealed class FakeEmailService : IEmailSender, IEmailReceiverService
     {
         public FakeEmailService(FakeEmailParams p = null)
         {
@@ -18,9 +18,9 @@ namespace SysWeaver.Email
             Size = Math.Max(p.Size, 10);
             TimeOut = Math.Max(p.TimeOut, 0) * 1000;
             var maxPoll = Math.Max(p.MaxPoll, 10);
-            From = p.From?.Trim();
-            if (String.IsNullOrEmpty(From))
-                From = "noreply@example.com";
+            Sender = p.From?.Trim();
+            if (String.IsNullOrEmpty(Sender))
+                Sender = "noreply@example.com";
             FailDomains = (p.FailDomains ?? []).Select(x => x?.Trim().TrimStart('@').ToLowerInvariant()).Where(x => !String.IsNullOrEmpty(x)).ToArray();
             Incoming = new(x => x.Id, x => x.System, x => x.Clone(), Size, TimeOut, maxPoll);
         }
@@ -31,7 +31,7 @@ namespace SysWeaver.Email
             Changed.Dispose();
         }
 
-        public override string ToString() => String.Concat(From, " (", Messages.Count, " emails)");
+        public override string ToString() => String.Concat(Sender, " (", Messages.Count, " emails)");
 
         readonly int Size;
         readonly int TimeOut;
@@ -43,7 +43,7 @@ namespace SysWeaver.Email
         /// <summary>
         /// The from address when sending emails using this instance
         /// </summary>
-        public String From { get; }
+        public readonly String Sender;
 
         static String Validate(String email, String what)
         {
@@ -74,7 +74,7 @@ namespace SysWeaver.Email
         AnyEmail SendInternal(String to, String subject, String message, bool isHtml)
         {
             to = Validate(to, "receiver");
-            var m = new AnyEmail(false, From, to, subject?.Trim() ?? "", message ?? "", isHtml, null);
+            var m = new AnyEmail(false, Sender, to, subject?.Trim() ?? "", message ?? "", isHtml, null);
             if (Fails(to))
                 m.Error = "Fake: delivery to " + to.ToQuoted() + " failed";
             Add(m);
@@ -122,7 +122,7 @@ namespace SysWeaver.Email
         public String FakeIncoming(FakeEmailRequest email)
         {
             var from = Validate(email.From, "sender");
-            var to = String.IsNullOrWhiteSpace(email.To) ? From : Validate(email.To, "receiver");
+            var to = String.IsNullOrWhiteSpace(email.To) ? Sender : Validate(email.To, "receiver");
             var m = new AnyEmail(true, from, to, email.Subject?.Trim() ?? "", email.Body ?? "", email.IsHtml, email.System)
             {
                 SenderName = String.IsNullOrWhiteSpace(email.SenderName) ? "Fake user" : email.SenderName.Trim(),
@@ -155,7 +155,7 @@ namespace SysWeaver.Email
             if ((cc == v) && (TimeOut > 0))
                 cc = await Changed.WaitForChange(cc, TimeOut).ConfigureAwait(false);
             if (cc == v)
-                return new FakeEmailList { Version = cc, Unchanged = true, From = From };
+                return new FakeEmailList { Version = cc, Unchanged = true, From = Sender };
             FakeEmailSummary[] emails;
             lock (Messages)
             {
@@ -166,7 +166,7 @@ namespace SysWeaver.Email
             return new FakeEmailList
             {
                 Version = cc,
-                From = From,
+                From = Sender,
                 Emails = emails,
             };
         }

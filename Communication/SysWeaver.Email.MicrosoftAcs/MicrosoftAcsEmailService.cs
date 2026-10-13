@@ -11,7 +11,7 @@ namespace SysWeaver.Email
 {
 
 
-    public sealed class MicrosoftAcsEmailService : IEmailService, IHaveStats, IPerfMonitored
+    public sealed class MicrosoftAcsEmailService : IEmailSender, IHaveStats, IPerfMonitored
     {
         public MicrosoftAcsEmailService(MicrosoftAcsEmailParams p = null)
         {
@@ -40,9 +40,9 @@ namespace SysWeaver.Email
             RetryCount = Math.Max(1, p.RetryCount) - 1;
         }
         public override string ToString() => Tos;
-        public string From => Sender;
+        
+        public readonly String Sender;
 
-        readonly String Sender;
         readonly WaitUntil Wait;
         readonly String Tos;
         readonly ExceptionTracker RetryFails = new ExceptionTracker();
@@ -104,6 +104,10 @@ namespace SysWeaver.Email
                 yield return x;
             foreach (var x in RetryFails.GetStats(nameof(MicrosoftAcsEmailService), "Retry."))
                 yield return x;
+        }
+
+        public void Dispose()
+        {
         }
 
         readonly EmailClient Client;

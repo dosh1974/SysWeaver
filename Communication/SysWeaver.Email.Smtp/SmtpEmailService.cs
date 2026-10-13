@@ -9,13 +9,13 @@ namespace SysWeaver.MicroService
 {
 
 
-    public sealed class SmtpEmailService : IEmailService, IDisposable, IHaveStats, IPerfMonitored
+    public sealed class SmtpEmailService : IEmailSender, IHaveStats, IPerfMonitored
     {
         public SmtpEmailService(SmtpEmailParams p = null)
         {
             p = p ?? new SmtpEmailParams();
             p.GetUserPassword(out var user, out var password);
-            User = user;
+            Sender = user;
             Tos = String.Concat("User: ", user.ToQuoted(), ", ", p);
             Client = new SmtpClient(p.Server)
             {
@@ -26,9 +26,8 @@ namespace SysWeaver.MicroService
             RetryCount = Math.Max(1, p.RetryCount) - 1;
         }
         public override string ToString() => Tos;
-        public string From => User;
-
-        readonly String User;
+        
+        public readonly String Sender;
         readonly String Tos;
         readonly ExceptionTracker RetryFails = new ExceptionTracker();
         readonly ExceptionTracker SendFails = new ExceptionTracker();
@@ -40,7 +39,7 @@ namespace SysWeaver.MicroService
             using var _ = PerfMon.Track(nameof(Send));
             using var m = new MailMessage
             {
-                From = new MailAddress(User),
+                From = new MailAddress(Sender),
                 Subject = subject?.Trim(),
                 Body = message,
                 IsBodyHtml = isHtml,

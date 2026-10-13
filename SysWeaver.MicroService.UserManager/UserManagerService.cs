@@ -37,7 +37,7 @@ namespace SysWeaver.MicroService
     [WebMenuPath("User", "User/Management", "Management", "User management tools, manage other users", null, 100000)]
     [WebMenuEmbedded("User", "User/Management/InviteUser", "Invite user", "auth/InviteUser.html", "Click to invite a user to join this site", "IconInvite", 0, UserManagerRoles.InviteUser)]
     [IsMicroService]
-    [RequiredDep<IEmailService>]
+    [RequiredDep<IEmailSender>]
     public sealed partial class UserManagerService : AuthorizerBase, IDisposable
     {
         #region Dynamic menu

@@ -15,7 +15,7 @@ namespace SysWeaver.Email
 {
 
 
-    public sealed class AmazonSesEmailService : IEmailService, IDisposable, IHaveStats, IPerfMonitored
+    public sealed class AmazonSesEmailService : IEmailSender, IHaveStats, IPerfMonitored
     {
         public AmazonSesEmailService(AmazonSesEmailParams p = null)
         {
@@ -39,9 +39,7 @@ namespace SysWeaver.Email
             RetryCount = Math.Max(1, p.RetryCount) - 1;
         }
         public override string ToString() => Tos;
-        public string From => Sender;
-
-        readonly String Sender;
+        public readonly String Sender;
         readonly String FromAddress;
         readonly String ConfigurationSet;
         readonly String Tos;

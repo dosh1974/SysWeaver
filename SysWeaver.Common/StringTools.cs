@@ -2297,7 +2297,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool)"/>
+        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool, bool)"/>
         /// </summary>
         static readonly SearchValues<Char> MdEscapeChars = SearchValues.Create(
             [
@@ -2325,7 +2325,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool)"/>
+        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool, bool)"/>
         /// </summary>
         static readonly SearchValues<Char> MdEscapeCharsAll = SearchValues.Create(
             [
