@@ -124,7 +124,7 @@ namespace SysWeaver.MicroService
             return new HttpRequestData(resData);
         }
 
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }

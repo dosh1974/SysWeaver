@@ -360,17 +360,6 @@ namespace SysWeaver.Net
             return ser.Create<T>(data);
         }
 
-        T GetText<T>(String text, IDeserializer ser)
-        {
-            var ts = ser as ITextDeserializer;
-#if DEBUG
-            if (ts == null)
-                throw new Exception(String.Concat("The \"", ser.Name, "\" isn't a ITextDeserializer which is required"));
-#endif//DEBUG
-            var v = ts.FromString<T>(text);
-            return v;
-        }
-
         /// <summary>
         /// Decode an API argument passed as text (typically the query string of a GET request).
         /// </summary>
@@ -393,13 +382,20 @@ namespace SysWeaver.Net
             var tl = textInput.Length;
             if (tl <= 0)
                 return default(T);
-            var text = Uri.UnescapeDataString(textInput);
-            var c = text[0];
+            //  Uri.UnescapeDataString only decodes "%XX" sequences ('+' is kept), so text without a '%' is used as is (no string is created)
+            String text = null;
+            var span = textInput;
+            if (textInput.Contains('%'))
+            {
+                text = Uri.UnescapeDataString(textInput);
+                span = text;
+            }
+            var c = span[0];
             if (c == '_')
-                return GetBinary<T>(text);
+                return GetBinary<T>(text ?? new String(span));
             if (!SerMapper.TryGetValue(c, out var ser))
             {
-                if (Consts.TryGetValue(text, out var val))
+                if (Consts.TryGetValueSpan(span, out var val))
                 {
                     ser = JsonDeSer;
                     if (ser == null)
@@ -408,20 +404,26 @@ namespace SysWeaver.Net
                 }else
                 {
                     if (!Char.IsLetter(c))
-                        throw new Exception(String.Concat("Don't know how to handle API parameters \"", text, '"'));
+                        throw new Exception(String.Concat("Don't know how to handle API parameters \"", span, "\""));
                     ser = UriDeSer;
                     if (ser == null)
                         throw new Exception("No enabled uri deserializer");
                 }
             }
             if (ser == null)
-            { 
+            {
                 if (Formats.TryGetValue(c, out var mime))
                     throw new Exception(String.Concat("No enabled serializer for \"", mime, '"'));
                 else
                     throw new Exception(String.Concat("No serializer defined for '", c, '\''));
             }
-            return GetText<T>(text, ser);
+            var ts = ser as ITextDeserializer;
+#if DEBUG
+            if (ts == null)
+                throw new Exception(String.Concat("The \"", ser.Name, "\" isn't a ITextDeserializer which is required"));
+#endif//DEBUG
+            //  An existing string (unescaped or a constant) is passed as is, else the deserializer reads the span (the default FromSpan creates the string)
+            return text != null ? ts.FromString<T>(text) : ts.FromSpan<T>(span);
         }
 
 

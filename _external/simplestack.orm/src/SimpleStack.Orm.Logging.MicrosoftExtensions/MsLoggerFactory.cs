@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SimpleStack.Orm.Logging.MicrosoftExtensions
 {
-    public class MsLogger<T> : SimpleStack.Orm.Logging.ILogger<T>
+    public class MsLogger<T> : SimpleStack.Orm.Logging.ILogger<T>, SimpleStack.Orm.Logging.IDebugLogFilter
     {
         private readonly Microsoft.Extensions.Logging.ILogger<T> _logger;
 
@@ -11,7 +11,9 @@ namespace SimpleStack.Orm.Logging.MicrosoftExtensions
         {
             _logger = logger;
         }
-        
+
+        public bool IsDebugEnabled => _logger.IsEnabled(LogLevel.Debug);
+
         public void LogError(Exception e, string message, params object[] p)
         {
             _logger.LogError(e,message,p);

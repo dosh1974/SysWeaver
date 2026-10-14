@@ -4,8 +4,10 @@ namespace SimpleStack.Orm.Logging
 {
     public class DummyLoggerFactory : ILoggerFactory
     {
-        private class DummyLogger<T> : ILogger<T>
+        private class DummyLogger<T> : ILogger<T>, IDebugLogFilter
         {
+            public bool IsDebugEnabled => false;
+
             public void LogError(Exception e, string message, params object[] p)
             {
             

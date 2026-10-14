@@ -51,7 +51,7 @@ namespace SysWeaver.AI
             folder = EnvInfo.MakeAbsoulte(folder);
             WorkflowFolder = Path.GetFullPath(folder);
             if (!Directory.Exists(WorkflowFolder))
-                Msg?.AddMessage(MsgPrefix + "The workflow folder " + WorkflowFolder.ToFilename() + " doesn't exist!", MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{MsgPrefix}The workflow folder {WorkflowFolder.ToFilename()} doesn't exist!");
             Http = WebTools.GetHttpClient(Math.Max(5, p.NetworkTimeoutSeconds));
             AnnotateSubgraphInputs = p.AnnotateSubgraphInputs;
             FetchUiWorkflows = p.FetchUiWorkflows;

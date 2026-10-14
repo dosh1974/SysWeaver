@@ -630,6 +630,34 @@ namespace SysWeaver.MicroService
 
         static readonly IReadOnlyDictionary<Type, ValTypes> DataConverters = GetDataConverters();
 
+        /// <summary>
+        /// The supported column types (the keys of <see cref="DataConverters"/>) by their full and assembly qualified names.
+        /// A fixed set (bounded, no stale misses, only core library types are kept alive), a name is only added if Type.GetType(name) returns the type
+        /// </summary>
+        static readonly IReadOnlyDictionary<String, Type> ColumnTypes = GetColumnTypes();
+
+        static IReadOnlyDictionary<String, Type> GetColumnTypes()
+        {
+            var d = new Dictionary<String, Type>(StringComparer.Ordinal);
+            foreach (var t in DataConverters.Keys)
+            {
+                foreach (var name in new[] { t.FullName, t.AssemblyQualifiedName })
+                {
+                    if ((name != null) && (Type.GetType(name) == t))
+                        d[name] = t;
+                }
+            }
+            return d.Freeze();
+        }
+
+        /// <summary>
+        /// Same as Type.GetType(typeName), the supported types are looked up in <see cref="ColumnTypes"/>
+        /// </summary>
+        /// <param name="typeName">The type name of a column</param>
+        /// <returns>The type or null if not found</returns>
+        static Type GetColumnType(String typeName)
+            => ((typeName != null) && ColumnTypes.TryGetValue(typeName, out var t)) ? t : Type.GetType(typeName);
+
 
 
         static Type StripTask(Type t)
@@ -742,7 +770,7 @@ namespace SysWeaver.MicroService
             for (int i = 0; i < setCount; ++i)
             {
                 var col = cols[values[i]];
-                var t = Type.GetType(col.Type);
+                var t = GetColumnType(col.Type);
                 if (t == null)
                     throw new Exception("Invalid type found for column: " + col.Name.ToQuoted());
                 if (!dcs.TryGetValue(t, out var typeInfo))

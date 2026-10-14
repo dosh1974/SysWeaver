@@ -77,18 +77,18 @@ namespace SysWeaver
             EnvInfo.AppSeed = p.AppSeed;
             if (m != null)
             {
-                m.AddMessage(String.Concat(LogPrefix, "OS name:         ", EnvInfo.OsName));
-                m.AddMessage(String.Concat(LogPrefix, "OS platform:     ", EnvInfo.OsPlatform));
-                m.AddMessage(String.Concat(LogPrefix, "OS version:      ", EnvInfo.OsVersion));
-                m.AddMessage(String.Concat(LogPrefix, "OS architecture: ", RuntimeInformation.OSArchitecture.ToString()));
-                m.AddMessage(String.Concat(LogPrefix, "Key folder:      ", Folders.KeyFolder.ToQuoted()));
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS name:         {EnvInfo.OsName}");
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS platform:     {EnvInfo.OsPlatform}");
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS version:      {EnvInfo.OsVersion}");
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS architecture: {RuntimeInformation.OSArchitecture.ToString()}");
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}Key folder:      {Folders.KeyFolder.ToQuoted()}");
                 void w(String title, IReadOnlyList<String> folders)
                 {
-                    m.AddMessage(String.Concat(LogPrefix, title, folders.Count != 1 ? "s:" : ":"));
+                    m.AddMessage(MessageLevels.Info, $"{LogPrefix}{title}{(folders.Count != 1 ? "s:" : ":")}");
                     using (var t = m.Tab())
                     {
                         foreach (var f in folders)
-                            m.AddMessage(String.Concat(LogPrefix, '"', f, '"'));
+                            m.AddMessage(MessageLevels.Info, $"{LogPrefix}\"{f}\"");
                     }
                 }
                 w("Current user application folder", Folders.UserAppFolders);
@@ -103,23 +103,23 @@ namespace SysWeaver
             var s = p.ThreadPoolWorkerThreads;
             if (s == 0)
             {
-                m?.AddMessage(LogPrefix + "Using default minimum number of ThreadPool worker threads: " + workerThreads);
+                m?.AddMessage(MessageLevels.Info, $"{LogPrefix}Using default minimum number of ThreadPool worker threads: {workerThreads}");
             }
             else
             {
                 workerThreads = Math.Max(workerThreads, s > 0 ? s : (Environment.ProcessorCount * -s + 50) / 100);
-                m?.AddMessage(LogPrefix + "Setting the minimum number of ThreadPool worker threads to " + workerThreads + " (default: " + DefWorkerThreads + ")");
+                m?.AddMessage(MessageLevels.Info, $"{LogPrefix}Setting the minimum number of ThreadPool worker threads to {workerThreads} (default: {DefWorkerThreads})");
             }
 
             s = p.ThreadPoolIoThreads;
             if (s == 0)
             {
-                m?.AddMessage(LogPrefix + "Using default minimum number of ThreadPool IO threads: " + ioThreads);
+                m?.AddMessage(MessageLevels.Info, $"{LogPrefix}Using default minimum number of ThreadPool IO threads: {ioThreads}");
             }
             else
             {
                 ioThreads = Math.Max(ioThreads, s > 0 ? s : (Environment.ProcessorCount * -s + 50) / 100);
-                m?.AddMessage(LogPrefix + "Setting the minimum number of ThreadPool IO threads to " + ioThreads + " (default: " + DefIoThreads + ")");
+                m?.AddMessage(MessageLevels.Info, $"{LogPrefix}Setting the minimum number of ThreadPool IO threads to {ioThreads} (default: {DefIoThreads})");
             }
             if (workerThreads != DefWorkerThreads || ioThreads != DefIoThreads)
                 ThreadPool.SetMinThreads(workerThreads, ioThreads);

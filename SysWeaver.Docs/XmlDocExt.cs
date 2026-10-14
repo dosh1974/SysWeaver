@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using System.Xml.XPath;
 
@@ -16,7 +17,7 @@ namespace SysWeaver.Docs
     /// </summary>
     /// <remarks>
     /// <para>The documentation is read from the "AssemblyName.xml" file next to each assembly's <see cref="Assembly.Location"/> the first time an assembly is needed,
-    /// and all results are cached (thread safe). Assemblies without a location (single-file publish, dynamic) or without a documentation file yield null.</para>
+    /// and all results are cached (thread safe; the reflection objects of collectible assemblies are held weakly, so that they can be unloaded).Assemblies without a location (single-file publish, dynamic) or without a documentation file yield null.</para>
     /// <para>Lookups also search the assemblies of the declaring type's interfaces and base types.
     /// Fields, properties, methods and constructors are matched exactly first (the member definition, regardless of the type it was reflected from),
     /// so a documented base member and a documented override each get their own documentation.
@@ -29,16 +30,36 @@ namespace SysWeaver.Docs
     {
 
 
-        static readonly ConcurrentDictionary<Type, List<DocAssembly>> AsmsCache = new ConcurrentDictionary<Type, List<DocAssembly>>();
-        static readonly ConcurrentDictionary<Type, IXmlDocInfo> TypeCache = new ConcurrentDictionary<Type, IXmlDocInfo>();
-        static readonly ConcurrentDictionary<FieldInfo, IXmlDocInfo> FieldCache = new ConcurrentDictionary<FieldInfo, IXmlDocInfo>();
-        static readonly ConcurrentDictionary<PropertyInfo, IXmlDocInfo> PropertyCache = new ConcurrentDictionary<PropertyInfo, IXmlDocInfo>();
-        static readonly ConcurrentDictionary<MethodInfo, IXmlDocMethodInfo> MethodCache = new ConcurrentDictionary<MethodInfo, IXmlDocMethodInfo>();
-        static readonly ConcurrentDictionary<ParameterInfo, IXmlDocParameterInfo> ParameterCache = new ConcurrentDictionary<ParameterInfo, IXmlDocParameterInfo>();
-        static readonly ConcurrentDictionary<ConstructorInfo, IXmlDocMethodInfo> ConstructorCache = new ConcurrentDictionary<ConstructorInfo, IXmlDocMethodInfo>();
-        static readonly ConcurrentDictionary<MethodBase, IXmlDocMethodInfo> MethodBaseCache = new ConcurrentDictionary<MethodBase, IXmlDocMethodInfo>();
-        static readonly ConcurrentDictionary<MemberInfo, IXmlDocInfo> MemberCache = new ConcurrentDictionary<MemberInfo, IXmlDocInfo>();
-        static readonly List<DocAssembly> Empty = new List<DocAssembly>(); 
+        /// <summary>
+        /// A thread safe cache keyed by reflection objects: keys of collectible assemblies are held weakly (a <see cref="ConditionalWeakTable{TKey, TValue}"/>, so that the assembly can be unloaded),
+        /// all other keys in a dictionary.
+        /// </summary>
+        sealed class ReflectionCache<TKey, TValue> where TKey : class where TValue : class
+        {
+            public ReflectionCache(Func<TKey, bool> isCollectible)
+            {
+                IsCollectible = isCollectible;
+            }
+
+            readonly Func<TKey, bool> IsCollectible;
+            readonly ConcurrentDictionary<TKey, TValue> Strong = new();
+            readonly ConditionalWeakTable<TKey, TValue> Weak = new();
+
+            public bool TryGetValue(TKey key, out TValue value) => Strong.TryGetValue(key, out value) || Weak.TryGetValue(key, out value);
+
+            public bool TryAdd(TKey key, TValue value) => IsCollectible(key) ? Weak.TryAdd(key, value) : Strong.TryAdd(key, value);
+        }
+
+        static readonly ReflectionCache<Type, List<DocAssembly>> AsmsCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<Type, IXmlDocInfo> TypeCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<FieldInfo, IXmlDocInfo> FieldCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<PropertyInfo, IXmlDocInfo> PropertyCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<MethodInfo, IXmlDocMethodInfo> MethodCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<ParameterInfo, IXmlDocParameterInfo> ParameterCache = new(static x => x.Member.IsCollectible);
+        static readonly ReflectionCache<ConstructorInfo, IXmlDocMethodInfo> ConstructorCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<MethodBase, IXmlDocMethodInfo> MethodBaseCache = new(static x => x.IsCollectible);
+        static readonly ReflectionCache<MemberInfo, IXmlDocInfo> MemberCache = new(static x => x.IsCollectible);
+        static readonly List<DocAssembly> Empty = new List<DocAssembly>();
 
         static IReadOnlyList<DocAssembly> GetAssemblies(Type type)
         {
@@ -644,7 +665,7 @@ namespace SysWeaver.Docs
             }
         }
 
-        static readonly ConcurrentDictionary<Assembly, DocAssembly> DocAssemblies = new ();
+        static readonly ReflectionCache<Assembly, DocAssembly> DocAssemblies = new(static x => x.IsCollectible);
 
         static String Read(XElement x, String childName)
         {

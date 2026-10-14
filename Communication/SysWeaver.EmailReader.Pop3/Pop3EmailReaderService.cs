@@ -59,7 +59,7 @@ namespace SysWeaver.EmailReader
             Incoming = new(x => x.Id, x => x.System, x => x.Clone(), Size, timeOut, maxPoll);
             Tos = p.ToString();
             _ = PollLoop(Cancel.Token);
-            Msg?.AddMessage(LogPrefix + "Checking " + Server.ToQuoted() + " every " + (PollInterval / 1000) + " seconds" + (DeleteAfterRead ? "" : ", emails are left on the server"), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Checking {Server.ToQuoted()} every {PollInterval / 1000} seconds{(DeleteAfterRead ? "" : ", emails are left on the server")}");
         }
 
         public override string ToString() => Tos;
@@ -117,7 +117,7 @@ namespace SysWeaver.EmailReader
                     if (cancel.IsCancellationRequested)
                         break;
                     PollFails.OnException(ex);
-                    Msg?.AddMessage(LogPrefix + "Failed to check the mailbox at " + Server.ToQuoted(), ex, MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to check the mailbox at {Server.ToQuoted()}", ex);
                     delay = PollRetryDelay;
                 }
                 try
@@ -181,7 +181,7 @@ namespace SysWeaver.EmailReader
             if ((uids == null) && (count > 0) && !DeleteAfterRead && !WarnedNoUidl)
             {
                 WarnedNoUidl = true;
-                Msg?.AddMessage(LogPrefix + "The server " + Server.ToQuoted() + " doesn't support UIDL, all emails are read on every check (duplicates with the same Message-Id are ignored), consider using " + nameof(Pop3EmailReaderParams.DeleteAfterRead), MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}The server {Server.ToQuoted()} doesn't support UIDL, all emails are read on every check (duplicates with the same Message-Id are ignored), consider using {nameof(Pop3EmailReaderParams.DeleteAfterRead)}");
             }
             //  Commits the deletes
             await client.DisconnectAsync(true, cancel).ConfigureAwait(false);
@@ -231,7 +231,7 @@ namespace SysWeaver.EmailReader
             catch (Exception ex)
             {
                 ProcessFails.OnException(ex);
-                Msg?.AddMessage(LogPrefix + "Failed to process the email " + (m.MessageId ?? uid).ToQuoted() + ", it's left on the server", ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to process the email {(m.MessageId ?? uid).ToQuoted()}, it's left on the server", ex);
                 return null;
             }
         }

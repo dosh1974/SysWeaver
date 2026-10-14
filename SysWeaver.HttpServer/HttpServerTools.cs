@@ -491,7 +491,7 @@ namespace SysWeaver.Net
             public IReadOnlyList<string> Auth => throw new NotImplementedException();
 			public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 			public HttpRequestData Get(HttpServerRequest request) => throw new NotImplementedException();
-            public Task<HttpRequestData> GetAsync(HttpServerRequest request) => throw new NotImplementedException();
+            public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request) => throw new NotImplementedException();
             public string GetEtag(out bool useAsync, HttpServerRequest request) => throw new NotImplementedException();
 
        

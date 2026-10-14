@@ -34,7 +34,7 @@ namespace SysWeaver.MicroService
             throw new NotImplementedException();
         }
 
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             var res = await Fs.Upload(request, Repo).ConfigureAwait(false);
             return new HttpRequestData(JsonSer.Serialize(res));

@@ -77,7 +77,7 @@ namespace SysWeaver.MicroService
             {
                 using var _ = await Lock.Lock().ConfigureAwait(false);
                 var m = Manager;
-                m.AddMessage(String.Concat(Prefix, "Synching folder \"", DestPath, "\" from \"", RemoteName, "\" on \"", RemoteAddress, '"'));
+                m.AddMessage(MessageLevels.Info, $"{Prefix}Synching folder \"{DestPath}\" from \"{RemoteName}\" on \"{RemoteAddress}\"");
                 var folder = Folder;
                 var fn = WebFolder;
                 var swapMethod = SwapMethod;
@@ -143,7 +143,7 @@ namespace SysWeaver.MicroService
                             }
                         }
                         Version = newVersion;
-                        m.AddMessage(String.Concat(Prefix, "Folder updated to version ", newVersion));
+                        m.AddMessage(MessageLevels.Info, $"{Prefix}Folder updated to version {newVersion}");
                     }
                     return exx;
                 }

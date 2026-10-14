@@ -308,23 +308,13 @@ namespace SysWeaver.MicroService
 
         async Task<FileUploadResult> Upload(ReadOnlyMemory<Byte> data, FileUploadInfo file, HttpServerRequest r, String uid, String name)
         {
-            var info = new MagickImageInfo(data.Span);
-            switch (info.Format)
-            {
-                case MagickFormat.Png:
-                case MagickFormat.Jpeg:
-                case MagickFormat.Tif:
-                case MagickFormat.WebP:
-                case MagickFormat.Avif:
-                    break;
-                default:
-                    return FileRepoTools.InvalidFile;
-            }
+            using var img = ImageRepoService.ReadSupportedSource(data);
+            if (img == null)
+                return FileRepoTools.InvalidFile;
             var sizes = Sizes;
             var ss = sizes.Length;
             ReadOnlyMemory<Byte>[] imgs = new ReadOnlyMemory<byte>[ss];
 
-            using var img = new MagickImage(data.Span);
             if ((!AllowTransparent) && (img.HasAlpha))
             {
                 img.BackgroundColor = Background;

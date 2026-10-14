@@ -153,7 +153,7 @@ namespace SysWeaver.Net.ExploreModule
         }
 
 
-        public Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }

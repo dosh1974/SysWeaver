@@ -211,7 +211,7 @@ namespace SysWeaver.Net
                     {
                         if (p.IgnoreBadPrefixes)
                         {
-                            msg?.AddMessage(Prefix + "Can't listen on prefix \"" + pre + "\", exception: " + ex.Message, MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't listen on prefix \"{pre}\", exception: {ex.Message}");
                             continue;
                         }
                         else
@@ -226,7 +226,7 @@ namespace SysWeaver.Net
                         {
                             if (p.IgnoreBadPrefixes)
                             {
-                                msg?.AddMessage(Prefix + "Can't listen on prefix \"" + pre + "\" without a certificate provider!", MessageLevels.Warning);
+                                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't listen on prefix \"{pre}\" without a certificate provider!");
                                 continue;
                             }
                             throw new Exception(Prefix + "Can't listen on prefix \"" + pre + "\" without a certificate provider!");
@@ -239,13 +239,13 @@ namespace SysWeaver.Net
                         {
                             if (p.IgnoreBadPrefixes)
                             {
-                                msg?.AddMessage(Prefix + "Can't listen on prefix \"" + pre + "\" failed to read certificate: " + ex2.Message, ex2, MessageLevels.Warning);
+                                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't listen on prefix \"{pre}\" failed to read certificate: {ex2.Message}", ex2);
                                 continue;
                             }
                             throw new Exception(Prefix + "Can't listen on prefix \"" + pre + "\" failed to read certificate: " + ex2.Message, ex2);
                         }
                     }
-                    msg?.AddMessage(Prefix + "Listening on prefix \"" + pre + "\"", MessageLevels.Info);
+                    msg?.AddMessage(MessageLevels.Info, $"{Prefix}Listening on prefix \"{pre}\"");
                     Action<ListenOptions> onOptions = opt =>
                     {
                         opt.Protocols = HttpProtocols.Http1;

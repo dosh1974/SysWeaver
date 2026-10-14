@@ -81,9 +81,9 @@ namespace SysWeaver.ReverseProxy
             var testId = EnvInfo.ResolveText(p.ClientId ?? "$(MachineName)");
             var clientId = SanitizeClientId(testId);
             if (!testId.FastEquals(clientId))
-                manager.AddMessage(String.Concat("Evaluated client id \"", testId, "\" was reduced to \"", clientId, "\", only a-z, A-Z or 0-9 is allowed!"), MessageLevels.Warning);
+                manager.AddMessage(MessageLevels.Warning, $"Evaluated client id \"{testId}\" was reduced to \"{clientId}\", only a-z, A-Z or 0-9 is allowed!");
             else
-                manager.AddMessage(String.Concat("Reverse proxy client id: \"", clientId, '"'));
+                manager.AddMessage(MessageLevels.Info, $"Reverse proxy client id: \"{clientId}\"");
             ClientId = clientId;
             Manager = manager;
             if (!SetLocalServer(manager.TryGet<HttpServerBase>()))
@@ -99,7 +99,7 @@ namespace SysWeaver.ReverseProxy
                     ValidateEndPointName(name);
                     defaultEndPointName = defaultEndPointName ?? name;
                     endPoints.Add(name, new LocalEndPoint(name, ep));
-                    manager.AddMessage(String.Concat('"', name, "\" => \"", ep, '"'));
+                    manager.AddMessage(MessageLevels.Info, $"\"{name}\" => \"{ep}\"");
                 }
             }
             if (endPoints.Count <= 0)

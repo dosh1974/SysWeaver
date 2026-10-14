@@ -167,7 +167,7 @@ namespace SysWeaver.MicroService
             var key = typeName;
 
 
-            bool haveDebug = request?.Session?.Auth?.IsValid("Debug") ?? false;
+            bool haveDebug = request?.Session?.Auth?.IsValid(Authorization.RoleDebug) ?? false;
             var cache = haveDebug ? TypeInfoCacheDebug : TypeInfoCache;
             if (cache.TryGetValue(key, out var v))
                 return v;
@@ -702,7 +702,7 @@ namespace SysWeaver.MicroService
                 return null;
             var key = url;
 
-            bool haveDebug = request?.Session?.Auth?.IsValid("Debug") ?? false;
+            bool haveDebug = request?.Session?.Auth?.IsValid(Authorization.RoleDebug) ?? false;
             var cache = haveDebug ? ApiInfoCacheDebug : ApiInfoCache;
             if (cache.TryGetValue(key, out var v))
                 return v;
@@ -714,7 +714,7 @@ namespace SysWeaver.MicroService
             }
             var r = new ApiInfo();
             i.CopyTo(r);
-            bool isDebug = request?.Session?.Auth?.IsValid("Debug") ?? false;
+            bool isDebug = request?.Session?.Auth?.IsValid(Authorization.RoleDebug) ?? false;
             if (arg != null)
             {
                 r.Arg = GetTypeInfo(arg, arg.FullName, isDebug, GetInfo(pi));

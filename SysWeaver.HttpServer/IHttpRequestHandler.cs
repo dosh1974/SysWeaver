@@ -102,7 +102,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request information</param>
         /// <returns>The response data, ownership is transferred to the server (it's disposed after use)</returns>
-        Task<HttpRequestData> GetAsync(HttpServerRequest request);
+        ValueTask<HttpRequestData> GetAsync(HttpServerRequest request);
 
         /*
 

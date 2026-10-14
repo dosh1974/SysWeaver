@@ -95,14 +95,14 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="auth">The auth of the user making the request</param>
         /// <returns>True if the user should be able to join</returns>
-        public bool CanJoin(Authorization auth) => auth.IsValid(Auth);
+        public bool CanJoin(Authorization auth) => auth.IsValid(RequiredTokensCache.Get(ref AuthTokens, Auth));
 
         /// <summary>
         /// Check if the supplied auth (of the user making the request) can join this session
         /// </summary>
         /// <param name="auth">The auth of the user making the request</param>
         /// <returns>True if the user should be able to join</returns>
-        public bool CanPost(Authorization auth) => auth.IsValid(PostAuth ?? Auth);
+        public bool CanPost(Authorization auth) => auth.IsValid(RequiredTokensCache.Get(ref PostAuthTokens, PostAuth ?? Auth));
 
         /// <summary>
         /// Check if the supplied auth (of the user making the request) can clear this session
@@ -112,7 +112,7 @@ namespace SysWeaver.Chat
         public bool CanClear(Authorization auth)
         {
             var ca = ClearAuth;
-            return ca == "-" ? false : auth.IsValid(ca);
+            return ca == "-" ? false : auth.IsValid(RequiredTokensCache.Get(ref ClearAuthTokens, ca));
         }
 
         /// <summary>
@@ -125,10 +125,16 @@ namespace SysWeaver.Chat
             var rv = RemoveOwn ? ChatRemoveMessages.Own : ChatRemoveMessages.None;
             var ra = RemoveAnyAuth;
             if (ra != "-")
-                if (auth.IsValid(ra))
+                if (auth.IsValid(RequiredTokensCache.Get(ref RemoveAnyAuthTokens, ra)))
                     rv = ChatRemoveMessages.Any;
             return rv;
         }
+
+        //  The parsed auth requirements, cached per (reference of the) requirement string: the public fields can change at any time
+        RequiredTokensCache AuthTokens;
+        RequiredTokensCache PostAuthTokens;
+        RequiredTokensCache ClearAuthTokens;
+        RequiredTokensCache RemoveAnyAuthTokens;
 
 
 

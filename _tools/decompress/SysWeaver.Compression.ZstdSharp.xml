@@ -1,0 +1,148 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Compression.ZstdSharp</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Compression.CompZstdSharp">
+            <summary>
+            A Zstandard ("zstd", extension "zstd") plug-in using the fully managed ZstdSharp.Port library, through <see cref="T:SysWeaver.Compression.CompStreamCodec`2"/>.
+            Registered with priority 1 once <see cref="M:SysWeaver.Compression.CompZstdSharp.Register"/> is called.
+            </summary>
+            <remarks>
+            Uses zstd level 1 / 9 / 22 for <see cref="F:SysWeaver.Compression.CompEncoderLevels.Fast"/> / <see cref="F:SysWeaver.Compression.CompEncoderLevels.Balanced"/> / <see cref="F:SysWeaver.Compression.CompEncoderLevels.Best"/>.
+            The <see cref="T:ZstdSharp.Compressor"/> / <see cref="T:ZstdSharp.Decompressor"/> contexts are pooled (per level for compressors) and reset between uses.
+            Concatenated (and skippable) zstd frames are decompressed.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZstdSharp.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZstdSharp.SysWeaver#Compression#ICompType#Instance">
+            <summary>
+            Implements <see cref="P:SysWeaver.Compression.ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="F:SysWeaver.Compression.CompZstdSharp.Instance"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZstdSharp.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZstdSharp.HttpCode">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZstdSharp.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZstdSharp.FileExtensions">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZstdSharp.Compressors">
+            <summary>
+            Pooled compressors (one pool per level), the native context is kept between uses
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZstdSharp.Decompressors">
+            <summary>
+            Pooled decompressors, the native context is kept between uses
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompZstdSharp.ZstdEncoder">
+            <summary>
+            A pooled zstd compressor
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdEncoder.Create(SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdEncoder.GetMaxCompressedLength(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdEncoder.TryCompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@,System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdEncoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Compression.CompZstdSharp.ZstdDecoder">
+            <summary>
+            A pooled zstd decompressor
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdDecoder.Create">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdDecoder.TryDecompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@)">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Compression.CompZstdSharp.ZstdDecoder.NextHeaderSize">
+            <summary>
+            Concatenated zstd frames are valid zstd data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdDecoder.BeginNext(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            The decompressor is ready for the next frame when a frame is done, so this only checks that the data starts with a zstd (or skippable) frame
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Int32@,System.Int32@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.ZstdDecoder.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Decompress(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <inheritdoc/>
+        </member>
+    </members>
+</doc>

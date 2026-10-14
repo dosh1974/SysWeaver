@@ -5,6 +5,8 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Text;
 
 namespace SysWeaver
@@ -61,16 +63,18 @@ namespace SysWeaver
 
         /// <summary>
         /// True if FastToLower returns the key itself because it's lower case ASCII (the common case: the key can be looked up as is, the fastest lookup).
-        /// The same inline scan as FastToLower.
+        /// Keys up to 16 chars are tested without a loop, longer keys with the same inline scan as FastToLower.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static bool IsLowerAscii(String key) => AsciiCase.FindChangeOrNonAscii(key, AsciiCase.ToLower) < 0;
+        static bool IsLowerAscii(String key)
+            => key.Length <= ShortKey ? IsSameCaseShort(ref MemoryMarshal.GetReference(key.AsSpan()), (nuint)key.Length, AsciiCase.ToLower) : AsciiCase.FindChangeOrNonAscii(key, AsciiCase.ToLower) < 0;
 
         /// <summary>
         /// True if FastToUpper returns the key itself because it's upper case ASCII
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static bool IsUpperAscii(String key) => AsciiCase.FindChangeOrNonAscii(key, AsciiCase.ToUpper) < 0;
+        static bool IsUpperAscii(String key)
+            => key.Length <= ShortKey ? IsSameCaseShort(ref MemoryMarshal.GetReference(key.AsSpan()), (nuint)key.Length, AsciiCase.ToUpper) : AsciiCase.FindChangeOrNonAscii(key, AsciiCase.ToUpper) < 0;
 
         /// <summary>
         /// True if no char of the span must change (all ASCII, no letter from first to first + 25)
@@ -78,12 +82,68 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool IsSameCaseAscii(ReadOnlySpan<Char> key, Char first)
         {
-            if (key.Length > 16)
+            if (key.Length > ShortKey)
                 return !key.ContainsAnyInRange(first, (Char)(first + 25)) && Ascii.IsValid(key);
-            foreach (uint c in key)
-                if (((c - first) < 26) || (c >= 0x80))
-                    return false;
-            return true;
+            return IsSameCaseShort(ref MemoryMarshal.GetReference(key), (nuint)key.Length, first);
+        }
+
+        /// <summary>
+        /// Keys up to this length are tested by <see cref="IsSameCaseShort"/>
+        /// </summary>
+        const int ShortKey = 16;
+
+        /// <summary>
+        /// The bits 0x80 (of a 16 bit lane) of the chars in 4 chars that must change or aren't ASCII (any bit set if any char must change or isn't ASCII).
+        /// For an ASCII char (less than 0x80): c + (0x80 - first) has bit 7 set if c &gt;= first, c + (0x80 - first - 26) if c &gt;= first + 26 (no carry into the next lane).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong Change4(ulong chars, ushort first)
+            => (chars & 0xFF80FF80FF80FF80UL)
+            | ((chars + (0x80U - first) * 0x0001000100010001UL) & ~(chars + (0x80U - first - 26U) * 0x0001000100010001UL) & 0x0080008000800080UL);
+
+        /// <summary>
+        /// The same as <see cref="Change4"/> for 2 chars
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static uint Change2(uint chars, ushort first)
+            => (chars & 0xFF80FF80U)
+            | ((chars + (0x80U - first) * 0x00010001U) & ~(chars + (0x80U - first - 26U) * 0x00010001U) & 0x00800080U);
+
+        /// <summary>
+        /// True if none of the (at most 16) chars must change: all ASCII, no letter from first to first + 25.
+        /// No loop: two (overlapping) reads of 2, 4 or 8 chars.
+        /// </summary>
+        /// <param name="c">The first char</param>
+        /// <param name="l">The number of chars, 0 to 16</param>
+        /// <param name="first">The first letter that must change ('A' when lower casing, 'a' when upper casing)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool IsSameCaseShort(ref Char c, nuint l, ushort first)
+        {
+            ref byte p = ref Unsafe.As<Char, byte>(ref c);
+            if (l >= 4)
+            {
+                if (l <= 8)
+                    return (Change4(Unsafe.ReadUnaligned<ulong>(ref p), first) | Change4(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, (l - 4) * 2)), first)) == 0;
+                if (Vector128.IsHardwareAccelerated)
+                {
+                    ref ushort s = ref Unsafe.As<Char, ushort>(ref c);
+                    var a = Vector128.Create(first);
+                    var v0 = Vector128.LoadUnsafe(ref s);
+                    var v1 = Vector128.LoadUnsafe(ref s, l - 8);
+                    var m = Vector128.LessThan(v0 - a, Vector128.Create((ushort)26)) | Vector128.LessThan(v1 - a, Vector128.Create((ushort)26))
+                        | Vector128.GreaterThan(v0 | v1, Vector128.Create((ushort)0x7f));
+                    return m == Vector128<ushort>.Zero;
+                }
+                // 9 - 16 chars: four (overlapping) reads of 4 chars
+                return (Change4(Unsafe.ReadUnaligned<ulong>(ref p), first) | Change4(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, 8)), first)
+                    | Change4(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, (l - 8) * 2)), first) | Change4(Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, (l - 4) * 2)), first)) == 0;
+            }
+            if (l >= 2)
+                return (Change2(Unsafe.ReadUnaligned<uint>(ref p), first) | Change2(Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref p, (l - 2) * 2)), first)) == 0;
+            if (l == 0)
+                return true;
+            uint ch = c;
+            return ((ch - first) >= 26) && (ch < 0x80);
         }
 
         /// <summary>

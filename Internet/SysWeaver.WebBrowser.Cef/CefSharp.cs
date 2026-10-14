@@ -91,21 +91,21 @@ namespace SysWeaver.WebBrowser
         static async Task<bool> InternalInit(IMessageHost m, CefSettings settings)
         {
             var path = Path.Combine(EnvInfo.RuntimeFolderNative, "CefSharp.BrowserSubprocess.exe");
-            m?.AddMessage(Prefix + "Initialize from folder " + path.ToQuoted());
+            m?.AddMessage(MessageLevels.Info, $"{Prefix}Initialize from folder {path.ToQuoted()}");
             //settings.BrowserSubprocessPath = path;
             return await Cef.InitializeAsync(settings, performDependencyCheck: true, browserProcessHandler: null);
         }
 
         static Task InternalShutDown(IMessageHost m)
         {
-            m?.AddMessage(Prefix + "Shutdown");
+            m?.AddMessage(MessageLevels.Info, $"{Prefix}Shutdown");
             try
             {
                 Cef.Shutdown();
             }
             catch (Exception ex)
             {
-                m?.AddMessage(Prefix + "Shutdown failed", ex, MessageLevels.Warning);
+                m?.AddMessage(MessageLevels.Warning, $"{Prefix}Shutdown failed", ex);
             }
             return Task.CompletedTask;
         }

@@ -2189,6 +2189,7 @@
             <summary>
             An equality comparer for byte array content.
             Null arrays are supported by Equals (two null arrays are equal), use <see cref="T:SysWeaver.FastByteArrayEqualityComparer"/> if arrays are never null and always at least 4 bytes long.
+            Supports lookups by <see cref="T:System.ReadOnlySpan`1"/> of bytes (alternate lookups of Dictionary, ConcurrentDictionary, HashSet and <see cref="T:SysWeaver.LowAllocConcurrentDictionary`2"/>).
             </summary>
         </member>
         <member name="F:SysWeaver.ByteArrayEqualityComparer.Instance">
@@ -2207,11 +2208,41 @@
         <member name="M:SysWeaver.ByteArrayEqualityComparer.GetHashCode(System.Byte[])">
             <summary>
             Get a hash code for the content of a byte array.
-            The hash code is built from (up to) the first 4 bytes of the array (big endian), arrays with the same content always have the same hash code.
+            All bytes are hashed (a fast seeded hash), arrays with the same content always have the same hash code.
+            The hash code is randomized per process (like string hash codes), never persist it.
             </summary>
             <param name="obj">The array to get the hash code for</param>
-            <returns>The hash code, 0 for an empty array</returns>
+            <returns>The hash code</returns>
             <exception cref="T:System.ArgumentNullException">If <paramref name="obj"/> is null</exception>
+        </member>
+        <member name="M:SysWeaver.ByteArrayEqualityComparer.Equals(System.ReadOnlySpan{System.Byte},System.Byte[])">
+            <summary>
+            Determines whether a span has the same content as a byte array
+            </summary>
+            <param name="alternate">The bytes</param>
+            <param name="other">The array, may be null (never equal to a span)</param>
+            <returns>True if the array isn't null and has the same content</returns>
+        </member>
+        <member name="M:SysWeaver.ByteArrayEqualityComparer.GetHashCode(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get a hash code for the bytes, the same as for an array with the same content
+            </summary>
+            <param name="alternate">The bytes</param>
+            <returns>The hash code</returns>
+        </member>
+        <member name="M:SysWeaver.ByteArrayEqualityComparer.HashSpan(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            The hash code of some bytes, the same as <see cref="M:SysWeaver.ByteArrayEqualityComparer.GetHashCode(System.ReadOnlySpan{System.Byte})"/> (a direct call, used by the alternate lookups of <see cref="T:SysWeaver.LowAllocConcurrentDictionary`2"/>)
+            </summary>
+            <param name="bytes">The bytes</param>
+            <returns>The hash code</returns>
+        </member>
+        <member name="M:SysWeaver.ByteArrayEqualityComparer.Create(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Create an array with the bytes (used when an alternate lookup adds a key)
+            </summary>
+            <param name="alternate">The bytes</param>
+            <returns>A new array</returns>
         </member>
         <member name="T:SysWeaver.ByteArrayExtensions">
             <summary>
@@ -3719,6 +3750,63 @@
             </summary>
             <param name="value">The value to encode</param>
             <returns>The compact string that represents it (least significant digit first, at least one char)</returns>
+        </member>
+        <member name="F:SysWeaver.CompactAsciiString.MaxEncodedLength">
+            <summary>
+            The maximum number of chars of an encoded 64-bit value (base 2), a destination of this length is large enough for any value and alphabet
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompactAsciiString.TryEncode(System.UInt64,System.Span{System.Char},System.Int32@)">
+            <summary>
+            Encode a 64-bit unsigned integer into a span, the same chars as <see cref="M:SysWeaver.CompactAsciiString.Encode(System.UInt64)"/>.
+            </summary>
+            <param name="value">The value to encode</param>
+            <param name="destination">The destination (<see cref="F:SysWeaver.CompactAsciiString.MaxEncodedLength"/> chars are always enough)</param>
+            <param name="charsWritten">The number of chars written (at least one), 0 if the destination is too short</param>
+            <returns>True if the value was written, false if the destination is too short (the content of the destination is undefined)</returns>
+        </member>
+        <member name="M:SysWeaver.CompactAsciiString.Encode(System.UInt64,System.Span{System.Char})">
+            <summary>
+            Encode a 64-bit unsigned integer into a span, the same chars as <see cref="M:SysWeaver.CompactAsciiString.Encode(System.UInt64)"/>.
+            </summary>
+            <param name="value">The value to encode</param>
+            <param name="destination">The destination (<see cref="F:SysWeaver.CompactAsciiString.MaxEncodedLength"/> chars are always enough)</param>
+            <returns>The number of chars written (at least one)</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="destination"/> is too short</exception>
+        </member>
+        <member name="M:SysWeaver.CompactAsciiString.TryDecodeUInt64(System.ReadOnlySpan{System.Char},System.UInt64@)">
+            <summary>
+            Decode a compact string to the 64-bit unsigned integer that it represents, without exceptions (same value as <see cref="M:SysWeaver.CompactAsciiString.DecodeUInt64(System.String)"/>).
+            </summary>
+            <param name="compactString">The compact value representation</param>
+            <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+            <returns>True if all chars are valid, else false</returns>
+            <remarks>Not canonical and no overflow checks, see <see cref="M:SysWeaver.CompactAsciiString.DecodeUInt64(System.String)"/></remarks>
+        </member>
+        <member name="M:SysWeaver.CompactAsciiString.TryDecodeInt64(System.ReadOnlySpan{System.Char},System.Int64@)">
+            <summary>
+            Decode a compact string to the 64-bit signed integer that it represents, without exceptions (same value as <see cref="M:SysWeaver.CompactAsciiString.DecodeInt64(System.String)"/>).
+            </summary>
+            <param name="compactString">The compact value representation</param>
+            <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+            <returns>True if all chars are valid, else false</returns>
+        </member>
+        <member name="M:SysWeaver.CompactAsciiString.TryDecodeUInt32(System.ReadOnlySpan{System.Char},System.UInt32@)">
+            <summary>
+            Decode a compact string to the 32-bit unsigned integer that it represents, without exceptions (same value as <see cref="M:SysWeaver.CompactAsciiString.DecodeUInt32(System.String)"/>).
+            </summary>
+            <param name="compactString">The compact value representation</param>
+            <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+            <returns>True if all chars are valid, else false</returns>
+            <remarks>Not canonical and no overflow checks, see <see cref="M:SysWeaver.CompactAsciiString.DecodeUInt32(System.String)"/></remarks>
+        </member>
+        <member name="M:SysWeaver.CompactAsciiString.TryDecodeInt32(System.ReadOnlySpan{System.Char},System.Int32@)">
+            <summary>
+            Decode a compact string to the 32-bit signed integer that it represents, without exceptions (same value as <see cref="M:SysWeaver.CompactAsciiString.DecodeInt32(System.String)"/>).
+            </summary>
+            <param name="compactString">The compact value representation</param>
+            <param name="value">The value that was represented by the string (an empty span decodes to 0), 0 if a char isn't valid</param>
+            <returns>True if all chars are valid, else false</returns>
         </member>
         <member name="M:SysWeaver.CompactAsciiString.DecodeInt64(System.String)">
             <summary>
@@ -9261,6 +9349,8 @@
             A fast equality comparer for byte array's that can be used if all these conditions are met:
             * Arrays may not be null.
             * Arrays must be at least 4 bytes in length.
+            * The keys are random (ex: hashes): the hash code only depends on the length and the first and last 8 bytes (constant time).
+            Supports lookups by <see cref="T:System.ReadOnlySpan`1"/> of bytes (alternate lookups of Dictionary, ConcurrentDictionary, HashSet and <see cref="T:SysWeaver.LowAllocConcurrentDictionary`2"/>).
             </summary>
         </member>
         <member name="F:SysWeaver.FastByteArrayEqualityComparer.Instance">
@@ -9268,6 +9358,7 @@
             A fast equality comparer for byte array's that can be used if all these conditions are met:
             * Arrays may not be null.
             * Arrays must be at least 4 bytes in length.
+            * The keys are random (ex: hashes): the hash code only depends on the length and the first and last 8 bytes (constant time).
             </summary>
         </member>
         <member name="M:SysWeaver.FastByteArrayEqualityComparer.Equals(System.Byte[],System.Byte[])">
@@ -9280,11 +9371,44 @@
         </member>
         <member name="M:SysWeaver.FastByteArrayEqualityComparer.GetHashCode(System.Byte[])">
             <summary>
-            Get a hash code for the content of a byte array, this is the first 4 bytes of the array as an Int32 (machine endian)
+            Get a hash code for the content of a byte array: a hash of the length and the first and last 8 bytes (constant time, a fast seeded hash).
+            Arrays with the same content always have the same hash code; arrays of the same length that only differ in the bytes between the first and last 8 bytes
+            also have the same hash code (use <see cref="T:SysWeaver.ByteArrayEqualityComparer"/> for such keys, it hashes all bytes).
+            The hash code is randomized per process (like string hash codes), never persist it.
             </summary>
             <param name="obj">The array to get the hash code for, must be at least 4 bytes long</param>
             <returns>The hash code</returns>
             <exception cref="T:System.ArgumentOutOfRangeException">If <paramref name="obj"/> is shorter than 4 bytes (or null)</exception>
+        </member>
+        <member name="M:SysWeaver.FastByteArrayEqualityComparer.HashSpan(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            The hash code of some bytes (any length), the same as <see cref="M:SysWeaver.FastByteArrayEqualityComparer.GetHashCode(System.Byte[])"/> for an array with the same content
+            </summary>
+            <param name="bytes">The bytes</param>
+            <returns>The hash code</returns>
+        </member>
+        <member name="M:SysWeaver.FastByteArrayEqualityComparer.Equals(System.ReadOnlySpan{System.Byte},System.Byte[])">
+            <summary>
+            Determines whether a span has the same content as a byte array
+            </summary>
+            <param name="alternate">The bytes</param>
+            <param name="other">The array, may not be null (a null array is treated as an empty array)</param>
+            <returns>True if the array has the same content</returns>
+        </member>
+        <member name="M:SysWeaver.FastByteArrayEqualityComparer.GetHashCode(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get a hash code for the bytes, the same as for an array with the same content.
+            Spans shorter than 4 bytes are hashed too (no exception), such keys can't be in a collection using this comparer.
+            </summary>
+            <param name="alternate">The bytes</param>
+            <returns>The hash code</returns>
+        </member>
+        <member name="M:SysWeaver.FastByteArrayEqualityComparer.Create(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Create an array with the bytes (used when an alternate lookup adds a key)
+            </summary>
+            <param name="alternate">The bytes</param>
+            <returns>A new array</returns>
         </member>
         <member name="T:SysWeaver.FastMemCache`2">
             <summary>
@@ -10330,7 +10454,7 @@
         <member name="M:SysWeaver.FileHash.GetCacheKey(System.String)">
             <summary>
             Given a file, compute name for meta data.
-            The key is a hash (26 chars) of the full name, creation time, last write time and length of the file.
+            The key is a hash (26 chars) of the full name, creation time, last write time (ticks) and length of the file.
             </summary>
             <param name="filename">The existing file to get the hash of the content</param>
             <returns>The key name for this file, null if the file doesn't exist or is invalid</returns>
@@ -10338,7 +10462,8 @@
         <member name="M:SysWeaver.FileHash.GetCacheKey(System.IO.FileInfo)">
             <summary>
             Compute the cache key for a file.
-            Same as hashing String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length) (current culture), but without any heap allocations (for normal path lengths).
+            Same as hashing String.Join('|', fi.FullName, fi.CreationTimeUtc.Ticks, fi.LastWriteTimeUtc.Ticks, fi.Length) (invariant culture), but without any heap allocations (for normal path lengths).
+            The times are written as ticks (full resolution), so that a same length rewrite within a second gets a new key.
             </summary>
             <param name="fi">The file</param>
             <returns>The key or null if the file doesn't exist</returns>
@@ -13113,6 +13238,37 @@
             <param name="count">The max number of bytes to read</param>
             <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
         </member>
+        <member name="M:SysWeaver.IO.LengthLimitedStream.Read(System.Span{System.Byte})">
+            <summary>
+            Read bytes from the underlying stream, without reading past the max length
+            </summary>
+            <param name="buffer">The buffer to read into</param>
+            <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
+        </member>
+        <member name="M:SysWeaver.IO.LengthLimitedStream.ReadByte">
+            <summary>
+            Read a byte from the underlying stream, without reading past the max length
+            </summary>
+            <returns>The byte, or -1 at the end of this view (or of the underlying stream)</returns>
+        </member>
+        <member name="M:SysWeaver.IO.LengthLimitedStream.ReadAsync(System.Memory{System.Byte},System.Threading.CancellationToken)">
+            <summary>
+            Read bytes from the underlying stream asynchronously, without reading past the max length
+            </summary>
+            <param name="buffer">The buffer to read into</param>
+            <param name="cancellationToken">The cancellation token</param>
+            <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
+        </member>
+        <member name="M:SysWeaver.IO.LengthLimitedStream.ReadAsync(System.Byte[],System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Read bytes from the underlying stream asynchronously, without reading past the max length
+            </summary>
+            <param name="buffer">The buffer to read into</param>
+            <param name="offset">The offset in the buffer to write the first byte to</param>
+            <param name="count">The max number of bytes to read</param>
+            <param name="cancellationToken">The cancellation token</param>
+            <returns>The number of bytes read, 0 at the end of this view (or of the underlying stream)</returns>
+        </member>
         <member name="M:SysWeaver.IO.LengthLimitedStream.Write(System.Byte[],System.Int32,System.Int32)">
             <summary>
             Not supported, always throws
@@ -13524,6 +13680,26 @@
             True for string keys using ordinal comparison, these use a fast seeded hash, with a fallback to the randomized ordinal hash if collisions are detected
             </summary>
         </member>
+        <member name="F:SysWeaver.LowAllocConcurrentDictionary`2.ByteKeys">
+            <summary>
+            For byte array keys: which known comparer is used (the alternate span lookups call its hash and compare the bytes directly), else <see cref="F:SysWeaver.LowAllocConcurrentDictionary`2.ByteKeysNone"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocConcurrentDictionary`2.ByteKeysNone">
+            <summary>
+            Not byte array keys, or another comparer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocConcurrentDictionary`2.ByteKeysAll">
+            <summary>
+            Byte array keys using <see cref="T:SysWeaver.ByteArrayEqualityComparer"/> (a hash of all bytes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocConcurrentDictionary`2.ByteKeysEnds">
+            <summary>
+            Byte array keys using <see cref="T:SysWeaver.FastByteArrayEqualityComparer"/> (a hash of the length and the first and last 8 bytes)
+            </summary>
+        </member>
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.#ctor(System.Int32,System.Collections.Generic.IEqualityComparer{`0})">
             <summary>
             Create a new dictionary
@@ -13744,6 +13920,11 @@
             True if the slots are selected using the randomized fallback hash (see <see cref="F:SysWeaver.LowAllocKeyMode.FastString"/>)
             </summary>
         </member>
+        <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.SetTable(SysWeaver.LowAllocDictionarySegment@,SysWeaver.LowAllocConcurrentDictionary{`0,`1}.Table)">
+            <summary>
+            Set the table of a segment and the copies of its fields that the lookup fast paths use (must hold the lock and be inside BeginWrite / EndWrite, unless the dictionary isn't shared yet)
+            </summary>
+        </member>
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.Rebuild(SysWeaver.LowAllocDictionarySegment@,System.Boolean,System.Boolean)">
             <summary>
             Must hold the lock, creates and publishes a new table without any tombstones.
@@ -13882,7 +14063,9 @@
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.GetAlternateLookup``1">
             <summary>
             Get a lookup that uses an alternate key type, like ReadOnlySpan&lt;char&gt; for string keys (lookups without allocating a string).
-            The comparer of the dictionary must implement IAlternateEqualityComparer&lt;TAlternate, TKey&gt; (StringComparer.Ordinal and the default string comparer does for ReadOnlySpan&lt;char&gt;).
+            The comparer of the dictionary must implement IAlternateEqualityComparer&lt;TAlternate, TKey&gt;, ex:
+            StringComparer.Ordinal / OrdinalIgnoreCase and the default string comparer for ReadOnlySpan&lt;char&gt;,
+            <see cref="T:SysWeaver.ByteArrayEqualityComparer"/> and <see cref="T:SysWeaver.FastByteArrayEqualityComparer"/> for ReadOnlySpan&lt;byte&gt; (byte array keys).
             </summary>
             <typeparam name="TAlternate">The alternate key type</typeparam>
             <returns>The lookup</returns>
@@ -13925,8 +14108,9 @@
         </member>
         <member name="P:SysWeaver.LowAllocConcurrentDictionary`2.AlternateLookup`1.Item(`2)">
             <summary>
-            Get or set a value (setting creates a key from the alternate key if needed)
+            Get or set a value (setting overwrites the value of an existing key, or adds a key created from the alternate key)
             </summary>
+            <exception cref="T:System.Collections.Generic.KeyNotFoundException">Thrown by the getter if the key doesn't exist</exception>
         </member>
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.AlternateLookup`1.TryAdd(`2,`1)">
             <summary>
@@ -13937,6 +14121,12 @@
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.AlternateLookup`1.TryRemove(`2,`1@)">
             <summary>
             Remove a key
+            </summary>
+            <returns>True if the key was removed</returns>
+        </member>
+        <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.AlternateLookup`1.TryRemove(`2,`0@,`1@)">
+            <summary>
+            Remove a key, and get the actual key that was stored in the dictionary
             </summary>
             <returns>True if the key was removed</returns>
         </member>
@@ -13952,7 +14142,14 @@
         </member>
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.TryGetValueAlternate``1(``0,System.Collections.Generic.IAlternateEqualityComparer{``0,`0},`0@,`1@)">
             <summary>
-            Lookup using an alternate key, lock free (validated using the segment version, like <see cref="M:SysWeaver.LowAllocConcurrentDictionary`2.TryGetValueInline(`0,`1@,SysWeaver.LowAllocKeyMode)"/>)
+            Lookup using an alternate key, lock free (validated using the segment version).
+            The fast path is the same as <see cref="M:SysWeaver.LowAllocConcurrentDictionary`2.TryGetValueInline(`0,`1@,SysWeaver.LowAllocKeyMode)"/>: a single lock free attempt, only checking the home block (where almost all keys are),
+            everything else is done by <see cref="M:SysWeaver.LowAllocConcurrentDictionary`2.TryGetValueAlternateSlow``1(``0,System.Collections.Generic.IAlternateEqualityComparer{``0,`0},System.UInt64,`0@,`1@)"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.TryGetValueAlternateSlow``1(``0,System.Collections.Generic.IAlternateEqualityComparer{``0,`0},System.UInt64,`0@,`1@)">
+            <summary>
+            The key wasn't in its home block, the table is randomized or a write happened during the lock free read: search the whole probe sequence, retry (and eventually read under the lock)
             </summary>
         </member>
         <member name="M:SysWeaver.LowAllocConcurrentDictionary`2.Clear">
@@ -14089,12 +14286,36 @@
             <param name="s">The chars to hash</param>
             <returns>A 64 bit hash, only valid during the life time of the process</returns>
         </member>
+        <member name="M:SysWeaver.LowAllocStringHash.GetHash(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get a 64 bit hash of the bytes (all bits are well mixed)
+            </summary>
+            <param name="s">The bytes to hash</param>
+            <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        </member>
         <member name="M:SysWeaver.LowAllocStringHash.GetHash(System.Char@,System.Int32)">
             <summary>
             Get a 64 bit hash of the chars (all bits are well mixed)
             </summary>
             <param name="c">The first char</param>
             <param name="length">The number of chars</param>
+            <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        </member>
+        <member name="M:SysWeaver.LowAllocStringHash.GetHash(System.Byte@,System.UIntPtr)">
+            <summary>
+            Get a 64 bit hash of a number of bytes (all bits are well mixed)
+            </summary>
+            <param name="p">The first byte</param>
+            <param name="len">The number of bytes, an even number or at least 4 (0 - 3 bytes are only handled for 0 and 2 bytes)</param>
+            <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        </member>
+        <member name="M:SysWeaver.LowAllocStringHash.GetEndsHash(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get a 64 bit hash of the length and the first and last 8 bytes (constant time, all bits are well mixed).
+            Inputs of the same length that only differ in the bytes between the first and last 8 bytes have the same hash.
+            One (seeded) 128 bit multiply: meant for random keys (ex: hashes), use <see cref="M:SysWeaver.LowAllocStringHash.GetHash(System.ReadOnlySpan{System.Byte})"/> for other keys.
+            </summary>
+            <param name="s">The bytes to hash</param>
             <returns>A 64 bit hash, only valid during the life time of the process</returns>
         </member>
         <member name="T:SysWeaver.LowAllocDictionarySegments">
@@ -14131,6 +14352,27 @@
         <member name="F:SysWeaver.LowAllocDictionarySegment.Used">
             <summary>
             Number of non empty slots in the current table, live + tombstones (only modified while holding the lock)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocDictionarySegment.Tags">
+            <summary>
+            The tags of the current table (a copy of Table.Tags, so that the lookup fast paths don't have to load the table first).
+            The copies are published while the version is odd, they are only consistent with each other if the version is validated (the readers bounds check them).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocDictionarySegment.Entries">
+            <summary>
+            The entries of the current table (a copy of Table.Entries)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocDictionarySegment.Blocks">
+            <summary>
+            The number of blocks of the current table (a copy of Table.Blocks)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LowAllocDictionarySegment.Randomized">
+            <summary>
+            True if the current table uses the randomized hash (a copy of Table.Randomized)
             </summary>
         </member>
         <member name="M:SysWeaver.LowAllocDictionarySegment.EnterLockSlow">
@@ -14457,6 +14699,455 @@
             If true, the file must exist or an exception will be thrown (by the first call to <see cref="M:SysWeaver.ManagedFile.TryGetNow"/> / <see cref="M:SysWeaver.ManagedFile.TryGetNowAsync"/>)
             </summary>
         </member>
+        <member name="T:SysWeaver.Markdown.MdDocument">
+            <summary>
+            A parsed markdown document (GitHub flavored markdown: CommonMark + GFM extensions + some GitHub extras).
+            The markdown is first parsed into blocks (so that reference links and footnotes can be defined anywhere), inline content is parsed when rendering (see <see cref="T:SysWeaver.Markdown.MdInline"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdDocument.Refs">
+            <summary>
+            Link reference definitions, key = normalized label
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdDocument.Footnotes">
+            <summary>
+            Footnote definitions, key = normalized label
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdDocument.RefDefRe">
+            <summary>
+            A link reference definition (may span multiple lines), matched at a position in the paragraph text
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdDocument.Unescape(System.String)">
+            <summary>
+            Process backslash escapes and html entities (used for urls, titles and info strings)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdDocument.LazyLine(System.String)">
+            <summary>
+            A lazy continuation line is always paragraph text, escape the first char if it would start a block
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdDocument.ListStart.Marker">
+            <summary>
+            The bullet char or the ordered delimiter ('.' or ')')
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdDocument.IsBlockStart(System.String)">
+            <summary>
+            True if the line starts a block that interrupts a paragraph
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdDocument.MaxDepth">
+            <summary>
+            Container blocks (quotes, lists etc) nested deeper than this are rendered as a paragraph (avoids stack overflows on malicious input)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdDocument.ExtractRefs(System.Collections.Generic.List{System.String})">
+            <summary>
+            Extract link reference definitions from the start of a paragraph
+            </summary>
+            <returns>The remaining paragraph text, or null if nothing remains</returns>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdBlock.BlankBefore">
+            <summary>
+            True if the block is preceded by a blank line (and isn't the first block of its container), used to determine if a list is loose
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdHtml">
+            <summary>
+            Raw html (sanitized when rendered)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdList.EndedWithBlank">
+            <summary>
+            True if the list was followed by blank lines (consumed by the list)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdEmoji">
+            <summary>
+            Common GitHub emoji short codes (the names are also valid in Slack)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdHtmlFormat">
+            <summary>
+            Renders markdown as html, either unstyled (styled using tags and classes) or with inline styles for emails
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdHtmlFormat.Render">
+            <summary>
+            Render the document
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdHtmlFormat.FirstHeading">
+            <summary>
+            The plain text of the first heading (null if none)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdHtmlFormat.Esc(System.String)">
+            <summary>
+            Escape text for use in html content
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdHtmlFormat.EscAttr(System.String)">
+            <summary>
+            Escape text for use in a (double quoted) html attribute
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdHtmlFormat.EmailStyles">
+            <summary>
+            Inline styles used for emails, key = tag (or a special key)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdHtmlFormat.Open(System.Text.StringBuilder,System.String,System.String,System.String,System.String)">
+            <summary>
+            Append an opening tag (with an inline style for emails)
+            </summary>
+            <param name="sb">The output</param>
+            <param name="tag">The tag name</param>
+            <param name="attributes">Optional attributes (already escaped)</param>
+            <param name="styleKey">The key of the email style (null to use the tag)</param>
+            <param name="extraStyle">Optional extra email style</param>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdHtmlFormat.FootnoteRefCount">
+            <summary>
+            Key = footnote label, Value = number of references
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdHtmlFormat.HeadingIds">
+            <summary>
+            Used heading ids, key = slug, value = number of times used
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdHtmlFormat.HeadingId(System.String)">
+            <summary>
+            Get a GitHub style heading id: lower case, spaces to '-', punctuation removed, duplicates gets a suffix
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdAttribute">
+            <summary>
+            An allowed html attribute (the value is decoded and validated)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdAttribute.#ctor(System.String,System.String)">
+            <summary>
+            An allowed html attribute (the value is decoded and validated)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdFormat">
+            <summary>
+            The output format, inline content is rendered by calling these methods
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdFormat.FootnoteOrder">
+            <summary>
+            Labels (normalized) of referenced footnotes, in reference order
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.FootnoteNumber(System.String)">
+            <summary>
+            Get the number of a footnote (the order that it was first referenced)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Markdown.MdFormat.PlainFormat">
+            <summary>
+            The format used to render plain text
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Plain(System.String)">
+            <summary>
+            Render inline markdown as plain text
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Text(System.String)">
+            <summary>
+            Plain text
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Code(System.String)">
+            <summary>
+            A code span
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Link(System.String,System.String,System.String,System.String)">
+            <summary>
+            A link
+            </summary>
+            <param name="url">The (safe) url</param>
+            <param name="title">The title, can be null</param>
+            <param name="inner">The rendered link text</param>
+            <param name="innerPlain">The link text as plain text</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Image(System.String,System.String,System.String)">
+            <summary>
+            An image
+            </summary>
+            <param name="url">The (safe) url</param>
+            <param name="alt">The alternative text (plain text)</param>
+            <param name="title">The title, can be null</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Tag(System.String,System.Boolean,System.Collections.Generic.IReadOnlyList{SysWeaver.Markdown.MdAttribute})">
+            <summary>
+            An allowed html tag
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.EmphasisOpen(System.String)">
+            <summary>
+            Start of emphasis
+            </summary>
+            <param name="tag">"em", "strong" or "del"</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.EmphasisClose(System.String)">
+            <summary>
+            End of emphasis
+            </summary>
+            <param name="tag">"em", "strong" or "del"</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Math(System.String,System.Boolean)">
+            <summary>
+            Math (TeX)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.Emoji(System.String,System.String)">
+            <summary>
+            An emoji short code
+            </summary>
+            <param name="name">The short code name, ex: "smile"</param>
+            <param name="emoji">The emoji</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdFormat.FootnoteRef(System.Int32,System.String)">
+            <summary>
+            A footnote reference
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdPlainFormat">
+            <summary>
+            Renders inline content as plain text
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdInline">
+            <summary>
+            Inline markdown parsing.
+            Link texts are parsed as ranges of the same string, and the results are cached (a failed outer link renders the inner links, which are then parsed again),
+            so that nested brackets doesn't take exponential (or quadratic) time.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.MaxLinkDepth">
+            <summary>
+            Links and images are not parsed when nested deeper than this
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.MaxLabelLength">
+            <summary>
+            The maximum length of a link label (CommonMark)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.SafeSchemes">
+            <summary>
+            Url schemes that are allowed in links and images (relative urls are always allowed)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.AllowedTags">
+            <summary>
+            Html tags that are allowed, key = tag, value = allowed attributes (in addition to title)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.VoidTags">
+            <summary>
+            Tags without content (closing tags are ignored)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.SafeUrl(System.String)">
+            <summary>
+            Returns the url if it's safe to use in a link or image (percent encoded), else null
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.IsAbsolute(System.String)">
+            <summary>
+            True if the url has a scheme (ex: "https:", "mailto:")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.EncodeUrl(System.String)">
+            <summary>
+            Percent encode characters that aren't valid in an url (existing %XX escapes are kept), like CommonMark does
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.IsAsciiWhiteSpace(System.Char)">
+            <summary>
+            Only ASCII white space separates link destinations and titles
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdInline.Context">
+            <summary>
+            The state of rendering a string (shared by all ranges and formats)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Context.Ranges">
+            <summary>
+            Rendered ranges (link texts), key = (format, start, end), value = the result and if it contains a link
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Context.CodeFailed">
+            <summary>
+            Key = (run length, end), value = a position where a search for the end of a code span failed (searches from later positions will fail too)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.Context.BracketEnd(System.Int32)">
+            <summary>
+            Get the position of the ']' that matches the '[' at a position (or -1)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Context.MathFailed">
+            <summary>
+            Key = end, value = a position where a search for a closing $ failed (searches from later positions will fail too)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Context.LinkDepth">
+            <summary>
+            The current link nesting depth
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.FindCodeEnd(SysWeaver.Markdown.MdInline.Context,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Find the end of a code span (the start of a backtick run of the same length)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.FindBrackets(SysWeaver.Markdown.MdInline.Context)">
+            <summary>
+            Find the matching ']' of all '[' (escapes, code spans, autolinks and html tags are handled)
+            </summary>
+            <returns>For each position of a '[', the position of the matching ']' (or -1)</returns>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Node.Kind">
+            <summary>
+            0 = text (escaped when rendered), 1 = rendered, 2 = a delimiter run (*, _ or ~)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Node.Opens">
+            <summary>
+            Opening emphasis, rendered after the (remaining) delimiter chars
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdInline.Node.Closes">
+            <summary>
+            Closing emphasis, rendered before the (remaining) delimiter chars
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.Render(System.String,SysWeaver.Markdown.MdFormat)">
+            <summary>
+            Render inline markdown
+            </summary>
+            <param name="s">The inline markdown</param>
+            <param name="f">The output format</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.RenderRange(SysWeaver.Markdown.MdInline.Context,System.Int32,System.Int32,SysWeaver.Markdown.MdFormat)">
+            <summary>
+            Render the text of a link or image (cached)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.Render(SysWeaver.Markdown.MdInline.Context,System.Int32,System.Int32,SysWeaver.Markdown.MdFormat,System.Boolean,System.Boolean@)">
+            <summary>
+            Render a range of inline markdown
+            </summary>
+            <param name="ctx">The context</param>
+            <param name="start">The start of the range</param>
+            <param name="end">The end of the range (exclusive)</param>
+            <param name="f">The output format</param>
+            <param name="inLink">True when rendering the text of a link (bare urls and email addresses are not converted to links)</param>
+            <param name="hasLink">True if the range contains a link (at any level)</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.ProcessEmphasis(System.Collections.Generic.List{SysWeaver.Markdown.MdInline.Node},SysWeaver.Markdown.MdFormat)">
+            <summary>
+            Match delimiter runs into em, strong and del (the CommonMark delimiter algorithm)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.TryMath(SysWeaver.Markdown.MdInline.Context,System.Int32,System.Int32,SysWeaver.Markdown.MdFormat,System.String@,System.Int32@)">
+            <summary>
+            Math: $$display$$, $`inline`$ or $inline$ (the opening $ may not be followed by a space, the closing $ may not be preceded by a space or followed by a digit)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.TryInlineDestination(System.String,System.Int32,System.Int32,System.String@,System.String@,System.Int32@)">
+            <summary>
+            Parse an inline link destination and title: (url "title")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.TryLink(SysWeaver.Markdown.MdInline.Context,System.Int32,System.Int32,SysWeaver.Markdown.MdFormat,System.Boolean,System.String@,System.Int32@,System.Boolean@)">
+            <summary>
+            Try to parse a link or an image starting at a '['
+            </summary>
+            <param name="ctx">The context</param>
+            <param name="start">The position of the '['</param>
+            <param name="n">The end of the current range</param>
+            <param name="f">The output format</param>
+            <param name="image">True if this is an image</param>
+            <param name="text">The rendered link / image</param>
+            <param name="next">The position after the link / image</param>
+            <param name="hasLink">True if the image contains a link</param>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.TryAngle(System.String,System.Int32,System.Int32,SysWeaver.Markdown.MdFormat,System.String@,System.Int32@,System.Boolean@)">
+            <summary>
+            Try to parse an autolink, an allowed html tag or a comment starting at a '&lt;'
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdInline.TryBareUrl(System.String,System.Int32,System.Int32,System.Int32,SysWeaver.Markdown.MdFormat,System.String@,System.Int32@)">
+            <summary>
+            Try to parse a bare url (http://, https://, ftp:// or www.)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Markdown.MdSlackFormat">
+            <summary>
+            Renders markdown as Slack "mrkdwn" (the text format of Slack messages).
+            Features that Slack doesn't have are emulated: headings are bold, lists use bullet chars, tables are rendered as aligned text in a code block,
+            alerts are block quotes with a bold title, footnotes are listed at the end, nested block quotes are flattened.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.Render">
+            <summary>
+            Render the document
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.Esc(System.String)">
+            <summary>
+            Escape the characters that are control characters in Slack (&amp;, &lt; and &gt;)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.EscUrl(System.String)">
+            <summary>
+            Escape an url for use in a Slack link
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.EscLabel(System.String)">
+            <summary>
+            Escape a link label (may not contain '|')
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.Text(System.String)">
+            <summary>
+            Slack has no way to escape formatting chars, literal chars that could be interpreted as formatting are replaced with look alikes
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Markdown.MdSlackFormat.SoftBreak">
+            <summary>
+            Slack breaks lines on new lines, but a soft break in markdown is just a space
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Markdown.MdSlackFormat.OpenLinks">
+            <summary>
+            True for each open "a" tag that was rendered as a link
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.Quote(System.Func{System.String})">
+            <summary>
+            Slack only supports one level of block quotes, nested quotes are flattened
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Markdown.MdSlackFormat.RenderTable(SysWeaver.Markdown.MdTable)">
+            <summary>
+            Tables are rendered as aligned (plain) text in a code block
+            </summary>
+        </member>
         <member name="T:SysWeaver.MathExt">
             <summary>
             Math related helpers (greatest common divisor and clamping)
@@ -14470,7 +15161,7 @@
             <param name="b">Second number</param>
             <returns>The greatest common divisor of a and b (the largest integer that evenly divides both a and b).
             Gcd(0, x) = Gcd(x, 0) = x, so Gcd(0, 0) = 0</returns>
-            <remarks>Uses the Euclidean algorithm (a binary GCD was measured to be slower)</remarks>
+            <remarks>Uses the binary (Stein) algorithm with trailing zero counts (measured 1.7 - 6x faster than the Euclidean algorithm, the 64 bit division is slow)</remarks>
         </member>
         <member name="M:SysWeaver.MathExt.Gcd(System.Int64,System.Int64)">
             <summary>
@@ -15286,6 +15977,23 @@
             <param name="level">Optional message level</param>
             <exception cref="T:System.NullReferenceException"><paramref name="message"/> is null (and the message is accepted).</exception>
         </member>
+        <member name="M:SysWeaver.MessageHost.AddMessage(SysWeaver.MessageLevels,SysWeaver.MessageTextHandler@)">
+            <summary>
+            Add a new message, the interpolated text is only formatted if the message is accepted (<paramref name="level"/> is above <see cref="P:SysWeaver.MessageHost.AcceptMessageAbove"/>).
+            </summary>
+            <param name="level">The message level</param>
+            <param name="message">The interpolated text: <c>AddMessage(MessageLevels.Debug, $"Loaded {name}")</c>.
+            A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+        </member>
+        <member name="M:SysWeaver.MessageHost.AddMessage(SysWeaver.MessageLevels,SysWeaver.MessageTextHandler@,System.Exception)">
+            <summary>
+            Add a new message with an exception, the interpolated text is only formatted if the message is accepted (<paramref name="level"/> is above <see cref="P:SysWeaver.MessageHost.AcceptMessageAbove"/>).
+            </summary>
+            <param name="level">The message level</param>
+            <param name="message">The interpolated text: <c>AddMessage(MessageLevels.Debug, $"Request {url} failed", ex)</c>.
+            A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+            <param name="ex">An exception (may be null), inner exceptions are included when rendered</param>
+        </member>
         <member name="M:SysWeaver.MessageHost.WaitAll(System.Collections.Generic.List{System.Threading.Tasks.Task})">
             <summary>
             Wait for all tasks to complete, failed tasks (a handler's Add threw) are ignored
@@ -15357,6 +16065,119 @@
             <summary>
             An error occurred (often accompanied by an exception).
             </summary>
+        </member>
+        <member name="T:SysWeaver.MessageTextHandler">
+            <summary>
+            An interpolated string handler used by the <c>AddMessage(MessageLevels level, $"...")</c> overloads of <see cref="T:SysWeaver.MessageHost"/> and <see cref="T:SysWeaver.MessageHostExt"/>:
+            the text is only formatted if the message is accepted by the host (the level is above <see cref="P:SysWeaver.IMessageHost.AcceptMessageAbove"/>),
+            so a filtered message doesn't format (or evaluate) the interpolation holes.
+            </summary>
+            <remarks>
+            The text is formatted like a <c>$"..."</c> string (the current culture).
+            The expressions of the holes are not evaluated when the message is filtered, they shouldn't have side effects.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.#ctor(System.Int32,System.Int32,SysWeaver.IMessageHost,SysWeaver.MessageLevels,System.Boolean@)">
+            <summary>
+            Create a handler (called by the compiler)
+            </summary>
+            <param name="literalLength">The number of constant chars</param>
+            <param name="formattedCount">The number of holes</param>
+            <param name="host">The message host that will receive the message</param>
+            <param name="level">The level of the message</param>
+            <param name="shouldAppend">True if the message is accepted (the text must be formatted)</param>
+            <exception cref="T:System.NullReferenceException"><paramref name="host"/> is null.</exception>
+        </member>
+        <member name="P:SysWeaver.MessageTextHandler.Enabled">
+            <summary>
+            True if the message is accepted (the text is formatted), else false
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendLiteral(System.String)">
+            <summary>Append a literal (called by the compiler)</summary>
+            <param name="value">The text</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted``1(``0)">
+            <summary>Append a value (called by the compiler)</summary>
+            <typeparam name="T">The type of the value</typeparam>
+            <param name="value">The value</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted``1(``0,System.String)">
+            <summary>Append a value (called by the compiler)</summary>
+            <typeparam name="T">The type of the value</typeparam>
+            <param name="value">The value</param>
+            <param name="format">The format string</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted``1(``0,System.Int32)">
+            <summary>Append a value (called by the compiler)</summary>
+            <typeparam name="T">The type of the value</typeparam>
+            <param name="value">The value</param>
+            <param name="alignment">The minimum width, negative values are left aligned</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted``1(``0,System.Int32,System.String)">
+            <summary>Append a value (called by the compiler)</summary>
+            <typeparam name="T">The type of the value</typeparam>
+            <param name="value">The value</param>
+            <param name="alignment">The minimum width, negative values are left aligned</param>
+            <param name="format">The format string</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted(System.ReadOnlySpan{System.Char})">
+            <summary>Append a span of chars (called by the compiler)</summary>
+            <param name="value">The text</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted(System.ReadOnlySpan{System.Char},System.Int32,System.String)">
+            <summary>Append a span of chars (called by the compiler)</summary>
+            <param name="value">The text</param>
+            <param name="alignment">The minimum width, negative values are left aligned</param>
+            <param name="format">Ignored</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted(System.String)">
+            <summary>Append a string (called by the compiler)</summary>
+            <param name="value">The text</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted(System.String,System.Int32,System.String)">
+            <summary>Append a string (called by the compiler)</summary>
+            <param name="value">The text</param>
+            <param name="alignment">The minimum width, negative values are left aligned</param>
+            <param name="format">Ignored</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.AppendFormatted(System.Object,System.Int32,System.String)">
+            <summary>Append a value (called by the compiler)</summary>
+            <param name="value">The value</param>
+            <param name="alignment">The minimum width, negative values are left aligned</param>
+            <param name="format">The format string</param>
+        </member>
+        <member name="M:SysWeaver.MessageTextHandler.ToStringAndClear">
+            <summary>
+            Get the formatted text and release the buffer (only call it once, and only if <see cref="P:SysWeaver.MessageTextHandler.Enabled"/> is true)
+            </summary>
+            <returns>The text</returns>
+        </member>
+        <member name="T:SysWeaver.MessageHostExt">
+            <summary>
+            Extension methods for <see cref="T:SysWeaver.IMessageHost"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MessageHostExt.AddMessage(SysWeaver.IMessageHost,SysWeaver.MessageLevels,SysWeaver.MessageTextHandler@)">
+            <summary>
+            Add a new message, the interpolated text is only formatted if the message is accepted (<paramref name="level"/> is above <see cref="P:SysWeaver.IMessageHost.AcceptMessageAbove"/>).
+            </summary>
+            <param name="host">The message host</param>
+            <param name="level">The message level</param>
+            <param name="message">The interpolated text: <c>host.AddMessage(MessageLevels.Debug, $"Loaded {name}")</c>.
+            A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+            <exception cref="T:System.NullReferenceException"><paramref name="host"/> is null.</exception>
+        </member>
+        <member name="M:SysWeaver.MessageHostExt.AddMessage(SysWeaver.IMessageHost,SysWeaver.MessageLevels,SysWeaver.MessageTextHandler@,System.Exception)">
+            <summary>
+            Add a new message with an exception, the interpolated text is only formatted if the message is accepted (<paramref name="level"/> is above <see cref="P:SysWeaver.IMessageHost.AcceptMessageAbove"/>).
+            </summary>
+            <param name="host">The message host</param>
+            <param name="level">The message level</param>
+            <param name="message">The interpolated text: <c>host.AddMessage(MessageLevels.Debug, $"Request {url} failed", ex)</c>.
+            A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+            <param name="ex">An exception (may be null), inner exceptions are included when rendered</param>
+            <exception cref="T:System.NullReferenceException"><paramref name="host"/> is null.</exception>
         </member>
         <member name="T:SysWeaver.Mimes">
             <summary>
@@ -15487,7 +16308,7 @@
             <remarks>
             The query string ('?') and the fragment ('#') are ignored.
             Only the text after the last '.' in the last path segment is used, so multi part extensions such as ".dll.config" resolves to ".config".
-            The lookup is case insensitive, at most one allocation is made (the lower cased extension).
+            The lookup is case insensitive and doesn't allocate.
             </remarks>
         </member>
         <member name="F:SysWeaver.MimeTypeMap.MaxExtLength">
@@ -16719,6 +17540,11 @@
             The caller guarantees that the chars read are inside the string or the null terminator (the length is checked against the min length of the keys first).
             </summary>
         </member>
+        <member name="M:SysWeaver.IStringFingerprint.Get(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>
+            The same fingerprint for a span: a span has no null terminator, a char read at the length is 0 (like the terminator of a string)
+            </summary>
+        </member>
         <member name="T:SysWeaver.StringFingerprint">
             <summary>
             The fingerprint readers (structs, so that the code is specialized for every reader)
@@ -16727,6 +17553,17 @@
         <member name="F:SysWeaver.StringFingerprint.LengthMul">
             <summary>
             The length is mixed into the fingerprint
+            </summary>
+        </member>
+        <member name="M:SysWeaver.StringFingerprint.ReadSpan(System.ReadOnlySpan{System.Char},System.Int32,System.Int32)">
+            <summary>
+            Read 1, 2 or 4 chars of a span (like Read1 / Read2 / Read4), the chars at or after the end of the span are read as 0 (the null terminator of a string).
+            The start is never negative (the caller checked the length against the min length of the keys).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.StringFingerprint.ReadSpanPadded(System.ReadOnlySpan{System.Char},System.Int32,System.Int32)">
+            <summary>
+            The chars past the end of the span are 0 (only the last char read can be past the end)
             </summary>
         </member>
         <member name="T:SysWeaver.StringFingerprint.Left4">
@@ -16764,9 +17601,22 @@
             Only the length
             </summary>
         </member>
+        <member name="T:SysWeaver.StringFingerprint.Hash">
+            <summary>
+            A hash of all chars (and the length), the last resort when no window of chars separates the keys (ex: mixed keys like file extensions and mime types).
+            Slower than a window for long keys (all chars are read), but still a single pass without a comparer call.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.StringFingerprint.HashChars(System.Char@,System.Int32)">
+            <summary>
+            Hash the chars (4 at a time, then the rest one by one, never past the length).
+            An 8 char step (two lanes) was measured: faster for 24+ chars, but slower for the short keys that are the common case (file extensions).
+            </summary>
+        </member>
         <member name="T:SysWeaver.StringFingerprint.Kind">
             <summary>
-            The fingerprint readers, the most selective first (the order candidates are tried in)
+            The fingerprint readers, the most selective first (the order candidates are tried in).
+            <see cref="F:SysWeaver.StringFingerprint.Kind.Hash"/> is only tried if no other kind is good enough.
             </summary>
         </member>
         <member name="M:SysWeaver.StringFingerprint.Get(SysWeaver.StringFingerprint.Kind,System.String,System.Int32)">
@@ -16851,6 +17701,12 @@
             </summary>
             <returns>The index of the key, -1 if not found (or null)</returns>
         </member>
+        <member name="M:SysWeaver.SmallStringKeys`1.IndexOf(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Find a key (ordinal compare of the chars)
+            </summary>
+            <returns>The index of the key, -1 if not found</returns>
+        </member>
         <member name="T:SysWeaver.StringKeyEntry`1">
             <summary>
             An entry of a <see cref="T:SysWeaver.StringKeyTable`2"/>: the key, the low 32 bits of its hash and the value (in the same cache line)
@@ -16894,6 +17750,12 @@
             Find a key
             </summary>
             <returns>A reference to the entry, a null reference if not found (or null)</returns>
+        </member>
+        <member name="M:SysWeaver.StringKeyTable`2.Find(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Find a key (ordinal compare of the chars)
+            </summary>
+            <returns>A reference to the entry, a null reference if not found</returns>
         </member>
         <member name="T:SysWeaver.OrdinalStringKeys">
             <summary>
@@ -16990,6 +17852,17 @@
         <member name="M:SysWeaver.StringKeyTableReadonlyDictionary`2.#ctor(SysWeaver.StringKeyTable{`1,`0},System.Collections.Generic.IEqualityComparer{System.String})">
             <param name="table">The table with the keys and values</param>
             <param name="comparer">The ordinal comparer the keys were frozen with (reported by Comp)</param>
+        </member>
+        <member name="T:SysWeaver.FrozenOrdinalStringDictionary`1">
+            <summary>
+            A <see cref="T:System.Collections.Frozen.FrozenDictionary`2"/> with ordinal string keys (used when no good fingerprint was found), with a cached span lookup
+            (getting the alternate lookup of a FrozenDictionary per lookup is slow: a cast to a contravariant interface)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FrozenOrdinalStringSet">
+            <summary>
+            A <see cref="T:System.Collections.Frozen.FrozenSet`1"/> with ordinal string keys (used when no good fingerprint was found), with a cached span lookup
+            </summary>
         </member>
         <member name="T:SysWeaver.StringKeyTableReadonlySet`1">
             <summary>
@@ -17564,7 +18437,7 @@
             Linux: "/var/lib" (.NET returns "/usr/share", which is meant for read only data).
             </summary>
             <remarks>
-            On Linux only root can create folders in "/var/lib", see <see cref="T:SysWeaver.Folders"/> for how the SysWeaver folder is set up.
+            On Linux only root can create folders in "/var/lib", see <see cref="F:SysWeaver.PathTemplate.Folders"/> for how the SysWeaver folder is set up.
             </remarks>
         </member>
         <member name="M:SysWeaver.PathTemplate.Resolve(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.Boolean,System.Boolean)">
@@ -17599,9 +18472,41 @@
             <remarks>
             Lookup order: special folders (<see cref="T:System.Environment.SpecialFolder"/> names), then <paramref name="extra"/>, then env info variables.
             Only defined special folder names are resolved as folders (numeric values are not).
+            The special folder paths are read once per process (cached on first use), a folder that is changed (redirected) while the process runs is not seen.
             How unknown variables are handled is defined by <see cref="T:SysWeaver.TextTemplate"/>.
             Parsed templates are cached per template string (thread safe, unbounded), the variables are evaluated on every call.
             </remarks>
+        </member>
+        <member name="M:SysWeaver.PathTemplate.GetFolder(System.Environment.SpecialFolder)">
+            <summary>
+            Get the path of a special folder (<see cref="M:System.Environment.GetFolderPath(System.Environment.SpecialFolder)"/>, <see cref="F:SysWeaver.PathTemplate.CommonApplicationData"/> for CommonApplicationData), cached for the process.
+            </summary>
+            <remarks>
+            The path is read at most once per folder (lock free after that): a folder that is changed (redirected) after its first use is not seen.
+            An empty path (a folder that doesn't exist on this OS) is cached too.
+            </remarks>
+            <param name="f">A defined special folder</param>
+            <returns>The path of the folder, empty if the folder doesn't exist on this OS</returns>
+        </member>
+        <member name="F:SysWeaver.PathTemplate.FolderPaths">
+            <summary>
+            The cached special folder paths, indexed by the enum value (null = not read yet)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PathTemplate.SparseFolderPaths">
+            <summary>
+            Cached paths of special folders with a value outside <see cref="F:SysWeaver.PathTemplate.FolderPaths"/> (not used by the current .NET values)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PathTemplate.Folders">
+            <summary>
+            All special folder names (including names that share a value, ex: Personal / MyDocuments), case sensitive (as Enum.TryParse)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PathTemplate.FoldersIgnoreCase">
+            <summary>
+            All special folder names, case in-sensitive (as Enum.TryParse with ignoreCase)
+            </summary>
         </member>
         <member name="T:SysWeaver.IPerfMonitored">
             <summary>
@@ -17649,6 +18554,11 @@
             </summary>
             <remarks>Measurements in progress complete on the removed entries (they are not counted in the new entries)</remarks>
         </member>
+        <member name="F:SysWeaver.PerfMonitor.Generation">
+            <summary>
+            Incremented by every <see cref="M:SysWeaver.PerfMonitor.Reset"/> (after the entries are removed), the entries cached by <see cref="T:SysWeaver.PerfTracker"/> instances are only used while it's unchanged
+            </summary>
+        </member>
         <member name="M:SysWeaver.PerfMonitor.#ctor(System.String)">
             <summary>
             Create a new performance tracker
@@ -17667,6 +18577,21 @@
             </summary>
             <param name="name">The name of the operation</param>
             <returns>The entry, or null if monitoring is disabled</returns>
+        </member>
+        <member name="M:SysWeaver.PerfMonitor.Begin(SysWeaver.PerfTracker)">
+            <summary>
+            Get the entry of a tracker, the cached entry if no reset happened since it was looked up
+            </summary>
+            <param name="tracker">The tracker (of this monitor)</param>
+            <returns>The entry, or null if monitoring is disabled</returns>
+        </member>
+        <member name="M:SysWeaver.PerfMonitor.GetTracker(System.String)">
+            <summary>
+            Get a tracker for a name, keep it (in a field) and call <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfTracker)"/> to measure an operation without looking up the name.
+            </summary>
+            <param name="name">The name of the operation (case sensitive)</param>
+            <returns>A tracker, measurements using it are identical to <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfMonitor,System.String)"/> with the same name (also after a <see cref="M:SysWeaver.PerfMonitor.Reset"/>)</returns>
+            <remarks>Creating a tracker doesn't create an entry, the entry is created on the first measurement (like <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfMonitor,System.String)"/>)</remarks>
         </member>
         <member name="M:SysWeaver.PerfMonitor.GetTimestamp">
             <summary>
@@ -17705,6 +18630,80 @@
             <param name="tracker">The performance monitor, may be null (nothing is measured)</param>
             <param name="name">The name of the operation (case sensitive)</param>
             <returns>A measurement, a default (no-op) measurement if <paramref name="tracker"/> is null or monitoring is disabled</returns>
+        </member>
+        <member name="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfTracker)">
+            <summary>
+            Start measuring an operation, dispose the returned value (typically with a using statement) when the operation completes.
+            Identical to <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfMonitor,System.String)"/> with the name of the tracker, without looking up the name.
+            </summary>
+            <param name="tracker">The tracker, may be null (nothing is measured)</param>
+            <returns>A measurement, a default (no-op) measurement if <paramref name="tracker"/> is null or monitoring is disabled</returns>
+        </member>
+        <member name="T:SysWeaver.PerfTracker">
+            <summary>
+            A cached handle for a named operation of a <see cref="T:SysWeaver.PerfMonitor"/> (see <see cref="M:SysWeaver.PerfMonitor.GetTracker(System.String)"/>),
+            use <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfTracker)"/> to measure an operation without looking up the name.
+            </summary>
+            <remarks>Thread safe, the measurements are identical to <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfMonitor,System.String)"/> with the same name (the entry is looked up again after a <see cref="M:SysWeaver.PerfMonitor.Reset"/>).</remarks>
+        </member>
+        <member name="F:SysWeaver.PerfTracker.Monitor">
+            <summary>
+            The performance monitor
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PerfTracker.Name">
+            <summary>
+            The name of the operation
+            </summary>
+        </member>
+        <member name="T:SysWeaver.PerfTracker.CachedEntry">
+            <summary>
+            The entry and the generation of the monitor it was looked up in (one instance, so that both are read and written atomically)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.PerfTrackers">
+            <summary>
+            Trackers for names that share a prefix and / or a suffix (ex: "Build." + mime type, or key + ".Icon"),
+            use <see cref="M:SysWeaver.PerfTrackers.Get(System.String)"/> to get the tracker of a variable part without building the name per call.
+            </summary>
+            <remarks>Thread safe, one tracker is kept per variable part (the monitor also keeps one entry per name).</remarks>
+        </member>
+        <member name="M:SysWeaver.PerfTrackers.#ctor(SysWeaver.PerfMonitor,System.String,System.String)">
+            <summary>
+            Create a tracker set
+            </summary>
+            <param name="monitor">The performance monitor, may be null (<see cref="M:SysWeaver.PerfTrackers.Get(System.String)"/> returns null, nothing is measured)</param>
+            <param name="prefix">The start of the names (null is the same as an empty string)</param>
+            <param name="suffix">The end of the names (null is the same as an empty string)</param>
+        </member>
+        <member name="F:SysWeaver.PerfTrackers.Monitor">
+            <summary>
+            The performance monitor (may be null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PerfTrackers.Prefix">
+            <summary>
+            The start of the names
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PerfTrackers.Suffix">
+            <summary>
+            The end of the names
+            </summary>
+        </member>
+        <member name="M:SysWeaver.PerfTrackers.Get(System.String)">
+            <summary>
+            Get the tracker of the name <see cref="F:SysWeaver.PerfTrackers.Prefix"/> + <paramref name="name"/> + <see cref="F:SysWeaver.PerfTrackers.Suffix"/>
+            </summary>
+            <param name="name">The variable part of the name (null is the same as an empty string)</param>
+            <returns>The tracker (always the same instance for a name), null if <see cref="F:SysWeaver.PerfTrackers.Monitor"/> is null</returns>
+        </member>
+        <member name="M:SysWeaver.PerfTrackers.Track(System.String)">
+            <summary>
+            Start measuring the operation named <see cref="F:SysWeaver.PerfTrackers.Prefix"/> + <paramref name="name"/> + <see cref="F:SysWeaver.PerfTrackers.Suffix"/> (see <see cref="M:SysWeaver.PerfMonitorEx.Track(SysWeaver.PerfTracker)"/>)
+            </summary>
+            <param name="name">The variable part of the name (null is the same as an empty string)</param>
+            <returns>A measurement, a default (no-op) measurement if <see cref="F:SysWeaver.PerfTrackers.Monitor"/> is null or monitoring is disabled (no tracker is created)</returns>
         </member>
         <member name="T:SysWeaver.PerfMesurementExt">
             <summary>
@@ -17801,8 +18800,12 @@
         </member>
         <member name="P:SysWeaver.IPerfEntry.LastExecution">
             <summary>
-            When the "method" was last executed (completed).
+            When the "method" was last executed (completed), UTC, <see cref="T:System.DateTime"/>.Ticks == 0 if it was never executed.
             </summary>
+            <remarks>
+            Measured with the <see cref="T:System.Diagnostics.Stopwatch"/> and converted to a <see cref="T:System.DateTime"/> when the monitor is enumerated (relative to <see cref="P:System.DateTime.UtcNow"/> at that time),
+            so it can differ from the system clock at the end of the measurement by the drift / adjustments of the system clock since then.
+            </remarks>
         </member>
         <member name="P:SysWeaver.IPerfEntry.Min">
             <summary>
@@ -17819,11 +18822,21 @@
             The mutable statistics of one named operation, raw counters are updated atomically by <see cref="T:SysWeaver.PerfMesurement"/> and the computed values are refreshed by <see cref="M:SysWeaver.PerfTrackerEntry.Update(System.Int64)"/>
             </summary>
         </member>
+        <member name="F:SysWeaver.PerfTrackerEntry.Last">
+            <summary>
+            The <see cref="T:System.Diagnostics.Stopwatch"/> time stamp of the end of the last measurement, 0 if there is none (converted to <see cref="P:SysWeaver.PerfTrackerEntry.LastExecution"/> by <see cref="M:SysWeaver.PerfTrackerEntry.Update(System.Int64)"/>)
+            </summary>
+        </member>
         <member name="M:SysWeaver.PerfTrackerEntry.Update(System.Int64)">
             <summary>
             Refresh the computed values from the raw counters
             </summary>
             <param name="runningFor">Number of stopwatch ticks since the monitor was created or reset</param>
+        </member>
+        <member name="F:SysWeaver.PerfTrackerEntry.IntLastExecution">
+            <summary>
+            The UTC ticks of <see cref="P:SysWeaver.PerfTrackerEntry.LastExecution"/> (0 if never executed), -1 until the first <see cref="M:SysWeaver.PerfTrackerEntry.Update(System.Int64)"/> (<see cref="F:System.DateTime.MinValue"/>), one 64 bit value read / written atomically
+            </summary>
         </member>
         <member name="T:SysWeaver.PeriodicCancellationTokenSource">
             <summary>
@@ -18420,6 +19433,23 @@
             <returns>A read only set containing the unique elements</returns>
             <exception cref="T:System.ArgumentNullException">Thrown if <paramref name="data"/> is null</exception>
         </member>
+        <member name="M:SysWeaver.ReadOnlyData.Set``1(System.Collections.Generic.IEqualityComparer{``0},System.ReadOnlySpan{``0})">
+            <summary>
+            Create a read only (frozen) set from some data
+            </summary>
+            <typeparam name="T">The element type</typeparam>
+            <param name="comparer">The comparer to use, if null the default comparer is used</param>
+            <param name="data">The elements to add to the set, duplicates (according to the comparer) are ignored</param>
+            <returns>A read only set containing the unique elements</returns>
+        </member>
+        <member name="M:SysWeaver.ReadOnlyData.Set``1(System.ReadOnlySpan{``0})">
+            <summary>
+            Create a read only (frozen) set from some data, using the default comparer
+            </summary>
+            <typeparam name="T">The element type</typeparam>
+            <param name="data">The elements to add to the set, duplicates are ignored</param>
+            <returns>A read only set containing the unique elements</returns>
+        </member>
         <member name="M:SysWeaver.ReadOnlyData.Dictionary``2(System.Collections.Generic.IEqualityComparer{``0},System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{``0,``1}})">
             <summary>
             Create a read only (frozen) dictionary from some key-value pairs
@@ -18664,7 +19694,8 @@
             The implementation is chosen from the content and the comparer:
             a shared (cached per comparer) empty dictionary, a single entry dictionary, a vectorized dictionary for 2-8 keys of a 4 or 8 byte integer / enum type (default comparer),
             an open addressing table for more such keys, a fingerprint based dictionary for ordinal string keys (<see cref="P:System.StringComparer.Ordinal"/> or the default string comparer),
-            else a <see cref="T:System.Collections.Frozen.FrozenDictionary`2"/>.
+            else a <see cref="T:System.Collections.Frozen.FrozenDictionary`2"/> (for ordinal string keys wrapped with a cached span lookup).
+            The dictionaries with ordinal string keys implement <see cref="T:SysWeaver.IReadOnlySpanKeyDictionary`1"/> (see <see cref="T:SysWeaver.SpanKeyLookupExt"/>).
             The returned dictionaries are thread safe for reads.
             Freezing allocates a copy, it's intended for data that is created once and read many times (see also <see cref="T:SysWeaver.SemiFrozenDictionary`2"/>).
             A null key throws <see cref="T:System.ArgumentNullException"/> on lookups (the indexer, ContainsKey and TryGetValue) for all implementations (like a <see cref="T:System.Collections.Generic.Dictionary`2"/>), including the empty and single entry dictionaries.
@@ -18803,6 +19834,12 @@
             <summary>
             The item as an array, created on first use (enumeration is rare, lookups are the common case)
             </summary>
+        </member>
+        <member name="M:SysWeaver.SingleReadonlyDictionary`3.TryGetValue(System.ReadOnlySpan{System.Char},`1@,System.Boolean@)">
+            <summary>
+            A lookup with a span (string keys only, if the comparer supports span lookups)
+            </summary>
+            <returns>False if a span lookup isn't supported</returns>
         </member>
         <member name="T:SysWeaver.ReflectionFlags">
             <summary>
@@ -20222,7 +21259,8 @@
             The implementation is chosen from the content and the comparer:
             a shared (cached per comparer) empty set, a single item set, a vectorized set for 2-8 keys of a 4 or 8 byte integer / enum type (default comparer),
             an open addressing table for more such keys, a fingerprint based set for ordinal string keys (<see cref="P:System.StringComparer.Ordinal"/> or the default string comparer),
-            else a <see cref="T:System.Collections.Frozen.FrozenSet`1"/>.
+            else a <see cref="T:System.Collections.Frozen.FrozenSet`1"/> (for ordinal string keys wrapped with a cached span lookup).
+            The sets with ordinal string keys implement <see cref="T:SysWeaver.IReadOnlySpanKeySet"/> (see <see cref="T:SysWeaver.SpanKeyLookupExt"/>).
             The returned sets are thread safe for reads.
             Freezing allocates a copy, it's intended for data that is created once and read many times.
             </remarks>
@@ -20307,6 +21345,12 @@
             <summary>
             The key as an array, created on first use (enumeration is rare, lookups are the common case), so that freezing a single item set is a single allocation
             </summary>
+        </member>
+        <member name="M:SysWeaver.SingleReadonlySet`2.TryContains(System.ReadOnlySpan{System.Char},System.Boolean@)">
+            <summary>
+            A lookup with a span (string keys only, if the comparer supports span lookups)
+            </summary>
+            <returns>False if a span lookup isn't supported</returns>
         </member>
         <member name="M:SysWeaver.SingleReadonlySet`2.Scan(System.Collections.Generic.IEnumerable{`0},System.Boolean@,System.Boolean@)">
             <summary>
@@ -20487,6 +21531,206 @@
             <returns>A lower case hexadecimal string with two chars for every byte (empty if the data is empty)</returns>
             <exception cref="T:System.ArgumentOutOfRangeException">The data is too large (the string would be longer than int.MaxValue chars)</exception>
         </member>
+        <member name="T:SysWeaver.IReadOnlySpanKeyDictionary`1">
+            <summary>
+            A read only dictionary with string keys that can be searched using a span of chars (no string is created for the key).
+            Implemented by the frozen dictionaries with ordinal string keys returned by <see cref="M:SysWeaver.DictionaryExt.Freeze``2(System.Collections.Generic.IReadOnlyDictionary{``0,``1},System.Collections.Generic.IEqualityComparer{``0})"/>,
+            use <see cref="M:SysWeaver.SpanKeyLookupExt.TryGetValueSpan``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)"/> to search any dictionary.
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+        </member>
+        <member name="M:SysWeaver.IReadOnlySpanKeyDictionary`1.TryGetValue(System.ReadOnlySpan{System.Char},`0@)">
+            <summary>
+            Get the value of a key, the chars of the key are compared ordinally (the same result as a lookup with a string with the same chars)
+            </summary>
+            <param name="key">The key</param>
+            <param name="value">The value of the key, default if not found</param>
+            <returns>True if the key was found</returns>
+        </member>
+        <member name="T:SysWeaver.IReadOnlySpanKeySet">
+            <summary>
+            A read only set of strings that can be searched using a span of chars (no string is created for the key).
+            Implemented by the frozen sets with ordinal string keys returned by <see cref="M:SysWeaver.SetExt.Freeze``1(System.Collections.Generic.IReadOnlySet{``0},System.Collections.Generic.IEqualityComparer{``0})"/>,
+            use <see cref="M:SysWeaver.SpanKeyLookupExt.ContainsSpan(System.Collections.Generic.IReadOnlySet{System.String},System.ReadOnlySpan{System.Char})"/> to search any set.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IReadOnlySpanKeySet.Contains(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Check if the set contains a key, the chars of the key are compared ordinally (the same result as a lookup with a string with the same chars)
+            </summary>
+            <param name="key">The key</param>
+            <returns>True if the key is in the set</returns>
+        </member>
+        <member name="T:SysWeaver.SpanKeyLookupExt">
+            <summary>
+            Lookups in string keyed dictionaries and sets using spans, and case insensitive lookups (in collections with lower / upper case keys) that don't create a lower / upper case string.
+            </summary>
+            <remarks>
+            A span lookup doesn't allocate for:
+            the dictionaries / sets returned by DictionaryExt.Freeze / SetExt.Freeze (any comparer that supports span lookups, like the ordinal comparers),
+            <see cref="T:System.Collections.Frozen.FrozenDictionary`2"/>, <see cref="T:System.Collections.Generic.Dictionary`2"/>, <see cref="T:System.Collections.Concurrent.ConcurrentDictionary`2"/>, <see cref="T:System.Collections.Frozen.FrozenSet`1"/> and <see cref="T:System.Collections.Generic.HashSet`1"/>
+            with a comparer that implements <see cref="T:System.Collections.Generic.IAlternateEqualityComparer`2"/> for spans (the ordinal comparers, the default string comparer).
+            Other collections are searched with a string created from the span (the same result).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.SpanKeyLookupExt.MaxStackLength">
+            <summary>
+            Keys up to this length are lower / upper cased on the stack, longer keys are converted to a string
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.IsLowerAscii(System.String)">
+            <summary>
+            True if FastToLower returns the key itself because it's lower case ASCII (the common case: the key can be looked up as is, the fastest lookup).
+            Keys up to 16 chars are tested without a loop, longer keys with the same inline scan as FastToLower.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.IsUpperAscii(System.String)">
+            <summary>
+            True if FastToUpper returns the key itself because it's upper case ASCII
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.IsSameCaseAscii(System.ReadOnlySpan{System.Char},System.Char)">
+            <summary>
+            True if no char of the span must change (all ASCII, no letter from first to first + 25)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SpanKeyLookupExt.ShortKey">
+            <summary>
+            Keys up to this length are tested by <see cref="M:SysWeaver.SpanKeyLookupExt.IsSameCaseShort(System.Char@,System.UIntPtr,System.UInt16)"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.Change4(System.UInt64,System.UInt16)">
+            <summary>
+            The bits 0x80 (of a 16 bit lane) of the chars in 4 chars that must change or aren't ASCII (any bit set if any char must change or isn't ASCII).
+            For an ASCII char (less than 0x80): c + (0x80 - first) has bit 7 set if c &gt;= first, c + (0x80 - first - 26) if c &gt;= first + 26 (no carry into the next lane).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.Change2(System.UInt32,System.UInt16)">
+            <summary>
+            The same as <see cref="M:SysWeaver.SpanKeyLookupExt.Change4(System.UInt64,System.UInt16)"/> for 2 chars
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.IsSameCaseShort(System.Char@,System.UIntPtr,System.UInt16)">
+            <summary>
+            True if none of the (at most 16) chars must change: all ASCII, no letter from first to first + 25.
+            No loop: two (overlapping) reads of 2, 4 or 8 chars.
+            </summary>
+            <param name="c">The first char</param>
+            <param name="l">The number of chars, 0 to 16</param>
+            <param name="first">The first letter that must change ('A' when lower casing, 'a' when upper casing)</param>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueSpan``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)">
+            <summary>
+            Get the value of a key in a string keyed dictionary using a span (the same result as a lookup with a string with the same chars)
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+            <param name="d">The dictionary, must not be null</param>
+            <param name="key">The key</param>
+            <param name="value">The value of the key, default if not found</param>
+            <returns>True if the key was found</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ContainsSpan(System.Collections.Generic.IReadOnlySet{System.String},System.ReadOnlySpan{System.Char})">
+            <summary>
+            Check if a string set contains a key using a span (the same result as a lookup with a string with the same chars)
+            </summary>
+            <param name="set">The set, must not be null</param>
+            <param name="key">The key</param>
+            <returns>True if the key is in the set</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueLower``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.String,``0@)">
+            <summary>
+            Get the value of a key in a dictionary with lower case keys, the same result (and exceptions) as d.TryGetValue(key.FastToLower(), out value), but no lower case string is created for the lookup.
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+            <param name="d">The dictionary (the keys should be lower case), must not be null</param>
+            <param name="key">The key, any case, must not be null</param>
+            <param name="value">The value of the lower cased key, default if not found</param>
+            <returns>True if the lower cased key was found</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueCased``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},System.Boolean,``0@)">
+            <summary>
+            Lower / upper case a key (at most MaxStackLength chars) on the stack and look it up with a span
+            (not inlined: the callers' common path, a key that doesn't change, has no stack allocation)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ContainsCased(System.Collections.Generic.IReadOnlySet{System.String},System.ReadOnlySpan{System.Char})">
+            <summary>
+            Lower / upper case a key (at most MaxStackLength chars) on the stack and look it up with a span
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ToLower(System.ReadOnlySpan{System.Char},System.Span{System.Char})">
+            <summary>
+            Lower case chars (the same chars as FastToLower / ToLowerInvariant), ASCII using SIMD
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ToUpper(System.ReadOnlySpan{System.Char},System.Span{System.Char})">
+            <summary>
+            Upper case chars (the same chars as FastToUpper / ToUpperInvariant), ASCII using SIMD
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueLower``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)">
+            <summary>
+            Get the value of a key in a dictionary with lower case keys, the same result as d.TryGetValue(new String(key).FastToLower(), out value), but no string is created for the lookup.
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+            <param name="d">The dictionary (the keys should be lower case), must not be null</param>
+            <param name="key">The key, any case</param>
+            <param name="value">The value of the lower cased key, default if not found</param>
+            <returns>True if the lower cased key was found</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ToLowerString(System.ReadOnlySpan{System.Char})">
+            <summary>
+            A lower case string (invariant, the same chars as FastToLower) of a span
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueUpper``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.String,``0@)">
+            <summary>
+            Get the value of a key in a dictionary with upper case keys, the same result (and exceptions) as d.TryGetValue(key.FastToUpper(), out value), but no upper case string is created for the lookup.
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+            <param name="d">The dictionary (the keys should be upper case), must not be null</param>
+            <param name="key">The key, any case, must not be null</param>
+            <param name="value">The value of the upper cased key, default if not found</param>
+            <returns>True if the upper cased key was found</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueUpper``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)">
+            <summary>
+            Get the value of a key in a dictionary with upper case keys, the same result as d.TryGetValue(new String(key).FastToUpper(), out value), but no string is created for the lookup.
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+            <param name="d">The dictionary (the keys should be upper case), must not be null</param>
+            <param name="key">The key, any case</param>
+            <param name="value">The value of the upper cased key, default if not found</param>
+            <returns>True if the upper cased key was found</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ContainsLower(System.Collections.Generic.IReadOnlySet{System.String},System.String)">
+            <summary>
+            Check if a set with lower case keys contains a key, the same result (and exceptions) as set.Contains(key.FastToLower()), but no lower case string is created for the lookup.
+            </summary>
+            <param name="set">The set (the keys should be lower case), must not be null</param>
+            <param name="key">The key, any case, must not be null</param>
+            <returns>True if the lower cased key is in the set</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ContainsLower(System.Collections.Generic.IReadOnlySet{System.String},System.ReadOnlySpan{System.Char})">
+            <summary>
+            Check if a set with lower case keys contains a key, the same result as set.Contains(new String(key).FastToLower()), but no string is created for the lookup.
+            </summary>
+            <param name="set">The set (the keys should be lower case), must not be null</param>
+            <param name="key">The key, any case</param>
+            <returns>True if the lower cased key is in the set</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueOther``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)">
+            <summary>
+            A span lookup in the other known dictionary implementations
+            </summary>
+            <returns>1 if found, 0 if not found, -1 if the dictionary doesn't support span lookups</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.ContainsOther(System.Collections.Generic.IReadOnlySet{System.String},System.ReadOnlySpan{System.Char})">
+            <summary>
+            A span lookup in the other known set implementations
+            </summary>
+            <returns>1 if found, 0 if not found, -1 if the set doesn't support span lookups</returns>
+        </member>
         <member name="T:SysWeaver.SpanStringExt">
             <summary>
             Low level string functions for char spans
@@ -20513,6 +21757,7 @@
             <param name="a">The first part</param>
             <param name="b">The second part</param>
             <returns>A new string with all the parts (empty if all parts are empty)</returns>
+            <remarks>A total length above Int32.MaxValue throws an OutOfMemoryException (String.Concat)</remarks>
         </member>
         <member name="M:SysWeaver.SpanStringExt.ConcatToString(System.ReadOnlySpan{System.Char},System.ReadOnlySpan{System.Char},System.ReadOnlySpan{System.Char})">
             <summary>
@@ -20522,6 +21767,7 @@
             <param name="b">The second part</param>
             <param name="c">The third part</param>
             <returns>A new string with all the parts (empty if all parts are empty)</returns>
+            <remarks>A total length above Int32.MaxValue throws an OutOfMemoryException (String.Concat)</remarks>
         </member>
         <member name="M:SysWeaver.SpanStringExt.ConcatToString(System.ReadOnlySpan{System.Char},System.ReadOnlySpan{System.Char},System.ReadOnlySpan{System.Char},System.ReadOnlySpan{System.Char})">
             <summary>
@@ -20532,11 +21778,7 @@
             <param name="c">The third part</param>
             <param name="d">The fourth part</param>
             <returns>A new string with all the parts (empty if all parts are empty)</returns>
-        </member>
-        <member name="F:SysWeaver.SpanStringExt.Concat">
-            <summary>
-            Copies the (pinned) sources, pointer and length pairs, into the new string
-            </summary>
+            <remarks>A total length above Int32.MaxValue throws an OutOfMemoryException (String.Concat)</remarks>
         </member>
         <member name="F:SysWeaver.SpanStringExt.CreateUpperCasedString">
             <summary>
@@ -21236,6 +22478,19 @@
             <param name="separator">The separator to insert between the texts (null is the same as empty)</param>
             <param name="texts">The texts to join</param>
             <returns>null if texts is null, else the joined string (String.Empty if no text is non empty, the text itself if only one is non empty)</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.JoinNonEmpty(System.String,System.ReadOnlySpan{System.String})">
+            <summary>
+            Similar to String.Join but excludes all null or empty texts
+            </summary>
+            <param name="separator">The separator to insert between the texts (null is the same as empty)</param>
+            <param name="texts">The texts to join</param>
+            <returns>The joined string (String.Empty if no text is non empty, the text itself if only one is non empty)</returns>
+        </member>
+        <member name="T:SysWeaver.StringExt.JoinNonEmptyState">
+            <summary>
+            The separator and texts of <see cref="M:SysWeaver.StringExt.JoinNonEmpty(System.String,System.ReadOnlySpan{System.String})"/>, the state when building the string
+            </summary>
         </member>
         <member name="F:SysWeaver.StringExt.JoinNonEmptyAction">
             <summary>
@@ -22358,19 +23613,25 @@
             <param name="count">The number of times to repeat the string, ex: 3 (must not be negative)</param>
             <returns>A repeated string, ex: "HelloHelloHello"</returns>
         </member>
-        <member name="F:SysWeaver.StringTools.EscapeChars">
+        <member name="F:SysWeaver.StringTools.MdEscapeChars">
             <summary>
-            The chars that are escaped (with a '\') by <see cref="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean)"/>
+            The chars that are escaped (with a '\') by <see cref="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean,System.Boolean)"/>
             </summary>
         </member>
-        <member name="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean)">
+        <member name="F:SysWeaver.StringTools.MdEscapeCharsAll">
+            <summary>
+            The chars that are escaped (with a '\') by <see cref="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean,System.Boolean)"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean,System.Boolean)">
             <summary>
             Escape some text to work inside mark down, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
-            Doesn't escape +, - and .
+            Doesn't escape +, - and . unless all is true
             A text that starts with the char 1 is considered to be markdown already, it's returned as is (without the first char).
             </summary>
             <param name="text">The text to escape</param>
             <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping, if false any non breaking spaces are converted to spaces</param>
+            <param name="all">If true, +, - and . are also escaped</param>
             <returns>Escaped text, an empty string if the text is null or empty, the input instance if nothing changed</returns>
         </member>
         <member name="T:SysWeaver.StringTree">
@@ -23854,6 +25115,30 @@
             The <paramref name="tasks"/> argument was null.
             </exception>
         </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll``1(System.ReadOnlySpan{System.Threading.Tasks.ValueTask{``0}})">
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <typeparam name="T">The result type of the tasks</typeparam>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks, the result contains the results of the tasks in the same order as the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied span contains no tasks, or all tasks are already completed successfully, the returned task is completed synchronously (no task is allocated).
+            Else the tasks are copied to an array.
+            </para>
+            </remarks>
+        </member>
         <member name="M:SysWeaver.TaskExt.WhenAll(System.Collections.Generic.IReadOnlyList{System.Threading.Tasks.ValueTask})">
             <summary>
             Creates a task that will complete when all of the supplied tasks have completed.
@@ -24195,6 +25480,12 @@
             Required auth
             </summary>
         </member>
+        <member name="F:SysWeaver.TextFile.AuthTokens">
+            <summary>
+            Optional: the pre-processed tokens of <see cref="F:SysWeaver.TextFile.Auth"/> (as returned by Authorization.GetRequiredTokens, ex: a static list or a RequiredTokensCache field of the producer), so that the requirement isn't parsed per check.
+            Null means that <see cref="F:SysWeaver.TextFile.Auth"/> is parsed per check. When set, it must be the parsed <see cref="F:SysWeaver.TextFile.Auth"/>.
+            </summary>
+        </member>
         <member name="F:SysWeaver.TextFile.Filename">
             <summary>
             The full path of the file on disc
@@ -24261,14 +25552,17 @@
               £ = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
               ¤ = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
               * = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+              ! = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+              / = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $, £, ¤ and * may be used.
-            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤ and *, ex: _#, ^$
+            Only one of @, #, %, $, £, ¤, *, ! and / may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
+            Example: _#, ^$
             </summary>
             <remarks>
             The template text is parsed once (in the constructor), <see cref="M:SysWeaver.TextTemplate.Get(System.Func{System.String,System.String})"/> then builds the result with a single string allocation.
             Instances are immutable and <see cref="M:SysWeaver.TextTemplate.Get(System.Func{System.String,System.String})"/> is thread safe (as long as the value provider is).
-            The value provider is called more than once per variable (once to compute the length and once per occurrence), so it must return the same value for the same name during a call.
+            The value provider is called once per variable name and call (the values are read into a pooled array when the length is computed and written from it), every occurrence of a variable gets the same value.
             How unresolved variables (the provider returns null) are rendered depends on the constructor, see each constructor.
             Typically used for path templates (<see cref="T:SysWeaver.PathTemplate"/>), environment variables (<see cref="M:SysWeaver.EnvInfo.ResolveText(System.String,System.Boolean,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})"/>) and HTML / text templates in the HTTP server.
             </remarks>
@@ -24295,9 +25589,12 @@
             $(£Var) = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
             $(¤Var) = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
             $(*Var) = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+            $(!Var) = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            $(/Var) = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $, £, ¤ and * may be used.
-            _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: $(_#Var)
+            Only one of @, #, %, $, £, ¤, *, ! and / may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
+            Example: $(_#Var)
             </param>
             <exception cref="T:System.NullReferenceException"><paramref name="text"/>, <paramref name="varBegin"/> or <paramref name="varEnd"/> is null.</exception>
         </member>
@@ -24335,9 +25632,12 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $, £, ¤ and * may be used.
-            _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
+            Only one of @, #, %, $, £, ¤, *, ! and / may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
+            Example: [_#Var]
             </param>
         </member>
         <member name="M:SysWeaver.TextTemplate.#ctor(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.Boolean,System.Boolean)">
@@ -24361,9 +25661,12 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $, £, ¤ and * may be used.
-            _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
+            Only one of @, #, %, $, £, ¤, *, ! and / may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
+            Example: [_#Var]
             </param>
         </member>
         <member name="M:SysWeaver.TextTemplate.Get(System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
@@ -24388,9 +25691,89 @@
             Get a string from the template with the specified replacements
             </summary>
             <param name="getVars">A function that returns the value for the given key, if not found return null.
-            Called multiple times for the same key, so it must be deterministic (else the result is truncated or an exception is thrown).</param>
+            Called once per variable name (every occurrence of the variable gets that value).</param>
             <returns>A string with the specified replacements done</returns>
-            <exception cref="T:System.ArgumentException"><paramref name="getVars"/> returned a longer value for a key on a later call (the computed length is exceeded).</exception>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.Get``1(``0,System.Func{``0,System.String,System.String})">
+            <summary>
+            Get a string from the template with the specified replacements, the values are looked up using a state (use a static lambda to avoid allocating a closure per call)
+            </summary>
+            <typeparam name="TState">The type of the state</typeparam>
+            <param name="state">The state passed to <paramref name="getVars"/></param>
+            <param name="getVars">A function that returns the value for the given state and key, if not found return null.
+            Called once per variable name (every occurrence of the variable gets that value).</param>
+            <returns>A string with the specified replacements done</returns>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.AppendTo``1(System.Text.StringBuilder,``0,System.Func{``0,System.String,System.String})">
+            <summary>
+            Append the text from the template with the specified replacements to a string builder (the same text as <see cref="M:SysWeaver.TextTemplate.Get``1(``0,System.Func{``0,System.String,System.String})"/>, without creating a string).
+            </summary>
+            <typeparam name="TState">The type of the state</typeparam>
+            <param name="sb">The string builder to append the text to</param>
+            <param name="state">The state passed to <paramref name="getVars"/></param>
+            <param name="getVars">A function that returns the value for the given state and key, if not found return null.
+            Called once per variable name (every occurrence of the variable gets that value), use a static lambda to avoid allocating a closure per call.</param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="sb"/> is null.</exception>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.AppendMemoryValuesTo``1(System.Text.StringBuilder,``0,System.Func{``0,System.String,System.ReadOnlyMemory{System.Char}})">
+            <summary>
+            Append the text from the template with the specified replacements to a string builder, the values are read as memory (ex: a part of a string or a reused buffer, no string per value).
+            The same text as <see cref="M:SysWeaver.TextTemplate.AppendTo``1(System.Text.StringBuilder,``0,System.Func{``0,System.String,System.String})"/> with the values converted to strings.
+            </summary>
+            <remarks>
+            A transformed variable (ex: <c>${#Var}</c>) needs a string: a value that isn't a whole string is copied to a new string, except for transforms that leave the value unchanged
+            (<c>@</c> when the value doesn't contain any of the chars encoded by <see cref="M:System.Web.HttpUtility.HtmlAttributeEncode(System.String)"/>).
+            </remarks>
+            <typeparam name="TState">The type of the state</typeparam>
+            <param name="sb">The string builder to append the text to</param>
+            <param name="state">The state passed to <paramref name="getVars"/></param>
+            <param name="getVars">A function that returns the value for the given state and key, if not found return <c>default</c> (a memory without a backing string or array, the same as a null string;
+            an empty string's memory is a found empty value).
+            Called once per variable name (every occurrence of the variable gets that value), use a static lambda to avoid allocating a closure per call.
+            The memory must be valid until this method returns.</param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="sb"/> is null.</exception>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.IsNotFound(System.ReadOnlyMemory{System.Char})">
+            <summary>
+            True if a memory value means "not found" (no backing object, like a null string)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.AsString(System.ReadOnlyMemory{System.Char})">
+            <summary>
+            Get a memory value as a string, without a copy if the memory is a whole string
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.HtmlAttributeEncodedChars">
+            <summary>
+            The chars that <see cref="M:System.Web.HttpUtility.HtmlAttributeEncode(System.String)"/> encodes, a text without any of them is returned as is
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.HtmlAttributeEncodeTransform">
+            <summary>
+            The "@" transform (HtmlAttributeEncode)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.IsUnchangedBy(System.Func{System.String,System.String},System.ReadOnlySpan{System.Char})">
+            <summary>
+            Test if a transform leaves a text unchanged (only known for some transforms, false if unknown)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.Resolve``1(System.ReadOnlyMemory{System.Char}[],``0,System.Func{``0,System.String,System.ReadOnlyMemory{System.Char}})">
+            <summary>
+            Read the values of all variables as memory (one call of <paramref name="getVars"/> per name in <see cref="F:SysWeaver.TextTemplate.Lookups"/>), see <see cref="M:SysWeaver.TextTemplate.Resolve``1(System.String[],``0,System.Func{``0,System.String,System.String})"/>.
+            </summary>
+            <param name="values">Receives the looked up values (the first <see cref="F:SysWeaver.TextTemplate.Lookups"/> elements), then the value to write for each slot (<see cref="F:SysWeaver.TextTemplate.Slots"/>, not found = write the original text of each occurrence)</param>
+            <param name="state">The state passed to <paramref name="getVars"/></param>
+            <param name="getVars">The value provider</param>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.Resolve``1(System.String[],``0,System.Func{``0,System.String,System.String})">
+            <summary>
+            Read the values of all variables (one call of <paramref name="getVars"/> per name in <see cref="F:SysWeaver.TextTemplate.Lookups"/>) and compute the length of the result.
+            </summary>
+            <param name="values">Receives the looked up values (the first <see cref="F:SysWeaver.TextTemplate.Lookups"/> elements), then the value to write for each slot (<see cref="F:SysWeaver.TextTemplate.Slots"/>, null = write the original text of each occurrence)</param>
+            <param name="state">The state passed to <paramref name="getVars"/></param>
+            <param name="getVars">The value provider</param>
+            <returns>The length of the result</returns>
         </member>
         <member name="F:SysWeaver.TextTemplate.Template">
             <summary>
@@ -24427,9 +25810,12 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $, £, ¤ and * may be used.
-            _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
+            Only one of @, #, %, $, £, ¤, *, ! and / may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
+            Example: [_#Var]
             </param>
             <returns>The text with all replacements made</returns>
         </member>
@@ -24455,11 +25841,24 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $, £, ¤ and * may be used.
-            _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
+            Only one of @, #, %, $, £, ¤, *, ! and / may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
+            Example: [_#Var]
             </param>
             <returns>The text with all replacements made</returns>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.VarList">
+            <summary>
+            The <see cref="F:SysWeaver.TextTemplate.VarsAndFrequency"/> (in the same order), enumerated by Get without an enumerator allocation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.TransformedList">
+            <summary>
+            The <see cref="F:SysWeaver.TextTemplate.TransformedVars"/> (in the same order), enumerated by Get without an enumerator allocation, null if there are none (no dictionary of transformed values is needed)
+            </summary>
         </member>
         <member name="F:SysWeaver.TextTemplate.KeepUnresolved">
             <summary>
@@ -24474,6 +25873,71 @@
         <member name="F:SysWeaver.TextTemplate.TransformsLookup">
             <summary>
             The <see cref="F:SysWeaver.TextTemplate.Transforms"/>, looked up using a span (ordinal)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Block.Slot">
+            <summary>
+            The index of the variable in <see cref="F:SysWeaver.TextTemplate.Slots"/> (set after parsing, only used by variable blocks)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Lookups">
+            <summary>
+            The variable names passed to the value provider, once each (ordinal): the names used by the transformed variables (in <see cref="F:SysWeaver.TextTemplate.TransformedList"/> order), then the untransformed variables (in <see cref="F:SysWeaver.TextTemplate.VarList"/> order)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slots">
+            <summary>
+            How to compute the value of each variable (in <see cref="F:SysWeaver.TextTemplate.VarList"/> order)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.TextTemplate.Slot">
+            <summary>
+            How to compute the value of a variable (an element of <see cref="F:SysWeaver.TextTemplate.VarList"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slot.Lookup">
+            <summary>
+            The index of the value in <see cref="F:SysWeaver.TextTemplate.Lookups"/>, -1 if the value is always unresolved (null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slot.Transform">
+            <summary>
+            The transform to apply to the value, null if the variable isn't transformed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slot.TransformDefault">
+            <summary>
+            The value to transform if the variable is unresolved (the default of the dictionary constructor, or the variable name)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slot.Count">
+            <summary>
+            The number of occurrences of the variable
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slot.Default">
+            <summary>
+            The default value (dictionary constructor)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.Slot.TokenLen">
+            <summary>
+            The total length of the variable tokens (written as is if the variable is unresolved)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.CreateSlots(System.Collections.Generic.KeyValuePair{System.String,System.Tuple{System.Int32,System.String,System.Boolean,System.Int32}}[],System.Collections.Generic.IEqualityComparer{System.String},System.Collections.Generic.KeyValuePair{System.String,System.Tuple{System.String,System.Func{System.String,System.String}}}[],System.Collections.Generic.IEqualityComparer{System.String},System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},SysWeaver.TextTemplate.Block[])">
+            <summary>
+            Create the <see cref="F:SysWeaver.TextTemplate.Lookups"/> and <see cref="F:SysWeaver.TextTemplate.Slots"/> and set the <see cref="F:SysWeaver.TextTemplate.Block.Slot"/> of the variable blocks
+            </summary>
+        </member>
+        <member name="T:SysWeaver.TextTemplate.BuildState">
+            <summary>
+            The state of <see cref="M:SysWeaver.TextTemplate.Build(System.Span{System.Char},System.String[])"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TextTemplate.BuildState.Values">
+            <summary>
+            The values computed by <see cref="M:SysWeaver.TextTemplate.Resolve``1(System.String[],``0,System.Func{``0,System.String,System.String})"/> (null if there are no variables)
             </summary>
         </member>
         <member name="T:SysWeaver.TorService">
@@ -25806,7 +27270,7 @@
         </member>
         <member name="T:SysWeaver.WebTools">
             <summary>
-            Helpers to create and share http clients
+            Helpers to create and share http clients, and to create html
             </summary>
         </member>
         <member name="F:SysWeaver.WebTools.UserAgent">
@@ -25867,6 +27331,54 @@
             <returns>A shared http client</returns>
             <exception cref="T:System.InvalidOperationException">If <paramref name="useTor"/> is true and SysWeaver.Tor isn't available</exception>
             <remarks>Thread safe</remarks>
+        </member>
+        <member name="M:SysWeaver.WebTools.MarkdownToHtml(System.String)">
+            <summary>
+            Convert markdown (GitHub flavored) to html, the result is html that can be used as the inner html of an element (no html, head or body tags etc).
+            No styling is applied, style the result using css (tags, and the classes listed below).
+            Supported (CommonMark + GitHub extensions):
+            - Headings (# and underlined, with GitHub style id's), paragraphs, hard line breaks (two trailing spaces or a trailing backslash), thematic breaks.
+            - Emphasis (*em*, **strong**), strikethrough (~~del~~), inline code, backslash escapes, html entities, emoji short codes (:smile:).
+            - Links (inline, reference, autolinks and bare urls / email addresses) and images.
+            - Block quotes, alerts (> [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]), ordered and unordered (nested) lists, task lists, fenced and indented code blocks, tables, footnotes.
+            - Math ($inline$, $`inline`$, $$display$$ and ```math blocks), the TeX is kept as is (render it on the client, ex: using KaTeX or MathJax).
+            - Raw html (sanitized: only safe tags and attributes are kept, others are escaped), html comments are removed.
+            Classes:
+            - Code blocks: "language-[info]" on the code element (if a language is specified, ex: "language-mermaid").
+            - Task lists: "contains-task-list" on the list, "task-list-item" on the item and "task-list-item-checkbox" on the (disabled) checkbox.
+            - Tables: "align-left", "align-center" or "align-right" on th and td elements of aligned columns.
+            - Alerts: a div with "markdown-alert" and "markdown-alert-[note|tip|important|warning|caution]", the title is a p with "markdown-alert-title".
+            - Math: "math math-inline" on a span, or "math math-display" on a span (inline) or div (block).
+            - Footnotes: "footnote-ref" on the sup of references, the definitions are in a section with "footnotes", with links back using "footnote-backref".
+            Links and images may only use relative urls or the schemes http, https, mailto, tel, ftp and cid.
+            </summary>
+            <param name="markdown">The markdown text</param>
+            <returns>The html</returns>
+        </member>
+        <member name="M:SysWeaver.WebTools.MarkdownToHtmlDocument(System.String,System.String,System.String,System.String)">
+            <summary>
+            Convert markdown (GitHub flavored) to a stand alone html document that is suitable as the body of an email (compatible with most email clients).
+            The same markdown is supported as for <see cref="M:SysWeaver.WebTools.MarkdownToHtml(System.String)"/>, the content is placed in a centered 600 pixel wide table and styled using inline styles (classes are kept).
+            Task list check boxes are rendered as characters (form elements are removed by many email clients).
+            </summary>
+            <param name="markdown">The markdown text</param>
+            <param name="title">The title of the document, null to use the text of the first heading (if any)</param>
+            <param name="preheader">Optional preview text, shown by many email clients after the subject in the inbox (but not in the email)</param>
+            <param name="language">The language of the content (the lang attribute)</param>
+            <returns>A complete html document</returns>
+        </member>
+        <member name="M:SysWeaver.WebTools.MarkdownToSlack(System.String)">
+            <summary>
+            Convert markdown (GitHub flavored) to Slack "mrkdwn" (the text format used in Slack messages), keeping as many features as possible.
+            - Emphasis, strikethrough, inline code, code blocks, block quotes and links are converted to the Slack syntax (&amp;, &lt; and &gt; are escaped).
+            - Headings are bold, lists use bullet characters (nested lists are indented), task lists use ☐ and ☑, thematic breaks are a line of ─.
+            - Tables are rendered as aligned plain text in a code block, math is rendered as code.
+            - Alerts are block quotes with a bold title, nested block quotes are flattened (Slack only supports one level).
+            - Images are links, relative links are rendered as their text (they can't be used in Slack), footnotes are listed at the end.
+            - Emoji short codes are converted to emojis, raw html is converted where possible (b, i, code, a, img, br etc), else removed.
+            </summary>
+            <param name="markdown">The markdown text</param>
+            <returns>The Slack mrkdwn text</returns>
         </member>
         <member name="T:System.Text.RegularExpressions.Generated.SecretKeyValueRegex_0">
             <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the SecretKeyValueRegex method.</summary>

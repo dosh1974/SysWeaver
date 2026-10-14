@@ -151,12 +151,13 @@ namespace SysWeaver.Serialization
             using var ser = SerPools[(int)options].Get();
             if (!IsValueRoot(ser, s, obj))
             {
-                using var ms = new MemoryStream();
+                //  Written into a pooled buffer, the result is an exact sized copy
+                using var ms = new ArrayPoolStream();
                 using var wr = new BsonDataWriter(ms);
                 try
                 {
                     ser.Serialize(wr, obj);
-                    return new ReadOnlyMemory<Byte>(ms.GetBuffer(), 0, (int)ms.Length);
+                    return ms.ToArray();
                 }
                 catch (JsonWriterException ex) when ((ms.Length == 0) && ex.Message.Contains(RootValueError, StringComparison.Ordinal))
                 {
@@ -212,14 +213,15 @@ namespace SysWeaver.Serialization
         /// <returns>The BSON data</returns>
         static ReadOnlyMemory<byte> SerializeWrapped<T>(JsonSerializer ser, T obj)
         {
-            using var ms = new MemoryStream();
+            //  Written into a pooled buffer, the result is an exact sized copy
+            using var ms = new ArrayPoolStream();
             using var wr = new BsonDataWriter(ms);
             wr.WriteStartObject();
             wr.WritePropertyName(RootValueName);
             ser.Serialize(wr, obj);
             wr.WriteEndObject();
             wr.Flush();
-            return new ReadOnlyMemory<Byte>(ms.GetBuffer(), 0, (int)ms.Length);
+            return ms.ToArray();
         }
 
         /// <summary>

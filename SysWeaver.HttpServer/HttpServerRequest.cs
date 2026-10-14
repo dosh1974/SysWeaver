@@ -305,6 +305,17 @@ namespace SysWeaver.Net
         /// </summary>
         public Object Custom;
 
+        /// <summary>
+        /// The Accept header as read by <see cref="ApiHttpEntry.GetCacheKey(HttpServerRequest)"/>, reused (and released) when the API result is encoded,
+        /// so the header is read once per API request. Only valid if <see cref="ApiAcceptRead"/> is true.
+        /// </summary>
+        internal String ApiAccept;
+
+        /// <summary>
+        /// True if <see cref="ApiAccept"/> holds the Accept header of this request.
+        /// </summary>
+        internal bool ApiAcceptRead;
+
 
         NameValueCollection IQP;
         IReadOnlyDictionary<String, String> IqpL;

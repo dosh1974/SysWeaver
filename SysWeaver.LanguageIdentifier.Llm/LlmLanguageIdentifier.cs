@@ -87,8 +87,15 @@ namespace SysWeaver.LanguageIdentifier
 
         readonly ExceptionTracker Errors = new ExceptionTracker();
 
+        //  The cache keys (in memory only), the same text as String.Join("\n\r\t", ..) (current culture, null = empty) without the params array and the boxing
+        static String GetKey(String text, String userLanguge, double userLanguageBias, double minConfidence)
+            => $"{text}\n\r\t{userLanguge}\n\r\t{userLanguageBias}\n\r\t{minConfidence}";
+
+        static String GetKey(String text, String userLanguge, double userLanguageBias, int numberOfResults)
+            => $"{text}\n\r\t{userLanguge}\n\r\t{userLanguageBias}\n\r\t{numberOfResults}";
+
         public ValueTask<string> Identify(string text, string userLanguge = null, double userLanguageBias = 0.2, double minConfidence = 0.05)
-            => Cache.GetOrUpdateValueAsync(String.Join("\n\r\t", text, userLanguge, userLanguageBias, minConfidence), async f =>
+            => Cache.GetOrUpdateValueAsync(GetKey(text, userLanguge, userLanguageBias, minConfidence), async f =>
             {
                 using var _ = await ConLock.Lock().ConfigureAwait(false);
                 using var __ = PerfMon.Track(nameof(Identify));
@@ -122,7 +129,7 @@ namespace SysWeaver.LanguageIdentifier
 
 
         public ValueTask<IdentifiedLanguage[]> Identify(string text, int numberOfResults, string userLanguge = null, double userLanguageBias = 0.2)
-            => CacheList.GetOrUpdateValueAsync(String.Join("\n\r\t", text, userLanguge, userLanguageBias, numberOfResults), async f =>
+            => CacheList.GetOrUpdateValueAsync(GetKey(text, userLanguge, userLanguageBias, numberOfResults), async f =>
             {
                 using var _ = await ConLock.Lock().ConfigureAwait(false);
                 using var __ = PerfMon.Track(nameof(Identify));

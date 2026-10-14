@@ -165,7 +165,8 @@ namespace SysWeaver.Net
                     set(to, vals);
                     continue;
                 }
-                to.Headers[k] = new StringValues(vals.ToArray());
+                //  A single value doesn't need an array
+                to.Headers[k] = vc == 1 ? new StringValues(vals[0]) : new StringValues(vals.ToArray());
             }
             to.StatusCode = status;
         }

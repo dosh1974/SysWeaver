@@ -229,6 +229,63 @@ namespace SysWeaver
             var t = Parser(value);
             if (!Limit)
                 return t;
+            if (t == null)
+                return ParseNullValue(t, value);
+            var tt = t.GetType();
+            var less = LessTest;
+            if ((less == null) || (less.ValueType != tt))
+                LessTest = less = new LimitTest(tt, CompileLimitTest(tt, MinValue, false));
+            if (less.Test(t))
+                throw new ArgumentOutOfRangeException(Name, String.Concat("Option argument ", Name, " parsed from \"", value, "\" as ", t, " is to small! Valid value range is [", MinValue, "; ", MaxValue, ']'));
+            var greater = GreaterTest;
+            if ((greater == null) || (greater.ValueType != tt))
+                GreaterTest = greater = new LimitTest(tt, CompileLimitTest(tt, MaxValue, true));
+            if (greater.Test(t))
+                throw new ArgumentOutOfRangeException(Name, String.Concat("Option argument ", Name, " parsed from \"", value, "\" as ", t, " is to big! Valid value range is [", MinValue, "; ", MaxValue, ']'));
+            return t;
+        }
+
+        /// <summary>
+        /// A compiled limit test for parsed values of a runtime type
+        /// </summary>
+        sealed class LimitTest
+        {
+            public LimitTest(Type valueType, Func<Object, bool> test)
+            {
+                ValueType = valueType;
+                Test = test;
+            }
+            /// <summary>
+            /// The runtime type of the parsed value
+            /// </summary>
+            public readonly Type ValueType;
+            /// <summary>
+            /// Returns true if the value is outside the limit
+            /// </summary>
+            public readonly Func<Object, bool> Test;
+        }
+
+        //  The last compiled limit tests (bounded: a parsed value of another runtime type replaces them, a failed compilation isn't cached)
+        LimitTest LessTest;
+        LimitTest GreaterTest;
+
+        /// <summary>
+        /// Compile "(Type)(valueType)value &lt; (Type)limit" (or &gt;): the same expression as with a constant of the parsed value (a constant has the runtime type of the value)
+        /// </summary>
+        Func<Object, bool> CompileLimitTest(Type valueType, Object limit, bool greater)
+        {
+            var type = Type;
+            var p = Expression.Parameter(typeof(Object), "value");
+            var te = Expression.Convert(Expression.Convert(p, valueType), type);
+            var le = Expression.Convert(Expression.Constant(limit), type);
+            return Expression.Lambda<Func<Object, bool>>(greater ? Expression.GreaterThan(te, le) : Expression.LessThan(te, le), p).Compile();
+        }
+
+        /// <summary>
+        /// The limit tests of a null value (not cached: a null constant is typed as Object)
+        /// </summary>
+        Object ParseNullValue(Object t, String value)
+        {
             var type = Type;
             var te = Expression.Convert(Expression.Constant(t), type);
             if (Expression.Lambda<Func<bool>>(Expression.LessThan(te, Expression.Convert(Expression.Constant(MinValue), type))).Compile()())

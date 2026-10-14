@@ -47,7 +47,7 @@ namespace SysWeaver.IpLocation.Caches
                 var l = Loc;
                 if (l == null)
                     return null;
-                return String.Concat(l.Latitude.ToString(CultureInfo.InvariantCulture), ',', l.Longitude.ToString(CultureInfo.InvariantCulture));
+                return String.Create(CultureInfo.InvariantCulture, $"{l.Latitude},{l.Longitude}");
             }
         }
 

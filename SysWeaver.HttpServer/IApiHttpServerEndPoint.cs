@@ -52,8 +52,9 @@ namespace SysWeaver.Net
         /// <remarks>
         /// No authorization is performed, the caller is responsible for checking <see cref="IHttpServerEndPoint.Auth"/> against the request's session.
         /// Auditing is performed as for a normal call.
+        /// A value task: await it exactly once (use <see cref="ValueTask{TResult}.AsTask"/> to get a task).
         /// </remarks>
-        Task<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data);
+        ValueTask<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data);
 
     }
 

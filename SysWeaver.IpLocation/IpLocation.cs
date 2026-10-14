@@ -5,7 +5,7 @@ namespace SysWeaver.IpLocation
 {
     public sealed class IpLocation
     {
-        public override string ToString() => String.Concat(IsoCountry, ' ', Latitude.ToString(CultureInfo.InvariantCulture), ", ", Longitude.ToString(CultureInfo.InvariantCulture), "\n", Address);
+        public override string ToString() => String.Create(CultureInfo.InvariantCulture, $"{IsoCountry} {Latitude}, {Longitude}\n{Address}");
 
         public String IsoCountry;
         public Double Latitude;

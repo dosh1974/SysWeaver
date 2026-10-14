@@ -712,7 +712,7 @@ namespace SysWeaver.MicroService
             if (!Validate(out var fi, out var mime, out var compType, out var isLink, out var scope, context, l, false))
                 return null;
             var qs = context.QueryStringStart;
-            if ((qs <= 0) || (!context.Url.Substring(qs).FastEquals("peak")))
+            if ((qs <= 0) || (!context.Url.AsSpan(qs).SequenceEqual("peak")))
                 fi.LastAccessTimeUtc = DateTime.UtcNow;
             //  Validated everything, return file data
             if (isLink)

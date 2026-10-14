@@ -167,7 +167,7 @@ namespace SysWeaver.Net
             {
                 if (!File.Exists(filename))
                 {
-                    msg?.AddMessage(Prefix + "File " + filename.ToQuoted() + " does not exist!", MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{Prefix}File {filename.ToQuoted()} does not exist!");
                     return;
                 }
                 var valid = ValidCodes;
@@ -189,24 +189,24 @@ namespace SysWeaver.Net
                     var f = ParseOne(ref pos, row);
                     if (String.IsNullOrEmpty(f))
                     {
-                        msg?.AddMessage(Prefix + "Expected a from prefix in " + filename.ToQuoted() + " at row " + rowNumber + ", ignoring changes!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Expected a from prefix in {filename.ToQuoted()} at row {rowNumber}, ignoring changes!");
                         return;
                     }
                     var t = ParseOne(ref pos, row);
                     if (String.IsNullOrEmpty(t))
                     {
-                        msg?.AddMessage(Prefix + "Expected a to prefix in " + filename.ToQuoted() + " at row " + rowNumber + ", ignoring changes!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Expected a to prefix in {filename.ToQuoted()} at row {rowNumber}, ignoring changes!");
                         return;
                     }
                     var codeStr = ParseOne(ref pos, row) ?? "302";
                     if (!int.TryParse(codeStr, out var code))
                     {
-                        msg?.AddMessage(Prefix + "Expected a valid code in " + filename.ToQuoted() + " at row " + rowNumber + ", ignoring changes!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Expected a valid code in {filename.ToQuoted()} at row {rowNumber}, ignoring changes!");
                         return;
                     }
                     if (!valid.Contains(code))
                     {
-                        msg?.AddMessage(Prefix + "Expected a valid code in " + filename.ToQuoted() + " at row " + rowNumber + ", ignoring changes!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Expected a valid code in {filename.ToQuoted()} at row {rowNumber}, ignoring changes!");
                         return;
                     }
                     d[f] = Tuple.Create(t, code);
@@ -216,7 +216,7 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to parse " + filename.ToQuoted() + ", ignoring changes!", ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to parse {filename.ToQuoted()}, ignoring changes!", ex);
                 return;
             }
             var c = Cache;
@@ -225,7 +225,7 @@ namespace SysWeaver.Net
                 c.Clear();
                 Redirs = d;
             }
-            msg?.AddMessage(Prefix + "Redirections updated from file " + filename.ToQuoted());
+            msg?.AddMessage(MessageLevels.Info, $"{Prefix}Redirections updated from file {filename.ToQuoted()}");
         }
 
         readonly bool CaseSensitive;

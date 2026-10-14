@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -24,7 +25,6 @@ namespace SysWeaver.MicroService
                 DiscFolder = discFolder;
                 UploadAuth = isKey ? Roles.Admin : "";
                 ValidExt = isKey ? ValidKeyExt : ValidConfigExt;
-                InvalidSuffixes = isKey ? ReadOnlySet<String>.Empty : InvalidConfigSuffixes;
             }
             readonly bool IsKey;
             readonly String DiscFolder;
@@ -33,7 +33,6 @@ namespace SysWeaver.MicroService
 
             public IReadOnlyList<FileHttpServerModuleFolder> ExposeFolders => null;
 
-            readonly IReadOnlySet<String> InvalidSuffixes;
             readonly IReadOnlySet<String> ValidExt;
 
             public string UploadAuth { get; init; }
@@ -62,23 +61,76 @@ namespace SysWeaver.MicroService
                 var dest = GetDest(file.Name);
                 if (dest == null)
                     return InvalidFileName;
-                if (File.Exists(dest))
+                var fi = new FileInfo(dest);
+                if (fi.Exists)
                 {
-                    var h = await FileHash.GetHashAsync(dest).ConfigureAwait(false);
-                    h = HashTools.ToHexHash(h);
+                    var h = await GetHexHash(dest, fi).ConfigureAwait(false);
                     if (h.FastEquals(file.Hash))
                         return FileUploadResult.AlreadyUploaded;
                 }
-                if (!ValidExt.Contains(file.GetExtension().FastToLower()))
-                    return FileUploadResult.RefuseExtension;
-                var lfile = file.Name.FastToLower();
-                foreach (var x in InvalidSuffixes)
-                    if (lfile.FastEndsWith(x))
-                        return FileUploadResult.Refuse;
+                var res = CheckName(file.Name);
+                if (res != null)
+                    return res;
                 if (file.Length > (64 << 10))
                     return FileUploadResult.RefuseSize;
                 return FileUploadResult.Upload;
             }
+
+            /// <summary>
+            /// Check the extension and the suffix of a (plain) file name.
+            /// The same results as lower casing the extension (FileUploadInfo.GetExtension) and the name with FastToLower, without creating strings (like IsValidConfigName)
+            /// </summary>
+            /// <param name="name">The file name</param>
+            /// <returns>null if the name can be uploaded, else the refusal</returns>
+            FileUploadResult CheckName(String name)
+            {
+                var n = name.AsSpan();
+                var dot = n.LastIndexOf('.');
+                if (!ValidExt.ContainsLower(dot < 0 ? ReadOnlySpan<Char>.Empty : n.Slice(dot)))
+                    return FileUploadResult.RefuseExtension;
+                //  Key files have no invalid suffixes
+                if ((!IsKey) && HasInvalidConfigSuffix(n))
+                    return FileUploadResult.Refuse;
+                return null;
+            }
+
+            /// <summary>
+            /// The hex hash of an existing file, cached by the file's length, last write time and creation time (the highest resolution timestamps available, 100 ns ticks).
+            /// FileHash caches by the same values (but formatted with a second resolution), so a cached hash is the hash FileHash would return.
+            /// </summary>
+            /// <param name="dest">The full name of the file</param>
+            /// <param name="fi">The file info of the (existing) file</param>
+            /// <returns>The hex hash (HashTools.ToHexHash of FileHash.GetHashAsync)</returns>
+            async ValueTask<String> GetHexHash(String dest, FileInfo fi)
+            {
+                var length = fi.Length;
+                var written = fi.LastWriteTimeUtc.Ticks;
+                var created = fi.CreationTimeUtc.Ticks;
+                var cache = HashCache;
+                if (cache.TryGetValue(dest, out var e) && (e.Length == length) && (e.Written == written) && (e.Created == created))
+                    return e.HexHash;
+                var h = await FileHash.GetHashAsync(dest).ConfigureAwait(false);
+                if (h == null)
+                    return HashTools.ToHexHash(h);
+                h = HashTools.ToHexHash(h);
+                //  Bounded: the names are user input (only the existing files of the folder are cached)
+                if (cache.Count >= MaxHashCacheCount)
+                    cache.Clear();
+                cache[dest] = new HashCacheEntry(length, written, created, h);
+                return h;
+            }
+
+            /// <summary>
+            /// A cached hex hash of a file and the file values it was computed for
+            /// </summary>
+            sealed record HashCacheEntry(long Length, long Written, long Created, String HexHash);
+
+            const int MaxHashCacheCount = 256;
+
+            /// <summary>
+            /// The cached hex hashes of the files in the disc folder (the key is the full name)
+            /// </summary>
+            readonly ConcurrentDictionary<String, HashCacheEntry> HashCache = new ConcurrentDictionary<String, HashCacheEntry>(StringComparer.Ordinal);
 
             public Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
             {

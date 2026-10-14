@@ -413,7 +413,7 @@ namespace SysWeaver.AI
             }
             if (layers <= 0)
                 return null;
-            msg?.AddMessage(String.Concat("The model ", name.ToQuoted(), " (", arch, ") has ", layers.ToString(), " multi token prediction (MTP) layer(s) that the bundled llama.cpp doesn't support, using a copy of the model without them"), MessageLevels.Warning);
+            msg?.AddMessage(MessageLevels.Warning, $"The model {name.ToQuoted()} ({arch}) has {layers.ToString()} multi token prediction (MTP) layer(s) that the bundled llama.cpp doesn't support, using a copy of the model without them");
             try
             {
                 var meta = FileMetaData.Process<LlamaSharpStrippedGguf>("Gguf", filename, (src, destBase, existing) =>
@@ -422,7 +422,7 @@ namespace SysWeaver.AI
                     var fi = new FileInfo(dest);
                     if ((existing != null) && fi.Exists && (fi.Length == existing.Length) && String.Equals(existing.Filename, fi.FullName, StringComparison.OrdinalIgnoreCase))
                         return null;
-                    msg?.AddMessage(String.Concat("Creating a copy of ", src.ToQuoted(), " without MTP layers at ", fi.FullName.ToQuoted(), ", this may take a while"), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"Creating a copy of {src.ToQuoted()} without MTP layers at {fi.FullName.ToQuoted()}, this may take a while");
                     var temp = dest + ".tmp";
                     try
                     {
@@ -454,7 +454,7 @@ namespace SysWeaver.AI
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(String.Concat("Failed to create a copy of the model ", name.ToQuoted(), " without MTP layers"), ex, MessageLevels.Error);
+                msg?.AddMessage(MessageLevels.Error, $"Failed to create a copy of the model {name.ToQuoted()} without MTP layers", ex);
                 return null;
             }
         }

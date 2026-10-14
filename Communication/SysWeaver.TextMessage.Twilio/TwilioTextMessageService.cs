@@ -87,7 +87,7 @@ namespace SysWeaver.TextMessage
             }
             IncomingHandler = new WebhookRequestHandler("Incoming", HandleIncoming);
             StatusHandler = new WebhookRequestHandler("Status", HandleStatus);
-            Msg?.AddMessage(LogPrefix + "Using " + Senders.Length + " sender(s), webhooks at " + url.ToQuoted(), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Using {Senders.Length} sender(s), webhooks at {url.ToQuoted()}");
         }
 
         public override string ToString() => Tos;

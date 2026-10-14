@@ -119,15 +119,32 @@ namespace SysWeaver.AI
     /// The <see cref="Save"/> method is passed as the (data url or text based) save file delegate (ex: to <see cref="IAiChatSession.CompleteUpdate"/>),
     /// the <see cref="AiToolContext"/> uses <see cref="SaveBytes"/> for binary data (no base64 encoding and decoding).
     /// </summary>
-    sealed class AiFileSaver
+    /// <remarks>
+    /// The save file delegate must be the <see cref="Save"/> method itself (<c>saveFile: saver.Save</c>), the saver is found through the target of the delegate:
+    /// a delegate that wraps it (ex: a lambda that calls <see cref="Save"/>) saves binary data as a data url.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var saver = new AiFileSaver(
+    ///     (mime, data, filename) => message.AddFileData(mime, data, ..),     // a data url or text
+    ///     (mime, bytes, filename) => message.AddFileData(mime, bytes, ..));  // the same file from bytes
+    /// await session.CompleteUpdate(text, extraData, request, onUpdate, saver.Save, saveData, onTools, debug, from, onUsage);
+    /// </code>
+    /// </example>
+    public sealed class AiFileSaver
     {
         /// <summary>
         /// Create a file saver
         /// </summary>
         /// <param name="saveText">Save a file from a data url or text (mime, data, filename), returns an url</param>
-        /// <param name="saveBytes">Save a file from bytes (mime, data, filename), returns an url, must give the same result as saving the data url of the bytes</param>
+        /// <param name="saveBytes">Save a file from bytes (mime, data, filename), returns an url, must give the same result as saving the data url of the bytes.
+        /// Null saves binary data as a data url using <paramref name="saveText"/></param>
+        /// <exception cref="ArgumentNullException"><paramref name="saveText"/> is null (DEBUG builds only).</exception>
         public AiFileSaver(Func<String, String, String, String> saveText, Func<String, ReadOnlyMemory<Byte>, String, String> saveBytes)
         {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(saveText);
+#endif//DEBUG
             SaveText = saveText;
             SaveBytes = saveBytes;
         }

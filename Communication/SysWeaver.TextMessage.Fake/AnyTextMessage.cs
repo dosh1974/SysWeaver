@@ -24,7 +24,19 @@ namespace SysWeaver.TextMessage
         /// </summary>
         public String Reference;
 
-        public override string ToString() => String.Concat('#', Id, Incoming ? " from " : " to ", PhoneNumber, " [", Channel, Incoming ? "" : ", " + Status, Failure == TextMessageFailures.None ? "" : " " + Failure, "]: ", Text);
+        public override string ToString()
+        {
+            //  Enums are formatted like ToString (current culture, the same as String.Concat of the boxed values)
+            var incoming = Incoming;
+            var failure = Failure;
+            if (failure == TextMessageFailures.None)
+                return incoming
+                    ? $"#{Id} from {PhoneNumber} [{Channel}]: {Text}"
+                    : $"#{Id} to {PhoneNumber} [{Channel}, {Status}]: {Text}";
+            return incoming
+                ? $"#{Id} from {PhoneNumber} [{Channel} {failure}]: {Text}"
+                : $"#{Id} to {PhoneNumber} [{Channel}, {Status} {failure}]: {Text}";
+        }
 
         public AnyTextMessage(bool incoming, string phoneNumber, string text, String name, String isoCountry, String system)
         {

@@ -32,25 +32,15 @@ namespace SysWeaver.MicroService
         protected override async Task<FileUploadStatus> OnUploaded(FileInfo file, long replacedSize, FileUploadInfo info, HttpServerRequest r, object context)
         {
             using var data = await FileReadOnlyMemory.ReadAsync(file.FullName).ConfigureAwait(false);
-            var imgInfo = new MagickImageInfo(data.Memory.Span);
-            switch (imgInfo.Format)
-            {
-                case MagickFormat.Png:
-                case MagickFormat.Jpeg:
-                case MagickFormat.Tif:
-                case MagickFormat.WebP:
-                case MagickFormat.Avif:
-                    break;
-                default:
-                    return FileUploadStatus.InvalidFile;
-            }
+            using var img = ImageRepoService.ReadSupportedSource(data.Memory);
+            if (img == null)
+                return FileUploadStatus.InvalidFile;
             var fn = Path.GetFileNameWithoutExtension(file.Name);
             var sizes = Sizes;
             var ss = sizes.Length;
             ReadOnlyMemory<Byte>[] imgs = new ReadOnlyMemory<byte>[ss];
             String[] names = new string[ss];
 
-            using var img = new MagickImage(data.Memory.Span);
             for (int i = 0; i < ss; ++i)
             {
                 var size = sizes[i];

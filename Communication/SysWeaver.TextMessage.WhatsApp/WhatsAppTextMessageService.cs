@@ -74,7 +74,7 @@ namespace SysWeaver.TextMessage
             PostHandler = new WebhookRequestHandler("Notify", Notify);
             if ((VerifyToken == null) || (AppSecret == null))
                 Msg?.AddMessage(LogPrefix + "No " + nameof(p.VerifyToken) + " and/or " + nameof(p.AppSecret) + " specified, incoming messages can't be received", MessageLevels.Warning);
-            Msg?.AddMessage(LogPrefix + "Using " + Numbers.Length + " number(s), webhook at " + url.ToQuoted(), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Using {Numbers.Length} number(s), webhook at {url.ToQuoted()}");
         }
 
         public override string ToString() => Tos;

@@ -66,7 +66,7 @@ namespace SysWeaver.AI
 
         public HttpRequestData Get(HttpServerRequest request) => throw new NotSupportedException();
 
-        public Task<HttpRequestData> GetAsync(HttpServerRequest request) => GetFn(request);
+        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request) => new ValueTask<HttpRequestData>(GetFn(request));
     }
 
     /// <summary>

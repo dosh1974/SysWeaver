@@ -46,6 +46,17 @@
             <param name="text">The serialized text.</param>
             <returns>The deserialized object (null/default if the text represents a null value).</returns>
         </member>
+        <member name="M:SysWeaver.Serialization.ITextDeserializer.FromSpan``1(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Deserialize an object from text, with the same result and exceptions as <see cref="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.String)"/> of the same text
+            (unlike <see cref="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.ReadOnlySpan{System.Char})"/> that may differ in edge cases for some implementations).
+            The default implementation creates a string and calls <see cref="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.String)"/>,
+            implementations that can deserialize from a span with the same result override it (no string is created).
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="text">The serialized text.</param>
+            <returns>The deserialized object (null/default if the text represents a null value).</returns>
+        </member>
         <member name="T:SysWeaver.Serialization.ISerializer">
             <summary>
             Serializes objects to binary data.
@@ -193,6 +204,10 @@
         </member>
         <member name="M:SysWeaver.Serialization.NetJsonSerializer.FromString``1(System.String)">
             <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.FromSpan``1(System.ReadOnlySpan{System.Char})">
+            <inheritdoc/>
+            <remarks>The string overload of <see cref="T:System.Text.Json.JsonSerializer"/> deserializes the span of the string, so the result is the same as <see cref="M:SysWeaver.Serialization.NetJsonSerializer.FromString``1(System.String)"/>.</remarks>
         </member>
         <member name="M:SysWeaver.Serialization.NetJsonSerializer.Create``1(System.ReadOnlySpan{System.Byte})">
             <inheritdoc/>
@@ -383,10 +398,9 @@
             Encode a string as UTF-8.
             </summary>
             <param name="st">The string to encode, must not be null.</param>
-            <returns>The UTF-8 bytes, as a slice of a newly allocated (possibly larger) array.</returns>
+            <returns>The UTF-8 bytes, a newly allocated array of the exact size.</returns>
             <remarks>
-            Starts with a buffer of 2 bytes per char (+64), if that is too small (text with many non-ASCII chars) the exact size is computed and a new buffer is allocated.
-            Invalid surrogates are replaced with U+FFFD.
+            Invalid surrogates are replaced with U+FFFD, no BOM is written.
             </remarks>
         </member>
         <member name="M:SysWeaver.Serialization.SerTools.MakeHeader(System.String,System.Text.Encoding)">

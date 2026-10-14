@@ -142,7 +142,7 @@ namespace SysWeaver.AI
                 var found = new HashSet<String>(all.Select(x => x.Value.Name ?? ""), StringComparer.OrdinalIgnoreCase);
                 foreach (var x in names)
                     if (!found.Contains(x))
-                        Msg?.AddMessage(LogPrefix + "No AI service instance named " + x.ToQuoted() + " was found", MessageLevels.Warning);
+                        Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}No AI service instance named {x.ToQuoted()} was found");
             }
             else
             {

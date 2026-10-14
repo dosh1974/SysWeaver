@@ -201,7 +201,7 @@ namespace SysWeaver.TextMessage
                     _ = PollStatuses(r, statuses, cancel.Token);
                 }
             }
-            Msg?.AddMessage(LogPrefix + "Connected to " + r.Name.ToQuoted() + ", incoming: " + r.IncomingMode + ", statuses: " + r.StatusMode, MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Connected to {r.Name.ToQuoted()}, incoming: {r.IncomingMode}, statuses: {r.StatusMode}");
         }
 
         void Disconnect(Route r)
@@ -465,7 +465,7 @@ namespace SysWeaver.TextMessage
             catch (Exception ex)
             {
                 FallbackFails.OnException(ex);
-                Msg?.AddMessage(LogPrefix + "Failed to send a message to " + p.Message.PhoneNumber + " using a fallback route", ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to send a message to {p.Message.PhoneNumber} using a fallback route", ex);
                 return;
             }
             //  Report the new attempt as a status update (the message id changes)

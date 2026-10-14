@@ -254,7 +254,7 @@ namespace SysWeaver.Db
                         }
                     }
                     if (i == 0)
-                        m?.AddMessage(LogPrefix + "Connection problems, will retry in a while: " + ex.Message, MessageLevels.Warning);
+                        m?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Connection problems, will retry in a while: {ex.Message}");
                     if (i > 0)
                         if (DateTime.UtcNow > end)
                             throw;

@@ -293,7 +293,7 @@ namespace SysWeaver.MicroService
             var et = error.Text;
             if (!String.IsNullOrEmpty(et))
             {
-                M.AddMessage(prefix + "Failed: " + et, MessageLevels.Warning);
+                M.AddMessage(MessageLevels.Warning, $"{prefix}Failed: {et}");
                 throw new Exception(et);
             }
             M.AddMessage(MessageLevels.Debug, $"{prefix}All done");
@@ -726,7 +726,7 @@ namespace SysWeaver.MicroService
                 tot += res.Data.Length;
             }
 
-            M.AddMessage(Prefix + "Took: " + (DateTime.UtcNow - start) + ", data len: " + tot);
+            M.AddMessage(MessageLevels.Info, $"{Prefix}Took: {DateTime.UtcNow - start}, data len: {tot}");
             var d = "data:image/png;base64," + Convert.ToBase64String(res.Data);
             return d;
         }
@@ -764,7 +764,7 @@ namespace SysWeaver.MicroService
                 tasks[i] = DoOne();
             }
             await Task.WhenAll(tasks).ConfigureAwait(false);
-            M.AddMessage(Prefix + "Took: " + (DateTime.UtcNow - start) + ", data len: " + tot);
+            M.AddMessage(MessageLevels.Info, $"{Prefix}Took: {DateTime.UtcNow - start}, data len: {tot}");
             var d = "data:image/png;base64," + Convert.ToBase64String(res.Data);
             return d;
         }

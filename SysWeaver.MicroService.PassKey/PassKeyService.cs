@@ -97,7 +97,7 @@ namespace SysWeaver.MicroService
                     var o = PassKeyTools.GetOrigin(x?.Trim());
                     if (o == null)
                     {
-                        manager.AddMessage("Ignoring invalid passkey origin " + x.ToQuoted() + ", expected \"scheme://host[:port]\"", MessageLevels.Warning);
+                        manager.AddMessage(MessageLevels.Warning, $"Ignoring invalid passkey origin {x.ToQuoted()}, expected \"scheme://host[:port]\"");
                         continue;
                     }
                     origins.Add(o);
@@ -381,7 +381,7 @@ namespace SysWeaver.MicroService
             }
             catch (Fido2VerificationException e)
             {
-                M.AddMessage("Passkey sign in failed: " + e.Message, MessageLevels.Warning);
+                M.AddMessage(MessageLevels.Warning, $"Passkey sign in failed: {e.Message}");
                 return PassKeyResult.Fail(PassKeyErrors.VerificationFailed, e.Message);
             }
             var auth = await Um.UsePassKey(credId, res.SignCount, res.IsBackedUp).ConfigureAwait(false);
@@ -618,7 +618,7 @@ namespace SysWeaver.MicroService
             {
                 if (e.Code == Fido2ErrorCode.NonUniqueCredentialId)
                     return Tuple.Create<PassKeyCredential, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.AlreadyRegistered));
-                M.AddMessage("Passkey creation failed: " + e.Message, MessageLevels.Warning);
+                M.AddMessage(MessageLevels.Warning, $"Passkey creation failed: {e.Message}");
                 return Tuple.Create<PassKeyCredential, PassKeyResult>(null, PassKeyResult.Fail(PassKeyErrors.VerificationFailed, e.Message));
             }
             var session = context.Session;

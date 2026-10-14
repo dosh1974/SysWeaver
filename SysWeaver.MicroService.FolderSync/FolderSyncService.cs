@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
             throw new NotImplementedException();
         }
 
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             if (request.HttpMethod != HttpServerMethods.POST)
                 return FalseValue;
@@ -413,19 +413,19 @@ namespace SysWeaver.MicroService
         async Task<Exception> TryCompressFolderLog(String folder)
         {
             var m = Manager;
-            m.AddMessage(String.Concat(LogPrefix, "Compressing: \"", folder, "\""));
+            m.AddMessage(MessageLevels.Info, $"{LogPrefix}Compressing: \"{folder}\"");
             using var _ = m.Tab();
             var ex = await TryCompressFolder(folder).ConfigureAwait(false);
             if (ex == null)
-                m.AddMessage(String.Concat(LogPrefix, "Compression done!"));
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}Compression done!");
             else
-                m.AddMessage(String.Concat(LogPrefix, "Compression of: \"", folder, "\" failed!"), ex, MessageLevels.Warning);
+                m.AddMessage(MessageLevels.Warning, $"{LogPrefix}Compression of: \"{folder}\" failed!", ex);
             return ex;
         }
 
         async Task<ValueTuple<Exception, CdcChunkStats>> TryExpandFolderLog(String compact)
         {
-            Manager.AddMessage(LogPrefix + "Expanding \"" + compact + "\"");
+            Manager.AddMessage(MessageLevels.Info, $"{LogPrefix}Expanding \"{compact}\"");
             try
             {
                 var stats = await ContentDependentChunking.Expand(compact).ConfigureAwait(false);
@@ -494,14 +494,14 @@ namespace SysWeaver.MicroService
         async Task<int> RunCommand(String cmd)
         {
             var m = Manager;
-            m.AddMessage(String.Concat(LogPrefix, "Running command: \"", cmd, "\":"));
+            m.AddMessage(MessageLevels.Info, $"{LogPrefix}Running command: \"{cmd}\":");
             using var _ = m.Tab();
             try
             {
                 var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
                 return await ExternalProcess.RunAsync(exe, args, (text, err) =>
                 {
-                    m.AddMessage(LogPrefix + text, err ? MessageLevels.Warning : MessageLevels.Info);
+                    m.AddMessage(err ? MessageLevels.Warning : MessageLevels.Info, $"{LogPrefix}{text}");
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)

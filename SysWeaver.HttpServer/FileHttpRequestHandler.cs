@@ -175,7 +175,7 @@ namespace SysWeaver.Net
         /// <param name="request">The request</param>
         /// <returns>Never returns</returns>
         /// <exception cref="NotImplementedException">Always thrown</exception>
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
@@ -277,8 +277,8 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request</param>
         /// <returns>The response body</returns>
-        /// <remarks>A body that is already available completes without an async state machine, anything else (pending, faulted, canceled or a synchronous throw) gives the same task as an async method.</remarks>
-        public Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        /// <remarks>A body that is already available completes without an async state machine or a task, anything else (pending, faulted, canceled or a synchronous throw) wraps the same task as an async method.</remarks>
+        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             Task<ReadOnlyMemory<Byte>> t;
             try
@@ -287,11 +287,11 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                return GetAsyncThrow(ExceptionDispatchInfo.Capture(ex));
+                return new ValueTask<HttpRequestData>(GetAsyncThrow(ExceptionDispatchInfo.Capture(ex)));
             }
             if ((t != null) && t.IsCompletedSuccessfully)
-                return Task.FromResult(new HttpRequestData(t.Result));
-            return GetAsyncAwait(t);
+                return new ValueTask<HttpRequestData>(new HttpRequestData(t.Result));
+            return new ValueTask<HttpRequestData>(GetAsyncAwait(t));
         }
 
         static async Task<HttpRequestData> GetAsyncAwait(Task<ReadOnlyMemory<Byte>> t)

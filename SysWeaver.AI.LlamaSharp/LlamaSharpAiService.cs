@@ -57,23 +57,23 @@ namespace SysWeaver.AI
                         var name = l.Name;
                         if (String.IsNullOrEmpty(name))
                         {
-                            msg?.AddMessage("A model without a name can't be loaded, file: " + l.FilePath.ToQuoted(), MessageLevels.Error);
+                            msg?.AddMessage(MessageLevels.Error, $"A model without a name can't be loaded, file: {l.FilePath.ToQuoted()}");
                             continue;
                         }
                         if (models.ContainsKey(name))
                         {
-                            msg?.AddMessage("A model named " + name.ToQuoted() + " is already loaded, ignoring file: " + l.FilePath.ToQuoted(), MessageLevels.Error);
+                            msg?.AddMessage(MessageLevels.Error, $"A model named {name.ToQuoted()} is already loaded, ignoring file: {l.FilePath.ToQuoted()}");
                             continue;
                         }
                         if (String.IsNullOrEmpty(l.FilePath))
                         {
-                            msg?.AddMessage("The model " + name.ToQuoted() + " have no file path", MessageLevels.Error);
+                            msg?.AddMessage(MessageLevels.Error, $"The model {name.ToQuoted()} have no file path");
                             continue;
                         }
                         var fileName = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(l.FilePath));
                         if (!File.Exists(fileName))
                         {
-                            msg?.AddMessage("The model file " + fileName.ToQuoted() + " of " + name.ToQuoted() + " doesn't exist", MessageLevels.Error);
+                            msg?.AddMessage(MessageLevels.Error, $"The model file {fileName.ToQuoted()} of {name.ToQuoted()} doesn't exist");
                             continue;
                         }
                         try
@@ -84,7 +84,7 @@ namespace SysWeaver.AI
                         }
                         catch (Exception ex)
                         {
-                            msg?.AddMessage("Failed to load the model " + name.ToQuoted() + " from " + fileName.ToQuoted(), ex, MessageLevels.Error);
+                            msg?.AddMessage(MessageLevels.Error, $"Failed to load the model {name.ToQuoted()} from {fileName.ToQuoted()}", ex);
                         }
                     }
                 }
@@ -143,7 +143,7 @@ namespace SysWeaver.AI
             message = message?.TrimEnd();
             if (String.IsNullOrEmpty(message))
                 return;
-            m.AddMessage("llama.cpp: " + message, l);
+            m.AddMessage(l, $"llama.cpp: {message}");
         }
 
         #endregion//Native

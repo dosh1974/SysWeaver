@@ -235,7 +235,7 @@ namespace SysWeaver.Security
                     }
                     catch (Exception ex)
                     {
-                        Msg?.AddMessage("Failed to Dispose new certificate " + newCert.Thumbprint, ex, MessageLevels.Warning);
+                        Msg?.AddMessage(MessageLevels.Warning, $"Failed to Dispose new certificate {newCert.Thumbprint}", ex);
                     }
                     return;
                 }
@@ -246,13 +246,13 @@ namespace SysWeaver.Security
                 }
                 catch (Exception ex)
                 {
-                    Msg?.AddMessage("An OnChanged handler failed for the new certificate " + newCert.Thumbprint, ex, MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"An OnChanged handler failed for the new certificate {newCert.Thumbprint}", ex);
                 }
             }
             catch (Exception ex)
             {
                 oldCert = null;
-                Msg?.AddMessage("Failed to renew the Lan cert, retrying in " + nextCheckMinutes + " minutes", ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"Failed to renew the Lan cert, retrying in {nextCheckMinutes} minutes", ex);
             }
             finally
             {
@@ -266,7 +266,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                Msg?.AddMessage("Failed to Dispose old certificate " + oldCert.Thumbprint, ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"Failed to Dispose old certificate {oldCert.Thumbprint}", ex);
             }
         }
 

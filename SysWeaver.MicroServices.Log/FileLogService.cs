@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Auth;
 
 namespace SysWeaver.MicroService
 {
@@ -126,6 +127,7 @@ namespace SysWeaver.MicroService
                 yield return new TextFile
                 {
                     Auth = Roles.AdminOps,
+                    AuthTokens = Authorization.RoleAdminOps,
                     Description = "This is the application log file.",
                     Name = H.DownloadName,
                     Filename = fn,

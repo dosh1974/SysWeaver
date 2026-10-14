@@ -24,9 +24,11 @@ namespace SysWeaver.Knowledge
         {
             if ((width <= 0) || (height <= 0))
                 return "";
-            var key = String.Join("x", width, height);
-            if (ScreenKeys.TryGetValue(key, out var t))
-                key = String.Join(',', key, height + "p", t);
+            //  The "[width]x[height]" key on the stack (formatted with the current culture like Int32.ToString), looked up with a span
+            Span<Char> keyBuffer = stackalloc Char[24];
+            keyBuffer.TryWrite($"{width}x{height}", out var keyLength);
+            ReadOnlySpan<Char> key = keyBuffer.Slice(0, keyLength);
+            ScreenKeysLookup.TryGetValue(key, out var t);
             double aspect = (double)width / (double)height;
             String at = null;
             if ((at == null) && ApproxEqual(aspect, 1.0))
@@ -47,7 +49,10 @@ namespace SysWeaver.Knowledge
                 at = "18:9";
             if ((at == null) && ApproxEqual(aspect, 2.3, 2.4))
                 at = "21:9"; 
-            return at == null ? key : String.Join(',', key, at);
+            //  One string: "[key](,[height]p,[screen names])(,[aspect])"
+            if (t != null)
+                return at == null ? $"{key},{height}p,{t}" : $"{key},{height}p,{t},{at}";
+            return at == null ? new String(key) : $"{key},{at}";
         }
 
 
@@ -70,6 +75,8 @@ namespace SysWeaver.Knowledge
             { "7680x4320", "Ultra HD,UHD,8K" },
             { "15360x8640", "Ultra HD,UHD,16K" },
         };
+
+        static readonly Dictionary<String, String>.AlternateLookup<ReadOnlySpan<Char>> ScreenKeysLookup = ScreenKeys.GetAlternateLookup<ReadOnlySpan<Char>>();
     }
 
 

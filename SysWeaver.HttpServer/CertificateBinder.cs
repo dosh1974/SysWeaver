@@ -30,7 +30,7 @@ namespace SysWeaver.Net
                 var uri = new Uri(listenerPrefix.Replace("*", "localhost"));
                 if (uri.Scheme.FastToLower() != "https")
                 {
-                    msg?.AddMessage(logPrefix + "Can't bind certificate to non-https prefix " + listenerPrefix.ToQuoted(), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{logPrefix}Can't bind certificate to non-https prefix {listenerPrefix.ToQuoted()}");
                     return true;
                 }
                 String bind;
@@ -54,7 +54,7 @@ namespace SysWeaver.Net
                         }
                         catch (Exception ex)
                         {
-                            msg?.AddMessage(logPrefix + "Failed to install certificate " + hash.ToQuoted(), ex, MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{logPrefix}Failed to install certificate {hash.ToQuoted()}", ex);
                         }
                         if (isNew)
                         {
@@ -96,14 +96,14 @@ namespace SysWeaver.Net
                         }
                         break;
                     default:
-                        msg?.AddMessage(logPrefix + "Bind certificate's on platform " + pid + " is not supported!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{logPrefix}Bind certificate's on platform {pid} is not supported!");
                         break;
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(logPrefix + "Failed to get certificate for prefix " + listenerPrefix.ToQuoted(), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{logPrefix}Failed to get certificate for prefix {listenerPrefix.ToQuoted()}", ex);
                 return false;
             }
         }

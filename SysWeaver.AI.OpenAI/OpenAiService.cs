@@ -73,7 +73,7 @@ namespace SysWeaver.AI
                         }
                         if (tikToken == null)
                         {
-                            msg?.AddMessage("Failed to get a TikToken for " + t.ToQuoted(), exception, MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"Failed to get a TikToken for {t.ToQuoted()}", exception);
                         }
                         else
                         {

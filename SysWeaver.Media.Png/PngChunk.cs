@@ -33,15 +33,8 @@ namespace SysWeaver.Media.Png
             Length = length;
             Id = id;
             Data = data;
-            Span<Byte> w = stackalloc Byte[4];
-            w[0] = (Byte)(id >> 24);
-            w[1] = (Byte)(id >> 16);
-            w[2] = (Byte)(id >> 8);
-            w[3] = (Byte)(id >> 0);
-            var c = PngTools.CalcCrc32(w);
-            if (length > 0)
-                c = PngTools.CalcCrc32(data, c);
-            Crc32 = c;
+            //  The crc of the id and the data (a null array is empty data)
+            Crc32 = PngTools.CalcChunkCrc32(id, length > 0 ? new ReadOnlySpan<Byte>(data) : default);
         }
 
         /// <summary>

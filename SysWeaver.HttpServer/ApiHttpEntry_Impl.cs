@@ -38,7 +38,18 @@ namespace SysWeaver.Net
             var io = api.IoParams;
             if (request == null)
                 return new ValueTask<ReadOnlyMemory<Byte>>(io.DefaultOutput.Serialize(value));
-            var ser = io.GetSerializer(request.GetReqHeader("Accept"));
+            String accept;
+            if (request.ApiAcceptRead)
+            {
+                //  Read by GetCacheKey, used once
+                accept = request.ApiAccept;
+                request.ApiAccept = null;
+                request.ApiAcceptRead = false;
+            }else
+            {
+                accept = request.GetReqHeader("Accept");
+            }
+            var ser = io.GetSerializer(accept);
             if (!api.NeedTranslation)
                 return new ValueTask<ReadOnlyMemory<Byte>>(ser.Serialize(value));
             var t = request.Translator;

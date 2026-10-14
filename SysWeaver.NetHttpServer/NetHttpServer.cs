@@ -115,7 +115,7 @@ namespace SysWeaver.Net
                 {
                     if (p.IgnoreBadPrefixes)
                     {
-                        msg?.AddMessage(Prefix + "Can't listen on prefix \"" + pre + "\" without a certificate", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't listen on prefix \"{pre}\" without a certificate");
                         continue;
                     }
                     else
@@ -128,7 +128,7 @@ namespace SysWeaver.Net
                 {
                     if (p.IgnoreBadPrefixes)
                     {
-                        msg?.AddMessage(Prefix + "Can't listen on prefix \"" + pre + "\", exception: " + ex.Message, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't listen on prefix \"{pre}\", exception: {ex.Message}");
                         continue;
                     }
                     else
@@ -137,9 +137,9 @@ namespace SysWeaver.Net
                     }
                 }
                 if (certName != null)
-                    msg?.AddMessage(Prefix + "Listening on prefix \"" + pre + "\", using certificate " + certName.ToQuoted() + " [" + cp + "]", MessageLevels.Info);
+                    msg?.AddMessage(MessageLevels.Info, $"{Prefix}Listening on prefix \"{pre}\", using certificate {certName.ToQuoted()} [{cp}]");
                 else
-                    msg?.AddMessage(Prefix + "Listening on prefix \"" + pre + "\"", MessageLevels.Info);
+                    msg?.AddMessage(MessageLevels.Info, $"{Prefix}Listening on prefix \"{pre}\"");
                 l.Prefixes.Add(pre);
                 var pc = prefix.Clone();
                 pc.Prefix = pre;
@@ -190,7 +190,7 @@ namespace SysWeaver.Net
                         if (cert == null || (!CertificateBinder.BindHttps(pre, cert, msg, Prefix).RunAsync()))
                         {
                             var retry = DateTime.UtcNow.AddMinutes(FirstCertRetryMinutes);
-                            msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
+                            msg?.AddMessage(MessageLevels.Info, $"{Prefix}Will try to get new certificate at {retry.ToString("o")}");
                             Scheduler.AddTask(retry, () => SwitchCert(provider, pre), "Retry get cert");
                         }else
                         {
@@ -370,7 +370,7 @@ namespace SysWeaver.Net
                     break;
                 if ((DateTime.UtcNow - now).TotalSeconds >= waitDuration)
                 {
-                    Msg?.AddMessage(Prefix + pending + " request failed to complete within " + waitDuration + " seconds", MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{Prefix}{pending} request failed to complete within {waitDuration} seconds");
                     break;
                 }
                 await Task.Delay(10).ConfigureAwait(false);

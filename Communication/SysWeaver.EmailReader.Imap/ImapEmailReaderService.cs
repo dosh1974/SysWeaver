@@ -136,7 +136,7 @@ namespace SysWeaver.EmailReader
                     if (cancel.IsCancellationRequested)
                         break;
                     PollFails.OnException(ex);
-                    Msg?.AddMessage(LogPrefix + "Failed to read the mailbox at " + Server.ToQuoted(), ex, MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to read the mailbox at {Server.ToQuoted()}", ex);
                 }
                 try
                 {
@@ -164,7 +164,7 @@ namespace SysWeaver.EmailReader
             var moveTo = AfterRead == ImapAfterRead.Move ? await client.GetFolderAsync(MoveTo, cancel).ConfigureAwait(false) : null;
             var idle = UseIdle && client.Capabilities.HasFlag(ImapCapabilities.Idle);
             var uidPlus = client.Capabilities.HasFlag(ImapCapabilities.UidPlus);
-            Msg?.AddMessage(LogPrefix + "Reading " + folder.FullName.ToQuoted() + " at " + Server.ToQuoted() + (idle ? " using IDLE" : " every " + (PollInterval / 1000) + " seconds"), MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Reading {folder.FullName.ToQuoted()} at {Server.ToQuoted()}{(idle ? " using IDLE" : " every " + (PollInterval / 1000) + " seconds")}");
             if (folder.UidValidity != UidValidity)
             {
                 Handled.Clear();
@@ -326,7 +326,7 @@ namespace SysWeaver.EmailReader
             catch (Exception ex)
             {
                 ProcessFails.OnException(ex);
-                Msg?.AddMessage(LogPrefix + "Failed to process the email " + (m.MessageId ?? uid).ToQuoted() + ", it's left as unread", ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to process the email {(m.MessageId ?? uid).ToQuoted()}, it's left as unread", ex);
                 return null;
             }
         }

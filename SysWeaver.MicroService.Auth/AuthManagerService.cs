@@ -392,7 +392,7 @@ This server supports the following sizes:
             {
                 if (!files.Contains(x.SplitFirst('?')))
                     return false;
-                Manager.AddMessage("Reloading " + x.ToQuoted());
+                Manager.AddMessage(MessageLevels.Info, $"Reloading {x.ToQuoted()}");
                 return true;
             });
             ss.OnUserFilesChanged(userGuid, files.ToArray());

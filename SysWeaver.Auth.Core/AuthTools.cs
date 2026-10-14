@@ -95,7 +95,42 @@ namespace SysWeaver.Auth
         /// <param name="password">Password (null is treated as empty)</param>
         /// <param name="userSalt">Salt (null is treated as empty)</param>
         /// <returns>The hash as a string: ToBase64(SHA256(UTF8(password|salt))), 44 chars</returns>
-        public static String ComputeHashString(String password, String userSalt) => ComputeHashString(String.Join('|', password, userSalt));
+        public static String ComputeHashString(String password, String userSalt)
+        {
+            var p = password.AsSpan();
+            var s = userSalt.AsSpan();
+            //  Huge inputs (unreachable for passwords) use the joined string, so that the exceptions are the same
+            if (((long)p.Length + s.Length) > MaxDirectHashChars)
+                return ComputeHashString(String.Join('|', password, userSalt));
+            //  The parts are UTF-8 encoded into one buffer (no joined string), '|' is ASCII so the bytes are the same as UTF8(password|salt), even for lone surrogates at the ends of the parts
+            Byte[] rented = null;
+            var l = (p.Length + s.Length + 1) << 2;
+            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPoolStream.Rent(l));
+            try
+            {
+                var utf8 = Encoding.UTF8;
+                if (!utf8.TryGetBytes(p, dest, out var size))
+                    throw new InvalidOperationException("Internal error!");
+                dest[size++] = (Byte)'|';
+                if (!utf8.TryGetBytes(s, dest.Slice(size), out var ss))
+                    throw new InvalidOperationException("Internal error!");
+                size += ss;
+                Span<Byte> hash = stackalloc Byte[SHA256.HashSizeInBytes];
+                if (SHA256.HashData(dest.Slice(0, size), hash) != SHA256.HashSizeInBytes)
+                    throw new InvalidOperationException("Internal error!");
+                return Convert.ToBase64String(hash);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPoolStream.Return(rented);
+            }
+        }
+
+        /// <summary>
+        /// Above this many chars (password + salt) the password hash is computed from the joined string
+        /// </summary>
+        const int MaxDirectHashChars = 1 << 26;
 
         /// <summary>
         /// Convert a byte array hash to a hash string: ToBase64(hash)

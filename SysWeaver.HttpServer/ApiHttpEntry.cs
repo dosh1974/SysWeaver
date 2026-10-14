@@ -979,11 +979,12 @@ namespace SysWeaver.Net
         /// <param name="request">The request context, its <see cref="HttpServerRequest.Custom"/> is overwritten with the input. Its headers select the input deserializer, decompression and output serializer.</param>
         /// <param name="data">The serialized input (compressed only if the request has a <c>Content-Encoding</c> header), empty for no input (default value).</param>
         /// <returns>The serialized result, empty for methods without a return value.</returns>
-        /// <remarks>No authorization, rate limiting or caching is performed, the caller is responsible for that. Used by AI tools, the API explorer and chart services.</remarks>
-        public Task<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
+        /// <remarks>No authorization, rate limiting or caching is performed, the caller is responsible for that. Used by AI tools, the API explorer and chart services.
+        /// A value task: await it exactly once (use <see cref="ValueTask{TResult}.AsTask"/> to get a task).</remarks>
+        public ValueTask<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
         {
             request.Custom = UnmanagedMemory.Create(data);
-            return PostAsync.Run(this, request).AsTask();
+            return PostAsync.Run(this, request);
         }
 
         /// <inheritdoc/>
@@ -1073,13 +1074,16 @@ namespace SysWeaver.Net
         /// <param name="request">The request.</param>
         /// <returns>For GET (or methods without input): url and Accept header. For POST with input: the base64 encoded body, local url, Content-Encoding, Content-Type and Accept headers;
         /// <see cref="HttpServerTools.PreventCacheKey"/> if the body is larger than 4096 bytes.</returns>
-        /// <remarks>For POST with input the body is read here and stored in <see cref="HttpServerRequest.Custom"/> so the invoker can reuse it (disposed with the request).</remarks>
+        /// <remarks>For POST with input the body is read here and stored in <see cref="HttpServerRequest.Custom"/> so the invoker can reuse it (disposed with the request).
+        /// The Accept header is kept in the request, so encoding the result doesn't read it again.</remarks>
         public ValueTask<String> GetCacheKey(HttpServerRequest request)
         {
             String accept;
             try
             {
                 accept = request.GetReqHeader("Accept");
+                request.ApiAccept = accept;
+                request.ApiAcceptRead = true;
                 if ((request.HttpMethod != HttpServerMethods.POST) || (!HaveArgs))
                     return new ValueTask<String>(String.Concat(request.Url, "\r", accept));
             }
@@ -1176,10 +1180,10 @@ namespace SysWeaver.Net
         /// <returns>The response body.</returns>
         /// <remarks>
         /// An invoker that completes synchronously (a synchronous API method, no translation) doesn't need an async state machine:
-        /// the measurement is ended and a completed task is returned.
-        /// Anything else (pending, faulted, canceled or a synchronous throw) is completed by an async method, so the returned task is the same as before.
+        /// the measurement is ended and the result is returned without a task.
+        /// Anything else (pending, faulted, canceled or a synchronous throw) is completed by an async method, so the wrapped task is the same as before.
         /// </remarks>
-        Task<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
+        ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
             PerfMesurement m = default;
             ValueTask<ReadOnlyMemory<Byte>> t;
@@ -1191,13 +1195,13 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                return GetAsyncThrow(m, ExceptionDispatchInfo.Capture(ex));
+                return new ValueTask<HttpRequestData>(GetAsyncThrow(m, ExceptionDispatchInfo.Capture(ex)));
             }
             if (!t.IsCompletedSuccessfully)
-                return GetAsyncAwait(m, t);
+                return new ValueTask<HttpRequestData>(GetAsyncAwait(m, t));
             var res = t.Result;
             m.Dispose();
-            return Task.FromResult(new HttpRequestData(res));
+            return new ValueTask<HttpRequestData>(new HttpRequestData(res));
         }
 
         /// <summary>

@@ -103,6 +103,11 @@ namespace SysWeaver.Serialization
             return JsonReader.Create<T>(text);
         }
 
+        /// <inheritdoc/>
+        /// <remarks>The text is transcoded to UTF-8 the same way as <see cref="JsonReader.Create{T}(String, String)"/> does (empty text uses the string path, so the parser sees the same buffer).</remarks>
+        public T FromSpan<T>(ReadOnlySpan<char> text)
+            => text.IsEmpty ? JsonReader.Create<T>(String.Empty) : FromString<T>(text);
+
     }
 
 

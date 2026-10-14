@@ -4,6 +4,74 @@
         <name>SysWeaver.Serialization.NewtonsoftJson</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJson.CharBufferWriter">
+            <summary>
+            A <see cref="T:System.IO.TextWriter"/> that writes into a buffer rented from <see cref="P:System.Buffers.ArrayPool`1.Shared"/> (returned when disposed), used instead of a <see cref="T:System.IO.StringWriter"/> to serialize without a <see cref="T:System.Text.StringBuilder"/> and an intermediate string.
+            The formatting culture is <see cref="P:System.Globalization.CultureInfo.InvariantCulture"/> (like the StringWriter of JsonConvert.SerializeObject).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJson.CharBufferWriter.Encoding">
+            <summary>
+            The same as a StringWriter (UTF-16)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.NewtonsoftJson.CharBufferWriter.Written">
+            <summary>
+            The text written so far (invalid after Dispose)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJson.SharedCharArrayPool">
+            <summary>
+            The Newtonsoft array pool interface on <see cref="P:System.Buffers.ArrayPool`1.Shared"/> (the internal buffers of a JsonTextWriter)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJson.MemberResolver">
+            <summary>
+            Newtonsoft contract resolver used for serialization: only writable members (non read-only fields and properties with a setter) are serialized,
+            and collection items use <see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/> by default.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.Instance">
+            <summary>
+            The shared instance (contract resolvers cache contracts, so share a single instance).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.CreateProperty(System.Reflection.MemberInfo,Newtonsoft.Json.MemberSerialization)">
+            <summary>
+            Creates the property as the default resolver does, but read-only fields and properties without a setter are never serialized.
+            </summary>
+            <param name="member">The field or property.</param>
+            <param name="memberSerialization">The member serialization mode of the declaring type.</param>
+            <returns>The property, with <see cref="P:Newtonsoft.Json.Serialization.JsonProperty.ShouldSerialize"/> returning false for read-only members.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.CreateContract(System.Type)">
+            <summary>
+            Creates the contract as the default resolver does, but container contracts (collections and dictionaries) default to
+            <see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/> for their items (when not set by attributes).
+            </summary>
+            <param name="objectType">The type to create a contract for.</param>
+            <returns>The contract.</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder">
+            <summary>
+            Serialization binder that writes type names like the default Newtonsoft binder, but resolves type names using <see cref="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)"/>.
+            </summary>
+            <remarks>
+            Only types allowed by the <see cref="T:SysWeaver.DataTypePolicy"/> can be bound (Newtonsoft checks that the type is assignable to the declared type).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.Instance">
+            <summary>
+            The shared instance.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.BindToName(System.Type,System.String@,System.String@)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.BindToType(System.String,System.String)">
+            <inheritdoc/>
+            <exception cref="T:SysWeaver.DataTypeNotAllowedException">The type isn't allowed by the <see cref="T:SysWeaver.DataTypePolicy"/></exception>
+        </member>
         <member name="T:SysWeaver.Serialization.ExtendedJsonTextWriter">
             <summary>
             A <see cref="T:Newtonsoft.Json.JsonTextWriter"/> that exposes indentation helpers, used by <see cref="T:SysWeaver.Serialization.JsonByteArrayConverter"/> to write raw, aligned byte array rows.
@@ -66,53 +134,6 @@
             <param name="value">The byte array to write, may be null.</param>
             <param name="serializer">The calling serializer (unused).</param>
         </member>
-        <member name="T:SysWeaver.Serialization.NewtonsoftJson.MemberResolver">
-            <summary>
-            Newtonsoft contract resolver used for serialization: only writable members (non read-only fields and properties with a setter) are serialized,
-            and collection items use <see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/> by default.
-            </summary>
-        </member>
-        <member name="F:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.Instance">
-            <summary>
-            The shared instance (contract resolvers cache contracts, so share a single instance).
-            </summary>
-        </member>
-        <member name="M:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.CreateProperty(System.Reflection.MemberInfo,Newtonsoft.Json.MemberSerialization)">
-            <summary>
-            Creates the property as the default resolver does, but read-only fields and properties without a setter are never serialized.
-            </summary>
-            <param name="member">The field or property.</param>
-            <param name="memberSerialization">The member serialization mode of the declaring type.</param>
-            <returns>The property, with <see cref="P:Newtonsoft.Json.Serialization.JsonProperty.ShouldSerialize"/> returning false for read-only members.</returns>
-        </member>
-        <member name="M:SysWeaver.Serialization.NewtonsoftJson.MemberResolver.CreateContract(System.Type)">
-            <summary>
-            Creates the contract as the default resolver does, but container contracts (collections and dictionaries) default to
-            <see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/> for their items (when not set by attributes).
-            </summary>
-            <param name="objectType">The type to create a contract for.</param>
-            <returns>The contract.</returns>
-        </member>
-        <member name="T:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder">
-            <summary>
-            Serialization binder that writes type names like the default Newtonsoft binder, but resolves type names using <see cref="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)"/>.
-            </summary>
-            <remarks>
-            Only types allowed by the <see cref="T:SysWeaver.DataTypePolicy"/> can be bound (Newtonsoft checks that the type is assignable to the declared type).
-            </remarks>
-        </member>
-        <member name="F:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.Instance">
-            <summary>
-            The shared instance.
-            </summary>
-        </member>
-        <member name="M:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.BindToName(System.Type,System.String@,System.String@)">
-            <inheritdoc/>
-        </member>
-        <member name="M:SysWeaver.Serialization.NewtonsoftJson.SerializationBinder.BindToType(System.String,System.String)">
-            <inheritdoc/>
-            <exception cref="T:SysWeaver.DataTypeNotAllowedException">The type isn't allowed by the <see cref="T:SysWeaver.DataTypePolicy"/></exception>
-        </member>
         <member name="T:SysWeaver.Serialization.NewtonsoftJsonSerializer">
             <summary>
             Serializer for the "json" extension backed by Newtonsoft.Json (priority 1).
@@ -123,7 +144,8 @@
             Deserialization honors "$type" (<see cref="F:Newtonsoft.Json.TypeNameHandling.Auto"/>) and resolves names with <see cref="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)"/>,
             so only types allowed by the <see cref="T:SysWeaver.DataTypePolicy"/> (and assignable to the declared type) can be instantiated.
             A json null is read as NaN into a (not nullable) float / double (SysWeaver.Json writes NaN and infinities as null), see <see cref="T:SysWeaver.Serialization.NullAsNaNConverter"/>.
-            Deserializers are pooled (<see cref="T:SysWeaver.LimitedObjectPool`1"/>) so concurrent calls are safe.
+            Serializers and deserializers are pooled (<see cref="T:SysWeaver.LimitedObjectPool`1"/>, one call at a time per instance) so concurrent calls are safe; the text is written into a pooled buffer and UTF-8 encoded from it (no intermediate string).
+            Global <see cref="P:Newtonsoft.Json.JsonConvert.DefaultSettings"/> are applied when serializing (like JsonConvert.SerializeObject, then without pooling).
             </remarks>
         </member>
         <member name="P:SysWeaver.Serialization.NewtonsoftJsonSerializer.Name">
@@ -166,6 +188,27 @@
         </member>
         <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
             <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.CreateSerPool(Newtonsoft.Json.JsonSerializerSettings)">
+            <summary>
+            Factory for pooled serializers configured like JsonSerializer.CreateDefault(Formats[i]) without global default settings (only the settings used by <see cref="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.Formats"/> are copied).
+            A serializer keeps no state between calls (the reference resolver and the serialization stack are created per call, no events are set), so it can be reused, one call at a time.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.SerPools">
+            <summary>
+            Pooled serializers per <see cref="T:SysWeaver.Serialization.SerializerOptions"/> (same order as <see cref="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.Formats"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Write(SysWeaver.Serialization.NewtonsoftJson.CharBufferWriter,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize like JsonConvert.SerializeObject(obj, Formats[options]) (without global default settings) into a char buffer
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToUTF8(System.ReadOnlySpan{System.Char})">
+            <summary>
+            The same as <see cref="M:SysWeaver.Serialization.SerTools.ToUTF8(System.String)"/> for a span: the same bytes (invalid surrogates are replaced with U+FFFD, no BOM) in a new array of the exact size
+            </summary>
         </member>
         <member name="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.DeserCreate">
             <summary>

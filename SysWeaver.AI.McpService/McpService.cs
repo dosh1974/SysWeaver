@@ -187,7 +187,7 @@ namespace SysWeaver.AI
             catch (Exception ex)
             {
                 //  A bad method shouldn't prevent other tools from being registered
-                Msg?.AddMessage(LogPrefix + "Failed to add the method " + method.Name.ToQuoted() + " of " + method.DeclaringType?.Name.ToQuoted() + " as a tool", ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to add the method {method.Name.ToQuoted()} of {method.DeclaringType?.Name.ToQuoted()} as a tool", ex);
                 return false;
             }
             if (!Tools.TryAdd(tool.Name, tool))
@@ -323,7 +323,7 @@ namespace SysWeaver.AI
                 }
                 catch (Exception ex)
                 {
-                    Msg?.AddMessage(LogPrefix + "Failed to store " + name.ToQuoted() + " in the user storage, the file is only temporary available", ex, MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to store {name.ToQuoted()} in the user storage, the file is only temporary available", ex);
                 }
             }
             var now = DateTime.UtcNow;
@@ -594,7 +594,7 @@ namespace SysWeaver.AI
             }
             catch (Exception ex)
             {
-                Msg?.AddMessage(LogPrefix + "Failed to handle " + method.ToQuoted(), ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to handle {method.ToQuoted()}", ex);
                 return Json(w => WriteError(w, id, ErrInternal, ex.SafeMessage()));
             }
         }
@@ -910,6 +910,6 @@ namespace SysWeaver.AI
 
         public HttpRequestData Get(HttpServerRequest request) => throw new NotSupportedException();
 
-        public Task<HttpRequestData> GetAsync(HttpServerRequest request) => GetFn(request);
+        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request) => new ValueTask<HttpRequestData>(GetFn(request));
     }
 }

@@ -199,7 +199,8 @@ namespace SysWeaver.AI
             var fn = v.Item3;
             if (fn == null)
                 throw new Exception("Variable " + key.ToQuoted() + " is invalid!");
-            var ia = v.Item2.Auth;
+            //  The parsed requirement (null if the requirement is null)
+            var ia = v.Item2.GetAuthTokens();
             var a = session.Auth;
             if (a == null)
             {
@@ -263,7 +264,8 @@ namespace SysWeaver.AI
             {
                 if (exclude.Contains(item.Id))
                     return;
-                var ia = item.Auth;
+                //  The parsed requirement (null if the requirement is null)
+                var ia = item.GetAuthTokens();
                 if (auth == null)
                 {
                     if (ia != null)

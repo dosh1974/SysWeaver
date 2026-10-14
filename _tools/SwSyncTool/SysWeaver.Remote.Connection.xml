@@ -215,6 +215,16 @@
             The end point name, "METHOD path" (ex: "GET Api/GetUser"), used for perf tracking.
             </summary>
         </member>
+        <member name="F:SysWeaver.Remote.Connection.ApiMeta.Tracker">
+            <summary>
+            The perf trackers of <see cref="F:SysWeaver.Remote.Connection.ApiMeta.Name"/> and "Cache " + <see cref="F:SysWeaver.Remote.Connection.ApiMeta.Name"/>, created on first use (see RemoteConnectionBase.TrackEndPoint / TrackCache)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.ApiMeta.CacheTracker">
+            <summary>
+            The perf trackers of <see cref="F:SysWeaver.Remote.Connection.ApiMeta.Name"/> and "Cache " + <see cref="F:SysWeaver.Remote.Connection.ApiMeta.Name"/>, created on first use (see RemoteConnectionBase.TrackEndPoint / TrackCache)
+            </summary>
+        </member>
         <member name="T:SysWeaver.Remote.Connection.ApiMeta`1">
             <summary>
             Meta data for an end point that returns a value, optionally holding a response cache.
@@ -335,6 +345,12 @@
             Compiled functions are cached per template (thread safe, a template may be compiled more than once under contention).
             </remarks>
         </member>
+        <member name="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.TryGetNamed(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String@,System.Func{`0,System.String}@)">
+            <summary>
+            Look up a named template, the key is "[template]\0[name 0]\0[name 1].." (null names are empty).
+            For an array of names (the generated clients) the key is built in a pooled buffer and the key string is only created on a miss
+            </summary>
+        </member>
         <member name="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.Get(System.String)">
             <summary>
             Get (or compile and cache) the formatting function for a template.
@@ -356,6 +372,11 @@
             <exception cref="T:System.ArgumentNullException"><paramref name="textTemplate"/> is null.</exception>
             <exception cref="T:System.FormatException">Nested '{', or a variable that names a missing member (or an invalid index / unknown element name for array types).</exception>
             <exception cref="T:System.NotSupportedException">A variable names a member of an unsupported type.</exception>
+        </member>
+        <member name="M:SysWeaver.Remote.Connection.UriParamsEncoder`1.Compile(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.Boolean,System.Collections.Concurrent.ConcurrentDictionary{System.String,System.Func{`0,System.String}},System.String)">
+            <summary>
+            Compile and cache the formatting function for a template (a separate method: the closure of the variable lookup isn't created by a cache hit)
+            </summary>
         </member>
         <member name="T:SysWeaver.Remote.EndPointOptions">
             <summary>
@@ -837,6 +858,16 @@
         <member name="P:SysWeaver.Remote.RemoteConnectionBase.PerfMon">
             <summary>
             The performance monitor that tracks the time of every end point call (and cache lookups), named "Interface@BaseUrl".
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.TrackEndPoint(SysWeaver.Remote.Connection.ApiMeta)">
+            <summary>
+            Start tracking an end point call (named <see cref="F:SysWeaver.Remote.Connection.ApiMeta.Name"/>), using the tracker cached in the meta data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.TrackCache(SysWeaver.Remote.Connection.ApiMeta)">
+            <summary>
+            Start tracking a cache lookup of an end point (named "Cache " + <see cref="F:SysWeaver.Remote.Connection.ApiMeta.Name"/>), using the tracker cached in the meta data
             </summary>
         </member>
         <member name="M:SysWeaver.Remote.RemoteConnectionBase.GetStats">

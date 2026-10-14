@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace SysWeaver
@@ -15,17 +16,25 @@ namespace SysWeaver
         /// <param name="b">Second number</param>
         /// <returns>The greatest common divisor of a and b (the largest integer that evenly divides both a and b).
         /// Gcd(0, x) = Gcd(x, 0) = x, so Gcd(0, 0) = 0</returns>
-        /// <remarks>Uses the Euclidean algorithm (a binary GCD was measured to be slower)</remarks>
+        /// <remarks>Uses the binary (Stein) algorithm with trailing zero counts (measured 1.7 - 6x faster than the Euclidean algorithm, the 64 bit division is slow)</remarks>
         public static ulong Gcd(ulong a, ulong b)
         {
-            while (a != 0 && b != 0)
+            if (a == 0)
+                return b;
+            if (b == 0)
+                return a;
+            //  The common power of two, then both odd: subtract the smaller from the larger (the difference is even), remove its factors of two
+            int shift = BitOperations.TrailingZeroCount(a | b);
+            a >>= BitOperations.TrailingZeroCount(a);
+            do
             {
+                b >>= BitOperations.TrailingZeroCount(b);
                 if (a > b)
-                    a %= b;
-                else
-                    b %= a;
+                    (a, b) = (b, a);
+                b -= a;
             }
-            return a | b;
+            while (b != 0);
+            return a << shift;
         }
 
         /// <summary>

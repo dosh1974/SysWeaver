@@ -414,7 +414,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Given a file, compute name for meta data.
-        /// The key is a hash (26 chars) of the full name, creation time, last write time and length of the file.
+        /// The key is a hash (26 chars) of the full name, creation time, last write time (ticks) and length of the file.
         /// </summary>
         /// <param name="filename">The existing file to get the hash of the content</param>
         /// <returns>The key name for this file, null if the file doesn't exist or is invalid</returns>
@@ -432,7 +432,8 @@ namespace SysWeaver
 
         /// <summary>
         /// Compute the cache key for a file.
-        /// Same as hashing String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length) (current culture), but without any heap allocations (for normal path lengths).
+        /// Same as hashing String.Join('|', fi.FullName, fi.CreationTimeUtc.Ticks, fi.LastWriteTimeUtc.Ticks, fi.Length) (invariant culture), but without any heap allocations (for normal path lengths).
+        /// The times are written as ticks (full resolution), so that a same length rewrite within a second gets a new key.
         /// </summary>
         /// <param name="fi">The file</param>
         /// <returns>The key or null if the file doesn't exist</returns>
@@ -444,14 +445,14 @@ namespace SysWeaver
             var fullName = fi.FullName;
             Span<Byte> keyHash = stackalloc Byte[MD5.HashSizeInBytes];
             Span<Char> temp = stackalloc Char[1024];
-            // Formatting with a null provider uses the current culture, same as String.Join (ToString)
-            if (temp.TryWrite(null, $"{fullName}|{fi.CreationTimeUtc}|{fi.LastWriteTimeUtc}|{fi.Length}", out var written))
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (temp.TryWrite(inv, $"{fullName}|{fi.CreationTimeUtc.Ticks}|{fi.LastWriteTimeUtc.Ticks}|{fi.Length}", out var written))
             {
                 MD5.HashData(MemoryMarshal.AsBytes(temp.Slice(0, written)), keyHash);
             }
             else
             {
-                var keyName = String.Join('|', fullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length);
+                var keyName = String.Create(inv, $"{fullName}|{fi.CreationTimeUtc.Ticks}|{fi.LastWriteTimeUtc.Ticks}|{fi.Length}");
                 MD5.HashData(MemoryMarshal.AsBytes(keyName.AsSpan()), keyHash);
             }
             return HashTools.GetHashString16(keyHash);

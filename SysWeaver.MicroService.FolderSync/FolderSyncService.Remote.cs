@@ -399,7 +399,7 @@ namespace SysWeaver.MicroService
                         }
                         var ex = await PathExt.TryDeleteDirectoryAsync(versionFolder, false).ConfigureAwait(false);
                         if (ex == null)
-                            Manager.AddMessage(String.Concat("Removed old remote folder \"", versionFolder, '"'));
+                            Manager.AddMessage(MessageLevels.Info, $"Removed old remote folder \"{versionFolder}\"");
                         else
                             PruneErrors.OnException(ex);
                     }

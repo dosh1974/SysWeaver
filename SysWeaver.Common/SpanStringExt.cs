@@ -35,21 +35,10 @@ namespace SysWeaver
         /// <param name="a">The first part</param>
         /// <param name="b">The second part</param>
         /// <returns>A new string with all the parts (empty if all parts are empty)</returns>
+        /// <remarks>A total length above Int32.MaxValue throws an OutOfMemoryException (String.Concat)</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ConcatToString(this ReadOnlySpan<char> a, ReadOnlySpan<char> b)
-        {
-            var al = a.Length;
-            var bl = b.Length;
-            fixed (Char* aa = a)
-            fixed (Char* bb = b)
-            {
-                Span<(IntPtr, int)> x = stackalloc (IntPtr, int)[]
-                {
-                    (new IntPtr(aa), al),
-                    (new IntPtr(bb), bl)
-                };
-                return String.Create(al + bl, x, Concat);
-            }
-        }
+            => String.Concat(a, b);
 
         /// <summary>
         /// Concat spans into a string with zero unnecessary memory allocations and zero unnecessary memory copying.
@@ -58,24 +47,10 @@ namespace SysWeaver
         /// <param name="b">The second part</param>
         /// <param name="c">The third part</param>
         /// <returns>A new string with all the parts (empty if all parts are empty)</returns>
+        /// <remarks>A total length above Int32.MaxValue throws an OutOfMemoryException (String.Concat)</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ConcatToString(this ReadOnlySpan<char> a, ReadOnlySpan<char> b, ReadOnlySpan<char> c)
-        {
-            var al = a.Length;
-            var bl = b.Length;
-            var cl = c.Length;
-            fixed (Char* aa = a)
-            fixed (Char* bb = b)
-            fixed (Char* cc = c)
-            {
-                Span<(IntPtr, int)> x = stackalloc (IntPtr, int)[]
-                {
-                    (new IntPtr(aa), al),
-                    (new IntPtr(bb), bl),
-                    (new IntPtr(cc), cl)
-                };
-                return String.Create(al + bl + cl, x, Concat);
-            }
-        }
+            => String.Concat(a, b, c);
 
         /// <summary>
         /// Concat spans into a string with zero unnecessary memory allocations and zero unnecessary memory copying.
@@ -85,48 +60,10 @@ namespace SysWeaver
         /// <param name="c">The third part</param>
         /// <param name="d">The fourth part</param>
         /// <returns>A new string with all the parts (empty if all parts are empty)</returns>
+        /// <remarks>A total length above Int32.MaxValue throws an OutOfMemoryException (String.Concat)</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ConcatToString(this ReadOnlySpan<char> a, ReadOnlySpan<char> b, ReadOnlySpan<char> c, ReadOnlySpan<char> d)
-        {
-            var al = a.Length;
-            var bl = b.Length;
-            var cl = c.Length;
-            var dl = d.Length;
-            fixed (Char* aa = a)
-            fixed (Char* bb = b)
-            fixed (Char* cc = c)
-            fixed (Char* dd = d)
-            {
-                Span<(IntPtr, int)> x = stackalloc (IntPtr, int)[]
-                {
-                    (new IntPtr(aa), al),
-                    (new IntPtr(bb), bl),
-                    (new IntPtr(cc), cl),
-                    (new IntPtr(dd), dl)
-                };
-                return String.Create(al + bl + cl + dl, x, Concat);
-            }
-        }
-
-
-        /// <summary>
-        /// Copies the (pinned) sources, pointer and length pairs, into the new string
-        /// </summary>
-        static readonly SpanAction<Char, Span<(IntPtr, int)>> Concat = (dest, sources) =>
-        {
-            fixed (Char* dd = dest)
-            {
-                var d = dd;
-                var l = sources.Length;
-                for (int i = 0; i < l; ++i)
-                {
-                    var len = sources[i].Item2;
-                    var s = (Char*)sources[i].Item1.ToPointer();
-                    var l2 = len + len;
-                    Buffer.MemoryCopy(s, d, l2, l2);
-                    d += len;
-                }
-            }
-        };
+            => String.Concat(a, b, c, d);
 
 
         /// <summary>

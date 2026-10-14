@@ -48,6 +48,26 @@ namespace SysWeaver.Chart
         static readonly Char[] SvgSplitChars = " ,".ToCharArray();
         static readonly Char[] SvgTrimChars = " \tpx".ToCharArray();
 
+        /// <summary>
+        /// Same bytes as Convert.FromBase64String(data.Substring(start)) without the copy of the payload (the array may be slightly larger than the data)
+        /// </summary>
+        /// <param name="data">The text</param>
+        /// <param name="start">The start of the base64 data</param>
+        /// <param name="length">The number of decoded bytes</param>
+        /// <returns>An array starting with the decoded bytes</returns>
+        static Byte[] FromBase64(String data, int start, out int length)
+        {
+            var s = data.AsSpan(start);
+            //  Valid base64 has a multiple of 4 non white space chars, so the decoded length is at most (length / 4) * 3
+            var b = new Byte[(s.Length >> 2) * 3];
+            if (Convert.TryFromBase64Chars(s, b, out length))
+                return b;
+            //  Invalid data (throws the same exception)
+            b = Convert.FromBase64String(data.Substring(start));
+            length = b.Length;
+            return b;
+        }
+
         public Task<MemoryFile> Export(object data, object context, ChartExportOptions options = null)
         {
             options = options ?? new ChartExportOptions();
@@ -57,11 +77,11 @@ namespace SysWeaver.Chart
             var bi = d.FastIndexOf(";base64,");
             if (bi < 0)
                 throw new Exception("Expected base64 encoded data!");
-            var dd = Convert.FromBase64String(d.Substring(bi + 8));
+            var dd = FromBase64(d, bi + 8, out var ddLen);
             double w = 100;
             double h = 100;
             String bgColor = null;
-            using (var ss = new MemoryStream(dd, false))
+            using (var ss = new MemoryStream(dd, 0, ddLen, false))
             {
                 XDocument xdoc = XDocument.Load(ss);
 #pragma warning disable CS0219
@@ -174,7 +194,7 @@ namespace SysWeaver.Chart
             s.Columns[0].SetWidth(w, LengthUnit.Pixel);
             s.Rows[0].SetHeight(h, LengthUnit.Pixel);
             ExcelPicture p;
-            using var ps = new MemoryStream(dd, false);
+            using var ps = new MemoryStream(dd, 0, ddLen, false);
             p = s.Pictures.Add(ps, ExcelPictureFormat.Svg, new AnchorCell(s.Columns[0], s.Rows[0], true), w, h, LengthUnit.Pixel);
             ExcelService.PageSetUp(s, ChartJsExcelService.ChartMarginInch, (h > w) ^ options.SwapLandscapePortrait, true);
 

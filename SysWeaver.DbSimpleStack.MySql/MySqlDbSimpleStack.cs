@@ -396,7 +396,8 @@ namespace SysWeaver.Db
             List<ValueTuple<String, int, Object[]>> cmds = new ((l + maxBatchSize - 1) / maxBatchSize + 16);
             String[] paramNames = null;
             var pool = ArrayPool<Object>.Shared;
-            var sb = new StringBuilder();
+            var cmdStart = us[0];
+            var cmdEnd = useInsert ? null : us[1];
             Object[] ps = null;
             try
             {
@@ -416,9 +417,7 @@ namespace SysWeaver.Db
                                 count >>= 1;
                         }
                     }
-                    sb.Clear();
-                    sb.Append(us[0]);
-                    sb.Append(GetBulkUpsertCommand(out var pn, count, fl));
+                    var values = GetBulkUpsertCommand(out var pn, count, fl);
                     // Keep the longest names (used by all batches)
                     if ((paramNames == null) || (pn.Length > paramNames.Length))
                         paramNames = pn;
@@ -433,9 +432,8 @@ namespace SysWeaver.Db
                         ++i;
                         --count;
                     }
-                    if (!useInsert)
-                        sb.Append(us[1]);
-                    var cmd = sb.ToString();
+                    //  One copy of the (large) command text, no builder
+                    var cmd = String.Concat(cmdStart, values, cmdEnd);
                     cmds.Add(ValueTuple.Create(cmd, pCount, ps));
                     ps = null;
                 }

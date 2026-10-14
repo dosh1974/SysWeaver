@@ -21,7 +21,7 @@ namespace SysWeaver.MicroService
             Manager = manager;
             var process = Process.GetCurrentProcess();
             var coreCount = Environment.ProcessorCount;
-            manager.AddMessage(Prefix + "The system have " + coreCount + " logical cores");
+            manager.AddMessage(MessageLevels.Info, $"{Prefix}The system have {coreCount} logical cores");
             var coreMask = GetCoreMask(coreCount);
             ulong affinity = coreMask;
             if (!String.IsNullOrEmpty(p.AffinityMask))
@@ -50,7 +50,7 @@ namespace SysWeaver.MicroService
             affinity &= coreMask;
             if (affinity != coreMask)
             {
-                manager.AddMessage(Prefix + "Setting process affinity mask to " + affinity.AsBinary(coreCount).ToQuoted());
+                manager.AddMessage(MessageLevels.Info, $"{Prefix}Setting process affinity mask to {affinity.AsBinary(coreCount).ToQuoted()}");
                 try
                 {
 #pragma warning disable CA1416
@@ -61,7 +61,7 @@ namespace SysWeaver.MicroService
                 }
                 catch (Exception ex)
                 {
-                    manager.AddMessage(Prefix + "Failed to set process affinity mask to " + affinity.AsBinary(coreCount).ToQuoted() + ", ignoring!", ex, MessageLevels.Warning);
+                    manager.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to set process affinity mask to {affinity.AsBinary(coreCount).ToQuoted()}, ignoring!", ex);
                 }
             }
             if (!String.IsNullOrEmpty(p.PriorityClass))
@@ -71,7 +71,7 @@ namespace SysWeaver.MicroService
                 var oldPrio = process.PriorityClass;
                 if (oldPrio != prio)
                 {
-                    manager.AddMessage(Prefix + "Setting process priority class to " + prio.ToString().ToQuoted());
+                    manager.AddMessage(MessageLevels.Info, $"{Prefix}Setting process priority class to {prio.ToString().ToQuoted()}");
                     try
                     {
                         process.PriorityClass = prio;
@@ -79,7 +79,7 @@ namespace SysWeaver.MicroService
                     }
                     catch (Exception ex)
                     {
-                        manager.AddMessage(Prefix + "Failed to set process priority class to " + prio.ToString().ToQuoted() + ", ignoring!", ex, MessageLevels.Warning);
+                        manager.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to set process priority class to {prio.ToString().ToQuoted()}, ignoring!", ex);
                     }
                 }
             }
@@ -88,7 +88,7 @@ namespace SysWeaver.MicroService
             PrevBoost = currentBoost;
             if (currentBoost != newBoost)
             {
-                manager.AddMessage(Prefix + (newBoost ?  "Enabling priority boost for the current process" : "Disabling priority boost for the current process"));
+                manager.AddMessage(MessageLevels.Info, $"{Prefix}{(newBoost ?  "Enabling priority boost for the current process" : "Disabling priority boost for the current process")}");
                 try
                 {
                     process.PriorityBoostEnabled = p.PriorityBoost;
@@ -96,7 +96,7 @@ namespace SysWeaver.MicroService
                 }
                 catch (Exception ex)
                 {
-                    manager.AddMessage(Prefix + (newBoost ? "Failed to enable priority boost for the current process, ignoring!" : "Failed to disable priority boost for the current process, ignoring!"), ex, MessageLevels.Warning);
+                    manager.AddMessage(MessageLevels.Warning, $"{Prefix}{(newBoost ? "Failed to enable priority boost for the current process, ignoring!" : "Failed to disable priority boost for the current process, ignoring!")}", ex);
                 }
             }
         }
@@ -108,7 +108,7 @@ namespace SysWeaver.MicroService
             if (Interlocked.Exchange(ref ChangedBoost, 0) != 0)
             {
                 var val = PrevBoost;
-                manager.AddMessage(Prefix + (val ? "Restoring priority boost for the current process to enabled" : "Restoring priority boost for the current process to disabled"));
+                manager.AddMessage(MessageLevels.Info, $"{Prefix}{(val ? "Restoring priority boost for the current process to enabled" : "Restoring priority boost for the current process to disabled")}");
                 try
                 {
                     process.PriorityBoostEnabled = val;
@@ -121,7 +121,7 @@ namespace SysWeaver.MicroService
             PrevPritority = null;
             if (old != null)
             {
-                manager.AddMessage(Prefix + "Restoring process priorty class to " + old.ToString().ToQuoted());
+                manager.AddMessage(MessageLevels.Info, $"{Prefix}Restoring process priorty class to {old.ToString().ToQuoted()}");
                 try
                 {
                     process.PriorityClass = old.Value;
@@ -133,7 +133,7 @@ namespace SysWeaver.MicroService
             var t = Interlocked.Exchange(ref PrevAffinity, 0);
             if (t != 0)
             {
-                manager.AddMessage(Prefix + "Restoring process affinity mask to " + t.AsBinary(Environment.ProcessorCount).ToQuoted());
+                manager.AddMessage(MessageLevels.Info, $"{Prefix}Restoring process affinity mask to {t.AsBinary(Environment.ProcessorCount).ToQuoted()}");
                 try
                 {
 #pragma warning disable CA1416

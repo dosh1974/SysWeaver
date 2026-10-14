@@ -21,7 +21,7 @@ namespace SysWeaver.MicroService
             var ip = NetworkTools.GetAnyLanIP(ms);
             if (ip == null)
             {
-                manager.AddMessage(Prefix + "Waiting up to " + timeOut + " seconds for a valid LAN ip");
+                manager.AddMessage(MessageLevels.Info, $"{Prefix}Waiting up to {timeOut} seconds for a valid LAN ip");
                 ip = NetworkTools.WaitForLanIp(timeOut, ms);
             }
             if (ip == null)
@@ -37,7 +37,7 @@ namespace SysWeaver.MicroService
                 using (manager.Tab())
                 {
                     foreach (var x in ips)
-                        manager.AddMessage(Prefix + x);
+                        manager.AddMessage(MessageLevels.Info, $"{Prefix}{x}");
                 }
             }
             if (p.WaitForInternet)
@@ -54,7 +54,7 @@ namespace SysWeaver.MicroService
                             throw new Exception(Prefix + "No internet connection!");
                     }else
                     {
-                        manager.AddMessage(Prefix + "Internet found at: " + iip);
+                        manager.AddMessage(MessageLevels.Info, $"{Prefix}Internet found at: {iip}");
                     }
                 }
             }
@@ -65,7 +65,7 @@ namespace SysWeaver.MicroService
             var ip = await NetworkTools.IsConnectedToInternetAsync().ConfigureAwait(false);
             if (ip != null)
                 return ip;
-            manager.AddMessage(Prefix + "Waiting up to " + timeOut + " seconds for an internet connection");
+            manager.AddMessage(MessageLevels.Info, $"{Prefix}Waiting up to {timeOut} seconds for an internet connection");
             return await NetworkTools.WaitForInternetConnectionAsync(timeOut).ConfigureAwait(false);
         }
 

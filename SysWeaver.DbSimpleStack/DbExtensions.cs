@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
@@ -536,12 +537,91 @@ namespace SysWeaver.Db
         /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
-        public static async Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params object[] args) where T : new()
+        public static Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params object[] args) where T : new()
         {
-            using var reader = await ReaderCommandAsync(con, command, args).ConfigureAwait(false);
+            DbCommand cmd;
+            try
+            {
+                cmd = CreateCommand(con, command, args);
+            }
+            catch (Exception ex)
+            {
+                return Failed(ex);
+            }
+            return OnResultCoreAsync(cmd, onResult);
+        }
+
+        /// <summary>
+        /// Iterate over the results of a query, user must ensure that the read data is of the correct type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="con"></param>
+        /// <param name="onResult">The function to run for every read object, return false to stop enumeration</param>
+        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
+        /// <returns></returns>
+        public static Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params ReadOnlySpan<object> args) where T : new()
+        {
+            //  Not async (a span can't be captured): the exceptions of the command creation are returned in the task, like the async array overload did
+            DbCommand cmd;
+            try
+            {
+                cmd = CreateCommand(con, command, args);
+            }
+            catch (Exception ex)
+            {
+                return Failed(ex);
+            }
+            return OnResultCoreAsync(cmd, onResult);
+        }
+
+        static async Task OnResultCoreAsync<T>(DbCommand cmd, Func<T, bool> onResult) where T : new()
+        {
+            using var reader = await ExecuteReaderAsync(cmd).ConfigureAwait(false);
             while (await reader.ReadAsync().ConfigureAwait(false))
                 if (!onResult(reader.CreateObject<T>()))
                     break;
+        }
+
+        /// <summary>
+        /// A task that failed like an async method that threw the exception: faulted, or canceled for an OperationCanceledException (the same exception is rethrown by an await)
+        /// </summary>
+        static Task Failed(Exception ex) => ex is OperationCanceledException ? Rethrow<bool>(ex) : Task.FromException(ex);
+
+        /// <summary>
+        /// A task that failed like an async method that threw the exception: faulted, or canceled for an OperationCanceledException (the same exception is rethrown by an await)
+        /// </summary>
+        static Task<T> Failed<T>(Exception ex) => ex is OperationCanceledException ? Rethrow<T>(ex) : Task.FromException<T>(ex);
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators: the async method builder turns an OperationCanceledException into a canceled task (keeping the exception)
+        static async Task<T> Rethrow<T>(Exception ex)
+        {
+            ExceptionDispatchInfo.Capture(ex).Throw();
+            return default;
+        }
+#pragma warning restore CS1998
+
+        /// <summary>
+        /// Iterate over the results of a query, user must ensure that the read data is of the correct type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="con"></param>
+        /// <param name="onResult">The task to perform on every read object, return false to stop enumeration</param>
+        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
+        /// <returns></returns>
+        public static Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params object[] args) where T : new()
+        {
+            DbCommand cmd;
+            try
+            {
+                cmd = CreateCommand(con, command, args);
+            }
+            catch (Exception ex)
+            {
+                return Failed(ex);
+            }
+            return OnResultCoreAsync(cmd, onResult);
         }
 
         /// <summary>
@@ -553,9 +633,24 @@ namespace SysWeaver.Db
         /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
-        public static async Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params object[] args) where T : new()
+        public static Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params ReadOnlySpan<object> args) where T : new()
         {
-            using var reader = await ReaderCommandAsync(con, command, args).ConfigureAwait(false);
+            //  Not async (a span can't be captured): the exceptions of the command creation are returned in the task, like the async array overload did
+            DbCommand cmd;
+            try
+            {
+                cmd = CreateCommand(con, command, args);
+            }
+            catch (Exception ex)
+            {
+                return Failed(ex);
+            }
+            return OnResultCoreAsync(cmd, onResult);
+        }
+
+        static async Task OnResultCoreAsync<T>(DbCommand cmd, Func<T, Task<bool>> onResult) where T : new()
+        {
+            using var reader = await ExecuteReaderAsync(cmd).ConfigureAwait(false);
             while (await reader.ReadAsync().ConfigureAwait(false))
                 if (!(await onResult(reader.CreateObject<T>()).ConfigureAwait(false)))
                     break;
@@ -569,10 +664,47 @@ namespace SysWeaver.Db
         /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
-        public static async Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params object[] args) where T : new()
+        public static Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params object[] args) where T : new()
+        {
+            DbCommand cmd;
+            try
+            {
+                cmd = CreateCommand(con, command, args);
+            }
+            catch (Exception ex)
+            {
+                return Failed<List<T>>(ex);
+            }
+            return GetResultCoreAsync<T>(cmd);
+        }
+
+        /// <summary>
+        /// Get the whole result of a query as a list, user must ensure that the read data is of the correct type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="con"></param>
+        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
+        /// <returns></returns>
+        public static Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params ReadOnlySpan<object> args) where T : new()
+        {
+            //  Not async (a span can't be captured): the exceptions of the command creation are returned in the task, like the async array overload did
+            DbCommand cmd;
+            try
+            {
+                cmd = CreateCommand(con, command, args);
+            }
+            catch (Exception ex)
+            {
+                return Failed<List<T>>(ex);
+            }
+            return GetResultCoreAsync<T>(cmd);
+        }
+
+        static async Task<List<T>> GetResultCoreAsync<T>(DbCommand cmd) where T : new()
         {
             var t = new List<T>();
-            using var reader = await ReaderCommandAsync(con, command, args).ConfigureAwait(false);
+            using var reader = await ExecuteReaderAsync(cmd).ConfigureAwait(false);
             while (await reader.ReadAsync().ConfigureAwait(false))
                 t.Add(reader.CreateObject<T>());
             return t;

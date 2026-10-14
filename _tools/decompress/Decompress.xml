@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Decompress</name>
+    </assembly>
+    <members>
+        <member name="F:SysWeaver.DecompressParams.Overwrite">
+            <summary>
+            If true, existing destination files are overwritten, else they are skipped
+            </summary>
+        </member>
+        <member name="F:SysWeaver.DecompressParams.Once">
+            <summary>
+            If true, only one compressed version of a file is decompressed (ex: if both "a.txt.br" and "a.txt.zstd" exists, only one of them is decompressed, using the Prefer order)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.DecompressParams.Prefer">
+            <summary>
+            The order of preference when using Once (http codes like zstd, br, gzip, deflate), any other supported compression method is less preferred
+            </summary>
+        </member>
+        <member name="F:SysWeaver.DecompressParams.ExtOrder">
+            <summary>
+            All supported file extensions (with a "." prefix) in order of preference
+            </summary>
+        </member>
+        <member name="F:SysWeaver.DecompressProgram.ExitDecompressFailed">
+            <summary>
+            Exit code: a file couldn't be decompressed (invalid or truncated data).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.DecompressProgram.GetPreferredExt(System.String,SysWeaver.DecompressParams)">
+            <summary>
+            Get the file extension (with a "." prefix) of the preferred compressed version of a file (using Once)
+            </summary>
+            <param name="basePath">The file name without the compression extension</param>
+            <param name="opt">Options</param>
+            <returns>The extension of the preferred compressed version that exists, or null if none exist</returns>
+        </member>
+    </members>
+</doc>

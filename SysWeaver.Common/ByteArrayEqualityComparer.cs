@@ -63,9 +63,16 @@ namespace SysWeaver
         /// </summary>
         /// <param name="alternate">The bytes</param>
         /// <returns>The hash code</returns>
-        public int GetHashCode(ReadOnlySpan<Byte> alternate)
+        public int GetHashCode(ReadOnlySpan<Byte> alternate) => HashSpan(alternate);
+
+        /// <summary>
+        /// The hash code of some bytes, the same as <see cref="GetHashCode(ReadOnlySpan{byte})"/> (a direct call, used by the alternate lookups of <see cref="LowAllocConcurrentDictionary{TKey, TValue}"/>)
+        /// </summary>
+        /// <param name="bytes">The bytes</param>
+        /// <returns>The hash code</returns>
+        internal static int HashSpan(ReadOnlySpan<Byte> bytes)
         {
-            var h = LowAllocStringHash.GetHash(alternate);
+            var h = LowAllocStringHash.GetHash(bytes);
             return (int)h ^ (int)(h >> 32);
         }
 

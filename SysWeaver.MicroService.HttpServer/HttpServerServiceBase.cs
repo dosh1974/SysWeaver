@@ -171,7 +171,7 @@ namespace SysWeaver.MicroService
                 if (s.UnregisterTransformerService(transformService))
                     m.AddMessage(MessageLevels.Debug, $"{MsgPrefix}Unregistered transformer service \"{transformService.GetType()}\" ({transformService})");
                 else
-                    m.AddMessage(MsgPrefix + "Failed to unregister transformer service! Already unregistered? Type \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Warning);
+                    m.AddMessage(MessageLevels.Warning, $"{MsgPrefix}Failed to unregister transformer service! Already unregistered? Type \"{transformService.GetType()}\" ({transformService})");
             }
 
             var rawModule = instance as IHttpServerRawModule;
@@ -183,7 +183,7 @@ namespace SysWeaver.MicroService
                 }
                 else
                 {
-                    m.AddMessage(MsgPrefix + "Failed to remove raw module! Already removed? Type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Warning);
+                    m.AddMessage(MessageLevels.Warning, $"{MsgPrefix}Failed to remove raw module! Already removed? Type \"{rawModule.GetType()}\" ({rawModule})");
                 }
             }
             var module = instance as IHttpServerModule;
@@ -195,7 +195,7 @@ namespace SysWeaver.MicroService
                 }
                 else
                 {
-                    m.AddMessage(MsgPrefix + "Failed to remove module! Already removed? Type \"" + module.GetType() + "\" (" + module + ")", MessageLevels.Warning);
+                    m.AddMessage(MessageLevels.Warning, $"{MsgPrefix}Failed to remove module! Already removed? Type \"{module.GetType()}\" ({module})");
                 }
             }
             var tv = instance as IHaveTemplateVariables;
@@ -229,7 +229,7 @@ namespace SysWeaver.MicroService
                     foreach (var x in tv.TemplateVariableGroups)
                     {
                         if (!sv.TryAdd(x.Key, x.Value))
-                            m.AddMessage(MsgPrefix + "Failed to add template variables group \"" + x.Key + "\" since it already exist, ignored", MessageLevels.Warning);
+                            m.AddMessage(MessageLevels.Warning, $"{MsgPrefix}Failed to add template variables group \"{x.Key}\" since it already exist, ignored");
                     }
                 }
             }
@@ -242,7 +242,7 @@ namespace SysWeaver.MicroService
                 }
                 else
                 {
-                    m.AddMessage(MsgPrefix + "Failed to add module! Already added? Type \"" + module.GetType() + "\" (" + module + ")", MessageLevels.Warning);
+                    m.AddMessage(MessageLevels.Warning, $"{MsgPrefix}Failed to add module! Already added? Type \"{module.GetType()}\" ({module})");
                 }
             }
 
@@ -255,7 +255,7 @@ namespace SysWeaver.MicroService
                 }
                 else
                 {
-                    m.AddMessage(MsgPrefix + "Failed to add raw module! Already added? Type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Warning);
+                    m.AddMessage(MessageLevels.Warning, $"{MsgPrefix}Failed to add raw module! Already added? Type \"{rawModule.GetType()}\" ({rawModule})");
                 }
             }
             var transformService = instance as IHttpTransformerService;

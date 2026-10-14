@@ -210,7 +210,7 @@ namespace SysWeaver.AI
                     {
                         if ((name != "Debug") && (name != "Pure"))
                             throw new ArgumentException("No chat session named " + name.ToQuoted(), nameof(name));
-                        if ((auth == null) || (!auth.IsValid("debug")))
+                        if ((auth == null) || (!auth.IsValid(Authorization.RoleDebug)))
                             throw new Exception("Session is not authorized to acccess chat session " + name.ToQuoted());
                         s = CreateAiChatSession(true, null, "Debug", "Debug", name != "Pure", null);
                         s.ChatId = name;

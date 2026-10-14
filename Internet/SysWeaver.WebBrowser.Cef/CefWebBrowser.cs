@@ -234,7 +234,7 @@ namespace SysWeaver.WebBrowser
                 if (e.Success)
                     return true;
                 var err = "Page load failed with error code: " + e.ErrorCode + ", http status code: " + e.HttpStatusCode;
-                M?.AddMessage(Prefix + err, throwOnError ? MessageLevels.Error : MessageLevels.Warning);
+                M?.AddMessage(throwOnError ? MessageLevels.Error : MessageLevels.Warning, $"{Prefix}{err}");
                 if (throwOnError)
                     throw new Exception(err);
                 return false;

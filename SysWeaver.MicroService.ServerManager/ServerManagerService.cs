@@ -337,15 +337,36 @@ namespace SysWeaver.MicroService
             //  Only a file name, the callers combine it with a service folder (optpass-68: "..\\" names reached other folders)
             if (!IsPlainFileName(filename))
                 return false;
-            var ext = Path.GetExtension(filename).FastToLower();
-            if (!ValidConfigExt.Contains(ext))
+            //  The same results as lower casing the extension and the name with FastToLower (the invariant culture), without creating strings
+            if (!ValidConfigExt.ContainsLower(Path.GetExtension(filename.AsSpan())))
                 return false;
-            var lf = filename.FastToLower();
-            foreach (var x in InvalidConfigSuffixes)
-                if (lf.FastEndsWith(x))
-                    return false;
-            return true;
+            return !HasInvalidConfigSuffix(filename);
         }
+
+        /// <summary>
+        /// Test if a file name ends with one of the InvalidConfigSuffixes (case insensitive), the same result as testing name.FastToLower().FastEndsWith(suffix) for each suffix, without creating strings
+        /// </summary>
+        static bool HasInvalidConfigSuffix(ReadOnlySpan<Char> name)
+        {
+            //  The suffixes are lower case ASCII: only the end of the name is lower cased (the invariant culture maps a char to ASCII independent of its neighbours)
+            var tail = name.Slice(Math.Max(name.Length - MaxInvalidConfigSuffixLength, 0));
+            Span<Char> lowerBuffer = stackalloc Char[MaxInvalidConfigSuffixLength];
+            ReadOnlySpan<Char> lower = lowerBuffer.Slice(0, tail.ToLowerInvariant(lowerBuffer));
+            foreach (var x in InvalidConfigSuffixList)
+                if (lower.EndsWith(x, StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// The InvalidConfigSuffixes as an array (no enumerator)
+        /// </summary>
+        static readonly String[] InvalidConfigSuffixList = InvalidConfigSuffixes.ToArray();
+
+        /// <summary>
+        /// The length of the longest InvalidConfigSuffixes
+        /// </summary>
+        static readonly int MaxInvalidConfigSuffixLength = InvalidConfigSuffixList.Max(x => x.Length);
 
         static HashSet<String> GetConfigs(String path, String name)
         {
@@ -384,12 +405,12 @@ namespace SysWeaver.MicroService
                 var version = Path.Combine(path, config);
                 if (masterConfigs.Remove(config))
                 {
-                    m.AddMessage(String.Concat(LogPrefix, "Replacing config \"", version, "\" with master config"));
+                    m.AddMessage(MessageLevels.Info, $"{LogPrefix}Replacing config \"{version}\" with master config");
                     ex = ex ?? await PathExt.TryCopyFileAsync(master, version).ConfigureAwait(false);
                 }
                 else
                 {
-                    m.AddMessage(String.Concat(LogPrefix, "Creating new master config from \"", version, '"'));
+                    m.AddMessage(MessageLevels.Info, $"{LogPrefix}Creating new master config from \"{version}\"");
                     ex = ex ?? await PathExt.TryCopyFileAsync(version, master).ConfigureAwait(false);
                 }
             }
@@ -399,7 +420,7 @@ namespace SysWeaver.MicroService
                     continue;
                 var master = Path.Combine(parent, config);
                 var version = Path.Combine(path, config);
-                m.AddMessage(String.Concat(LogPrefix, "Creating new config from master \"", version, '"'));
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}Creating new config from master \"{version}\"");
                 ex = ex ?? await PathExt.TryCopyFileAsync(master, version).ConfigureAwait(false);
             }
             return ex;
@@ -458,14 +479,14 @@ namespace SysWeaver.MicroService
                 return -42;
             }
             var m = Manager;
-            m.AddMessage(LogPrefix + "Executing: " + cmd);
+            m.AddMessage(MessageLevels.Info, $"{LogPrefix}Executing: {cmd}");
             using var _ = m.Tab();
             try
             {
                 var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
                 return await ExternalProcess.RunAsync(exe, args, (text, err) =>
                 {
-                    m.AddMessage(LogPrefix + text, err ? MessageLevels.Warning : MessageLevels.Info);
+                    m.AddMessage(err ? MessageLevels.Warning : MessageLevels.Info, $"{LogPrefix}{text}");
                     if (!err)
                         onStdOut?.Invoke(text);
                 }).ConfigureAwait(false);
@@ -1891,7 +1912,7 @@ namespace SysWeaver.MicroService
             }
             if (h != null)
             {
-                Manager.AddMessage(LogPrefix + "Terminating process " + serviceName + ":" + pid + " and all child processes");
+                Manager.AddMessage(MessageLevels.Info, $"{LogPrefix}Terminating process {serviceName}:{pid} and all child processes");
                 h.Kill(true);
             }
             context.Session.InvalidateCache();
@@ -2587,6 +2608,10 @@ namespace SysWeaver.MicroService
             }
             public readonly String Name;
             public readonly String OpenParams;
+            /// <summary>
+            /// The parsed Auth (cached per reference of the requirement string)
+            /// </summary>
+            public RequiredTokensCache AuthTokens;
         }
 
         readonly IReadOnlyDictionary<string, InternalTextFile> TextFiles;
@@ -2620,7 +2645,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Unknown file!");
             if (!x.AllowDelete)
                 throw new Exception("May not delete this file!");
-            if (!context.Session.Auth.IsValid(x.Auth))
+            if (!context.Session.Auth.IsValid(RequiredTokensCache.Get(ref x.AuthTokens, x.Auth)))
                 throw new Exception("Not authorized to delete this file!");
             return await DeleteFileWithBackup(x.Filename, Path.Combine(EnvInfo.ExecutableDir, "bak")).ConfigureAwait(false);
         }
@@ -2641,7 +2666,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Unknown file!");
             if (!x.AllowEdit)
                 throw new Exception("May not save this file!");
-            if (!context.Session.Auth.IsValid(x.Auth))
+            if (!context.Session.Auth.IsValid(RequiredTokensCache.Get(ref x.AuthTokens, x.Auth)))
                 throw new Exception("Not authorized to save this file!");
             await SaveWithBackup(x.Filename, file.Content).ConfigureAwait(false);
             return true;
@@ -2693,6 +2718,7 @@ namespace SysWeaver.MicroService
                     yield return new TextFile
                     {
                         Auth = x.Auth,
+                        AuthTokens = RequiredTokensCache.Get(ref x.AuthTokens, x.Auth),
                         Description = x.Desc,
                         Name = x.Name,
                         Filename = fn,

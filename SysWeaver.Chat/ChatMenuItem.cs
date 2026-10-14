@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using SysWeaver.Auth;
 
 namespace SysWeaver.Chat
 {
@@ -41,6 +43,17 @@ namespace SysWeaver.Chat
         /// Any child items
         /// </summary>
         public ChatMenuItem[] Children;
+
+        /// <summary>
+        /// Get the pre-processed tokens of <see cref="Auth"/> (parsed once per value), for <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
+        /// <returns>The same as <see cref="Authorization.GetRequiredTokens(string)"/> of <see cref="Auth"/></returns>
+        public IReadOnlyList<String> GetAuthTokens() => RequiredTokensCache.Get(ref AuthTokens, Auth);
+
+        /// <summary>
+        /// The parsed <see cref="Auth"/> (cached per reference of the requirement string, not copied by <see cref="CopyTo(ChatMenuItem)"/>)
+        /// </summary>
+        RequiredTokensCache AuthTokens;
 
         /// <summary>
         /// Copy everything but the children

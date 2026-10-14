@@ -121,7 +121,7 @@ namespace SysWeaver.MicroService
 
         void OnChange(Domain d)
         {
-            Manager.AddMessage("Certificate for " + d.DomainName + " was updated!");
+            Manager.AddMessage(MessageLevels.Info, $"Certificate for {d.DomainName} was updated!");
         }
 
         async Task InitDomains()

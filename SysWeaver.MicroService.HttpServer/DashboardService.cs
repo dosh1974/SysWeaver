@@ -58,12 +58,19 @@ namespace SysWeaver.MicroService
                     return null;
                 return nob?.Board;
             }
-            var cacheKey = String.Join('_', id, user);
-            //  The store key must be a valid file name (the id is user input and user guids contain ':'), invalid chars are replaced with '_' (keys that were valid are unchanged)
-            var storeKey = PathExt.SafeFilename(StorePrefix + cacheKey);
-            var ub = await UserBoards.GetOrUpdateAsync(cacheKey, cc => Store.TryGetAsync<UserBoard>(storeKey)).ConfigureAwait(false);
+            var cacheKey = String.Concat(id, "_", user);
+            var ub = await UserBoards.GetOrUpdateAsync(cacheKey, LoadUserBoard, Store).ConfigureAwait(false);
             return ub?.Board;
         }
+
+        /// <summary>
+        /// Read a user board from the store (only on a cache miss: the store key is only built here)
+        /// </summary>
+        /// <param name="cacheKey">The cache key ("[id]_[user guid]")</param>
+        /// <param name="store">The store</param>
+        static Task<UserBoard> LoadUserBoard(String cacheKey, KeyValueStore store)
+            //  The store key must be a valid file name (the id is user input and user guids contain ':'), invalid chars are replaced with '_' (keys that were valid are unchanged)
+            => store.TryGetAsync<UserBoard>(PathExt.SafeFilename(StorePrefix + cacheKey));
 
 
         readonly FastMemCache<String, UserBoard> UserBoards = new FastMemCache<string, UserBoard>(TimeSpan.FromSeconds(60), StringComparer.Ordinal);

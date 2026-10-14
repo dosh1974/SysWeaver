@@ -546,12 +546,12 @@ namespace SysWeaver.Security
             if (s == null)
             {
                 qn = (ruleName ?? "null").ToQuoted();
-                msg?.AddMessage(p + "Can't " + what + " firewall rule " + qn + ", the name is empty!", MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{p}Can't {what} firewall rule {qn}, the name is empty!");
                 return false;
             }
             qn = s.ToQuoted();
             if (!String.Equals(s, ruleName, StringComparison.Ordinal))
-                msg?.AddMessage(p + "Using firewall rule name " + qn + " for " + ruleName.ToQuoted() + " (sanitized)");
+                msg?.AddMessage(MessageLevels.Info, $"{p}Using firewall rule name {qn} for {ruleName.ToQuoted()} (sanitized)");
             ruleName = s;
             return true;
         }
@@ -560,14 +560,14 @@ namespace SysWeaver.Security
         {
             if (msg == null)
                 return;
-            msg.AddMessage(p + text + ", error: " + r.ExitCode, MessageLevels.Warning);
+            msg.AddMessage(MessageLevels.Warning, $"{p}{text}, error: {r.ExitCode}");
             using (msg.Tab())
             {
                 foreach (var x in r.AllOutput.Split('\n'))
                 {
                     var t = x.Trim();
                     if (t.Length > 0)
-                        msg.AddMessage(p + t, MessageLevels.Info);
+                        msg.AddMessage(MessageLevels.Info, $"{p}{t}");
                 }
             }
         }
@@ -593,7 +593,7 @@ namespace SysWeaver.Security
             var prots = GetProtocols(protocol);
             if ((port <= 0) || (port > 65535) || (prots == null) || ((direction != FirewallDirections.Inbound) && (direction != FirewallDirections.Outbound)))
             {
-                msg?.AddMessage(p + "Can't add firewall rule " + qn + ", invalid port (" + port + "), protocol (" + protocol + ") or direction (" + direction + ")!", MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{p}Can't add firewall rule {qn}, invalid port ({port}), protocol ({protocol}) or direction ({direction})!");
                 return false;
             }
             var name = qn + " for " + StringTools.RemoveCamelCase(direction.ToString()).FastToLower() + " " + StringTools.RemoveCamelCase(protocol.ToString()).FastToLower() + " traffic on port " + port;
@@ -601,12 +601,12 @@ namespace SysWeaver.Security
             var used = d.Used;
             if (used == null)
             {
-                msg?.AddMessage(p + "No active firewall found" + (d.IsCertain ? "" : " (probably)") + ", traffic on port " + port + " isn't blocked, firewall rule " + qn + " isn't needed (" + d + ")");
+                msg?.AddMessage(MessageLevels.Info, $"{p}No active firewall found{(d.IsCertain ? "" : " (probably)")}, traffic on port {port} isn't blocked, firewall rule {qn} isn't needed ({d})");
                 return true;
             }
             if (!d.IsRoot)
             {
-                msg?.AddMessage(p + "Can't add firewall rule " + name + " to " + used.Kind + ", root is required!", MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{p}Can't add firewall rule {name} to {used.Kind}, root is required!");
                 return false;
             }
             msg?.AddMessage(MessageLevels.Debug, $"{p}Checking if {used.Kind} firewall rule {name} exists");
@@ -617,7 +617,7 @@ namespace SysWeaver.Security
                 case LinuxFirewallKinds.Firewalld:
                     if (direction == FirewallDirections.Outbound)
                     {
-                        msg?.AddMessage(p + "firewalld doesn't filter outgoing traffic, firewall rule " + name + " isn't needed");
+                        msg?.AddMessage(MessageLevels.Info, $"{p}firewalld doesn't filter outgoing traffic, firewall rule {name} isn't needed");
                         return true;
                     }
                     return FirewalldAddOrSet(used.Program, ruleName, port, prots, msg, p, qn, name);
@@ -650,7 +650,7 @@ namespace SysWeaver.Security
             }
             if (!d.IsRoot)
             {
-                msg?.AddMessage(p + "Can't remove firewall rule " + qn + " from " + used.Kind + ", root is required!", MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{p}Can't remove firewall rule {qn} from {used.Kind}, root is required!");
                 return false;
             }
             msg?.AddMessage(MessageLevels.Debug, $"{p}Deleting {used.Kind} rule {qn}");
@@ -831,7 +831,7 @@ namespace SysWeaver.Security
             f6 = null;
             if (t4 == null)
             {
-                msg?.AddMessage(p + "Can't read " + UfwRulesFile.ToQuoted() + ", failed to check firewall rule " + qn, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{p}Can't read {UfwRulesFile.ToQuoted()}, failed to check firewall rule {qn}");
                 return false;
             }
             bool mine(UfwTuple x) => String.Equals(x.Comment, ruleName, StringComparison.Ordinal);
@@ -877,11 +877,11 @@ namespace SysWeaver.Security
             if (ok4 && ok6)
             {
                 if ((v4.Count + v6.Count) <= 0)
-                    msg?.AddMessage(p + "Firewall rule " + name + " isn't needed, " + foreignMsg);
+                    msg?.AddMessage(MessageLevels.Info, $"{p}Firewall rule {name} isn't needed, {foreignMsg}");
                 else if ((v4.Count == 0) || (ipv6 && (v6.Count == 0)))
-                    msg?.AddMessage(p + qn + " exists and is valid (partly as a foreign rule, " + foreignMsg + ")");
+                    msg?.AddMessage(MessageLevels.Info, $"{p}{qn} exists and is valid (partly as a foreign rule, {foreignMsg})");
                 else
-                    msg?.AddMessage(p + qn + " exists and is valid");
+                    msg?.AddMessage(MessageLevels.Info, $"{p}{qn} exists and is valid");
                 return true;
             }
             var update = (v4.Count + v6.Count) > 0;
@@ -894,7 +894,7 @@ namespace SysWeaver.Security
             var need6 = ipv6 && !covered6;
             if (!(need4 || need6))
             {
-                msg?.AddMessage(p + (update ? "Removed" : "Didn't add") + " firewall rule " + name + ", " + foreignMsg);
+                msg?.AddMessage(MessageLevels.Info, $"{p}{(update ? "Removed" : "Didn't add")} firewall rule {name}, {foreignMsg}");
                 return true;
             }
             if (!update)
@@ -902,7 +902,7 @@ namespace SysWeaver.Security
             //  Only add the address family that isn't covered by a foreign rule (adding "any" would take over the foreign rule)
             var addr = (need4 && (need6 || !ipv6)) ? "any" : (need4 ? "0.0.0.0/0" : "::/0");
             if ((addr != "any") && (msg != null))
-                msg.AddMessage(p + "Only adding the " + (need4 ? "IPv4" : "IPv6") + " part of firewall rule " + qn + ", " + foreignMsg);
+                msg.AddMessage(MessageLevels.Info, $"{p}Only adding the {(need4 ? "IPv4" : "IPv6")} part of firewall rule {qn}, {foreignMsg}");
             List<String> a = new List<string> { "allow", outbound ? "out" : "in" };
             if (proto != "any")
             {
@@ -919,7 +919,7 @@ namespace SysWeaver.Security
             var r = Exec(ufw, a.ToArray());
             if (r.ExitCode == 0)
             {
-                msg?.AddMessage(p + (update ? "Updated" : "Added") + " firewall rule " + name);
+                msg?.AddMessage(MessageLevels.Info, $"{p}{(update ? "Updated" : "Added")} firewall rule {name}");
                 return true;
             }
             LogFailure(msg, p, "Failed to " + (update ? "update" : "add") + " firewall rule " + qn, r);
@@ -938,7 +938,7 @@ namespace SysWeaver.Security
             //  Delete the IPv6 rules first: deleting an IPv4 spec never touches IPv6 rules (and vice versa), the order doesn't matter
             if (!UfwDelete(ufw, v6.Concat(v4), msg, p, qn))
                 return false;
-            msg?.AddMessage(p + "Deleted firewall rule " + qn);
+            msg?.AddMessage(MessageLevels.Info, $"{p}Deleted firewall rule {qn}");
             return true;
         }
 
@@ -996,7 +996,7 @@ namespace SysWeaver.Security
                 var inRuntime = FirstLine(Exec(fw, "--zone=" + zone, "--query-service=" + svc).Output) == "yes";
                 if (inZone && inRuntime && ports.SetEquals(expected))
                 {
-                    msg?.AddMessage(p + qn + " exists and is valid");
+                    msg?.AddMessage(MessageLevels.Info, $"{p}{qn} exists and is valid");
                     return true;
                 }
                 update = true;
@@ -1074,7 +1074,7 @@ namespace SysWeaver.Security
                     return false;
                 }
             }
-            msg?.AddMessage(p + (update ? "Updated" : "Added") + " firewall rule " + name);
+            msg?.AddMessage(MessageLevels.Info, $"{p}{(update ? "Updated" : "Added")} firewall rule {name}");
             return true;
         }
 
@@ -1125,7 +1125,7 @@ namespace SysWeaver.Security
                 }
             }
             if (ok)
-                msg?.AddMessage(p + "Deleted firewall rule " + qn);
+                msg?.AddMessage(MessageLevels.Info, $"{p}Deleted firewall rule {qn}");
             return ok;
         }
 
@@ -1280,7 +1280,7 @@ namespace SysWeaver.Security
             {
                 if (!(IsNftName(x.Family) && IsNftName(x.Table) && IsNftName(x.Chain) && (x.Handle > 0)))
                 {
-                    msg?.AddMessage(p + "Can't delete nftables rule " + qn + " from chain " + String.Join(' ', x.Family, x.Table, x.Chain).ToQuoted() + ", unsupported name", MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{p}Can't delete nftables rule {qn} from chain {String.Join(' ', x.Family, x.Table, x.Chain).ToQuoted()}, unsupported name");
                     ok = false;
                     continue;
                 }
@@ -1307,7 +1307,7 @@ namespace SysWeaver.Security
                     continue;
                 if (!(IsNftName(c.Table) && IsNftName(c.Name)))
                 {
-                    msg?.AddMessage(p + "Can't add firewall rule " + qn + " to nftables chain " + c.ToString().ToQuoted() + ", unsupported name", MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{p}Can't add firewall rule {qn} to nftables chain {c.ToString().ToQuoted()}, unsupported name");
                     continue;
                 }
                 targets.Add(c);
@@ -1323,7 +1323,7 @@ namespace SysWeaver.Security
             {
                 if (mine.Count > 0)
                     NftDelete(nft, mine, msg, p, qn);
-                msg?.AddMessage(p + "No nftables chain filters " + (outbound ? "outgoing" : "incoming") + " traffic, firewall rule " + qn + " isn't needed");
+                msg?.AddMessage(MessageLevels.Info, $"{p}No nftables chain filters {(outbound ? "outgoing" : "incoming")} traffic, firewall rule {qn} isn't needed");
                 return true;
             }
             bool valid = mine.Count == expected.Count;
@@ -1339,7 +1339,7 @@ namespace SysWeaver.Security
             }
             if (valid)
             {
-                msg?.AddMessage(p + qn + " exists and is valid");
+                msg?.AddMessage(MessageLevels.Info, $"{p}{qn} exists and is valid");
                 return true;
             }
             var update = mine.Count > 0;
@@ -1364,7 +1364,7 @@ namespace SysWeaver.Security
                     return false;
                 }
             }
-            msg?.AddMessage(p + (update ? "Updated" : "Added") + " firewall rule " + name + " (runtime only)");
+            msg?.AddMessage(MessageLevels.Info, $"{p}{(update ? "Updated" : "Added")} firewall rule {name} (runtime only)");
             return true;
         }
 
@@ -1380,7 +1380,7 @@ namespace SysWeaver.Security
             }
             if (!NftDelete(nft, mine, msg, p, qn))
                 return false;
-            msg?.AddMessage(p + "Deleted firewall rule " + qn);
+            msg?.AddMessage(MessageLevels.Info, $"{p}Deleted firewall rule {qn}");
             return true;
         }
 

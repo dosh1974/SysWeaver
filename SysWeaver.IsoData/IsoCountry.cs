@@ -1,6 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using SysWeaver.Data;
 
 namespace SysWeaver.IsoData
@@ -138,10 +140,40 @@ namespace SysWeaver.IsoData
         public static IsoCountry TryGetName(String name)
         {
             var ni = NameToInfo;
-            name = name?.FastToLower() ?? "";
-            if (ni.TryGetValue(FixName(name), out var i))
+            name ??= "";
+            //  ASCII (the common case): lower cased and normalized on the stack, looked up with a span (no allocation)
+            //  A name that doesn't change (lower case ASCII without '-' and '.'): looked up as it is
+            if ((name.Length <= MaxStackName) && Ascii.IsValid(name))
+                return name.AsSpan().IndexOfAny(NameChanges) < 0 ? (ni.TryGetValue(name, out var n) ? n : null) : TryGetNameAscii(ni, name);
+            if (ni.TryGetValue(FixName(name.FastToLower()), out var i))
                 return i;
             return null;
+        }
+
+        /// <summary>
+        /// Names up to this length are normalized on the stack
+        /// </summary>
+        const int MaxStackName = 256;
+
+        /// <summary>
+        /// The ASCII chars that FixName(name.FastToLower()) changes or removes
+        /// </summary>
+        static readonly SearchValues<Char> NameChanges = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZ-.");
+
+        /// <summary>
+        /// The same as FixName(name.FastToLower()) for ASCII names (no diacritics): lower cased, '-' replaced with ' ' and '.' removed, into a stack buffer
+        /// </summary>
+        static IsoCountry TryGetNameAscii(IReadOnlyDictionary<String, IsoCountry> ni, String name)
+        {
+            Span<Char> b = stackalloc Char[name.Length];
+            int n = 0;
+            foreach (var c in name)
+            {
+                if (c == '.')
+                    continue;
+                b[n++] = c == '-' ? ' ' : (uint)(c - 'A') <= ('Z' - 'A') ? (Char)(c | 0x20) : c;
+            }
+            return ni.TryGetValueSpan(b.Slice(0, n), out var i) ? i : null;
         }
 
 

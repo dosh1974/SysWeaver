@@ -29,13 +29,20 @@ namespace SysWeaver
         public static bool PassProbability64(this BigRat probability, SecureRng rng, out BigRat usedProb)
         {
             var x = probability.Normalize();
-            var var = (BigRat)(Int64.MaxValue >> 1);
             var num = x.Numerator();
             var denom = x.Denominator();
-            while (denom >= var)
+            if (denom >= MaxDenom)
             {
-                denom /= 2;
-                num /= 2;
+                //  Halving the (exact) rationals k times and truncating them is the same as shifting the integers k bits:
+                //  the first k where floor(d / 2^k) < MaxDenom, the numerator truncated towards zero (like the conversion of a negative rational)
+                var d = (BigInteger)denom;
+                var k = (int)Math.Max(d.GetBitLength() - 62, 0);
+                while ((d >> k) >= MaxDenomInt)
+                    ++k;
+                var n = (BigInteger)num;
+                var q = n.Sign < 0 ? -((-n) >> k) : (n >> k);
+                num = (BigRat)q;
+                denom = d >> k;
             }
             var inum = (UInt64)num;
             var idenom = (UInt64)denom;
@@ -43,6 +50,12 @@ namespace SysWeaver
             usedProb = new BigRat((long)inum, idenom);
             return val < inum;
         }
+
+        /// <summary>
+        /// The denominators of PassProbability64 are reduced below this value (2^62 - 1)
+        /// </summary>
+        const long MaxDenomInt = Int64.MaxValue >> 1;
+        static readonly BigRat MaxDenom = MaxDenomInt;
 
     }
 
@@ -293,7 +306,9 @@ namespace SysWeaver
         public static explicit operator BigInteger(BigRat value)
         {
             if (value.p == null) return default;
-            var s = new ReadOnlySpan<uint>(Truncate(value).p);
+            //  A non zero value in (-1, 1) truncates to zero (a null p)
+            var tp = Truncate(value).p; if (tp == null) return default;
+            var s = new ReadOnlySpan<uint>(tp);
             var a = MemoryMarshal.AsBytes(s.Slice(1, unchecked((int)(s[0] & 0x3fffffff))));
             var r = new BigInteger(a, true, false); if (value < 0) r = -r; return r;
         }
@@ -1853,8 +1868,9 @@ namespace SysWeaver
         }
         static void toi(BigRat x, uint* d, uint f)
         {
-            uint i, c, l = f & 0xffff; if (x.p == null) { for (i = 0; i < l; i++) d[i] = 0; return; }
-            fixed (uint* p = Truncate(x).p)
+            //  A non zero value in (-1, 1) truncates to zero (a null p)
+            uint i, c, l = f & 0xffff; var tp = x.p == null ? null : Truncate(x).p; if (tp == null) { for (i = 0; i < l; i++) d[i] = 0; return; }
+            fixed (uint* p = tp)
             {
                 var n = p[0] & 0x3fffffff; var s = (p[0] & 0x80000000) != 0;
                 if ((f & 0x10000) != 0) // unsigned

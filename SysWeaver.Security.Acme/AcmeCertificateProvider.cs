@@ -58,7 +58,7 @@ namespace SysWeaver.Security
                         }
                         catch (Exception ex)
                         {
-                            msg?.AddMessage(Prefix + "Can't import certificate for " + bn.ToQuoted(), ex, MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't import certificate for {bn.ToQuoted()}", ex);
                         }
                     }
                 }
@@ -72,7 +72,7 @@ namespace SysWeaver.Security
                     var f = PathTemplate.Resolve(cn);
                     if (!File.Exists(f))
                     {
-                        msg?.AddMessage(Prefix + "Can't import certificate " + f.ToQuoted() + " since it doesn't exist!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't import certificate {f.ToQuoted()} since it doesn't exist!");
                         continue;
                     }
                     var pem = await FileExt.ReadTextAsync(f).ConfigureAwait(false);
@@ -83,7 +83,7 @@ namespace SysWeaver.Security
                     }
                     catch (Exception ex)
                     {
-                        msg?.AddMessage(Prefix + "Can't import certificate " + f.ToQuoted(), ex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't import certificate {f.ToQuoted()}", ex);
                         continue;
                     }
                     certs.Add(certBytes);
@@ -132,7 +132,7 @@ namespace SysWeaver.Security
             var certFilename = String.IsNullOrEmpty(p.Filename) ? null : EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename, extra));
             var cex = certFilename == null ? null : PathExt.EnsureCanWriteFile(certFilename);
             if (cex != null)
-                msg?.AddMessage(Prefix + "Failed to create the folder required to store " + certFilename.ToFilename(), cex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create the folder required to store {certFilename.ToFilename()}", cex);
             Filename = certFilename;
             Password = EnvInfo.ResolveText(p.Password);
             MinValidHours = Math.Max(p.MinValidHours, 2);
@@ -149,18 +149,18 @@ namespace SysWeaver.Security
             {
                 var ex = PathExt.EnsureFolderExist(challengeFolder);
                 if (ex != null)
-                    msg?.AddMessage(Prefix + "Failed to create the challenge folder " + challengeFolder.ToFolder(), ex, MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create the challenge folder {challengeFolder.ToFolder()}", ex);
             }
             ChallengeFolder = challengeFolder;
             var accountFile = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.AccountFilename, extra));
             KeyFilename = accountFile;
             var aex = PathExt.EnsureCanWriteFile(accountFile);
             if (aex != null)
-                msg?.AddMessage(Prefix + "Failed to create the folder required to store " + accountFile.ToFilename(), aex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create the folder required to store {accountFile.ToFilename()}", aex);
             var authUrl = new Uri(authApi);
             AuthApi = authUrl;
             Mail = email;
-            msg?.AddMessage(Prefix + "Using API at " + authUrl.ToString().ToQuoted());
+            msg?.AddMessage(MessageLevels.Info, $"{Prefix}Using API at {authUrl.ToString().ToQuoted()}");
         }
 
         /// <summary>
@@ -248,7 +248,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to create new certificate order context for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create new certificate order context for: {String.Join(", ", Names.Select(x => x.ToQuoted()))}", ex);
                 throw;
             }
             //  Authorize
@@ -266,7 +266,7 @@ namespace SysWeaver.Security
                 }
                 catch (Exception ex)
                 {
-                    msg?.AddMessage(Prefix + "Failed to create a HTTP challenge for new certificate order context for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), ex, MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create a HTTP challenge for new certificate order context for: {String.Join(", ", Names.Select(x => x.ToQuoted()))}", ex);
                     throw;
                 }
                 var key = challangeContext.Token;
@@ -276,14 +276,14 @@ namespace SysWeaver.Security
                 {
                     cfile = GetChallengeFilename(cfolder, key);
                     if (!String.Equals(Path.GetFileName(cfile), key, StringComparison.Ordinal))
-                        msg?.AddMessage(Prefix + "The challenge token " + key.ToQuoted() + " contains invalid file name chars, using the file " + cfile.ToFilename() + " (the challenge validation will probably fail)", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}The challenge token {key.ToQuoted()} contains invalid file name chars, using the file {cfile.ToFilename()} (the challenge validation will probably fail)");
                     try
                     {
                         await Retry.OpAsync(() => File.WriteAllTextAsync(cfile, value)).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
-                        msg?.AddMessage(Prefix + "Failed to save challenge file to " + cfile.ToFilename(), ex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to save challenge file to {cfile.ToFilename()}", ex);
                         throw;
                     }
                 }
@@ -331,7 +331,7 @@ namespace SysWeaver.Security
                     }
                     catch (Exception ex)
                     {
-                        msg?.AddMessage(Prefix + "Failed to validate challenge " + c.Item2.ToQuoted(), ex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to validate challenge {c.Item2.ToQuoted()}", ex);
                         throw;
                     }
                     var file = c.Item3;
@@ -339,7 +339,7 @@ namespace SysWeaver.Security
                     {
                         var ex = PathExt.TryDeleteFile(file);
                         if (ex != null)
-                            msg?.AddMessage(Prefix + "Failed to delete challenge file " + file.ToQuoted() + ", ignoring!", ex, MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to delete challenge file {file.ToQuoted()}, ignoring!", ex);
                     }
                     else
                     {
@@ -357,7 +357,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to finalize new certificate order for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to finalize new certificate order for: {String.Join(", ", Names.Select(x => x.ToQuoted()))}", ex);
                 throw;
             }
             try
@@ -388,7 +388,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to download new certificate chain for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to download new certificate chain for: {String.Join(", ", Names.Select(x => x.ToQuoted()))}", ex);
                 throw;
             }
             msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Building certificate from downloaded data");
@@ -407,7 +407,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to create certificate from data for: " + String.Join(", ", Names.Select(x => x.ToQuoted())), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create certificate from data for: {String.Join(", ", Names.Select(x => x.ToQuoted()))}", ex);
                 throw;
             }
         }
@@ -430,7 +430,7 @@ namespace SysWeaver.Security
                 }
                 catch (Exception ex)
                 {
-                    msg?.AddMessage(Prefix + "Failed to load account key from " + accountFile.ToFilename() + ", creating a new account!", ex, MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to load account key from {accountFile.ToFilename()}, creating a new account!", ex);
                 }
                 //  Log in to account
                 if (accountKey != null)
@@ -488,7 +488,7 @@ namespace SysWeaver.Security
                                 }
                                 break;
                             default:
-                                msg?.AddMessage(Prefix + "Account status is " + info.Status + ", creating a new account!", MessageLevels.Warning);
+                                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Account status is {info.Status}, creating a new account!");
                                 break;
                         }
                     }
@@ -508,7 +508,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to create a new account using " + mail.ToMail(), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create a new account using {mail.ToMail()}", ex);
                 throw;
             }
             //  Make sure destination folder exists
@@ -516,7 +516,7 @@ namespace SysWeaver.Security
             accountKey = context.AccountKey;
             var pex = PathExt.EnsureCanWriteFile(accountFile);
             if (pex != null)
-                msg?.AddMessage(Prefix + "Failed to create the folder required to store " + accountFile.ToFilename(), pex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create the folder required to store {accountFile.ToFilename()}", pex);
         //  Save account key
             try
             {
@@ -524,10 +524,10 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to save account key to " + accountFile.ToFilename(), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to save account key to {accountFile.ToFilename()}", ex);
                 throw;
             }
-            msg?.AddMessage(Prefix + "Created new account using mail " + mail.ToMail());
+            msg?.AddMessage(MessageLevels.Info, $"{Prefix}Created new account using mail {mail.ToMail()}");
             return Tuple.Create(context, account);
         }
 
@@ -578,7 +578,7 @@ namespace SysWeaver.Security
                             ExpireAction = Scheduler.Add(renewAtX, InvokeExpireSoon, "ACME cert renewal");
 //                            if (TestCount == 1)
 //                                ExpireAction = TaskScheduler.Add(DateTime.UtcNow.AddSeconds(30), InvokeExpireSoon, true); C = null; PathExt.TryDeleteFile(f); // HACK: Used to test renewal
-                            msg?.AddMessage(Prefix + "Loaded certificate, expires at " + expiresX.ToString("o") + ", renewal is scheduled at " + renewAtX.ToString("o"));
+                            msg?.AddMessage(MessageLevels.Info, $"{Prefix}Loaded certificate, expires at {expiresX.ToString("o")}, renewal is scheduled at {renewAtX.ToString("o")}");
                             return c;
                         }
                         c.Dispose();
@@ -586,7 +586,7 @@ namespace SysWeaver.Security
                     }
                     catch (Exception ex)
                     {
-                        msg?.AddMessage(Prefix + "Failed to load certificate from " + f.ToFilename() + ", will request a new certificate", ex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to load certificate from {f.ToFilename()}, will request a new certificate", ex);
                     }
                 }
             //  Create a new certificate
@@ -598,14 +598,14 @@ namespace SysWeaver.Security
                     msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Saving certificate file {f.ToFilename()}");
                     var pex = PathExt.EnsureCanWriteFile(f);
                     if (pex != null)
-                        msg?.AddMessage(Prefix + "Failed to create folder required to save " + f.ToFilename(), pex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to create folder required to save {f.ToFilename()}", pex);
                     try
                     {
                         await Retry.OpAsync(() => File.WriteAllBytesAsync(f, c.Export(X509ContentType.Pfx, Password))).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
-                        msg?.AddMessage(Prefix + "Failed to save certificate file " + f.ToFilename(), ex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to save certificate file {f.ToFilename()}", ex);
                     }
                     var crtFile = Path.ChangeExtension(f, "crt");
                     msg?.AddMessage(MessageLevels.Debug, $"{Prefix}Saving public certificate file {crtFile.ToFilename()}");
@@ -615,14 +615,14 @@ namespace SysWeaver.Security
                     }
                     catch (Exception ex)
                     {
-                        msg?.AddMessage(Prefix + "Failed to save public certificate file " + crtFile.ToFilename(), ex, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to save public certificate file {crtFile.ToFilename()}", ex);
                     }
                 }
                 Interlocked.Exchange(ref C, c)?.Dispose();
                 var expires = c.GetExpiration();
                 var renewAt = expires.AddHours(RenewBeforeExpirationHours);
                 ExpireAction = Scheduler.Add(renewAt, InvokeExpireSoon, "ACME cert renewal");
-                msg?.AddMessage(Prefix + "Created certificate, expires at " + expires.ToString("o") + ", renewal is scheduled at " + renewAt.ToString("o"));
+                msg?.AddMessage(MessageLevels.Info, $"{Prefix}Created certificate, expires at {expires.ToString("o")}, renewal is scheduled at {renewAt.ToString("o")}");
                 return c;
             }
             finally

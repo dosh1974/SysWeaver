@@ -38,12 +38,12 @@ namespace SysWeaver.ReverseProxy
                 baseUrl += '/';
                 BaseUrl = baseUrl;
                 BaseUrlLen = baseUrl.Length;
-                msg?.AddMessage(String.Concat("Client url routing: \"", baseUrl, "[ClientId]<-EndPoint>/<..url..>\""));
+                msg?.AddMessage(MessageLevels.Info, $"Client url routing: \"{baseUrl}[ClientId]<-EndPoint>/<..url..>\"");
             }
             if (haveDomains)
             {
                 IgnoreDomains = ignoreDomains.Freeze();
-                msg?.AddMessage(String.Concat("Client domain routing: \"http{s}://[ClientId]<-EndPoint>.*.*/<..url..>\""));
+                msg?.AddMessage("Client domain routing: \"http{s}://[ClientId]<-EndPoint>.*.*/<..url..>\"");
             }
             else
             {

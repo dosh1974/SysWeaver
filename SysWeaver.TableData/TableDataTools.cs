@@ -73,18 +73,69 @@ namespace SysWeaver.Data
         /// <remarks>Deserialization is done into a dynamically emitted type with one property per column, the conversion function is cached per type and mime type.</remarks>
         public static TableData FromTypedData(Type type, IDeserializer ser, ReadOnlySpan<Byte> data)
         {
+            //  A null type or deserializer throws a NullReferenceException (as when the key was built from the names)
+            if (type is null)
+                throw new NullReferenceException();
+            var mime = ser.Mime;
             var c = TableConverters;
-            var key = String.Concat(type.FullName, '_', ser.Mime);
+            if (c.TryGetValue(type, out var conv))
+            {
+                var cfn = conv.Get(mime);
+                if (cfn != null)
+                    return cfn(ser, data, conv.Columns);
+            }
             var e = type.GetGenericArguments()[0];
             var columns = GetCols(e);
-            if (c.TryGetValue(key, out var fn))
-                return fn(ser, data, columns);
             e = GetPropertyType(columns);
-            type = typeof(TypedTableData<>).MakeGenericType(e);
-            var exp = Expression.Lambda<Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData>>(Expression.Call(MethodToTableData.MakeGenericMethod(e), Expression.Call(ParamSer, MethodSerCreate.MakeGenericMethod(type), ParamData), ParamCols), ParamSer, ParamData, ParamCols);
-            fn = exp.Compile();
-            c.TryAdd(key, fn);
+            var tt = typeof(TypedTableData<>).MakeGenericType(e);
+            var exp = Expression.Lambda<Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData>>(Expression.Call(MethodToTableData.MakeGenericMethod(e), Expression.Call(ParamSer, MethodSerCreate.MakeGenericMethod(tt), ParamData), ParamCols), ParamSer, ParamData, ParamCols);
+            var fn = exp.Compile();
+            if (conv == null)
+            {
+                c.TryAdd(type, new TypedTableConverters(columns));
+                c.TryGetValue(type, out conv);
+            }
+            conv.Add(mime, fn);
             return fn(ser, data, columns);
+        }
+
+        /// <summary>
+        /// The conversion functions of a typed table type (one per mime type) and the columns of its row type
+        /// </summary>
+        sealed class TypedTableConverters
+        {
+            public TypedTableConverters(TableDataColumn[] columns)
+            {
+                Columns = columns;
+            }
+
+            /// <summary>
+            /// The columns of the row type (the shared array returned by <see cref="GetCols(Type)"/>, it never changes)
+            /// </summary>
+            public readonly TableDataColumn[] Columns;
+
+            /// <summary>
+            /// The conversion function for each mime type (copy on write, there are only a few mime types)
+            /// </summary>
+            volatile KeyValuePair<String, Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData>>[] Fns = [];
+
+            public Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData> Get(String mime)
+            {
+                foreach (var x in Fns)
+                    if (String.Equals(x.Key, mime, StringComparison.Ordinal))
+                        return x.Value;
+                return null;
+            }
+
+            public void Add(String mime, Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData> fn)
+            {
+                lock (this)
+                {
+                    if (Get(mime) != null)
+                        return;
+                    Fns = [.. Fns, new(mime, fn)];
+                }
+            }
         }
 
 
@@ -108,7 +159,10 @@ namespace SysWeaver.Data
         static readonly MethodInfo MethodSerCreate = typeof(IDeserializer).GetMethod(nameof(IDeserializer.Create), BindingFlags.Instance | BindingFlags.Public, [typeof(ReadOnlySpan<Byte>)]);
 
         static readonly MethodInfo MethodToTableData = typeof(TableDataTools).GetMethod(nameof(InternalToTableData), BindingFlags.Static | BindingFlags.NonPublic);
-        static readonly ConcurrentDictionary<String, Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData>> TableConverters = new(StringComparer.Ordinal);
+        /// <summary>
+        /// The conversion functions per typed table type (weak keys, so that collectible types can be unloaded; the functions only reference types emitted by this assembly)
+        /// </summary>
+        static readonly ConditionalWeakTable<Type, TypedTableConverters> TableConverters = new();
 
 
         /// <summary>

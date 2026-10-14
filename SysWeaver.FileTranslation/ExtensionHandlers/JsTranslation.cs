@@ -302,6 +302,41 @@ namespace SysWeaver.MicroService.ExtensionHandlers
         }
 
 
+        /// <summary>
+        /// The same as ParseLiteral, without unescaping the literal: the same end (i) and result, and the same exception as Unescape.
+        /// Unescape throws "No end quote!" if the literal contains a line terminator that isn't escaped
+        /// (an escaped "\r\n" is one line continuation, the other escapes only consume digits after the escaped char, so the escapes are the same as the ones skipped here).
+        /// </summary>
+        static bool SkipLiteral(String text, ref int i)
+        {
+            var l = text.Length;
+            var q = text[i];
+            ++i;
+            bool lineBreak = false;
+            while (i < l)
+            {
+                var c = text[i];
+                if (c == '\\')
+                {
+                    //  "\\\r\n": the '\n' isn't a quote and Unescape consumes it with the escape
+                    if (((i + 2) < l) && (text[i + 1] == '\r') && (text[i + 2] == '\n'))
+                        ++i;
+                    i += 2;
+                    continue;
+                }
+                if (c == q)
+                {
+                    if (lineBreak)
+                        throw new Exception("No end quote!");
+                    return true;
+                }
+                if (IsLineTerminator(c))
+                    lineBreak = true;
+                ++i;
+            }
+            return false;
+        }
+
         static bool FindEnd(String text, ref int i, int count = 1)
         {
             var l = text.Length;
@@ -322,7 +357,7 @@ namespace SysWeaver.MicroService.ExtensionHandlers
                 }
                 if ((c == '"') || (c == '\''))
                 {
-                    if (!ParseLiteral(out var _, text, ref i))
+                    if (!SkipLiteral(text, ref i))
                         return false;
                     ++i;
                     continue;

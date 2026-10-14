@@ -45,6 +45,17 @@ namespace SysWeaver.Serialization
         /// <returns>The deserialized object (null/default if the text represents a null value).</returns>
         T FromString<T>(String text);
 
+        /// <summary>
+        /// Deserialize an object from text, with the same result and exceptions as <see cref="FromString{T}(String)"/> of the same text
+        /// (unlike <see cref="FromString{T}(ReadOnlySpan{Char})"/> that may differ in edge cases for some implementations).
+        /// The default implementation creates a string and calls <see cref="FromString{T}(String)"/>,
+        /// implementations that can deserialize from a span with the same result override it (no string is created).
+        /// </summary>
+        /// <typeparam name="T">The type to create.</typeparam>
+        /// <param name="text">The serialized text.</param>
+        /// <returns>The deserialized object (null/default if the text represents a null value).</returns>
+        T FromSpan<T>(ReadOnlySpan<Char> text) => FromString<T>(new String(text));
+
     }
 
 }

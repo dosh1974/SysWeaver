@@ -626,13 +626,13 @@ namespace SysWeaver.OsServices
                     Console.WriteLine("Exception: " + ex);
                 }
                 else
-                    log.AddMessage("Failed to back up file " + filename.ToQuoted() + " to " + fn.ToQuoted(), ex, MessageLevels.Warning);
+                    log.AddMessage(MessageLevels.Warning, $"Failed to back up file {filename.ToQuoted()} to {fn.ToQuoted()}", ex);
                 return false;
             }
             if (log == null)
                 Console.WriteLine("Backed up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
             else
-                log.AddMessage("Backed up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
+                log.AddMessage(MessageLevels.Info, $"Backed up file {filename.ToQuoted()} to {fn.ToQuoted()}");
             return true;
         }
 
@@ -650,11 +650,11 @@ namespace SysWeaver.OsServices
             try
             {
                 File.Copy(current, lastGood, true);
-                man.AddMessage("Saved the current configuration, as the last good configuration: " + lastGood.ToQuoted());
+                man.AddMessage(MessageLevels.Info, $"Saved the current configuration, as the last good configuration: {lastGood.ToQuoted()}");
             }
             catch (Exception ex)
             {
-                man.AddMessage("Failed to save the current configuration, as the last good configuration: " + lastGood.ToQuoted(), ex, MessageLevels.Warning);
+                man.AddMessage(MessageLevels.Warning, $"Failed to save the current configuration, as the last good configuration: {lastGood.ToQuoted()}", ex);
             }
         }
 
@@ -1014,7 +1014,7 @@ namespace SysWeaver.OsServices
                                             return;
                                         c.Cancel = true;
                                         ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
-                                        manager.AddMessage("Got " + c.Signal + ", shutting down.");
+                                        manager.AddMessage(MessageLevels.Info, $"Got {c.Signal}, shutting down.");
                                         ConsoleTools.ResetColor();
                                         Shutdown(manager);
                                     };

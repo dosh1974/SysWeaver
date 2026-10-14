@@ -290,13 +290,13 @@ namespace SysWeaver.AI
                 var key = String.Concat(c.Tag, '.', c.Input);
                 if (used.TryGetValue(c.Target, out var prev))
                 {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to ", key.ToQuoted(), " that is already mapped by ", MemberName(type, prev), ", ignored!"), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} maps to {key.ToQuoted()} that is already mapped by {MemberName(type, prev)}, ignored!");
                     return;
                 }
                 used.Add(c.Target, m);
                 var w = GetTypeWarning(t, c.Kind);
                 if (w != null)
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " of type ", t.Name.ToQuoted(), " maps to ", key.ToQuoted(), " but ", w, ", may fail!"), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} of type {t.Name.ToQuoted()} maps to {key.ToQuoted()} but {w}, may fail!");
                 inputMaps.Add(new InputMap(c.PTag, c.PInput, m, t));
             }
 
@@ -305,7 +305,7 @@ namespace SysWeaver.AI
                 var key = "!" + tag;
                 if (used.TryGetValue(key, out var prev))
                 {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to the node bypass of ", tag.ToQuoted(), " that is already mapped by ", MemberName(type, prev), ", ignored!"), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} maps to the node bypass of {tag.ToQuoted()} that is already mapped by {MemberName(type, prev)}, ignored!");
                     return;
                 }
                 used.Add(key, m);
@@ -323,13 +323,13 @@ namespace SysWeaver.AI
                     {
                         if (!IsBool(t))
                         {
-                            msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to the tag ", name.ToQuoted(), " but only bool's can be mapped to a tag (to bypass the node), ignored!"), MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} maps to the tag {name.ToQuoted()} but only bool's can be mapped to a tag (to bypass the node), ignored!");
                             continue;
                         }
                         var tag = wf.Tags.FirstOrDefault(x => String.Equals(x, name, StringComparison.OrdinalIgnoreCase));
                         if (tag == null)
                         {
-                            msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to the tag ", name.ToQuoted(), " that doesn't exist in the workflow, ignored! Available tags: ", String.Join(", ", wf.Tags)), MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} maps to the tag {name.ToQuoted()} that doesn't exist in the workflow, ignored! Available tags: {String.Join(", ", wf.Tags)}");
                             continue;
                         }
                         AddTag(m, t, tag);
@@ -341,7 +341,7 @@ namespace SysWeaver.AI
                         var match = allInputs.FirstOrDefault(x => String.Equals(x.Tag, tagName, StringComparison.OrdinalIgnoreCase) && String.Equals(x.Input, inputName, StringComparison.OrdinalIgnoreCase));
                         if (match == null)
                         {
-                            msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to ", name.ToQuoted(), " that doesn't exist in the workflow, ignored! Available inputs: ", cands.Available()), MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} maps to {name.ToQuoted()} that doesn't exist in the workflow, ignored! Available inputs: {cands.Available()}");
                             continue;
                         }
                         AddInput(m, t, match);
@@ -356,7 +356,7 @@ namespace SysWeaver.AI
                 }
                 if (c.Count > 1)
                 {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches: ", String.Join(", ", c.Select(x => String.Concat(x.Tag, '.', x.Input))), rule == 4 ? ", ignored! Prefix the name with the tag name or use the [ComfyUiName] attribute" : ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} is ambiguous, matches: {String.Join(", ", c.Select(x => String.Concat(x.Tag, '.', x.Input)))}{(rule == 4 ? ", ignored! Prefix the name with the tag name or use the [ComfyUiName] attribute" : ", ignored! Use the [ComfyUiName] attribute")}");
                     continue;
                 }
                 if (tc != null)
@@ -364,10 +364,10 @@ namespace SysWeaver.AI
                     if (tc.Count == 1)
                         AddTag(m, t, tc[0]);
                     else
-                        msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches the tags: ", String.Join(", ", tc), ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} is ambiguous, matches the tags: {String.Join(", ", tc)}, ignored! Use the [ComfyUiName] attribute");
                     continue;
                 }
-                msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " can't be mapped to any input, ignored! Available inputs: ", cands.Available()), MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} can't be mapped to any input, ignored! Available inputs: {cands.Available()}");
             }
             if (msg != null)
             {
@@ -468,7 +468,7 @@ namespace SysWeaver.AI
                     tag = wf.Outputs.FirstOrDefault(x => String.Equals(x, attr.Name, StringComparison.OrdinalIgnoreCase));
                     if (tag == null)
                     {
-                        msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to the output ", attr.Name.ToQuoted(), " that doesn't exist in the workflow, ignored! Available outputs: ", Available()), MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} maps to the output {attr.Name.ToQuoted()} that doesn't exist in the workflow, ignored! Available outputs: {Available()}");
                         continue;
                     }
                 }
@@ -478,12 +478,12 @@ namespace SysWeaver.AI
                     var c = wf.Outputs.Where(x => Norm(x) == n).ToList();
                     if (c.Count > 1)
                     {
-                        msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches the outputs: ", String.Join(", ", c), ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} is ambiguous, matches the outputs: {String.Join(", ", c)}, ignored! Use the [ComfyUiName] attribute");
                         continue;
                     }
                     if (c.Count == 0)
                     {
-                        msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " can't be mapped to any output, ignored! Available outputs: ", Available()), MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} can't be mapped to any output, ignored! Available outputs: {Available()}");
                         continue;
                     }
                     tag = c[0];
@@ -491,11 +491,11 @@ namespace SysWeaver.AI
                 var read = GetRead(t, ep, tag);
                 if (read == null)
                 {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is of type ", t.Name.ToQuoted(), " that is not supported for outputs (use byte[], byte[][], List<byte[]>, String, String[] or List<String>), ignored!"), MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{prefix}Property {MemberName(type, m)} is of type {t.Name.ToQuoted()} that is not supported for outputs (use byte[], byte[][], List<byte[]>, String, String[] or List<String>), ignored!");
                     continue;
                 }
                 if (used.TryGetValue(tag, out var prev))
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to the output ", tag.ToQuoted(), " that is also mapped by ", MemberName(type, prev)), MessageLevels.Info);
+                    msg?.AddMessage(MessageLevels.Info, $"{prefix}Property {MemberName(type, m)} maps to the output {tag.ToQuoted()} that is also mapped by {MemberName(type, prev)}");
                 else
                     used.Add(tag, m);
                 msg?.AddMessage(MessageLevels.Debug, $"{prefix}Output {tag.ToQuoted()} => {MemberName(type, m)}");

@@ -110,7 +110,7 @@ namespace SysWeaver.Net
         /// <param name="request">The request</param>
         /// <returns>Never returns</returns>
         /// <exception cref="NotImplementedException">Always thrown</exception>
-        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }

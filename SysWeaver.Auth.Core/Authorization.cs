@@ -25,35 +25,35 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.Debug"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleDebug = GetRequiredTokens(Roles.Debug);
+        public static readonly IReadOnlyList<String> RoleDebug = GetRequiredTokens(Roles.Debug);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.Admin"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleAdmin = GetRequiredTokens(Roles.Admin);
+        public static readonly IReadOnlyList<String> RoleAdmin = GetRequiredTokens(Roles.Admin);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.Dev"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleDev = GetRequiredTokens(Roles.Dev);
+        public static readonly IReadOnlyList<String> RoleDev = GetRequiredTokens(Roles.Dev);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.Ops"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleOps = GetRequiredTokens(Roles.Ops);
+        public static readonly IReadOnlyList<String> RoleOps = GetRequiredTokens(Roles.Ops);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.Service"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleService = GetRequiredTokens(Roles.Service);
+        public static readonly IReadOnlyList<String> RoleService = GetRequiredTokens(Roles.Service);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.Disabled"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleDisabled = GetRequiredTokens(Roles.Disabled);
+        public static readonly IReadOnlyList<String> RoleDisabled = GetRequiredTokens(Roles.Disabled);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.AdminOps"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleAdminOps = GetRequiredTokens(Roles.AdminOps);
+        public static readonly IReadOnlyList<String> RoleAdminOps = GetRequiredTokens(Roles.AdminOps);
         /// <summary>
         /// Pre-processed tokens of <see cref="Roles.OpsDev"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
         /// </summary>
-        public static IReadOnlyList<String> RoleOpsDev = GetRequiredTokens(Roles.OpsDev);
+        public static readonly IReadOnlyList<String> RoleOpsDev = GetRequiredTokens(Roles.OpsDev);
 
 
         /// <summary>

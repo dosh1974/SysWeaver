@@ -40,7 +40,7 @@ namespace SysWeaver.Auth
             var p = Params;
             if (p.ApiKeyAuth == null)
                 return TaskExt.FalseTask;
-            if (auth.IsValid(ManagementAuth))
+            if (auth.IsValid(ManagementTokens))
                 return TaskExt.TrueTask;
             return TaskExt.FalseTask;
         }
@@ -60,6 +60,7 @@ namespace SysWeaver.Auth
             MustExist = p.MustExist;
             //  null must never mean "no auth required" for the key management methods, use the default instead
             ManagementAuth = p.ApiKeyManagementAuth ?? Roles.AdminOps;
+            ManagementTokens = Authorization.GetRequiredTokens(ManagementAuth);
             if (p.ApiKeyAuth != null)
             {
                 var aa = ManagementAuth;
@@ -89,6 +90,11 @@ namespace SysWeaver.Auth
         /// The effective auth required to manage API keys (<see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/>, null is mapped to <see cref="Roles.AdminOps"/>).
         /// </summary>
         readonly String ManagementAuth;
+
+        /// <summary>
+        /// The pre-processed tokens of <see cref="ManagementAuth"/> (no parsing per check)
+        /// </summary>
+        readonly IReadOnlyList<String> ManagementTokens;
 
         readonly IMessageHost Msg;
 
@@ -121,7 +127,7 @@ namespace SysWeaver.Auth
             var ex = d.Ex;
             if (ex != null)
             {
-                Msg?.AddMessage(LogPrefix + "Failed to read " + d.Location.ToQuoted(), ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to read {d.Location.ToQuoted()}", ex);
                 FileLines = null;
                 UpdateUsers();
                 return;
@@ -204,7 +210,7 @@ namespace SysWeaver.Auth
                                 var keyName = kv.Substring(0, Math.Max(0, kv.IndexOf(':'))).Trim();
                                 if (configured.Contains(keyName.FastToLower()))
                                 {
-                                    msg?.AddMessage(LogPrefix + "Ignoring api key " + keyName.ToQuoted() + ", a user with that name already exists", MessageLevels.Warning);
+                                    msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Ignoring api key {keyName.ToQuoted()}, a user with that name already exists");
                                     continue;
                                 }
                                 var auth = AddUser(a, guidMap, kv + apiKeyAuth, true, true);
@@ -313,7 +319,7 @@ namespace SysWeaver.Auth
                     var s = pol.Check(pwd);
                     if (s != PasswordStatus.Ok)
                     {
-                        Msg?.AddMessage(LogPrefix + s + ", password for user " + user.ToQuoted() + " doesn't meet the password policy: " + pol, MessageLevels.Warning);
+                        Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}{s}, password for user {user.ToQuoted()} doesn't meet the password policy: {pol}");
                         return null;
                     }
                 }
@@ -333,7 +339,7 @@ namespace SysWeaver.Auth
             catch (ArgumentException ex)
             {
                 //  An invalid line (ex: a too long user name or domain) is skipped, the other users are still loaded
-                Msg?.AddMessage(LogPrefix + "Ignoring user " + user.ToQuoted() + ", the user line is invalid: " + ex.Message, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Ignoring user {user.ToQuoted()}, the user line is invalid: {ex.Message}");
                 return null;
             }
             guidMap[guid] = info;

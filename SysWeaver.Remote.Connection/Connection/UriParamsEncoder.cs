@@ -4,6 +4,7 @@ using System.Text;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Collections.Concurrent;
+using System.Buffers;
 
 namespace SysWeaver.Remote.Connection
 {
@@ -24,7 +25,56 @@ namespace SysWeaver.Remote.Connection
     public static class UriParamsEncoder<T>
     {
         static readonly ConcurrentDictionary<string, Func<T, string>> Cache = new ConcurrentDictionary<string, Func<T, string>>();
-        static readonly ConcurrentDictionary<string, Func<T, string>> NamedCache = new ConcurrentDictionary<string, Func<T, string>>();
+        static readonly ConcurrentDictionary<string, Func<T, string>> NamedCache = new ConcurrentDictionary<string, Func<T, string>>(StringComparer.Ordinal);
+        static readonly ConcurrentDictionary<string, Func<T, string>>.AlternateLookup<ReadOnlySpan<Char>> NamedLookup = NamedCache.GetAlternateLookup<ReadOnlySpan<Char>>();
+
+        /// <summary>
+        /// Look up a named template, the key is "[template]\0[name 0]\0[name 1].." (null names are empty).
+        /// For an array of names (the generated clients) the key is built in a pooled buffer and the key string is only created on a miss
+        /// </summary>
+        static bool TryGetNamed(string textTemplate, IReadOnlyList<String> elementNames, out string key, out Func<T, string> con)
+        {
+            if (elementNames is not String[] names)
+            {
+                key = String.Concat(textTemplate, "\0", String.Join('\0', elementNames));
+                return NamedCache.TryGetValue(key, out con);
+            }
+            var length = textTemplate.Length + Math.Max(names.Length, 1);
+            foreach (var n in names)
+                length += n?.Length ?? 0;
+            var pool = ArrayPool<Char>.Shared;
+            var buffer = pool.Rent(length);
+            try
+            {
+                var b = buffer.AsSpan(0, length);
+                textTemplate.CopyTo(b);
+                var used = textTemplate.Length;
+                foreach (var n in names)
+                {
+                    //  The separator after the template and between the names
+                    b[used++] = '\0';
+                    if (n == null)
+                        continue;
+                    n.CopyTo(b.Slice(used));
+                    used += n.Length;
+                }
+                //  No names: the separator after the template
+                if (names.Length == 0)
+                    b[used++] = '\0';
+                ReadOnlySpan<Char> span = b.Slice(0, used);
+                if (NamedLookup.TryGetValue(span, out con))
+                {
+                    key = null;
+                    return true;
+                }
+                key = new String(span);
+                return false;
+            }
+            finally
+            {
+                pool.Return(buffer);
+            }
+        }
 
         /// <summary>
         /// Get (or compile and cache) the formatting function for a template.
@@ -51,9 +101,28 @@ namespace SysWeaver.Remote.Connection
             ArgumentNullException.ThrowIfNull(textTemplate);
             var isNamed = (elementNames != null) && typeof(T).IsArray;
             var cache = isNamed ? NamedCache : Cache;
-            var key = isNamed ? String.Concat(textTemplate, "\0", String.Join('\0', elementNames)) : textTemplate;
-            if (cache.TryGetValue(key, out var con))
-                return con;
+            String key;
+            Func<T, string> con;
+            if (isNamed)
+            {
+                if (TryGetNamed(textTemplate, elementNames, out key, out con))
+                    return con;
+            }
+            else
+            {
+                key = textTemplate;
+                if (cache.TryGetValue(key, out con))
+                    return con;
+            }
+            return Compile(textTemplate, elementNames, isNamed, cache, key);
+        }
+
+        /// <summary>
+        /// Compile and cache the formatting function for a template (a separate method: the closure of the variable lookup isn't created by a cache hit)
+        /// </summary>
+        static Func<T, string> Compile(string textTemplate, IReadOnlyList<String> elementNames, bool isNamed, ConcurrentDictionary<string, Func<T, string>> cache, String key)
+        {
+            Func<T, string> con;
             List<Tuple<bool, string>> tokens = new List<Tuple<bool, string>>();
             var l = textTemplate.Length;
             StringBuilder tempB = new StringBuilder(l);

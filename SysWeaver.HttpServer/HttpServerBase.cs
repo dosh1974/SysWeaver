@@ -158,13 +158,13 @@ namespace SysWeaver.Net
                     var i = t.IndexOf('=');
                     if (i < 0)
                     {
-                        msg?.AddMessage(Prefix + "Expected a \"Key=Value\" string, found \"" + x + "\", ignoring!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Expected a \"Key=Value\" string, found \"{x}\", ignoring!");
                         continue;
                     }
                     var key = t.Substring(0, i).TrimEnd();
                     if (key.Length <= 0)
                     {
-                        msg?.AddMessage(Prefix + "Expected a \"Key=Value\" string, found \"" + x + "\", ignoring!", MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Expected a \"Key=Value\" string, found \"{x}\", ignoring!");
                         continue;
                     }
                     var value = t.Substring(i + 1).TrimStart();
@@ -258,7 +258,7 @@ namespace SysWeaver.Net
             if ((ip == null) && !NetworkTools.GetLocalIps().Any(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork))
             {
                 const int timeOut = 60;
-                msg?.AddMessage(Prefix + "Waiting up to " + timeOut + " seconds for a valid LAN ip");
+                msg?.AddMessage(MessageLevels.Info, $"{Prefix}Waiting up to {timeOut} seconds for a valid LAN ip");
                 ip = NetworkTools.WaitForLanIp(timeOut);
                 if (ip == null)
                     msg?.AddMessage(Prefix + "No LAN ip found!", MessageLevels.Warning);
@@ -1163,7 +1163,7 @@ namespace SysWeaver.Net
             var p = data.QueryParamsLowercase;
             if (!p.TryGetValue("u", out var url))
                 throw new Exception("No 'u' query parameter found, expecting a redirect url");
-            Msg?.AddMessage("url=" + url, MessageLevels.Warning);
+            Msg?.AddMessage(MessageLevels.Warning, $"url={url}");
             //  Only redirect to this site (prevents open redirects to phishing sites)
             if (!IsLocalRedirectUrl(url, data.Prefix, ExternalRootUri))
             {
@@ -2356,9 +2356,9 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Failed to get certificate for " + pre.ToQuoted() + ", continue to use current", ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to get certificate for {pre.ToQuoted()}, continue to use current", ex);
                 var retry = DateTime.UtcNow.AddMinutes(CertRetryMinutes);
-                msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
+                msg?.AddMessage(MessageLevels.Info, $"{Prefix}Will try to get new certificate at {retry.ToString("o")}");
                 Scheduler.AddTask(retry, () => SwitchCert(cert, pre), "Retry cert " + pre.ToQuoted());
                 return;
             }
@@ -2367,11 +2367,11 @@ namespace SysWeaver.Net
             {
                 var ok = await OnNewCert(cert, pre).ConfigureAwait(false);
                 if (ok)
-                    msg?.AddMessage(Prefix + "Rebound certificate for " + pre.ToQuoted());
+                    msg?.AddMessage(MessageLevels.Info, $"{Prefix}Rebound certificate for {pre.ToQuoted()}");
             }
             catch (Exception ex)
             {
-                msg?.AddMessage(Prefix + "Certificate binding failure for " + pre.ToQuoted(), ex, MessageLevels.Warning);
+                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Certificate binding failure for {pre.ToQuoted()}", ex);
             }
         }
 
@@ -2382,7 +2382,7 @@ namespace SysWeaver.Net
         /// <param name="pre">The prefix</param>
         protected void OnCertChanged(ICertificateProvider cert, String pre)
         {
-            Msg?.AddMessage(Prefix + "Certificate for " + pre.ToQuoted() + " changed, rebinding certs.");
+            Msg?.AddMessage(MessageLevels.Info, $"{Prefix}Certificate for {pre.ToQuoted()} changed, rebinding certs.");
             TaskExt.StartNewAsyncChain(() => SwitchCert(cert, pre).ConfigureAwait(false));
         }
 

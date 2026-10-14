@@ -40,9 +40,8 @@ namespace SysWeaver.Net
         {
             Stream = stream;
             Mem = null;
-            var d = new Stack<IDisposable>();
-            d.Push(stream);
-            Disp = d;
+            Disp0 = stream;
+            HaveDisp0 = true;
         }
 
         /// <summary>
@@ -57,9 +56,8 @@ namespace SysWeaver.Net
             Mem = mem;
             if (disposable == null)
                 return;
-            var d = new Stack<IDisposable>();
-            d.Push(disposable);
-            Disp = d;
+            Disp0 = disposable;
+            HaveDisp0 = true;
         }
 
         /// <summary>
@@ -75,9 +73,8 @@ namespace SysWeaver.Net
             IsMapped = doNotCache;
             if (disposable == null)
                 return;
-            var d = new Stack<IDisposable>();
-            d.Push(disposable);
-            Disp = d;
+            Disp0 = disposable;
+            HaveDisp0 = true;
         }
 
         /// <summary>
@@ -88,9 +85,8 @@ namespace SysWeaver.Net
         {
             Stream = null;
             Mem = mem.Memory;
-            var d = new Stack<IDisposable>();
-            d.Push(mem);
-            Disp = d;
+            Disp0 = mem;
+            HaveDisp0 = true;
             IsMapped = true;
         }
 
@@ -114,6 +110,18 @@ namespace SysWeaver.Net
         /// </summary>
         internal bool IsMapped;
 
+        /// <summary>
+        /// The first object to dispose (disposed last), only valid if <see cref="HaveDisp0"/> is true (a stream can be null).
+        /// </summary>
+        IDisposable Disp0;
+        /// <summary>
+        /// True if <see cref="Disp0"/> must be disposed.
+        /// </summary>
+        bool HaveDisp0;
+        /// <summary>
+        /// The objects to dispose that were added after <see cref="Disp0"/> (created for the second one only, disposed first in reverse order of addition).
+        /// Only non empty if <see cref="HaveDisp0"/> is true.
+        /// </summary>
         Stack<IDisposable> Disp;
 
         /// <summary>
@@ -128,6 +136,12 @@ namespace SysWeaver.Net
             IsMapped = false;
             if (stream == null)
                 return;
+            if (!HaveDisp0)
+            {
+                Disp0 = stream;
+                HaveDisp0 = true;
+                return;
+            }
             var d = Disp;
             if (d == null)
             {
@@ -153,11 +167,19 @@ namespace SysWeaver.Net
         /// </summary>
         public void Dispose()
         {
-            var d = Disp;
-            if (d == null)
+            //  Same order and exception behaviour as a single stack: an object is removed before it's disposed, an exception stops the disposing (a new call continues)
+            if (!HaveDisp0)
                 return;
-            while (d.Count > 0)
-                d.Pop().Dispose();
+            var d = Disp;
+            if (d != null)
+            {
+                while (d.Count > 0)
+                    d.Pop().Dispose();
+            }
+            var f = Disp0;
+            Disp0 = null;
+            HaveDisp0 = false;
+            f.Dispose();
         }
     }
 }

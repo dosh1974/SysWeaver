@@ -49,14 +49,34 @@
             If true, compress the files (even if it by default wouldn't)
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressProgram.Version">
+            <summary>
+            Version for the pure compresson part
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.TypeVersion">
+            <summary>
+            Version for type specific transformation / compression
+            </summary>
+        </member>
         <member name="F:SysWeaver.CompressProgram.ExitCompressFailed">
             <summary>
             Exit code: a file couldn't be compressed using any of the compression methods (with OnlyBest).
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressProgram.ToolZopFliPng">
+            <summary>
+            https://github.com/google/zopfli
+            </summary>
+        </member>
         <member name="F:SysWeaver.CompressProgram.ToolMinify">
             <summary>
             https://github.com/tdewolff/minify/
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ToolMinimizeShaders">
+            <summary>
+            https://github.com/laurentlb/shader-minifier
             </summary>
         </member>
         <member name="M:SysWeaver.CompressProgram.OnAllGlobalConsts(System.String[],System.Func{System.String,System.String,System.String,System.String,System.String,System.String})">

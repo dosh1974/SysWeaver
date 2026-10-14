@@ -327,7 +327,7 @@ namespace SysWeaver.MicroService
                 {
                     if (author == null)
                         continue;
-                    if (!author.IsValid(auth))
+                    if (!author.IsValid(RequiredTokensCache.Get(ref val.AuthTokens, auth)))
                         continue;
                 }
             //  May not return item if there is no user
@@ -437,6 +437,11 @@ namespace SysWeaver.MicroService
             public float Order;
 
             public String Auth;
+
+            /// <summary>
+            /// The parsed Auth (cached per reference of the requirement string)
+            /// </summary>
+            public RequiredTokensCache AuthTokens;
 
             /// <summary>
             /// If true, only return if there is no user

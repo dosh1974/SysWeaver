@@ -81,7 +81,7 @@ namespace SysWeaver.TextMessage
                 Msg?.AddMessage(LogPrefix + "No " + nameof(p.QueueUrls) + " specified, incoming messages and delivery events can't be received", MessageLevels.Warning);
             else if (ConfigurationSetName == null)
                 Msg?.AddMessage(LogPrefix + "No " + nameof(p.ConfigurationSetName) + " specified, delivery events are only received if the account has a default configuration set", MessageLevels.Debug);
-            Msg?.AddMessage(LogPrefix + "Using " + Senders.Length + " sender(s) in " + (p.Region ?? "us-east-1") + ", polling " + queues.Length + " queue(s)", MessageLevels.Debug);
+            Msg?.AddMessage(MessageLevels.Debug, $"{LogPrefix}Using {Senders.Length} sender(s) in {p.Region ?? "us-east-1"}, polling {queues.Length} queue(s)");
         }
 
         public override string ToString() => Tos;

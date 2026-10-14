@@ -82,6 +82,24 @@ namespace SysWeaver
         readonly bool FastStrings;
 
         /// <summary>
+        /// For byte array keys: which known comparer is used (the alternate span lookups call its hash and compare the bytes directly), else <see cref="ByteKeysNone"/>
+        /// </summary>
+        readonly byte ByteKeys;
+
+        /// <summary>
+        /// Not byte array keys, or another comparer
+        /// </summary>
+        const byte ByteKeysNone = 0;
+        /// <summary>
+        /// Byte array keys using <see cref="ByteArrayEqualityComparer"/> (a hash of all bytes)
+        /// </summary>
+        const byte ByteKeysAll = 1;
+        /// <summary>
+        /// Byte array keys using <see cref="FastByteArrayEqualityComparer"/> (a hash of the length and the first and last 8 bytes)
+        /// </summary>
+        const byte ByteKeysEnds = 2;
+
+        /// <summary>
         /// Create a new dictionary
         /// </summary>
         /// <param name="capacity">The number of items the dictionary can hold before it needs to grow, for large data sets set this to avoid growing (and the allocations it causes)</param>
@@ -100,6 +118,9 @@ namespace SysWeaver
                 FastStrings = true;
                 Comparer = (IEqualityComparer<TKey>)(object)StringComparer.Ordinal;
             }
+            // The known byte array comparers (sealed types)
+            if (typeof(TKey) == typeof(byte[]))
+                ByteKeys = Comparer is ByteArrayEqualityComparer ? ByteKeysAll : Comparer is FastByteArrayEqualityComparer ? ByteKeysEnds : ByteKeysNone;
             // Room for capacity items in total without growing (taking the max load factor into account)
             var perSegment = (Math.Max(0L, capacity) + SegmentCount - 1) / SegmentCount;
             // Keys are randomly distributed between segments, for large capacities add 4 standard deviations of headroom (~1% at 10M items),
@@ -110,7 +131,7 @@ namespace SysWeaver
             var slots = perSegment * 8 / 7 + 1;
             var blocks = (int)Math.Clamp((slots + BlockSize - 1) >> BlockBits, 1, MaxBlocks);
             for (int i = 0; i < SegmentCount; i++)
-                GetSegmentAt(i).Table = new Table(blocks);
+                SetTable(ref GetSegmentAt(i), new Table(blocks));
         }
 
         /// <summary>
@@ -490,6 +511,18 @@ namespace SysWeaver
         static Table GetTable(ref LowAllocDictionarySegment seg) => Unsafe.As<Table>(Volatile.Read(ref seg.Table));
 
         /// <summary>
+        /// Set the table of a segment and the copies of its fields that the lookup fast paths use (must hold the lock and be inside BeginWrite / EndWrite, unless the dictionary isn't shared yet)
+        /// </summary>
+        static void SetTable(ref LowAllocDictionarySegment seg, Table t)
+        {
+            seg.Tags = t.Tags;
+            seg.Entries = t.Entries;
+            seg.Blocks = t.Blocks;
+            seg.Randomized = t.Randomized;
+            Volatile.Write(ref seg.Table, t);
+        }
+
+        /// <summary>
         /// Must hold the lock, creates and publishes a new table without any tombstones.
         /// The old table is never modified after this, so concurrent readers of it are safe.
         /// </summary>
@@ -535,7 +568,10 @@ namespace SysWeaver
                 newEntries[idx] = e;
                 ++live;
             }
-            Volatile.Write(ref seg.Table, t);
+            // The lock free readers of the segment fields (not the table) must see one table: they retry if the version changed
+            seg.BeginWrite();
+            SetTable(ref seg, t);
+            seg.EndWrite();
             seg.Live = live;
             seg.Used = live;
             return t;
@@ -960,15 +996,22 @@ namespace SysWeaver
                 var h = GetHash(key, mode);
                 ref var seg = ref GetSegment(h);
                 int version = Volatile.Read(ref seg.Version);
-                var table = GetTable(ref seg);
-                // The table is always consistent (never torn), so it's safe to search even if a write is in progress (the result is then discarded)
-                var th = GetTableHash(table, h, key, mode);
-                nuint first = GetHomeSlot(th, table.Blocks);
-                var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(table.Tags), first);
+                // The table fields are read from the segment (one dependent load less), they may be from different tables if a rebuild is in progress:
+                // the indices are bounds checked (memory safety) and the result is discarded if the version changed
+                var tags = Unsafe.As<byte[]>(seg.Tags);
+                var entries = Unsafe.As<Entry[]>(seg.Entries);
+                var th = (KeyMode(mode) == LowAllocKeyMode.FastString) && seg.Randomized ? Mix(Comparer.GetHashCode(key)) : h;
+                nuint first = GetHomeSlot(th, seg.Blocks);
+                if ((first + BlockSize) > (nuint)tags.Length)
+                    goto slow;
+                var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(tags), first);
                 uint matches = Vector128.Equals(loaded, GetKeyTagVector(th)).ExtractMostSignificantBits();
                 while (matches != 0)
                 {
-                    ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), first + (uint)BitOperations.TrailingZeroCount(matches));
+                    nuint idx = first + (uint)BitOperations.TrailingZeroCount(matches);
+                    if (idx >= (nuint)entries.Length)
+                        goto slow;
+                    ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(entries), idx);
                     if (IsKey(e.Key, key, mode))
                     {
                         value = e.Value;
@@ -1190,7 +1233,7 @@ namespace SysWeaver
         /// Get a lookup that uses an alternate key type, like ReadOnlySpan&lt;char&gt; for string keys (lookups without allocating a string).
         /// The comparer of the dictionary must implement IAlternateEqualityComparer&lt;TAlternate, TKey&gt;, ex:
         /// StringComparer.Ordinal / OrdinalIgnoreCase and the default string comparer for ReadOnlySpan&lt;char&gt;,
-        /// <see cref="ByteArrayEqualityComparer"/> for ReadOnlySpan&lt;byte&gt; (byte array keys).
+        /// <see cref="ByteArrayEqualityComparer"/> and <see cref="FastByteArrayEqualityComparer"/> for ReadOnlySpan&lt;byte&gt; (byte array keys).
         /// </summary>
         /// <typeparam name="TAlternate">The alternate key type</typeparam>
         /// <returns>The lookup</returns>
@@ -1246,17 +1289,21 @@ namespace SysWeaver
             /// <summary>
             /// Get the value of a key
             /// </summary>
-            public bool TryGetValue(TAlternate key, [MaybeNullWhen(false)] out TValue value) => Dictionary.TryGetValueAlternate(key, AltComparer, out _, out value);
+            public bool TryGetValue(TAlternate key, [MaybeNullWhen(false)] out TValue value) => Dictionary.TryGetValueAlternate(key, AltComparer, ref Unsafe.NullRef<TKey>(), out value);
 
             /// <summary>
             /// Get the value of a key, and the actual key stored in the dictionary
             /// </summary>
-            public bool TryGetValue(TAlternate key, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) => Dictionary.TryGetValueAlternate(key, AltComparer, out actualKey, out value);
+            public bool TryGetValue(TAlternate key, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value)
+            {
+                actualKey = default;
+                return Dictionary.TryGetValueAlternate(key, AltComparer, ref actualKey, out value);
+            }
 
             /// <summary>
             /// Check if a key exists
             /// </summary>
-            public bool ContainsKey(TAlternate key) => Dictionary.TryGetValueAlternate(key, AltComparer, out _, out _);
+            public bool ContainsKey(TAlternate key) => Dictionary.TryGetValueAlternate(key, AltComparer, ref Unsafe.NullRef<TKey>(), out _);
 
             /// <summary>
             /// Get or set a value (setting overwrites the value of an existing key, or adds a key created from the alternate key)
@@ -1269,7 +1316,8 @@ namespace SysWeaver
                 {
                     // An existing key is reused (no allocation), if it's removed concurrently it's added again (an equal key)
                     var d = Dictionary;
-                    d[d.TryGetValueAlternate(key, AltComparer, out var actualKey, out _) ? actualKey : AltComparer.Create(key)] = value;
+                    TKey actualKey = default;
+                    d[d.TryGetValueAlternate(key, AltComparer, ref actualKey, out _) ? actualKey : AltComparer.Create(key)] = value;
                 }
             }
 
@@ -1297,7 +1345,8 @@ namespace SysWeaver
             public bool TryRemove(TAlternate key, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value)
             {
                 // Find the actual key and remove it (retry if it was removed or replaced concurrently)
-                while (Dictionary.TryGetValueAlternate(key, AltComparer, out actualKey, out _))
+                actualKey = default;
+                while (Dictionary.TryGetValueAlternate(key, AltComparer, ref actualKey, out _))
                 {
                     if (Dictionary.TryRemove(actualKey, out value))
                         return true;
@@ -1314,19 +1363,35 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ulong GetAlternateHash<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer) where TAlternate : notnull, allows ref struct
         {
-            // Fast strings are only used with ReadOnlySpan<char> (see TryGetAlternateLookup)
-            if (UseFastStrings)
+            // Fast strings are only used with ReadOnlySpan<char> (see TryGetAlternateLookup), the type test removes the string code from the other instantiations
+            if ((typeof(TAlternate) == typeof(ReadOnlySpan<char>)) && UseFastStrings)
                 return LowAllocStringHash.GetHash(Unsafe.As<TAlternate, ReadOnlySpan<char>>(ref key));
+            // Byte array keys with a known comparer: direct calls (an interface call through shared generic code is slow)
+            if ((typeof(TAlternate) == typeof(ReadOnlySpan<byte>)) && !typeof(TKey).IsValueType)
+            {
+                var kind = ByteKeys;
+                if (kind == ByteKeysAll)
+                    return Mix(ByteArrayEqualityComparer.HashSpan(Unsafe.As<TAlternate, ReadOnlySpan<byte>>(ref key)));
+                if (kind == ByteKeysEnds)
+                    return Mix(FastByteArrayEqualityComparer.HashSpan(Unsafe.As<TAlternate, ReadOnlySpan<byte>>(ref key)));
+            }
             return Mix(comparer.GetHashCode(key));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool AlternateEquals<TAlternate>(IAlternateEqualityComparer<TAlternate, TKey> comparer, TAlternate key, TKey k) where TAlternate : notnull, allows ref struct
         {
-            if (UseFastStrings)
+            if ((typeof(TAlternate) == typeof(ReadOnlySpan<char>)) && UseFastStrings)
             {
                 ReadOnlySpan<char> a = Unsafe.As<TAlternate, ReadOnlySpan<char>>(ref key);
                 ReadOnlySpan<char> b = Unsafe.As<TKey, string>(ref k);
+                return a.SequenceEqual(b);
+            }
+            // Byte array keys with a known comparer (both compare the content, the key isn't null)
+            if ((typeof(TAlternate) == typeof(ReadOnlySpan<byte>)) && !typeof(TKey).IsValueType && (ByteKeys != ByteKeysNone))
+            {
+                ReadOnlySpan<byte> a = Unsafe.As<TAlternate, ReadOnlySpan<byte>>(ref key);
+                ReadOnlySpan<byte> b = Unsafe.As<TKey, byte[]>(ref k);
                 return a.SequenceEqual(b);
             }
             return comparer.Equals(key, k);
@@ -1390,33 +1455,42 @@ namespace SysWeaver
         /// everything else is done by <see cref="TryGetValueAlternateSlow"/>.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        bool TryGetValueAlternate<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
+        bool TryGetValueAlternate<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, ref TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
         {
             var h = GetAlternateHash(key, comparer);
             if (Vector128.IsHardwareAccelerated)
             {
                 ref var seg = ref GetSegment(h);
                 int version = Volatile.Read(ref seg.Version);
-                var table = GetTable(ref seg);
+                // The table fields are read from the segment (see TryGetValueInline): bounds checked, validated by the version
+                var tags = Unsafe.As<byte[]>(seg.Tags);
+                var entries = Unsafe.As<Entry[]>(seg.Entries);
+                nuint first = GetHomeSlot(h, seg.Blocks);
                 // Randomized tables use another hash for the slots (the slow path)
-                if (!table.Randomized)
+                if ((!seg.Randomized) && ((first + BlockSize) <= (nuint)tags.Length))
                 {
-                    nuint first = GetHomeSlot(h, table.Blocks);
-                    var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(table.Tags), first);
+                    var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(tags), first);
                     uint matches = Vector128.Equals(loaded, GetKeyTagVector(h)).ExtractMostSignificantBits();
                     while (matches != 0)
                     {
-                        ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), first + (uint)BitOperations.TrailingZeroCount(matches));
+                        nuint idx = first + (uint)BitOperations.TrailingZeroCount(matches);
+                        if (idx >= (nuint)entries.Length)
+                            goto slow;
+                        ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(entries), idx);
                         var k = e.Key;
                         // A concurrent remove may have cleared the key (lock free read), the read is retried in that case
                         if (!IsNull(k) && AlternateEquals(comparer, key, k))
                         {
-                            actualKey = k;
                             value = e.Value;
                             // Make sure that all reads above are done before validating the version
                             Volatile.ReadBarrier();
                             if (IsValid(ref seg, version))
+                            {
+                                // Only stored when the caller wants it (no write barrier for the value only lookups)
+                                if (!Unsafe.IsNullRef(ref actualKey))
+                                    actualKey = k;
                                 return true;
+                            }
                             goto slow;
                         }
                         matches &= matches - 1;
@@ -1426,7 +1500,8 @@ namespace SysWeaver
                         Volatile.ReadBarrier();
                         if (IsValid(ref seg, version))
                         {
-                            actualKey = default;
+                            if (!Unsafe.IsNullRef(ref actualKey))
+                                actualKey = default;
                             value = default;
                             return false;
                         }
@@ -1434,14 +1509,14 @@ namespace SysWeaver
                 }
             }
         slow:
-            return TryGetValueAlternateSlow(key, comparer, h, out actualKey, out value);
+            return TryGetValueAlternateSlow(key, comparer, h, ref actualKey, out value);
         }
 
         /// <summary>
         /// The key wasn't in its home block, the table is randomized or a write happened during the lock free read: search the whole probe sequence, retry (and eventually read under the lock)
         /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        bool TryGetValueAlternateSlow<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, ulong h, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
+        bool TryGetValueAlternateSlow<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, ulong h, ref TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
         {
             ref var seg = ref GetSegment(h);
             for (int attempt = 0; attempt < MaxOptimisticReads; ++attempt)
@@ -1460,7 +1535,8 @@ namespace SysWeaver
                 Volatile.ReadBarrier();
                 if (Volatile.Read(ref seg.Version) == version)
                 {
-                    actualKey = e.Key;
+                    if (!Unsafe.IsNullRef(ref actualKey))
+                        actualKey = e.Key;
                     value = e.Value;
                     return idx >= 0;
                 }
@@ -1473,7 +1549,8 @@ namespace SysWeaver
                 var th = table.Randomized ? Mix(comparer.GetHashCode(key)) : h;
                 int idx = FindAlternate(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
                 var e = idx >= 0 ? table.Entries[idx] : default;
-                actualKey = e.Key;
+                if (!Unsafe.IsNullRef(ref actualKey))
+                    actualKey = e.Key;
                 value = e.Value;
                 return idx >= 0;
             }
@@ -1861,6 +1938,38 @@ namespace SysWeaver
             }
             return Mum(S2 ^ len, Mum(a ^ S1, b ^ h));
         }
+
+        /// <summary>
+        /// Get a 64 bit hash of the length and the first and last 8 bytes (constant time, all bits are well mixed).
+        /// Inputs of the same length that only differ in the bytes between the first and last 8 bytes have the same hash.
+        /// One (seeded) 128 bit multiply: meant for random keys (ex: hashes), use <see cref="GetHash(ReadOnlySpan{byte})"/> for other keys.
+        /// </summary>
+        /// <param name="s">The bytes to hash</param>
+        /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ulong GetEndsHash(ReadOnlySpan<byte> s)
+        {
+            ref byte p = ref MemoryMarshal.GetReference(s);
+            nuint len = (nuint)s.Length;
+            ulong a, b;
+            if (len >= 8)
+            {
+                a = Read64(ref p, 0);
+                b = Read64(ref p, len - 8);
+            }
+            else if (len >= 4)
+            {
+                a = Read32(ref p, 0);
+                b = Read32(ref p, len - 4);
+            }
+            else
+            {
+                // 0 - 3 bytes: the first, middle and last byte
+                a = len > 0 ? ((ulong)p << 16) | ((ulong)Unsafe.Add(ref p, len >> 1) << 8) | Unsafe.Add(ref p, len - 1) : 0UL;
+                b = 0;
+            }
+            return Mum(a ^ S1, b ^ S0 ^ len);
+        }
     }
 
 
@@ -1908,6 +2017,27 @@ namespace SysWeaver
         /// </summary>
         [FieldOffset(84)]
         public int Used;
+        /// <summary>
+        /// The tags of the current table (a copy of Table.Tags, so that the lookup fast paths don't have to load the table first).
+        /// The copies are published while the version is odd, they are only consistent with each other if the version is validated (the readers bounds check them).
+        /// </summary>
+        [FieldOffset(88)]
+        public object Tags;
+        /// <summary>
+        /// The entries of the current table (a copy of Table.Entries)
+        /// </summary>
+        [FieldOffset(96)]
+        public object Entries;
+        /// <summary>
+        /// The number of blocks of the current table (a copy of Table.Blocks)
+        /// </summary>
+        [FieldOffset(104)]
+        public int Blocks;
+        /// <summary>
+        /// True if the current table uses the randomized hash (a copy of Table.Randomized)
+        /// </summary>
+        [FieldOffset(108)]
+        public bool Randomized;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnterLock()

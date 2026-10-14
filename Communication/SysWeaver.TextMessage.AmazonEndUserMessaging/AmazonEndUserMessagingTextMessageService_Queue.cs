@@ -54,7 +54,7 @@ namespace SysWeaver.TextMessage
                     if (cancel.IsCancellationRequested)
                         break;
                     PollFails.OnException(ex);
-                    Msg?.AddMessage(LogPrefix + "Failed to poll the queue " + queueUrl.ToQuoted(), ex, MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to poll the queue {queueUrl.ToQuoted()}", ex);
                     try
                     {
                         await Task.Delay(PollRetryDelay, cancel).ConfigureAwait(false);

@@ -826,6 +826,31 @@
             <exception cref="T:System.ArgumentOutOfRangeException">The parsed value is outside [<see cref="F:SysWeaver.CommandLineOptionArgument.MinValue"/>, <see cref="F:SysWeaver.CommandLineOptionArgument.MaxValue"/>]</exception>
             <remarks>Any exception thrown by the parser is propagated. The limit check compiles expressions on every call.</remarks>
         </member>
+        <member name="T:SysWeaver.CommandLineOptionArgument.LimitTest">
+            <summary>
+            A compiled limit test for parsed values of a runtime type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.LimitTest.ValueType">
+            <summary>
+            The runtime type of the parsed value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.LimitTest.Test">
+            <summary>
+            Returns true if the value is outside the limit
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.CompileLimitTest(System.Type,System.Object,System.Boolean)">
+            <summary>
+            Compile "(Type)(valueType)value &lt; (Type)limit" (or &gt;): the same expression as with a constant of the parsed value (a constant has the runtime type of the value)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.ParseNullValue(System.Object,System.String)">
+            <summary>
+            The limit tests of a null value (not cached: a null constant is typed as Object)
+            </summary>
+        </member>
         <member name="M:SysWeaver.CommandLineOptionArgument.ToString">
             <summary>
             Returns "Type Name Tags - HelpText".

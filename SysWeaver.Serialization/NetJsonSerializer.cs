@@ -134,6 +134,13 @@ namespace SysWeaver.Serialization
         }
 
         /// <inheritdoc/>
+        /// <remarks>The string overload of <see cref="JsonSerializer"/> deserializes the span of the string, so the result is the same as <see cref="FromString{T}(String)"/>.</remarks>
+        public T FromSpan<T>(ReadOnlySpan<char> text)
+        {
+            return JsonSerializer.Deserialize<T>(text, DeSerOptions);
+        }
+
+        /// <inheritdoc/>
         public T Create<T>(ReadOnlySpan<byte> data)
         {
             return JsonSerializer.Deserialize<T>(data, DeSerOptions);

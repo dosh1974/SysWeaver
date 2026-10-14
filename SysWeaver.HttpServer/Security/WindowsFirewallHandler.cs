@@ -101,7 +101,7 @@ namespace SysWeaver.Security
                 ok &= isOk("Action", "Allow");
                 if (ok)
                 {
-                    msg?.AddMessage(p + qn + " exists and is valid");
+                    msg?.AddMessage(MessageLevels.Info, $"{p}{qn} exists and is valid");
                     return true;
                 }
                 msg?.AddMessage(MessageLevels.Debug, $"{p}Updating existing firewall rule {name}");
@@ -111,22 +111,22 @@ namespace SysWeaver.Security
                 r = ExternalProcess.Run("netsh", args, (text, wrn) =>
                 {
                     if (wrn)
-                        msg?.AddMessage(p + text, MessageLevels.Warning);
+                        msg?.AddMessage(MessageLevels.Warning, $"{p}{text}");
                     log.Add(text);
                 });
                 if (r == 0)
                 {
-                    msg?.AddMessage(p + "Updated firewall rule " + name);
+                    msg?.AddMessage(MessageLevels.Info, $"{p}Updated firewall rule {name}");
                     return true;
                 }
                 //  Update failed
                 if (msg != null)
                 {
-                    msg.AddMessage(p + "Failed to update firewall rule " + qn + ", error: " + r, MessageLevels.Warning);
+                    msg.AddMessage(MessageLevels.Warning, $"{p}Failed to update firewall rule {qn}, error: {r}");
                     using (msg.Tab())
                     {
                         foreach (var x in log)
-                            msg.AddMessage(p + x, MessageLevels.Info);
+                            msg.AddMessage(MessageLevels.Info, $"{p}{x}");
                     }
                 }
                 // Try to remove rule
@@ -139,21 +139,21 @@ namespace SysWeaver.Security
             r = ExternalProcess.Run("netsh", args, (text, wrn) =>
             {
                 if (wrn)
-                    msg?.AddMessage(p + text, MessageLevels.Warning);
+                    msg?.AddMessage(MessageLevels.Warning, $"{p}{text}");
                 log.Add(text);
             });
             if (r == 0)
             {
-                msg?.AddMessage(p + "Added firewall rule " + name);
+                msg?.AddMessage(MessageLevels.Info, $"{p}Added firewall rule {name}");
                 return true;
             }
             if (msg != null)
             {
-                msg.AddMessage(p + "Failed to add firewall rule " + qn + ", error: " + r, MessageLevels.Warning);
+                msg.AddMessage(MessageLevels.Warning, $"{p}Failed to add firewall rule {qn}, error: {r}");
                 using (msg.Tab())
                 {
                     foreach (var x in log)
-                        msg.AddMessage(p + x, MessageLevels.Info);
+                        msg.AddMessage(MessageLevels.Info, $"{p}{x}");
                 }
             }
             return false;
@@ -180,7 +180,7 @@ namespace SysWeaver.Security
             var r = ExternalProcess.Run("netsh", args, (text, wrn) => log.Add(text));
             if (r == 0)
             {
-                msg?.AddMessage(p + "Deleted firewall rule " + qn);
+                msg?.AddMessage(MessageLevels.Info, $"{p}Deleted firewall rule {qn}");
                 return true;
             }
             //  Failed, check if a rule with that name exists at all
@@ -191,11 +191,11 @@ namespace SysWeaver.Security
             }
             if (msg != null)
             {
-                msg.AddMessage(p + "Failed to delete firewall rule " + qn + ", error: " + r, MessageLevels.Warning);
+                msg.AddMessage(MessageLevels.Warning, $"{p}Failed to delete firewall rule {qn}, error: {r}");
                 using (msg.Tab())
                 {
                     foreach (var x in log)
-                        msg.AddMessage(p + x, MessageLevels.Info);
+                        msg.AddMessage(MessageLevels.Info, $"{p}{x}");
                 }
             }
             return false;
@@ -217,7 +217,7 @@ namespace SysWeaver.Security
         public bool AddOrSet(string ruleName, int port, IMessageHost msg = null, string messagePrefix = null, FirewallProtcols protocol = FirewallProtcols.Tcp, FirewallDirections direction = FirewallDirections.Inbound)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
-            msg?.AddMessage(p + "Can't add firewall rule " + ruleName.ToQuoted() + ", no firewall handler found!", MessageLevels.Warning);
+            msg?.AddMessage(MessageLevels.Warning, $"{p}Can't add firewall rule {ruleName.ToQuoted()}, no firewall handler found!");
             return false;
         }
 
@@ -225,7 +225,7 @@ namespace SysWeaver.Security
         public bool Remove(string ruleName, IMessageHost msg = null, string messagePrefix = null)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
-            msg?.AddMessage(p + "Can't remove firewall rule " + ruleName.ToQuoted() + ", no firewall handler found!", MessageLevels.Warning);
+            msg?.AddMessage(MessageLevels.Warning, $"{p}Can't remove firewall rule {ruleName.ToQuoted()}, no firewall handler found!");
             return false;
         }
     }

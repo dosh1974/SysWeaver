@@ -757,13 +757,6 @@ namespace SysWeaver.Net
         {
             var auth = Auth?.Guid;
             var maxWaitSeconds = Math.Max(5, MessageKeepAliveSeconds);
-            var returnOn = new HashSet<String>(HttpServerBase.ForcedMessages, StringComparer.Ordinal);
-            var returnOnMessages = req.MessageTypes;
-            if (returnOnMessages != null)
-                foreach (var x in returnOnMessages)
-                    returnOn.Add(x.FastToLower());   
-
-
             var ma = MessagesAdded;
             long waiterId = 0;
             var shared = false;// !req.NonShared;
@@ -795,6 +788,12 @@ namespace SysWeaver.Net
                     Messages = HttpServerBase.MessageServerReconnects,
                 };
             }
+            //  The message types are only needed when waiting (not for the connect / reconnect responses above)
+            var returnOn = new HashSet<String>(HttpServerBase.ForcedMessages, StringComparer.Ordinal);
+            var returnOnMessages = req.MessageTypes;
+            if (returnOnMessages != null)
+                foreach (var x in returnOnMessages)
+                    returnOn.Add(x.FastToLower());
             var messages = Messages;
             if (messages != null)
             {

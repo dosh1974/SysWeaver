@@ -4,6 +4,7 @@ using SysWeaver.Net;
 using SysWeaver.Remote;
 using SysWeaver.Serialization;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
@@ -205,7 +206,7 @@ namespace SysWeaver.MicroService
                         }
                     }
                 }
-                AddMessage("Platform tools: " + PlatformTools.Current.Name);
+                AddMessage(MessageLevels.Info, $"Platform tools: {PlatformTools.Current.Name}");
                 PruneTask = new PeriodicTask(Prune, 2000);
                 OnCreated.RaiseEvents();
             }
@@ -286,9 +287,9 @@ namespace SysWeaver.MicroService
         void UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             if (e.IsTerminating)
-                AddMessage("Terminating CLR due to a Fatal Unhandled Exception: " + e.ToString(), e.ExceptionObject as Exception);
+                AddMessage(MessageLevels.Error, $"Terminating CLR due to a Fatal Unhandled Exception: {e.ToString()}", e.ExceptionObject as Exception);
             else
-                AddMessage("Fatal Unhandled Exception: " + e.ToString(), e.ExceptionObject as Exception);
+                AddMessage(MessageLevels.Error, $"Fatal Unhandled Exception: {e.ToString()}", e.ExceptionObject as Exception);
         }
 
         ConcurrentDictionary<IHaveStats, Stats[]> SavedStats;
@@ -318,7 +319,7 @@ namespace SysWeaver.MicroService
                         info = Unregister(i);
                         if (info == null)
                         {
-                            AddMessage(String.Join("Can't find service of type ", Tag, ServiceName(i, info)), MessageLevels.Warning);
+                            AddMessage(MessageLevels.Warning, $"{Tag} Can't find service of type {ServiceName(i, info)}");
                             continue;
                         }
                         if (!info.Owned)
@@ -331,7 +332,7 @@ namespace SysWeaver.MicroService
                     }
                     catch (Exception e)
                     {
-                        AddMessage(String.Join("Failed to unregister or dispose service of type ", Tag, ServiceName(i, info)), e, MessageLevels.Warning);
+                        AddMessage(MessageLevels.Warning, $"{Tag} Failed to unregister or dispose service of type {ServiceName(i, info)}", e);
                     }
                 }
             }
@@ -401,7 +402,7 @@ namespace SysWeaver.MicroService
                 AddHavePerfMonitor(instance as IPerfMonitored);
                 AddHaveStats(instance as IHaveStats);
             }
-            AddMessage(String.Join(" Registered instance of type ", Tag, ServiceName(instance, info)));
+            AddMessage(MessageLevels.Info, $"{Tag} Registered instance of type {ServiceName(instance, info)}");
             OnServiceAdded.RaiseEvents(instance, info);
             return info;
         }
@@ -586,7 +587,7 @@ namespace SysWeaver.MicroService
             if (type == null)
             {
                 var ex = new TypeInitializationException(m.Type, null);
-                AddMessage(String.Concat("Type \"", m.Type, "\" not found!"), ex);
+                AddMessage(MessageLevels.Error, $"Type \"{m.Type}\" not found!", ex);
                 Flush();
                 throw ex;
             }
@@ -604,7 +605,7 @@ namespace SysWeaver.MicroService
                     }
                     catch (Exception ex)
                     {
-                        AddMessage(String.Concat(Tag, " Failed to create remote connetion of type ", m.Type.ToQuoted()), ex);
+                        AddMessage(MessageLevels.Error, $"{Tag} Failed to create remote connetion of type {m.Type.ToQuoted()}", ex);
                         throw;
                     }
                     Register(inst, m.Name, true, typeof(RemoteConnection)).StartDuration = PerfMonitor.GetEllapsed(start);
@@ -617,7 +618,7 @@ namespace SysWeaver.MicroService
                 if (regT != null)
                 {
                     regT.Invoke(null, null);
-                    AddMessage(String.Concat(Tag, " Registered serializer of type \"", type.FullName, "\""));
+                    AddMessage(MessageLevels.Info, $"{Tag} Registered serializer of type \"{type.FullName}\"");
                     return;
                 }
             }
@@ -627,7 +628,7 @@ namespace SysWeaver.MicroService
                 if (regT != null)
                 {
                     regT.Invoke(null, null);
-                    AddMessage(String.Concat(Tag, " Registered compressor of type \"", type.FullName, "\""));
+                    AddMessage(MessageLevels.Info, $"{Tag} Registered compressor of type \"{type.FullName}\"");
                     return;
                 }
             }
@@ -683,9 +684,9 @@ namespace SysWeaver.MicroService
                 if (fail)
                     continue;
                 if (args.Length > 0)
-                    AddMessage(String.Concat(Tag, " Creating instance of type \"", type.Name, "\", with arguments: ", String.Join(", ", args.Select(x => GetToString(x)))));
+                    AddMessage(MessageLevels.Info, $"{Tag} Creating instance of type \"{type.Name}\", with arguments: {String.Join(", ", args.Select(x => GetToString(x)))}");
                 else
-                    AddMessage(String.Concat(Tag, " Creating instance of type \"", type.Name, '"'));
+                    AddMessage(MessageLevels.Info, $"{Tag} Creating instance of type \"{type.Name}\"");
                 Object inst;
                 try
                 {
@@ -696,14 +697,14 @@ namespace SysWeaver.MicroService
                 }
                 catch (Exception ex)
                 {
-                    AddMessage(String.Concat(Tag, " Failed to create service of type ", m.Type.ToQuoted()), ex);
+                    AddMessage(MessageLevels.Error, $"{Tag} Failed to create service of type {m.Type.ToQuoted()}", ex);
                     throw;
                 }
                 Register(inst, m.Name, true, paramType).StartDuration = PerfMonitor.GetEllapsed(start);
                 return;
             }
             var ex2 = new Exception("Can't find a constructor in \"" + m.Type + "\" that matches the available instances, can't find an instance for the following types:\n" + String.Join('\n', missingTypes.Select(x => x.FullName.ToQuoted())));
-            AddMessage(String.Concat("Can't create an instance of type \"", m.Type, "\""), ex2);
+            AddMessage(MessageLevels.Error, $"Can't create an instance of type \"{m.Type}\"", ex2);
             Flush();
             throw ex2;
         }
@@ -766,9 +767,9 @@ namespace SysWeaver.MicroService
             catch (Exception ex)
             {
                 if (String.IsNullOrEmpty(filename))
-                    AddMessage(String.Concat(Tag, " Failed to parse manifest"), ex);
+                    AddMessage(MessageLevels.Error, $"{Tag} Failed to parse manifest", ex);
                 else
-                    AddMessage(String.Concat(Tag, " Failed to parse manifest file ", filename.ToFilename()), ex);
+                    AddMessage(MessageLevels.Error, $"{Tag} Failed to parse manifest file {filename.ToFilename()}", ex);
                 throw;
             }
             var l = mf.Length + 1;
@@ -795,7 +796,7 @@ namespace SysWeaver.MicroService
         public void RegisterManifestFile(String file, bool trackPerf = true, bool showProgress = false)
         {
             using var perfMon = trackPerf ? PerfMon.Track("Register." + Path.GetFileName(file)) : default;
-            AddMessage(Tag + " Registering services from file \"" + file + "\":");
+            AddMessage(MessageLevels.Info, $"{Tag} Registering services from file \"{file}\":");
             var i = Instances;
             var c = i.Count;
             using (Tab())
@@ -807,13 +808,13 @@ namespace SysWeaver.MicroService
                 }
                 catch (Exception ex)
                 {
-                    AddMessage(String.Concat(Tag, " Failed to read manifest file ", file.ToFilename()), ex);
+                    AddMessage(MessageLevels.Error, $"{Tag} Failed to read manifest file {file.ToFilename()}", ex);
                     throw;
                 }
                 RegisterManifest(text, file, false);
             }
             c = i.Count - c;
-            AddMessage(Tag + " Added " + c + (c == 1 ? " service from the file." : " services from the file."));
+            AddMessage(MessageLevels.Info, $"{Tag} Added {c}{(c == 1 ? " service from the file." : " services from the file.")}");
         }
 
         static String ServiceName(Object i, ServiceInfo info, bool isDebug = false)
@@ -855,7 +856,7 @@ namespace SysWeaver.MicroService
             }
             var type = instance.GetType();
             RemoveType(type, instance);
-            AddMessage(String.Join(" Unregistered instance of type ", Tag, ServiceName(instance, info)));
+            AddMessage(MessageLevels.Info, $"{Tag} Unregistered instance of type {ServiceName(instance, info)}");
             OnServiceRemoved.RaiseEvents(instance, info);
             return info;
         }
@@ -1048,15 +1049,12 @@ namespace SysWeaver.MicroService
                 info.OnUse();
                 return (T)v.Key;
             }
-            d = Orders[(int)order](d);
-            foreach (var v in d)
+            //  One pass search (no sort), the first instance with the name in the requested order
+            if (TryFindFirst(out var n, x, GetFilterPasses(type, order), order, instanceName, false))
             {
-                info = v.Value;
-                if (String.Equals(info.Name, instanceName, StringComparison.OrdinalIgnoreCase))
-                {
-                    info.OnUse();
-                    return (T)v.Key;
-                }
+                info = n.Value;
+                info.OnUse();
+                return (T)n.Key;
             }
             throw new Exception("No instance of type \"" + t.FullName + "\" is registered!");
         }
@@ -1085,15 +1083,12 @@ namespace SysWeaver.MicroService
                 info.OnUse();
                 return v.Key;
             }
-            d = Orders[(int)order](d);
-            foreach (var v in d)
+            //  One pass search (no sort), the first instance with the name in the requested order
+            if (TryFindFirst(out var n, x, GetFilterPasses(type, order), order, instanceName, false))
             {
-                info = v.Value;
-                if (String.Equals(info.Name, instanceName, StringComparison.OrdinalIgnoreCase))
-                {
-                    info.OnUse();
-                    return v.Key;
-                }
+                info = n.Value;
+                info.OnUse();
+                return n.Key;
             }
             throw new Exception("No instance of type \"" + t.FullName + "\" is registered!");
         }
@@ -1151,15 +1146,7 @@ namespace SysWeaver.MicroService
         /// <param name="order">Order of the instanes</param>
         /// <returns></returns>
         public T TryGet<T>(String instanceName, ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Newest) where T : class
-        {
-            var all = GetAllInfo<T>(type, order);
-            if (instanceName == null)
-                return all.FirstOrDefault().Key;
-            foreach (var x in all)
-                if (x.Value.Name.FastStartsWith(instanceName))
-                    return x.Key;
-            return null;
-        }
+            => TryGet<T>(out var _, instanceName, type, order);
 
         /// <summary>
         /// Try to get the instance registered as the specified type and the associated information
@@ -1172,21 +1159,15 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         public T TryGet<T>(out ServiceInfo info, String instanceName, ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Newest) where T : class
         {
-            var all = GetAllInfo<T>(type, order);
-            if (instanceName == null)
-            {
-                var f = all.FirstOrDefault();
-                info = f.Value;
-                return f.Key;
-            }
-            foreach (var x in all)
-            {
-                info = x.Value;
-                if (info.Name.FastStartsWith(instanceName))
-                    return x.Key;
-            }
             info = null;
-            return null;
+            if (!TypeInstances.TryGetValue(typeof(T), out var x))
+                return null;
+            //  One pass search (no sort), the first instance (instanceName is null) or the first instance whose name starts with instanceName in the requested order
+            if (!TryFindFirst(out var v, x, GetFilterPasses(type, order), order, instanceName, true))
+                return null;
+            info = v.Value;
+            info.OnUse();
+            return (T)v.Key;
         }
 
 
@@ -1218,25 +1199,178 @@ namespace SysWeaver.MicroService
         #region Multiple instances
 
         /// <summary>
+        /// The passes of each filter (indexed by ServiceInstanceTypes, the same length as Filters): -1 = all instances, 0 = the local instances, 1 = the remote instances.
+        /// Filters[type] is the concatenation of the passes (ex: LocalOrRemote is the local instances followed by the remote instances)
+        /// </summary>
+        static readonly sbyte[][] FilterPasses =
+        [
+            [-1],
+            [0],
+            [1],
+            [0, 1],
+            [1, 0],
+        ];
+
+        /// <summary>
+        /// A single pass of all instances
+        /// </summary>
+        static readonly sbyte[] AllPass = [-1];
+
+        /// <summary>
+        /// Get the filter passes of a filter and order, an invalid filter or order throws an IndexOutOfRangeException (as the Filters / Orders lookups)
+        /// </summary>
+        static sbyte[] GetFilterPasses(ServiceInstanceTypes type, ServiceInstanceOrders order)
+        {
+            var passes = FilterPasses[(int)type];
+            _ = Orders[(int)order];
+            //  The order is unique per instance, so the sorted concatenation of LocalOrRemote / RemoteAllLocal is the same as all instances sorted
+            if ((passes.Length > 1) && (order != ServiceInstanceOrders.Any))
+                return AllPass;
+            return passes;
+        }
+
+        /// <summary>
+        /// True if an instance belongs to a filter pass
+        /// </summary>
+        static bool InPass(sbyte pass, ServiceInfo info) => (pass < 0) || ((pass != 0) == info.Remote);
+
+        //  The order is unique per instance, so an unstable sort gives the same order as OrderBy / OrderByDescending
+        static readonly Comparison<KeyValuePair<Object, ServiceInfo>> OldestFirst = static (x, y) => x.Value.Order.CompareTo(y.Value.Order);
+        static readonly Comparison<KeyValuePair<Object, ServiceInfo>> NewestFirst = static (x, y) => y.Value.Order.CompareTo(x.Value.Order);
+
+        /// <summary>
+        /// Collect the instances of Orders[order](Filters[type](c)) (the same instances in the same order) into a buffer rented from the shared array pool.
+        /// An invalid filter or order throws an IndexOutOfRangeException (as the Filters / Orders lookups)
+        /// </summary>
+        /// <param name="buffer">A buffer rented from ArrayPool.Shared, replaced by a larger one if needed (the old one is returned)</param>
+        /// <param name="c">The instances</param>
+        /// <param name="type">The filter</param>
+        /// <param name="order">The order</param>
+        /// <returns>The number of instances in the buffer</returns>
+        static int Collect(ref KeyValuePair<Object, ServiceInfo>[] buffer, ConcurrentDictionary<Object, ServiceInfo> c, ServiceInstanceTypes type, ServiceInstanceOrders order)
+        {
+            var passes = GetFilterPasses(type, order);
+            int count = 0;
+            foreach (var pass in passes)
+            {
+                foreach (var x in c)
+                {
+                    if (!InPass(pass, x.Value))
+                        continue;
+                    var b = buffer;
+                    if (count == b.Length)
+                    {
+                        var pool = ArrayPool<KeyValuePair<Object, ServiceInfo>>.Shared;
+                        var n = pool.Rent(count * 2);
+                        b.AsSpan(0, count).CopyTo(n);
+                        pool.Return(b, true);
+                        buffer = b = n;
+                    }
+                    b[count++] = x;
+                }
+            }
+            if ((count > 1) && (order != ServiceInstanceOrders.Any))
+                buffer.AsSpan(0, count).Sort(order == ServiceInstanceOrders.Oldest ? OldestFirst : NewestFirst);
+            return count;
+        }
+
+        /// <summary>
+        /// Get the instances of Orders[order](Filters[type](c)) as an array, OnUse is called for every returned instance
+        /// </summary>
+        static R[] GetMaterialized<R>(ConcurrentDictionary<Object, ServiceInfo> c, ServiceInstanceTypes type, ServiceInstanceOrders order, Func<KeyValuePair<Object, ServiceInfo>, R> get)
+        {
+            var pool = ArrayPool<KeyValuePair<Object, ServiceInfo>>.Shared;
+            var buffer = pool.Rent(16);
+            try
+            {
+                var count = Collect(ref buffer, c, type, order);
+                return ToArray(buffer.AsSpan(0, count), get);
+            }
+            finally
+            {
+                pool.Return(buffer, true);
+            }
+        }
+
+        /// <summary>
+        /// Create the result array of some instances, OnUse is called for every instance
+        /// </summary>
+        static R[] ToArray<R>(ReadOnlySpan<KeyValuePair<Object, ServiceInfo>> s, Func<KeyValuePair<Object, ServiceInfo>, R> get)
+        {
+            var count = s.Length;
+            if (count <= 0)
+                return [];
+            var r = new R[count];
+            for (int i = 0; i < count; ++i)
+            {
+                var x = s[i];
+                x.Value.OnUse();
+                r[i] = get(x);
+            }
+            return r;
+        }
+
+        /// <summary>
+        /// Find the first instance of Orders[order](Filters[type](c)) whose name matches (the first instance if <paramref name="instanceName"/> is null) without sorting, one pass per filter pass.
+        /// </summary>
+        /// <param name="found">The instance found</param>
+        /// <param name="c">The instances</param>
+        /// <param name="passes">The filter passes, from GetFilterPasses (validates the filter and order)</param>
+        /// <param name="order">The order</param>
+        /// <param name="instanceName">The name to find, null to find the first instance</param>
+        /// <param name="prefix">True if a name matches when it starts with <paramref name="instanceName"/> (FastStartsWith), false if it's equal ignoring case</param>
+        /// <returns>True if an instance was found</returns>
+        static bool TryFindFirst(out KeyValuePair<Object, ServiceInfo> found, ConcurrentDictionary<Object, ServiceInfo> c, sbyte[] passes, ServiceInstanceOrders order, String instanceName, bool prefix)
+        {
+            var sorted = order != ServiceInstanceOrders.Any;
+            var newest = order == ServiceInstanceOrders.Newest;
+            bool have = false;
+            KeyValuePair<Object, ServiceInfo> best = default;
+            long bestOrder = 0;
+            foreach (var pass in passes)
+            {
+                foreach (var x in c)
+                {
+                    var info = x.Value;
+                    if (!InPass(pass, info))
+                        continue;
+                    if (instanceName != null)
+                    {
+                        if (!(prefix ? info.Name.FastStartsWith(instanceName) : String.Equals(info.Name, instanceName, StringComparison.OrdinalIgnoreCase)))
+                            continue;
+                    }
+                    //  Unsorted: the first match in the filter order
+                    if (!sorted)
+                    {
+                        found = x;
+                        return true;
+                    }
+                    //  Sorted: the match with the lowest (Oldest) / highest (Newest) order
+                    var o = info.Order;
+                    if (have && (newest ? (o <= bestOrder) : (o >= bestOrder)))
+                        continue;
+                    best = x;
+                    bestOrder = o;
+                    have = true;
+                }
+            }
+            found = best;
+            return have;
+        }
+
+        /// <summary>
         /// Get the instances registered as the specified type
         /// </summary>
         /// <typeparam name="T">The type</typeparam>
         /// <param name="type">Filter instances</param>
         /// <param name="order">Order of the instanes</param>
-        /// <returns>The instance that matches the type</returns>
+        /// <returns>The instances that matches the type (a new array, the use count of every returned instance is incremented by this call)</returns>
         public IEnumerable<T> GetAll<T>(ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Any)
         {
             var t = typeof(T);
             if (!TypeInstances.TryGetValue(t, out var x))
                 return [];
-            IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
-            d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            return d.Select(x =>
-            {
-                x.Value.OnUse();
-                return (T)x.Key;
-            });
+            return GetMaterialized(x, type, order, static x => (T)x.Key);
         }
 
 
@@ -1246,19 +1380,12 @@ namespace SysWeaver.MicroService
         /// <param name="t">The type to get instances for</param>
         /// <param name="type">Filter instances</param>
         /// <param name="order">Order of the instanes</param>
-        /// <returns>The instance that matches the type</returns>
+        /// <returns>The instances that matches the type (a new array, the use count of every returned instance is incremented by this call)</returns>
         public IEnumerable<Object> GetAll(Type t, ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Any)
         {
             if (!TypeInstances.TryGetValue(t, out var x))
                 return [];
-            IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
-            d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            return d.Select(x =>
-            {
-                x.Value.OnUse();
-                return x.Key;
-            });
+            return GetMaterialized(x, type, order, static x => x.Key);
         }
 
         /// <summary>
@@ -1266,17 +1393,44 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="type">Filter instances</param>
         /// <param name="order">Order of the instanes</param>
-        /// <returns>The instances</returns>
+        /// <returns>The instances (a new array, the use count of every returned instance is incremented by this call)</returns>
         public IEnumerable<Object> GetAll(ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Any)
         {
-            IEnumerable<KeyValuePair<Object, ServiceInfo>> d = Instances;
-            d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            return d.Select(x =>
+            if (order == ServiceInstanceOrders.Any)
+                return GetMaterialized(Instances, type, order, static x => x.Key);
+            //  Sorted: the cached ordered instances (MO-23), filtered
+            var p = GetFilterPasses(type, order)[0];
+            var all = GetOrderedInstances();
+            var al = all.Length;
+            var pool = ArrayPool<KeyValuePair<Object, ServiceInfo>>.Shared;
+            var buffer = pool.Rent(al);
+            try
             {
-                x.Value.OnUse();
-                return x.Key;
-            });
+                int count = 0;
+                if (order == ServiceInstanceOrders.Oldest)
+                {
+                    for (int i = 0; i < al; ++i)
+                    {
+                        var x = all[i];
+                        if (InPass(p, x.Value))
+                            buffer[count++] = x;
+                    }
+                }
+                else
+                {
+                    for (int i = al - 1; i >= 0; --i)
+                    {
+                        var x = all[i];
+                        if (InPass(p, x.Value))
+                            buffer[count++] = x;
+                    }
+                }
+                return ToArray(buffer.AsSpan(0, count), static x => x.Key);
+            }
+            finally
+            {
+                pool.Return(buffer, true);
+            }
         }
 
 
@@ -1289,20 +1443,13 @@ namespace SysWeaver.MicroService
         /// <typeparam name="T">The type</typeparam>
         /// <param name="type">Filter instances</param>
         /// <param name="order">Order of the instanes</param>
-        /// <returns>The instance that matches the type</returns>
+        /// <returns>The instances that matches the type (a new array, the use count of every returned instance is incremented by this call)</returns>
         public IEnumerable<KeyValuePair<T, ServiceInfo>> GetAllInfo<T>(ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Any)
         {
             var t = typeof(T);
             if (!TypeInstances.TryGetValue(t, out var x))
                 return [];
-            IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
-            d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            return d.Select(x =>
-            {
-                x.Value.OnUse();
-                return new KeyValuePair<T, ServiceInfo>((T)x.Key, x.Value);
-            });
+            return GetMaterialized(x, type, order, static x => new KeyValuePair<T, ServiceInfo>((T)x.Key, x.Value));
         }
 
         /// <summary>
@@ -1311,19 +1458,12 @@ namespace SysWeaver.MicroService
         /// <param name="t">The type to get instances for</param>
         /// <param name="type">Filter instances</param>
         /// <param name="order">Order of the instanes</param>
-        /// <returns>The instance that matches the type</returns>
+        /// <returns>The instances that matches the type (a new array, the use count of every returned instance is incremented by this call)</returns>
         public IEnumerable<KeyValuePair<Object, ServiceInfo>> GetAllInfo(Type t, ServiceInstanceTypes type = ServiceInstanceTypes.Any, ServiceInstanceOrders order = ServiceInstanceOrders.Any)
         {
             if (!TypeInstances.TryGetValue(t, out var x))
                 return [];
-            IEnumerable<KeyValuePair<Object, ServiceInfo>> d = x;
-            d = Filters[(int)type](d);
-            d = Orders[(int)order](d);
-            return d.Select(x =>
-            {
-                x.Value.OnUse();
-                return new KeyValuePair<Object, ServiceInfo>(x.Key, x.Value);
-            });
+            return GetMaterialized(x, type, order, static x => x);
         }
 
 
@@ -1689,11 +1829,11 @@ namespace SysWeaver.MicroService
                         var f = await HtmlTableDataExporter.Simple.Export(t).ConfigureAwait(false);
                         await PathExt.EnsureCanWriteFileAsync(fn).ConfigureAwait(false);
                         await File.WriteAllBytesAsync(fn, f.Data).ConfigureAwait(false);
-                        AddMessage("Dumped stats to \"" + fn + "\"");
+                        AddMessage(MessageLevels.Info, $"Dumped stats to \"{fn}\"");
                     }
                     catch (Exception ex)
                     {
-                        AddMessage("Failed to dump stats to \"" + fn + "\"", ex, MessageLevels.Warning);
+                        AddMessage(MessageLevels.Warning, $"Failed to dump stats to \"{fn}\"", ex);
                     }
                 }
             }
@@ -1713,11 +1853,11 @@ namespace SysWeaver.MicroService
                         var f = await HtmlTableDataExporter.Simple.Export(t).ConfigureAwait(false);
                         await PathExt.EnsureCanWriteFileAsync(fn).ConfigureAwait(false);
                         await File.WriteAllBytesAsync(fn, f.Data).ConfigureAwait(false);
-                        AddMessage("Dumped peformance stats to \"" + fn + "\"");
+                        AddMessage(MessageLevels.Info, $"Dumped peformance stats to \"{fn}\"");
                     }
                     catch (Exception ex)
                     {
-                        AddMessage("Failed to dump peformance stats to \"" + fn + "\"", ex, MessageLevels.Warning);
+                        AddMessage(MessageLevels.Warning, $"Failed to dump peformance stats to \"{fn}\"", ex);
                     }
                 }
             }
@@ -1809,6 +1949,11 @@ namespace SysWeaver.MicroService
         public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks");
 
         /// <summary>
+        /// The pre-processed tokens of "debug,ops" (users that can see the system performance entries)
+        /// </summary>
+        static readonly IReadOnlyList<String> DebugOpsTokens = Authorization.GetRequiredTokens("debug,ops");
+
+        /// <summary>
         /// Get performance information
         /// </summary>
         /// <param name="r">Paramaters</param>
@@ -1823,7 +1968,7 @@ namespace SysWeaver.MicroService
         public TableData PerfTable(TableDataRequest r, HttpServerRequest context)
         {
             PerfTableApis.Add(context.LocalUrl);
-            bool onlyApi = !context.Session.Auth.IsValid("debug,ops");
+            bool onlyApi = !context.Session.Auth.IsValid(DebugOpsTokens);
             var data = TableDataTools.Get(r, 1000, GetPerformanceEntries(onlyApi));
             if (onlyApi)
                 data = TableDataTools.HideColumn(data, nameof(IPerfEntry.System));
@@ -2235,6 +2380,15 @@ namespace SysWeaver.MicroService
             => TableDataTools.Get(r, refreshRate, GetTextFiles(context));
 
         /// <summary>
+        /// Test if a user may read a text file, using the pre-processed tokens when the producer supplied them
+        /// </summary>
+        static bool CanRead(Authorization a, TextFile f)
+        {
+            var tokens = f.AuthTokens;
+            return tokens != null ? a.IsValid(tokens) : a.IsValid(f.Auth);
+        }
+
+        /// <summary>
         /// Get all available text files
         /// </summary>
         /// <param name="context"></param>
@@ -2249,7 +2403,7 @@ namespace SysWeaver.MicroService
                     continue;
                 foreach (var f in t.GetTextFiles())
                 {
-                    if (!a.IsValid(f.Auth))
+                    if (!CanRead(a, f))
                         continue;
                     var o = f.OpenParams;
                     if (o == null)
@@ -2285,7 +2439,7 @@ namespace SysWeaver.MicroService
                     //  Only the requested file, with it's own auth
                     if (!String.Equals(f.Name, name, StringComparison.Ordinal))
                         continue;
-                    if (!a.IsValid(f.Auth))
+                    if (!CanRead(a, f))
                         continue;
                     try
                     {

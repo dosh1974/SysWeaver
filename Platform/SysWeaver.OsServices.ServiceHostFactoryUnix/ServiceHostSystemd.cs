@@ -513,7 +513,7 @@ namespace SysWeaver.OsServices
                     c.Cancel = true;
                     if (Interlocked.CompareExchange(ref quit, 1, 0) != 0)
                         return;
-                    manager.AddMessage("Got signal: " + c.Signal);
+                    manager.AddMessage(MessageLevels.Info, $"Got signal: {c.Signal}");
                 };
                 Action<PosixSignalContext> onPause = c =>
                 {

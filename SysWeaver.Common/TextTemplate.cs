@@ -3,6 +3,8 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Buffers;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Web;
 
 namespace SysWeaver
@@ -33,7 +35,7 @@ namespace SysWeaver
     /// <remarks>
     /// The template text is parsed once (in the constructor), <see cref="Get(Func{string, string})"/> then builds the result with a single string allocation.
     /// Instances are immutable and <see cref="Get(Func{string, string})"/> is thread safe (as long as the value provider is).
-    /// The value provider is called more than once per variable (once to compute the length and once per occurrence), so it must return the same value for the same name during a call.
+    /// The value provider is called once per variable name and call (the values are read into a pooled array when the length is computed and written from it), every occurrence of a variable gets the same value.
     /// How unresolved variables (the provider returns null) are rendered depends on the constructor, see each constructor.
     /// Typically used for path templates (<see cref="PathTemplate"/>), environment variables (<see cref="EnvInfo.ResolveText(string, bool, IReadOnlyDictionary{string, string})"/>) and HTML / text templates in the HTTP server.
     /// </remarks>
@@ -173,7 +175,8 @@ namespace SysWeaver
             VarsAndFrequency = vars.Freeze();
             VarList = VarsAndFrequency.ToArray();
             TransformedList = (TransformedVars?.Count ?? 0) > 0 ? TransformedVars.ToArray() : null;
-            Blocks = blocks;
+            Blocks = blocks.ToArray();
+            (Lookups, Slots) = CreateSlots(VarList, vars.Comparer, TransformedList, transformedVars?.Comparer, TransformDefaults, Blocks);
             StaticLen = staticLen;
         }
 
@@ -251,7 +254,8 @@ namespace SysWeaver
             VarsAndFrequency = vars.Freeze();
             VarList = VarsAndFrequency.ToArray();
             TransformedList = (TransformedVars?.Count ?? 0) > 0 ? TransformedVars.ToArray() : null;
-            Blocks = blocks;
+            Blocks = blocks.ToArray();
+            (Lookups, Slots) = CreateSlots(VarList, vars.Comparer, TransformedList, transformedVars?.Comparer, TransformDefaults, Blocks);
             StaticLen = staticLen;
         }
 
@@ -341,7 +345,8 @@ namespace SysWeaver
             VarsAndFrequency = vars.Freeze();
             VarList = VarsAndFrequency.ToArray();
             TransformedList = (TransformedVars?.Count ?? 0) > 0 ? TransformedVars.ToArray() : null;
-            Blocks = blocks;
+            Blocks = blocks.ToArray();
+            (Lookups, Slots) = CreateSlots(VarList, vars.Comparer, TransformedList, transformedVars?.Comparer, TransformDefaults, Blocks);
             StaticLen = staticLen;
         }
 
@@ -381,9 +386,8 @@ namespace SysWeaver
         /// Get a string from the template with the specified replacements
         /// </summary>
         /// <param name="getVars">A function that returns the value for the given key, if not found return null.
-        /// Called multiple times for the same key, so it must be deterministic (else the result is truncated or an exception is thrown).</param>
+        /// Called once per variable name (every occurrence of the variable gets that value).</param>
         /// <returns>A string with the specified replacements done</returns>
-        /// <exception cref="ArgumentException"><paramref name="getVars"/> returned a longer value for a key on a later call (the computed length is exceeded).</exception>
         public String Get(Func<String, String> getVars) => Get(getVars, static (f, k) => f(k));
 
         /// <summary>
@@ -392,48 +396,235 @@ namespace SysWeaver
         /// <typeparam name="TState">The type of the state</typeparam>
         /// <param name="state">The state passed to <paramref name="getVars"/></param>
         /// <param name="getVars">A function that returns the value for the given state and key, if not found return null.
-        /// Called multiple times for the same key, so it must be deterministic (else the result is truncated or an exception is thrown).</param>
+        /// Called once per variable name (every occurrence of the variable gets that value).</param>
         /// <returns>A string with the specified replacements done</returns>
-        /// <exception cref="ArgumentException"><paramref name="getVars"/> returned a longer value for a key on a later call (the computed length is exceeded).</exception>
         public String Get<TState>(TState state, Func<TState, String, String> getVars)
         {
-            var eVars = VarList;
-            int len = StaticLen;
-            Dictionary<String, String> transformed = null;
-            var tr = TransformedList;
-            if (tr != null)
+            var count = Lookups.Length + Slots.Length;
+            if (count <= 0)
+                return String.Create(StaticLen, new BuildState(this, null), static (dest, s) => s.Template.Build(dest, s.Values));
+            var values = ArrayPool<String>.Shared.Rent(count);
+            try
             {
-                transformed = new Dictionary<string, string>(TransformedVars.GetComparer());
-                var defs = TransformDefaults;
-                foreach (var x in tr)
+                var len = Resolve(values, state, getVars);
+                var str = String.Create(len, new BuildState(this, values), static (dest, s) => s.Template.Build(dest, s.Values));
+#if DEBUG
+                if (str.Length != len)
+                    throw new Exception("Internal error!");
+#endif//DEBUG
+                return str;
+            }
+            finally
+            {
+                Array.Clear(values, 0, count);
+                ArrayPool<String>.Shared.Return(values);
+            }
+        }
+
+        /// <summary>
+        /// Append the text from the template with the specified replacements to a string builder (the same text as <see cref="Get{TState}(TState, Func{TState, string, string})"/>, without creating a string).
+        /// </summary>
+        /// <typeparam name="TState">The type of the state</typeparam>
+        /// <param name="sb">The string builder to append the text to</param>
+        /// <param name="state">The state passed to <paramref name="getVars"/></param>
+        /// <param name="getVars">A function that returns the value for the given state and key, if not found return null.
+        /// Called once per variable name (every occurrence of the variable gets that value), use a static lambda to avoid allocating a closure per call.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="sb"/> is null.</exception>
+        public void AppendTo<TState>(StringBuilder sb, TState state, Func<TState, String, String> getVars)
+        {
+            ArgumentNullException.ThrowIfNull(sb);
+            var count = Lookups.Length + Slots.Length;
+            if (count <= 0)
+            {
+                Append(sb, null);
+                return;
+            }
+            var values = ArrayPool<String>.Shared.Rent(count);
+            try
+            {
+                Resolve(values, state, getVars);
+                Append(sb, values);
+            }
+            finally
+            {
+                Array.Clear(values, 0, count);
+                ArrayPool<String>.Shared.Return(values);
+            }
+        }
+
+        /// <summary>
+        /// Append the text from the template with the specified replacements to a string builder, the values are read as memory (ex: a part of a string or a reused buffer, no string per value).
+        /// The same text as <see cref="AppendTo{TState}(StringBuilder, TState, Func{TState, string, string})"/> with the values converted to strings.
+        /// </summary>
+        /// <remarks>
+        /// A transformed variable (ex: <c>${#Var}</c>) needs a string: a value that isn't a whole string is copied to a new string, except for transforms that leave the value unchanged
+        /// (<c>@</c> when the value doesn't contain any of the chars encoded by <see cref="HttpUtility.HtmlAttributeEncode(string)"/>).
+        /// </remarks>
+        /// <typeparam name="TState">The type of the state</typeparam>
+        /// <param name="sb">The string builder to append the text to</param>
+        /// <param name="state">The state passed to <paramref name="getVars"/></param>
+        /// <param name="getVars">A function that returns the value for the given state and key, if not found return <c>default</c> (a memory without a backing string or array, the same as a null string;
+        /// an empty string's memory is a found empty value).
+        /// Called once per variable name (every occurrence of the variable gets that value), use a static lambda to avoid allocating a closure per call.
+        /// The memory must be valid until this method returns.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="sb"/> is null.</exception>
+        public void AppendMemoryValuesTo<TState>(StringBuilder sb, TState state, Func<TState, String, ReadOnlyMemory<Char>> getVars)
+        {
+            ArgumentNullException.ThrowIfNull(sb);
+            var count = Lookups.Length + Slots.Length;
+            if (count <= 0)
+            {
+                Append(sb, null);
+                return;
+            }
+            var values = ArrayPool<ReadOnlyMemory<Char>>.Shared.Rent(count);
+            try
+            {
+                Resolve(values, state, getVars);
+                var blocks = Blocks;
+                var temp = Template;
+                var nl = Lookups.Length;
+                foreach (var block in blocks)
                 {
-                    var v = getVars(state, x.Value.Item1);
-                    //  Unresolved: use the default (dictionary constructor) or the variable name
-                    if (v == null)
-                        v = defs == null ? x.Key : (defs.TryGetValue(x.Value.Item1, out var dv) ? dv : null) ?? String.Empty;
-                    v = x.Value.Item2(v);
-                    transformed[x.Key] = v;
+                    if (block.Var != null)
+                    {
+                        var val = values[nl + block.Slot];
+                        //  Unresolved: left as is (the original text)
+                        if (IsNotFound(val))
+                        {
+                            sb.Append(temp, block.Start, block.Count);
+                            continue;
+                        }
+                        sb.Append(val.Span);
+                        continue;
+                    }
+                    sb.Append(temp, block.Start, block.Count);
                 }
             }
-            foreach (var x in eVars)
+            finally
             {
-                var k = x.Key;
-                var v = x.Value.Item3 ? (transformed.TryGetValue(k, out var t) ? t : null) : getVars(state, k);
-                //  Unresolved: the original text of each occurrence, or the default
-                if ((v == null) && KeepUnresolved)
+                Array.Clear(values, 0, count);
+                ArrayPool<ReadOnlyMemory<Char>>.Shared.Return(values);
+            }
+        }
+
+        /// <summary>
+        /// True if a memory value means "not found" (no backing object, like a null string)
+        /// </summary>
+        static bool IsNotFound(ReadOnlyMemory<Char> value) => value.Equals(default(ReadOnlyMemory<Char>));
+
+        /// <summary>
+        /// Get a memory value as a string, without a copy if the memory is a whole string
+        /// </summary>
+        static String AsString(ReadOnlyMemory<Char> value)
+        {
+            if (IsNotFound(value))
+                return null;
+            if (MemoryMarshal.TryGetString(value, out var s, out var start, out var length) && (start == 0) && (length == s.Length))
+                return s;
+            return new String(value.Span);
+        }
+
+        /// <summary>
+        /// The chars that <see cref="HttpUtility.HtmlAttributeEncode(string)"/> encodes, a text without any of them is returned as is
+        /// </summary>
+        static readonly SearchValues<Char> HtmlAttributeEncodedChars = SearchValues.Create("\"&'<");
+
+        /// <summary>
+        /// The "@" transform (HtmlAttributeEncode)
+        /// </summary>
+        static readonly Func<String, String> HtmlAttributeEncodeTransform = HttpUtility.HtmlAttributeEncode;
+
+        /// <summary>
+        /// Test if a transform leaves a text unchanged (only known for some transforms, false if unknown)
+        /// </summary>
+        static bool IsUnchangedBy(Func<String, String> transform, ReadOnlySpan<Char> text)
+            => ReferenceEquals(transform, HtmlAttributeEncodeTransform) && (text.IndexOfAny(HtmlAttributeEncodedChars) < 0);
+
+        /// <summary>
+        /// Read the values of all variables as memory (one call of <paramref name="getVars"/> per name in <see cref="Lookups"/>), see <see cref="Resolve{TState}(string[], TState, Func{TState, string, string})"/>.
+        /// </summary>
+        /// <param name="values">Receives the looked up values (the first <see cref="Lookups"/> elements), then the value to write for each slot (<see cref="Slots"/>, not found = write the original text of each occurrence)</param>
+        /// <param name="state">The state passed to <paramref name="getVars"/></param>
+        /// <param name="getVars">The value provider</param>
+        void Resolve<TState>(ReadOnlyMemory<Char>[] values, TState state, Func<TState, String, ReadOnlyMemory<Char>> getVars)
+        {
+            var lookups = Lookups;
+            var nl = lookups.Length;
+            for (int i = 0; i < nl; ++i)
+                values[i] = getVars(state, lookups[i]);
+            var slots = Slots;
+            var ns = slots.Length;
+            var keepUnresolved = KeepUnresolved;
+            for (int i = 0; i < ns; ++i)
+            {
+                ref readonly var slot = ref slots[i];
+                var li = slot.Lookup;
+                ReadOnlyMemory<Char> v = default;
+                if (li >= 0)
                 {
-                    len += x.Value.Item4;
+                    v = values[li];
+                    var tr = slot.Transform;
+                    //  Unresolved transformed variables: use the default (dictionary constructor) or the variable name
+                    if ((tr != null) && (IsNotFound(v) || !IsUnchangedBy(tr, v.Span)))
+                        v = tr(AsString(v) ?? slot.TransformDefault).AsMemory();
+                }
+                //  Unresolved: the original text of each occurrence, or the default
+                if (IsNotFound(v))
+                {
+                    if (keepUnresolved)
+                    {
+                        values[nl + i] = default;
+                        continue;
+                    }
+                    v = (slot.Default ?? String.Empty).AsMemory();
+                }
+                values[nl + i] = v;
+            }
+        }
+
+        /// <summary>
+        /// Read the values of all variables (one call of <paramref name="getVars"/> per name in <see cref="Lookups"/>) and compute the length of the result.
+        /// </summary>
+        /// <param name="values">Receives the looked up values (the first <see cref="Lookups"/> elements), then the value to write for each slot (<see cref="Slots"/>, null = write the original text of each occurrence)</param>
+        /// <param name="state">The state passed to <paramref name="getVars"/></param>
+        /// <param name="getVars">The value provider</param>
+        /// <returns>The length of the result</returns>
+        int Resolve<TState>(String[] values, TState state, Func<TState, String, String> getVars)
+        {
+            var lookups = Lookups;
+            var nl = lookups.Length;
+            for (int i = 0; i < nl; ++i)
+                values[i] = getVars(state, lookups[i]);
+            var slots = Slots;
+            var ns = slots.Length;
+            var keepUnresolved = KeepUnresolved;
+            int len = StaticLen;
+            for (int i = 0; i < ns; ++i)
+            {
+                ref readonly var slot = ref slots[i];
+                var li = slot.Lookup;
+                String v = null;
+                if (li >= 0)
+                {
+                    v = values[li];
+                    var tr = slot.Transform;
+                    //  Unresolved transformed variables: use the default (dictionary constructor) or the variable name
+                    if (tr != null)
+                        v = tr(v ?? slot.TransformDefault);
+                }
+                //  Unresolved: the original text of each occurrence, or the default
+                if ((v == null) && keepUnresolved)
+                {
+                    len += slot.TokenLen;
+                    values[nl + i] = null;
                     continue;
                 }
-                var val = v ?? x.Value.Item2 ?? String.Empty;
-                len += (x.Value.Item1 * val.Length);
+                v = v ?? slot.Default ?? String.Empty;
+                len += (slot.Count * v.Length);
+                values[nl + i] = v;
             }
-            var str = String.Create(len, new BuildState<TState>(this, state, getVars, transformed), static (dest, s) => s.Template.Build(dest, s));
-#if DEBUG
-            if (str.Length != len)
-                throw new Exception("Internal error!");
-#endif//DEBUG
-            return str;
+            return len;
         }
 
         /// <summary>
@@ -558,8 +749,8 @@ namespace SysWeaver
             { "^", new Func<String, String>(x => StringExt.FastToUpper(x)) },
             { "~", new Func<String, String>(x => x.RemoveCamelCase()) },
 
-            { "@", HttpUtility.HtmlAttributeEncode }, 
-            { "#", HttpUtility.HtmlEncode }, 
+            { "@", HtmlAttributeEncodeTransform },
+            { "#", HttpUtility.HtmlEncode },
             { "%", HttpUtility.UrlEncode }, 
             { "$", x => HttpUtility.JavaScriptStringEncode(x, false) },
             { "£", x => HttpUtility.JavaScriptStringEncode(x, true) },
@@ -649,6 +840,10 @@ namespace SysWeaver
             public readonly int Start;
             public readonly int Count;
             public readonly bool Transform;
+            /// <summary>
+            /// The index of the variable in <see cref="Slots"/> (set after parsing, only used by variable blocks)
+            /// </summary>
+            public int Slot;
 
             public Block(int start, int count)
             {
@@ -667,57 +862,159 @@ namespace SysWeaver
 
         readonly int StaticLen;
 
-        readonly IReadOnlyList<Block> Blocks;
+        readonly Block[] Blocks;
 
         /// <summary>
-        /// The state of <see cref="Build{TState}(Span{char}, in BuildState{TState})"/>
+        /// The variable names passed to the value provider, once each (ordinal): the names used by the transformed variables (in <see cref="TransformedList"/> order), then the untransformed variables (in <see cref="VarList"/> order)
         /// </summary>
-        readonly struct BuildState<TState>
+        readonly String[] Lookups;
+
+        /// <summary>
+        /// How to compute the value of each variable (in <see cref="VarList"/> order)
+        /// </summary>
+        readonly Slot[] Slots;
+
+        /// <summary>
+        /// How to compute the value of a variable (an element of <see cref="VarList"/>)
+        /// </summary>
+        readonly struct Slot
         {
-            public BuildState(TextTemplate template, TState state, Func<TState, String, String> getVars, Dictionary<String, String> transformed)
+            public Slot(int lookup, Func<String, String> transform, String transformDefault, int count, String def, int tokenLen)
             {
-                Template = template;
-                State = state;
-                GetVars = getVars;
-                Transformed = transformed;
+                Lookup = lookup;
+                Transform = transform;
+                TransformDefault = transformDefault;
+                Count = count;
+                Default = def;
+                TokenLen = tokenLen;
             }
-            public readonly TextTemplate Template;
-            public readonly TState State;
-            public readonly Func<TState, String, String> GetVars;
             /// <summary>
-            /// The values of the transformed variables (null if there are none)
+            /// The index of the value in <see cref="Lookups"/>, -1 if the value is always unresolved (null)
             /// </summary>
-            public readonly Dictionary<String, String> Transformed;
+            public readonly int Lookup;
+            /// <summary>
+            /// The transform to apply to the value, null if the variable isn't transformed
+            /// </summary>
+            public readonly Func<String, String> Transform;
+            /// <summary>
+            /// The value to transform if the variable is unresolved (the default of the dictionary constructor, or the variable name)
+            /// </summary>
+            public readonly String TransformDefault;
+            /// <summary>
+            /// The number of occurrences of the variable
+            /// </summary>
+            public readonly int Count;
+            /// <summary>
+            /// The default value (dictionary constructor)
+            /// </summary>
+            public readonly String Default;
+            /// <summary>
+            /// The total length of the variable tokens (written as is if the variable is unresolved)
+            /// </summary>
+            public readonly int TokenLen;
         }
 
-        void Build<TState>(Span<Char> dest, in BuildState<TState> vars)
+        /// <summary>
+        /// Create the <see cref="Lookups"/> and <see cref="Slots"/> and set the <see cref="Block.Slot"/> of the variable blocks
+        /// </summary>
+        static (String[], Slot[]) CreateSlots(KeyValuePair<String, Tuple<int, String, bool, int>>[] varList, IEqualityComparer<String> varComparer,
+            KeyValuePair<String, Tuple<String, Func<String, String>>>[] trList, IEqualityComparer<String> trComparer, IReadOnlyDictionary<String, String> defs, Block[] blocks)
+        {
+            var lookups = new List<String>();
+            var lookupIndex = new Dictionary<String, int>(StringComparer.Ordinal);
+            int GetLookup(String name)
+            {
+                if (!lookupIndex.TryGetValue(name, out var index))
+                {
+                    index = lookups.Count;
+                    lookups.Add(name);
+                    lookupIndex.Add(name, index);
+                }
+                return index;
+            }
+            //  The transformed variables, the value provider is called with the name without the transform prefix
+            Dictionary<String, int> trIndex = null;
+            var trCount = trList?.Length ?? 0;
+            if (trCount > 0)
+            {
+                trIndex = new Dictionary<String, int>(trComparer);
+                for (int i = 0; i < trCount; ++i)
+                {
+                    trIndex[trList[i].Key] = i;
+                    GetLookup(trList[i].Value.Item1);
+                }
+            }
+            var vl = varList.Length;
+            var slots = new Slot[vl];
+            var slotIndex = new Dictionary<String, int>(varComparer);
+            for (int i = 0; i < vl; ++i)
+            {
+                var x = varList[i];
+                var k = x.Key;
+                var v = x.Value;
+                slotIndex[k] = i;
+                if (v.Item3)
+                {
+                    if ((trIndex != null) && trIndex.TryGetValue(k, out var ti))
+                    {
+                        var t = trList[ti];
+                        var name = t.Value.Item1;
+                        var trDef = defs == null ? t.Key : (defs.TryGetValue(name, out var dv) ? dv : null) ?? String.Empty;
+                        slots[i] = new Slot(GetLookup(name), t.Value.Item2, trDef, v.Item1, v.Item2, v.Item4);
+                    }
+                    else
+                    {
+                        slots[i] = new Slot(-1, null, null, v.Item1, v.Item2, v.Item4);
+                    }
+                    continue;
+                }
+                slots[i] = new Slot(GetLookup(k), null, null, v.Item1, v.Item2, v.Item4);
+            }
+            foreach (var b in blocks)
+            {
+                var v = b.Var;
+                if (v != null)
+                    b.Slot = slotIndex[v];
+            }
+            return (lookups.ToArray(), slots);
+        }
+
+        /// <summary>
+        /// The state of <see cref="Build(Span{char}, String[])"/>
+        /// </summary>
+        readonly struct BuildState
+        {
+            public BuildState(TextTemplate template, String[] values)
+            {
+                Template = template;
+                Values = values;
+            }
+            public readonly TextTemplate Template;
+            /// <summary>
+            /// The values computed by <see cref="Resolve{TState}(string[], TState, Func{TState, string, string})"/> (null if there are no variables)
+            /// </summary>
+            public readonly String[] Values;
+        }
+
+        void Build(Span<Char> dest, String[] values)
         {
             var blocks = Blocks;
-            var bc = blocks.Count;
             var temp = Template.AsSpan();
-            var def = VarsAndFrequency;
+            var nl = Lookups.Length;
             int offset = 0;
-            for (int i = 0; i < bc; ++ i)
+            foreach (var block in blocks)
             {
-                var block = blocks[i];
-                var v = block.Var;
-                if (v != null)
+                if (block.Var != null)
                 {
-                    var val = block.Transform ? (vars.Transformed.TryGetValue(v, out var t) ? t : null) : vars.GetVars(vars.State, v);
+                    var val = values[nl + block.Slot];
+                    //  Unresolved: left as is (the original text)
                     if (val == null)
                     {
-                        //  Unresolved: left as is (the original text) or the default
-                        if (KeepUnresolved)
-                        {
-                            var cl = block.Count;
-                            temp.Slice(block.Start, cl).CopyTo(dest.Slice(offset));
-                            offset += cl;
-                            continue;
-                        }
-                        val = def[v].Item2;
-                    }
-                    if (String.IsNullOrEmpty(val))
+                        var cl = block.Count;
+                        temp.Slice(block.Start, cl).CopyTo(dest.Slice(offset));
+                        offset += cl;
                         continue;
+                    }
                     val.AsSpan().CopyTo(dest.Slice(offset));
                     offset += val.Length;
                     continue;
@@ -725,6 +1022,29 @@ namespace SysWeaver
                 var l = block.Count;
                 temp.Slice(block.Start, l).CopyTo(dest.Slice(offset));
                 offset += l;
+            }
+        }
+
+        void Append(StringBuilder sb, String[] values)
+        {
+            var blocks = Blocks;
+            var temp = Template;
+            var nl = Lookups.Length;
+            foreach (var block in blocks)
+            {
+                if (block.Var != null)
+                {
+                    var val = values[nl + block.Slot];
+                    //  Unresolved: left as is (the original text)
+                    if (val == null)
+                    {
+                        sb.Append(temp, block.Start, block.Count);
+                        continue;
+                    }
+                    sb.Append(val);
+                    continue;
+                }
+                sb.Append(temp, block.Start, block.Count);
             }
         }
 

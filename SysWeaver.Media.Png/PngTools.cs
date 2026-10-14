@@ -137,7 +137,7 @@ namespace SysWeaver.Media.Png
         public static uint CalcCrc32(Byte[] data, long offset, long len, uint crc = 0)
         {
             var end = offset + Math.Max(0, Math.Min(data.LongLength - offset, len));
-            //  A valid range is computed 8 bytes at a time
+            //  A valid range is computed by the span overload
             if ((offset >= 0) && (end > offset))
                 return CalcCrc32(new ReadOnlySpan<Byte>(data, (int)offset, (int)(end - offset)), crc);
             //  Nothing to compute, or a negative offset (throws an IndexOutOfRangeException as before)
@@ -158,6 +158,42 @@ namespace SysWeaver.Media.Png
         /// <param name="crc">Initial crc, pass the result of a previous call to continue a computation (0 to start a new one)</param>
         /// <returns>The crc32 for the data</returns>
         public static uint CalcCrc32(ReadOnlySpan<Byte> data, uint crc = 0)
+            //  A new computation of at least VectorizedCrcMinLength bytes uses the vectorized (carry-less multiplication) System.IO.Hashing implementation
+            //  (same polynomial, initial value and final xor), it can't continue from a crc value: a continuation is computed with slicing by 8.
+            //  Continuing from a crc of 0 is the same as starting a new computation (0 ^ 0xffffffff is the initial value)
+            => ((crc == 0) && (data.Length >= VectorizedCrcMinLength)) ? System.IO.Hashing.Crc32.HashToUInt32(data) : SlicingBy8(data, crc);
+
+        /// <summary>
+        /// Shorter data is computed faster with slicing by 8 (System.IO.Hashing only vectorizes 64 bytes or more, and has a higher fixed cost)
+        /// </summary>
+        const int VectorizedCrcMinLength = 64;
+
+        /// <summary>
+        /// Compute the crc of a chunk: the chunk type (big endian) followed by the data
+        /// </summary>
+        /// <param name="id">The chunk type</param>
+        /// <param name="data">The chunk data</param>
+        /// <returns>The crc32</returns>
+        internal static uint CalcChunkCrc32(uint id, ReadOnlySpan<Byte> data)
+        {
+            Span<Byte> w = stackalloc Byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(w, id);
+            if (data.Length < VectorizedCrcMinLength)
+                return SlicingBy8(data, SlicingBy8(w, 0));
+            //  One vectorized computation of the id and the data
+            var c = new System.IO.Hashing.Crc32();
+            c.Append(w);
+            c.Append(data);
+            return c.GetCurrentHashAsUInt32();
+        }
+
+        /// <summary>
+        /// Compute the Crc32 checksum using "slicing by 8"
+        /// </summary>
+        /// <param name="data">Data</param>
+        /// <param name="crc">Initial crc, the result of a previous computation (0 to start a new one)</param>
+        /// <returns>The crc32 for the data</returns>
+        static uint SlicingBy8(ReadOnlySpan<Byte> data, uint crc)
         {
             var c = crc ^ 0xffffffff;
             //  "Slicing by 8": 8 table lookups per 8 bytes instead of one dependent lookup per byte (same result).
@@ -451,8 +487,7 @@ namespace SysWeaver.Media.Png
             pngFile.Write(w);
             if (len > 0)
                 pngFile.Write(data, 0, len);
-            var crc = CalcCrc32(w, 0);
-            d = CalcCrc32(data, crc);
+            d = CalcChunkCrc32(c.Id, data);
             w[0] = (Byte)(d >> 24);
             w[1] = (Byte)(d >> 16);
             w[2] = (Byte)(d >> 8);

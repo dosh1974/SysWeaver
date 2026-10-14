@@ -55,6 +55,13 @@ namespace SysWeaver
         public String Auth;
 
         /// <summary>
+        /// Optional: the pre-processed tokens of <see cref="Auth"/> (as returned by Authorization.GetRequiredTokens, ex: a static list or a RequiredTokensCache field of the producer), so that the requirement isn't parsed per check.
+        /// Null means that <see cref="Auth"/> is parsed per check. When set, it must be the parsed <see cref="Auth"/>.
+        /// </summary>
+        [TableDataIgnore]
+        public IReadOnlyList<String> AuthTokens;
+
+        /// <summary>
         /// The full path of the file on disc
         /// </summary>
         [TableDataText]

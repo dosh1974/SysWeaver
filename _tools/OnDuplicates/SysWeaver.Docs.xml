@@ -55,7 +55,7 @@
             </summary>
             <remarks>
             <para>The documentation is read from the "AssemblyName.xml" file next to each assembly's <see cref="P:System.Reflection.Assembly.Location"/> the first time an assembly is needed,
-            and all results are cached (thread safe). Assemblies without a location (single-file publish, dynamic) or without a documentation file yield null.</para>
+            and all results are cached (thread safe; the reflection objects of collectible assemblies are held weakly, so that they can be unloaded).Assemblies without a location (single-file publish, dynamic) or without a documentation file yield null.</para>
             <para>Lookups also search the assemblies of the declaring type's interfaces and base types.
             Fields, properties, methods and constructors are matched exactly first (the member definition, regardless of the type it was reflected from),
             so a documented base member and a documented override each get their own documentation.
@@ -64,6 +64,12 @@
             Members of constructed generic types (ex: List&lt;int&gt;) and constructed generic methods are looked up on their generic definitions.</para>
             <para>Used for command line help (SysWeaver.CommandLine), config file comments (loaded by name from SysWeaver.Common), API/type info and table column descriptions.</para>
             </remarks>
+        </member>
+        <member name="T:SysWeaver.Docs.XmlDocExt.ReflectionCache`2">
+            <summary>
+            A thread safe cache keyed by reflection objects: keys of collectible assemblies are held weakly (a <see cref="T:System.Runtime.CompilerServices.ConditionalWeakTable`2"/>, so that the assembly can be unloaded),
+            all other keys in a dictionary.
+            </summary>
         </member>
         <member name="M:SysWeaver.Docs.XmlDocExt.Definition``1(``0)">
             <summary>

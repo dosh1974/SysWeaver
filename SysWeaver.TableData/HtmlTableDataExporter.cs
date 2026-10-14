@@ -70,6 +70,51 @@ namespace SysWeaver.Data
             Cell = Create(cell);
             Name = name;
             Desc = desc;
+            //  Stream the rows / cells into the document when the result is the same (the templates only use the variables that are known at that point)
+            if (OnlyUses(Body, "Title", "Rows"))
+                (BodyPre, BodyPost) = Split(Body, "Rows");
+            if (OnlyUses(Row, "Cells") && (!Uses(Header, "Cells")) && (!Uses(Cell, "Cells")) && (!Uses(Body, "Cells")))
+                (RowPre, RowPost) = Split(Row, "Cells");
+        }
+
+        static bool Uses(TextTemplate t, String name)
+        {
+            foreach (var x in t.Vars)
+                if (String.Equals(x, name, StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+
+        static bool OnlyUses(TextTemplate t, String a, String b = null)
+        {
+            foreach (var x in t.Vars)
+                if ((!String.Equals(x, a, StringComparison.Ordinal)) && (!String.Equals(x, b, StringComparison.Ordinal)))
+                    return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Split a template at the only occurrence of an untransformed variable.
+        /// </summary>
+        /// <param name="t">The template</param>
+        /// <param name="name">The name of the variable</param>
+        /// <returns>The templates before and after the variable, (null, null) if the variable isn't used exactly once (untransformed) or if the parts don't render as the template</returns>
+        static (TextTemplate, TextTemplate) Split(TextTemplate t, String name)
+        {
+            var text = t.Template;
+            var token = String.Concat("${", name, "}");
+            var i = text.IndexOf(token, StringComparison.Ordinal);
+            if ((i < 0) || (text.IndexOf(token, i + 1, StringComparison.Ordinal) >= 0))
+                return (null, null);
+            var pre = new TextTemplate(text.Substring(0, i), "${", "}");
+            var post = new TextTemplate(text.Substring(i + token.Length), "${", "}");
+            if (Uses(pre, name) || Uses(post, name))
+                return (null, null);
+            //  Every variable rendered as a unique text: the parts must render the same text (the variable is a token of the template)
+            static String Marker(String v) => String.Concat("\u0001", v, "\u0002");
+            if (!String.Equals(t.Get(Marker), String.Concat(pre.Get(Marker), Marker(name), post.Get(Marker)), StringComparison.Ordinal))
+                return (null, null);
+            return (pre, post);
         }
 
 
@@ -90,6 +135,129 @@ namespace SysWeaver.Data
         readonly TextTemplate Row;
         readonly TextTemplate Header;
         readonly TextTemplate Cell;
+
+        /// <summary>
+        /// The <see cref="Body"/> before / after the rows (null if the rows can't be streamed into the document)
+        /// </summary>
+        readonly TextTemplate BodyPre, BodyPost;
+
+        /// <summary>
+        /// The <see cref="Row"/> before / after the cells (null if the cells can't be streamed into the document)
+        /// </summary>
+        readonly TextTemplate RowPre, RowPost;
+
+        /// <summary>
+        /// The template variables (the values of a dictionary that is reused for all templates, default = not set).
+        /// The values are memory: a pre-formatted cell is written without its leading (Char)1, a cell title can be formatted into <see cref="TitleBuffer"/> (no string per cell).
+        /// </summary>
+        sealed class Vars
+        {
+            public ReadOnlyMemory<Char> Title;
+            public ReadOnlyMemory<Char> Text;
+            public ReadOnlyMemory<Char> TextFmt;
+            public ReadOnlyMemory<Char> Class;
+            public ReadOnlyMemory<Char> Cells;
+            public ReadOnlyMemory<Char> Rows;
+
+            /// <summary>
+            /// A reused buffer for the cell titles that are formatted without a string (see <see cref="SetTitle(object)"/>)
+            /// </summary>
+            Char[] TitleBuffer = new Char[64];
+
+            /// <summary>
+            /// The largest title buffer (a value that doesn't fit is converted with ToString)
+            /// </summary>
+            const int MaxTitleBuffer = 4096;
+
+            /// <summary>
+            /// Set the <see cref="Title"/> to the text of value?.ToString() ?? "".
+            /// The CoreLib types whose ToString() is the same text as TryFormat without a format and provider (the current culture) are formatted into the reused buffer.
+            /// </summary>
+            /// <param name="value">The cell value</param>
+            public void SetTitle(Object value)
+            {
+                if (value is String s)
+                {
+                    Title = s.AsMemory();
+                    return;
+                }
+                if (value is SByte or Int16 or Int32 or Int64 or Byte or UInt16 or UInt32 or UInt64 or Single or Double or Decimal
+                    or DateTime or DateTimeOffset or DateOnly or TimeOnly or TimeSpan or Guid)
+                {
+                    var f = (ISpanFormattable)value;
+                    var b = TitleBuffer;
+                    while (b.Length <= MaxTitleBuffer)
+                    {
+                        if (f.TryFormat(b, out var written, default, null))
+                        {
+                            Title = new ReadOnlyMemory<Char>(b, 0, written);
+                            return;
+                        }
+                        b = new Char[b.Length * 2];
+                        TitleBuffer = b;
+                    }
+                }
+                Title = (value?.ToString() ?? "").AsMemory();
+            }
+
+            public static readonly Func<Vars, String, ReadOnlyMemory<Char>> Get = static (v, name) => name switch
+            {
+                "Title" => v.Title,
+                "Text" => v.Text,
+                "TextFmt" => v.TextFmt,
+                "Class" => v.Class,
+                "Cells" => v.Cells,
+                "Rows" => v.Rows,
+                _ => default,
+            };
+        }
+
+        /// <summary>
+        /// Remove the trailing white space (as <see cref="String.TrimEnd()"/>) from the text appended after <paramref name="start"/>
+        /// </summary>
+        static void TrimEnd(StringBuilder sb, int start)
+        {
+            var l = sb.Length;
+            while ((l > start) && Char.IsWhiteSpace(sb[l - 1]))
+                --l;
+            sb.Length = l;
+        }
+
+        /// <summary>
+        /// Start a template that contains the text appended after this call (the cells of a row or the rows of the body)
+        /// </summary>
+        /// <returns>The start of the inner text</returns>
+        static int Begin(StringBuilder sb, TextTemplate pre, Vars vars)
+        {
+            pre?.AppendMemoryValuesTo(sb, vars, Vars.Get);
+            return sb.Length;
+        }
+
+        /// <summary>
+        /// End a template that contains the text appended after <paramref name="start"/> (trimmed at the end)
+        /// </summary>
+        /// <param name="sb">The builder</param>
+        /// <param name="start">The start of the inner text (returned by <see cref="Begin(StringBuilder, TextTemplate, Vars)"/>)</param>
+        /// <param name="template">The whole template</param>
+        /// <param name="post">The template after the inner text, null if the inner text isn't streamed (the whole template is rendered with the inner text as a variable)</param>
+        /// <param name="vars">The variables</param>
+        /// <param name="isRows">True for the rows of the body, false for the cells of a row</param>
+        static void End(StringBuilder sb, int start, TextTemplate template, TextTemplate post, Vars vars, bool isRows)
+        {
+            TrimEnd(sb, start);
+            if (post != null)
+            {
+                post.AppendMemoryValuesTo(sb, vars, Vars.Get);
+                return;
+            }
+            var inner = sb.ToString(start, sb.Length - start).AsMemory();
+            sb.Length = start;
+            if (isRows)
+                vars.Rows = inner;
+            else
+                vars.Cells = inner;
+            template.AppendMemoryValuesTo(sb, vars, Vars.Get);
+        }
 
         
         /// <inheritdoc/>
@@ -228,20 +396,29 @@ namespace SysWeaver.Data
         public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             options = options ?? new TableDataExportOptions();
-            StringBuilder rowsBuilder = new StringBuilder();
+            //  The whole document is rendered into one builder: the rows and cells are appended between the parts of the body / row templates (when possible, else rendered as a variable)
+            var sb = new StringBuilder(4096);
             var cols = tableData.Cols;
             var colMax = cols?.Length ?? 0;
             var colToStrings = new ValueTuple<TableDataExporterTools.Formatter, bool>[colMax];
             //  The cell classes of a column: [0] = left aligned, [1] = right aligned
             var classes = new String[colMax * 2];
             var hide = new bool[colMax];
-            Dictionary<String, String> vals = new Dictionary<string, string>(StringComparer.Ordinal);
+            var vals = new Vars();
             var dc = Classes;
             var headers = !options.NoHeaders;
-            var rowBuilder = new StringBuilder();
+            var name = String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename;
+            var bodyPost = BodyPost;
+            var rowPre = RowPre;
+            var rowPost = RowPost;
+            Vars bodyVars = null;
+            if (bodyPost != null)
+                bodyVars = new Vars { Title = (tableData.Title ?? name).AsMemory() };
+            var rowsStart = Begin(sb, BodyPre, bodyVars);
             if (cols != null)
             {
                 var coll = cols.Length;
+                var cellsStart = headers ? Begin(sb, rowPre, vals) : 0;
                 for (int i = 0; i < coll; ++i)
                 {
                     var col = cols[i];
@@ -258,17 +435,14 @@ namespace SysWeaver.Data
                     }
                     if (headers)
                     {
-                        vals["Title"] = col.Desc ?? "";
-                        vals["Text"] = (col.Title ?? col.Name ?? "").Replace(' ', (Char)0xa0);
-                        vals["Class"] = (colFmt.Item2 ? "r " : "") + (cl ?? "").Replace("m", "").Trim();
-                        rowBuilder.Append(Header.Get(vals));
+                        vals.Title = (col.Desc ?? "").AsMemory();
+                        vals.Text = (col.Title ?? col.Name ?? "").Replace(' ', (Char)0xa0).AsMemory();
+                        vals.Class = ((colFmt.Item2 ? "r " : "") + (cl ?? "").Replace("m", "").Trim()).AsMemory();
+                        Header.AppendMemoryValuesTo(sb, vals, Vars.Get);
                     }
                 }
                 if (headers)
-                {
-                    vals["Cells"] = rowBuilder.ToString().TrimEnd();
-                    rowsBuilder.Append(Row.Get(vals));
-                }
+                    End(sb, cellsStart, Row, rowPost, vals, false);
             }
 
             var rows = tableData.Rows;
@@ -282,7 +456,7 @@ namespace SysWeaver.Data
                         var tl = t.Length;
                         if (tl > 0)
                         {
-                            rowBuilder.Clear();
+                            var cellsStart = Begin(sb, rowPre, vals);
                             for (int x = 0; x < tl; ++x)
                             {
                                 var ni = x + 1;
@@ -308,23 +482,25 @@ namespace SysWeaver.Data
                                     (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
                                 var valueText = fmt(value, nextValue, col);
                                 var isFormatted = (!String.IsNullOrEmpty(valueText)) && (valueText[0] == 1);
-                                vals["Title"] = value?.ToString() ?? "";
-                                vals["Text"] = isFormatted ? "" : (valueText ?? "");
-                                vals["TextFmt"] = isFormatted ? valueText.Substring(1) : "";
-                                vals["Class"] = x < colMax ? classes[x * 2 + (rightAlign ? 1 : 0)] : (rightAlign ? "r " : "");
-                                rowBuilder.Append(Cell.Get(vals));
+                                vals.SetTitle(value);
+                                vals.Text = (isFormatted ? "" : (valueText ?? "")).AsMemory();
+                                //  The markup without the leading (Char)1 (no substring)
+                                vals.TextFmt = isFormatted ? valueText.AsMemory(1) : "".AsMemory();
+                                vals.Class = (x < colMax ? classes[x * 2 + (rightAlign ? 1 : 0)] : (rightAlign ? "r " : "")).AsMemory();
+                                Cell.AppendMemoryValuesTo(sb, vals, Vars.Get);
                             }
-                            vals["Cells"] = rowBuilder.ToString().TrimEnd();
-                            rowsBuilder.Append(Row.Get(vals));
+                            End(sb, cellsStart, Row, rowPost, vals, false);
                         }
                     }
                 }
             }
-            var name = String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename;
-            vals["Title"] = tableData.Title ?? name;
-            vals["Rows"] = rowsBuilder.ToString().TrimEnd();
-            var text = Body.Get(vals);
-            return Task.FromResult(new MemoryFile(name + ".html", Mimes.HtmlText, Encoding.UTF8.GetBytes(text)));
+            if (bodyVars == null)
+            {
+                bodyVars = vals;
+                vals.Title = (tableData.Title ?? name).AsMemory();
+            }
+            End(sb, rowsStart, Body, bodyPost, bodyVars, true);
+            return Task.FromResult(new MemoryFile(name + ".html", Mimes.HtmlText, TableDataExporterTools.GetUtf8Bytes(sb)));
         }
     }
 

@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> A dependency-free PNG decoder and chunk inspector.
+> A managed PNG decoder and chunk inspector (no native dependencies).
 
 | | |
 |---|---|
@@ -33,5 +33,5 @@ Read PNG images and their metadata chunks (for example embedded text) without a 
 ## Relationships
 
 - **Project:** [`SysWeaver.Media.Png.csproj`](SysWeaver.Media.Png.csproj)
-- **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md)
+- **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md), the System.IO.Hashing package (the vectorized CRC-32 of `CalcCrc32` and the chunk writing)
 - **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md)

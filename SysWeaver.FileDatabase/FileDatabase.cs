@@ -122,7 +122,7 @@ namespace SysWeaver.FileDatabase
             using var _ = PerfMon.Track(nameof(Init));
             var msg = Msg;
             List<T> allList = new List<T>();
-            msg?.AddMessage(Prefix + "Syncing file system with database");
+            msg?.AddMessage(MessageLevels.Info, $"{Prefix}Syncing file system with database");
             using (msg?.Tab())
             {
                 var db = Db;
@@ -221,7 +221,7 @@ namespace SysWeaver.FileDatabase
                     {
                         if (!Directory.Exists(folderName))
                         {
-                            msg?.AddMessage(Prefix + "Folder " + folderName.ToQuoted() + " doesn't exist, ignoring!", MessageLevels.Warning);
+                            msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Folder {folderName.ToQuoted()} doesn't exist, ignoring!");
                             continue;
                         }
                         var folder = folderName;
@@ -230,7 +230,7 @@ namespace SysWeaver.FileDatabase
                             var pex = validFolders.StartsWithAny(folderName);
                             if (pex != null)
                             {
-                                msg?.AddMessage(Prefix + "Folder " + folderName.ToQuoted() + " is already covered by folder " + pex.ToQuoted() + ", ignoring!", MessageLevels.Warning);
+                                msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Folder {folderName.ToQuoted()} is already covered by folder {pex.ToQuoted()}, ignoring!");
                                 continue;
                             }
                         }

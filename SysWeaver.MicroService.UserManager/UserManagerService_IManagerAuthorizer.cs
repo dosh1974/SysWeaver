@@ -179,16 +179,28 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
+        /// The base64 chars of a hash that are encoded on the stack (a SHA-256 hash is 44 chars)
+        /// </summary>
+        const int MaxStackPasswordHashChars = 128;
+
+        /// <summary>
         /// Constant time compare of a stored password hash (base64) and a hash (the stored hash is password equivalent)
         /// </summary>
         static bool IsSamePasswordHash(String storedPwd, byte[] hash)
         {
             if (storedPwd == null)
                 return false;
-            var h = AuthTools.HashToString(hash);
+            //  The base64 text of the hash on the stack (the same chars as AuthTools.HashToString), a hash that doesn't fit uses the string
+            ReadOnlySpan<Byte> hs = hash;
+            scoped ReadOnlySpan<Char> h;
+            Span<Char> b = stackalloc Char[MaxStackPasswordHashChars];
+            if (Convert.TryToBase64Chars(hs, b, out var written))
+                h = b.Slice(0, written);
+            else
+                h = AuthTools.HashToString(hs);
             return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                 System.Runtime.InteropServices.MemoryMarshal.AsBytes(storedPwd.AsSpan()),
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(h.AsSpan()));
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(h));
         }
 
         /// <summary>

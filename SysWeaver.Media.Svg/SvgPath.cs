@@ -1145,46 +1145,70 @@ namespace SysWeaver.Media
             double maxX = double.MinValue;
             double minY = double.MaxValue;
             double maxY = double.MinValue;
-            List<double>[] points = new List<double>[c];
+            //  The points of each region (x0, y0, x1, y1..) and its y range (min, max)
+            double[][] points = new double[c][];
+            double[] yRanges = new double[c * 2];
+            var buf = new List<double>();
+            Action<double, double> onPoint = (tx, ty) =>
+            {
+                tx /= xPrio;
+
+                if (tx < minX)
+                    minX = tx;
+                if (ty < minY)
+                    minY = ty;
+
+                if (tx > maxX)
+                    maxX = tx;
+                if (ty > maxY)
+                    maxY = ty;
+                var prev = buf.Count - 2;
+                if (prev >= 0)
+                {
+                    if ((tx == buf[prev]) && (ty == buf[prev + 1]))
+                        return;
+                }
+                buf.Add(tx);
+                buf.Add(ty);
+            };
             for (int i = 0; i < c; ++i)
             {
                 var p = regions[i] + 'Z';
-                var pp = new List<double>();
-                points[i] = pp;
-                Process(p, (tx, ty) =>
-                {
-                    tx /= xPrio;
-
-                    if (tx < minX)
-                        minX = tx;
-                    if (ty < minY)
-                        minY = ty;
-
-                    if (tx > maxX)
-                        maxX = tx;
-                    if (ty > maxY)
-                        maxY = ty;
-                    var prev = pp.Count - 2;
-                    if (prev >= 0)
-                    {
-                        if ((tx == pp[prev]) && (ty == pp[prev + 1]))
-                            return;
-                    }
-                    pp.Add(tx);
-                    pp.Add(ty);
-                });
-                var pl = pp.Count - 2;
+                buf.Clear();
+                Process(p, onPoint);
+                var pl = buf.Count - 2;
                 if (pl > 0)
                 {
-                    if ((pp[pl] == pp[0]) && (pp[pl + 1] == pp[1]))
-                        pp.RemoveRange(pl, 2);
+                    if ((buf[pl] == buf[0]) && (buf[pl + 1] == buf[1]))
+                        buf.RemoveRange(pl, 2);
                 }
+                var a = buf.ToArray();
+                points[i] = a;
+                //  A point with a y outside of [min, max) can't be inside (no edge crosses it), NaN never skips
+                double lo = double.PositiveInfinity;
+                double hi = double.NegativeInfinity;
+                for (int k = 1; k < a.Length; k += 2)
+                {
+                    var v = a[k];
+                    if (double.IsNaN(v))
+                    {
+                        lo = double.NegativeInfinity;
+                        hi = double.PositiveInfinity;
+                        break;
+                    }
+                    if (v < lo)
+                        lo = v;
+                    if (v > hi)
+                        hi = v;
+                }
+                yRanges[i * 2] = lo;
+                yRanges[i * 2 + 1] = hi;
             }
 
-            bool IsInside(double pX, double pY, List<double> polygon)
+            bool IsInside(double pX, double pY, double[] polygon)
             {
                 bool inside = false;
-                var pc = polygon.Count;
+                var pc = polygon.Length;
 
                 int j = pc - 2;
                 for (int i = 0; i < pc; i += 2)
@@ -1207,11 +1231,13 @@ namespace SysWeaver.Media
                 bool isInside = false;
                 for (int j = 0; j < c; ++j)
                 {
+                    if ((py < yRanges[j * 2]) || (py >= yRanges[j * 2 + 1]))
+                        continue;
                     var pp = points[j];
                     if (!IsInside(px, py, pp))
                         continue;
                     isInside = true;
-                    var pc = pp.Count;
+                    var pc = pp.Length;
                     var prevx = pp[pc - 2];
                     var prevy = pp[pc - 1];
                     for (int i = 0; i < pc; i += 2)
@@ -1628,25 +1654,63 @@ namespace SysWeaver.Media
             size = rad / Math.Max(mx, my);
             offsetX += rad;
             offsetY += rad;
-            String[] c = new String[n];
-            var fmt = SvgTools.GetFormat(maxDecimals);
-            for (int i = 0; i < n; i++)
-            {
-                var xp = x[i] * size + offsetX;
-                var yp = y[i] * size + offsetY;
-                c[i] = String.Join(' ', fmt(xp), fmt(yp));
-            }
+            //  The format of SvgTools.GetFormat (same exception for a negative maxDecimals), each coordinate is formatted once into the builder
+            var numFormat = "0." + new String('#', maxDecimals);
+            var f = SvgTools.Format;
+            //  The last vertex is written first and last
+            Span<Char> last = stackalloc Char[MaxStackVertex];
+            var lastLength = FormatVertex(last, x[n - 1] * size + offsetX, y[n - 1] * size + offsetY, numFormat, f);
+            String lastText = lastLength < 0 ? String.Join(' ', (x[n - 1] * size + offsetX).ToString(numFormat, f), (y[n - 1] * size + offsetY).ToString(numFormat, f)) : null;
             StringBuilder b = new StringBuilder();
-            b.Append('M').Append(c[n - 1]);
+            b.Append('M');
+            if (lastText == null)
+                b.Append(last.Slice(0, lastLength));
+            else
+                b.Append(lastText);
             b.Append('L');
-            for (int i = 0; i < n; i++)
+            Span<Char> t = stackalloc Char[MaxStackVertex];
+            var nl = n - 1;
+            for (int i = 0; i < nl; i++)
             {
                 if (i > 0)
                     b.Append(' ');
-                b.Append(c[i]);
+                var xp = x[i] * size + offsetX;
+                var yp = y[i] * size + offsetY;
+                var tl = FormatVertex(t, xp, yp, numFormat, f);
+                if (tl >= 0)
+                    b.Append(t.Slice(0, tl));
+                else
+                    b.Append(xp.ToString(numFormat, f)).Append(' ').Append(yp.ToString(numFormat, f));
             }
+            b.Append(' ');
+            if (lastText == null)
+                b.Append(last.Slice(0, lastLength));
+            else
+                b.Append(lastText);
             b.Append('z');
             return b.ToString();
+        }
+
+        /// <summary>
+        /// The size of the stack buffers used to format a vertex
+        /// </summary>
+        const int MaxStackVertex = 128;
+
+        /// <summary>
+        /// Format "x y" with the number format (the same text as ToString(numFormat, f) of both)
+        /// </summary>
+        /// <returns>The number of chars written, -1 if the text doesn't fit</returns>
+        static int FormatVertex(Span<Char> d, double x, double y, String numFormat, IFormatProvider f)
+        {
+            if (!x.TryFormat(d, out var w, numFormat, f))
+                return -1;
+            if (w >= d.Length)
+                return -1;
+            d[w] = ' ';
+            ++w;
+            if (!y.TryFormat(d.Slice(w), out var w2, numFormat, f))
+                return -1;
+            return w + w2;
         }
 
 

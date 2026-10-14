@@ -8,6 +8,10 @@ namespace SimpleStack.Orm
     {
         public readonly ILoggerFactory _loggerFactory;
         private readonly ILogger<OrmConnection> _logger;
+        /// <summary>
+        /// The logger of the commands of this connection, created by the first command (not one per command)
+        /// </summary>
+        private ILogger<OrmCommand> _commandLogger;
         private bool _isOpen;
 
         /// <summary>
@@ -143,7 +147,11 @@ namespace SimpleStack.Orm
         /// <inheritdoc />
         protected override DbCommand CreateDbCommand()
         {
-            var cmd = new OrmCommand(DbConnection.CreateCommand(), _loggerFactory);
+            var inner = DbConnection.CreateCommand();
+            var logger = _commandLogger;
+            if (logger == null)
+                _commandLogger = logger = _loggerFactory.CreateLogger<OrmCommand>();
+            var cmd = new OrmCommand(inner, logger);
             if (Transaction != null)
             {
                 cmd.Transaction = Transaction.trans;

@@ -101,7 +101,7 @@ namespace SysWeaver.Security
                 var fi = new FileInfo(RootFilename);
                 if (!fi.Exists)
                 {
-                    Msg?.AddMessage(Prefix + "Can't get public certificate from " + RootFilename.ToFilename() + " since the file doesn't exist!", MessageLevels.Warning);
+                    Msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Can't get public certificate from {RootFilename.ToFilename()} since the file doesn't exist!");
                     return false;
                 }
                 var lwt = fi.LastWriteTimeUtc;
@@ -130,7 +130,7 @@ namespace SysWeaver.Security
             }
             catch (Exception ex)
             {
-                Msg?.AddMessage(Prefix + "Failed to get public certificate from " + RootFilename.ToFilename(), ex, MessageLevels.Warning);
+                Msg?.AddMessage(MessageLevels.Warning, $"{Prefix}Failed to get public certificate from {RootFilename.ToFilename()}", ex);
                 return false;
             }
         }
