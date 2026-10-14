@@ -393,28 +393,90 @@ namespace SysWeaver.Net.IsoDataModule
         [WebMenuTable(null, "Debug/Data/{0}", "Phone number prefixes", null, "IconTablePhone")]
         public TableData PhonePrefixTable(TableDataRequest r) => TableDataTools.Get(r, 30000, PhonePrefix.Codes);
 
-        IHttpRequestHandler HandleCountry(String name)
+        const String FlagPrefix = "icons/flags/";
+        const String FlagSuffix = ".svg";
+
+        /// <summary>
+        /// Urls up to this length are built on the stack
+        /// </summary>
+        const int MaxStackUrl = 256;
+
+        /// <summary>
+        /// Get the handler of a flag icon, the same as Data.TryGetHandler("icons/flags/" + code.FastToLower() + ".svg") with the url built on the stack (no allocation)
+        /// </summary>
+        /// <param name="code">The country code (or any name)</param>
+        /// <returns>The handler or null if there is no such flag</returns>
+        IStaticHttpRequestHandler GetFlag(ReadOnlySpan<Char> code)
         {
-            if (name.FastEquals("explore"))
+            var cl = code.Length;
+            var l = FlagPrefix.Length + cl + FlagSuffix.Length;
+            if (l > MaxStackUrl)
+                return Data.TryGetHandler(String.Concat(FlagPrefix, code.ToString().FastToLower(), FlagSuffix));
+            Span<Char> url = stackalloc Char[l];
+            FlagPrefix.CopyTo(url);
+            //  The same chars as FastToLower (invariant culture)
+            code.ToLowerInvariant(url.Slice(FlagPrefix.Length, cl));
+            FlagSuffix.CopyTo(url.Slice(FlagPrefix.Length + cl));
+            return Data.TryGetHandler(url);
+        }
+
+        /// <summary>
+        /// The same as <paramref name="csv"/>.Split(',').Contains(<paramref name="value"/>) without the split
+        /// </summary>
+        /// <exception cref="NullReferenceException"><paramref name="csv"/> is null</exception>
+        static bool ContainsPart(String csv, String value)
+        {
+            var s = csv.AsSpan(0, csv.Length);
+            if (value == null)
+                return false;
+            foreach (var r in s.Split(','))
+                if (s[r].SequenceEqual(value))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// The same as l?.Where(x => x.IsoCountry != null)?.FirstOrDefault()?.IsoCountry without the enumerators
+        /// </summary>
+        static String FirstIsoCountry(IReadOnlyList<PhonePrefix> l)
+        {
+            if (l == null)
                 return null;
+            var c = l.Count;
+            for (int i = 0; i < c; ++i)
+            {
+                var ic = l[i].IsoCountry;
+                if (ic != null)
+                    return ic;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The text before the first '.' (the file name of a request url without the extension)
+        /// </summary>
+        static ReadOnlySpan<Char> RemoveExtension(ReadOnlySpan<Char> name)
+        {
             var i = name.IndexOf('.');
-            if (i >= 0)
-                name = name.Substring(0, i);
+            return i >= 0 ? name.Slice(0, i) : name;
+        }
+
+        IHttpRequestHandler HandleCountry(ReadOnlySpan<Char> name)
+        {
+            if (name.SequenceEqual("explore"))
+                return null;
+            name = RemoveExtension(name);
             var ci = IsoCountry.TryGetName(name);
             if (ci == null)
-            {
-                var t = Data.TryGetHandler("icons/flags/" + name.FastToLower() + ".svg");
-                return t ?? Unknown;
-            }
-            return Data.TryGetHandler("icons/flags/" + ci.Iso3166a2.FastToLower() + ".svg");
+                return GetFlag(name) ?? Unknown;
+            return GetFlag(ci.Iso3166a2);
         }
 
         IEnumerable<IHttpServerEndPoint> EnumCountries()
         {
-            var d = Data;
             foreach (var x in IsoCountry.Aliases)
             {
-                IHttpServerEndPoint t = d.TryGetHandler("icons/flags/" + x.Value.Iso3166a2.FastToLower() + ".svg");
+                IHttpServerEndPoint t = GetFlag(x.Value.Iso3166a2);
                 if (t != null)
                     yield return new HttpServerEndPoint(
                         String.Concat("iso_data/country/", x.Key, ".svg"),
@@ -440,28 +502,18 @@ namespace SysWeaver.Net.IsoDataModule
             {  "ko", "KR" },
         }.Freeze();
 
-        IHttpRequestHandler HandleLanguage(String name)
+        /// <summary>
+        /// Get the country whose flag represents a language: the country with the same ISO code if the language is spoken there, a hard coded country or the first known country where the language is spoken
+        /// </summary>
+        /// <returns>The country or null</returns>
+        static IsoCountry GetLanguageCountry(IsoLanguage lang)
         {
-            if (name.FastEquals("explore"))
-                return null;
-            var i = name.IndexOf('.');
-            if (i >= 0)
-                name = name.Substring(0, i);
-            var lang = IsoLanguage.TryGet(out var ci, name);
-            if (ci != null)
-                return Data.TryGetHandler("icons/flags/" + ci.Iso3166a2.FastToLower() + ".svg");
-            if (lang == null)
-            {
-                lang = IsoLanguage.TryGetName(name);
-                if (lang == null)
-                    return Unknown;
-            }
-            name = lang.Iso639_1;
+            var name = lang.Iso639_1;
             //  Same iso
-            ci = IsoCountry.TryGet(name);
+            var ci = IsoCountry.TryGet(name);
             if (ci != null)
             {
-                if (!ci.Languages.Split(',').Contains(name))
+                if (!ContainsPart(ci.Languages, name))
                     ci = null;
             }
         //  Hardcoded map
@@ -476,27 +528,53 @@ namespace SysWeaver.Net.IsoDataModule
                         break;
                 }
             }
+            return ci;
+        }
+
+        IHttpRequestHandler HandleLanguage(ReadOnlySpan<Char> name)
+        {
+            if (name.SequenceEqual("explore"))
+                return null;
+            name = RemoveExtension(name);
+            var lang = IsoLanguage.TryGet(out var ci, name);
+            if (ci != null)
+                return GetFlag(ci.Iso3166a2);
+            if (lang == null)
+            {
+                lang = IsoLanguage.TryGetName(name);
+                if (lang == null)
+                    return Unknown;
+            }
+            ci = GetLanguageCountry(lang);
             if (ci == null)
                 return Unknown;
-            return Data.TryGetHandler("icons/flags/" + ci.Iso3166a2.FastToLower() + ".svg");
+            return GetFlag(ci.Iso3166a2);
         }
 
 
         IEnumerable<IHttpServerEndPoint> EnumLanguages()
         {
-            var d = Data;
             foreach (var x in IsoCountry.Countries)
             {
                 var ll = x.Languages;
                 if (ll == null)
                     continue;
                 var cc = x.Iso3166a2;
-                IHttpServerEndPoint t = d.TryGetHandler("icons/flags/" + cc.FastToLower() + ".svg");
+                IHttpServerEndPoint t = GetFlag(cc);
                 if (t == null)
                     continue;
-                foreach (var lang in ll.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    yield return new HttpServerEndPoint(
-                        String.Concat("iso_data/language/", lang, '-', cc, ".svg"),
+                //  The same parts as ll.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), without the split
+                var lll = ll.Length;
+                for (int s = 0; ;)
+                {
+                    var e = ll.IndexOf(',', s);
+                    if (e < 0)
+                        e = lll;
+                    var url = GetLanguageUrl(ll, s, e, cc);
+                    s = e + 1;
+                    if (url != null)
+                        yield return new HttpServerEndPoint(
+                        url,
                         t.Method,
                         t.ClientCacheDuration,
                         t.RequestCacheDuration,
@@ -510,33 +588,16 @@ namespace SysWeaver.Net.IsoDataModule
                         t.Mime,
                         null
                         );
+                    if (e >= lll)
+                        break;
+                }
             }
             foreach (var ln in IsoLanguage.Aliases)
             {
-                var lang = ln.Value;
-                var name = lang.Iso639_1;
-                //  Same iso
-                var ci = IsoCountry.TryGet(name);
+                var ci = GetLanguageCountry(ln.Value);
                 if (ci != null)
                 {
-                    if (!ci.Languages.Split(',').Contains(name))
-                        ci = null;
-                }
-                if ((ci == null) && LangMap.TryGetValue(name, out var cname))
-                    ci = IsoCountry.TryGet(cname);
-                if (ci == null)
-                {
-                    foreach (var x in lang.GetCountries())
-                    {
-                        ci = IsoCountry.TryGet(x);
-                        if (ci != null)
-                            break;
-                    }
-                }
-                if (ci != null)
-                {
-                    var cc = ci.Iso3166a2;
-                    IHttpServerEndPoint t = d.TryGetHandler("icons/flags/" + cc.FastToLower() + ".svg");
+                    IHttpServerEndPoint t = GetFlag(ci.Iso3166a2);
                     if (t == null)
                         continue;
                     yield return new HttpServerEndPoint(
@@ -560,41 +621,55 @@ namespace SysWeaver.Net.IsoDataModule
 
 
 
-        IHttpRequestHandler HandlePhonePrefix(String name)
+        /// <summary>
+        /// The same as String.Concat("iso_data/language/", part, '-', cc, ".svg") where part is the trimmed text from <paramref name="s"/> to <paramref name="e"/> (one allocation)
+        /// </summary>
+        /// <returns>The url or null if the trimmed part is empty</returns>
+        static String GetLanguageUrl(String ll, int s, int e, String cc)
         {
-            if (name.FastEquals("explore"))
+            const String prefix = "iso_data/language/";
+            var part = ll.AsSpan(s, e - s).Trim();
+            if (part.IsEmpty)
                 return null;
-            var i = name.IndexOf('.');
-            if (i >= 0)
-                name = name.Substring(0, i);
+            var pl = part.Length;
+            var l = prefix.Length + pl + 1 + cc.Length + FlagSuffix.Length;
+            Span<Char> b = l <= MaxStackUrl ? stackalloc Char[l] : new Char[l];
+            prefix.CopyTo(b);
+            var o = prefix.Length;
+            part.CopyTo(b.Slice(o));
+            o += pl;
+            b[o++] = '-';
+            cc.CopyTo(b.Slice(o));
+            FlagSuffix.CopyTo(b.Slice(o + cc.Length));
+            return new String(b);
+        }
+
+        IHttpRequestHandler HandlePhonePrefix(ReadOnlySpan<Char> name)
+        {
+            if (name.SequenceEqual("explore"))
+                return null;
+            name = RemoveExtension(name);
             try
             {
-                var countryName = PhonePrefix.Identify(out var p, name)?.Where(x => x.IsoCountry != null)?.FirstOrDefault()?.IsoCountry;
-                var ci = IsoCountry.TryGet(countryName);
+                var ci = IsoCountry.TryGet(FirstIsoCountry(PhonePrefix.Identify(out _, name)));
                 if (ci == null)
-                {
-                    var t = Data.TryGetHandler("icons/flags/" + name.FastToLower() + ".svg");
-                    return t ?? Unknown;
-                }
-                return Data.TryGetHandler("icons/flags/" + ci.Iso3166a2.FastToLower() + ".svg");
+                    return GetFlag(name) ?? Unknown;
+                return GetFlag(ci.Iso3166a2);
             }catch
             {
-                var t = Data.TryGetHandler("icons/flags/" + name.FastToLower() + ".svg");
-                return t ?? Unknown;
+                return GetFlag(name) ?? Unknown;
             }
         }
 
         IEnumerable<IHttpServerEndPoint> EnumPhonePrefixes()
         {
-            var d = Data;
             foreach (var x in PhonePrefix.Codes)
             {
                 var name = x.CountryCode;
-                var countryName = PhonePrefix.Identify(out var p, name)?.Where(x => x.IsoCountry != null)?.FirstOrDefault()?.IsoCountry;
-                var ci = IsoCountry.TryGet(countryName);
+                var ci = IsoCountry.TryGet(FirstIsoCountry(PhonePrefix.Identify(out _, name)));
                 if (ci != null)
                 {
-                    IHttpServerEndPoint t = d.TryGetHandler("icons/flags/" + ci.Iso3166a2.FastToLower() + ".svg");
+                    IHttpServerEndPoint t = GetFlag(ci.Iso3166a2);
                     if (t != null)
                     {
                         yield return new HttpServerEndPoint(
@@ -632,14 +707,19 @@ namespace SysWeaver.Net.IsoDataModule
                 var rp = x.RegionPrefix;
                 if (String.IsNullOrEmpty(rp))
                     continue;
-                foreach (var rs in rp.Split(','))
+                //  The same parts as rp.Split(','), without the split
+                var rpl = rp.Length;
+                for (int s = 0; s <= rpl; )
                 {
-                    name = x.CountryCode + rs;
-                    countryName = PhonePrefix.Identify(out p, name)?.Where(x => x.IsoCountry != null)?.FirstOrDefault()?.IsoCountry;
-                    ci = IsoCountry.TryGet(countryName);
+                    var e = rp.IndexOf(',', s);
+                    if (e < 0)
+                        e = rpl;
+                    name = String.Concat(x.CountryCode, rp.AsSpan(s, e - s));
+                    s = e + 1;
+                    ci = IsoCountry.TryGet(FirstIsoCountry(PhonePrefix.Identify(out _, name)));
                     if (ci != null)
                     {
-                        IHttpServerEndPoint t = d.TryGetHandler("icons/flags/" + ci.Iso3166a2.FastToLower() + ".svg");
+                        IHttpServerEndPoint t = GetFlag(ci.Iso3166a2);
                         if (t != null)
                         {
                             yield return new HttpServerEndPoint(
@@ -686,16 +766,16 @@ namespace SysWeaver.Net.IsoDataModule
         {
             //if (!context.LocalUrl.FastStartsWith("iso_data/"))
                 //return null;
-            //  Same as context.LocalUrl.Substring(9) and ordinal starts with tests, only the final sub path is allocated
+            //  Same as context.LocalUrl.Substring(9) and ordinal starts with tests, the sub paths are spans (the flag urls are built on the stack, no allocation)
             var localUrl = context.LocalUrl;
             //  Substring throws the same exception as before if the url is too short
             var url = localUrl.Length >= 9 ? localUrl.AsSpan(9) : localUrl.Substring(9);
             if (url.StartsWith("country/"))
-                return HandleCountry(localUrl.Substring(17));
+                return HandleCountry(url.Slice(8));
             if (url.StartsWith("language/"))
-                return HandleLanguage(localUrl.Substring(18));
+                return HandleLanguage(url.Slice(9));
             if (url.StartsWith("phone_prefix/"))
-                return HandlePhonePrefix(localUrl.Substring(22));
+                return HandlePhonePrefix(url.Slice(13));
             return null;
         }
 

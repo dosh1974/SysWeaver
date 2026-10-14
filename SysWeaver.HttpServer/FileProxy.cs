@@ -110,7 +110,7 @@ namespace SysWeaver.Net
         readonly String SourceRoot;
 
         /// <inheritdoc/>
-        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
         /// <inheritdoc/>
         public PerfMonitor PerfMon { get; init;  }
@@ -127,7 +127,7 @@ namespace SysWeaver.Net
         /// Proxy a request.
         /// </summary>
         /// <exception cref="UserNotAllowedException">Thrown if the session lacks the required tokens</exception>
-        async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
+        async ValueTask<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
         {
             using var __ = PerfMon.Track(nameof(HandleAsync));
             var fp = ForPrefix;

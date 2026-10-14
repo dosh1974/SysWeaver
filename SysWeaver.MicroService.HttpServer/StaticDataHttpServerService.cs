@@ -31,14 +31,15 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<Assembly, int> Asms = new ConcurrentDictionary<Assembly, int>();
 
 
-        static bool Filter(ref String x)
+        /// <summary>
+        /// Only serve resources with ".web." in the name, the served name is the text after the first ".web."
+        /// </summary>
+        static int Filter(String x)
         {
             var fi = x.FastIndexOf(".web.");
             if (fi < 0)
-                return false;
-            fi += 5;
-            x = x.Substring(fi);
-            return true;
+                return -1;
+            return fi + 5;
         }
 
         void AddFiles(Object o)

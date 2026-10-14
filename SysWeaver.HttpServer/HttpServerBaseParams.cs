@@ -123,6 +123,14 @@ namespace SysWeaver.Net
         /// </summary>
         public HttpRateLimiterParams SessionLimits;
 
+        /// <summary>
+        /// Responses with a known length (in memory or a seekable stream) that are smaller than this number of bytes are sent uncompressed (no Content-Encoding header),
+        /// since compressing a few bytes costs more than it saves (the compressed output is often larger than the input).
+        /// Pre-compressed data that the client doesn't accept is still decompressed.
+        /// Zero (or a negative value) disables this, compressible responses are then always compressed.
+        /// </summary>
+        public int MinCompressSize = 128;
+
     }
 
 }

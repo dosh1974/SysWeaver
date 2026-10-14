@@ -150,9 +150,20 @@ namespace SysWeaver
         /// The list can be empty when no complete prefix was found in exact mode.</returns>
         /// <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
         public static IReadOnlyList<PhonePrefix> Identify(out int nextChar, String internationalNumber, bool matchExact = false)
+            => Identify(out nextChar, internationalNumber.AsSpan(), matchExact);
+
+        /// <summary>
+        /// The same as <see cref="Identify(out int, string, bool)"/> for a span (ex: a part of a string, an empty span is the same as a null or empty string).
+        /// </summary>
+        /// <param name="nextChar">The position in <paramref name="internationalNumber"/> of the next character (the first character that wasn't parsed as part of the prefix), -1 if nothing was parsed.</param>
+        /// <param name="internationalNumber">An international telephone number (without any international dialing prefix such as "00"), only digits are respected, all other chars are ignored</param>
+        /// <param name="matchExact">If true, only the exact matches are returned (the longest complete prefix found).</param>
+        /// <returns>Null if the input is empty or no digits matches any prefix, else a list of phone codes that this number could be, highest <see cref="Rank"/> first.</returns>
+        /// <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
+        public static IReadOnlyList<PhonePrefix> Identify(out int nextChar, ReadOnlySpan<Char> internationalNumber, bool matchExact = false)
         {
             nextChar = -1;
-            if (String.IsNullOrEmpty(internationalNumber))
+            if (internationalNumber.IsEmpty)
                 return null;
             var l = internationalNumber.Length;
             var node = Root;

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Text;
 using SysWeaver.Serialization.SwJson;
 using SysWeaver.Serialization.SwJson.Reader;
@@ -60,6 +61,13 @@ namespace SysWeaver.Serialization
 
         /// <inheritdoc/>
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact) => JsonWriter.ToJsonBytes(obj);
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// The json is written to pooled buffers and copied to <paramref name="output"/> (no array is allocated).
+        /// Implemented explicitly, so that code finding the Serialize method of the class by name (reflection) is unaffected.
+        /// </remarks>
+        void ISerializer.Serialize<T>(T obj, IBufferWriter<byte> output, SerializerOptions options) => JsonWriter.ToJsonBuffer(obj, output);
 
         /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlySpan<byte> data) 

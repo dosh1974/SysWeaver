@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 
 namespace SysWeaver.Serialization
 {
@@ -15,6 +16,26 @@ namespace SysWeaver.Serialization
         /// <param name="options">The requested output style, implementations are free to ignore it.</param>
         /// <returns>The serialized data, owned by the caller. The memory may be a slice of a larger array.</returns>
         ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact);
+
+        /// <summary>
+        /// Serialize an object to binary data (UTF-8 encoded text for text based serializers), written to a buffer writer
+        /// (ex: a <see cref="SerBufferWriter"/>, so that no array is allocated for data that is only needed temporarily).
+        /// The data written is the same as the data returned by <see cref="Serialize{T}(T, SerializerOptions)"/>, with the same exceptions.
+        /// </summary>
+        /// <remarks>
+        /// The default implementation writes the data returned by <see cref="Serialize{T}(T, SerializerOptions)"/>,
+        /// implementations that can serialize to a pooled buffer override it.
+        /// </remarks>
+        /// <typeparam name="T">The static type to serialize as, see <see cref="Serialize{T}(T, SerializerOptions)"/>.</typeparam>
+        /// <param name="obj">The object to serialize, may be null.</param>
+        /// <param name="output">The writer to write the serialized data to.</param>
+        /// <param name="options">The requested output style, implementations are free to ignore it.</param>
+        void Serialize<T>(T obj, IBufferWriter<Byte> output, SerializerOptions options = SerializerOptions.Compact)
+        {
+            var data = Serialize(obj, options).Span;
+            data.CopyTo(output.GetSpan(data.Length));
+            output.Advance(data.Length);
+        }
     }
 
 

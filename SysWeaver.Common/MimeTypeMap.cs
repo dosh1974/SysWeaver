@@ -112,6 +112,18 @@ namespace SysWeaver
             return result ?? DefaultMimeType;
         }
 
+        /// <summary>
+        /// The same as <see cref="GetMimeType(string, bool)"/> for a span (ex: a part of a string), without allocations (for up to 256 chars).
+        /// </summary>
+        /// <param name="str">The file extension (with or without the leading '.') or a MIME type (with or without the "; charset=UTF-8" suffix).</param>
+        /// <param name="withCharset">If true a "; charset=UTF-8" is added to the MIME type of text documents.</param>
+        /// <returns>The MIME type and true if the type is compressible, "application/octet-stream" (not compressible) if not found.</returns>
+        public static Tuple<string, bool> GetMimeType(ReadOnlySpan<Char> str, bool withCharset = true)
+        {
+            (withCharset ? MapWithCharSet : Map).TryGetValueLower(str, out var result);
+            return result ?? DefaultMimeType;
+        }
+
 
 
         /// <summary>

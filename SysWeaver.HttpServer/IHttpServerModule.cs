@@ -62,8 +62,9 @@ namespace SysWeaver.Net
         /// </summary>
         /// <remarks>
         /// The property is read for every request, but implementations should treat it as constant (don't toggle it on and off).
+        /// The server consumes every returned value task exactly once (a handler that is already known can be returned without allocating a task).
         /// </remarks>
-        Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get => null; }
+        Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get => null; }
 
 
         /// <summary>

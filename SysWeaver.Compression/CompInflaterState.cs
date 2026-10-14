@@ -46,7 +46,12 @@ namespace SysWeaver.Compression
         /// <summary>
         /// Empty data is valid if the encoder of this .NET version produces no data for empty data (true for .NET 10 and earlier)
         /// </summary>
-        static readonly bool DeflateEmptyIsValid = EncodesEmptyAsEmpty(s => new DeflateStream(s, CompressionLevel.Fastest, true));
+        internal static readonly bool DeflateEmptyIsValid = EncodesEmptyAsEmpty(s => new DeflateStream(s, CompressionLevel.Fastest, true));
+
+        /// <summary>
+        /// True if <see cref="ThrowIfTruncated(Stream)"/> can detect truncated DeflateStream data (the internals are as expected)
+        /// </summary>
+        internal static bool CanDetectDeflateTruncation => GetDeflateState != null;
 
         /// <summary>
         /// Empty data is valid if the encoder of this .NET version produces no data for empty data (true for .NET 10 and earlier)

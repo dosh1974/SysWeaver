@@ -36,6 +36,11 @@ namespace SysWeaver.Net
         public HttpServerRequest Redirected { get; set; }
 
         /// <summary>
+        /// The same text as the default (GetType().Name, the class is sealed) without the type name lookup (read for every request by the perf tracking of the server).
+        /// </summary>
+        String IHttpRequestHandler.Name => nameof(StaticStreamHttpRequestHandler);
+
+        /// <summary>
         /// True if text template variable substitution may be applied, set when the mime type ends with "UTF-8" (text).
         /// </summary>
         public bool AllowTemplates { get; init; }

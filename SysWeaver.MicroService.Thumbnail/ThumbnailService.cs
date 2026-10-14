@@ -167,9 +167,9 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// An optional async handler
         /// </summary>
-        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler => CachedAsyncHandler;
+        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler => CachedAsyncHandler;
 
-        readonly Func<HttpServerRequest, Task<IHttpRequestHandler>> CachedAsyncHandler;
+        readonly Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> CachedAsyncHandler;
 
         /// <summary>
         /// Get the resolution name from a local url "thumbnail/{name}.png"
@@ -189,7 +189,7 @@ namespace SysWeaver.MicroService
             return name.Slice(0, d).ToString();
         }
 
-        async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
+        async ValueTask<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
         {
             var rname = GetResolutionName(context.LocalUrl);
             if (rname == null)
@@ -291,7 +291,7 @@ namespace SysWeaver.MicroService
 
         readonly ConcurrentDictionary<String, Tuple<int, int, long, FastMemCache<String, MediaInfo>>> MapRes = new ConcurrentDictionary<string, Tuple<int, int, long, FastMemCache<String, MediaInfo>>>(StringComparer.Ordinal);
 
-        public async Task<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic)
+        public async ValueTask<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic)
         {
             using (AllTrackers.Track(key))
             {

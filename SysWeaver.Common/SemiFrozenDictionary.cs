@@ -436,6 +436,19 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Get the dictionary to read one key from: the frozen copy if available, else the underlying dictionary
+        /// (counted as one read, like a <see cref="TryGetValue(TKey, out TValue)"/> call, so it's frozen after enough reads without modifications).
+        /// Used for span lookups (<see cref="SpanKeyLookupExt.TryGetValueSpan{V}(SemiFrozenDictionary{String, V}, ReadOnlySpan{Char}, out V)"/>).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal IReadOnlyDictionary<TKey, TValue> GetForRead()
+            => Internal ?? GetForReadNotFrozen();
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        IReadOnlyDictionary<TKey, TValue> GetForReadNotFrozen()
+            => ++Reads >= FreezeAfter ? Freeze() : Underlaying;
+
+        /// <summary>
         /// Read the underlaying dictionary (lock free), and freeze it when it has been read enough times since the last modification
         /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]

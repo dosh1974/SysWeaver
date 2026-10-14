@@ -157,7 +157,8 @@ namespace SysWeaver.Net
         public virtual String GetRawQuery(String def = "") => GetQuery(def);
 
         /// <summary>
-        /// The compression encoder and level selected for the response (set by the server before the handler data is read), null if not compressed.
+        /// The compression encoder and level selected for the response (set by the server before the handler data is read), null if the handler has no compression or the client accepts none of its encoders.
+        /// It's not cleared when the response ends up not compressed by the server (pre-compressed data sent as is or decompressed, or data smaller than <see cref="HttpServerBaseParams.MinCompressSize"/>).
         /// </summary>
         public Tuple<ICompEncoder, CompEncoderLevels> CompEncoder;
 
@@ -315,6 +316,23 @@ namespace SysWeaver.Net
         /// True if <see cref="ApiAccept"/> holds the Accept header of this request.
         /// </summary>
         internal bool ApiAcceptRead;
+
+        /// <summary>
+        /// The Content-Encoding header as read by the POST cache key of <see cref="ApiHttpEntry.GetCacheKey(HttpServerRequest)"/>, reused (and released) when the body is deserialized,
+        /// so the header is read once per cached API POST. Only valid if <see cref="ApiContentRead"/> is true.
+        /// </summary>
+        internal String ApiContentEncoding;
+
+        /// <summary>
+        /// The Content-Type header as read by the POST cache key of <see cref="ApiHttpEntry.GetCacheKey(HttpServerRequest)"/>, reused (and released) when the body is deserialized.
+        /// Only valid if <see cref="ApiContentRead"/> is true.
+        /// </summary>
+        internal String ApiContentType;
+
+        /// <summary>
+        /// True if <see cref="ApiContentEncoding"/> and <see cref="ApiContentType"/> hold the headers of this request.
+        /// </summary>
+        internal bool ApiContentRead;
 
 
         NameValueCollection IQP;

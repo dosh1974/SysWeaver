@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -112,6 +113,62 @@ namespace SysWeaver.Serialization
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
             return JsonSerializer.SerializeToUtf8Bytes<T>(obj, Options[(int)options]);
+        }
+
+        /// <summary>
+        /// The writer options that <see cref="JsonSerializer.SerializeToUtf8Bytes{TValue}(TValue, JsonSerializerOptions)"/> uses for each of the <see cref="Options"/> (same as the internal JsonSerializerOptions.GetWriterOptions)
+        /// </summary>
+        static readonly JsonWriterOptions[] WriterOptions = Array.ConvertAll(Options, o => new JsonWriterOptions
+        {
+            Encoder = o.Encoder,
+            Indented = o.WriteIndented,
+            IndentCharacter = o.IndentCharacter,
+            IndentSize = o.IndentSize,
+            MaxDepth = o.MaxDepth == 0 ? 64 : o.MaxDepth,
+            NewLine = o.NewLine,
+            SkipValidation = true,
+        });
+
+        /// <summary>
+        /// A writer that the cached json writers are reset to when not in use (so that they don't keep a reference to the caller's writer), nothing is written to it
+        /// </summary>
+        static readonly ArrayBufferWriter<Byte> NoOutput = new ArrayBufferWriter<Byte>(1);
+
+        /// <summary>
+        /// The json writers of the thread (one per <see cref="SerializerOptions"/>), an entry is null while in use
+        /// </summary>
+        [ThreadStatic]
+        static Utf8JsonWriter[] Writers;
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// The json is written directly to <paramref name="output"/> using a cached json writer (no array is allocated).
+        /// Implemented explicitly, so that code finding the Serialize method of the class by name (reflection) is unaffected.
+        /// </remarks>
+        void ISerializer.Serialize<T>(T obj, IBufferWriter<byte> output, SerializerOptions options)
+        {
+            var o = Options[(int)options];
+            var ws = Writers ??= new Utf8JsonWriter[Options.Length];
+            var i = (int)options;
+            var w = ws[i];
+            if (w == null)
+            {
+                w = new Utf8JsonWriter(output, WriterOptions[i]);
+            }
+            else
+            {
+                ws[i] = null;
+                w.Reset(output);
+            }
+            try
+            {
+                JsonSerializer.Serialize<T>(w, obj, o);
+            }
+            finally
+            {
+                w.Reset(NoOutput);
+                ws[i] = w;
+            }
         }
 
         /// <inheritdoc/>

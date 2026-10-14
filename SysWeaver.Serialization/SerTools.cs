@@ -89,13 +89,36 @@ namespace SysWeaver.Serialization
             return Expression.Lambda<Func<ISerializer, Object, SerializerOptions, ReadOnlyMemory<Byte>>>(fn, ser, obj, opt).Compile();
         }
 
-        static readonly MethodInfo MethodSerialize = typeof(ISerializer).GetMethod(nameof(ISerializer.Serialize));
+        static readonly MethodInfo MethodSerialize = typeof(ISerializer).GetMethod(nameof(ISerializer.Serialize), 1, [Type.MakeGenericMethodParameter(0), typeof(SerializerOptions)]);
         static readonly ParameterExpression ExpInpSer = Expression.Parameter(typeof(ISerializer), "serializer");
         static readonly ParameterExpression ExpInpObj = Expression.Parameter(typeof(object), "obj");
         static readonly ParameterExpression ExpInpOptions= Expression.Parameter(typeof(SerializerOptions), "options");
 
 
         static readonly ConcurrentDictionary<Type, Func<ISerializer, Object, SerializerOptions, ReadOnlyMemory<Byte>>> TypedSerializers = new ();
+
+        /// <summary>
+        /// Create a deep copy of an object by serializing it and deserializing the data, the same as <c>serializer.Create&lt;T&gt;(serializer.Serialize(obj, options))</c>
+        /// (same result and exceptions), but the data is written to a pooled buffer (<see cref="SerBufferWriter"/>) instead of a new array.
+        /// </summary>
+        /// <typeparam name="T">The static type to serialize as and the type to create.</typeparam>
+        /// <param name="serializer">The serializer.</param>
+        /// <param name="obj">The object to copy, may be null.</param>
+        /// <param name="options">The requested output style.</param>
+        /// <returns>The copy.</returns>
+        public static T DeepCopy<T>(this ISerializerType serializer, T obj, SerializerOptions options = SerializerOptions.Compact)
+        {
+            var w = SerBufferWriter.Rent();
+            try
+            {
+                serializer.Serialize(obj, w, options);
+                return serializer.Create<T>(w.WrittenMemory);
+            }
+            finally
+            {
+                w.Dispose();
+            }
+        }
 
 
     }

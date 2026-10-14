@@ -187,6 +187,19 @@ namespace SysWeaver.Compression
         /// <inheritdoc/>
         public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
         {
+            //  The pooled native decoder doesn't allocate (the DeflateStream does)
+            var n = CompNativeInflater.TryRent();
+            if (n != null)
+            {
+                try
+                {
+                    return n.Decompress(from, to);
+                }
+                finally
+                {
+                    n.Return();
+                }
+            }
             unsafe
             {
                 fixed (byte* bp = from)
@@ -207,6 +220,20 @@ namespace SysWeaver.Compression
         /// <inheritdoc/>
         public void Decompress(ReadOnlySpan<Byte> from, Stream to)
         {
+            //  The pooled native decoder doesn't allocate (the DeflateStream does)
+            var n = CompNativeInflater.TryRent();
+            if (n != null)
+            {
+                try
+                {
+                    n.Decompress(from, to);
+                }
+                finally
+                {
+                    n.Return();
+                }
+                return;
+            }
             unsafe
             {
                 fixed (byte* bp = from)

@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Buffers;
 using System.IO;
 using System.Text;
 using SysWeaver.Serialization.NewtonsoftJson;
@@ -107,6 +108,28 @@ namespace SysWeaver.Serialization
             using var w = new CharBufferWriter();
             Write(w, obj, options);
             return ToUTF8(w.Written);
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// The json is UTF-8 encoded directly into <paramref name="output"/> (no array is allocated).
+        /// Implemented explicitly, so that code finding the Serialize method of the class by name (reflection) is unaffected.
+        /// </remarks>
+        void ISerializer.Serialize<T>(T obj, IBufferWriter<byte> output, SerializerOptions options)
+        {
+            //  JsonConvert.SerializeObject applies the global default settings, keep that path when they are set
+            if (JsonConvert.DefaultSettings != null)
+            {
+                output.Write(Serialize(obj, options).Span);
+                return;
+            }
+            using var w = new CharBufferWriter();
+            Write(w, obj, options);
+            var st = w.Written;
+            var enc = Encoding.UTF8;
+            var l = enc.GetByteCount(st);
+            enc.GetBytes(st, output.GetSpan(l));
+            output.Advance(l);
         }
 
         /// <summary>
