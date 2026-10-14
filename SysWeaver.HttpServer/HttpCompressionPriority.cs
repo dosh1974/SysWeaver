@@ -17,12 +17,18 @@ namespace SysWeaver.Net
     public sealed class HttpCompressionPriority
     {
         /// <inheritdoc/>
-        public override string ToString() => String.Join(", ", Encoders.Select(x => String.Join(":", x.Item1.HttpCode, x.Item2)));
+        public override string ToString() => Text;
 
         HttpCompressionPriority(IReadOnlyList<Tuple<ICompEncoder, CompEncoderLevels>> encoders)
         {
             Encoders = encoders;
+            Text = String.Join(", ", encoders.Select(x => String.Join(":", x.Item1.HttpCode, x.Item2)));
         }
+
+        /// <summary>
+        /// The text returned by <see cref="ToString"/>, created once (the instances are immutable, the text is the compression preference of every handler using the instance)
+        /// </summary>
+        readonly String Text;
 
         /// <summary>
         /// The encoders and compression levels to use, most preferable first.
@@ -74,6 +80,20 @@ namespace SysWeaver.Net
             if (m.Count < MaxCachedHeaders)
                 m.TryAdd(supported, val);
             return val;
+        }
+
+        /// <summary>
+        /// The same as <see cref="GetEncoder(string, IReadOnlySet{string})"/> with the accepted encoders of a request, which are only read (parsed / looked up) if the choice isn't cached.
+        /// </summary>
+        /// <param name="supported">The Accept-Encoding header value of the request</param>
+        /// <param name="request">The request</param>
+        internal Tuple<ICompEncoder, CompEncoderLevels> GetEncoder(String supported, HttpServerRequest request)
+        {
+            if (String.IsNullOrEmpty(supported))
+                return null;
+            if (Matches.TryGetValue(supported, out var val))
+                return val;
+            return GetEncoder(supported, request.AcceptedEncoders);
         }
 
         /// <summary>

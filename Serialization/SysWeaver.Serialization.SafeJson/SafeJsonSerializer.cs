@@ -76,6 +76,15 @@ namespace SysWeaver.Serialization
             => options == SerializerOptions.Verbose ? DeSerializer.Serialize(obj, options) : Serializer.Serialize(obj, options);
 
         /// <inheritdoc/>
+        void ISerializer.Serialize<T>(T obj, System.Buffers.IBufferWriter<byte> output, SerializerOptions options)
+        {
+            if (options == SerializerOptions.Verbose)
+                DeSerializer.Serialize(obj, output, options);
+            else
+                Serializer.Serialize(obj, output, options);
+        }
+
+        /// <inheritdoc/>
         public string ToString<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
             => options == SerializerOptions.Verbose ? DeSerializer.ToString(obj, options) : Serializer.ToString(obj, options);
 

@@ -991,6 +991,11 @@ namespace SysWeaver.Net
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.Api;
 
         /// <summary>
+        /// The same text as the default (GetType().Name, the class is sealed) without the type name lookup (read for every request by the perf tracking of the server).
+        /// </summary>
+        String IHttpRequestHandler.Name => nameof(ApiHttpEntry);
+
+        /// <summary>
         /// The instance the method is invoked on.
         /// </summary>
         public Object Instance { get; init; }
@@ -1098,6 +1103,7 @@ namespace SysWeaver.Net
         /// Return a value task for an exception thrown synchronously (the same as the async method before the GET fast path).
         /// </summary>
 #pragma warning disable CS1998 // Async method lacks 'await' operators (the async method builder creates the task)
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
         static async ValueTask<String> GetCacheKeyThrow(ExceptionDispatchInfo ex)
         {
             ex.Throw();
@@ -1108,6 +1114,8 @@ namespace SysWeaver.Net
         /// <summary>
         /// The POST part of <see cref="GetCacheKey(HttpServerRequest)"/> (the body is read).
         /// </summary>
+        /// <remarks>A pooled box when the body read is pending (the server awaits the key once).</remarks>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
         async ValueTask<String> GetPostCacheKey(HttpServerRequest request, String accept)
         {
             var memP = await Input_POST_Read(this, request).ConfigureAwait(false);
@@ -1117,36 +1125,171 @@ namespace SysWeaver.Net
                 return HttpServerTools.PreventCacheKey;
             var ce = request.GetReqHeader("Content-Encoding");
             var ct = request.GetReqHeader("Content-Type");
+            SetApiContent(request, ce, ct);
+            //  The raw Content-Type text is part of the key, so "application/json" and "Application/JSON" (or "application/json; charset=UTF-8") POSTs
+            //  with the same body are cached as separate entries (correct results, duplicate entries). Two alternatives, not enabled (measure live headers first):
+            //
+            //  Option 1, case insensitive: the deserializer lookup ignores case and padding (TryGetValueLower of the trimmed text), so the same text lower cased and trimmed
+            //  selects the same deserializer. Merges case / padding variants only, costs one string per POST with an upper case or padded Content-Type.
+            //ct = ct?.FastTrimToLower();
+            //
+            //  Option 2, deserializer lookup: key on the name of the deserializer that the Content-Type selects (the same lookup as Input_POST_Deserialize),
+            //  so every text that selects the same deserializer shares an entry (case, padding, charset / parameter variants registered for the same deserializer,
+            //  a missing Content-Type and the default type). An unknown type keeps its text, marked so it can't match a name (the request fails, failed requests aren't cached).
+            //  One dictionary lookup per POST, no allocation for a known type.
+            //ct = GetPostCacheContentType(IoParams, ct);
             return PostCacheKey(mem, request.LocalUrl, ce, ct, accept);
         }
+
+        /*
+        /// <summary>
+        /// The Content-Type part of a POST cache key: the name of the deserializer that the Content-Type selects (see Input_POST_Deserialize),
+        /// or the text itself prefixed with a NUL if it selects none (so an unknown type can never share an entry with a deserializer name, the request fails anyway)
+        /// </summary>
+        static String GetPostCacheContentType(ApiIoParams iop, String ct)
+        {
+            if (String.IsNullOrEmpty(ct))
+                return iop.DefaultInput.Name;
+            return iop.InputSerializers.TryGetValueLower(ct.AsSpan().Trim(), out var deser) ? deser.Name : String.Concat("\0", ct);
+        }
+        */
 
         /// <summary>
         /// Same as String.Join('\r', Convert.ToBase64String(body.Span), localUrl, contentEncoding, contentType, accept) without the temporary base64 string (null values are empty)
         /// </summary>
         static String PostCacheKey(ReadOnlyMemory<Byte> body, String localUrl, String contentEncoding, String contentType, String accept)
         {
-            localUrl ??= "";
-            contentEncoding ??= "";
-            contentType ??= "";
-            accept ??= "";
-            //  The body is at most 4096 bytes, so the length can't overflow
-            var len = ((body.Length + 2) / 3) * 4 + 4 + localUrl.Length + contentEncoding.Length + contentType.Length + accept.Length;
+            var len = GetPostCacheKeyLength(body.Length, localUrl, contentEncoding, contentType, accept);
             return String.Create(len, (body, localUrl, contentEncoding, contentType, accept), static (dst, s) =>
-            {
-                Convert.TryToBase64Chars(s.body.Span, dst, out var p);
-                dst[p++] = '\r';
-                s.localUrl.CopyTo(dst.Slice(p));
-                p += s.localUrl.Length;
-                dst[p++] = '\r';
-                s.contentEncoding.CopyTo(dst.Slice(p));
-                p += s.contentEncoding.Length;
-                dst[p++] = '\r';
-                s.contentType.CopyTo(dst.Slice(p));
-                p += s.contentType.Length;
-                dst[p++] = '\r';
-                s.accept.CopyTo(dst.Slice(p));
-            });
+                WritePostCacheKey(dst, s.body.Span, s.localUrl, s.contentEncoding, s.contentType, s.accept));
         }
+
+        /// <summary>
+        /// The length of a POST cache key (see <see cref="PostCacheKey"/>, null values are empty).
+        /// </summary>
+        static int GetPostCacheKeyLength(int bodyLength, String localUrl, String contentEncoding, String contentType, String accept)
+            //  The body is at most 4096 bytes, so the length can't overflow
+            => ((bodyLength + 2) / 3) * 4 + 4 + (localUrl?.Length ?? 0) + (contentEncoding?.Length ?? 0) + (contentType?.Length ?? 0) + (accept?.Length ?? 0);
+
+        /// <summary>
+        /// Write a POST cache key (see <see cref="PostCacheKey"/>, null values are empty) into a buffer of <see cref="GetPostCacheKeyLength"/> chars.
+        /// </summary>
+        static void WritePostCacheKey(Span<Char> dst, ReadOnlySpan<Byte> body, String localUrl, String contentEncoding, String contentType, String accept)
+        {
+            Convert.TryToBase64Chars(body, dst, out var p);
+            dst[p++] = '\r';
+            localUrl.AsSpan().CopyTo(dst.Slice(p));
+            p += localUrl?.Length ?? 0;
+            dst[p++] = '\r';
+            contentEncoding.AsSpan().CopyTo(dst.Slice(p));
+            p += contentEncoding?.Length ?? 0;
+            dst[p++] = '\r';
+            contentType.AsSpan().CopyTo(dst.Slice(p));
+            p += contentType?.Length ?? 0;
+            dst[p++] = '\r';
+            accept.AsSpan().CopyTo(dst.Slice(p));
+        }
+
+        /// <summary>
+        /// Keep the Content-Encoding and Content-Type headers read by the cache key for the deserialization of the body (see <see cref="Input_POST_Deserialize{T}"/>).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void SetApiContent(HttpServerRequest request, String contentEncoding, String contentType)
+        {
+            request.ApiContentEncoding = contentEncoding;
+            request.ApiContentType = contentType;
+            request.ApiContentRead = true;
+        }
+
+        #region Cache key without a string (used by the server)
+
+        /// <summary>
+        /// True if the cache key of the request is a POST key (the body is part of the key), else the key is url "\r" accept.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool IsPostCacheKey(HttpServerRequest request) => (request.HttpMethod == HttpServerMethods.POST) && HaveArgs;
+
+        /// <summary>
+        /// The same as <see cref="GetCacheKey(HttpServerRequest)"/> (the same headers and body reads, side effects and exceptions), but the key isn't created:
+        /// returns the length of the key (0 for <see cref="HttpServerTools.PreventCacheKey"/>), the key text is written by <see cref="WriteCacheKey(Span{char}, HttpServerRequest)"/>.
+        /// </summary>
+        /// <remarks>Exceptions may be thrown synchronously (the server awaits this immediately inside the same try block, the same as awaiting a faulted task).
+        /// A pooled box when the body read is pending (the server awaits the value task once).</remarks>
+        internal ValueTask<int> PrepareCacheKey(HttpServerRequest request)
+        {
+            var accept = request.GetReqHeader("Accept");
+            request.ApiAccept = accept;
+            request.ApiAcceptRead = true;
+            if (!IsPostCacheKey(request))
+                return new ValueTask<int>(GetGetCacheKeyLength(request.Url, accept));
+            var read = Input_POST_Read(this, request);
+            if (!read.IsCompletedSuccessfully)
+                return PreparePostCacheKeyAwait(request, accept, read);
+            return new ValueTask<int>(PreparePostCacheKey(request, accept, read.Result));
+        }
+
+        /// <summary>
+        /// The pending part of <see cref="PrepareCacheKey(HttpServerRequest)"/>.
+        /// </summary>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<int> PreparePostCacheKeyAwait(HttpServerRequest request, String accept, ValueTask<IUnmanagedReadOnlyMemory<Byte>> read)
+            => PreparePostCacheKey(request, accept, await read.ConfigureAwait(false));
+
+        /// <summary>
+        /// The POST part of <see cref="PrepareCacheKey(HttpServerRequest)"/> after the body was read (the same as <see cref="GetPostCacheKey(HttpServerRequest, string)"/>).
+        /// </summary>
+        static int PreparePostCacheKey(HttpServerRequest request, String accept, IUnmanagedReadOnlyMemory<Byte> memP)
+        {
+            var mem = memP.Memory;
+            request.Custom = memP;
+            if (mem.Length > 4096)
+                return 0;
+            var ce = request.GetReqHeader("Content-Encoding");
+            var ct = request.GetReqHeader("Content-Type");
+            SetApiContent(request, ce, ct);
+            return GetPostCacheKeyLength(mem.Length, request.LocalUrl, ce, ct, accept);
+        }
+
+        /// <summary>
+        /// Write the cache key prepared by <see cref="PrepareCacheKey(HttpServerRequest)"/> (the same text as <see cref="GetCacheKey(HttpServerRequest)"/>),
+        /// must be called before the request is invoked (it uses the Accept header, body and content headers kept in the request).
+        /// </summary>
+        /// <param name="dst">The destination, exactly the length returned by <see cref="PrepareCacheKey(HttpServerRequest)"/></param>
+        /// <param name="request">The request</param>
+        internal void WriteCacheKey(Span<Char> dst, HttpServerRequest request)
+        {
+            if (!IsPostCacheKey(request))
+            {
+                WriteGetCacheKey(dst, request.Url, request.ApiAccept);
+                return;
+            }
+            WritePostCacheKey(dst, ((IUnmanagedReadOnlyMemory<Byte>)request.Custom).Memory.Span, request.LocalUrl, request.ApiContentEncoding, request.ApiContentType, request.ApiAccept);
+        }
+
+        /// <summary>
+        /// True if the key prepared by <see cref="PrepareCacheKey(HttpServerRequest)"/> is url "\r" accept, that can be written again after the request is invoked (see <see cref="WriteGetCacheKey"/>).
+        /// A POST key contains the body that is released by the invoker.
+        /// </summary>
+        internal bool IsGetCacheKey(HttpServerRequest request) => !IsPostCacheKey(request);
+
+        /// <summary>
+        /// The length of a GET cache key: url "\r" accept (a null accept is empty).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int GetGetCacheKeyLength(String url, String accept) => (url?.Length ?? 0) + 1 + (accept?.Length ?? 0);
+
+        /// <summary>
+        /// Write a GET cache key: url "\r" accept (a null accept is empty), the same text as String.Concat(url, "\r", accept).
+        /// </summary>
+        internal static void WriteGetCacheKey(Span<Char> dst, String url, String accept)
+        {
+            url.AsSpan().CopyTo(dst);
+            var p = url?.Length ?? 0;
+            dst[p++] = '\r';
+            accept.AsSpan().CopyTo(dst.Slice(p));
+        }
+
+        #endregion//Cache key without a string (used by the server)
 
         /// <summary>
         /// Sets the response mime type and requests asynchronous handling.
@@ -1181,7 +1324,7 @@ namespace SysWeaver.Net
         /// <remarks>
         /// An invoker that completes synchronously (a synchronous API method, no translation) doesn't need an async state machine:
         /// the measurement is ended and the result is returned without a task.
-        /// Anything else (pending, faulted, canceled or a synchronous throw) is completed by an async method, so the wrapped task is the same as before.
+        /// Anything else (pending, faulted, canceled or a synchronous throw) is completed by an async method with a pooled box, so the states are the same as before (the server awaits the value task once).
         /// </remarks>
         ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
@@ -1195,10 +1338,10 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                return new ValueTask<HttpRequestData>(GetAsyncThrow(m, ExceptionDispatchInfo.Capture(ex)));
+                return GetAsyncThrow(m, ExceptionDispatchInfo.Capture(ex));
             }
             if (!t.IsCompletedSuccessfully)
-                return new ValueTask<HttpRequestData>(GetAsyncAwait(m, t));
+                return GetAsyncAwait(m, t);
             var res = t.Result;
             m.Dispose();
             return new ValueTask<HttpRequestData>(new HttpRequestData(res));
@@ -1207,17 +1350,20 @@ namespace SysWeaver.Net
         /// <summary>
         /// Await a pending (or failed) invoker, then end the measurement (the same as a using block around the await).
         /// </summary>
-        static async Task<HttpRequestData> GetAsyncAwait(PerfMesurement m, ValueTask<ReadOnlyMemory<Byte>> t)
+        /// <remarks>A pooled box instead of a task (the server awaits the value task once).</remarks>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<HttpRequestData> GetAsyncAwait(PerfMesurement m, ValueTask<ReadOnlyMemory<Byte>> t)
         {
             using (m)
                 return new HttpRequestData(await t.ConfigureAwait(false));
         }
 
         /// <summary>
-        /// Return a task for an exception thrown synchronously by an invoker (the same task as an async method would return, ex: canceled for an <see cref="OperationCanceledException"/>).
+        /// Return a value task for an exception thrown synchronously by an invoker (the same states as an async method would return, ex: canceled for an <see cref="OperationCanceledException"/>).
         /// </summary>
 #pragma warning disable CS1998 // Async method lacks 'await' operators (the async method builder creates the task)
-        static async Task<HttpRequestData> GetAsyncThrow(PerfMesurement m, ExceptionDispatchInfo ex)
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<HttpRequestData> GetAsyncThrow(PerfMesurement m, ExceptionDispatchInfo ex)
         {
             using (m)
                 ex.Throw();
@@ -1330,8 +1476,9 @@ namespace SysWeaver.Net
         /// Read the entire request body into pooled memory (the caller must dispose the result).
         /// </summary>
         /// <exception cref="HttpResponseException">A 413 response if the body exceeds <see cref="ApiIoParams.MaxRequestSize"/>.</exception>
-        static Task<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
-            => api.IoParams.ReadRequestBodyAsync(request);
+        /// <remarks>The value task (a pooled box when the read is pending) must be consumed exactly once.</remarks>
+        static ValueTask<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
+            => api.IoParams.ReadBodyAsync(request);
 
         /// <summary>
         /// Deserialize the input from the request body (or from a body previously stored in <see cref="HttpServerRequest.Custom"/>).
@@ -1340,12 +1487,29 @@ namespace SysWeaver.Net
         /// </summary>
         /// <exception cref="Exception">Unknown Content-Encoding or Content-Type.</exception>
         /// <exception cref="HttpResponseException">A 413 response if the body exceeds <see cref="ApiIoParams.MaxRequestSize"/> or decompresses to more than <see cref="ApiIoParams.MaxDecompressedSize"/>.</exception>
-        /// <remarks>If reading or deserializing fails for an audited API, the failure is audited (see <see cref="AuditInputFailed"/>).</remarks>
-        static async ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
+        /// <remarks>If reading or deserializing fails for an audited API, the failure is audited (see <see cref="AuditInputFailed"/>).
+        /// A body that is already read (by <see cref="GetCacheKey(HttpServerRequest)"/>) or read synchronously is deserialized without a state machine,
+        /// only a pending read is awaited by an async method (a pooled box).
+        /// Exceptions may be thrown synchronously: every caller is an async invoker that awaits this immediately, so that is the same as a faulted task.</remarks>
+        static ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             try
             {
-                return await Input_POST_Deserialize<T>(api, request).ConfigureAwait(false);
+                IUnmanagedReadOnlyMemory<Byte> dataMem;
+                var c = request.Custom;
+                if (c != null)
+                {
+                    dataMem = (IUnmanagedReadOnlyMemory<Byte>)c;
+                    request.Custom = null;
+                }
+                else
+                {
+                    var read = Input_POST_Read(api, request);
+                    if (!read.IsCompletedSuccessfully)
+                        return Input_POST_Await<T>(api, request, read);
+                    dataMem = read.Result;
+                }
+                return new ValueTask<T>(Input_POST_Deserialize<T>(api, request, dataMem));
             }
             catch (Exception ex)
             {
@@ -1354,27 +1518,48 @@ namespace SysWeaver.Net
             }
         }
 
-        /// <remarks>A value task: the body is usually already read by <see cref="GetCacheKey(HttpServerRequest)"/>, so this completes synchronously.</remarks>
-        static async ValueTask<T> Input_POST_Deserialize<T>(ApiHttpEntry api, HttpServerRequest request)
+        /// <summary>
+        /// The pending part of <see cref="Input_POST{T}(ApiHttpEntry, HttpServerRequest)"/>: await the body read, then deserialize it.
+        /// </summary>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<T> Input_POST_Await<T>(ApiHttpEntry api, HttpServerRequest request, ValueTask<IUnmanagedReadOnlyMemory<Byte>> read)
         {
-            IUnmanagedReadOnlyMemory<Byte> dataMem = null;
-            var c = request.Custom;
-            if (c != null)
+            try
             {
-                dataMem = (IUnmanagedReadOnlyMemory<Byte>)c;
-                request.Custom = null;
+                return Input_POST_Deserialize<T>(api, request, await read.ConfigureAwait(false));
             }
-            else
+            catch (Exception ex)
             {
-                dataMem = await Input_POST_Read(api, request).ConfigureAwait(false);
+                AuditInputFailed(api, request, ex);
+                throw;
             }
+        }
+
+        /// <summary>
+        /// Decompress and deserialize a request body (disposed).
+        /// </summary>
+        static T Input_POST_Deserialize<T>(ApiHttpEntry api, HttpServerRequest request, IUnmanagedReadOnlyMemory<Byte> dataMem)
+        {
             using (dataMem)
             {
                 var data = dataMem.Memory;
+                //  The content headers read by the cache key (if any) are used once
+                String ce = null;
+                String ct = null;
+                var contentRead = request.ApiContentRead;
+                if (contentRead)
+                {
+                    ce = request.ApiContentEncoding;
+                    ct = request.ApiContentType;
+                    request.ApiContentEncoding = null;
+                    request.ApiContentType = null;
+                    request.ApiContentRead = false;
+                }
                 if (data.Length <= 0)
                     return default;
                 //  Decompress data
-                var ce = request.GetReqHeader("Content-Encoding");
+                if (!contentRead)
+                    ce = request.GetReqHeader("Content-Encoding");
                 IUnmanagedReadOnlyMemory<Byte> compMem = null;
                 if (!String.IsNullOrEmpty(ce))
                 {
@@ -1386,13 +1571,14 @@ namespace SysWeaver.Net
                 {
                     //  Find serializer
                     var iop = api.IoParams;
-                    var ct = request.GetReqHeader("Content-Type");
+                    if (!contentRead)
+                        ct = request.GetReqHeader("Content-Type");
                     var deser = iop.DefaultInput;
                     if (!String.IsNullOrEmpty(ct))
                     {
-                        ct = ct.FastTrimToLower();
-                        if (!iop.InputSerializers.TryGetValue(ct, out deser))
-                            ThrowSerializer(ct);
+                        //  The same lookup as TryGetValue(ct.FastTrimToLower()) without the string for a padded / upper case type
+                        if (!iop.InputSerializers.TryGetValueLower(ct.AsSpan().Trim(), out deser))
+                            ThrowSerializer(ct.FastTrimToLower());
                     }
                     /*
                     var encoding = deser.Encoding;

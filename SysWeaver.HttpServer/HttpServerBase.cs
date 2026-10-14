@@ -113,6 +113,7 @@ namespace SysWeaver.Net
             Msg = msg;
             Auth = auth;
             BaseParams = p;
+            MinCompressSize = Math.Max(0, p.MinCompressSize);
             Translator = p.AutoTranslate ? translator : null;
             FirewallHandler = firewallHandler;
             ExternalRootUri = p.ExternalRootUri;
@@ -1056,9 +1057,9 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Continue a handler search after a module returned an incomplete task.
+        /// Continue a handler search after a module returned an incomplete (or faulted / canceled) value task.
         /// </summary>
-        /// <param name="pending">The incomplete task</param>
+        /// <param name="pending">The incomplete value task (consumed once, by the await)</param>
         /// <param name="data">The request</param>
         /// <param name="ignoreThis">Module to ignore</param>
         /// <param name="prefixModules">The prefix modules being searched, null if the pending task is from the ordered modules</param>
@@ -1066,7 +1067,7 @@ namespace SysWeaver.Net
         /// <param name="orderedMods">The ordered modules being searched, null if the pending task is from the prefix modules</param>
         /// <param name="mi">The module index of the module that returned the pending task</param>
         /// <param name="tracker">The perf tracker to dispose when done</param>
-        async ValueTask<IHttpRequestHandler> GetHandlerAsync(Task<IHttpRequestHandler> pending, HttpServerRequest data, IHttpServerModule ignoreThis, IReadOnlyList<IReadOnlyList<IHttpServerModule>> prefixModules, int pmi, IHttpServerModule[] orderedMods, int mi, PerfMesurement tracker)
+        async ValueTask<IHttpRequestHandler> GetHandlerAsync(ValueTask<IHttpRequestHandler> pending, HttpServerRequest data, IHttpServerModule ignoreThis, IReadOnlyList<IReadOnlyList<IHttpServerModule>> prefixModules, int pmi, IHttpServerModule[] orderedMods, int mi, PerfMesurement tracker)
         {
             using var _ = tracker;
             var t = await pending.ConfigureAwait(false);
@@ -1577,28 +1578,148 @@ namespace SysWeaver.Net
         {
             accept ??= String.Empty;
             method ??= String.Empty;
+            return String.Create(GetCacheKeyLength(key, requestType, accept, method, lang), (key, requestType, accept, method, lang), static (span, s) =>
+                WriteCacheKey(span, s.key, s.requestType, s.accept, s.method, s.lang));
+        }
+
+        /// <summary>
+        /// The length of a cache key (accept and method must not be null)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int GetCacheKeyLength(String key, String requestType, String accept, String method, String lang)
+        {
             var len = key.Length + requestType.Length + accept.Length + method.Length + 3;
             if (lang != null)
                 len += lang.Length + 1;
-            return String.Create(len, (key, requestType, accept, method, lang), static (span, s) =>
+            return len;
+        }
+
+        /// <summary>
+        /// Write a cache key: key \n requestType \n accept \n method [\n lang] (accept and method must not be null)
+        /// </summary>
+        static void WriteCacheKey(Span<Char> span, String key, String requestType, String accept, String method, String lang)
+        {
+            key.CopyTo(span);
+            var p = key.Length;
+            span[p++] = '\n';
+            requestType.CopyTo(span.Slice(p));
+            p += requestType.Length;
+            span[p++] = '\n';
+            accept.CopyTo(span.Slice(p));
+            p += accept.Length;
+            span[p++] = '\n';
+            method.CopyTo(span.Slice(p));
+            if (lang == null)
+                return;
+            p += method.Length;
+            span[p++] = '\n';
+            lang.CopyTo(span.Slice(p));
+        }
+
+        /// <summary>
+        /// Cache keys up to this length are built on the stack for a lookup
+        /// </summary>
+        const int MaxStackCacheKey = 1024;
+
+        /// <summary>
+        /// The same as cache.TryGetValue(MakeCacheKey(key, requestType, accept, method, lang), out ce), with the key built on the stack (or in a pooled buffer)
+        /// </summary>
+        [SkipLocalsInit]
+        static bool TryGetCached(LowAllocConcurrentDictionary<String, HttpCacheEntry> cache, String key, String requestType, String accept, String method, String lang, out HttpCacheEntry ce)
+        {
+            if (!cache.TryGetAlternateLookup<ReadOnlySpan<Char>>(out var lookup))
+                return cache.TryGetValue(MakeCacheKey(key, requestType, accept, method, lang), out ce);
+            accept ??= String.Empty;
+            method ??= String.Empty;
+            var len = GetCacheKeyLength(key, requestType, accept, method, lang);
+            if (len <= MaxStackCacheKey)
             {
-                s.key.CopyTo(span);
-                var p = s.key.Length;
-                span[p++] = '\n';
-                s.requestType.CopyTo(span.Slice(p));
-                p += s.requestType.Length;
-                span[p++] = '\n';
-                s.accept.CopyTo(span.Slice(p));
-                p += s.accept.Length;
-                span[p++] = '\n';
-                s.method.CopyTo(span.Slice(p));
-                var lang = s.lang;
-                if (lang == null)
-                    return;
-                p += s.method.Length;
-                span[p++] = '\n';
-                lang.CopyTo(span.Slice(p));
+                Span<Char> b = stackalloc Char[MaxStackCacheKey];
+                WriteCacheKey(b, key, requestType, accept, method, lang);
+                return lookup.TryGetValue(b.Slice(0, len), out ce);
+            }
+            var rented = ArrayPool<Char>.Shared.Rent(len);
+            try
+            {
+                WriteCacheKey(rented, key, requestType, accept, method, lang);
+                return lookup.TryGetValue(rented.AsSpan(0, len), out ce);
+            }
+            finally
+            {
+                ArrayPool<Char>.Shared.Return(rented);
+            }
+        }
+
+        /// <summary>
+        /// The same as MakeCacheKey(String.Concat(url, "\r", apiAccept), requestType, accept, method, lang): the cache key of an API GET (see <see cref="ApiHttpEntry.GetCacheKey(HttpServerRequest)"/>) without the API key string
+        /// </summary>
+        static String MakeApiGetCacheKey(String url, String apiAccept, String requestType, String accept, String method, String lang)
+        {
+            accept ??= String.Empty;
+            method ??= String.Empty;
+            var keyLen = ApiHttpEntry.GetGetCacheKeyLength(url, apiAccept);
+            return String.Create(keyLen + GetCacheKeyLength(String.Empty, requestType, accept, method, lang), (url, apiAccept, keyLen, requestType, accept, method, lang), static (span, s) =>
+            {
+                ApiHttpEntry.WriteGetCacheKey(span, s.url, s.apiAccept);
+                WriteCacheKey(span.Slice(s.keyLen), String.Empty, s.requestType, s.accept, s.method, s.lang);
             });
+        }
+
+        /// <summary>
+        /// Write the cache key of an API request: the key prepared by <see cref="ApiHttpEntry.PrepareCacheKey(HttpServerRequest)"/> (keyLen chars), then \n requestType \n accept \n method [\n lang] (accept and method must not be null)
+        /// </summary>
+        static void WriteApiCacheKey(Span<Char> span, ApiHttpEntry api, HttpServerRequest request, int keyLen, String requestType, String accept, String method, String lang)
+        {
+            api.WriteCacheKey(span.Slice(0, keyLen), request);
+            WriteCacheKey(span.Slice(keyLen), String.Empty, requestType, accept, method, lang);
+        }
+
+        /// <summary>
+        /// The same as <see cref="TryGetCached"/> with the key of <see cref="ApiHttpEntry.GetCacheKey(HttpServerRequest)"/>, without creating the API key or the cache key string.
+        /// The key must have been prepared by <see cref="ApiHttpEntry.PrepareCacheKey(HttpServerRequest)"/> (keyLen chars, more than 0).
+        /// Returns true for an entry that can be used (not expired and the same etag).
+        /// cacheKey is the cache key string if it was created (the cache doesn't support span lookups, or a POST key that isn't a usable hit:
+        /// a POST key contains the body that is released when the request is invoked, so it can't be written later when the response is saved), else null (see <see cref="MakeApiGetCacheKey"/>).
+        /// </summary>
+        [SkipLocalsInit]
+        static bool TryGetCachedApi(LowAllocConcurrentDictionary<String, HttpCacheEntry> cache, ApiHttpEntry api, HttpServerRequest request, int keyLen, String requestType, String accept, String method, String lang, long nowT, String etag, out HttpCacheEntry ce, out String cacheKey)
+        {
+            accept ??= String.Empty;
+            method ??= String.Empty;
+            var len = keyLen + GetCacheKeyLength(String.Empty, requestType, accept, method, lang);
+            if (!cache.TryGetAlternateLookup<ReadOnlySpan<Char>>(out var lookup))
+            {
+                cacheKey = String.Create(len, (api, request, keyLen, requestType, accept, method, lang), static (span, s) =>
+                    WriteApiCacheKey(span, s.api, s.request, s.keyLen, s.requestType, s.accept, s.method, s.lang));
+                return cache.TryGetValue(cacheKey, out ce) && (nowT < ce.Expires) && ce.ETag.FastEquals(etag);
+            }
+            cacheKey = null;
+            if (len <= MaxStackCacheKey)
+            {
+                Span<Char> b = stackalloc Char[MaxStackCacheKey];
+                b = b.Slice(0, len);
+                WriteApiCacheKey(b, api, request, keyLen, requestType, accept, method, lang);
+                if (lookup.TryGetValue(b, out ce) && (nowT < ce.Expires) && ce.ETag.FastEquals(etag))
+                    return true;
+                if (!api.IsGetCacheKey(request))
+                    cacheKey = new String(b);
+                return false;
+            }
+            var rented = ArrayPool<Char>.Shared.Rent(len);
+            try
+            {
+                var r = rented.AsSpan(0, len);
+                WriteApiCacheKey(r, api, request, keyLen, requestType, accept, method, lang);
+                if (lookup.TryGetValue(r, out ce) && (nowT < ce.Expires) && ce.ETag.FastEquals(etag))
+                    return true;
+                if (!api.IsGetCacheKey(request))
+                    cacheKey = new String(r);
+                return false;
+            }
+            finally
+            {
+                ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -1801,33 +1922,83 @@ namespace SysWeaver.Net
                     }
                 }
                 //  Handle cached requests
-                String cacheKey = String.Empty;
+                //  The parts of the cache key (the key string is only created when a response is saved, a lookup builds it on the stack)
+                String cacheKeyPart = null;
+                String cacheKeyType = null;
+                String cacheKeyAccept = null;
+                String cacheKeyMethod = null;
+                String cacheKeyLang = null;
+                //  API entries: the complete cache key if it was created by the lookup, or the Accept header part of an API GET key (url \r accept)
+                String cacheKeyFull = null;
+                String cacheKeyApiAccept = null;
+                bool cacheKeyApiGet = false;
                 LowAllocConcurrentDictionary<String, HttpCacheEntry> cache = null;
-                var now = DateTime.UtcNow;
-                var nowT = now.Ticks;
+                //  The time is only used by the request cache (rcd is never changed from 0 to non zero below)
+                DateTime now = default;
+                long nowT = 0;
                 if (rcd != 0)
                 {
+                    now = DateTime.UtcNow;
+                    nowT = now.Ticks;
                     cache = ((rcd < 0) || isDynamicTemplate) ? session.SaveCache : Cache;
                     if (rcd < 0)
                         rcd = -rcd;
-                    var keyTask = t.GetCacheKey(data);
-                    var key = (keyTask.IsCompletedSuccessfully ? keyTask.Result : await keyTask.ConfigureAwait(false)) ?? url;
-                    if (key.Length > 0)
+                    bool haveKey;
+                    bool useCached = false;
+                    HttpCacheEntry ce = null;
+                    if (t is ApiHttpEntry apiEntry)
                     {
-                        Interlocked.Increment(ref CacheTotal);
-                        cacheKey = MakeCacheKey(key, data.GetType().Name, data.AcceptEncoding, data.Method, (useLanguageCache && haveTranslator) ? lang : null);
-                        if (cache.TryGetValue(cacheKey, out var ce))
+                        //  API entries write their key into the lookup buffer (no key strings on a hit), the same text as GetCacheKey
+                        var keyLenTask = apiEntry.PrepareCacheKey(data);
+                        var apiKeyLen = keyLenTask.IsCompletedSuccessfully ? keyLenTask.Result : await keyLenTask.ConfigureAwait(false);
+                        haveKey = apiKeyLen > 0;
+                        if (haveKey)
                         {
+                            Interlocked.Increment(ref CacheTotal);
+                            cacheKeyType = data.GetType().Name;
+                            cacheKeyAccept = data.AcceptEncoding;
+                            cacheKeyMethod = data.Method;
+                            cacheKeyLang = (useLanguageCache && haveTranslator) ? lang : null;
                             //  The cache key doesn't include the etag, so an entry created from an older version of the source must not be served (it's replaced below)
-                            if ((nowT < ce.Expires) && ce.ETag.FastEquals(etag))
+                            useCached = TryGetCachedApi(cache, apiEntry, data, apiKeyLen, cacheKeyType, cacheKeyAccept, cacheKeyMethod, cacheKeyLang, nowT, etag, out ce, out cacheKeyFull);
+                            if (!useCached && (cacheKeyFull == null))
                             {
-                                Interlocked.Exchange(ref ce.LastUsed, nowT);
-                                using (TrackSendCached.Track())
-                                    await ce.SendCached(data, isHead).ConfigureAwait(false);
-                                Interlocked.Increment(ref CacheHit);
-                                return;
+                                //  A GET key (url \r accept) is written again when the response is saved
+                                cacheKeyPart = data.Url;
+                                cacheKeyApiAccept = data.ApiAccept;
+                                cacheKeyApiGet = true;
                             }
                         }
+                    }
+                    else
+                    {
+                        var keyTask = t.GetCacheKey(data);
+                        var key = (keyTask.IsCompletedSuccessfully ? keyTask.Result : await keyTask.ConfigureAwait(false)) ?? url;
+                        haveKey = key.Length > 0;
+                        if (haveKey)
+                        {
+                            Interlocked.Increment(ref CacheTotal);
+                            cacheKeyPart = key;
+                            cacheKeyType = data.GetType().Name;
+                            cacheKeyAccept = data.AcceptEncoding;
+                            cacheKeyMethod = data.Method;
+                            cacheKeyLang = (useLanguageCache && haveTranslator) ? lang : null;
+                            //  The cache key doesn't include the etag, so an entry created from an older version of the source must not be served (it's replaced below)
+                            useCached = TryGetCached(cache, key, cacheKeyType, cacheKeyAccept, cacheKeyMethod, cacheKeyLang, out ce) && (nowT < ce.Expires) && ce.ETag.FastEquals(etag);
+                        }
+                    }
+                    if (useCached)
+                    {
+                        Interlocked.Exchange(ref ce.LastUsed, nowT);
+                        using (TrackSendCached.Track())
+                            await ce.SendCached(data, isHead).ConfigureAwait(false);
+                        Interlocked.Increment(ref CacheHit);
+                        return;
+                    }
+                    if (!haveKey)
+                    {
+                        //  An empty key means "don't cache" (ex: a POST body over 4096 bytes): no in memory compression (at Best level) and no cache entry under "" (modpass-1)
+                        rcd = 0;
                     }
                 }
                 var output = data.OutputStream;
@@ -1994,12 +2165,13 @@ namespace SysWeaver.Net
  
                     //  Determine compression
                     var acc = data.AcceptEncoding;
-                    var acceptedEncoders = data.AcceptedEncoders;
-                    var comp = t.Compression?.GetEncoder(acc, acceptedEncoders);
+                    //  The accepted encoders are only parsed / looked up when needed (the encoder choice is cached per Accept-Encoding value)
+                    var comp = t.Compression?.GetEncoder(acc, data);
                     data.CompEncoder = comp;
                     //  Handle pre-compressed data (use directly or decompress)
                     if (dec != null)
                     {
+                        var acceptedEncoders = data.AcceptedEncoders;
                         //  If encoded as gzip..
                         if (dec.HttpCode.FastEquals("gzip"))
                         {
@@ -2063,6 +2235,26 @@ namespace SysWeaver.Net
                         }
                     }
 
+                    //  Tiny responses with a known length are sent uncompressed (pre-compressed data is already decompressed here)
+                    if (comp != null)
+                    {
+                        var minComp = MinCompressSize;
+                        if (minComp > 0)
+                        {
+                            var cs = i.Stream;
+                            if (cs == null)
+                            {
+                                if (i.Mem.Length < minComp)
+                                    comp = null;
+                            }
+                            else
+                            {
+                                if (cs.CanSeek && ((cs.Length - cs.Position) < minComp))
+                                    comp = null;
+                            }
+                        }
+                    }
+
                     //  Apply compression
                     if (comp != null)
                     {
@@ -2088,7 +2280,11 @@ namespace SysWeaver.Net
 
                     //  Cache
                     if (rcd > 0)
-                        await SaveToCache(cache, cacheKey, now.AddSeconds(rcd), nowT, etag, i, data, data.LocalUrl).ConfigureAwait(false);
+                        await SaveToCache(cache,
+                            cacheKeyFull ?? (cacheKeyApiGet
+                                ? MakeApiGetCacheKey(cacheKeyPart, cacheKeyApiAccept, cacheKeyType, cacheKeyAccept, cacheKeyMethod, cacheKeyLang)
+                                : MakeCacheKey(cacheKeyPart, cacheKeyType, cacheKeyAccept, cacheKeyMethod, cacheKeyLang)),
+                            now.AddSeconds(rcd), nowT, etag, i, data, data.LocalUrl).ConfigureAwait(false);
 
                     //  Get length
                     var s = i.Stream;
@@ -2478,6 +2674,11 @@ namespace SysWeaver.Net
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor("HttpServer");
 
         readonly HttpServerBaseParams BaseParams;
+
+        /// <summary>
+        /// Responses with a known length below this are sent uncompressed, 0 = always compress, see <see cref="HttpServerBaseParams.MinCompressSize"/>
+        /// </summary>
+        readonly long MinCompressSize;
 
         #region Auth
 

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Collections.Concurrent;
 using System.Buffers;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -242,122 +243,99 @@ namespace SysWeaver.Net
         }.Freeze();
 
 
-        struct FixBase64State
-        {
-            public readonly String Src;
-            public readonly int Start;
-
-            public FixBase64State(string src, int start)
-            {
-                Src = src;
-                Start = start;
-            }
-        }
-
-
-        static void WriteFixBase64(Span<Char> to, FixBase64State data)
-        {
-            var str = data.Src;
-            var start = data.Start;
-            var strLen = str.Length;
-            int d = 0; 
-            for (int i = start; i < strLen; ++ i)
-            {
-                var c = str[i];
-                if (c == '-')
-                    c = '+';
-                if (c == '_')
-                    c = '/';
-                to[d] = c;
-                ++d;
-            }
-            var len = to.Length;
-            while (d < len)
-            {
-                to[d] = '=';
-                ++d;
-            }
-        }
-
-        static readonly SpanAction<Char, FixBase64State> WriteFixBase64Action = WriteFixBase64;
-
-
-
-
         /// <summary>
-        /// Decode base64 or base64url (padding optional) starting at <paramref name="start"/>.
+        /// The maximum number of base64 chars to fix up (base64url to base64 and padding) on the stack (4 KB), longer arguments use a pooled buffer.
         /// </summary>
-        /// <exception cref="Exception">The text isn't valid base64.</exception>
-        static ReadOnlyMemory<Byte> FromText(String text, int start)
-        {
-            var ttl = text.Length;
-            var tl = text.Length - start;
-            bool needPadding = (tl & 3) != 0;
-            bool needFix = false;
-            if (!needPadding)
-            {
-                for (int i = start; i < ttl; ++i)
-                {
-                    var c = text[i];
-                    needFix |= (c == '-');
-                    needFix |= (c == '_');
-                    if (needFix)
-                        break;
-                }
-            }
-            if (needPadding || needFix)
-            {
-                var nl = needPadding ? ((tl + 3) & ~3) : tl;
-                text = String.Create(nl, new FixBase64State(text, start), WriteFixBase64Action);
-                tl = nl;
-                start = 0;
-            }
-            tl += (tl << 1);
-            tl += 7;
-            tl >>= 2;
-            var temp = GC.AllocateUninitializedArray<Byte>(tl);
-            if (!Convert.TryFromBase64Chars(text.AsSpan().Slice(start), temp.AsSpan(), out var b))
-                throw new Exception("Invalid base64 data in binary API parameter");
-            return new ReadOnlyMemory<Byte>(temp, 0, b);
-        }
+        const int MaxStackBase64 = 2048;
+
+        static void ThrowBinaryFormat(ReadOnlySpan<Char> text)
+            => throw new Exception(String.Concat("Don't know how to handle binary data \"", new String(text).LimitLength(20), '"'));
+
+        static void ThrowNoSerializer(ReadOnlySpan<Char> ext)
+            => throw new Exception(String.Concat("Can't find an enabled serializer named \"", new String(ext).FastToLower(), '"'));
+
+        static void ThrowInvalidBase64()
+            => throw new Exception("Invalid base64 data in binary API parameter");
 
         /// <summary>
         /// Decode a binary argument: "_" + type char (see <see cref="GetDecomp"/>) + [serializer extension + ","] + base64url data.
+        /// The data is decoded from the span into a pooled buffer (strings are only created for exception messages).
         /// </summary>
-        T GetBinary<T>(String text)
+        [SkipLocalsInit]
+        T GetBinary<T>(ReadOnlySpan<Char> text)
         {
 #if DEBUG
             if (text.Length < 2)
                 throw new Exception("Binary API parameter is missing the type char");
 #endif//DEBUG
-            if (!Decomp.TryGetValue(text[1], out var z))
-                throw new Exception(String.Concat("Don't know how to handle binary data of type '", text[1], '\''));
+            var tc = text[1];
+            if (!Decomp.TryGetValue(tc, out var z))
+                throw new Exception(String.Concat("Don't know how to handle binary data of type '", tc, '\''));
             int i = 2;
             IDeserializer ser;
             if (z.Item2)
             {
-                i = text.IndexOf(',', i);
+                i = text.Slice(2).IndexOf(',');
                 if (i < 0)
-                    throw new Exception(String.Concat("Don't know how to handle binary data \"", text.LimitLength(20), '"'));
-                var ext = text.FastToLower(2, i - 2);
-                if (!InputSerializers.TryGetValue(ext, out ser))
-                    throw new Exception(String.Concat("Can't find an enabled serializer named \"", ext, '"'));
-                ++i;
+                    ThrowBinaryFormat(text);
+                //  The same lookup as with the lower cased extension string
+                if (!InputSerializers.TryGetValueLower(text.Slice(2, i), out ser))
+                    ThrowNoSerializer(text.Slice(2, i));
+                i += 3;
             }else
             {
                 ser = JsonDeSer;
                 if (ser == null)
                     throw new Exception(String.Concat("Can't find an enabled json serializer"));
             }
-            var data = FromText(text, i);
+            //  Base64 or base64url (padding optional): '-' => '+', '_' => '/' and '=' padding to a multiple of 4 chars,
+            //  the same chars to the same decoder as before (when nothing changes the text is decoded as is)
+            scoped ReadOnlySpan<Char> b64 = text.Slice(i);
+            var tl = b64.Length;
+            var nl = (tl + 3) & ~3;
+            Char[] pooledChars = null;
+            if ((nl != tl) || b64.ContainsAny('-', '_'))
+            {
+                Span<Char> f = nl <= MaxStackBase64 ? stackalloc Char[nl] : (pooledChars = ArrayPool<Char>.Shared.Rent(nl)).AsSpan(0, nl);
+                b64.Replace(f, '-', '+');
+                f.Replace('_', '/');
+                f.Slice(tl).Fill('=');
+                b64 = f;
+            }
+            //  The same (large enough) size as before
+            var temp = ArrayPoolStream.Rent(((nl + (nl << 1)) + 7) >> 2);
+            var ok = Convert.TryFromBase64Chars(b64, temp, out var b);
+            if (pooledChars != null)
+                ArrayPool<Char>.Shared.Return(pooledChars);
+            if (!ok)
+            {
+                ArrayPoolStream.Return(temp);
+                ThrowInvalidBase64();
+            }
             var comp = z.Item1;
             if (comp != null)
             {
-                using var dd = GetDecompressed(comp, data.Span);
-                return ser.Create<T>(dd.Memory);
-
+                IUnmanagedReadOnlyMemory<Byte> dd;
+                try
+                {
+                    dd = GetDecompressed(comp, new ReadOnlySpan<Byte>(temp, 0, b));
+                }
+                finally
+                {
+                    ArrayPoolStream.Return(temp);
+                }
+                using (dd)
+                    return ser.Create<T>(dd.Memory);
             }
-            return ser.Create<T>(data);
+            //  Pooled like the decompressed data (and request bodies), deserializers don't keep a reference to the data
+            try
+            {
+                return ser.Create<T>(new ReadOnlyMemory<Byte>(temp, 0, b));
+            }
+            finally
+            {
+                ArrayPoolStream.Return(temp);
+            }
         }
 
         /// <summary>
@@ -392,7 +370,7 @@ namespace SysWeaver.Net
             }
             var c = span[0];
             if (c == '_')
-                return GetBinary<T>(text ?? new String(span));
+                return GetBinary<T>(span);
             if (!SerMapper.TryGetValue(c, out var ser))
             {
                 if (Consts.TryGetValueSpan(span, out var val))
@@ -443,36 +421,113 @@ namespace SysWeaver.Net
         /// <param name="request">The request to read the body of.</param>
         /// <returns>The body (not decompressed), the caller must dispose it.</returns>
         /// <exception cref="HttpResponseException">A 413 response if the Content-Length or the actual body exceeds <see cref="MaxRequestSize"/>.</exception>
-        public async Task<IUnmanagedReadOnlyMemory<Byte>> ReadRequestBodyAsync(HttpServerRequest request)
+        public Task<IUnmanagedReadOnlyMemory<Byte>> ReadRequestBodyAsync(HttpServerRequest request)
+        {
+            var t = ReadBodyAsync(request);
+            return t.IsCompletedSuccessfully ? Task.FromResult(t.Result) : t.AsTask();
+        }
+
+        /// <summary>
+        /// The read size when the length of the request body is unknown (or zero, some servers reports 0 for a chunked body).
+        /// </summary>
+        const int UnknownLengthReadSize = 16384;
+
+        /// <summary>
+        /// Read the entire request body into pooled memory, enforcing <see cref="MaxRequestSize"/> (the same as <see cref="ReadRequestBodyAsync(HttpServerRequest)"/>).
+        /// The body is read straight into a pooled buffer sized from the Content-Length (no stream object and no copy), the buffer grows if the body is larger.
+        /// </summary>
+        /// <param name="request">The request to read the body of.</param>
+        /// <returns>The body (not decompressed), the caller must dispose it. Await once.</returns>
+        /// <exception cref="HttpResponseException">A 413 response if the Content-Length or the actual body exceeds <see cref="MaxRequestSize"/>.</exception>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        internal async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadBodyAsync(HttpServerRequest request)
         {
             var max = MaxRequestSize;
             var len = request.ReqContentLength;
             if ((max > 0) && (len > max))
                 ThrowTooLarge(max);
-            using var ms = new ArrayPoolStream((int)Math.Clamp(len, 32, MaxInitialCapacity));
             var input = request.InputStream;
             if (input == null)
-                return ms.GetMemory();
-            var buf = ArrayPoolStream.Rent(16384);
+                return UnmanagedMemory.Empty<Byte>();
+            //  Room for the Content-Length + 1 (the end is detected without growing), the client supplied length is capped (the buffer grows as data arrives)
+            var buf = ArrayPoolStream.Rent(len > 0 ? (int)Math.Min(len + 1, MaxInitialCapacity) : UnknownLengthReadSize);
+            int total = 0;
             try
             {
-                long total = 0;
                 for (; ; )
                 {
-                    var r = await input.ReadAsync(buf.AsMemory()).ConfigureAwait(false);
+                    if (total == buf.Length)
+                        buf = Grow(buf, total);
+                    var r = await input.ReadAsync(buf.AsMemory(total)).ConfigureAwait(false);
                     if (r <= 0)
                         break;
                     total += r;
                     if ((max > 0) && (total > max))
                         ThrowTooLarge(max);
-                    ms.Write(buf, 0, r);
                 }
             }
-            finally
+            catch
             {
                 ArrayPoolStream.Return(buf);
+                throw;
             }
-            return ms.GetMemory();
+            return PooledMemory.Create(buf, total);
+        }
+
+        /// <summary>
+        /// Replace a full pooled buffer with one twice the size (the same growth as <see cref="ArrayPoolStream"/>).
+        /// </summary>
+        /// <param name="buf">The full buffer, returned to the pool.</param>
+        /// <param name="length">The number of valid bytes (the buffer length).</param>
+        /// <param name="minLength">The minimum size of the new buffer.</param>
+        /// <returns>The new buffer (rented using <see cref="ArrayPoolStream.Rent(int)"/>) with the valid bytes copied.</returns>
+        /// <exception cref="IOException">The buffer would be larger than Array.MaxLength (the same exception as <see cref="ArrayPoolStream"/>).</exception>
+        static Byte[] Grow(Byte[] buf, int length, long minLength = 0)
+        {
+            var size = Math.Min(Math.Max(minLength, (long)buf.Length << 1), Array.MaxLength);
+            if ((size <= length) || (size < minLength))
+                throw new IOException("Stream too long");
+            var next = ArrayPoolStream.Rent((int)size);
+            new ReadOnlySpan<Byte>(buf, 0, length).CopyTo(next.AsSpan());
+            ArrayPoolStream.Return(buf);
+            return next;
+        }
+
+        /// <summary>
+        /// Pooled memory, the buffer is returned to the pool when disposed (only once).
+        /// </summary>
+        sealed class PooledMemory : IUnmanagedReadOnlyMemory<Byte>
+        {
+            PooledMemory(Byte[] buffer, int length)
+            {
+                Buffer = buffer;
+                Memory = new ReadOnlyMemory<Byte>(buffer, 0, length);
+            }
+
+            /// <summary>
+            /// Wrap a buffer rented using <see cref="ArrayPoolStream.Rent(int)"/> (the ownership is transferred).
+            /// </summary>
+            /// <returns>The memory, the shared empty instance if the length is 0 (the buffer is then returned).</returns>
+            public static IUnmanagedReadOnlyMemory<Byte> Create(Byte[] buffer, int length)
+            {
+                if (length <= 0)
+                {
+                    ArrayPoolStream.Return(buffer);
+                    return UnmanagedMemory.Empty<Byte>();
+                }
+                return new PooledMemory(buffer, length);
+            }
+
+            Byte[] Buffer;
+
+            public ReadOnlyMemory<Byte> Memory { get; }
+
+            public void Dispose()
+            {
+                var b = Interlocked.Exchange(ref Buffer, null);
+                if (b != null)
+                    ArrayPoolStream.Return(b);
+            }
         }
 
         /// <summary>
@@ -484,41 +539,70 @@ namespace SysWeaver.Net
         /// <exception cref="HttpResponseException">A 413 response if the decompressed data exceeds <see cref="MaxDecompressedSize"/>.</exception>
         public IUnmanagedReadOnlyMemory<Byte> GetDecompressed(ICompDecoder decoder, ReadOnlySpan<Byte> data)
         {
-            var max = MaxDecompressedSize;
-            using var ms = new ArrayPoolStream((int)Math.Clamp((long)data.Length << 2, 4096, MaxInitialCapacity));
-            if (max <= 0)
+            var s = new LimitedWriteStream(ArrayPoolStream.Rent((int)Math.Clamp((long)data.Length << 2, 4096, MaxInitialCapacity)), MaxDecompressedSize);
+            try
             {
-                decoder.Decompress(data, ms);
+                decoder.Decompress(data, s);
             }
-            else
+            catch
             {
-                using var ls = new LimitedWriteStream(ms, max);
-                decoder.Decompress(data, ls);
+                s.Release();
+                throw;
             }
-            return ms.GetMemory();
+            return s.GetMemory();
         }
 
         /// <summary>
-        /// A write only stream that forwards writes to another stream, throwing a 413 <see cref="HttpResponseException"/> if more than a given number of bytes are written.
+        /// A write only stream that writes to a pooled buffer, throwing a 413 <see cref="HttpResponseException"/> if more than a given number of bytes are written.
+        /// The stream is also the memory handed out (one object instead of a stream, a limiting stream and a lease).
         /// </summary>
-        sealed class LimitedWriteStream : Stream
+        sealed class LimitedWriteStream : Stream, IUnmanagedReadOnlyMemory<Byte>, IDisposable
         {
-            public LimitedWriteStream(Stream inner, long max)
+            /// <param name="buffer">A buffer rented using <see cref="ArrayPoolStream.Rent(int)"/> (the ownership is transferred).</param>
+            /// <param name="max">The maximum number of bytes, zero or negative means no limit.</param>
+            public LimitedWriteStream(Byte[] buffer, long max)
             {
-                Inner = inner;
+                Buffer = buffer;
                 Max = max;
             }
-            readonly Stream Inner;
+            Byte[] Buffer;
             readonly long Max;
-            long Written;
+            int Written;
 
-            void Add(int count)
+            /// <summary>
+            /// The written data (set by <see cref="GetMemory"/>).
+            /// </summary>
+            public ReadOnlyMemory<Byte> Memory { get; private set; }
+
+            /// <summary>
+            /// Get the written data (this instance), the shared empty instance if nothing is written (the buffer is then returned).
+            /// </summary>
+            public IUnmanagedReadOnlyMemory<Byte> GetMemory()
             {
-                var w = Written + count;
-                if (w > Max)
-                    ThrowTooLarge(Max);
-                Written = w;
+                var w = Written;
+                if (w <= 0)
+                {
+                    Release();
+                    return UnmanagedMemory.Empty<Byte>();
+                }
+                Memory = new ReadOnlyMemory<Byte>(Buffer, 0, w);
+                return this;
             }
+
+            /// <summary>
+            /// Return the buffer to the pool (only once).
+            /// </summary>
+            public void Release()
+            {
+                var b = Interlocked.Exchange(ref Buffer, null);
+                if (b != null)
+                    ArrayPoolStream.Return(b);
+            }
+
+            /// <summary>
+            /// Disposing the memory returns the buffer (disposing the stream, ex: by a decoder, doesn't).
+            /// </summary>
+            void IDisposable.Dispose() => Release();
 
             public override bool CanRead => false;
             public override bool CanSeek => false;
@@ -532,32 +616,40 @@ namespace SysWeaver.Net
 
             public override void Write(byte[] buffer, int offset, int count)
             {
-                Add(count);
-                Inner.Write(buffer, offset, count);
+                ValidateBufferArguments(buffer, offset, count);
+                Write(new ReadOnlySpan<Byte>(buffer, offset, count));
             }
 
             public override void Write(ReadOnlySpan<byte> buffer)
             {
-                Add(buffer.Length);
-                Inner.Write(buffer);
+                var count = buffer.Length;
+                if (count <= 0)
+                    return;
+                var pos = Written;
+                var w = (long)pos + count;
+                var max = Max;
+                if ((max > 0) && (w > max))
+                    ThrowTooLarge(max);
+                var b = Buffer;
+                if (w > b.Length)
+                    Buffer = b = Grow(b, pos, w);
+                buffer.CopyTo(new Span<Byte>(b, pos, count));
+                Written = (int)w;
             }
 
             public override void WriteByte(byte value)
-            {
-                Add(1);
-                Inner.WriteByte(value);
-            }
+                => Write(new ReadOnlySpan<Byte>(in value));
 
             public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             {
-                Add(count);
-                return Inner.WriteAsync(buffer, offset, count, cancellationToken);
+                Write(buffer, offset, count);
+                return Task.CompletedTask;
             }
 
             public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
             {
-                Add(buffer.Length);
-                return Inner.WriteAsync(buffer, cancellationToken);
+                Write(buffer.Span);
+                return ValueTask.CompletedTask;
             }
         }
 

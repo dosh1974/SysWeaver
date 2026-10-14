@@ -151,6 +151,19 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
+        /// The same as <see cref="TryGetName(string)"/> for a span (ex: a part of a string), without allocations for ASCII names of up to 256 chars.
+        /// </summary>
+        /// <param name="name">The name of the country (an empty span is the same as a null or empty string).</param>
+        /// <returns>Information about the country if it's known, or null if it's unknown</returns>
+        public static IsoCountry TryGetName(ReadOnlySpan<Char> name)
+        {
+            var ni = NameToInfo;
+            if ((name.Length <= MaxStackName) && Ascii.IsValid(name))
+                return name.IndexOfAny(NameChanges) < 0 ? (ni.TryGetValueSpan(name, out var n) ? n : null) : TryGetNameAscii(ni, name);
+            return TryGetName(name.ToString());
+        }
+
+        /// <summary>
         /// Names up to this length are normalized on the stack
         /// </summary>
         const int MaxStackName = 256;
@@ -163,7 +176,7 @@ namespace SysWeaver.IsoData
         /// <summary>
         /// The same as FixName(name.FastToLower()) for ASCII names (no diacritics): lower cased, '-' replaced with ' ' and '.' removed, into a stack buffer
         /// </summary>
-        static IsoCountry TryGetNameAscii(IReadOnlyDictionary<String, IsoCountry> ni, String name)
+        static IsoCountry TryGetNameAscii(IReadOnlyDictionary<String, IsoCountry> ni, ReadOnlySpan<Char> name)
         {
             Span<Char> b = stackalloc Char[name.Length];
             int n = 0;

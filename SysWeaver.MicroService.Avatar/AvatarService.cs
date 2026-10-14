@@ -53,10 +53,10 @@ namespace SysWeaver.MicroService
         public String[] OnlyForPrefixes { get; } = ["Avatars/"];
 
 
-        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
 
-        Task<IHttpRequestHandler> Handle(HttpServerRequest context)
+        ValueTask<IHttpRequestHandler> Handle(HttpServerRequest context)
         {
             var lname = context.LocalUrl;
             var e = lname.LastIndexOf('.');
@@ -74,10 +74,11 @@ namespace SysWeaver.MicroService
             lname = lname.Substring(PrefixLen, e - (PrefixLen + 3));
             if (!int.TryParse(lname, out var seed))
                 return NullRet;
-            return Get(seed);
+            //  Wraps the cached task (no allocation)
+            return new ValueTask<IHttpRequestHandler>(Get(seed));
         }
 
-        static readonly Task<IHttpRequestHandler> NullRet = Task.FromResult<IHttpRequestHandler>(null);
+        static readonly ValueTask<IHttpRequestHandler> NullRet = default;
 
 
 

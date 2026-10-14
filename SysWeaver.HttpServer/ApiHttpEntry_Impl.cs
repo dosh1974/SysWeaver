@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Tasks;
 using SysWeaver.Serialization;
@@ -61,6 +63,8 @@ namespace SysWeaver.Net
         /// <summary>
         /// The translating part of <see cref="EncodeResult{T}(ApiHttpEntry, HttpServerRequest, T)"/>.
         /// </summary>
+        /// <remarks>A pooled box when the translation is pending (the invokers await it once).</remarks>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
         static async ValueTask<ReadOnlyMemory<Byte>> EncodeTranslatedResult<T>(ApiHttpEntry api, HttpServerRequest request, T value, ISerializer ser, ITranslator t)
         {
             var io = api.IoParams;
@@ -69,8 +73,8 @@ namespace SysWeaver.Net
             {
                 try
                 {
-                    var copySer = io.CopySerializer;
-                    var copy = copySer.Create<T>(copySer.Serialize(value));
+                    //  Same as copySer.Create<T>(copySer.Serialize(value)), the json is written to a pooled buffer
+                    var copy = io.CopySerializer.DeepCopy(value);
                     copy = await TypeTranslator.TranslateValue(t, lang, copy).ConfigureAwait(false);
                     return ser.Serialize(copy);
                 }
@@ -94,8 +98,108 @@ namespace SysWeaver.Net
             /// <param name="api">The end point being invoked (supplies io params and audit callbacks).</param>
             /// <param name="request">The request to read input from and pass to context aware methods.</param>
             /// <returns>The response body, empty for methods without a return value (a value task: synchronous API's complete without a task allocation).</returns>
+            /// <remarks>The async invokers use pooled boxes (<see cref="PoolingAsyncValueTaskMethodBuilder{TResult}"/>): the value task must be awaited (consumed) exactly once.</remarks>
             ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request);
         }
+
+        #region Synchronous invoker helpers
+
+        /// <summary>
+        /// The end of a synchronous invoker (called inside its try block, after the method returned): encode the result and raise the audit end.
+        /// A result that is encoded synchronously (no translation) is returned without a state machine, a pending encoding is awaited by <see cref="RunEncodeAwait{R}"/>.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ValueTask<ReadOnlyMemory<Byte>> RunEnd<R>(ApiHttpEntry api, HttpServerRequest request, bool track, long trackId, R oo)
+        {
+            var t = EncodeResult(api, request, oo);
+            if (!t.IsCompletedSuccessfully)
+                return RunEncodeAwait(api, request, track, trackId, oo, t);
+            var od = t.Result;
+            if (track)
+                api.OnEnd(trackId, request, api, oo);
+            return new ValueTask<ReadOnlyMemory<Byte>>(od);
+        }
+
+        /// <summary>
+        /// Await a pending (or faulted) encoding of a synchronous invoker, then raise the audit end (the audit exception on failure), the same as the rest of the async invoker.
+        /// </summary>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<ReadOnlyMemory<Byte>> RunEncodeAwait<R>(ApiHttpEntry api, HttpServerRequest request, bool track, long trackId, R oo, ValueTask<ReadOnlyMemory<Byte>> t)
+        {
+            try
+            {
+                var od = await t.ConfigureAwait(false);
+                if (track)
+                    api.OnEnd(trackId, request, api, oo);
+                return od;
+            }
+            catch (Exception ex)
+            {
+                if (track)
+                    api.OnException(trackId, request, api, ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Return a value task for an exception thrown by a synchronous invoker, after raising the audit exception (if tracked).
+        /// The same states as the async invoker (faulted, canceled for an <see cref="OperationCanceledException"/>), an exception thrown by the audit callback faults the task instead (as before).
+        /// </summary>
+#pragma warning disable CS1998 // Async method lacks 'await' operators (the async method builder creates the task)
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<ReadOnlyMemory<Byte>> RunThrow(ApiHttpEntry api, HttpServerRequest request, bool track, long trackId, ExceptionDispatchInfo ex)
+        {
+            if (track)
+                api.OnException(trackId, request, api, ex.SourceException);
+            ex.Throw();
+            return default;
+        }
+#pragma warning restore CS1998
+
+        /// <summary>
+        /// A synchronous POST invoker: the part after the input was read.
+        /// </summary>
+        interface IInvokePostRest<T>
+        {
+            /// <summary>
+            /// Invoke the API method with the input and return the encoded response body (the same as the rest of the async invoker after the input was awaited).
+            /// Never throws synchronously, exceptions are returned as faulted / canceled value tasks.
+            /// </summary>
+            ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io);
+        }
+
+        /// <summary>
+        /// Run a synchronous POST invoker: an input that is read and deserialized synchronously (the usual case) is passed on without a state machine,
+        /// a pending input is awaited by <see cref="RunPostAwait{T, I}"/>, an input exception is returned as a faulted / canceled value task (the same as the async invoker).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ValueTask<ReadOnlyMemory<Byte>> RunPost<T, I>(I invoker, ApiHttpEntry api, HttpServerRequest request) where I : class, IInvokePostRest<T>
+        {
+            ValueTask<T> input;
+            try
+            {
+                input = Input_POST<T>(api, request);
+            }
+            catch (Exception ex)
+            {
+                return RunThrow(api, request, false, 0, ExceptionDispatchInfo.Capture(ex));
+            }
+            if (!input.IsCompletedSuccessfully)
+                return RunPostAwait<T, I>(invoker, api, request, input);
+            return invoker.RunRest(api, request, input.Result);
+        }
+
+        /// <summary>
+        /// Await a pending (or failed) input of a synchronous POST invoker, then run the rest of the invoker.
+        /// </summary>
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        static async ValueTask<ReadOnlyMemory<Byte>> RunPostAwait<T, I>(I invoker, ApiHttpEntry api, HttpServerRequest request, ValueTask<T> input) where I : class, IInvokePostRest<T>
+        {
+            var io = await input.ConfigureAwait(false);
+            return await invoker.RunRest(api, request, io).ConfigureAwait(false);
+        }
+
+        #endregion//Synchronous invoker helpers
 
         #region One argument
 
@@ -113,6 +217,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -153,6 +258,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -189,26 +295,29 @@ namespace SysWeaver.Net
             }
             readonly Func<T, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
-                var io = Input_GET<T>(api, request);
+                T io;
+                try
+                {
+                    io = Input_GET<T>(api, request);
+                }
+                catch (Exception ex)
+                {
+                    return RunThrow(api, request, false, 0, ExceptionDispatchInfo.Capture(ex));
+                }
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
                 {
                     if (track)
                         api.OnStart(trackId, request, api, io);
-                    var oo = F(io);
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F(io));
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
 
@@ -219,7 +328,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
-        sealed class RetPostAsyncA1<T, R> : IInvokeApi
+        sealed class RetPostAsyncA1<T, R> : IInvokeApi, IInvokePostRest<T>
         {
             public RetPostAsyncA1(Func<T, R> f)
             {
@@ -228,26 +337,23 @@ namespace SysWeaver.Net
             }
             readonly Func<T, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async when the input completed: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+                => RunPost<T, RetPostAsyncA1<T, R>>(this, api, request);
+
+            public ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io)
             {
-                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
                 {
                     if (track)
                         api.OnStart(trackId, request, api, io);
-                    var oo = F(io);
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F(io));
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -269,6 +375,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -304,6 +411,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -365,7 +473,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
-        sealed class RawRetPostAsyncA1<T> : IInvokeApi
+        sealed class RawRetPostAsyncA1<T> : IInvokeApi, IInvokePostRest<T>
         {
             public RawRetPostAsyncA1(Func<T, ReadOnlyMemory<Byte>> f)
             {
@@ -374,9 +482,12 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ReadOnlyMemory<Byte>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async when the input completed, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+                => RunPost<T, RawRetPostAsyncA1<T>>(this, api, request);
+
+            public ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io)
             {
-                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
@@ -386,13 +497,11 @@ namespace SysWeaver.Net
                     var oo = F(io);
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return oo;
+                    return new ValueTask<ReadOnlyMemory<Byte>>(oo);
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -414,6 +523,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -451,6 +561,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -514,7 +625,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
-        sealed class PostAsyncA1<T> : IInvokeApi
+        sealed class PostAsyncA1<T> : IInvokeApi, IInvokePostRest<T>
         {
             public PostAsyncA1(Action<T> f)
             {
@@ -523,9 +634,12 @@ namespace SysWeaver.Net
             }
             readonly Action<T> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async when the input completed, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+                => RunPost<T, PostAsyncA1<T>>(this, api, request);
+
+            public ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io)
             {
-                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
@@ -536,13 +650,11 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, null);
-                    return oo;
+                    return new ValueTask<ReadOnlyMemory<Byte>>(oo);
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -568,6 +680,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -603,6 +716,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -638,7 +752,8 @@ namespace SysWeaver.Net
             }
             readonly Func<R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -646,17 +761,11 @@ namespace SysWeaver.Net
                 {
                     if (track)
                         api.OnStart(trackId, request, api, null);
-                    var oo = F();
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F());
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -673,7 +782,8 @@ namespace SysWeaver.Net
             }
             readonly Func<R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -681,17 +791,11 @@ namespace SysWeaver.Net
                 {
                     if (track)
                         api.OnStart(trackId, request, api, null);
-                    var oo = F();
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F());
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -712,6 +816,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -746,6 +851,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -852,6 +958,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -888,6 +995,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1004,6 +1112,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -1041,6 +1150,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -1077,26 +1187,29 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
-                var io = Input_GET<T>(api, request);
+                T io;
+                try
+                {
+                    io = Input_GET<T>(api, request);
+                }
+                catch (Exception ex)
+                {
+                    return RunThrow(api, request, false, 0, ExceptionDispatchInfo.Capture(ex));
+                }
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
                 {
                     if (track)
                         api.OnStart(trackId, request, api, io);
-                    var oo = F(io, request);
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F(io, request));
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -1104,7 +1217,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
-        sealed class ContextRetPostAsyncA1<T, R> : IInvokeApi
+        sealed class ContextRetPostAsyncA1<T, R> : IInvokeApi, IInvokePostRest<T>
         {
             public ContextRetPostAsyncA1(Func<T, HttpServerRequest, R> f)
             {
@@ -1113,26 +1226,23 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async when the input completed: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+                => RunPost<T, ContextRetPostAsyncA1<T, R>>(this, api, request);
+
+            public ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io)
             {
-                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
                 {
                     if (track)
                         api.OnStart(trackId, request, api, io);
-                    var oo = F(io, request);
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F(io, request));
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -1154,6 +1264,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -1189,6 +1300,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -1250,7 +1362,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
-        sealed class RawContextRetPostAsyncA1<T> : IInvokeApi
+        sealed class RawContextRetPostAsyncA1<T> : IInvokeApi, IInvokePostRest<T>
         {
             public RawContextRetPostAsyncA1(Func<T, HttpServerRequest, ReadOnlyMemory<Byte>> f)
             {
@@ -1259,9 +1371,12 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ReadOnlyMemory<Byte>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async when the input completed, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+                => RunPost<T, RawContextRetPostAsyncA1<T>>(this, api, request);
+
+            public ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io)
             {
-                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
@@ -1271,13 +1386,11 @@ namespace SysWeaver.Net
                     var oo = F(io, request);
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return oo;
+                    return new ValueTask<ReadOnlyMemory<Byte>>(oo);
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -1302,6 +1415,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -1339,6 +1453,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -1402,7 +1517,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
-        sealed class ContextPostAsyncA1<T> : IInvokeApi
+        sealed class ContextPostAsyncA1<T> : IInvokeApi, IInvokePostRest<T>
         {
             public ContextPostAsyncA1(Action<T, HttpServerRequest> f)
             {
@@ -1411,9 +1526,12 @@ namespace SysWeaver.Net
             }
             readonly Action<T, HttpServerRequest> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async when the input completed, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+                => RunPost<T, ContextPostAsyncA1<T>>(this, api, request);
+
+            public ValueTask<ReadOnlyMemory<Byte>> RunRest(ApiHttpEntry api, HttpServerRequest request, T io)
             {
-                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
                 try
@@ -1424,13 +1542,11 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return oo;
+                    return new ValueTask<ReadOnlyMemory<Byte>>(oo);
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -1456,6 +1572,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1491,6 +1608,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, Task<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1526,7 +1644,8 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1534,17 +1653,11 @@ namespace SysWeaver.Net
                 {
                     if (track)
                         api.OnStart(trackId, request, api, null);
-                    var oo = F(request);
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F(request));
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -1561,7 +1674,8 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            /// <remarks>Not async: a synchronous encoding completes without a state machine, exceptions are returned as faulted / canceled value tasks (the same as the async invoker).</remarks>
+            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1569,17 +1683,11 @@ namespace SysWeaver.Net
                 {
                     if (track)
                         api.OnStart(trackId, request, api, null);
-                    var oo = F(request);
-                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
-                    if (track)
-                        api.OnEnd(trackId, request, api, oo);
-                    return od;
+                    return RunEnd(api, request, track, trackId, F(request));
                 }
                 catch (Exception ex)
                 {
-                    if (track)
-                        api.OnException(trackId, request, api, ex);
-                    throw;
+                    return RunThrow(api, request, track, trackId, ExceptionDispatchInfo.Capture(ex));
                 }
             }
         }
@@ -1600,6 +1708,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1634,6 +1743,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1740,6 +1850,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1775,6 +1886,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -1901,6 +2013,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -1941,6 +2054,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -1982,6 +2096,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -2017,6 +2132,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -2057,6 +2173,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -2094,6 +2211,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -2138,6 +2256,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2173,6 +2292,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2212,6 +2332,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2246,6 +2367,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2284,6 +2406,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2320,6 +2443,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2365,6 +2489,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -2402,6 +2527,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -2443,6 +2569,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -2478,6 +2605,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -2521,6 +2649,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
@@ -2558,6 +2687,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
@@ -2602,6 +2732,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2637,6 +2768,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, ValueTask<R>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2676,6 +2808,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2710,6 +2843,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2748,6 +2882,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
@@ -2783,6 +2918,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask> F;
 
+            [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
             public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;

@@ -166,6 +166,19 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Get the value of a key in a string keyed <see cref="SemiFrozenDictionary{TKey, TValue}"/> using a span (the same result as <see cref="SemiFrozenDictionary{TKey, TValue}.TryGetValue(TKey, out TValue)"/> with a string with the same chars).
+        /// No string is created for the key if the comparer supports span lookups (the ordinal comparers, the default string comparer).
+        /// </summary>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="d">The dictionary, must not be null</param>
+        /// <param name="key">The key</param>
+        /// <param name="value">The value of the key, default if not found</param>
+        /// <returns>True if the key was found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryGetValueSpan<V>(this SemiFrozenDictionary<String, V> d, ReadOnlySpan<Char> key, [MaybeNullWhen(false)] out V value)
+            => d.GetForRead().TryGetValueSpan(key, out value);
+
+        /// <summary>
         /// Check if a string set contains a key using a span (the same result as a lookup with a string with the same chars)
         /// </summary>
         /// <param name="set">The set, must not be null</param>

@@ -192,6 +192,48 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
+        /// Convert an object to bytes (UTF8 encoded string), written to a buffer writer
+        /// </summary>
+        /// <remarks>
+        /// The json is written to pooled buffers and copied to <paramref name="output"/>, no array is allocated (unless <paramref name="output"/> allocates).
+        /// The bytes are the same as the bytes returned by <see cref="ToJsonBytes{T}(T, byte[], bool)"/>.
+        /// </remarks>
+        /// <typeparam name="T">Type of object, implicit</typeparam>
+        /// <param name="value">The object to convert to json</param>
+        /// <param name="output">The writer to write the json to</param>
+        /// <param name="typeIsOptional">If true, boxed values of primitive like types (numbers, string, bool, char, date / time types, Guid and enums) are written without type information (compatible with old Newtonsoft.Json versions),
+        /// if false all boxed data is written with type information</param>
+        public static void ToJsonBuffer<T>(T value, IBufferWriter<Byte> output, bool typeIsOptional = true)
+        {
+            //  The writer uses (and grows with) rented buffers, the result is copied to the output
+            var size = SizeHint<T>.RentSize;
+            var temp = ArrayPoolStream.Rent(size);
+            //  Pinning with fixed is cheaper than a GCHandle
+            fixed (Byte* p = temp)
+            {
+                var w = new BufferWriter(temp, p, 0, true, size)
+                {
+                    TypeIsOptional = typeIsOptional
+                };
+                try
+                {
+                    //  Primitives are written without an Ensure (the caller ensures the bounded size)
+                    w.Ensure(64);
+                    InternalRoot(ref w, value);
+                    var l = w.Offset;
+                    SizeHint<T>.Set(l);
+                    new ReadOnlySpan<Byte>(w.DataPtr, l).CopyTo(output.GetSpan(l));
+                    output.Advance(l);
+                }
+                finally
+                {
+                    //  Returns the rented buffer
+                    w.Dispose();
+                }
+            }
+        }
+
+        /// <summary>
         /// Convert an object to a json string
         /// </summary>
         /// <remarks>

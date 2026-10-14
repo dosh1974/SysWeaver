@@ -1,10 +1,14 @@
-﻿using SysWeaver.Compression;
+﻿using Microsoft.Win32.SafeHandles;
+using SysWeaver.Compression;
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Net
@@ -15,7 +19,7 @@ namespace SysWeaver.Net
     /// </summary>
     /// <remarks>
     /// The etag is computed from the last write time and size of the file, using the (possibly cached) state of the supplied <see cref="FileInfo"/>.
-    /// Files up to 1 MiB are memory mapped, larger files are streamed.
+    /// Files up to 1 MiB are read into pooled memory (a snapshot, the file isn't held open while the data is sent), larger files are streamed.
     /// Instances don't hold any open file handles and can be shared between concurrent requests.
     /// </remarks>
     public sealed class FileHttpRequestHandler : IHttpRequestHandler
@@ -36,6 +40,11 @@ namespace SysWeaver.Net
         /// Ignore, used internally
         /// </summary>
         public HttpServerRequest Redirected { get; set; }
+
+        /// <summary>
+        /// The same text as the default (GetType().Name, the class is sealed) without the type name lookup (read for every request by the perf tracking of the server).
+        /// </summary>
+        String IHttpRequestHandler.Name => nameof(FileHttpRequestHandler);
 
         /// <summary>
         /// If true, the file's access time is updated whenever the file is read
@@ -145,10 +154,20 @@ namespace SysWeaver.Net
 
 
         /// <summary>
+        /// Files up to this size are read into pooled memory (a handle and the buffer holder instead of a stream and a mapping: fewer objects and system calls, faster at all sizes up to 1 MiB, measured 2026-10-14).
+        /// </summary>
+        const int MaxReadSize = 1 << 20;
+
+        /// <summary>
+        /// Files up to this size are memory mapped (on Windows, read into pooled memory on other platforms) if they can't be read (byte range locks), larger files are streamed.
+        /// </summary>
+        const int MaxMapSize = 1 << 20;
+
+        /// <summary>
         /// Open the file (updating the access time if <see cref="UpdateAccessTime"/> is true).
         /// </summary>
         /// <param name="request">The request (not used)</param>
-        /// <returns>The file data as memory if 1 MiB or smaller (memory mapped on Windows, read into pooled memory on other platforms), else as a stream</returns>
+        /// <returns>The file data as memory if 1 MiB or smaller (read into pooled memory, memory mapped on Windows if a byte range lock prevents the read), else as a stream</returns>
         /// <exception cref="IOException">The file could not be opened (deleted, locked etc)</exception>
         public HttpRequestData Get(HttpServerRequest request)
         {
@@ -163,10 +182,370 @@ namespace SysWeaver.Net
                 {
                 }
             }
-            var fs = fi.OpenRead();
-            if (FileReadOnlyMemory.TryMap(out var mem, fs, true, 1 << 20))
-                return new HttpRequestData(mem);
-            return new HttpRequestData(fs);
+            //  Same mode, access, share and options (so the same exceptions) as fi.OpenRead()
+            var h = File.OpenHandle(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            try
+            {
+                var l = RandomAccess.GetLength(h);
+                if (l > MaxReadSize)
+                {
+                    //  Larger files are streamed using a light weight stream that owns the handle (one object instead of a FileStream and its strategies, faster reads and fewer allocations than a FileStream or a mapping, measured 2026-10-14)
+                    var s = new ReadOnlyFileHandleStream(h, l, fi.FullName);
+                    h = null;
+                    return new HttpRequestData(s);
+                }
+                var data = TryRead(h, (int)l);
+                if (data != null)
+                    return data;
+                //  The same stream as fi.OpenRead() (owns the handle), positioned at the start (a failed read may have moved the file pointer)
+                var fs = new FileStream(h, FileAccess.Read, 4096);
+                h = null;
+                try
+                {
+                    fs.Position = 0;
+                    if (FileReadOnlyMemory.TryMap(out var mem, fs, true, MaxMapSize))
+                        return new HttpRequestData(mem);
+                }
+                catch
+                {
+                    //  TryMap doesn't dispose the stream (leaveOpen) when the mapping fails, don't keep the file open until the finalizer runs (modpass-3)
+                    fs.Dispose();
+                    throw;
+                }
+                return new HttpRequestData(fs);
+            }
+            finally
+            {
+                h?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Read a small file into pooled memory (stops early at the end of the file if it shrunk).
+        /// </summary>
+        /// <param name="h">The file handle (not disposed)</param>
+        /// <param name="size">The length of the file</param>
+        /// <returns>The data (flagged as mapped: never cached, the buffer is returned to the pool when the data is disposed) or null if the file can't be read (ex: a byte range lock, the caller maps the file like before, a mapped view ignores byte range locks)</returns>
+        static HttpRequestData TryRead(SafeFileHandle h, int size)
+        {
+            if (size <= 0)
+                return new HttpRequestData(UnmanagedMemory.Empty<Byte>());
+            var buf = ArrayPool<Byte>.Shared.Rent(size);
+            try
+            {
+                var read = 0;
+                do
+                {
+                    var r = RandomAccess.Read(h, buf.AsSpan(read, size - read), read);
+                    if (r <= 0)
+                        break;
+                    read += r;
+                }
+                while (read < size);
+                if (read <= 0)
+                    return new HttpRequestData(UnmanagedMemory.Empty<Byte>());
+                var ret = new HttpRequestData(new PooledFileMemory(buf, read));
+                buf = null;
+                return ret;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+            finally
+            {
+                if (buf != null)
+                    ArrayPool<Byte>.Shared.Return(buf);
+            }
+        }
+
+        /// <summary>
+        /// A copy of a small file in a buffer rented from the shared ArrayPool (the same contract as the pooled memory of <see cref="FileReadOnlyMemory"/>).
+        /// Disposing it returns the buffer to the pool (thread safe, only the first call has an effect).
+        /// </summary>
+        sealed class PooledFileMemory : IUnmanagedReadOnlyMemory<Byte>
+        {
+            public PooledFileMemory(Byte[] buffer, int length)
+            {
+                Buffer = buffer;
+                Memory = new ReadOnlyMemory<Byte>(buffer, 0, length);
+            }
+
+            Byte[] Buffer;
+
+            /// <summary>
+            /// The data (must not be used after the object is disposed)
+            /// </summary>
+            public ReadOnlyMemory<Byte> Memory { get; }
+
+            /// <summary>
+            /// Return the buffer to the pool (only the first call has an effect)
+            /// </summary>
+            public void Dispose()
+            {
+                var b = Interlocked.Exchange(ref Buffer, null);
+                if (b != null)
+                    ArrayPool<Byte>.Shared.Return(b);
+            }
+        }
+
+        /// <summary>
+        /// A read only, seekable and unbuffered stream over a file handle that it owns (one object instead of a FileStream and its two strategy objects, no finalizer).
+        /// Reads use RandomAccess at the stream position. Async reads complete synchronously: a FileStream over a handle that isn't opened for async IO does the same blocking read, on a thread pool thread.
+        /// </summary>
+        /// <remarks>
+        /// The length is fixed: the file is opened with FileShare.Read, so it can't be written while the handle is open.
+        /// Not thread safe (like a FileStream).
+        /// </remarks>
+        sealed class ReadOnlyFileHandleStream : Stream
+        {
+            public ReadOnlyFileHandleStream(SafeFileHandle handle, long length, String path)
+            {
+                H = handle;
+                Len = length;
+                FilePath = path;
+            }
+
+            SafeFileHandle H;
+            readonly long Len;
+            long Pos;
+
+            /// <summary>
+            /// The full path of the file (the same as the path of the handle, used in exception messages)
+            /// </summary>
+            readonly String FilePath;
+
+            /// <summary>
+            /// The last task returned by ReadAsync(Byte[], ..), reused if the next read returns the same count (like a FileStream does)
+            /// </summary>
+            Task<int> LastReadTask;
+
+            /// <summary>
+            /// The handle, throws the same exception as a disposed FileStream if disposed
+            /// </summary>
+            SafeFileHandle Handle => H ?? throw new ObjectDisposedException(null, "Cannot access a closed file.");
+
+            /// <summary>
+            /// The handle, throws the same exception as the members of a disposed FileStream that use the stream checks (Read(Span), ReadByte, CopyTo) if disposed
+            /// </summary>
+            SafeFileHandle StreamHandle => H ?? throw new ObjectDisposedException(null, "Cannot access a closed Stream.");
+
+            public override bool CanRead => H != null;
+            public override bool CanSeek => H != null;
+            public override bool CanWrite => false;
+
+            public override long Length
+            {
+                get
+                {
+                    _ = Handle;
+                    return Len;
+                }
+            }
+
+            public override long Position
+            {
+                get
+                {
+                    _ = Handle;
+                    return Pos;
+                }
+                set
+                {
+                    if (value < 0)
+                        throw new ArgumentOutOfRangeException(nameof(value), "Non-negative number required.");
+                    _ = Handle;
+                    Pos = value;
+                }
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                if ((origin < SeekOrigin.Begin) || (origin > SeekOrigin.End))
+                    throw new ArgumentException("Invalid seek origin.", nameof(origin));
+                _ = Handle;
+                var p = origin switch
+                {
+                    SeekOrigin.Begin => offset,
+                    SeekOrigin.Current => Pos + offset,
+                    _ => Len + offset,
+                };
+                if (p < 0)
+                    throw InvalidArgument();
+                Pos = p;
+                return p;
+            }
+
+            /// <summary>
+            /// The exception that a FileStream throws for a seek before the start of the file (the system message of ERROR_INVALID_PARAMETER / EINVAL and the path)
+            /// </summary>
+            IOException InvalidArgument()
+            {
+                if (OperatingSystem.IsWindows())
+                    return new IOException(String.Concat(Marshal.GetPInvokeErrorMessage(87), " : '", FilePath, "'."), unchecked((int)0x80070057));
+                return new IOException(String.Concat(Marshal.GetPInvokeErrorMessage(22), " : '", FilePath, "'"), 22);
+            }
+
+            /// <summary>
+            /// Read at the current position and advance it
+            /// </summary>
+            int ReadCore(SafeFileHandle h, Span<Byte> buffer)
+            {
+                if (buffer.Length <= 0)
+                    return 0;
+                var n = RandomAccess.Read(h, buffer, Pos);
+                Pos += n;
+                return n;
+            }
+
+            public override int Read(Span<Byte> buffer) => ReadCore(StreamHandle, buffer);
+
+            public override int Read(Byte[] buffer, int offset, int count)
+            {
+                ValidateBufferArguments(buffer, offset, count);
+                return ReadCore(Handle, new Span<Byte>(buffer, offset, count));
+            }
+
+            public override int ReadByte()
+            {
+                Span<Byte> b = stackalloc Byte[1];
+                return ReadCore(StreamHandle, b) > 0 ? b[0] : -1;
+            }
+
+            public override ValueTask<int> ReadAsync(Memory<Byte> buffer, CancellationToken cancellationToken = default)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return ValueTask.FromCanceled<int>(cancellationToken);
+                var h = Handle;
+                try
+                {
+                    return new ValueTask<int>(ReadCore(h, buffer.Span));
+                }
+                catch (Exception ex)
+                {
+                    return ValueTask.FromException<int>(ex);
+                }
+            }
+
+            public override Task<int> ReadAsync(Byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                ValidateBufferArguments(buffer, offset, count);
+                if (cancellationToken.IsCancellationRequested)
+                    return Task.FromCanceled<int>(cancellationToken);
+                var h = Handle;
+                try
+                {
+                    var n = ReadCore(h, new Span<Byte>(buffer, offset, count));
+                    var t = LastReadTask;
+                    if ((t != null) && (t.Result == n))
+                        return t;
+                    t = Task.FromResult(n);
+                    LastReadTask = t;
+                    return t;
+                }
+                catch (Exception ex)
+                {
+                    return Task.FromException<int>(ex);
+                }
+            }
+
+            public override void CopyTo(Stream destination, int bufferSize)
+            {
+                ValidateCopyToArguments(destination, bufferSize);
+                var h = StreamHandle;
+                var buf = ArrayPool<Byte>.Shared.Rent(bufferSize);
+                try
+                {
+                    for (; ; )
+                    {
+                        var n = RandomAccess.Read(h, buf, Pos);
+                        if (n <= 0)
+                            break;
+                        Pos += n;
+                        destination.Write(buf, 0, n);
+                    }
+                }
+                finally
+                {
+                    ArrayPool<Byte>.Shared.Return(buf);
+                }
+            }
+
+            public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+            {
+                ValidateCopyToArguments(destination, bufferSize);
+                var h = StreamHandle;
+                if (cancellationToken.IsCancellationRequested)
+                    return Task.FromCanceled(cancellationToken);
+                return CopyToAsyncInternal(h, destination, bufferSize, cancellationToken);
+            }
+
+            async Task CopyToAsyncInternal(SafeFileHandle h, Stream destination, int bufferSize, CancellationToken cancellationToken)
+            {
+                var buf = ArrayPool<Byte>.Shared.Rent(bufferSize);
+                try
+                {
+                    for (; ; )
+                    {
+                        //  Canceled like a FileStream read (a TaskCanceledException), allocates only when canceled
+                        if (cancellationToken.IsCancellationRequested)
+                            await Task.FromCanceled(cancellationToken).ConfigureAwait(false);
+                        var n = RandomAccess.Read(h, buf, Pos);
+                        if (n <= 0)
+                            break;
+                        Pos += n;
+                        await destination.WriteAsync(new ReadOnlyMemory<Byte>(buf, 0, n), cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    ArrayPool<Byte>.Shared.Return(buf);
+                }
+            }
+
+            public override void Flush()
+            {
+                _ = Handle;
+            }
+
+            public override Task FlushAsync(CancellationToken cancellationToken)
+            {
+                _ = Handle;
+                return cancellationToken.IsCancellationRequested ? Task.FromCanceled(cancellationToken) : Task.CompletedTask;
+            }
+
+            public override void SetLength(long value)
+            {
+                if (value < 0)
+                    throw new ArgumentOutOfRangeException(nameof(value), "Non-negative number required.");
+                _ = Handle;
+                throw new NotSupportedException("Stream does not support writing.");
+            }
+
+            public override void Write(Byte[] buffer, int offset, int count)
+            {
+                ValidateBufferArguments(buffer, offset, count);
+                _ = Handle;
+                throw new NotSupportedException("Stream does not support writing.");
+            }
+
+            public override void Write(ReadOnlySpan<Byte> buffer)
+            {
+                _ = StreamHandle;
+                throw new NotSupportedException("Stream does not support writing.");
+            }
+
+            public override void WriteByte(Byte value)
+            {
+                _ = StreamHandle;
+                throw new NotSupportedException("Stream does not support writing.");
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                Interlocked.Exchange(ref H, null)?.Dispose();
+                base.Dispose(disposing);
+            }
         }
 
         /// <summary>
@@ -198,6 +577,11 @@ namespace SysWeaver.Net
         /// Ignore, used internally
         /// </summary>
         public HttpServerRequest Redirected { get; set; }
+
+        /// <summary>
+        /// The same text as the default (GetType().Name, the class is sealed) without the type name lookup (read for every request by the perf tracking of the server).
+        /// </summary>
+        String IHttpRequestHandler.Name => nameof(DynamicDataHttpRequestHandler);
 
 
         /// <summary>

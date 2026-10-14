@@ -119,6 +119,26 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
+        /// The same as <see cref="TryGet(out IsoCountry, string)"/> for a span (ex: a part of a string), without allocations.
+        /// </summary>
+        /// <param name="country">Information about the country if specified and known, else null</param>
+        /// <param name="regionalCode">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.</param>
+        /// <returns>Information about the language if it's known, or null if it's unknown or if a country part is present but unknown.</returns>
+        public static IsoLanguage TryGet(out IsoCountry country, ReadOnlySpan<Char> regionalCode)
+        {
+            country = null;
+            var t = regionalCode.IndexOf('-');
+            if (t > 0)
+            {
+                country = IsoCountry.TryGet(regionalCode.Slice(t + 1));
+                if (country == null)
+                    return null;
+                return IsoToInfo.TryGetValueLower(regionalCode.Slice(0, t), out var l) ? l : null;
+            }
+            return IsoToInfo.TryGetValueLower(regionalCode, out var i) ? i : null;
+        }
+
+        /// <summary>
         /// Get information about a language from a language name (or any comma separated part of the name), ISO 639-1 or ISO 639-2 code (case insensitive).
         /// Leading and trailing white space is ignored. If the whole text isn't found, anything from the first hyphen is ignored, so regional codes like "en-GB" are accepted
         /// (and names with a hyphen like "Luba-Katanga" are found).
@@ -141,6 +161,22 @@ namespace SysWeaver.IsoData
                 return null;
             //  Exactly as FastTrimToLower of the text before the hyphen (no split array, no substring)
             return ni.TryGetValueLower(name.AsSpan(0, h).Trim(), out i) ? i : null;
+        }
+
+        /// <summary>
+        /// The same as <see cref="TryGetName(string)"/> for a span (ex: a part of a string, an empty span is the same as a null or empty string), without allocations for names of up to 256 chars.
+        /// </summary>
+        /// <param name="name">The name of the language.</param>
+        /// <returns>Information about the language if it's known, or null if it's unknown</returns>
+        public static IsoLanguage TryGetName(ReadOnlySpan<Char> name)
+        {
+            var ni = NameToInfo;
+            if (ni.TryGetValueLower(name.Trim(), out var i))
+                return i;
+            var h = name.IndexOf('-');
+            if (h < 0)
+                return null;
+            return ni.TryGetValueLower(name.Slice(0, h).Trim(), out i) ? i : null;
         }
 
 

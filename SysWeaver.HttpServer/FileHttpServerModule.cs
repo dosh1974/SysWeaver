@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Enumeration;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -34,8 +35,9 @@ namespace SysWeaver.Net
         /// <returns>Must return a valid request handler</returns>
         /// <remarks>
         /// Called concurrently. The returned handler may be cached by the module for a few seconds.
+        /// The returned value task is consumed exactly once.
         /// </remarks>
-        Task<IHttpRequestHandler> Modify(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
+        ValueTask<IHttpRequestHandler> Modify(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
     }
 
     /// <summary>
@@ -51,7 +53,7 @@ namespace SysWeaver.Net
     public sealed class FileHttpServerModule : IHttpServerModule, IPerfMonitored
     {
 
-        delegate Task<IHttpRequestHandler> FtDel(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
+        delegate ValueTask<IHttpRequestHandler> FtDel(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
 
         /// <summary>
         /// Create a file server module.
@@ -256,13 +258,13 @@ namespace SysWeaver.Net
             var f = OrderedFolders;
             if (f == null)
                 return null;
-            var toDiscPath = ToDiscPath;
             foreach (var webFolder in f)
             {
                 var rootFolder = webFolder.Key;
                 if (!url.StartsWith(rootFolder, StringComparison.Ordinal))
                     continue;
-                var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
+                //  Same as ToDiscPath(url.Substring(rootFolder.Length)) using at most one allocation
+                var localDiscPath = GetLocalDiscPath(url, rootFolder.Length);
                 foreach (var discFolder in webFolder.Value.DiscFolders)
                 {
                     var absPath = SafeCombine(discFolder.Path, localDiscPath);
@@ -351,9 +353,9 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// A completed task with a null handler (the request isn't handled by this module).
+        /// A completed value task with a null handler (the request isn't handled by this module).
         /// </summary>
-        static readonly Task<IHttpRequestHandler> NullHandlerTask = Task.FromResult((IHttpRequestHandler)null);
+        static readonly ValueTask<IHttpRequestHandler> NullHandlerTask = default;
 
         /// <summary>
         /// Creates the cache entry of a local url on a cache miss (static, the url and the request are passed as the state, no closure per request).
@@ -383,23 +385,23 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoke a file transformer, the returned task is faulted if the transformer throws (like awaiting it in an async method).
+        /// Invoke a file transformer, the returned value task is faulted if the transformer throws (like awaiting it in an async method).
         /// </summary>
-        static Task<IHttpRequestHandler> Transform(FtDel ft, String ftKey, Tuple<String, bool> mime, FileInfo fi, DiscFolder df, bool isAccepted, ICompDecoder decoder)
+        static ValueTask<IHttpRequestHandler> Transform(FtDel ft, String ftKey, Tuple<String, bool> mime, FileInfo fi, DiscFolder df, bool isAccepted, ICompDecoder decoder)
         {
             try
             {
-                return ft(ftKey, mime, fi, df, isAccepted, decoder, df.UpdateAccessTime, df.IsDynamic) ?? Task.FromException<IHttpRequestHandler>(new NullReferenceException());
+                return ft(ftKey, mime, fi, df, isAccepted, decoder, df.UpdateAccessTime, df.IsDynamic);
             }
             catch (Exception ex)
             {
-                return Task.FromException<IHttpRequestHandler>(ex);
+                return ValueTask.FromException<IHttpRequestHandler>(ex);
             }
         }
 
-        Task<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
+        ValueTask<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
         {
-            //  Not an async method: a cache hit completes synchronously (no state machine, closure or delegate per request), exceptions are returned in the task
+            //  Not an async method: a cache hit completes synchronously (no state machine, closure, delegate or task per request), exceptions are returned in the value task
             try
             {
                 if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
@@ -420,18 +422,18 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                return Task.FromException<IHttpRequestHandler>(ex);
+                return ValueTask.FromException<IHttpRequestHandler>(ex);
             }
         }
 
-        static Task<IHttpRequestHandler> GetHandler(CachedFile cf, FtDel fileTransformer, String ftKey)
+        static ValueTask<IHttpRequestHandler> GetHandler(CachedFile cf, FtDel fileTransformer, String ftKey)
         {
             if (cf == null)
                 return NullHandlerTask;
             return Transform(fileTransformer, ftKey, cf.Mime, new FileInfo(cf.Path), cf.Folder, cf.IsAccepted, cf.Decoder);
         }
 
-        static async Task<IHttpRequestHandler> CachedHandlerAsync(ValueTask<CachedFile> t, FtDel fileTransformer, String ftKey)
+        static async ValueTask<IHttpRequestHandler> CachedHandlerAsync(ValueTask<CachedFile> t, FtDel fileTransformer, String ftKey)
         {
             var cf = await t.ConfigureAwait(false);
             return await GetHandler(cf, fileTransformer, ftKey).ConfigureAwait(false);
@@ -479,7 +481,6 @@ namespace SysWeaver.Net
                         if (absPath == null)
                             continue;
                         var fi = new FileInfo(absPath);
-                        var ext = fi.Extension;
                         decoder = null;
                         isAccepted = true;
                         if (df.AssumePreCompressed)
@@ -497,8 +498,8 @@ namespace SysWeaver.Net
                         }
                         if (!fi.Exists)
                             continue;
-                        //  GetMimeType lower cases the extension (on the stack)
-                        mime = MimeTypeMap.GetMimeType(ext);
+                        //  GetMimeType lower cases the extension (on the stack), the extension of the requested file (not of a pre-compressed variant)
+                        mime = MimeTypeMap.GetMimeType(GetExtension(absPath));
                         discFolder = df;
                         return fi;
                     }
@@ -523,9 +524,9 @@ namespace SysWeaver.Net
             return fi == null ? null : new CachedFile(fi.FullName, mime, df, isAccepted, decoder);
         }
 
-        Task<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
+        ValueTask<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
         {
-            //  Not an async method (no state machine per request), exceptions are returned in the task
+            //  Not an async method (no state machine or task per request), exceptions are returned in the value task
             try
             {
                 if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
@@ -538,7 +539,7 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                return Task.FromException<IHttpRequestHandler>(ex);
+                return ValueTask.FromException<IHttpRequestHandler>(ex);
             }
         }
 
@@ -546,14 +547,14 @@ namespace SysWeaver.Net
         /// The handler lookup (always set): returns a handler for GET/HEAD requests whose local url maps to an existing file (or pre-compressed variant), else null.
         /// The query string (if any) selects a registered <see cref="IFileTransformer"/>.
         /// </summary>
-        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
 
 
         #region File transforms
 
 
-        static readonly FtDel NoFT = (fileTransform, mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic) => Task.FromResult((IHttpRequestHandler)new FileHttpRequestHandler(mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic));
+        static readonly FtDel NoFT = (fileTransform, mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic) => new ValueTask<IHttpRequestHandler>(new FileHttpRequestHandler(mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic));
 
         /// <summary>
         /// Register a file transformer, used when a file is requested with a query string that equals the <paramref name="suffix"/>.
@@ -650,6 +651,22 @@ namespace SysWeaver.Net
             return code.Length > 0 ? code : null;
         }
 
+        /// <summary>
+        /// The extension of a full path, the same chars as <see cref="FileSystemInfo.Extension"/> of a <see cref="FileInfo"/> of the path (without a string)
+        /// </summary>
+        static ReadOnlySpan<Char> GetExtension(String fullPath)
+        {
+            for (int i = fullPath.Length; --i >= 0;)
+            {
+                var ch = fullPath[i];
+                if (ch == '.')
+                    return fullPath.AsSpan(i);
+                if ((ch == Path.DirectorySeparatorChar) || (ch == Path.AltDirectorySeparatorChar) || (ch == Path.VolumeSeparatorChar))
+                    break;
+            }
+            return default;
+        }
+
         static String RemoveExt(String url)
         {
             var l = url.LastIndexOf('.');
@@ -680,55 +697,98 @@ namespace SysWeaver.Net
             decoder = null;
             long smallest = long.MaxValue;
             FileInfo fis = null;
-            isAccepted = true;
-            if (acceptedEncoders != null)
+            //  The extensions that aren't accepted by the client, in enumeration order (the fallback only needs these: every accepted candidate already failed),
+            //  so the handlers are enumerated once (one boxed enumerator) unless there are more than PreCompCandidates.Length of them
+            PreCompCandidates other = default;
+            int otherCount = 0;
+            //  Find smallest of the accepted encoders
+            foreach (var x in CompManager.ExtensionHandlers)
             {
-                // TODO: Use Directory.GetFiles instead? Cache? Faster?
-
-                //  Find smallest of the accepted encoders
-                foreach (var x in CompManager.ExtensionHandlers)
+                var ext = x.Key;
+                if (ext[0] == '.')
+                    continue;
+                var dec = x.Value;
+                if ((acceptedEncoders == null) || !acceptedEncoders.Contains(dec.HttpCode))
                 {
-                    if (x.Key[0] == '.')
-                        continue;
-                    var dec = x.Value;
-                    if (!acceptedEncoders.Contains(dec.HttpCode))
-                        continue;
-                    var fi = new FileInfo(String.Join('.', absPath, x.Key));
-                    if (!fi.Exists)
-                        continue;
-                    var l = fi.Length;
-                    if (l >= smallest)
-                        continue;
-                    if ((orgTime != null) && (fi.LastWriteTimeUtc < orgTime))
-                        continue;
-                    decoder = dec;
-                    smallest = l;
-                    fis = fi;
+                    if (otherCount < PreCompCandidates.Length)
+                        other[otherCount] = x;
+                    ++otherCount;
+                    continue;
                 }
+                var fi = TryGetSmaller(absPath, ext, smallest, orgTime);
+                if (fi == null)
+                    continue;
+                decoder = dec;
+                smallest = fi.Length;
+                fis = fi;
             }
-            if (fis == null)
+            if (fis != null)
             {
-                isAccepted = false;
-                //  Find smallest using any encoder
-                foreach (var x in CompManager.ExtensionHandlers)
+                isAccepted = true;
+                return fis;
+            }
+            isAccepted = false;
+            //  Find smallest using any encoder (the accepted ones were already checked and failed)
+            if (otherCount <= PreCompCandidates.Length)
+            {
+                for (int i = 0; i < otherCount; ++i)
                 {
-                    if (x.Key[0] == '.')
+                    var x = other[i];
+                    var fi = TryGetSmaller(absPath, x.Key, smallest, orgTime);
+                    if (fi == null)
                         continue;
-                    var dec = x.Value;
-                    var fi = new FileInfo(String.Join('.', absPath, x.Key));
-                    if (!fi.Exists)
-                        continue;
-                    var l = fi.Length;
-                    if (l >= smallest)
-                        continue;
-                    if ((orgTime != null) && (fi.LastWriteTimeUtc < orgTime))
-                        continue;
-                    decoder = dec;
-                    smallest = l;
+                    decoder = x.Value;
+                    smallest = fi.Length;
                     fis = fi;
                 }
+                return fis;
+            }
+            foreach (var x in CompManager.ExtensionHandlers)
+            {
+                var ext = x.Key;
+                if (ext[0] == '.')
+                    continue;
+                var dec = x.Value;
+                if ((acceptedEncoders != null) && acceptedEncoders.Contains(dec.HttpCode))
+                    continue;
+                var fi = TryGetSmaller(absPath, ext, smallest, orgTime);
+                if (fi == null)
+                    continue;
+                decoder = dec;
+                smallest = fi.Length;
+                fis = fi;
             }
             return fis;
+        }
+
+        /// <summary>
+        /// Get a pre-compressed variant of a file if it exists, is smaller than a size and isn't older than a time.
+        /// </summary>
+        /// <param name="absPath">The path to the uncompressed file</param>
+        /// <param name="ext">The extension of the pre-compressed variant (without a '.')</param>
+        /// <param name="smallest">The variant must be smaller than this</param>
+        /// <param name="orgTime">If non-null, the variant may not be older than this</param>
+        /// <returns>The file info of the variant or null</returns>
+        static FileInfo TryGetSmaller(String absPath, String ext, long smallest, DateTime? orgTime)
+        {
+            var fi = new FileInfo(String.Concat(absPath, ".", ext));
+            if (!fi.Exists)
+                return null;
+            if (fi.Length >= smallest)
+                return null;
+            if ((orgTime != null) && (fi.LastWriteTimeUtc < orgTime))
+                return null;
+            return fi;
+        }
+
+        /// <summary>
+        /// Inline storage for the extension handlers that aren't accepted by the client (no allocation).
+        /// </summary>
+        [InlineArray(Length)]
+        struct PreCompCandidates
+        {
+            public const int Length = 8;
+            KeyValuePair<String, ICompType> Item;
         }
 
         readonly ConcurrentDictionary<String, Tuple<DateTime, TextTemplate, bool>> Templates = new ();

@@ -431,7 +431,8 @@ namespace SysWeaver.Net
             else
             {
                 root = HttpServerTools.FixEnumRoot(root);
-                HashSet<String> folders = new HashSet<string>();
+                //  The folder names are tested using spans (no string for an already seen folder)
+                var folders = new HashSet<string>(StringComparer.Ordinal).GetAlternateLookup<ReadOnlySpan<Char>>();
                 var lwt = HttpServerTools.StartedTime;
                 var etag = HttpServerTools.StartedETag;
                 var ul = root.Length;
@@ -445,10 +446,9 @@ namespace SysWeaver.Net
                         yield return (x.Value as IHttpServerEndPoint) ?? throw new NullReferenceException();
                     else
                     {
-                        var folderName = url.Substring(ul, f - ul);
-                        if (!folders.Add(folderName))
+                        if (!folders.Add(url.AsSpan(ul, f - ul)))
                             continue;
-                        yield return new HttpServerEndPoint(root + folderName, "[Implicit Folder] from " + LocationPrefix, lwt, etag);
+                        yield return new HttpServerEndPoint(String.Concat(root, url.AsSpan(ul, f - ul)), "[Implicit Folder] from " + LocationPrefix, lwt, etag);
                     }
                 }
             }
@@ -625,6 +625,13 @@ namespace SysWeaver.Net
         /// <summary>
         /// Populate (or create) an <see cref="ApiInfoBase"/> from an entry; negative request cache durations mean per session caching.
         /// </summary>
+        static String MimeWithoutParams(String mime)
+        {
+            //  Same as mime.Split(';')[0] (the instance itself if there is no ';')
+            var i = mime.IndexOf(';');
+            return i < 0 ? mime : mime.Substring(0, i);
+        }
+
         static ApiInfoBase SetApiInfo(ApiHttpEntry e, ApiInfoBase b = null)
         {
             if (b == null)
@@ -634,7 +641,7 @@ namespace SysWeaver.Net
             b.Auth = a == null ? null : String.Join(", ", a);
             b.Desc = e.Mi.XmlDoc().ToTitle();
             b.ClientCacheDuration = e.ClientCacheDuration;
-            b.Mime = e.IsApi ? null : e.Mime.Split(';')[0];
+            b.Mime = e.IsApi ? null : MimeWithoutParams(e.Mime);
             var rcd = e.RequestCacheDuration;
             b.RequestCacheDuration = rcd < 0 ? (-rcd) : rcd;
             b.PerSession = rcd < 0;

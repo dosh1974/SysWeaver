@@ -38,9 +38,9 @@ namespace SysWeaver.Chat
 
         public String[] OnlyForPrefixes { get; } = ["chat/file/"];
 
-        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
-        async Task<IHttpRequestHandler> GetChatFile(String l, HttpServerRequest context)
+        async ValueTask<IHttpRequestHandler> GetChatFile(String l, HttpServerRequest context)
         {
             var t = l.Split('/');
             var tl = t.Length;
