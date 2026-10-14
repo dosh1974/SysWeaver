@@ -2,11 +2,11 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Combines several text message providers (ex: WhatsApp and SMS) behind one sender / receiver: routing by channel, country and system, fallback when a provider can't deliver, and one merged stream of incoming messages and status updates.
+> Combines text message providers (ex: WhatsApp and SMS): routing by channel, country and system, fallback when a provider can't deliver, and merged incoming messages and status updates.
 
 | | |
 |---|---|
-| **Layer** | Users |
+| **Layer** | Networking |
 | **Kind** | Micro service |
 
 ## Purpose
@@ -24,6 +24,8 @@ flowchart LR
   SMS -->|"GetIncoming / GetStatusUpdates (remote, long poll)"| R
 ```
 
+Routes to any text message provider registered in the same service manager, ex: [SysWeaver.TextMessage.WhatsApp](../SysWeaver.TextMessage.WhatsApp/README.md), [SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/README.md), [SysWeaver.TextMessage.AmazonEndUserMessaging](../SysWeaver.TextMessage.AmazonEndUserMessaging/README.md) and [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md). The router implements the same contract itself, so callers don't know if they talk to a provider or the router.
+
 ## Key features
 
 - Routes are tried in order; a route matches a message by its `Channels` (vs `OutgoingTextMessage.Channels`), `Countries` / `ExcludeCountries` (of the recipient) and `Systems`. The message passed to a provider only allows the channels of the route, so one multi channel provider (ex: Twilio) can be used as several routes (ex: WhatsApp first, then SMS).
@@ -34,11 +36,10 @@ flowchart LR
 - Replies: incoming messages get a response token prefixed with the route name, so `Reply` (or `Send` with the `ResponseToken`) uses the provider (and number) that received the message.
 - `GetRoutes` shows each route, if the provider was found and how it's received from.
 
-## Limitations and considerations
+## Key components
 
-- A fallback after an asynchronous failure happens after `Send` returned; track the message using `Reference` in the status updates.
-- A status update that arrives before the provider's `Send` call returned can't trigger a fallback (not a problem for real providers, they report delivery much later).
-- Pending messages and the NotOnChannel cache are in memory only.
+- [`TextMessageRouterService`](TextMessageRouterService.cs) - routing, fallback, provider discovery and merging of incoming messages and status updates
+- [`TextMessageRouterParams`](TextMessageRouterParams.cs) - the routes and the fallback rules
 
 ## Using it
 
@@ -52,6 +53,13 @@ flowchart LR
       { "Instance": "Sms", "Channels": "Sms" } ] } }
 ]
 ```
+
+## Limitations and considerations
+
+- A fallback after an asynchronous failure happens after `Send` returned; track the message using `Reference` in the status updates.
+- A status update that arrives before the provider's `Send` call returned can't trigger a fallback (not a problem for real providers, they report delivery much later).
+- Pending messages and the NotOnChannel cache are in memory only.
+- `Send`, `GetIncoming`, `GetStatusUpdates` and `GetRoutes` require the `Admin` or `Ops` role when called over http.
 
 ## Writing a provider
 
@@ -81,4 +89,3 @@ Note: the AWS End User Messaging SMS API (service `sms-voice`, API version 2) is
 
 - **Project:** [`SysWeaver.TextMessage.Router.csproj`](SysWeaver.TextMessage.Router.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md), [SysWeaver.IsoData](../../SysWeaver.IsoData/README.md), [SysWeaver.MicroServices.ServiceManager](../../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Routes to:** [SysWeaver.TextMessage.AmazonEndUserMessaging](../SysWeaver.TextMessage.AmazonEndUserMessaging/README.md), [SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/README.md), [SysWeaver.TextMessage.WhatsApp](../SysWeaver.TextMessage.WhatsApp/README.md), [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md)

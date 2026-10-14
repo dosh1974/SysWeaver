@@ -2,82 +2,60 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> LLM integration for SysWeaver: an OpenAI-API chat provider that can call methods of your services as tools, generate images, tokenize text and keep an AI memory — usable with OpenAI or any compatible endpoint.
+> LLM integration for SysWeaver using the OpenAI API (or any compatible endpoint): an AI service and chat provider that can call methods of your services as tools, generate and edit images, tokenize text and keep an AI memory.
 
 | | |
 |---|---|
 | **Layer** | AI |
-| **Kind** | Micro service (chat provider, tool host) |
+| **Kind** | Micro service (AI provider) |
 
 ## Purpose
 
-Make every SysWeaver service potentially "AI-callable". Methods marked `[OpenAiUse]` on registered services are described to the model as tools (with JSON schemas generated from their signatures and XML documentation); when the model calls a tool, SysWeaver invokes the method and returns the result.
+The OpenAI provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the official [OpenAI](https://www.nuget.org/packages/OpenAI) package. Since the endpoint is configurable it also works with the OpenAI compatible APIs of other vendors and local servers (Gemini's OpenAI endpoint, LM Studio, etc).
 
 ## How it fits into SysWeaver
 
-```mermaid
-sequenceDiagram
-  participant U as User in chat UI
-  participant C as ChatService
-  participant O as OpenAiService
-  participant M as LLM endpoint
-  participant S as Your service method
-  U->>C: message
-  C->>O: provider handles session
-  O->>M: messages and tool schemas
-  M-->>O: tool call
-  O->>S: invoke OpenAiUse method
-  S-->>O: result
-  O->>M: tool result
-  M-->>O: final answer
-  O-->>C: reply
-  C-->>U: pushed message
-```
-
-```mermaid
-flowchart LR
-  Services["services with OpenAiUse methods"] --> Tools["tool cache<br/>JSON schemas from signatures and docs"]
-  Tools --> O["OpenAiService"]
-  O --> Mem["AI memory<br/>key/value storage"]
-  O --> Img["image generation and edit"]
-  O --> Tok["tokenizer"]
-  O --> Chat["IChatProvider for SysWeaver.Chat"]
-  O --> Tr["LLM translator and language identifier"]
-```
+`OpenAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) and [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) for code that uses `IAiService` (such as [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)); [SysWeaver.AI.LlmTranslator](../SysWeaver.AI.LlmTranslator/README.md) and [SysWeaver.LanguageIdentifier.Llm](../SysWeaver.LanguageIdentifier.Llm/README.md) require this provider.
 
 ## Key features
 
-- Chat sessions with model, reasoning effort and service tier selectable per session.
-- Automatic tool calling of annotated service methods, including table results rendered in the chat UI.
-- Persistent AI memory with limits, viewable as a table.
-- Image generation and editing.
-- Token encoding/decoding for cost and context management.
-- Configurable endpoint, so OpenAI-compatible APIs of other vendors can be used.
-- Concurrency limits for chats and image generation.
+- Chat sessions using the Responses API (default) or the Chat Completions API (`DefaultChatApi`, selectable per session), and query sessions
+- Model, reasoning effort and service tier selectable per session (`OpenAiSessionParams`)
+- Tool calling of annotated service methods, plus the default tools of [SysWeaver.AI](../SysWeaver.AI/README.md)
+- Image generation and editing tools (available to users with the `Debug` or `Content` role)
+- Token encoding/decoding with TiktokenSharp (token files are cached on disc)
+- Model tables (`Debug/AI/Models` menu) and debug APIs (chat, image generation and editing, token encode/decode)
+- Configurable endpoint, organization and project, network timeout and concurrency limits for chats and image generation
 
-## Limitations and considerations
+## Key components
 
-- Requires an API key and incurs usage costs; tool calls can multiply requests.
-- Exposing methods as tools gives the model the ability to call them — only mark methods that are safe for the requesting user.
-- Behaviour depends on the chosen model's tool-calling capabilities.
+- [`OpenAiService`](OpenAiService.cs) — the AI service: chat provider, session factory, image and token APIs
+- [`OpenAiResponseChatSession`](OpenAiResponseChatSession.cs) / [`OpenAiCompletionsChatSession`](OpenAiCompletionsChatSession.cs) — chat sessions using the Responses / Chat Completions API
+- [`OpenAiQuerySession`](OpenAiQuerySession.cs) — stateless query session
+- [`OpenAiParams`](OpenAiParams.cs) — service parameters
 
 ## Using it
 
-```csharp
-public sealed class WeatherService : IHaveOpenAiTools
-{
-    /// <summary>Current temperature in a city, in degrees Celsius</summary>
-    [OpenAiUse]
-    public double GetTemperature(string city) => 21.5;
-}
-```
 ```json
-{ "Type": "SysWeaver.AI.OpenAiService, SysWeaver.AI.OpenAI", "Params": { } }
+{ "Type": "SysWeaver.AI.OpenAiService, SysWeaver.AI.OpenAI", "Params": { "CredFile": "$(KeyFolder)/OpenAI.txt", "DefaultChatModel": "gpt-4.1" } }
 ```
-Provide the API key through the service's key parameters (it derives from the framework's API key parameter type).
+```csharp
+IAiService ai = manager.Get<OpenAiService>();
+var chat = ai.CreateChatSession(true, new OpenAiSessionParams { Model = "gpt-4.1", Tier = OpenAiServiceTier.Flex });
+```
+
+Set `EndPoint` (e.g. `"http://localhost:1234/v1"`) to use another OpenAI compatible API.
+
+## Limitations and considerations
+
+- Requires an API key (`ApiKey` or `CredFile`) and incurs usage costs; tool calls can multiply requests
+- Exposing methods as tools lets the model call them on behalf of the user — only expose methods that are safe for the requesting user
+- Stateless completions (`IAiService.Complete`) use the base class fallback: the conversation is sent as a transcript and caller defined tools are not supported
+- Compatible endpoints of other vendors often implement only parts of the API (e.g. no Responses API, images or service tiers)
 
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.OpenAI.csproj`](SysWeaver.AI.OpenAI.csproj)
 - **Builds on:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.Chat](../SysWeaver.Chat/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../SysWeaver.IsoData/README.md), [SysWeaver.Media.Png](../SysWeaver.Media.Png/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Used by:** [SysWeaver.AI.LlmTranslator](../SysWeaver.AI.LlmTranslator/README.md), [SysWeaver.LanguageIdentifier.Llm](../SysWeaver.LanguageIdentifier.Llm/README.md)
+- **Used by:** [SysWeaver.AI.LlmTranslator](../SysWeaver.AI.LlmTranslator/README.md), [SysWeaver.LanguageIdentifier.Llm](../SysWeaver.LanguageIdentifier.Llm/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md) (SysWeaver.Services)
+- **Third-party:** OpenAI, TiktokenSharp, Newtonsoft.Json

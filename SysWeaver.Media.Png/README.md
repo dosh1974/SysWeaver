@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> A managed PNG decoder and chunk inspector (no native dependencies).
+> A managed PNG decoder and chunk reader/writer with no native dependencies.
 
 | | |
 |---|---|
@@ -11,27 +11,31 @@
 
 ## Purpose
 
-Read PNG images and their metadata chunks (for example embedded text) without a native imaging library — useful where only simple decoding or metadata access is needed. Used by the OpenAI integration.
+Read PNG images and read or rewrite their chunks (for example embedded text metadata) without a native imaging library — useful where only simple decoding or metadata access is needed. The AI projects use it to stamp generated images with creation time, software and source information.
 
 ## Key features
 
-- `PngTools.DecodeArgb`: decodes all color types and bit depths (1 to 16 bits, palette, gray, RGB, alpha) and tRNS transparency to 32-bit pixels in B, G, R, A byte order (cross checked against ImageMagick).
-- Chunks: `ReadChunks`, `WriteChunks` / `MakePng` (optionally replacing the image data with new raw scanlines or a new IDAT chunk), `WriteChunk`, `DecodeIHDR`, `PngImageInfo.ToChunk`.
-- Raw image data: `ApplyFilterToScanline` (all 5 filters), `GetFilters`, `UnfilterData`, `DecodeAndUnfilterData`, `DecodeAndUnfilterIDAT`.
-- Text chunks: `CreateInformationChunk` (tEXt, zTXt or iTXt, whatever fits the text best), `SetCreationTimeInfo`, the well known `PngKeywords`.
-- Checksums: `CalcCrc32`, `CalcAdler32`, and `GetCompressed` (a zlib stream).
+- Decoding of all colour types and bit depths (1 to 16 bits, palette, gray, RGB, alpha, tRNS transparency) to 32-bit pixels (`PngTools.DecodeArgb`)
+- Reading and writing chunks, optionally replacing the image data (`ReadChunks`, `WriteChunks`, `MakePng`)
+- Scanline filtering and unfiltering helpers for raw image data
+- Text chunks (tEXt, zTXt or iTXt, whichever fits the text best) with the well-known `PngKeywords`, and a creation time chunk
+- CRC-32, Adler-32 and zlib stream helpers
+
+## Key components
+
+- [`PngTools`](PngTools.cs) — decoding, chunk reading/writing and helpers
+- [`PngChunk`](PngChunk.cs) — a single chunk (id and data)
+- [`PngImageInfo`](PngImageInfo.cs) — the decoded IHDR header
 
 ## Limitations and considerations
 
-- Decodes to 32-bit pixels only (16-bit channels are truncated to the high byte); use ImageMagick ([SysWeaver.Media](../SysWeaver.Media/README.md)) for general image handling.
-- Interlaced images are not supported (`NotSupportedException`). Chunk CRC's are not validated.
-- The streams must be seekable (`Position` / `Length` are used). `ReadChunks(Stream)` disposes the stream when the enumeration ends.
-- Corrupt data throws `IOException` (including `EndOfStreamException`) or `InvalidDataException` (deflate errors); chunk lengths and image sizes are validated before allocating.
-  An indexed image without a PLTE chunk or with a palette index outside the palette throws `IOException`.
-- Not included in the main solution file although a solution project references it.
+- Decodes to 32-bit pixels only (16-bit channels are reduced to 8 bits); use ImageMagick ([SysWeaver.Media](../SysWeaver.Media/README.md)) for general image handling
+- Interlaced images are not supported (`NotSupportedException`); chunk CRCs are not validated
+- Streams must be seekable
 
 ## Relationships
 
 - **Project:** [`SysWeaver.Media.Png.csproj`](SysWeaver.Media.Png.csproj)
-- **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md), the System.IO.Hashing package (the vectorized CRC-32 of `CalcCrc32` and the chunk writing)
-- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md)
+- **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md)
+- **Used by:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md)
+- **Third-party:** System.IO.Hashing (CRC-32)

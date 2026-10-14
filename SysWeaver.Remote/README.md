@@ -6,12 +6,12 @@
 
 | | |
 |---|---|
-| **Layer** | Remote APIs (contracts) |
-| **Kind** | Attribute library (no dependencies) |
+| **Layer** | Networking |
+| **Kind** | Library (attributes and interfaces, no dependencies) |
 
 ## Purpose
 
-Calling an HTTP API should look like calling a local method. An interface deriving from `IRemoteApi` describes endpoints, verbs, path templates, serializers, time-outs and caching; [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md) turns it into a working client. Because this assembly has no dependencies, API contracts can be shared cheaply between servers and clients.
+Calling an HTTP API should look like calling a local method. An interface deriving from `IRemoteApi` (or just `IDisposable`) describes endpoints, verbs, path templates, serializers, time-outs and caching; [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md) turns it into a working client. Because this assembly has no dependencies, API contracts can be shared cheaply between servers and clients.
 
 ## How it fits into SysWeaver
 
@@ -25,22 +25,33 @@ flowchart LR
 
 ## Key features
 
-- Endpoint path templates and HTTP verbs per method.
-- Per-interface or per-method serializer, time-out and cache overrides.
-- Option to send multiple parameters as an object rather than an array.
+- Endpoint path templates and HTTP verbs (GET, POST, PUT, DELETE) per method (`[RemoteEndPoint]`), with a path prefix per interface (`[RemotePathPrefix]`); by default the method name is the path, GET without parameters and POST otherwise
+- Per-interface or per-method serializer (`[RemoteSerializer]`), time-out (`[RemoteTimeout]`) and response cache (`[RemoteCache]`, `[NoRemoteCache]`) overrides
+- Option to send several parameters as one object instead of an array (`[ParamAsObject]`)
+- `IRemoteApi`: `Cancel()` and the `OnCallBegin` / `OnCallEnd` monitoring events implemented by every generated client
+- Serializer name constants (`RemoteParam`: `json`, `formUrl`, `formUrlIgnoreDefaults`)
 
-## Key types
+## Key components
 
-| Type | Role |
-|---|---|
-| `IRemoteApi` | Optional base interface: `Cancel()` and the `OnCallBegin` / `OnCallEnd` monitoring events |
-| `RemoteEndPoint` | Path template and verb (`HttpEndPointTypes`: Get, Post, Put, Delete) of a method; default: the method name, GET without parameters, POST otherwise |
-| `RemotePathPrefix` | Path prefix for all methods of an interface |
-| `RemoteSerializer` | Serializer (and post serializer) names, on an interface (connection default) or a method |
-| `RemoteTimeout` | Time-out in ms, on an interface (connection default) or a method (overrides it, can also extend it) |
-| `RemoteCache` / `NoRemoteCache` | Response cache (seconds, max items) of GET/DELETE end points with a return value, on a method or an interface |
-| `ParamAsObject` | Send several parameters as an object (one member per parameter) instead of an array |
-| `RemoteParam` | Serializer name constants (`json`, `formUrl`, `formUrlIgnoreDefaults`) |
+- [`IRemoteApi`](IRemoteApi.cs) — optional base interface of remote API contracts
+- [`RemoteEndPointAttribute`](RemoteEndPointAttribute.cs) — path template and verb, plus `RemotePathPrefixAttribute`
+- [`RemoteTimeoutAttribute`](RemoteTimeoutAttribute.cs) — time-out, cache and `ParamAsObject` attributes
+
+## Using it
+
+```csharp
+using SysWeaver.Remote;
+
+[RemotePathPrefix("Api/orders/")]
+public interface IOrders : IRemoteApi
+{
+    [RemoteEndPoint(HttpEndPointTypes.Get, "Get?id={id}")]
+    [RemoteCache(10)]
+    Task<Order> Get(int id);
+
+    Task<bool> Purge();     // GET "Api/orders/Purge"
+}
+```
 
 ## Limitations and considerations
 
@@ -50,4 +61,5 @@ flowchart LR
 ## Relationships
 
 - **Project:** [`SysWeaver.Remote.csproj`](SysWeaver.Remote.csproj)
+- **Builds on:** —
 - **Used by:** [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md), [SysWeaver.Remote.Services](../SysWeaver.Remote.Services/README.md)

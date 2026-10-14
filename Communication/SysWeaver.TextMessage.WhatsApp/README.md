@@ -2,11 +2,11 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Send and receive text messages using the WhatsApp Cloud API, on any number of business phone numbers. Combine it with an SMS provider using the [text message router](../SysWeaver.TextMessage.Router/README.md) for SMS fallback.
+> Send and receive text messages using the WhatsApp Cloud API on multiple business numbers (combine with SMS using the router).
 
 | | |
 |---|---|
-| **Layer** | Users |
+| **Layer** | Networking |
 | **Kind** | Micro service |
 
 ## Purpose
@@ -24,6 +24,8 @@ flowchart LR
   App -->|"GetIncoming / GetStatusUpdates (long poll) or OnIncoming / OnStatus (events)"| WA
 ```
 
+Combine it with an SMS provider ([SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/README.md) or [SysWeaver.TextMessage.AmazonEndUserMessaging](../SysWeaver.TextMessage.AmazonEndUserMessaging/README.md)) using the [text message router](../SysWeaver.TextMessage.Router/README.md) for SMS fallback; use [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md) for development and testing.
+
 ## Key features
 
 - No official .NET SDK exists, the Cloud API is implemented in the `api` folder (`IWhatsAppCloudApi` + json types) using `RemoteConnection`. Graph API json errors are surfaced as `WhatsAppApiException` (with the WhatsApp error code).
@@ -34,15 +36,13 @@ flowchart LR
 - Delivery statuses (sent, delivered, read, failed) are tracked in the message table.
 - Retries on transient errors, optional read receipts, stats and perf monitoring.
 
-## Limitations and considerations
+## Key components
 
-- **WhatsApp can't send or receive SMS.** Use the [text message router](../SysWeaver.TextMessage.Router/README.md) with an SMS provider for fallback, and to receive SMS on the same numbers (using that provider).
-- **There's no way to check if a number is on WhatsApp up front.** A message to a non-WhatsApp number is accepted by the API, and fails asynchronously with 131026 (which can also mean that the user blocked you or hasn't accepted the latest terms). So `Send` returns `Accepted`, and the failure arrives as a status update (the router falls back then).
-- **Business initiated messages require templates.** Free form text can only be sent within 24 hours after the user's last message. Without a template, sending to a user that hasn't written recently fails with OutsideWindow (131047).
-- Incoming messages, statuses and the window tracking are kept in memory only (lost on restart); pollers without a known cursor only get the last 5 minutes.
-- Media messages are reported as their caption or a "[type]" text, the media is not downloaded.
-- The webhook must be reachable by Meta over https with a valid (CA signed) certificate.
-- `Send`, `GetIncoming`, `GetStatusUpdates` and `MessageTable` require the `Admin` or `Ops` role when called over http.
+- [`WhatsAppTextMessageService`](WhatsAppTextMessageService.cs) - number selection, window tracking, sending and the text message contract
+- [`WhatsAppTextMessageService_Webhook`](WhatsAppTextMessageService_Webhook.cs) - the Meta webhook (verification, signature check, messages and statuses)
+- [`IWhatsAppCloudApi`](api/IWhatsAppCloudApi.cs) - the Graph API contract used through `RemoteConnection`
+- [`WhatsAppApiException`](WhatsAppApiException.cs) - Graph API errors and their mapping to `TextMessageFailures`
+- [`WhatsAppTextMessageParams`](WhatsAppTextMessageParams.cs) - token, app secret, webhook, numbers and template
 
 ## Using it
 
@@ -59,6 +59,16 @@ flowchart LR
     ],
     "Template": { "Name": "notification_text", "Language": "en" } } }
 ```
+
+## Limitations and considerations
+
+- **WhatsApp can't send or receive SMS.** Use the [text message router](../SysWeaver.TextMessage.Router/README.md) with an SMS provider for fallback, and to receive SMS on the same numbers (using that provider).
+- **There's no way to check if a number is on WhatsApp up front.** A message to a non-WhatsApp number is accepted by the API, and fails asynchronously with 131026 (which can also mean that the user blocked you or hasn't accepted the latest terms). So `Send` returns `Accepted`, and the failure arrives as a status update (the router falls back then).
+- **Business initiated messages require templates.** Free form text can only be sent within 24 hours after the user's last message. Without a template, sending to a user that hasn't written recently fails with OutsideWindow (131047).
+- Incoming messages, statuses and the window tracking are kept in memory only (lost on restart); pollers without a known cursor only get the last 5 minutes.
+- Media messages are reported as their caption or a "[type]" text, the media is not downloaded.
+- The webhook must be reachable by Meta over https with a valid (CA signed) certificate.
+- `Send`, `GetIncoming`, `GetStatusUpdates` and `MessageTable` require the `Admin` or `Ops` role when called over http.
 
 ## Setting up a Meta account for testing
 
@@ -78,5 +88,3 @@ flowchart LR
 
 - **Project:** [`SysWeaver.TextMessage.WhatsApp.csproj`](SysWeaver.TextMessage.WhatsApp.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md), [SysWeaver.HttpServer](../../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../../SysWeaver.IsoData/README.md), [SysWeaver.MicroServices.ServiceManager](../../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.Remote.Connection](../../SysWeaver.Remote.Connection/README.md), [SysWeaver.TableData](../../SysWeaver.TableData/README.md)
-- **Used with:** [SysWeaver.TextMessage.Router](../SysWeaver.TextMessage.Router/README.md)
-- **Alternative to:** [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md)

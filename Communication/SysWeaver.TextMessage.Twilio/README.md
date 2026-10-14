@@ -2,11 +2,11 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Send and receive text messages (SMS, MMS, WhatsApp, RCS) using Twilio Programmable Messaging, on any number of senders.
+> Send and receive text messages (SMS, MMS, WhatsApp, RCS) using Twilio Programmable Messaging on multiple senders.
 
 | | |
 |---|---|
-| **Layer** | Users |
+| **Layer** | Networking |
 | **Kind** | Micro service |
 
 ## Purpose
@@ -24,21 +24,23 @@ flowchart LR
   TW -->|"OnIncoming / OnStatus"| R
 ```
 
+Alternatives implementing the same contract: [SysWeaver.TextMessage.WhatsApp](../SysWeaver.TextMessage.WhatsApp/README.md) (WhatsApp Cloud API), [SysWeaver.TextMessage.AmazonEndUserMessaging](../SysWeaver.TextMessage.AmazonEndUserMessaging/README.md) (AWS SMS) and [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md) (development and testing). Combine providers using the [router](../SysWeaver.TextMessage.Router/README.md).
+
 ## Key features
 
 - Uses the official `Twilio` NuGet package (REST client, request signature validation).
 - Multiple senders: phone numbers, WhatsApp senders (`whatsapp:+...`), alphanumeric sender ids, short codes and Messaging Services, each with a channel, an optional `System` and `Countries`. Sender selection: the sender that received the message being replied to (`ResponseToken`), the requested `From`, the `System`, a WhatsApp sender with an open customer service window, then the first allowed channel (the order of the senders is the channel priority) and the recipient's country within that channel.
-- Respects `OutgoingTextMessage.Channels`, `Template` (Content API `ContentSid` + `ContentVariables`), `TimeToLive` (`ValidityPeriod`) and optionally `Purpose` (`MessageIntent`). WhatsApp messages outside the 24 hour window use the configured `WhatsAppTemplate` (or the message template), and a text that fails with 63016 (outside the window) is retried using the template.
+- Respects `OutgoingTextMessage.Channels`, `Template` (Content API `ContentSid` + `ContentVariables`), `TimeToLive` (`ValidityPeriod`) and optionally `Purpose` (`MessageIntent`, enabled by `SendMessageIntent`). WhatsApp messages outside the 24 hour window use the configured `WhatsAppTemplate` (or the message template), and a text that fails with 63016 (outside the window) is retried using the template.
 - Twilio error codes are mapped to `TextMessageFailures` (21614 / 30006 landline and 63003 not on WhatsApp → NotOnChannel, 21610 STOP → Blocked, 30003 → Unreachable, 30007 → Rejected, 63016 → OutsideWindow, ...). Recipient related failures are returned as a failed result (or a failed status update), other errors throw. Numbers that failed with NotOnChannel skip that channel for `NotOnChannelHours`.
 - Incoming messages and status callbacks are received by webhooks (an `IHttpServerModule`), validated using the `X-Twilio-Signature` header, de-duplicated, published as events and queued for `GetIncoming` / `GetStatusUpdates`. The status callback url carries the message `Reference` and `System`, so status updates have them even after a restart.
 - Retries on transient errors (5xx, 429), message table, stats and perf monitoring.
 
-## Limitations and considerations
+## Key components
 
-- Media (MMS, WhatsApp images etc) is not sent, and received media is reported as "[media]" (or the caption text).
-- `PublicUrl` must be the exact public base url that Twilio calls (the signature includes the url), especially behind a reverse proxy.
-- Incoming messages, the WhatsApp window tracking and pending messages are kept in memory only.
-- `Send`, `GetIncoming`, `GetStatusUpdates` and `MessageTable` require the `Admin` or `Ops` role when called over http.
+- [`TwilioTextMessageService`](TwilioTextMessageService.cs) - sender selection, sending and the text message contract
+- [`TwilioTextMessageService_Webhook`](TwilioTextMessageService_Webhook.cs) - the incoming message and status callback webhooks
+- [`TwilioErrors`](TwilioErrors.cs) - maps Twilio error codes to `TextMessageFailures`
+- [`TwilioTextMessageParams`](TwilioTextMessageParams.cs) - credentials, senders, public url and templates
 
 ## Using it
 
@@ -66,6 +68,13 @@ To fall back from WhatsApp to SMS, use the [router](../SysWeaver.TextMessage.Rou
     { "Instance": "twilio", "Name": "twilio-sms", "Channels": "Sms" } ] }
 ```
 
+## Limitations and considerations
+
+- Media (MMS, WhatsApp images etc) is not sent, and received media is reported as "[media]" (or the caption text).
+- `PublicUrl` must be the exact public base url that Twilio calls (the signature includes the url), especially behind a reverse proxy. Without it no status callback url is sent with the messages.
+- Incoming messages, the WhatsApp window tracking and pending messages are kept in memory only.
+- `Send`, `GetIncoming`, `GetStatusUpdates` and `MessageTable` require the `Admin` or `Ops` role when called over http.
+
 ## Setting up a Twilio account for testing
 
 1. **Account** - sign up at <https://www.twilio.com/try-twilio>. A trial account gets free credit, can only send to *verified* phone numbers (*Phone Numbers → Manage → Verified Caller IDs*) and prefixes messages with "Sent from your Twilio trial account".
@@ -81,5 +90,4 @@ To fall back from WhatsApp to SMS, use the [router](../SysWeaver.TextMessage.Rou
 
 - **Project:** [`SysWeaver.TextMessage.Twilio.csproj`](SysWeaver.TextMessage.Twilio.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md), [SysWeaver.HttpServer](../../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../../SysWeaver.IsoData/README.md), [SysWeaver.MicroServices.ServiceManager](../../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.TableData](../../SysWeaver.TableData/README.md)
-- **Used with:** [SysWeaver.TextMessage.Router](../SysWeaver.TextMessage.Router/README.md)
-- **Alternative to:** [SysWeaver.TextMessage.AmazonEndUserMessaging](../SysWeaver.TextMessage.AmazonEndUserMessaging/README.md), [SysWeaver.TextMessage.WhatsApp](../SysWeaver.TextMessage.WhatsApp/README.md), [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md)
+- **Third-party:** `Twilio`

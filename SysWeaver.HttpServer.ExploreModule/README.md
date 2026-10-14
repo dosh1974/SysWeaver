@@ -6,43 +6,51 @@
 
 | | |
 |---|---|
-| **Layer** | HTTP (module) |
-| **Kind** | HTTP module with embedded web pages |
+| **Layer** | Web platform |
+| **Kind** | Library (HTTP module with embedded web pages) |
 
 ## Purpose
 
-Make a running system self-describing. Developers and operators can browse the published APIs, open any table-data API in a generic grid, see which icons exist, and inspect which serializers and compressors are available — without extra tooling.
+Make a running system self-describing. Developers and operators can browse the server's end points and published APIs, open any table-data API in a generic grid, see which icons exist, and inspect which serializers and compressors are available — without extra tooling.
 
 ## How it fits into SysWeaver
 
 ```mermaid
 flowchart LR
   ExpS["ExploreHttpServerService"] --> Mod["ExploreHttpServerModule"]
-  Mod --> Pages["explore pages<br/>api, table, icons, logo"]
-  Mod --> Api["debug explore APIs"]
+  Static["StaticDataHttpServerModule"] --> Mod
   Icons["IconHttpServerModule"] --> Mod
+  Mod --> Pages["explore pages<br/>end points, api, table, icons, logo"]
+  Mod --> Api["debug/explore APIs"]
   Api --> SerComp["serializer and compressor registries"]
   Api --> Refs["table data references"]
 ```
 
 ## Key features
 
-- API explorer page and generic table page for any table-data endpoint or data reference.
-- Icon gallery of the shared icon set.
-- Inventories of registered serializers and compression formats.
-- Links that open a data reference as an interactive table.
+- Append `explore` to any folder URL (e.g. `/explore`, `/Api/explore`) to list the server's end points below it, with type, auth, caching, compression, size and location.
+- API page and a generic interactive table page for any table-data API or session data reference (`GetTableDataRefUrl` builds the link).
+- Icon gallery of the shared icon set and a logo seed designer.
+- Debug tables of the registered serializers, compression formats and the live table data references.
+- Menu entries under *Debug* in the web UI.
 
-## Limitations and considerations
+## Key components
 
-- Most endpoints are restricted to debug/dev roles; the module is intended for development and operations, not end users.
-- `DataRefTable` (a data reference as a table) returns at most `TableDataTools.DefaultMaxAllowedRows` rows per request (a request with no row limit gets the cap).
+- [`ExploreHttpServerModule`](ExploreHttpServerModule.cs) — the module, request handler and `debug/explore` APIs
+- [`ExploreHttpServerModuleParams`](ExploreHttpServerModuleParams.cs) — auth (default `Debug,Dev,Ops`) and caching options
 
 ## Using it
 
 Added by `ExploreHttpServerService` from [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md) (after the static data and icon services).
 
+## Limitations and considerations
+
+- The pages and most APIs are restricted to the Debug, Dev or Ops roles; the module is intended for development and operations, not end users.
+- `DataRefTable` returns at most `TableDataTools.DefaultMaxAllowedRows` rows per request (a request with no row limit gets the cap).
+- The build pre-compresses the embedded pages with a Windows tool from `_tools`.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.HttpServer.ExploreModule.csproj`](SysWeaver.HttpServer.ExploreModule.csproj)
 - **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md), [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md)
-- **Used by:** [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md)
+- **Used by:** [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md), [SwLanCertManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwLanCertManager/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md)

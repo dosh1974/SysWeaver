@@ -2,11 +2,11 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Send and receive SMS using AWS End User Messaging SMS (formerly Amazon Pinpoint SMS), with delivery events and two-way SMS read from SQS.
+> Send and receive SMS using AWS End User Messaging SMS (formerly Pinpoint SMS), with delivery events and two-way SMS read from SQS.
 
 | | |
 |---|---|
-| **Layer** | Users |
+| **Layer** | Networking |
 | **Kind** | Micro service |
 
 ## Purpose
@@ -24,6 +24,8 @@ flowchart LR
   S -->|"long poll, delete"| SQS
 ```
 
+Alternatives implementing the same contract: [SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/README.md) (SMS and WhatsApp), [SysWeaver.TextMessage.WhatsApp](../SysWeaver.TextMessage.WhatsApp/README.md) (WhatsApp Cloud API) and [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md) (development and testing). Combine providers using the [router](../SysWeaver.TextMessage.Router/README.md).
+
 ## Key features
 
 - Uses the official AWS SDK (`AWSSDK.PinpointSMSVoiceV2` = the End User Messaging SMS API, the package name is historical, and `AWSSDK.SQS`). Credentials from config / credentials file, or the default AWS credential chain (instance / task roles etc).
@@ -34,12 +36,12 @@ flowchart LR
 - Incoming messages and delivery events are read from SQS queues subscribed to the SNS topics: no public endpoint needed, and messages wait in the queue while the service is down (they are deleted when processed, failures are retried by SQS). Both SNS envelopes and raw message delivery are supported, duplicates are ignored.
 - Message table, stats and perf monitoring.
 
-## Limitations and considerations
+## Key components
 
-- SMS only: MMS (`SendMediaMessage`), RCS (`SendRcsMessage`) and voice are not implemented. WhatsApp through AWS is a separate service (AWS End User Messaging Social).
-- Delivery events can arrive up to 72 hours after sending; in countries without delivery receipts the final status is SUCCESSFUL (accepted by the carrier), reported as `Sent`.
-- Two-way SMS isn't available in all countries, and not for sender ids.
-- `Send`, `GetIncoming`, `GetStatusUpdates` and `MessageTable` require the `Admin` or `Ops` role when called over http.
+- [`AmazonEndUserMessagingTextMessageService`](AmazonEndUserMessagingTextMessageService.cs) - sender selection, carrier lookup, sending and the text message contract
+- [`AmazonEndUserMessagingTextMessageService_Queue`](AmazonEndUserMessagingTextMessageService_Queue.cs) - reads incoming messages and delivery events from SQS
+- [`AmazonEndUserMessagingErrors`](AmazonEndUserMessagingErrors.cs) - maps AWS errors and event types to `TextMessageFailures` and statuses
+- [`AmazonEndUserMessagingParams`](AmazonEndUserMessagingParams.cs) - region, senders, configuration set, queues and credentials
 
 ## Using it
 
@@ -59,6 +61,13 @@ flowchart LR
 
 `AwsSms.txt` contains a single line: `AKIAXXXXXXXXXXXXXXXX:the-secret-access-key` (omit `CredFile` to use the default AWS credential chain).
 
+## Limitations and considerations
+
+- SMS only: MMS (`SendMediaMessage`), RCS (`SendRcsMessage`) and voice are not implemented. WhatsApp through AWS is a separate service (AWS End User Messaging Social).
+- Delivery events can arrive up to 72 hours after sending; in countries without delivery receipts the final status is SUCCESSFUL (accepted by the carrier), reported as `Sent`.
+- Two-way SMS isn't available in all countries, and not for sender ids.
+- `Send`, `GetIncoming`, `GetStatusUpdates` and `MessageTable` require the `Admin` or `Ops` role when called over http.
+
 ## Setting up an AWS account for testing
 
 1. **AWS account and region** - sign up at <https://aws.amazon.com/>, open the *AWS End User Messaging SMS* console and pick a region. Phone numbers, configuration sets, the sandbox and limits are per region.
@@ -74,5 +83,4 @@ flowchart LR
 
 - **Project:** [`SysWeaver.TextMessage.AmazonEndUserMessaging.csproj`](SysWeaver.TextMessage.AmazonEndUserMessaging.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md), [SysWeaver.IsoData](../../SysWeaver.IsoData/README.md), [SysWeaver.MicroServices.ServiceManager](../../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.TableData](../../SysWeaver.TableData/README.md)
-- **Used with:** [SysWeaver.TextMessage.Router](../SysWeaver.TextMessage.Router/README.md)
-- **Alternative to:** [SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/README.md), [SysWeaver.TextMessage.Fake](../SysWeaver.TextMessage.Fake/README.md)
+- **Third-party:** `AWSSDK.PinpointSMSVoiceV2`, `AWSSDK.SQS`

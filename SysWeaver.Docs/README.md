@@ -25,26 +25,18 @@ flowchart LR
   Docs --> Tables["Table column descriptions"]
 ```
 
-All SysWeaver projects enable XML documentation generation, which is what makes this work framework-wide. Some consumers (e.g. the config file writer in SysWeaver.Common) load `SysWeaver.Docs.XmlDocExt` by name at runtime instead of referencing it, so it is an optional enhancement rather than a hard requirement.
+All SysWeaver projects enable XML documentation generation, which is what makes this work framework-wide. Some consumers (e.g. the config file writer in [SysWeaver.Common](../SysWeaver.Common/README.md)) load `SysWeaver.Docs.XmlDocExt` by name at runtime instead of referencing it, so it is an optional enhancement rather than a hard requirement.
 
 ## Key features
 
-- `XmlDocExt.XmlDoc()` extension methods on `Type`, `MemberInfo`, `FieldInfo`, `PropertyInfo`, `MethodInfo`, `ConstructorInfo`, `MethodBase` and `ParameterInfo`, returning `IXmlDocInfo` (summary, remarks), `IXmlDocMethodInfo` (plus returns and per-parameter docs) or `IXmlDocParameterInfo`.
-- `XmlSummary()` shortcuts for fields and properties.
-- Enum value documentation (`XmlDocEnum`).
-- `ToTitle()` combines summary and remarks into one text for tool tips / UI titles.
-- Members are also found when looked up through a derived type, and documentation of interfaces/base types in other assemblies is searched.
-- Each documentation file is parsed once (lazily) and all lookups are cached; thread safe.
+- `XmlDoc()` extension methods on `Type`, `MemberInfo`, `FieldInfo`, `PropertyInfo`, `MethodInfo`, `ConstructorInfo`, `MethodBase` and `ParameterInfo`, returning summary and remarks (`IXmlDocInfo`), plus returns and per-parameter docs for methods (`IXmlDocMethodInfo`)
+- `XmlSummary()` shortcuts for fields and properties, `XmlDocEnum()` for enum values, and `ToTitle()` combining summary and remarks for tool tips
+- Members looked up through derived types, generic instantiations or undocumented overrides fall back to the documentation of the related declaration, also across assemblies
+- Each documentation file is parsed once (lazily) and all lookups are cached; thread safe, and collectible assemblies can still be unloaded
 
-## Limitations and considerations
+## Key components
 
-- Only as good as the comments: undocumented members produce `null`.
-- Requires the `.xml` documentation files to be deployed next to the assemblies; publishing pipelines that drop them (or single-file publishing, where assemblies have no location) silently remove the documentation.
-- Texts are the plain inner text: `<see cref="..."/>` and similar self-closing tags vanish from the sentence, and `<inheritdoc/>` is not resolved.
-- Some signatures are not matched (e.g. types nested more than one level deep, conversion operators, multi-dimensional array parameters, static constructors), these simply return `null`.
-- Members of constructed generic types (`List<int>.Add`) and constructed generic methods are looked up on their generic definitions. An undocumented override gets the documentation of the base member.
-- `XmlDoc(MemberInfo)` only handles fields, properties, methods and constructors (a nested type passed as `MemberInfo` returns `null`, use `XmlDoc(Type)`).
-- Members are matched exactly first (the member definition, regardless of the type it was reflected from), so a base member and its documented override (or hiding member) each get their own documentation. Only a member without its own documentation falls back to a same-named (same signature) member of a related type: the closest documented base type (or interface) member, else a derived type's member.
+- [`XmlDocExt`](XmlDocExt.cs) — the extension methods and the documentation cache
 
 ## Using it
 
@@ -55,7 +47,15 @@ using SysWeaver.Docs;
 string text = typeof(MyServiceParams).GetField("Greeting").XmlSummary();
 ```
 
+## Limitations and considerations
+
+- Only as good as the comments: undocumented members produce `null`
+- Requires the `.xml` documentation files next to the assemblies; publishing pipelines that drop them (or single-file publishing, where assemblies have no location) silently remove the documentation
+- Texts are the plain inner text: `<see cref="..."/>` and similar self-closing tags vanish from the sentence, and `<inheritdoc/>` is not resolved
+- Some unusual signatures (e.g. types nested more than one level deep, conversion operators, multi-dimensional array parameters) are not matched and return `null`
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Docs.csproj`](SysWeaver.Docs.csproj)
+- **Builds on:** —
 - **Used by:** [SysWeaver.CommandLine](../SysWeaver.CommandLine/README.md), [SysWeaver.MicroService.Edit](../SysWeaver.MicroService.Edit/README.md), [SysWeaver.TableData](../SysWeaver.TableData/README.md)

@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Amazon SES (Simple Email Service) e-mail sending service implementing the framework's e-mail contract.
+> Sends email through Amazon SES (Simple Email Service), implementing the framework's `IEmailSender` contract.
 
 | | |
 |---|---|
@@ -11,28 +11,30 @@
 
 ## Purpose
 
-Provide `IEmailService` backed by [Amazon SES](https://aws.amazon.com/ses/), as an alternative to [SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README.md)'s SMTP service, so that features such as account verification, password reset and invitations can send e-mail through AWS.
+Provide `IEmailSender` backed by [Amazon SES](https://aws.amazon.com/ses/), so that features such as account verification, password reset and invitations (see [SysWeaver.MicroService.UserManager](../../SysWeaver.MicroService.UserManager/README.md)) can send email through AWS.
 
 ## How it fits into SysWeaver
 
 ```mermaid
 flowchart LR
-  UM["UserManager and other services"] -->|IEmailService| SES["AmazonSesEmailService"]
+  UM["UserManager and other services"] -->|IEmailSender| SES["AmazonSesEmailService"]
   SES -->|"SES v2 API (AWSSDK.SimpleEmailV2)"| AWS["Amazon SES"]
 ```
+
+Alternatives implementing the same contract: [SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README.md) (SMTP), [SysWeaver.Email.MicrosoftAcs](../SysWeaver.Email.MicrosoftAcs/README.md) (Azure Communication Services) and [SysWeaver.Email.Fake](../SysWeaver.Email.Fake/README.md) (development and testing).
 
 ## Key features
 
 - Uses the official AWS SDK (`AWSSDK.SimpleEmailV2`, SES API v2 `SendEmail`), including SigV4 request signing.
 - Credentials from config / credentials file (`AccessKeyId:SecretAccessKey`), or the default AWS credential chain (environment variables, `~/.aws/credentials`, instance / task roles) when none are given.
 - Optional sender display name (RFC 2047 encoded when non-ascii) and SES configuration set.
-- Retries with tracking; requests rejected by SES (unverified identity, invalid address etc) are not retried, throttling is.
+- Plain text or html body (UTF-8).
+- Retries (`RetryCount`) with tracking; requests rejected by SES (unverified identity, invalid address etc) are not retried, throttling is. Perf monitoring.
 
-## Limitations and considerations
+## Key components
 
-- One recipient per call (as defined by `IEmailService`); no templates, attachments or bulk sending.
-- While the account is in the SES *sandbox* it can only send to verified identities (see below).
-- Bounces and complaints are not handled by this service; set up a configuration set with event publishing (SNS etc) for that in production.
+- [`AmazonSesEmailService`](AmazonSesEmailService.cs) - the `IEmailSender` implementation
+- [`AmazonSesEmailParams`](AmazonSesEmailParams.cs) - region, sender, configuration set, retries and credentials
 
 ## Using it
 
@@ -46,6 +48,13 @@ flowchart LR
 ```
 
 `AmazonSes.txt` contains a single line: `AKIAXXXXXXXXXXXXXXXX:the-secret-access-key`.
+
+## Limitations and considerations
+
+- One recipient per call (as defined by `IEmailSender`); no templates, attachments or bulk sending.
+- `Region` defaults to `us-east-1`, it must be the region where the sender identity is verified.
+- While the account is in the SES *sandbox* it can only send to verified identities (see the set up steps below).
+- Bounces and complaints are not handled by this service; set up a configuration set with event publishing (SNS etc) for that in production.
 
 ## Setting up an AWS account for testing
 
@@ -94,4 +103,4 @@ List prices (pay-as-you-go, no subscription or minimum fee) as of October 2026, 
 
 - **Project:** [`SysWeaver.Email.AmazonSes.csproj`](SysWeaver.Email.AmazonSes.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md), [SysWeaver.MicroServices](../../SysWeaver.MicroServices/README.md)
-- **Alternative to:** [SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README.md) (SMTP), [SysWeaver.Email.MicrosoftAcs](../SysWeaver.Email.MicrosoftAcs/README.md) (Azure Communication Services)
+- **Third-party:** `AWSSDK.SimpleEmailV2`

@@ -2,37 +2,39 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> Local LLM integration for SysWeaver using [LLamaSharp](https://github.com/SciSharp/LLamaSharp) (llama.cpp): a chat provider that runs GGUF models in process and can call methods of your services as tools.
+> Local LLM integration for SysWeaver using LLamaSharp (llama.cpp): an AI service and chat provider that runs GGUF models in process and can call methods of your services as tools.
 
 | | |
 |---|---|
 | **Layer** | AI |
-| **Kind** | Micro service (chat provider, tool host) |
+| **Kind** | Micro service (AI provider) |
 
 ## Purpose
 
-The local equivalent of [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md) and [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md), built on [SysWeaver.AI](../SysWeaver.AI/README.md) using the [LLamaSharp](https://www.nuget.org/packages/LLamaSharp) package.
-No API key, no usage costs and no data leaves the machine.
+The local provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the [LLamaSharp](https://www.nuget.org/packages/LLamaSharp) package ([project](https://github.com/SciSharp/LLamaSharp)). No API key, no usage costs and no data leaves the machine.
+
+## How it fits into SysWeaver
+
+`LlamaSharpAiService` derives from `AiServiceBase` and so is an `IAiService` and an `IChatProvider`: AI chats appear in the [SysWeaver.Chat](../SysWeaver.Chat/README.md) UI, and registered service methods marked `[AiTool]` / `[AiUse]` can be called by the model. It is interchangeable with [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md) and [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md) for code that uses `IAiService`; it is the only provider with native stateless completions, which [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md) uses to serve local models through OpenAI and Google compatible APIs.
 
 ## Key features
 
-- Any number of models (GGUF files) are loaded when the service is created, each with its own load time parameters (context size, GPU layers, batch sizes, flash attention, KV cache types etc).
-- Models are selected per session using the model name (model code) from the configuration.
-- Chat sessions (streaming) and query sessions, prompts are formatted using the chat template of the model (or a configured template).
-- Tool calling of annotated service methods (`[OpenAiTool]` / `[OpenAiUse]`), using the Hermes / Qwen `<tool_call>` format (described in the system prompt).
-- Stateless completions (`IAiService.Complete`, used by [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)) with caller defined tools (tool calls are returned, not executed) and token streaming.
-- Thinking (`<think>` tags) is removed from responses.
-- The oldest messages are dropped when a conversation doesn't fit in the context.
-- CPU and Vulkan (GPU) backends are included, the Vulkan backend is used if available.
+- Chat sessions (streaming) and query sessions; the model is selected per session by its configured name (model code)
+- Any number of GGUF models, all loaded when the service is created, each with its own load and inference parameters (context size, GPU layers, batch sizes, flash attention, KV cache types, sampling, concurrency)
+- Prompts are formatted with the model's chat template or a configured one; a built in `gemma4` template adds Gemma 4 support
+- Tool calling of annotated service methods, plus the default tools of [SysWeaver.AI](../SysWeaver.AI/README.md), using the Hermes / Qwen `<tool_call>` format (or the native Gemma 4 format)
+- Stateless completions (`IAiService.Complete`) with caller defined tools (tool calls are returned, not executed) and token streaming
+- Thinking is removed from responses; the oldest messages are dropped when a conversation doesn't fit in the context
+- Models with multi token prediction layers that the bundled llama.cpp can't load are automatically loaded from a stripped copy
+- CPU and Vulkan (GPU) backends are included, Vulkan is used if available (`UseVulkan`); llama.cpp log messages can be forwarded to the log (`LogNative`)
+- Model tables (`Debug/AI/Models` menu) and debug APIs (chat, token counting)
 
-## Limitations and considerations
+## Key components
 
-- Models are loaded into memory (RAM / VRAM) for the lifetime of the service, every concurrent request allocates a context of `ContextSize` tokens.
-- The full conversation is processed on every request (no KV cache reuse between requests).
-- Tool calling relies on the model following the tool prompt, works best with models trained on the Hermes / Qwen format (Qwen 2.5+, Hermes etc).
-- Text only, image attachments and image generation are not supported.
-- The backend is selected process wide when the first model is loaded. To use CUDA, reference a `LLamaSharp.Backend.Cuda*` package from the application.
-- The reasoning effort parameter isn't used.
+- [`LlamaSharpAiService`](LlamaSharpAiService.cs) — the AI service: model loading, chat provider, session factory, completions
+- [`LlamaSharpModel`](LlamaSharpModel.cs) — a loaded model: prompt formatting, inference, tool call parsing
+- [`LlamaSharpChatSession`](LlamaSharpChatSession.cs) / [`LlamaSharpQuerySession`](LlamaSharpQuerySession.cs) — chat and query sessions
+- [`LlamaSharpAiParams`](LlamaSharpAiParams.cs) — service, model (`LlamaSharpLlm`) and session parameters
 
 ## Using it
 
@@ -49,10 +51,20 @@ No API key, no usage costs and no data leaves the machine.
 ```
 ```csharp
 IAiService ai = manager.Get<LlamaSharpAiService>();
-var chat = ai.CreateChatSession(true, new AiSessionParams { Model = "qwen3-8b" });
+var chat = ai.CreateChatSession(true, new LlamaSharpSessionParams { Model = "qwen3-8b" });
 ```
+
+## Limitations and considerations
+
+- Models are kept in memory (RAM / VRAM) for the lifetime of the service, and every concurrent request allocates a context of `ContextSize` tokens
+- The full conversation is processed on every request (no KV cache reuse between requests)
+- Tool calling relies on the model following the tool prompt, it works best with models trained on the Hermes / Qwen format (Qwen 2.5+, Hermes etc) or Gemma 4
+- Text only: attachments other than text are replaced by a note, image generation is not supported
+- The backend is selected process wide when the first model is loaded. To use CUDA, reference a `LLamaSharp.Backend.Cuda*` package from the application
+- The reasoning effort parameter isn't used
 
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.LlamaSharp.csproj`](SysWeaver.AI.LlamaSharp.csproj)
 - **Builds on:** [SysWeaver.AI](../SysWeaver.AI/README.md)
+- **Third-party:** LLamaSharp, LLamaSharp.Backend.Cpu, LLamaSharp.Backend.Vulkan

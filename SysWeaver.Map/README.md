@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> Generates styled SVG maps — world, continents, individual countries and country regions — from embedded map data.
+> Generates styled SVG maps — the world, Africa, Europe, North America, individual countries and their administrative regions — from embedded map data.
 
 | | |
 |---|---|
@@ -18,16 +18,31 @@ Visualise geographic data (e.g. users per country, highlighted regions) without 
 ```mermaid
 flowchart LR
   Data["embedded region SVG and JSON data"] --> Gen["MapGen"]
-  Style["map style and selection"] --> Gen
-  Iso["IsoData countries"] --> Gen
+  Style["MapGenParams<br/>map, styles, regions"] --> Gen
+  Iso["IsoData country names"] --> Gen
   Gen --> Svg["styled SVG map"]
   Svg --> Svc["MapService API"]
 ```
 
+## Key features
+
+- Maps of the world, Africa, Europe, North America, single countries and countries with their administrative zones (states, counties etc.), stored as brotli compressed SVG + JSON region data
+- A base style for all regions and per-region styles (fill, stroke, extrusion, text labels with country names)
+- 3D-style extrusion of regions, optional background colour and cropping to the highlighted regions
+- Region listing for a map (`MapTools.GetRegions`) and an in-memory cache of loaded maps
+- Parameter classes carry AI annotations so maps can be requested by tool-calling LLMs
+
+## Key components
+
+- [`MapGen`](MapGen.cs) — `Generate(MapGenParams)` returns the SVG
+- [`MapGenParams`](MapGenParams.cs) — map selection, base style, highlighted regions, extrusion, cropping
+- [`MapTools`](MapTools.cs) — map resource names and region listing
+- [`Maps`](Maps.cs) — the available maps
+
 ## Limitations and considerations
 
-- Map data is a static snapshot; border changes require new data and a rebuild.
-- Regional detail is limited to the regions present in the embedded data.
+- Map data is a static snapshot; border changes require new data and a rebuild
+- Regional detail is limited to the regions present in the embedded data
 
 ## Relationships
 

@@ -11,25 +11,39 @@
 
 ## Purpose
 
-Serve localized pages without maintaining a copy per language. Used by the translation file transformer and the translation services.
+Serve localized pages without maintaining a copy per language. The handlers turn a file into a language template: the translatable texts are replaced by variables that are translated per language.
 
 ## How it fits into SysWeaver
 
 ```mermaid
 flowchart LR
   File["HTML / JS file"] --> Ext["extension handler"]
-  Ext --> Parts["translatable text parts"]
-  Parts --> Tr["ITranslator"]
-  Tr --> Rebuild["rebuilt localized file"]
+  Ext --> Tpl["LanguageTemplate<br/>text with variables"]
+  Tpl --> Tr["ITranslator"]
+  Tr --> Out["localized file"]
 ```
+
+`TranslatorExtensionHandlers.Register()` registers the handlers for `.html`, `.htm` and `.js` with `LanguageTemplate` (in [SysWeaver.Common](../SysWeaver.Common/README.md)); the HTTP server then uses them to translate served files into the session language. Registration is done by [SysWeaver.HttpTransformer.Translate](../SysWeaver.HttpTransformer.Translate/README.md) and [SysWeaver.MicroService.Translation](../SysWeaver.MicroService.Translation/README.md)'s remote translator.
+
+## Key features
+
+- HTML: text nodes and the `title`, `placeholder` and `alt` attributes are extracted, markup is preserved; inline scripts are handled as JavaScript
+- JavaScript: string literals are extracted and unescaped / re-escaped
+- Identical texts (with the same context) share one variable; `${...}` variables inside texts are kept
+
+## Key components
+
+- [`TranslatorExtensionHandlers`](TranslatorExtensionHandlers.cs) — registers / unregisters the file handlers
+- [`HtmlTranslation`](ExtensionHandlers/HtmlTranslation.cs) — HTML template builder (HtmlAgilityPack)
+- [`JsTranslation`](ExtensionHandlers/JsTranslation.cs) — JavaScript template builder
 
 ## Limitations and considerations
 
-- Handles HTML and JavaScript; CSS handling is marked as TODO in the source.
-- Not included in the main solution file although solution projects reference it.
+- Handles HTML and JavaScript only; CSS (also inside HTML) is not handled
 
 ## Relationships
 
 - **Project:** [`SysWeaver.FileTranslation.csproj`](SysWeaver.FileTranslation.csproj)
 - **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md)
 - **Used by:** [SysWeaver.HttpTransformer.Translate](../SysWeaver.HttpTransformer.Translate/README.md), [SysWeaver.MicroService.Translation](../SysWeaver.MicroService.Translation/README.md)
+- **Third-party:** HtmlAgilityPack

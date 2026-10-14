@@ -1,6 +1,6 @@
 # _external — vendored third-party libraries
 
-[⬆ Back to the SysWeaver overview](../README.md)
+[⬆ SysWeaver overview](../README.md)
 
 Copies of open source libraries kept in the repository (each with its own upstream README and MIT license file) instead of being consumed as NuGet packages, which allows local modifications.
 

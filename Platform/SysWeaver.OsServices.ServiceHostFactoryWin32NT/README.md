@@ -6,13 +6,13 @@
 
 | | |
 |---|---|
-| **Layer** | Hosting (platform adapter) |
-| **Kind** | Library, resolved by name at runtime |
-| **Platform** | Windows |
+| **Layer** | Runtime |
+| **Kind** | Library (platform adapter, resolved by name at runtime) |
+| **Platform** | Windows only |
 
 ## Purpose
 
-Implements the service host contract of [SysWeaver.OsServices](../../SysWeaver.OsServices/README.md) on top of the Windows Service Control Manager and `System.ServiceProcess`.
+Implements the service host contract (`IServiceHostFactory` / `IServiceHost`) of [SysWeaver.OsServices](../../SysWeaver.OsServices/README.md) on top of the Windows Service Control Manager and `System.ServiceProcess`. `ServiceHost.Run` finds it by name (`SysWeaver.OsServices.ServiceHostFactoryWin32NT`), so the executable only has to reference and deploy it.
 
 ## How it fits into SysWeaver
 
@@ -32,32 +32,40 @@ sequenceDiagram
 
 ## Key features
 
-- Service registration (own process, LocalSystem, command line `[exe] daemon`) with display name, description, start-up type (disabled, manual, automatic or delayed automatic) and restart-on-failure actions (restart on 1st/2nd failure after `RestartDelaySeconds`, later failures after `RestartDelayLastSeconds`).
-- Elevation through the standard Windows "run as administrator" mechanism (`runas` verb, UAC prompt).
-- Start/stop/pause/continue mapped onto the service manager (`ServiceBase` pause/continue/stop/shutdown pause, resume or dispose all services).
-- Direct advapi32 interop (`Win32ServiceManager`, internal) for install, uninstall, configuration and control. Read-only queries (`IsInstalled`, `GetServiceStatus`, `GetStartupType`, `GetDescription`, `GetDelayedStart`, `GetDependencies`: the full list of the services / '+'-prefixed groups a service depends on) don't need elevation.
+- Service registration (own process, LocalSystem, command line `[exe] daemon`) with display name, description, start-up type (disabled, manual, automatic or delayed automatic) and restart-on-failure actions (`RestartDelaySeconds` for the 1st/2nd failure, `RestartDelayLastSeconds` for later ones, reset after `ResetSeconds`)
+- Elevation through the standard Windows "run as administrator" mechanism (`runas` verb, UAC prompt)
+- SCM pause/continue pause and resume all services; stop and system shutdown dispose the `ServiceManager`
+- Direct advapi32 interop (Unicode `...W` API) for install, uninstall, configuration and control; read-only queries such as `status` don't need elevation
 
-| Type | Role |
-|---|---|
-| `ServiceHostFactoryWin32NT` | `IServiceHostFactory` found by name by `ServiceHost.Run` |
-| `ElevatedProcessWin32NT` | `IsElevated` (Administrators role) and `RunElevated` |
-| `ServiceHostWindows`, `ServiceInstance`, `Win32ServiceManager` | Internal `IServiceHost`, `ServiceBase` and SCM interop implementations |
+## Key components
 
-## Limitations and considerations
-
-- Windows only; must be referenced or deployed with the executable so `ServiceHost` can find it.
-- The service always runs as LocalSystem; change the account in the Services console if needed.
-- `start` does not resume a paused service (use `continue`).
-- `uninstall` marks the service for deletion; Windows removes it once all handles are closed.
-- `status` doesn't need elevation (it opens only this service with query status rights), all changing verbs do (re-run with the `runas` verb). A service that can't be opened (missing, or access denied) is reported as not installed.
-- `pause` of a paused service returns `AlreadyPaused` and `continue` of a running service `AlreadyRunning` (exit code 0, as on Linux).
-- All SCM calls use the Unicode (`...W`) API, so service names, display names and executable paths can use any character.
+- [`ServiceHostFactoryWin32NT`](ServiceHostFactoryWin32NT.cs) — the `IServiceHostFactory` found by name by `ServiceHost.Run`
+- [`ServiceHostWindows`](ServiceHostWindows.cs) — internal `IServiceHost` (install, control, status)
+- [`ServiceInstance`](ServiceInstance.cs) — the `ServiceBase` that hosts the `ServiceManager`
+- [`Win32ServiceManager`](ServiceManager/Win32ServiceManager.cs) — internal SCM interop
+- [`ElevatedProcessWin32NT`](ElevatedProcessWin32NT.cs) — `IsElevated` (Administrators role) and `RunElevated`
 
 ## Using it
 
-Reference it from your executable project; everything else is driven by `ServiceHost.Run` and the command line verbs.
+Reference it (and [SysWeaver.OsServices](../../SysWeaver.OsServices/README.md)) from your executable project; everything else is driven by `ServiceHost.Run` and the command line verbs:
+
+```text
+MyService install
+MyService start
+MyService status
+```
+
+## Limitations and considerations
+
+- The service always runs as LocalSystem; change the account in the Services console if needed.
+- `start` does not resume a paused service (use `continue`).
+- `uninstall` marks the service for deletion; Windows removes it once all handles are closed.
+- All changing verbs need elevation (re-run with the `runas` verb). A service that can't be opened (missing, or access denied) is reported as not installed.
+- `pause` of a paused service returns `AlreadyPaused` and `continue` of a running service `AlreadyRunning` (exit code 0, as on Linux).
 
 ## Relationships
 
 - **Project:** [`SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj`](SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj)
 - **Builds on:** [SysWeaver.MicroServices.ServiceManager](../../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.OsServices](../../SysWeaver.OsServices/README.md)
+- **Used by:** services [ExchangeRateService](https://github.com/dosh1974/SysWeaver.Services/blob/main/ExchangeRateService/README.md), [FakeEmailService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeEmailService/README.md), [FakeTextService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeTextService/README.md), [IpLocationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/IpLocationService/README.md), [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md), [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md), [SwLanCertManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwLanCertManager/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md), [WebServerService](https://github.com/dosh1974/SysWeaver.Services/blob/main/WebServerService/README.md)
+- **Third-party:** `System.ServiceProcess.ServiceController`

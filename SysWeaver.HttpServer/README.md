@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Layer** | HTTP |
-| **Kind** | Library (abstract server + modules) |
+| **Layer** | Web platform |
+| **Kind** | Library |
 
 ## Purpose
 
@@ -25,11 +25,11 @@ flowchart TB
   Mods --> Disc["Folders on disc"]
   Mods --> Redir["Redirects and proxies"]
   Mods --> Other["Service provided modules<br/>upload, chat, thumbnails, ..."]
-  Base --> Trans["File transformers<br/>cached conversions by extension"]
+  Base --> Trans["Transformers<br/>cached conversions by extension or MIME type"]
   Base --> Push["Push messages<br/>long polling"]
 ```
 
-### A request, end to end
+A request, end to end:
 
 ```mermaid
 sequenceDiagram
@@ -52,78 +52,30 @@ sequenceDiagram
   M-->>C: response with cache headers
 ```
 
-## Key concepts
-
-| Concept | Description |
-|---|---|
-| **Modules** | Units that claim URL paths and produce request handlers (`IHttpServerModule`, or `IHttpServerRawModule`, which bypasses the whole pipeline including auth). Any registered service implementing a module interface is attached automatically. |
-| **Web API engine** | `ApiHttpServerModule` discovers `[WebApi]` methods on service instances and compiles fast invokers. URLs are composed from the API root (default `Api`), the class url (`[WebApiUrl]`, default the type name) and the method url/name, matched exactly and case sensitively. A method takes at most one input parameter (optionally followed by an `HttpServerRequest`). GET input is the whole query string (a single JSON value, XML, form data or compressed binary); POST input is the body, deserialized per `Content-Type`. Results are serialized according to the `Accept` header, falling back to the default serializer. |
-| **Sessions and auth** | Cookie based sessions (`HttpSession`) and device ids; authentication delegated to an `AuthManager` when registered; login redirect (`AuthRedirect`, default `auth/Login.html?to={0}`) for protected pages; API keys via the `Authorization` header (Basic / Bearer) or the `x-api-key` / `x-goog-api-key` headers, with the resulting user stored in the cookie session. |
-| **Auth tokens** | Per end point: `null` = open, `""` = any logged in user, `"-"` = explicitly open, otherwise comma separated tokens (any one suffices). For APIs: method `[WebApiAuth]` > type `[WebApiAuth]` > module default, with `IRunTimeWebApiAuth` overrides on top. |
-| **Caching** | Client cache headers, server-side response caches (global, or per session), pre-compressed assets, ETags / 304. |
-| **Templates** | Text files matching template patterns are served with `${Variable}` substitution and encoding modifiers; templates using dynamic variables bypass the global cache. |
-| **Transformers** | Services can register file-extension based transformers (e.g. minify, convert, translate); `CachedTransformer` caches their results on disc. |
-| **Push messages** | A long-poll channel through which the server pushes messages to a session, a user, all logged in users or all sessions. |
-| **Translation** | With a translator registered, responses and web assets can be translated to the session language automatically. |
-
-### Key types
-
-| Type | Role |
-|---|---|
-| `HttpServerBase` / `HttpServerBaseParams` | The abstract pipeline (partial, split over `HttpServerBase*.cs`) and its configuration. |
-| `HttpServerRequest` | The adapted request; `ManualHttpServerRequest` is an in-memory implementation. |
-| `HttpSession` | Per client session state, with `MessageStreamRequest` / `MessageStreamResponse` for long polling. |
-| `HttpServerPrefix`, `HttpServerHosts`, `HttpServerHostInfo` | Listen prefixes and host lookup. |
-| `IHttpRequestHandler` | A resolved handler: auth, etag (304), cache key, then `Get` / `GetAsync`. |
-| `ApiHttpServerModule`, `ApiHttpEntry`, `ApiIoParams` | The Web API engine, a compiled API method, and serializer negotiation. |
-| `FileHttpServerModule`, `StaticDataHttpServerModule`, `RedirectHttpServerModule` | Disc folders, embedded / in-memory content, and redirects. |
-| `FileProxy`, `ProxyTools`, `ProxyRequestCache` | Forwarding requests to other servers. |
-| `CertificateBinder`, `IFirewallHandler` (`FirewallHandler`, `WindowsFirewallHandler`, `LinuxFirewallHandler`, `NoFirewallHandler`) | HTTPS certificate binding and firewall rules (`FirewallHandler.Instance` picks the handler for the current OS). |
-| `NoUserLoggedInException` and related auth exceptions | Thrown by modules during handler resolution to start the login flow. |
-| `IApiAuditService`, `IHttpTransformerService`, `IUserStorageService` | Contracts implemented by other services. |
-
-### Built-in end points
-
-| Kind | End points |
-|---|---|
-| Always handled by the server | `logout`, `auth/redirect`, `auth/logout_user`, `serverTime` |
-| Used only when no module serves them | `login`, `basic_auth`, `icon.svg`, `icon_debug.svg`, `favicon.ico`, `apple-touch-icon.png`, `icon-180.png`, `icon-192.png`, `icon-512.png`, `logo.svg`, `logo_debug.svg`, `logo.png` (generated from the app name and colors), `app/app.css`, `app/app.js` (empty) |
-| Default templates | `index.html`, `debug.html`, `app/manifest.json`, `app/Home.html`, `common/theme.css`, plus the patterns in `HttpServerBaseParams.Templates` |
-
-### Template variables
-
-- Only server defined variables are replaced; query string parameters are never used as template variables, and any other `${...}` text (e.g. JavaScript template literals) is kept as is.
-- Dynamic (per request): `Server.UTC`, `Request.Prefix`, `Request.IP`, `Session.Lang` and, with a logged in user, `Session.User`, `Session.UserName`, `Session.Email`, `Session.Domain`, `Session.NickName`.
-- Static: `Color.Background`, `Color.Color`, `Color.Acc1`, `Color.Acc2` and the `Key=Value` pairs of `HttpServerBaseParams.Variables`.
-- Groups: `Env.*` (environment variables) and `EnvInfo.*` (e.g. `${EnvInfo.AppName}`); services can add their own groups.
-- Values are inserted as is unless the template uses an encoding modifier; always use the one matching the context (`#` html text, `@` attributes, `$` inside JavaScript / JSON strings, `£` JavaScript values).
-
-### Session lifetime
-
-- Sessions with 3 or fewer requests and no strongly authenticated user expire 30 seconds after the last activity; other sessions expire after `SessionExtendLifetime` (default 15) minutes of inactivity.
-- The session cookie is `HttpOnly`; `Secure` and `SameSite` are only added when `CorsCookies` is set.
-- On login through `HttpServerBase.RunOnLogin(session, request)` (used by `auth/redirect` and header / API key auth) the session token is rotated: the session (and its data) is kept, a new session cookie is set on the response and the old token stops working (for `RotatedTokenGraceSeconds` requests with the old token get a temporary anonymous session without a new cookie). `RunOnLogin(session)` doesn't rotate the token.
-- `auth/redirect` only redirects to relative urls or urls on the same origin (else 400).
-
 ## Key features
 
-- Complete API hosting from annotated methods: serialization negotiation, compression negotiation, caching, rate limiting, auditing and runtime-configurable auth.
-- Serving of embedded, on-disc and proxied content with redirects and pre-compressed variants.
-- HTTPS certificate binding from certificate provider services; optional firewall rule management.
-- A built-in single-page web application shell (home, welcome, menus, tables, themes) that other projects extend with their own pages.
-- Extensive diagnostic tables (APIs, sessions, users, caches, MIME types, template variables, transformer caches).
-- In-process API invocation (`IApiHttpServerEndPoint.InvokeAsync`) for AI tools and other services. It performs no auth, rate limit or cache checks, so callers must check `Auth` themselves.
+- **Modules:** units that claim URL paths and produce request handlers (`IHttpServerModule`, or `IHttpServerRawModule`, which bypasses the whole pipeline including auth). Any registered service implementing a module interface is attached automatically by the server service.
+- **Web API engine:** discovers `[WebApi]` methods on service instances and compiles fast invokers. URLs are `<root>/<class url>/<method>` (root defaults to `Api`, class url from `[WebApiUrl]`, else the type name), matched exactly and case sensitively. A method takes at most one input parameter (optionally followed by an `HttpServerRequest`); GET input is the whole query string (a single JSON value, XML, form data or compressed binary), POST input is the body, deserialized per `Content-Type`. Results are serialized per `Accept`, falling back to the default serializer. Caching, compression, rate limits and auditing are declared with attributes.
+- **Sessions and auth:** cookie sessions (`HttpSession`) and device ids; authentication delegated to an `AuthManager` when registered; login redirect for protected pages; API keys via the `Authorization` header (Basic / Bearer) or the `x-api-key` / `x-goog-api-key` headers. Auth per end point is `null` (open), `""` (any logged in user), `"-"` (explicitly open) or a comma separated list of tokens (any one suffices); for APIs method `[WebApiAuth]` > type `[WebApiAuth]` > module default, with `IRunTimeWebApiAuth` overrides on top.
+- **Session security:** the session cookie is `HttpOnly` (`Secure` / `SameSite` only with `CorsCookies`); the session token is rotated on login; short-lived anonymous sessions expire quickly; `auth/redirect` only redirects to relative or same-origin URLs.
+- **Content serving:** embedded resources, disc folders (`FileHttpServerModule`), in-memory content, redirects and forwarding to other servers (`FileProxy`), with pre-compressed variants, ETags / 304, client cache headers and server-side response caches (global or per session).
+- **Templates:** text files matching template patterns (by default `index.html`, `debug.html`, `app/manifest.json`, `app/Home.html`, `common/theme.css`) get `${Variable}` substitution. Only server defined variables are replaced (static ones such as colors and configured `Key=Value` pairs, per-request ones such as `Session.Lang` or `Session.UserName`, and groups like `Env.*`, `EnvInfo.*` or service-provided groups); other `${...}` text, e.g. JavaScript template literals, is kept. Encoding modifiers (`#` html text, `@` attributes, `$` JavaScript / JSON strings, `£` JavaScript values) must be used to match the context.
+- **Transformers:** services implementing `IHttpTransformerService` register conversions by file extension or MIME type; `CachedTransformer` is the base for transformers whose results (smaller or better supported variants) are cached on disc. They run for non-dynamic responses with an ETag; a query string starting with `raw` bypasses them.
+- **Push messages:** a long-poll channel through which the server pushes messages to a session, a user, all logged in users or all sessions.
+- **Translation:** with a translator registered, responses and web assets are translated to the session language.
+- **Built-in end points:** `logout`, `auth/redirect`, `auth/logout_user` and `serverTime`, plus fall-backs used when no module serves them (`login`, `basic_auth`, generated favicons and logos from the app name and colors, empty `app/app.css` / `app/app.js`).
+- **Web application shell:** an embedded single-page application (home and welcome pages, tabs, tags, themes, common scripts) that other projects extend with their own pages and menus.
+- **HTTPS and firewall:** certificate binding from certificate provider services (`CertificateBinder`) and optional firewall rules per listen prefix (`FirewallHandler.Instance` picks `WindowsFirewallHandler`, `LinuxFirewallHandler` or `NoFirewallHandler`).
+- **Diagnostics:** tables of APIs, sessions, users, caches, MIME types, template variables and transformer caches.
+- **In-process API invocation** (`IApiHttpServerEndPoint.InvokeAsync`) for AI tools and other services. It performs no auth, rate limit or cache checks, so callers must check `Auth` themselves.
 
-## Limitations and considerations
+## Key components
 
-- Certificate binding for the HttpListener based server uses Windows tooling; on other platforms use the Kestrel server for HTTPS.
-- The listeners' default listen prefix is external HTTPS on port 443 (`HttpServerPrefix.DefaultExternalHttps`), which requires a certificate provider (and, on Windows with HttpListener, elevated rights). Always configure prefixes explicitly for development with an explicit host (e.g. `http://localhost:8080`) rather than relying on the `DefaultLocalHttp(s)` presets.
-- HTTP range requests are not handled for cached content (marked as a TODO in the source), which matters for media streaming; suffix and multi-range requests are rejected.
-- The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source). The reverse proxy forwards the client's headers, including cookies and authorization; `FileProxy` strips the Cookie and Authorization headers unless `FileProxyParams.ForwardCookies` / `ForwardAuthorization` are set. The proxy cache keys responses on the forwarded Cookie and Authorization headers, never stores `private` / `no-store` responses and never caches `Set-Cookie` headers.
-- The API engine limits POST request bodies to `ApiHttpServerModuleParams.MaxRequestSize` (64 MB by default) and their decompressed size (`Content-Encoding`) to `MaxDecompressedSize` (64 MB by default), responding with 413 when exceeded. Other modules apply no request body size limit.
-- Request path handling and template output have known open hardening issues; expose only folders meant to be public and don't rely on the server as the only protection for sensitive files.
-- Firewall rules: `WindowsFirewallHandler` uses `netsh advfirewall` (needs elevation). Its `Remove` returns true when no rule with the name exists. `LinuxFirewallHandler` detects the active firewall (`Detect()`: firewalld, ufw or plain nftables, in that priority order) and needs root (it never uses `sudo`). When no firewall is active it does nothing and returns true. Rule names are sanitized (`SanitizeRuleName`: diacritics are removed, other disallowed chars become `_`, too long names get a hash). Rules that the handler didn't add are never changed or removed. ufw rules carry the rule name as comment. An identical ufw rule without that comment counts as present and isn't taken over. firewalld gets a `sysweaver-...` service in the default zone (adding or changing it runs `firewall-cmd --reload`, outbound rules aren't needed). nftables rules (with the name as comment) are inserted into the existing input / output filter chains and are runtime only (lost on reboot or ruleset reload). iptables-only systems aren't supported. macOS uses `NoFirewallHandler` (warning, false).
-- The build embeds pre-compressed assets produced by a Windows tool, so the project builds as-is only on Windows.
+- [`HttpServerBase`](HttpServerBase.cs) — the abstract pipeline (partial, split over `HttpServerBase*.cs`), configured by [`HttpServerBaseParams`](HttpServerBaseParams.cs)
+- [`ApiHttpServerModule`](ApiHttpServerModule.cs) — the Web API engine, with [`ApiHttpEntry`](ApiHttpEntry.cs) as a compiled API method
+- [`HttpSession`](HttpSession.cs) — per client session state, user and push message queue
+- [`FileHttpServerModule`](FileHttpServerModule.cs) — serves folders on disc
+- [`CachedTransformer`](CachedTransformer/CachedTransformer.cs) — base class of the disc-cached file transformers
 
 ## Using it
 
@@ -141,8 +93,19 @@ Normally used indirectly through a server micro service. Modules with parameter-
 
 Calling an API: `GET /Api/<class url>/<method>?"value"` or POST the value as the body.
 
+## Limitations and considerations
+
+- Certificate binding for the HttpListener based server uses Windows tooling (`netsh`, elevated rights); on other platforms use the Kestrel server for HTTPS.
+- The listeners' default listen prefix is external HTTPS on port 443 (`HttpServerPrefix.DefaultExternalHttps`), which requires a certificate provider (and, on Windows with HttpListener, elevated rights). Always configure prefixes explicitly, e.g. `http://localhost:8080`.
+- HTTP range requests are not handled for cached content (TODO in source), which matters for media streaming; suffix and multi-range requests are rejected.
+- The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source). `FileProxy` strips the Cookie and Authorization headers unless `FileProxyParams.ForwardCookies` / `ForwardAuthorization` are set; the reverse proxy forwards them.
+- The API engine limits POST bodies and their decompressed size (64 MB each by default, `ApiHttpServerModuleParams.MaxRequestSize` / `MaxDecompressedSize`, 413 when exceeded). Other modules apply no request body size limit.
+- Request path handling and template output have known open hardening issues; expose only folders meant to be public and don't rely on the server as the only protection for sensitive files.
+- Firewall handling: Windows uses `netsh advfirewall` (needs elevation); Linux detects firewalld, ufw or plain nftables (needs root, never uses `sudo`, does nothing when no firewall is active, iptables-only systems aren't supported, nftables rules are runtime only); macOS has no firewall support. Rules the handler didn't add are never changed or removed.
+- The build pre-compresses the embedded web assets with a Windows tool from `_tools`, so the project builds as-is only on Windows.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.HttpServer.csproj`](SysWeaver.HttpServer.csproj)
 - **Builds on:** [SysWeaver.Auth.Core](../SysWeaver.Auth.Core/README.md), [SysWeaver.Common](../SysWeaver.Common/README.md), [SysWeaver.Compression](../SysWeaver.Compression/README.md), [SysWeaver.IsoData](../SysWeaver.IsoData/README.md), [SysWeaver.Media.Svg](../SysWeaver.Media.Svg/README.md), [SysWeaver.MicroServices](../SysWeaver.MicroServices/README.md), [SysWeaver.Serialization](../SysWeaver.Serialization/README.md), [SysWeaver.TableData](../SysWeaver.TableData/README.md)
-- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AspHttpServer](../SysWeaver.AspHttpServer/README.md), [SysWeaver.Chat](../SysWeaver.Chat/README.md), [SysWeaver.HttpServer.ExploreModule](../SysWeaver.HttpServer.ExploreModule/README.md), [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md), [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md), [SysWeaver.HttpTransformer.Compress](../SysWeaver.HttpTransformer.Compress/README.md), [SysWeaver.HttpTransformer.Image](../SysWeaver.HttpTransformer.Image/README.md), [SysWeaver.HttpTransformer.Svg](../SysWeaver.HttpTransformer.Svg/README.md), [SysWeaver.HttpTransformer.Translate](../SysWeaver.HttpTransformer.Translate/README.md), [SysWeaver.MicroService.AspHttpServer](../SysWeaver.MicroService.AspHttpServer/README.md), [SysWeaver.MicroService.Auth](../SysWeaver.MicroService.Auth/README.md), [SysWeaver.MicroService.Avatar](../SysWeaver.MicroService.Avatar/README.md), [SysWeaver.MicroService.CustomUserImage](../SysWeaver.MicroService.CustomUserImage/README.md), [SysWeaver.MicroService.Edit](../SysWeaver.MicroService.Edit/README.md), [SysWeaver.MicroService.FileUploader](../SysWeaver.MicroService.FileUploader/README.md), [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md), [SysWeaver.MicroService.Map](../SysWeaver.MicroService.Map/README.md), [SysWeaver.MicroService.MediaThumbnail](../SysWeaver.MicroService.MediaThumbnail/README.md), [SysWeaver.MicroService.NetHttpServer](../SysWeaver.MicroService.NetHttpServer/README.md), [SysWeaver.MicroService.Thumbnail](../SysWeaver.MicroService.Thumbnail/README.md), [SysWeaver.MicroService.Thumbnail.Web](../SysWeaver.MicroService.Thumbnail.Web/README.md), [SysWeaver.MicroService.UserManager](../SysWeaver.MicroService.UserManager/README.md), [SysWeaver.MicroService.UserStorage](../SysWeaver.MicroService.UserStorage/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.NetHttpServer](../SysWeaver.NetHttpServer/README.md), [SysWeaver.ReverseProxy](../SysWeaver.ReverseProxy/README.md), [SysWeaver.Security](../SysWeaver.Security/README.md)
+- **Used by:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AspHttpServer](../SysWeaver.AspHttpServer/README.md), [SysWeaver.Chat](../SysWeaver.Chat/README.md), [SysWeaver.HttpServer.ExploreModule](../SysWeaver.HttpServer.ExploreModule/README.md), [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md), [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md), [SysWeaver.HttpTransformer.Compress](../SysWeaver.HttpTransformer.Compress/README.md), [SysWeaver.HttpTransformer.Image](../SysWeaver.HttpTransformer.Image/README.md), [SysWeaver.HttpTransformer.Svg](../SysWeaver.HttpTransformer.Svg/README.md), [SysWeaver.HttpTransformer.Translate](../SysWeaver.HttpTransformer.Translate/README.md), [SysWeaver.MicroService.AspHttpServer](../SysWeaver.MicroService.AspHttpServer/README.md), [SysWeaver.MicroService.Auth](../SysWeaver.MicroService.Auth/README.md), [SysWeaver.MicroService.Avatar](../SysWeaver.MicroService.Avatar/README.md), [SysWeaver.MicroService.CustomUserImage](../SysWeaver.MicroService.CustomUserImage/README.md), [SysWeaver.MicroService.Edit](../SysWeaver.MicroService.Edit/README.md), [SysWeaver.MicroService.FileUploader](../SysWeaver.MicroService.FileUploader/README.md), [SysWeaver.MicroService.HttpServer](../SysWeaver.MicroService.HttpServer/README.md), [SysWeaver.MicroService.Map](../SysWeaver.MicroService.Map/README.md), [SysWeaver.MicroService.MediaThumbnail](../SysWeaver.MicroService.MediaThumbnail/README.md), [SysWeaver.MicroService.NetHttpServer](../SysWeaver.MicroService.NetHttpServer/README.md), [SysWeaver.MicroService.Thumbnail](../SysWeaver.MicroService.Thumbnail/README.md), [SysWeaver.MicroService.Thumbnail.Web](../SysWeaver.MicroService.Thumbnail.Web/README.md), [SysWeaver.MicroService.UserManager](../SysWeaver.MicroService.UserManager/README.md), [SysWeaver.MicroService.UserStorage](../SysWeaver.MicroService.UserStorage/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.NetHttpServer](../SysWeaver.NetHttpServer/README.md), [SysWeaver.ReverseProxy](../SysWeaver.ReverseProxy/README.md), [SysWeaver.Security](../SysWeaver.Security/README.md), [SysWeaver.TextMessage.Twilio](../Communication/SysWeaver.TextMessage.Twilio/README.md), [SysWeaver.TextMessage.WhatsApp](../Communication/SysWeaver.TextMessage.WhatsApp/README.md)

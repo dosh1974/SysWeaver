@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Azure Communication Services (ACS) e-mail sending service implementing the framework's e-mail contract.
+> Sends email through Azure Communication Services (ACS), implementing the framework's `IEmailSender` contract.
 
 | | |
 |---|---|
@@ -11,29 +11,30 @@
 
 ## Purpose
 
-Provide `IEmailService` backed by [Azure Communication Services Email](https://learn.microsoft.com/azure/communication-services/concepts/email/email-overview), as an alternative to [SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README.md)'s SMTP service, so that features such as account verification, password reset and invitations can send e-mail through Azure.
+Provide `IEmailSender` backed by [Azure Communication Services Email](https://learn.microsoft.com/azure/communication-services/concepts/email/email-overview), so that features such as account verification, password reset and invitations (see [SysWeaver.MicroService.UserManager](../../SysWeaver.MicroService.UserManager/README.md)) can send email through Azure.
 
 ## How it fits into SysWeaver
 
 ```mermaid
 flowchart LR
-  UM["UserManager and other services"] -->|IEmailService| ACS["MicrosoftAcsEmailService"]
+  UM["UserManager and other services"] -->|IEmailSender| ACS["MicrosoftAcsEmailService"]
   ACS -->|"ACS Email API (Azure.Communication.Email)"| Azure["Azure Communication Services"]
 ```
+
+Alternatives implementing the same contract: [SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README.md) (SMTP), [SysWeaver.Email.AmazonSes](../SysWeaver.Email.AmazonSes/README.md) (Amazon SES) and [SysWeaver.Email.Fake](../SysWeaver.Email.Fake/README.md) (development and testing).
 
 ## Key features
 
 - Uses the official Azure SDK (`Azure.Communication.Email`).
 - Authenticates with an ACS connection string, or an access key plus `Endpoint` (inline or from a credentials file).
 - Optionally waits for the send operation to complete (`WaitForCompletion`), else returns as soon as ACS accepted the message.
-- Retries with tracking; requests rejected by ACS (4xx, except 408 / 429) are not retried.
+- Plain text or html body.
+- Retries (`RetryCount`) with tracking; requests rejected by ACS (4xx, except 408 / 429) are not retried. Perf monitoring.
 
-## Limitations and considerations
+## Key components
 
-- One recipient per call (as defined by `IEmailService`); no templates, attachments or bulk sending.
-- The sender display name can't be set per message, it's configured on the MailFrom address in Azure.
-- Microsoft Entra ID (managed identity) authentication is not supported, it would require the `Azure.Identity` package.
-- Default sending quotas are low (especially for Azure managed domains), see below.
+- [`MicrosoftAcsEmailService`](MicrosoftAcsEmailService.cs) - the `IEmailSender` implementation
+- [`MicrosoftAcsEmailParams`](MicrosoftAcsEmailParams.cs) - sender, endpoint, completion, retries and credentials
 
 ## Using it
 
@@ -45,6 +46,13 @@ flowchart LR
 ```
 
 `MicrosoftAcs.txt` contains a single line, the connection string: `endpoint=https://my-acs.europe.communication.azure.com/;accesskey=...`.
+
+## Limitations and considerations
+
+- One recipient per call (as defined by `IEmailSender`); no templates, attachments or bulk sending.
+- The sender display name can't be set per message, it's configured on the MailFrom address in Azure.
+- Microsoft Entra ID (managed identity) authentication is not supported, it would require the `Azure.Identity` package.
+- Default sending quotas are low (especially for Azure managed domains), see the set up steps below.
 
 ## Setting up an Azure account for testing
 
@@ -75,4 +83,4 @@ List prices (pay-as-you-go, no subscription or minimum fee) as of October 2026, 
 
 - **Project:** [`SysWeaver.Email.MicrosoftAcs.csproj`](SysWeaver.Email.MicrosoftAcs.csproj)
 - **Builds on:** [SysWeaver.Common](../../SysWeaver.Common/README.md), [SysWeaver.MicroServices](../../SysWeaver.MicroServices/README.md)
-- **Alternative to:** [SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README.md) (SMTP), [SysWeaver.Email.AmazonSes](../SysWeaver.Email.AmazonSes/README.md) (Amazon SES)
+- **Third-party:** `Azure.Communication.Email`

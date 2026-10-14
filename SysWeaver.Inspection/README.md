@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Layer** | Foundation (serialization infrastructure) |
+| **Layer** | Foundation |
 | **Kind** | Library |
 
 ## Purpose
@@ -25,37 +25,27 @@ flowchart LR
 ## Key features
 
 - Handlers generated once per (declared type, runtime type) and cached (`TypeHandlerCache<T>`, thread safe, never released).
-- Versioning: `IDescribable` types get their version from `[DescVersion(n)]` (1 without it). Data written by an older version is read with `Describe(i, version)`, data from a newer version is rejected (`StaticTypeHandler.ThrowInvalidVersion` throws an `InvalidDataException`).
-- Type name handling with configurable qualification (`TypenameQualifications`: `Simple` = full name, `Assembly` = full name + assembly name, `Full` = assembly qualified name; generic arguments are qualified the same way, all resolvable by `TypeFinder`).
-- Unmanaged memory blocks (`StaticTypeHandler.HandleUnmanagedMemory`) are inspected as a byte array; when reading, the memory is replaced by a pinned array (the old dispose action is called).
+- Types are handled as (first match): values with a typed `IInspector.Field` overload (primitives, `string`, dates and times, `Guid`), `IDescribable` types (the type describes itself, the most-derived `Describe` is used), arrays of any rank (`byte[]` as one block), enums, `Nullable<U>`, `KeyValuePair<K, V>`, lists and collections, and finally all other types as their instance fields (including private and inherited, except readonly fields).
+- Versioning: `IDescribable` types get their version from `[DescVersion(n)]` (1 without it). Data written by an older version is read with `Describe(i, version)`, data from a newer version is rejected with an `InvalidDataException`.
+- When reading, instances are created with an `(IInspector, int version[, bool isLatestVersion])` constructor if present, else a parameterless constructor of any accessibility; interfaces and abstract types are always handled through the runtime type (whose name is written).
+- Type name handling with configurable qualification (`TypenameQualifications`: `Simple` = full name, `Assembly` = full name + assembly name, `Full` = assembly qualified name), all resolvable by `TypeFinder`.
+- Unmanaged memory blocks (`StaticTypeHandler.HandleUnmanagedMemory`) are inspected as a byte array.
 
-## How types are handled
+## Key components
 
-`TypeHandler<T>` picks the first match:
-
-1. A typed `IInspector.Field` overload: primitives, `string`, `DateTime`, `TimeSpan`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `Guid`.
-2. `IDescribable`: the type describes itself. The implementation may be inherited from a base class (also a generic one) or explicit; the most-derived `Describe(IInspector)` / `Describe(IInspector, int)` is called (a method declared by a derived class, also one that hides a base method, wins).
-3. Arrays of any rank (jagged too); `byte[]` as one block.
-4. Enums, as their underlying type.
-5. `Nullable<U>` as the value, `KeyValuePair<K, V>` as the key and the value.
-6. `IList<E>`, then `ICollection<E>` (dictionaries, sets, linked lists), then the non generic `IList`.
-7. All other types: every instance field (including private and inherited fields) except readonly fields.
-
-Instances are created (when reading) with a constructor `(IInspector, int version, bool isLatestVersion)` or `(IInspector, int version)` if present, else a parameterless constructor of any accessibility (then described), the default value of a struct, else `Activator.CreateInstance` (throws `MissingMethodException` if there is no parameterless constructor).
-Interfaces and abstract types are always handled through the handler of the runtime type (the type name is written).
+- [`TypeHandler<T>`](TypeHandler.cs) — the compiled code that inspects one runtime type
+- [`TypeHandlerCache<T>`](TypeHandlerCache.cs) — the handler cache
+- [`StaticTypeHandler`](StaticTypeHandler.cs) — helpers used by the generated code (type names, versions, unmanaged memory)
+- [`TypenameQualifications`](TypenameQualifications.cs) — how type names are written
 
 ## Limitations and considerations
 
 - An internal building block; application code normally uses a serializer rather than inspectors directly.
 - The binary format produced through it is SysWeaver specific (not interoperable with other ecosystems).
-- Readonly fields are skipped silently, so get-only and init-only auto properties are not round tripped (inspection-cov-10).
-- Collections are created with their parameterless constructor: a custom comparer of a `HashSet` / `Dictionary` is lost (inspection-cov-11). Read-only `ICollection<E>` implementations can be written, reading one throws (`NotSupportedException` if it exists and must change, else usually `MissingMethodException`).
-- Writing (with an `IWriteInspector`) only reads the collections, so several threads may write the same collection at the same time. Other inspectors only clear and refill an `ICollection<E>` if the count or an item changed.
+- Readonly fields are skipped silently, so get-only and init-only auto properties are not round tripped.
+- Collections are created with their parameterless constructor: a custom comparer of a `HashSet` / `Dictionary` is lost. Read-only `ICollection<E>` implementations can be written, reading one throws.
+- Writing (with an `IWriteInspector`) only reads the collections, so several threads may write the same collection at the same time.
 - The handlers are compiled expression trees: the first use of a type is slow, and every type used stays in memory.
-
-## Known bugs
-
-See `_docs/BugReview-2026-10-06.md`: inspection-cov-10, inspection-cov-11 (this project).
 
 ## Relationships
 

@@ -7,8 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | 0 (the only bundled serializer for `msgpack`) |
+| **Kind** | Plug-in (serializer, `ISerializerType`) |
 
 ## Purpose
 
@@ -27,15 +26,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
-- Very compact and fast binary encoding.
+- Registered for `msgpack` (`application/x-msgpack`) with priority 0, the only bundled `msgpack` serializer.
 - `MessagePackSerializer` (singleton `Instance`, binary only) uses the *contractless* standard resolver, so types need no `[MessagePackObject]` / `[Key]` attributes.
+- Very compact and fast binary encoding.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- Members are written by name (contractless resolver), which is larger than integer keyed contracts.
-- `SerializerOptions` are ignored.
-- Selection between serializers of the same extension is by priority; this is currently the only bundled `msgpack` implementation.
+- [`MessagePackSerializer`](MessagePackSerializer.cs) — the serializer type
 
 ## Using it
 
@@ -47,7 +45,14 @@ The service manager recognises serializer types and registers them instead of cr
 
 Or register it from code at startup: `SysWeaver.Serialization.MessagePackSerializer.Register();`
 
+## Limitations and considerations
+
+- Members are written by name (contractless resolver), which is larger than integer keyed contracts.
+- `SerializerOptions` are ignored.
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `msgpack` implementation.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.MessagePack.csproj`](SysWeaver.Serialization.MessagePack.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
+- **Third-party:** [MessagePack](https://www.nuget.org/packages/MessagePack) (MessagePack-CSharp)

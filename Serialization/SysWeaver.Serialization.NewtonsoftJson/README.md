@@ -7,8 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ITextSerializerType`) |
-| **Selection priority** | 1 (above System.Text.Json, below SysWeaver.Json and SafeJson) |
+| **Kind** | Plug-in (serializer, `ITextSerializerType`) |
 
 ## Purpose
 
@@ -27,20 +26,18 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
-- Tolerant, feature-rich JSON parsing.
+- Registered for `json` (`application/json`) with priority 1, above System.Text.Json and below SysWeaver.Json and SafeJson (SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 - `NewtonsoftJsonSerializer` (singleton `Instance`) writes `$type` information where needed for `Compact`, on every object (indented) for `Verbose` and never for `Typeless`; reading honours `$type` (`TypeNameHandling.Auto`) and resolves names through `TypeNameResolver`.
 - `MemberResolver` (public contract resolver, also used by Chart.js) serializes fields and skips read-only fields and get-only properties.
 - `NewtonsoftJsonSerializer.ToFormattedJson` pretty-prints objects with byte arrays as aligned rows of numbers instead of base64.
-- Deserializers are pooled, so concurrent use is cheap and safe.
-- A json `null` is read as NaN into a (not nullable) `float` / `double`, so data written by SysWeaver.Json (which writes NaN and infinities as `null`, like the compact output of SafeJson) can be read back; the `NaN` / `Infinity` tokens are still accepted.
+- Serializers and deserializers are pooled, so concurrent use is cheap and safe.
+- A json `null` is read as NaN into a (not nullable) `float` / `double`, so data written by SysWeaver.Json (which writes NaN and infinities as `null`) can be read back; the `NaN` / `Infinity` tokens are still accepted.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- Slower and more allocation-heavy than the span-based serializers.
-- **Security:** `$type` names in the input are resolved with `TypeFinder.GetForData`: only types in loaded assemblies (or assemblies in the executable folder) can be named, the `DataTypePolicy` deny list of known gadget types, delegates and reflection types are always rejected, and the type must be assignable to the declared type.
-- `FromString(string)` returns null for null, empty or white space text and `null`, but throws `NullReferenceException` when other text deserializes to null (e.g. `undefined` or only a comment), unlike the other overloads which return null.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
+- [`NewtonsoftJsonSerializer`](NewtonsoftJsonSerializer.cs) — the serializer type
+- [`MemberResolver`](MemberResolver.cs) — contract resolver (fields included, read-only members skipped, `$type` names resolved safely)
 
 ## Using it
 
@@ -52,8 +49,16 @@ The service manager recognises serializer types and registers them instead of cr
 
 Or register it from code at startup: `SysWeaver.Serialization.NewtonsoftJsonSerializer.Register();`
 
+## Limitations and considerations
+
+- Slower and more allocation-heavy than the span-based serializers.
+- **Security:** `$type` names in the input are resolved with `TypeFinder.GetForData`: only types in loaded assemblies (or assemblies in the executable folder) can be named, the `DataTypePolicy` deny list of known gadget types, delegates and reflection types are always rejected, and the type must be assignable to the declared type.
+- `FromString(string)` returns null for null, empty or white space text and `null`, but throws `NullReferenceException` when other text deserializes to null (e.g. `undefined` or only a comment), unlike the other overloads which return null.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.NewtonsoftJson.csproj`](SysWeaver.Serialization.NewtonsoftJson.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
-- **Used by:** [SysWeaver.MicroService.ChartJs](../../SysWeaver.MicroService.ChartJs/README.md), [SysWeaver.Serialization.SafeJson](../SysWeaver.Serialization.SafeJson/README.md)
+- **Used by:** [SysWeaver.MicroService.ChartJs](../../SysWeaver.MicroService.ChartJs/README.md), [SysWeaver.Serialization.SafeJson](../SysWeaver.Serialization.SafeJson/README.md); in SysWeaver.Services: [ExchangeRateService](https://github.com/dosh1974/SysWeaver.Services/blob/main/ExchangeRateService/README.md); in SysWeaver.Tools: [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md)
+- **Third-party:** [Newtonsoft.Json](https://www.nuget.org/packages/Newtonsoft.Json)

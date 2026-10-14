@@ -19,9 +19,9 @@
 ```
 
 > ⚠️ **DISCLAIMER**  
->         SysWeaver is used in my personal and proffesional work.  
+>         SysWeaver is used in my personal and professional work.  
 >         It's **not** intended for wide public consumption.  
->         I move fast, refactor and break things regulary.  
+>         I move fast, refactor and break things regularly.  
 >         Use at your own risk!  
 
 # OVERVIEW
@@ -43,7 +43,7 @@ Functionality of a specific service is configured in a single json file that dec
 
 > SysWeaver is a .NET framework for building server applications out of small, annotated micro services that are composed by configuration and exposed through a built-in web platform. This documentation describes the architecture and the role of each project; the source code remains the reference for member-level details.
 
-> **Note from the repository README (paraphrased):** SysWeaver is used in the author's personal and professional work, is not aimed at wide public consumption, is refactored frequently and may break. It is MIT licensed.
+SysWeaver targets .NET 10 and is MIT licensed. Two companion repositories build on it: [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) (ready-to-run service applications) and [SysWeaver.Tools](https://github.com/dosh1974/SysWeaver.Tools) (command line tools, some used by the SysWeaver build) — see [Companion repositories](#companion-repositories).
 
 ## Contents
 
@@ -57,6 +57,7 @@ Functionality of a specific service is configured in a single json file that dec
 - [Project map](#project-map)
 - [Platform and build notes](#platform-and-build-notes)
 - [Repository layout](#repository-layout)
+- [Companion repositories](#companion-repositories)
 
 ## What SysWeaver is
 
@@ -311,6 +312,7 @@ flowchart LR
   Auth --> Server
   Static["StaticDataHttpServerService"] --> Icons["IconHttpServerService"]
   Icons --> Explore["ExploreHttpServerService"]
+  Api["ApiHttpServerService"] --> Menu["WebMenuService"]
   Sources["data sources, e.g. IP location or rate sources"] --> Consumers["services that require them"]
 ```
 
@@ -319,6 +321,7 @@ flowchart LR
 | Log service first | Only messages after its registration reach the file. |
 | Auth manager, certificate providers (and firewall handler) before the HTTP server service | The server reads them once at construction. |
 | Static data → icons → explorer | Each resolves the previous module in its constructor. |
+| API service before the web menu | `WebMenuService` requires the API module and resolves it in its constructor. |
 | Sources before consumers (IP location, exchange rates, translators before the translation cache, a web thumbnail service before media thumbnails) | Declared as required dependencies. |
 | API service, HTTP server service, auth manager (for authorizers) | Order-insensitive for services registered later: they listen for new services. |
 
@@ -330,7 +333,7 @@ flowchart LR
 |---|---|
 | [SysWeaver.Common](SysWeaver.Common/README.md) | The foundation every other SysWeaver project stands on: environment and configuration, folders, messaging/logging, async and collection primitives, and — importantly — the shared *vocabulary* of contracts and attributes that the rest of the framework implements. |
 | [SysWeaver.Common.Windows](Platform/SysWeaver.Common.Windows/README.md) | Windows implementation of the platform abstraction (`IPlatformTools`): system metrics, reboot, disk flush and directory permissions. |
-| [SysWeaver.Common.Linux](Platform/SysWeaver.Common.Linux/README.md) | Linux implementation of the platform abstraction (`IPlatformTools`): system metrics, reboot, disk flush, directory permissions and OS identification. |
+| [SysWeaver.Common.Linux](Platform/SysWeaver.Common.Linux/README.md) | Linux implementation of the platform abstraction (`IPlatformTools`): CPU/memory metrics, reboot, directory permissions and OS identification. |
 | [SysWeaver.Docs](SysWeaver.Docs/README.md) | Reads the compiler-generated XML documentation of assemblies at runtime, so that `///` comments become user-facing text: help screens, config file comments, API documentation and table column descriptions. |
 | [SysWeaver.CommandLine](SysWeaver.CommandLine/README.md) | Command line parsing into typed option objects, auto-generated help from XML docs, a console log handler, and a ready-made shell for "files in → folder out" tools. |
 | [SysWeaver.ExpressionEvaluator](SysWeaver.ExpressionEvaluator/README.md) | A compiling expression engine: text expressions are parsed and turned into LINQ expression trees for fast repeated evaluation in several numeric types. Also exposes a small calculator web API. |
@@ -339,7 +342,7 @@ flowchart LR
 | [SysWeaver.Inspection](SysWeaver.Inspection/README.md) | A reflection-driven "inspection" engine that compiles, per type, the code needed to walk an object's data in a versioned way — the foundation of SysWeaver's own binary serialization. |
 | [SysWeaver.Inspection.Binary](SysWeaver.Inspection.Binary/README.md) | Binary reader and writer inspectors: the concrete wire format for SysWeaver's binary serializer. |
 | [SysWeaver.IsoData](SysWeaver.IsoData/README.md) | Built-in reference data for countries, currencies, languages and international phone prefixes, with currency-aware amount formatting. |
-| [SysWeaver.Knowledge](SysWeaver.Knowledge/README.md) | An offline knowledge base — people, places, cities, countries, artists, art styles, movies, series, cars, sports, historical events and more — shipped as embedded databases with a search facility. |
+| [SysWeaver.Knowledge](SysWeaver.Knowledge/README.md) | An offline keyword knowledge base — people, places, cities, countries, animals, artists, art styles, movies, series, car brands, sports, historical events and years — compiled into the assembly, with a searcher that finds the known entities mentioned in a text. |
 
 ### Runtime and hosting
 
@@ -356,8 +359,8 @@ flowchart LR
 
 | Project | Purpose |
 |---|---|
-| [SysWeaver.Serialization](SysWeaver.Serialization/README.md) | The serialization abstraction of SysWeaver and its registry: every component serializes through named, prioritised serializer types selected by file extension / MIME type. Includes System.Text.Json and XML implementations. |
-| [SysWeaver.Serialization.SafeJson](Serialization/SysWeaver.Serialization.SafeJson/README.md) | A composite JSON serializer that writes with SysWeaver's fast JSON writer and reads with the tolerant Newtonsoft parser — and takes precedence over all other JSON serializers when registered. |
+| [SysWeaver.Serialization](SysWeaver.Serialization/README.md) | The serialization abstraction of SysWeaver and its registry: every component serializes through named, prioritised serializer types selected by file extension. Includes System.Text.Json and XML implementations. |
+| [SysWeaver.Serialization.SafeJson](Serialization/SysWeaver.Serialization.SafeJson/README.md) | Serializer plug-in (obsolete): **json** (text) that writes with SysWeaver's fast JSON writer and reads with the tolerant Newtonsoft parser, taking precedence over all other JSON serializers when registered. |
 | [SysWeaver.Serialization.CompactJson](Serialization/SysWeaver.Serialization.CompactJson/README.md) | Serializer plug-in: **json** (text) backed by CompactJson. |
 | [SysWeaver.Serialization.MessagePack](Serialization/SysWeaver.Serialization.MessagePack/README.md) | Serializer plug-in: **msgpack** (binary) backed by MessagePack-CSharp. |
 | [SysWeaver.Serialization.NewtonsoftBson](Serialization/SysWeaver.Serialization.NewtonsoftBson/README.md) | Serializer plug-in: **bson** (binary) backed by Newtonsoft.Json.Bson. |
@@ -373,14 +376,14 @@ flowchart LR
 | Project | Purpose |
 |---|---|
 | [SysWeaver.Compression](SysWeaver.Compression/README.md) | The compression abstraction and registry: named, prioritised codecs (Brotli, Deflate, GZip built in; Zstandard and native Brotli as plug-ins) used for HTTP content encoding, pre-compressed web assets, storage and data transfer. |
-| [SysWeaver.Compression.BrotliNativeNET](Compression/SysWeaver.Compression.BrotliNativeNET/README.md) | Brotli codec plug-in based on the native Brotli library, preferred over the built-in .NET Brotli codec when registered. |
-| [SysWeaver.Compression.ZstdSharp](Compression/SysWeaver.Compression.ZstdSharp/README.md) | Zstandard (`zstd`) codec plug-in, fully managed. |
-| [SysWeaver.Storage](SysWeaver.Storage/README.md) | Local persistence primitives: a redundant file-based key/value store, cached compressed copies of files, file meta-data databases and machine-wide locks. |
+| [SysWeaver.Compression.BrotliNativeNET](Compression/SysWeaver.Compression.BrotliNativeNET/README.md) | Codec plug-in: **br** (Brotli) backed by the native Brotli library of Brotli.NET, preferred over the built-in .NET Brotli codec when registered. |
+| [SysWeaver.Compression.ZstdSharp](Compression/SysWeaver.Compression.ZstdSharp/README.md) | Codec plug-in: **zstd** (Zstandard) backed by the fully managed ZstdSharp.Port. |
+| [SysWeaver.Storage](SysWeaver.Storage/README.md) | Local persistence primitives: a redundant file-based key/value store, cached compressed copies of files, file meta-data databases, temporary cache folders and machine-wide locks. |
 | [SysWeaver.Storage.Cdc](SysWeaver.Storage.Cdc/README.md) | Content-defined chunking (CDC) storage: files are split at content-dependent boundaries into hashed, compressed, de-duplicated chunks, and whole files or folders are represented as compact chunk lists. |
 | [SysWeaver.TableData](SysWeaver.TableData/README.md) | The table engine behind every data grid in the SysWeaver web UI: turns any sequence of objects into paged, sorted, filtered, searchable, translatable and exportable table data, driven by attributes on the row type. |
 | [SysWeaver.DbSimpleStack](SysWeaver.DbSimpleStack/README.md) | The relational database layer: a thin framework over the vendored SimpleStack.Orm that adds SysWeaver-style parameters, connection retry, automatic schema handling, object blobs, column attributes and in-memory table caches. |
 | [SysWeaver.DbSimpleStack.MySql](SysWeaver.DbSimpleStack.MySql/README.md) | MySQL / MariaDB back-end for the SysWeaver database layer, including character set/collation control, table partition folders, and automatic creation and evolution of tables. |
-| [SysWeaver.FileDatabase](SysWeaver.FileDatabase/README.md) | Indexes files and their meta data into a database table and searches them with text, date and value filters. |
+| [SysWeaver.FileDatabase](SysWeaver.FileDatabase/README.md) | Indexes files and their meta data into a database table and keeps it in sync with the file system. |
 
 ### Web platform
 
@@ -395,8 +398,8 @@ flowchart LR
 | [SysWeaver.HttpServer.ExploreModule](SysWeaver.HttpServer.ExploreModule/README.md) | Developer-facing explorer pages for a running SysWeaver server: API browser, generic interactive table viewer, icon browser, serializer/compression inventories and data references. |
 | [SysWeaver.HttpServer.IconModule](SysWeaver.HttpServer.IconModule/README.md) | Serves SysWeaver's shared SVG icon library, plus icons for file extensions, MIME types and country flags. |
 | [SysWeaver.HttpServer.IsoDataModule](SysWeaver.HttpServer.IsoDataModule/README.md) | HTTP module that publishes the ISO reference data (countries, currencies, languages, phone prefixes) as web tables and serves the related SVG assets. |
-| [SysWeaver.HttpTransformer.Compress](SysWeaver.HttpTransformer.Compress/README.md) | File transformer for the SysWeaver web server that re-compresses served files losslessly (smaller files, identical content), caching the results on disc. |
-| [SysWeaver.HttpTransformer.Image](SysWeaver.HttpTransformer.Image/README.md) | File transformer for the SysWeaver web server that converts and processes served images with ImageMagick, caching the results on disc. |
+| [SysWeaver.HttpTransformer.Compress](SysWeaver.HttpTransformer.Compress/README.md) | File transformer for the SysWeaver web server that pre-compresses compressible served files at the highest compression level (Brotli, Zstandard and Deflate by default), caching the results on disc. |
+| [SysWeaver.HttpTransformer.Image](SysWeaver.HttpTransformer.Image/README.md) | File transformer for the SysWeaver web server that converts served images into smaller or browser-supported formats (AVIF, WebP, PNG, JPEG) with ImageMagick, caching the results on disc. |
 | [SysWeaver.HttpTransformer.Svg](SysWeaver.HttpTransformer.Svg/README.md) | File transformer for the SysWeaver web server that minifies served SVG files with SysWeaver.Minifier.Svg, caching the results on disc. |
 | [SysWeaver.HttpTransformer.Translate](SysWeaver.HttpTransformer.Translate/README.md) | File transformer for the SysWeaver web server that translates served text files (e.g. HTML, JavaScript) into the session language with SysWeaver.FileTranslation, caching the results on disc. |
 | [SysWeaver.ReverseProxy](SysWeaver.ReverseProxy/README.md) | Expose web services on machines that are not reachable from the internet: a client on the private machine keeps outbound connections to a public SysWeaver server, which forwards incoming requests through them. |
@@ -409,53 +412,59 @@ flowchart LR
 | [SysWeaver.Remote.Connection](SysWeaver.Remote.Connection/README.md) | Runtime engine for remote APIs: generates classes implementing `IRemoteApi` interfaces that perform HTTP calls with SysWeaver serialization, compression, caching, authentication and concurrency limits. Enables local and remote services to be interchangeable. |
 | [SysWeaver.Remote.Services](SysWeaver.Remote.Services/README.md) | Ready-made remote API definitions for third-party services — currently the ip-api.com geolocation API. |
 | [SysWeaver.Tor](SysWeaver.Tor/README.md) | An `HttpClient` that routes requests through the Tor network. |
-| [SysWeaver.Email.AmazonSes](Communication/SysWeaver.Email.AmazonSes/README.md) | Amazon SES e-mail sending service implementing the framework's e-mail contract. |
-| [SysWeaver.Email.Fake](Communication/SysWeaver.Email.Fake/README.md) | A fake email provider for development and testing: "sent" emails are kept in memory and shown in a web inbox, failures and incoming emails can be simulated. |
-| [SysWeaver.Email.MicrosoftAcs](Communication/SysWeaver.Email.MicrosoftAcs/README.md) | Azure Communication Services e-mail sending service implementing the framework's e-mail contract. |
-| [SysWeaver.Email.Smtp](Communication/SysWeaver.Email.Smtp/README.md) | SMTP e-mail sending service implementing the framework's e-mail contract. |
-| [SysWeaver.EmailReader.Imap](Communication/SysWeaver.EmailReader.Imap/README.md) | Receive emails from a mailbox using IMAP (with IDLE), implementing the framework's e-mail receiver contract. |
-| [SysWeaver.EmailReader.Pop3](Communication/SysWeaver.EmailReader.Pop3/README.md) | Receive emails from a mailbox using POP3, implementing the framework's e-mail receiver contract. |
 | [SysWeaver.IpLocation](SysWeaver.IpLocation/README.md) | IP geolocation as a service, with pluggable data sources (commercial web APIs or another SysWeaver server) and pluggable caches. |
 | [SysWeaver.IpLocation.MySqlCache](SysWeaver.IpLocation.MySqlCache/README.md) | Persistent MySQL cache for IP location lookups. |
-| [SysWeaver.ExchangeRate](SysWeaver.ExchangeRate/README.md) | Currency exchange rates as a service: aggregates rates from pluggable sources, caches them on disc and can serve other SysWeaver instances. |
+| [SysWeaver.ExchangeRate](SysWeaver.ExchangeRate/README.md) | Currency exchange rates as a service: fetches rates from pluggable sources with failover, caches them on disc and can serve other SysWeaver instances. |
 
-### Security and users
+### Communication
 
 | Project | Purpose |
 |---|---|
-| [SysWeaver.Auth.Core](SysWeaver.Auth.Core/README.md) | Authentication core: the `AuthManager` that validates users across any number of pluggable authorizers with caching, the authorizer contract, a configuration-based `SimpleAuthorizer` with API keys, password policies and localizable message templates. |
-| [SysWeaver.MicroService.Auth](SysWeaver.MicroService.Auth/README.md) | The login front-end of SysWeaver: creates and registers the `AuthManager`, serves the login pages, and provides login, one-time-token login and input validation APIs. |
-| [SysWeaver.MicroService.UserManager](SysWeaver.MicroService.UserManager/README.md) | Self-service user accounts on MySQL: sign-up and invitations, passwords, e-mail and phone verification, nick names and account deletion — all driven by action tokens or short codes sent through e-mail/SMS with localized templates. |
-| [SysWeaver.MicroService.PassKey](SysWeaver.MicroService.PassKey/README.md) | Passwordless login with passkeys (WebAuthn / FIDO2), including adding a passkey from another device via QR code. |
-| [SysWeaver.MicroService.Avatar](SysWeaver.MicroService.Avatar/README.md) | Generated default profile pictures, composed from a library of SVG avatar parts. |
-| [SysWeaver.MicroService.CustomUserImage](SysWeaver.MicroService.CustomUserImage/README.md) | User-uploaded profile pictures, processed into standard sizes and stored in an image repository. |
-| [SysWeaver.MicroService.UserStorage](SysWeaver.MicroService.UserStorage/README.md) | Per-user file and link storage with access scopes (private, protected, public), retention, multi-disc distribution and on-disc compression. |
-| [SysWeaver.MicroService.MySqlAudit](SysWeaver.MicroService.MySqlAudit/README.md) | Audit trail for web API calls: every method marked `[WebApiAudit]` is recorded with its caller in MySQL and browsable in the web UI. |
+| [SysWeaver.Email.AmazonSes](Communication/SysWeaver.Email.AmazonSes/README.md) | Sends email through Amazon SES (Simple Email Service), implementing the framework's `IEmailSender` contract. |
+| [SysWeaver.Email.Fake](Communication/SysWeaver.Email.Fake/README.md) | A fake email provider for development and testing: "sent" emails are kept in memory and shown in a web inbox, failures and incoming emails can be simulated. |
+| [SysWeaver.Email.MicrosoftAcs](Communication/SysWeaver.Email.MicrosoftAcs/README.md) | Sends email through Azure Communication Services (ACS), implementing the framework's `IEmailSender` contract. |
+| [SysWeaver.Email.Smtp](Communication/SysWeaver.Email.Smtp/README.md) | Sends email through any SMTP server, implementing the framework's `IEmailSender` contract. |
+| [SysWeaver.EmailReader.Imap](Communication/SysWeaver.EmailReader.Imap/README.md) | Receives email from a mailbox using IMAP (with IDLE for instant delivery), implementing the framework's `IEmailReceiverService` contract. |
+| [SysWeaver.EmailReader.Pop3](Communication/SysWeaver.EmailReader.Pop3/README.md) | Receives email from a mailbox using POP3, implementing the framework's `IEmailReceiverService` contract. |
 | [SysWeaver.TextMessage.AmazonEndUserMessaging](Communication/SysWeaver.TextMessage.AmazonEndUserMessaging/README.md) | Send and receive SMS using AWS End User Messaging SMS (formerly Pinpoint SMS), with delivery events and two-way SMS read from SQS. |
 | [SysWeaver.TextMessage.Fake](Communication/SysWeaver.TextMessage.Fake/README.md) | A fake text message provider for development and testing: "sent" messages are kept in memory, delivery, failures and incoming messages can be simulated. |
 | [SysWeaver.TextMessage.Router](Communication/SysWeaver.TextMessage.Router/README.md) | Combines text message providers (ex: WhatsApp and SMS): routing by channel, country and system, fallback when a provider can't deliver, and merged incoming messages and status updates. |
 | [SysWeaver.TextMessage.Twilio](Communication/SysWeaver.TextMessage.Twilio/README.md) | Send and receive text messages (SMS, MMS, WhatsApp, RCS) using Twilio Programmable Messaging on multiple senders. |
 | [SysWeaver.TextMessage.WhatsApp](Communication/SysWeaver.TextMessage.WhatsApp/README.md) | Send and receive text messages using the WhatsApp Cloud API on multiple business numbers (combine with SMS using the router). |
+
+### Security and users
+
+| Project | Purpose |
+|---|---|
+| [SysWeaver.Auth.Core](SysWeaver.Auth.Core/README.md) | Authentication core: the `AuthManager` that validates users across any number of pluggable authorizers and caches Authorization header results, the authorizer contract, a configuration-based `SimpleAuthorizer` with API keys, password policies and localizable message templates. |
+| [SysWeaver.MicroService.Auth](SysWeaver.MicroService.Auth/README.md) | The login front-end of SysWeaver: creates and registers the `AuthManager`, serves the login pages and user images, and provides login, one-time-token login and input validation APIs. |
+| [SysWeaver.MicroService.UserManager](SysWeaver.MicroService.UserManager/README.md) | Self-service user accounts on MySQL: sign-up and invitations, passwords, e-mail and phone verification, nick names, passkey storage and account deletion — all driven by action tokens or short codes sent through e-mail/SMS with localized templates. |
+| [SysWeaver.MicroService.PassKey](SysWeaver.MicroService.PassKey/README.md) | Passwordless login with passkeys (WebAuthn / FIDO2), including adding a passkey from another device via QR code. |
+| [SysWeaver.MicroService.Avatar](SysWeaver.MicroService.Avatar/README.md) | Generated default profile pictures, composed from a library of SVG avatar parts. |
+| [SysWeaver.MicroService.CustomUserImage](SysWeaver.MicroService.CustomUserImage/README.md) | User-uploaded profile pictures, processed into standard sizes and stored per user, plus a general image repository that stores uploads in several sizes. |
+| [SysWeaver.MicroService.UserStorage](SysWeaver.MicroService.UserStorage/README.md) | Per-user file and link storage with access scopes (private, protected, public), retention, quotas, spreading over several folders and on-disc compression. |
+| [SysWeaver.MicroService.MySqlAudit](SysWeaver.MicroService.MySqlAudit/README.md) | Audit trail for web API calls: every method marked `[WebApiAudit]` is recorded with its caller in MySQL and browsable in the web UI. |
 | [SysWeaver.Security](SysWeaver.Security/README.md) | Certificate providers for HTTPS: certificates from files, self-signed certificates, certificates signed by your own CA, and LAN certificates issued by a central SysWeaver certificate manager. |
 | [SysWeaver.Security.Acme](SysWeaver.Security.Acme/README.md) | Automatic public certificates via ACME (Let's Encrypt by default), validated through HTTP challenges served by SysWeaver itself. |
-| [SysWeaver.MicroService.LanCertificateManager](SysWeaver.MicroService.LanCertificateManager/README.md) | Central issuer of certificates for LAN domains: other SysWeaver machines request and renew their certificates from this service. |
+| [SysWeaver.MicroService.LanCertificateManager](SysWeaver.MicroService.LanCertificateManager/README.md) | Central issuer of certificates for LAN domains: obtains ACME certificates for a list of domains and hands them out to other SysWeaver machines, which request and renew their certificates from this service. |
 
 ### AI, chat and translation
 
 | Project | Purpose |
 |---|---|
-| [SysWeaver.AI](SysWeaver.AI/README.md) | API agnostic AI functionality: chat provider, tool calling, AI memory and the base classes / interfaces used by the AI provider projects. |
+| [SysWeaver.AI](SysWeaver.AI/README.md) | API agnostic AI (LLM) functionality for SysWeaver: the chat provider, tool calling of service methods, AI memory, default tools and the service/session base classes that the AI provider projects build on. |
 | [SysWeaver.AI.ComfyUi](SysWeaver.AI.ComfyUi/README.md) | Run ComfyUI workflows with typed inputs and outputs through the ComfyUI-Connect REST API, workflows loaded from disc with compiled and cached mappings. |
-| [SysWeaver.AI.Google](SysWeaver.AI.Google/README.md) | LLM integration for SysWeaver using the Google Gemini API: chat provider with tool calling, image generation and AI memory. |
+| [SysWeaver.AI.Google](SysWeaver.AI.Google/README.md) | LLM integration for SysWeaver using the Google Gemini API (or Vertex AI): an AI service and chat provider that can call methods of your services as tools, generate and edit images and keep an AI memory. |
 | [SysWeaver.AI.HostService](SysWeaver.AI.HostService/README.md) | OpenAI compatible (Chat Completions and Responses) and Google compatible (Gemini API and Vertex AI) APIs, with streaming and tool calls, in front of one or more SysWeaver AI services. |
-| [SysWeaver.AI.LlamaSharp](SysWeaver.AI.LlamaSharp/README.md) | Local LLM integration for SysWeaver using LLamaSharp (llama.cpp): chat provider running GGUF models in process, with tool calling and AI memory. |
-| [SysWeaver.AI.OpenAI](SysWeaver.AI.OpenAI/README.md) | LLM integration for SysWeaver: an OpenAI-API chat provider that can call methods of your services as tools, generate images, tokenize text and keep an AI memory — usable with OpenAI or any compatible endpoint. |
+| [SysWeaver.AI.McpService](SysWeaver.AI.McpService/README.md) | An MCP (Model Context Protocol) server for SysWeaver: exposes the AI tools of the registered services to MCP clients (agents, IDEs, desktop assistants) over the Streamable HTTP transport. |
+| [SysWeaver.AI.LlamaSharp](SysWeaver.AI.LlamaSharp/README.md) | Local LLM integration for SysWeaver using LLamaSharp (llama.cpp): an AI service and chat provider that runs GGUF models in process and can call methods of your services as tools. |
+| [SysWeaver.AI.OpenAI](SysWeaver.AI.OpenAI/README.md) | LLM integration for SysWeaver using the OpenAI API (or any compatible endpoint): an AI service and chat provider that can call methods of your services as tools, generate and edit images, tokenize text and keep an AI memory. |
 | [SysWeaver.AI.LlmTranslator](SysWeaver.AI.LlmTranslator/README.md) | A translation back-end that uses a large language model through the OpenAI service. |
 | [SysWeaver.Chat](SysWeaver.Chat/README.md) | A chat framework: rooms/sessions with pluggable providers (simple in-memory rooms, MySQL-persisted rooms, AI assistants), real-time delivery, translation, file and link sharing and a web chat UI. |
 | [SysWeaver.Chat.MySql](SysWeaver.Chat.MySql/README.md) | Chat provider whose rooms and messages are persisted in MySQL. |
 | [SysWeaver.Translation.Google](SysWeaver.Translation.Google/README.md) | A translation back-end that uses Google's public translation web page. |
 | [SysWeaver.MicroService.Translation](SysWeaver.MicroService.Translation/README.md) | Translation as a web API, and translation *from* another server: exposes the process's translator over HTTP and provides a remote translator client with memory caching. |
-| [SysWeaver.MicroService.TranslationDbCache](SysWeaver.MicroService.TranslationDbCache/README.md) | The caching front of the translation pipeline: an `ITranslator` that serves translations from memory and MySQL and asks internal translators only for new texts. Includes a translation editor. |
+| [SysWeaver.MicroService.TranslationDbCache](SysWeaver.MicroService.TranslationDbCache/README.md) | The caching front of the translation pipeline: an `ITranslator` that serves translations from memory and MySQL and asks an internal translator only for new texts. Includes a translation editor. |
 | [SysWeaver.FileTranslation](SysWeaver.FileTranslation/README.md) | Translation of web files: extracts translatable text from HTML and JavaScript, translates it and rebuilds the file. |
 | [SysWeaver.LanguageIdentifier.FastText](SysWeaver.LanguageIdentifier.FastText/README.md) | Language identification with Facebook's fastText model: very fast, local, no external calls. |
 | [SysWeaver.LanguageIdentifier.Llm](SysWeaver.LanguageIdentifier.Llm/README.md) | Language identification using a large language model through the OpenAI service. |
@@ -465,22 +474,22 @@ flowchart LR
 | Project | Purpose |
 |---|---|
 | [SysWeaver.Media](SysWeaver.Media/README.md) | Media fundamentals shared by the media-related services: media type classification, media information, image processing helpers built on ImageMagick, and the contracts for screenshot and web-thumbnail services. |
-| [SysWeaver.Media.Audio](SysWeaver.Media.Audio/README.md) | Audio file information (duration, format) using NAudio. |
-| [SysWeaver.Media.Png](SysWeaver.Media.Png/README.md) | A dependency-free PNG decoder and chunk inspector. |
-| [SysWeaver.Media.Psd](SysWeaver.Media.Psd/README.md) | Reader/writer for Adobe Photoshop (PSD) files: layers, masks, channels, groups and image resources. |
+| [SysWeaver.Media.Audio](SysWeaver.Media.Audio/README.md) | Audio file information (duration, format) and waveform icons using NAudio. |
+| [SysWeaver.Media.Png](SysWeaver.Media.Png/README.md) | A managed PNG decoder and chunk reader/writer with no native dependencies. |
+| [SysWeaver.Media.Psd](SysWeaver.Media.Psd/README.md) | Reader/writer for Adobe Photoshop (PSD / PSB) files: layers, masks, channels, groups and image resources, plus helpers to decode RGB images and extract text layers. |
 | [SysWeaver.Media.Svg](SysWeaver.Media.Svg/README.md) | Programmatic SVG creation and rendering: a canvas/scene API with paths, shapes, gradients, shadows, 3D-style extrusion, text with embedded fonts, barcodes, composition templates, and SVG-to-bitmap rendering. |
 | [SysWeaver.Media.Video](SysWeaver.Media.Video/README.md) | Video decoding and information through FFmpeg, with native FFmpeg libraries shipped per platform. |
-| [SysWeaver.Minifier.Svg](SysWeaver.Minifier.Svg/README.md) | SVG minifier/optimiser, used at build time for all framework icons and at runtime by the SVG transformer. |
-| [SysWeaver.Map](SysWeaver.Map/README.md) | Generates styled SVG maps — world, continents, individual countries and country regions — from embedded map data. |
-| [SysWeaver.MicroService.Map](SysWeaver.MicroService.Map/README.md) | Web API wrapper that generates maps with SysWeaver.Map for signed-in users. |
+| [SysWeaver.Minifier.Svg](SysWeaver.Minifier.Svg/README.md) | SVG minifier/optimiser, used at build time (through the SvgOpt tool) for the framework's icons and at runtime by the SVG transformer. |
+| [SysWeaver.Map](SysWeaver.Map/README.md) | Generates styled SVG maps — the world, Africa, Europe, North America, individual countries and their administrative regions — from embedded map data. |
+| [SysWeaver.MicroService.Map](SysWeaver.MicroService.Map/README.md) | Web API and AI tools that generate SVG maps with SysWeaver.Map. |
 | [SysWeaver.MicroService.Media](SysWeaver.MicroService.Media/README.md) | A browser-based media player and viewer: images, video, audio, text and YouTube with WebGL shader effects, collages, animated counters and map views. |
-| [SysWeaver.MicroService.MediaThumbnail](SysWeaver.MicroService.MediaThumbnail/README.md) | Thumbnails for media items rendered by a web client (headless browser), for media that cannot be thumbnailed server-side. |
-| [SysWeaver.MicroService.Thumbnail](SysWeaver.MicroService.Thumbnail/README.md) | Instant thumbnails for any file served from disc: append a size key such as `?Thumb64x64` to the file's URL. |
+| [SysWeaver.MicroService.MediaThumbnail](SysWeaver.MicroService.MediaThumbnail/README.md) | Thumbnails for SVG images and GLSL effect files rendered by a headless browser, for media that cannot be thumbnailed server-side. |
+| [SysWeaver.MicroService.Thumbnail](SysWeaver.MicroService.Thumbnail/README.md) | Instant thumbnails for any file served from disc: append a size key such as `?Thumb32x32` to the file's URL. |
 | [SysWeaver.MicroService.Thumbnail.Web](SysWeaver.MicroService.Thumbnail.Web/README.md) | Thumbnails and screenshots of *web* content — image and video URLs, YouTube videos, Google Maps positions, media effects and arbitrary web pages — rendered with a headless browser. |
-| [SysWeaver.MicroService.QR](SysWeaver.MicroService.QR/README.md) | QR code generation as SVG, provided as a service contract for other features. |
-| [SysWeaver.Excel](SysWeaver.Excel/README.md) | Excel export of table data, using GemBox.Spreadsheet. |
+| [SysWeaver.MicroService.QR](SysWeaver.MicroService.QR/README.md) | QR code generation as SVG or PNG, provided through the `IQrCodeService` contract and configurable HTTP end points. |
+| [SysWeaver.Excel](SysWeaver.Excel/README.md) | Excel and PDF export of table data, using GemBox.Spreadsheet. |
 | [SysWeaver.MicroService.ChartJs](SysWeaver.MicroService.ChartJs/README.md) | Charts for SysWeaver using Chart.js: a typed chart configuration model, automatic charts from table data, performance charts, chart export and AI tool integration. |
-| [SysWeaver.MicroService.ChartJs.Excel](SysWeaver.MicroService.ChartJs.Excel/README.md) | Chart exporters to Excel and PDF. |
+| [SysWeaver.MicroService.ChartJs.Excel](SysWeaver.MicroService.ChartJs.Excel/README.md) | Chart export to Excel workbooks, with native Excel charts. |
 | [SysWeaver.WebBrowser](SysWeaver.WebBrowser/README.md) | Contracts for headless browser services, so browser automation features do not depend on a particular engine. |
 | [SysWeaver.WebBrowser.Cef](Internet/SysWeaver.WebBrowser.Cef/README.md) | Headless Chromium (CEF, off-screen) implementation of the browser service. |
 | [SysWeaver.WebBrowser.WebView2](Internet/SysWeaver.WebBrowser.WebView2/README.md) | Headless Microsoft Edge WebView2 implementation of the browser service. |
@@ -491,18 +500,19 @@ flowchart LR
 |---|---|
 | [SysWeaver.FolderSync](SysWeaver.FolderSync/README.md) | Client side of SysWeaver folder synchronisation: push a local folder to a server, or pull a shared folder from it, transferring only changed content chunks. |
 | [SysWeaver.MicroService.FolderSync](SysWeaver.MicroService.FolderSync/README.md) | Server side of folder synchronisation: managed folders that can be updated remotely, shared folders that clients pull, and remote folders the server keeps in sync from elsewhere — all with chunk-level transfer and change notification. |
-| [SysWeaver.MicroService.FileUploader](SysWeaver.MicroService.FileUploader/README.md) | Browser file uploads into named repositories, with status tracking and chunk-based storage. |
-| [SysWeaver.MicroService.Edit](SysWeaver.MicroService.Edit/README.md) | The generic object editor: type metadata and default instances for a browser-based editor that can edit any serializable object — used, for example, to edit the server's own service manifest. |
-| [SysWeaver.MicroService.ServerManager](SysWeaver.MicroService.ServerManager/README.md) | Remote server administration for SysWeaver hosts: manage deployed SysWeaver services and folders (versions, backups), watch processes, CPU, memory and drives, view text files and hosts, and reboot. |
+| [SysWeaver.MicroService.FileUploader](SysWeaver.MicroService.FileUploader/README.md) | Browser file uploads into named repositories, with pre-upload status checks, optional chunk-level deduplication and automatic pruning. |
+| [SysWeaver.MicroService.Edit](SysWeaver.MicroService.Edit/README.md) | The generic object editor: type metadata and default instances for a browser-based editor that can edit any serializable object, plus a text/code editor and ISO reference data for the web UI. |
+| [SysWeaver.MicroService.ServerManager](SysWeaver.MicroService.ServerManager/README.md) | Remote server administration for SysWeaver hosts: manage deployed SysWeaver services and folders (versions, backups, configs), watch processes, CPU, memory and drives, view and edit text files and the hosts file, manage key files, and reboot. |
 
 
 ## Platform and build notes
 
+- **Target framework:** all projects target .NET 10 (`net10.0`, `net10.0-windows` for the Windows-only browser hosts); the vendored libraries in `_external` keep their own targets.
 - **Runtime:** applications run on Windows and Linux. OS-specific behaviour (platform tools, service hosting, native media libraries) lives in separate assemblies resolved at runtime; deploy the ones for your target.
 - **Build:** many projects pre-compress or optimise their embedded web assets with pre-built Windows tools from `_tools` and use Windows shell commands in their build steps, so the repository builds as-is on Windows.
 - **Windows-only components:** the WebView2 browser, the CEF runtime packages as configured, certificate binding for the HttpListener server, and the Windows service host.
-- **Commercial or third-party terms:** Excel export uses a commercial spreadsheet library (free limited mode without a key); the Google translator uses a public web page rather than an official API; LLM features require an API account.
-- **Not in the solution:** a number of projects (mostly experimental or specialised) exist on disk but are not part of `SysWeaver.slnx`; they are marked in their own documents.
+- **Commercial or third-party terms:** Excel export uses a commercial spreadsheet library (GemBox) and needs a key — a licence key or the explicit free limited key; the Google translator uses a public web page rather than an official API; hosted LLM features (OpenAI, Google) require an API account, LlamaSharp runs models locally.
+- **Solution:** every framework project is part of `SysWeaver.slnx` (of the vendored libraries only the used parts are included).
 
 ## Repository layout
 
@@ -510,7 +520,21 @@ flowchart LR
 |---|---|
 | `SysWeaver.*` | Framework projects (one folder per project, each with its own README) |
 | `Serialization/` | Serializer plug-in projects |
+| `Compression/` | Compression codec plug-in projects |
+| `Communication/` | E-mail sender, e-mail reader and text message provider projects |
+| `Platform/` | OS-specific platform tools and service host factories (Windows, Linux) |
+| `Internet/` | Headless browser implementations (CEF, WebView2) |
 | `_external/` | Vendored third-party libraries — see [_external](_external/README.md) |
-| `_tools/` | Pre-built build tools — see [_tools](_tools/README.md) |
+| `_tools/` | Pre-built tools used by the build, published from SysWeaver.Tools — see [_tools](_tools/README.md) |
 | `_docs/` | Additional documents |
 | `SysWeaver.slnx` | Solution file |
+| `Clean_All.bat` | Deletes build output (`bin`, `obj`, generated web/data folders) using `_tools/VsClean` |
+
+## Companion repositories
+
+Both are cloned next to this repository (for example `C:\Dev\SysWeaver`, `C:\Dev\SysWeaver.Services`, `C:\Dev\SysWeaver.Tools`) and reference its projects with relative paths.
+
+| Repository | Content |
+|---|---|
+| [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services) | Ready-to-run service applications built from manifests: exchange rates, IP location, translation, fake e-mail / text message servers, reverse proxy client and server, LAN certificate manager, server manager and a minimal web server. |
+| [SysWeaver.Tools](https://github.com/dosh1974/SysWeaver.Tools) | Command line tools: asset compression and SVG optimisation (used by the build), folder sync clients, an HTTP client for SysWeaver APIs, ACME certificates and file utilities. |

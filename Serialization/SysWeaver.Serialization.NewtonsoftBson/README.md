@@ -7,8 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | 1 (the only bundled serializer for `bson`) |
+| **Kind** | Plug-in (serializer, `ISerializerType`) |
 
 ## Purpose
 
@@ -27,16 +26,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
-- Binary JSON for clients that prefer it.
-- `NewtonsoftBsonSerializer` (singleton `Instance`, binary only) writes with an internal `MemberResolver` that skips read-only fields and get-only properties, and adds `$type` information (where needed for `Compact`, everywhere for `Verbose`, never for `Typeless`).
+- Registered for `bson` (`application/bson`) with priority 1, the only bundled `bson` serializer.
+- `NewtonsoftBsonSerializer` (singleton `Instance`, binary only) writes with an internal member resolver that skips read-only fields and get-only properties, and adds `$type` information (where needed for `Compact`, everywhere for `Verbose`, never for `Typeless`).
+- Root values that BSON can't hold (`null`, numbers, strings, enums, dates, `Guid`, `byte[]` etc) are written wrapped as `{"$swRootValue": value}` and unwrapped when read; root arrays/collections are read back.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- BSON is rarely needed outside MongoDB-style ecosystems.
-- Reading honours `$type` (`TypeNameHandling.Auto`), resolving type names with `TypeNameResolver.GetForData`, so only types allowed by the `DataTypePolicy` (and assignable to the declared type) can be instantiated. Global `JsonConvert.DefaultSettings` are not applied.
-- BSON needs an object or array at the root: root values that aren't (`null`, numbers, `bool`, strings, enums, dates, `Guid`, `byte[]` etc) are written wrapped as `{"$swRootValue": value}` and unwrapped when read (other BSON readers see the wrapper document). Objects and collections are written exactly as before. Root arrays/collections are read back (`ReadRootValueAsArray` is enabled for collection types unless the data starts with `$type`).
-- Selection between serializers of the same extension is by priority; this is currently the only bundled `bson` implementation.
+- [`NewtonsoftBsonSerializer`](NewtonsoftBsonSerializer.cs) — the serializer type
 
 ## Using it
 
@@ -48,7 +45,15 @@ The service manager recognises serializer types and registers them instead of cr
 
 Or register it from code at startup: `SysWeaver.Serialization.NewtonsoftBsonSerializer.Register();`
 
+## Limitations and considerations
+
+- BSON is rarely needed outside MongoDB-style ecosystems.
+- Other BSON readers see the `$swRootValue` wrapper document for wrapped root values.
+- **Security:** reading honours `$type` (`TypeNameHandling.Auto`), resolving type names with `TypeNameResolver.GetForData`, so only types allowed by the `DataTypePolicy` (and assignable to the declared type) can be instantiated. Global `JsonConvert.DefaultSettings` are not applied.
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `bson` implementation.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.NewtonsoftBson.csproj`](SysWeaver.Serialization.NewtonsoftBson.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
+- **Third-party:** [Newtonsoft.Json](https://www.nuget.org/packages/Newtonsoft.Json), [Newtonsoft.Json.Bson](https://www.nuget.org/packages/Newtonsoft.Json.Bson)

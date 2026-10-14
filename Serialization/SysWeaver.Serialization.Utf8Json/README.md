@@ -7,12 +7,11 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ITextSerializerType`) |
-| **Selection priority** | -5 (lowest among the bundled serializers for `json`) |
+| **Kind** | Plug-in (serializer, `ITextSerializerType`) |
 
 ## Purpose
 
-An alternative UTF-8 based JSON implementation registered with a low priority, mainly useful for comparison and compatibility scenarios.
+An alternative UTF-8 based JSON implementation registered with a low priority: it never displaces the other JSON serializers when they are present, which makes it useful mainly for comparison and compatibility scenarios.
 
 ## How it fits into SysWeaver
 
@@ -27,13 +26,13 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
+- Registered for `json` (`application/json`) with priority -5, the lowest of the bundled JSON serializers (SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 - `Utf8JsonSerializer` (singleton `Instance`) implements both the binary (UTF-8) and the string APIs using Utf8Json's default resolver.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
-- `SerializerOptions` are ignored; output is always compact.
+- [`Utf8JsonSerializer`](Utf8JsonSerializer.cs) — the serializer type
 
 ## Using it
 
@@ -45,7 +44,13 @@ The service manager recognises serializer types and registers them instead of cr
 
 Or register it from code at startup: `SysWeaver.Serialization.Utf8JsonSerializer.Register();`
 
+## Limitations and considerations
+
+- `SerializerOptions` are ignored; output is always compact.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.Utf8Json.csproj`](SysWeaver.Serialization.Utf8Json.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
+- **Third-party:** [Utf8Json](https://www.nuget.org/packages/Utf8Json)

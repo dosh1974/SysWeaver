@@ -7,8 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | 0 (the only serializer for `swbin`) |
+| **Kind** | Plug-in (serializer, `ISerializerType`) |
 
 ## Purpose
 
@@ -27,17 +26,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
-- `SysWeaverBinarySerializer` (singleton `Instance`, binary only) writes with `BinaryWriterInspector` and reads with `BinaryReaderInspector`.
-- No external dependency.
-- Versioned, inspection-based encoding.
+- Registered for `swbin` (`application/x-swbin`) with priority 0, the only bundled `swbin` serializer.
+- `SysWeaverBinarySerializer` (singleton `Instance`, binary only) writes with `BinaryWriterInspector` (into pooled buffers) and reads with `BinaryReaderInspector`.
+- Versioned, inspection-based encoding with no external dependency.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- Only SysWeaver can read the format.
-- The root value is written as its static type (no root type information), so it must be read back as the same type.
-- `SerializerOptions` are ignored.
-- Selection between serializers of the same extension is by priority; this is currently the only bundled `swbin` implementation.
+- [`SysWeaverBinarySerializer`](SysWeaverBinarySerializer.cs) — the serializer type
 
 ## Using it
 
@@ -48,6 +44,13 @@ The service manager recognises serializer types and registers them instead of cr
 ```
 
 Or register it from code at startup: `SysWeaver.Serialization.SysWeaverBinarySerializer.Register();`
+
+## Limitations and considerations
+
+- Only SysWeaver can read the format.
+- The root value is written as its static type (no root type information), so it must be read back as the same type.
+- `SerializerOptions` are ignored.
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `swbin` implementation.
 
 ## Relationships
 

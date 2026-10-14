@@ -2,42 +2,37 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> Run ComfyUI workflows with typed inputs and outputs through the [ComfyUI-Connect](https://github.com/Good-Dream-Studio/ComfyUI-Connect) REST API.
+> Run ComfyUI workflows with typed inputs and outputs through the ComfyUI-Connect REST API, workflows loaded from disc with compiled and cached mappings.
 
 | | |
 |---|---|
 | **Layer** | AI |
-| **Kind** | Service (image / media generation client) |
+| **Kind** | Micro service (ComfyUI client) |
 
 ## Purpose
 
-Call ComfyUI workflows as if they were typed methods: a class (or struct) describes the inputs, another class describes the outputs, and the mapping to the workflow is generated (using Linq expressions) and cached the first time a workflow is used with those types.
+Call [ComfyUI](https://github.com/comfyanonymous/ComfyUI) workflows (image, video and audio generation) as if they were typed methods, using the [ComfyUI-Connect](https://github.com/Good-Dream-Studio/ComfyUI-Connect) REST API: one class describes the inputs, another the outputs, and the mapping to the workflow is generated (as compiled LINQ expressions) and cached the first time a workflow is used with those types.
+
+## How it fits into SysWeaver
+
+`ComfyUiService` is a plain service registered in the manifest; application code gets it from the service manager and calls `RunWorkflow`. It has no dependency on the LLM projects (it only shares the `SysWeaver.AI` namespace).
 
 ## Key features
 
-- Workflows are loaded from a local folder (API format json, as saved by `Workflow > Save API Endpoint` or `Export (API)`) and uploaded to the server on first use (optional).
-- `RunWorkflow<T, R>(T p, String workflowName)`, where the public properties / fields of `T` are mapped to the inputs of nodes annotated with `$tag` and the ones of `R` to the outputs of nodes annotated with `#tag`.
-- Automatic annotation of subgraph inputs: the API format flattens subgraphs, so the UI format workflow with the same name (from `UiWorkflowFolder`, or fetched from the ComfyUI server's saved workflows) is used to follow each subgraph input to the inner node input(s). Each subgraph input becomes a tag named from its label, ex: a subgraph input labeled `seed` adds `$seed(seed)` to the title of the inner `KSampler` node (in the uploaded copy, the file isn't changed). The subgraph node itself behaves like an annotated node with the subgraph inputs as its inputs: for a subgraph node titled `$Prompt`, `PromptSeed` or `[ComfyUiName("Prompt.sampler")]` work (without a `$tag` the sanitized title is used).
-- Case insensitive matching that also ignores non letters / digits (`SamplerSeed`, `Sampler_Seed` and `sampler-seed` are all equal):
-  - `TagInput` maps to the input `input` of the `$tag` node(s).
-  - `Tag` maps to the input of the `$tag` node(s) if the tag has a single input (this is how subgraph inputs are matched by their label).
-  - A `bool` named `Tag` controls node bypassing (false bypasses the `$tag` / `#tag` node(s)).
-  - `Input` maps to the input `input` if it's unique among all tags (tags exposing the same node input are not considered ambiguous).
-  - `[ComfyUiName("tag.input")]`, `[ComfyUiName("tag")]` maps explicitly, `[ComfyUiIgnore]` skips a member.
-- Warnings (once per workflow and type pair) for members that can't be mapped, ambiguous matches and type mismatches.
-- `null` inputs are not sent (the workflow default is used), enums are sent as their name.
-- `byte[]`, `ComfyUiFile` and `Uri` inputs are sent as files (ex: for a `Load Image` node), data is named by a hash of the content.
-- Outputs can be `byte[]` (first result), `byte[][]` / `List<byte[]>` (all results) or `String` / `String[]` / `List<String>` (base64).
-- `ComfyUiTypeGenerator.GetInputOutputTypes` generates the C# source of the input and output types for a workflow (from a file, a stream or a loaded `ComfyUiWorkflow`). Member names are validated against the matching rules above (`[ComfyUiName]` is added when a name can't map unambiguously), and `ComfyUiTypeOptions` controls the namespace, type / member name casing, fields vs properties, default initialization, bypass members and the UI workflow used for subgraph inputs.
+- Workflows are API format JSON files loaded from `WorkflowFolder` (name = file name) and uploaded to the ComfyUI-Connect server on first use (optional); `ReloadWorkflows()` picks up changed files
+- `RunWorkflow<T, R>(input, workflowName)`: public fields / properties of `T` map to the inputs of nodes tagged `$tag` in their title, those of `R` to the outputs of nodes tagged `#tag`
+- Forgiving name matching (`TagInput`, `Tag` or `Input`; case insensitive, ignoring non letters/digits), explicit mapping with `[ComfyUiName]`, `[ComfyUiIgnore]` to skip a member, and a `bool` named after a tag bypasses that node; unmappable or ambiguous members are reported as warnings
+- Automatic annotation of subgraph inputs, using the matching UI format workflow (from `UiWorkflowFolder` or fetched from the ComfyUI server)
+- File inputs (`byte[]`, `ComfyUiFile`, `Uri`), enum and nullable inputs (null keeps the workflow default); outputs as bytes or base64 strings, first or all results
+- `ComfyUiTypeGenerator` generates the C# source of the input and output types for a workflow
+- Optional API key (`Authorization` header, e.g. for an authenticating proxy) and ComfyUI token
 
-## Limitations and considerations
+## Key components
 
-- Only the API workflow format is supported (the UI format with `nodes` and `links` is rejected).
-- ComfyUI-Connect returns the files a node lists under `"images"` (base64 encoded). Images and videos (ex: `SaveVideo`) work as is, but audio (ex: `SaveAudio`) is listed under `"audio"` and is returned empty unless ComfyUI-Connect is patched: in `services/comfyui_service.py` `run_workflow`, collect the files of the keys `"images"`, `"audio"`, `"videos"` and `"gifs"` instead of only `"images"` (restart ComfyUI after the change).
-- ComfyUI caches node results, so running a workflow with the same inputs completes instantly and returns the cached result. Expose and randomize a seed (ex: annotate the sampler `$Sampler(seed)`) to get a new result for each run.
-- ComfyUI-Connect caches input files by name, so a supplied `ComfyUiFile.Name` must be unique for its content.
-- Call `ReloadWorkflows()` if workflow files are changed while running.
-- Subgraph annotation requires the UI and API workflows to be in sync (node ids must match), only top level subgraph instances are annotated (nested subgraphs are followed), and inputs connected outside the subgraph are skipped.
+- [`ComfyUiService`](ComfyUiService.cs) — the service: workflow loading, upload and `RunWorkflow`
+- [`ComfyUiWorkflow`](ComfyUiWorkflow.cs) — a loaded API format workflow with its tagged nodes
+- [`ComfyUiSubgraphs`](ComfyUiSubgraphs.cs) — annotation of subgraph inputs from the UI format workflow
+- [`ComfyUiTypeGenerator`](ComfyUiTypeGenerator.cs) — C# source generation of input and output types
 
 ## Using it
 
@@ -47,7 +42,7 @@ Call ComfyUI workflows as if they were typed methods: a class (or struct) descri
 ```csharp
 public sealed class Txt2ImgIn
 {
-    public long? Seed;                              // "$sampler" node, input "seed"
+    public long? Seed;                              // the input "seed", if unique among all tags
     public int? SamplerSteps;                       // "$sampler" node, input "steps"
     [ComfyUiName("positive.text")]
     public String Prompt;
@@ -63,17 +58,15 @@ var comfy = manager.Get<ComfyUiService>();
 var r = await comfy.RunWorkflow<Txt2ImgIn, Txt2ImgOut>(new Txt2ImgIn { Seed = 42, Prompt = "A cat" }, "txt2img");
 ```
 
-Generate the input and output types of a workflow (the UI workflow folder is used to annotate subgraph inputs):
+The `ComfyUiExample` program in the SysWeaver.Tests repository has complete examples (image, image edit, image to video, text to video and music).
 
-```csharp
-var (input, output) = await ComfyUiTypeGenerator.GetInputOutputTypes("ComfyUi/txt2img.json", new ComfyUiTypeOptions
-{
-    Namespace = "MyApp",
-    UiWorkflowFolder = @"C:\ComfyUI\user\default\workflows",
-});
-```
+## Limitations and considerations
 
-See the `ComfyUiExample` program in SysWeaver.Tests for complete examples (image, image edit, image to video, text to video and music).
+- Only the API workflow format can be run (the UI format is only used for subgraph annotation); subgraph annotation requires the UI and API workflows to be in sync
+- ComfyUI-Connect only returns the files listed under `"images"`: images and videos work, audio is returned empty unless ComfyUI-Connect is patched to also collect `"audio"` (and `"videos"`, `"gifs"`)
+- ComfyUI caches node results, so identical inputs return the cached result — expose and randomize a seed to get new results
+- ComfyUI-Connect caches input files by name, so a supplied `ComfyUiFile.Name` must be unique for its content
+- A request doesn't return until the workflow has completed (`NetworkTimeoutSeconds`, default 10 minutes)
 
 ## Relationships
 

@@ -6,40 +6,51 @@
 
 | | |
 |---|---|
-| **Layer** | HTTP (transformer plug-in) |
-| **Kind** | Cached file transformer (manifest-creatable) |
+| **Layer** | Translation |
+| **Kind** | Plug-in (cached file transformer) |
 
 ## Purpose
 
-Transformers let the web server deliver a *processed* version of a file without anyone preparing it in advance. This transformer translates served text files (e.g. HTML, JavaScript) into the session language with SysWeaver.FileTranslation. Results are cached on disc and rebuilt only when the source changes, so the cost is paid once per file version.
+Localise web files that are not templates without maintaining translated copies. [SysWeaver.FileTranslation](../SysWeaver.FileTranslation/README.md) extracts the translatable texts of a served file, the server's translator translates them from English into the request language, and the rebuilt file is cached on disc per language.
 
 ## How it fits into SysWeaver
 
 ```mermaid
 flowchart LR
-  Req["request for a file"] --> Srv["HTTP server"]
-  Srv --> Chain{"transformer registered<br/>for this extension?"}
-  Chain -->|yes| Cache{"cached result current?"}
-  Cache -->|yes| Out["serve cached result"]
+  Req["request for a file<br/>(session language)"] --> Srv["HTTP server"]
+  Srv --> Cache{"cached translation<br/>for this language?"}
+  Cache -->|yes| Out["serve translated file"]
   Cache -->|no| T["TranslationTransformer"]
-  T --> Store["disc cache"]
+  T --> FT["FileTranslation<br/>extract texts"]
+  FT --> Tr["server translator"]
+  Tr --> Store["disc cache<br/>name[lang].ext"]
   Store --> Out
-  Chain -->|no| Plain["serve original"]
 ```
 
-The transformer is a `CachedTransformer`, which implements the server's transformer-service interface; the HTTP server service attaches it automatically when it is registered. Folders marked as dynamic in the file module bypass transformer chains.
+The transformer derives from `CachedTransformer` in [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), which implements the server's transformer-service interface; the HTTP server service attaches it automatically when it is registered. Transformers only apply to non-dynamic responses with an ETag, and a query string starting with `raw` bypasses them.
 
-## Limitations and considerations
+## Key features
 
-- Requires a translator service; translation quality and cost depend on that translator.
-- The disc cache grows with the number of distinct files and versions; entries unused for a while are removed.
-- This project is not included in the main solution file and must be added to your build explicitly.
+- Registered for `.html`, `.htm` and `.js` files (the handlers of SysWeaver.FileTranslation, which it registers globally; this also enables the server's own in-memory language templates for these extensions).
+- Builds on the first request per file version and language (the request waits for the translation).
+- Only the generated text variables and `${Session.Lang}` are replaced; other `${...}` tokens such as JavaScript template literals are kept.
+
+## Key components
+
+- [`TranslationTransformer`](TranslationTransformer.cs) — the transformer and its per-extension handlers
 
 ## Using it
 
 ```json
 { "Type": "SysWeaver.HttpTransformer.TranslationTransformer, SysWeaver.HttpTransformer.Translate" }
 ```
+
+## Limitations and considerations
+
+- Source texts are assumed to be English.
+- Uses the translator of the HTTP server (see the server's translator parameters); without one the texts are kept as is. Translation quality and cost depend on that translator.
+- Requests without a language are served untranslated.
+- The disc cache grows with the number of distinct files, versions and languages; files not accessed for `RemoveAfterDays` (default 30) are removed.
 
 ## Relationships
 

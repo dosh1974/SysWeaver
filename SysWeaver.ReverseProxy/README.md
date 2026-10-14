@@ -1,62 +1,82 @@
-# OVERVIEW
+# SysWeaver.ReverseProxy
 
-The reverse proxy is a http proxy so that you can access services on machines that isn't visible to the internet (i.e no IP, routing etc).
+[⬆ SysWeaver overview](../README.md)
+
+> Expose web services on machines that are not reachable from the internet: a client on the private machine keeps outbound connections to a public SysWeaver server, which forwards incoming requests through them.
+
+| | |
+|---|---|
+| **Layer** | Networking |
+| **Kind** | Library with micro services |
+
+## Purpose
+
+Reach services on machines without a public IP address, port forwarding or inbound firewall rules. The private machine runs a `ReverseProxyClient` that long-polls a public SysWeaver server running `ReverseProxyServer`; requests arriving at the server for that client are queued, picked up by the client, executed locally and the responses sent back with the next poll.
 
 ![Simple schematic image](ReverseProxy.svg "Simple schematic image")
 
-## SERVER
+## How it fits into SysWeaver
 
-Server can either route to clients using a sub path (in the url) or using the domain name.
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant S as ReverseProxyServer (public)
+  participant C as ReverseProxyClient (private)
+  participant E as End point (local service or URL)
+  C->>S: GetReverseProxyRequest (long poll, previous response)
+  B->>S: GET /ReverseProxyFiles/ComputerA-Service1/index.html
+  S-->>C: queued request
+  C->>E: forward (in process or HTTP)
+  E-->>C: response
+  C->>S: GetReverseProxyRequest (with response)
+  S-->>B: response
+```
 
-### SUB PATH ROUTING (default)
-The syntax is: https://*domain*/*base path*/*client id*-*end point*/*remote path*  
-- *domain* is the ip or domain name to the proxy service, ex: *proxy.example.com*.
-- *base path* is defined in the server params and defaults to: *ReverseProxyFiles*.   
-- *client id* is the id that a client connection is using, only a-z, A-Z and 0-9 are valid chars.   
-- *end point* is the name of the end point that the client connection accepts, only a-z, A-Z and 0-9 are valid chars.   
-- *remote path* is the local name on the local end point.
-If the client only have a single end point it can be configured to ignore an end-point name, the syntax is then *base path*/*client id*/*remote path*
+## Key features
 
-An example: two clients named ComputerA and ComputerB that have two end points each named Service1 and Service2:
-- *https://proxy.example.com/ReverseProxyFiles/ComputerA-Service1/index.html* to access *index.html* on service 1 on computer A
-- *https://proxy.example.com/ReverseProxyFiles/ComputerA-Service2/index.html* to access *index.html* on service 2 on computer A
-- *https://proxy.example.com/ReverseProxyFiles/ComputerB-Service2/index.html* to access *index.html* on service 2 on computer B
+- **Sub path routing** (default): `https://<server>/<BaseUrl>/<ClientId>[-<EndPoint>]/<path>`, `BaseUrl` defaults to `ReverseProxyFiles`.
+- **Domain routing**: with `AllButDomains` set, requests to any other host name are routed by the first host label, `https://<ClientId>[-<EndPoint>].<domain>/<path>`; this keeps root-relative URLs (`/logo.png`) of proxied sites working, but needs DNS records, listeners and certificates for every name (or wildcards).
+- Client ids and end point names use only `a-z`, `A-Z` and `0-9`; the client id defaults to the machine name. Without an end point name the client's first end point is used.
+- Client end points (`"name:destination"`) can be the hosting SysWeaver server itself (handled in process, no HTTP call), or any URL the client can reach (localhost, LAN or internet).
+- Several parallel connections per client (`MaxConcurrentRequests`, default 8); server-side response caching per client using the HTTP cache headers.
+- Debug tables of connected clients (server) and end points (client).
 
-#### CAVETS
-Many web sites access resouces using rooted path ex: */logo.png*.
-If such a resource is accessed using the proxy *https://proxy.example.com/ReverseProxyFiles/ComputerA-Service1/index.html*,  
-the resolved url would be *https://proxy.example.com/logo.png*
-Domain routing "solves" this, but requires much more configuration (if you have many clients).
+## Key components
 
-### DOMAIN ROUTING
-The syntax is https://*client id*-*end point*.*base-domain*/*remote path*  
-- *client id* is the id that a client connection is using, only a-z, A-Z and 0-9 are valid chars.   
-- *end point* is the name of the end point that the client connection accepts, only a-z, A-Z and 0-9 are valid chars.   
-- *base-domain* is the base domain name to the proxy service, ex: *exmplae.com*.
-- *remote path* is the local name on the local end point.
+- [`ReverseProxyServer`](ReverseProxyServer.cs) — raw HTTP module on the public server, queues requests per client
+- [`ReverseProxyClient`](ReverseProxyClient.cs) — service on the private machine, polls the server and executes requests
+- [`IReverseProxyServer`](IReverseProxyServer.cs) — the remote API contract between them
+- [`ReverseProxyClientParams`](ReverseProxyClientParams.cs) / [`ReverseProxyServerParams`](ReverseProxyServerParams.cs) — configuration
 
-An example: two clients named ComputerA and ComputerB that have two end points each named Service1 and Service2:
-- *https://ComputerA-Service1.example.com/index.html* to access *index.html* on service 1 on computer A
-- *https://ComputerA-Service2.example.com/index.html* to access *index.html* on service 2 on computer A
-- *https://ComputerB-Service2.example.com/index.html* to access *index.html* on service 2 on computer B
- 
-#### CAVETS
-You need to define A records for all Computer/Service pairs (or use a wildcard dns, but that will limit the whole domain to a single computer).
-You need to listen to all prefixes (or use a wildcard listeners, blocking that port for any other services on that machine).
-You need a certificate for all prefixes if https is required (or use a wild card certificate).
+## Using it
 
----
+Public server manifest (with an auth manager and an authorizer that knows the client's service user):
 
-## CLIENT
+```json
+{ "Type": "SysWeaver.ReverseProxy.ReverseProxyServer, SysWeaver.ReverseProxy",
+  "Params": { "BaseUrl": "ReverseProxyFiles" } }
+```
 
-Clients must configure:
-- A remote proxy server address, ex: *https://proxy.example.com*.
-- Service credentials for that server (typically a key file).
-- One or more end points (the service defaults to have a single end point to it self).
+Private client manifest (`BaseUrl` and `CredFile` are the remote connection parameters of the server):
 
-#### END POINTS
-- Can be local (the same SysWeaver service that have the reverse proxy client), then all handling is internal (no web client calls).
-- Can be local host: *http://localhost:1212/ProxyRoot/*.
-- Can be on the LAN: *http://192.168.1.200:999* or *http://internal-services/*.
-- Can be anything a http client request can reach: *https://www.aljazeera.com/*.
+```json
+{ "Type": "SysWeaver.ReverseProxy.ReverseProxyClient, SysWeaver.ReverseProxy",
+  "Params": { "BaseUrl": "https://proxy.example.com", "CredFile": "$(KeyFolder)/ReverseProxyClient_ReverseProxyServer.txt",
+              "ClientId": "ComputerA", "EndPoints": [ "Service1:", "Service2:http://localhost:8080/" ] } }
+```
 
+Ready-made hosts: [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md) and [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md).
+
+## Limitations and considerations
+
+- With sub path routing, sites that use root-relative URLs (`/logo.png`) break, as these resolve outside the client's sub path; use domain routing for such sites.
+- `ReverseProxyServer` is a raw module: proxied requests bypass the server's pipeline, including auth, so every end point is public unless the end point itself requires authentication. Cookies and the `Authorization` header are forwarded.
+- Clients authenticate with a user having the `Service` role; any such user can register any client id.
+- The client IP seen by the end point is not forwarded (no `X-Forwarded-For`).
+- `BaseUrl` must not be `ReverseProxy` (used by the API) and everything under it is routed to clients.
+
+## Relationships
+
+- **Project:** [`SysWeaver.ReverseProxy.csproj`](SysWeaver.ReverseProxy.csproj)
+- **Builds on:** [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.Remote.Connection](../SysWeaver.Remote.Connection/README.md)
+- **Used by:** [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md), [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md)

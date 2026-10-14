@@ -2,45 +2,44 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> OpenAI compatible (Chat Completions and Responses) and Google compatible (Gemini API and Vertex AI) APIs in front of one or more SysWeaver AI services, so that OpenAI and Google GenAI clients (SDKs, agents, tools) can use them.
+> OpenAI compatible (Chat Completions and Responses) and Google compatible (Gemini API and Vertex AI) APIs, with streaming and tool calls, in front of one or more SysWeaver AI services.
 
 | | |
 |---|---|
 | **Layer** | AI |
-| **Kind** | Http server module (micro service) |
+| **Kind** | Micro service (HTTP server module) |
 
 ## Purpose
 
-Exposes the models of the AI services ([`IAiService`](../SysWeaver.AI/IAiService.cs)) registered in the service manager, ex: local models using [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md), using the OpenAI and Google APIs.
-Requests are forwarded to the AI service that provides the requested model.
+Let standard OpenAI and Google GenAI clients (SDKs, agents, tools) use the models of the AI services ([`IAiService`](../SysWeaver.AI/IAiService.cs)) registered in the application — typically local models from [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md). Each request is forwarded to the AI service that provides the requested model.
+
+## How it fits into SysWeaver
+
+```mermaid
+flowchart LR
+  OC["OpenAI clients"] --> H["HostService<br/>IHttpServerModule"]
+  GC["Google GenAI clients"] --> H
+  H -- "IAiService.Complete" --> A["AI services<br/>LlamaSharp, OpenAI, Google"]
+```
+
+The service is an HTTP server module, so the web server picks it up automatically; authentication uses the server's normal mechanisms (session, `Authorization: Bearer`, `x-api-key` / `x-goog-api-key` headers).
 
 ## Key features
 
-- OpenAI end points (relative to `OpenAiPrefix`, default `openai/v1/`, this is the base url for OpenAI clients):
-  - `GET models`, `GET models/{model}`
-  - `POST chat/completions` ([Chat Completions](https://platform.openai.com/docs/api-reference/chat))
-  - `POST responses` ([Responses](https://platform.openai.com/docs/api-reference/responses))
-- Google end points (relative to `GooglePrefix`, default `google/`, this is the base url for Google GenAI clients), any API version (`v1`, `v1beta`, `v1beta1` etc):
-  - Gemini API ([reference](https://ai.google.dev/api)): `GET {version}/models`, `GET {version}/models/{model}`, `POST {version}/models/{model}:generateContent`, `POST {version}/models/{model}:streamGenerateContent`
-  - Vertex AI ([reference](https://cloud.google.com/vertex-ai/generative-ai/docs/reference/rest)): `POST {version}/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:generateContent` (and `:streamGenerateContent`), express mode: `POST {version}/publishers/{publisher}/models/{model}:generateContent` (and `:streamGenerateContent`)
-  - Camel case and snake case request properties, OpenAPI style schemas (`"type": "OBJECT"`) and json schemas (`parametersJsonSchema`).
-- The OpenAI and Google APIs have conflicting end points (ex: `v1/models`), so they must use different prefixes (checked on creation), a prefix can be set to null to disable that API.
-- Streaming for all APIs (server sent events, Google `streamGenerateContent` without `alt=sse` returns a streamed json array).
-- Caller defined (function) tools, tool calls are returned to the client.
-- The AI services are selected by instance name (`Instances`) and used in creation order, without instance names the first AI service is used.
-- Models are mapped to the AI service that provides them (the first one if several services provides the same model), the model lists are cached by the AI services (updated at most every 5 minutes).
-- The default model (when no model is specified, OpenAI only) is the last model of the last AI service.
-- Errors use the OpenAI or Google error format (ex: `404` with `model_not_found` or `NOT_FOUND`).
-- Access requires the `Auth` tokens, clients can authenticate using an API key: `Authorization: Bearer <key>` (OpenAI, Vertex AI) or `x-goog-api-key: <key>` (Gemini API, Vertex AI express mode).
+- OpenAI API under `OpenAiPrefix` (default `openai/v1/`): models, `chat/completions` and `responses`
+- Google API under `GooglePrefix` (default `google/`), any API version: Gemini API models, `generateContent` and `streamGenerateContent`, and the same for Vertex AI paths (including express mode); camel and snake case properties, OpenAPI and JSON schemas
+- Streaming for all APIs (server sent events, or a streamed JSON array for Google without `alt=sse`)
+- Caller defined function tools, tool calls are returned to the client
+- Hosted AI services are selected by instance name (`Instances`, in creation order; without names the first AI service is used) and each model is mapped to the first service providing it; the default model (OpenAI, no model given) is the last model of the last service
+- Errors use the OpenAI or Google error format; access is restricted by the `Auth` tokens
+- The two APIs have conflicting end points, so they must use different prefixes (checked on creation); a prefix set to null disables that API
 
-## Limitations and considerations
+## Key components
 
-- Stateless: the Responses API `previous_response_id` and `conversation` are not supported, clients must send the whole conversation (`store: false` style).
-- Text only (no images, audio or files) and only function tools (no built in tools like web search or code execution).
-- OpenAI: `n` must be 1, logprobs are not supported.
-- Google: `candidateCount` must be 1, `countTokens`, caching, embeddings, structured output (`responseSchema`) and stop sequences are not supported, the API key query parameter (`?key=`) is not supported (use the `x-goog-api-key` header).
-- Vertex AI using Google credentials (OAuth access tokens) can't be used, use an API key (express mode) or a Bearer token known by the server.
-- The AI service must implement `IAiService.Complete` natively for tools and token streaming (LLamaSharp does), the default implementation (OpenAI and Google services) sends the conversation as a transcript, ignores caller defined tools and returns the response in a single update.
+- [`HostService`](HostService.cs) — the HTTP module: routing, model mapping, shared request/tool handling
+- [`HostService_ChatCompletions`](HostService_ChatCompletions.cs) / [`HostService_Responses`](HostService_Responses.cs) — the OpenAI APIs
+- [`HostService_Google`](HostService_Google.cs) — the Gemini API and Vertex AI
+- [`HostParams`](HostParams.cs) — parameters
 
 ## Using it
 
@@ -55,6 +54,14 @@ var chat = openAi.GetChatClient("qwen3-8b");
 var google = new Google.GenAI.Client(apiKey: apiKey, httpOptions: new HttpOptions { BaseUrl = "https://myserver/google/" });
 var r = await google.Models.GenerateContentAsync("qwen3-8b", "Hello");
 ```
+
+## Limitations and considerations
+
+- Stateless: the Responses API `previous_response_id` and `conversation` are not supported, clients must send the whole conversation
+- Text only (no images, audio or files) and only function tools (no built in tools like web search or code execution)
+- OpenAI: `n` must be 1, logprobs are not supported. Google: `candidateCount` must be 1; `countTokens`, caching, embeddings, structured output and stop sequences are not supported; the `?key=` query parameter is not supported (use the `x-goog-api-key` header)
+- Vertex AI with Google OAuth credentials can't be used, use an API key (express mode) or a Bearer token known by the server
+- Tool calls and token streaming need a native `IAiService.Complete` (only [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md) has one); with the OpenAI and Google services the conversation is sent as a transcript, caller defined tools are rejected when required (ignored otherwise) and the response arrives in a single update
 
 ## Relationships
 

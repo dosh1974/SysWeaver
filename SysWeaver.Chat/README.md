@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Layer** | Collaboration |
+| **Layer** | Chat |
 | **Kind** | Micro service + provider contract |
 
 ## Purpose
@@ -17,48 +17,51 @@ One chat UI and API for very different conversation partners: people in a room, 
 
 ```mermaid
 flowchart TB
-  UI["web chat UI"] <--> CS["ChatService<br/>sessions, polling, push"]
+  UI["web chat UI"] <--> CS["ChatService<br/>web APIs, push"]
   CS --> P1["SimpleChatService<br/>configured rooms"]
   CS --> P2["MySqlChat<br/>persisted rooms"]
-  CS --> P3["OpenAiService<br/>AI assistant"]
+  CS --> P3["AI services<br/>AI assistants"]
   CS --> Tr["translator<br/>per-user language"]
   CS --> US["user storage<br/>shared files and links"]
 ```
 
-## Key concepts
-
-| Concept | Description |
-|---|---|
-| **Provider** | Implements the chat provider contract; supplies sessions, messages and optionally user-created chats. |
-| **Session / room** | Has its own auth rules: who may join, post, clear and remove messages. |
-| **Message** | Text, markdown or HTML bodies with flags; delivered by polling/push. |
-| **Store handlers** | Services that can persist or render chat content (e.g. charts, explorer links) as shareable links. |
+`ChatService` picks up every registered `IChatProvider` (also those added later) and serves them through one set of web APIs and the embedded chat page. New messages, edits and removals are pushed to the clients through the HTTP server's session push messages.
 
 ## Key features
 
-- Per-room permissions, including anonymous rooms.
-- On-demand translation of messages into each user's language.
-- Optional speech input with a wake word.
-- File and link sharing via user storage, with optional public sharing.
-- AI tool integration: chat features are available to AI providers.
+- Pluggable providers (`IChatProvider`): [SysWeaver.Chat.MySql](../SysWeaver.Chat.MySql/README.md) for persisted rooms, the AI services of [SysWeaver.AI](../SysWeaver.AI/README.md) for AI assistants, `SimpleChatService` for configured in-memory rooms
+- Per room permissions (`ChatSessionParams`): join, post, clear, remove own / any message, including anonymous rooms
+- Text, Markdown and HTML messages, message and chat menus, user profiles
+- On-demand translation of messages into the user's language (when the server has a translator)
+- Optional continuous speech input with a wake word
+- File and link sharing through the user storage, privately or publicly (`AllowPublicStore`); other services can provide shareable links (`IChatStoreLinkHandler`)
+- AI tools for storing files and links and listing stored ones, used by the AI chat
 
-## Limitations and considerations
+## Key components
 
-- The simple provider keeps rooms in memory; use the MySQL provider for persistence.
-- Sharing features require a user storage service.
+- [`ChatService`](ChatService.cs) — the micro service: provider registry, web APIs, push delivery, storage and translation
+- [`IChatProvider`](IChatProvider.cs) / [`IChatController`](IChatController.cs) — the provider contract and the controller a provider uses to push changes
+- [`SimpleChatService`](SimpleChatService.cs) — a provider with rooms configured in the manifest (kept in memory)
+- [`ChatSessionParams`](ChatSessionParams.cs) — permissions and options of a room / session
 
 ## Using it
 
 ```json
 [
-  { "Type": "SysWeaver.Chat.SimpleChatService, SysWeaver.Chat", "Params": { "Rooms": [ "Lobby|*" ] } },
+  { "Type": "SysWeaver.Chat.SimpleChatService, SysWeaver.Chat",
+    "Params": { "Rooms": [ { "Name": "Lobby", "Auth": "" }, { "Name": "Admins", "Auth": "Admin" } ] } },
   { "Type": "SysWeaver.Chat.ChatService, SysWeaver.Chat" }
 ]
 ```
-The room definition syntax (name, join tokens, clear/remove permissions) is documented on the simple chat parameters.
+
+## Limitations and considerations
+
+- `SimpleChatService` keeps messages in memory; use the MySQL provider for persistence
+- Sharing requires a user storage service (`IUserStorageService`), translation requires a translator on the HTTP server
 
 ## Relationships
 
 - **Project:** [`SysWeaver.Chat.csproj`](SysWeaver.Chat.csproj)
 - **Builds on:** [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.Chat.MySql](../SysWeaver.Chat.MySql/README.md)
+- **Used by:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.Chat.MySql](../SysWeaver.Chat.MySql/README.md)
+- **Third-party:** HtmlAgilityPack, CommunityToolkit.HighPerformance

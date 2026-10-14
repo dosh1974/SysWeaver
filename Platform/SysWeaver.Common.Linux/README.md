@@ -2,44 +2,46 @@
 
 [⬆ SysWeaver overview](../../README.md)
 
-> Linux implementation of the platform abstraction (`IPlatformTools`): CPU/memory metrics, reboot and OS identification.
+> Linux implementation of the platform abstraction (`IPlatformTools`): CPU/memory metrics, reboot, directory permissions and OS identification.
 
 | | |
 |---|---|
-| **Layer** | Foundation (platform adapter) |
-| **Kind** | Library, loaded by name at runtime |
-| **Platform** | Linux |
+| **Layer** | Foundation |
+| **Kind** | Library (platform plug-in, loaded by type name at runtime) |
+| **Platform** | Linux only |
 
 ## Purpose
 
-The Linux counterpart of [SysWeaver.Common.Windows](../SysWeaver.Common.Windows/README.md): it lets portable framework code query CPU/memory, identify the OS or reboot the machine without Linux-specific code leaking into the core.
+The Linux counterpart of [SysWeaver.Common.Windows](../SysWeaver.Common.Windows/README.md): it lets portable framework code query CPU and memory usage, identify the OS, make shared data folders writable for everyone or reboot the machine without Linux-specific code leaking into the core.
 
 ## How it fits into SysWeaver
 
-`PlatformTools.Current` in [SysWeaver.Common](../../SysWeaver.Common/README.md) resolves `SysWeaver.LinuxPlatformTools` (assembly `SysWeaver.Common.Linux`) by type name when the process runs on Linux. The OS friendly name is the `PRETTY_NAME` from the distribution's `/etc/*-release` files, and the default key folder is `/etc/keys`.
+`PlatformTools.Current` in [SysWeaver.Common](../../SysWeaver.Common/README.md) resolves `SysWeaver.LinuxPlatformTools, SysWeaver.Common.Linux` by type name when the process runs on Linux, and falls back to `DummyPlatformTools` if the assembly is missing. No project calls it directly; [SysWeaver.Storage](../../SysWeaver.Storage/README.md) references it only so that it is copied to the output.
 
 ## Key features
 
-- `LinuxPlatformTools`: CPU usage (from two samples of `/proc/stat`) and physical memory (from `/proc/meminfo`), used by the service manager's statistics.
-- Reboot via `sudo /sbin/reboot`.
-- Human readable distribution name.
-- Exception counters exposed as statistics (`IHaveStats`).
+- CPU usage (two samples of `/proc/stat`) and physical memory (`/proc/meminfo`), shown in the service manager's statistics
+- OS friendly name from `PRETTY_NAME` in the distribution's `/etc/*-release` files; default key folder `/etc/keys`
+- Directory permissions mimicking the Windows "Everyone full control (inherited)" rule: `a+rwX` on the directory and its content plus a POSIX default ACL (`setfacl`) so content created later stays writable by everyone; used by `Folders` and `PathExt.CreateDataFolder`
+- Reboot via `sudo /sbin/reboot`
+- Failures counted as statistics (`IHaveStats`, system `Linux.Platform`)
 
-## Limitations and considerations
+## Key components
 
-- Linux only; other Unix variants (e.g. macOS, FreeBSD) have no dedicated implementation and fall back to the dummy tools.
-- Must be deployed with the application to be found.
-- `FlushToDisc` is a no-op that reports success (no fsync).
-- `MakeDirectoryAccessableToEveryOne` mimics the Windows "Everyone full control (inherited)" rule, so data created by a service running as root stays modifiable by users and vice versa: the directory and all existing content get `a+rwX` (directories also get setgid, never the sticky bit; symbolic links are skipped), and a POSIX default ACL (`setfacl -R -P -d -m u::rwx,g::rwx,o::rwx,m::rwx`) makes files and folders created later writable by everyone regardless of the creator's umask. Requires the `acl` package (`setfacl`) and a file system with ACL support; without it the mode bits are still applied but an exception is returned (new content then follows the creator's umask). Entries not owned by the process user (unless root) can't be changed and are reported in the returned exception. Successfully processed directories are cached per process. Used by `Folders` (all-user folders) and `PathExt.AllowAllAccess` / `PathExt.CreateDataFolder`.
-- Data shared by all users lives in `/var/lib` (`$(CommonApplicationData)`, see `PathTemplate.CommonApplicationData` in SysWeaver.Common), where only root can create folders. Run the application (or service) once as root, or create the root folder with `sudo mkdir -p /var/lib/SysWeaver && sudo chmod 1777 /var/lib/SysWeaver`; until then the all-user `Folders` fall back to the per-user folders.
-- CPU usage reads the aggregated `cpu` line of `/proc/stat` twice, 250 ms apart (the call blocks for that time), and returns the busy share of that interval (idle includes iowait); reboot requires password-less `sudo` for `/sbin/reboot` and only reports whether `sudo` could be started.
-- Memory reads `MemTotal` / `MemAvailable` from the first 200 characters of `/proc/meminfo`; `GetMemorySize` returns false if one is missing (kernels before 3.14 have no `MemAvailable`).
-- Failures of `GetMemorySize`, `GetCpuUsage` and `MakeDirectoryAccessableToEveryOne` are counted in the statistics (`Linux.Platform`, `Exception.Count` / `Time` / `Exception`).
-- Tests: the constant properties, the `/proc/meminfo` and `/proc/stat` parsing, the CPU usage computation and the failure paths run on any OS; memory, CPU and folder permissions are only tested on Linux.
+- [`LinuxPlatformTools`](LinuxPlatformTools.cs) — the `IPlatformTools` implementation
 
 ## Using it
 
 Deploy the DLL next to the executable; no configuration is required.
+
+## Limitations and considerations
+
+- Linux only; other Unix variants (e.g. macOS, FreeBSD) have no implementation and get the dummy tools
+- `FlushToDisc` is a no-op that reports success (no fsync)
+- `GetCpuUsage` blocks the caller for the 250 ms sampling interval
+- Directory permissions need the `acl` package (`setfacl`) and a file system with ACL support; without it only the mode bits are applied (an exception is returned) and later content follows the creator's umask. Entries owned by other users can't be changed unless running as root
+- Reboot requires password-less `sudo` for `/sbin/reboot` and only reports whether `sudo` could be started
+- Data shared by all users lives in `/var/lib` (`$(CommonApplicationData)`), where only root can create folders: run the application once as root, or create `/var/lib/SysWeaver` with `sudo mkdir -p /var/lib/SysWeaver && sudo chmod 1777 /var/lib/SysWeaver`
 
 ## Relationships
 

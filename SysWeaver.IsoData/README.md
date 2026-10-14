@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Foundation |
-| **Kind** | Library (embedded data, no dependencies beyond Common) |
+| **Kind** | Library (built-in data) |
 
 ## Purpose
 
@@ -29,10 +29,21 @@ flowchart TB
 - `IsoCountry`: ISO 3166 Alpha 2 code, official/common name, main currency, population, land area and spoken languages. Lookup by code only (`TryGet`, "Sweden" gives null) or by code and fuzzy name/nick name/abbreviation (`TryGetName`, `Aliases`).
 - `IsoCurrency`: ISO 4217 code and number, symbol, under units, separators and the "biggest" user country. Lookup by code or number (`TryGet`, `Validate`), formatting via `ToString(amount, CurrencyFormatOptions, ...)`, plus `CurrencyGlyphs`/`IsCurrencyGlyph` (all chars needed to render amounts, e.g. for font subsets).
 - `CurrencyFormatOptions`: flags selecting ISO prefix/suffix or symbol style, thousands separator, forced rounding and automatic removal of zero under units.
-- `IsoLanguage`: ISO 639-1/639-2 codes and names. Lookup by code (`TryGet`, also accepts regional codes like `en-GB`), by name (`TryGetName`), normalization (`Validate`), countries using a language (`GetCountries`) and `Common` (languages used in countries with 10M+ people in total, plus languages that were common before the 2026-10-07 population refresh, i.e. `sr`).
+- `IsoLanguage`: ISO 639-1/639-2 codes and names. Lookup by code (`TryGet`, also accepts regional codes like `en-GB`), by name (`TryGetName`), normalization (`Validate`), countries using a language (`GetCountries`) and `Common` (languages used in countries with 10M+ people in total, kept identical to the set computed before the 2026-10-07 population refresh: `sr` kept, `he`, `ho` and `tg` excluded; used as the default target languages).
 - `PhonePrefix`: international calling codes (with region prefixes, dialing prefixes and valid local digit counts). `Identify` finds the code(s) of a partial number; `GetValidatedPhoneNumber` validates a full number and splits it into prefix and local number (throwing with a human readable message when invalid).
 - `AmountExt`: `Amount.CurrencyInfo()` and `Amount.ToAmountString()` for displaying money correctly per currency.
 - Data classes are annotated with table-data attributes so they render nicely (flags, links) in debug tables.
+
+## Key components
+
+- [`IsoCountry`](IsoCountry.cs) — countries with names, aliases, currency, population, area and languages
+- [`IsoCurrency`](IsoCurrency.cs) — currencies and currency-aware amount formatting
+- [`IsoLanguage`](IsoLanguage.cs) — languages, regional codes and validation
+- [`PhonePrefix`](PhonePrefix.cs) — international calling codes and phone number validation
+
+## Using it
+
+Reference it and use the static lookups (e.g. `IsoCountry.TryGet("SE")`, `IsoCurrency.TryGet("USD").ToString(12.5M, CurrencyFormatOptions.Symbol)`, `PhonePrefix.GetValidatedPhoneNumber(...)`); to browse the data in the web UI add [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md).
 
 ## Limitations and considerations
 
@@ -44,12 +55,8 @@ flowchart TB
 - `IsoLanguage.Common` is a shared mutable array and `GetCountries` returns shared arrays: don't modify them.
 - `PhonePrefix.Identify` matches the longest prefix (country code + region prefix), so a number of a shared country code (ex: +1) whose digits start with a region prefix is attributed to that region.
 
-## Using it
-
-Reference it and use the static lookups (e.g. `IsoCountry.TryGet("SE")`, `IsoCurrency.TryGet("USD").ToString(12.5M, CurrencyFormatOptions.Symbol)`, `PhonePrefix.GetValidatedPhoneNumber(...)`); to browse the data in the web UI add [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md).
-
 ## Relationships
 
 - **Project:** [`SysWeaver.IsoData.csproj`](SysWeaver.IsoData.csproj)
 - **Builds on:** [SysWeaver.Common](../SysWeaver.Common/README.md)
-- **Used by:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.ExchangeRate](../SysWeaver.ExchangeRate/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md), [SysWeaver.Knowledge](../SysWeaver.Knowledge/README.md), [SysWeaver.LanguageIdentifier.FastText](../SysWeaver.LanguageIdentifier.FastText/README.md), [SysWeaver.Map](../SysWeaver.Map/README.md), [SysWeaver.MicroService.Auth](../SysWeaver.MicroService.Auth/README.md), [SysWeaver.MicroService.Translation](../SysWeaver.MicroService.Translation/README.md), [SysWeaver.MicroService.TranslationDbCache](../SysWeaver.MicroService.TranslationDbCache/README.md), [SysWeaver.Security](../SysWeaver.Security/README.md), [SysWeaver.TextMessage.Fake](../Communication/SysWeaver.TextMessage.Fake/README.md), [SysWeaver.Translation.Google](../SysWeaver.Translation.Google/README.md)
+- **Used by:** [SysWeaver.AI](../SysWeaver.AI/README.md), [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.ExchangeRate](../SysWeaver.ExchangeRate/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.HttpServer.IsoDataModule](../SysWeaver.HttpServer.IsoDataModule/README.md), [SysWeaver.Knowledge](../SysWeaver.Knowledge/README.md), [SysWeaver.LanguageIdentifier.FastText](../SysWeaver.LanguageIdentifier.FastText/README.md), [SysWeaver.Map](../SysWeaver.Map/README.md), [SysWeaver.MicroService.Auth](../SysWeaver.MicroService.Auth/README.md), [SysWeaver.MicroService.Translation](../SysWeaver.MicroService.Translation/README.md), [SysWeaver.MicroService.TranslationDbCache](../SysWeaver.MicroService.TranslationDbCache/README.md), [SysWeaver.Security](../SysWeaver.Security/README.md), [SysWeaver.TextMessage.AmazonEndUserMessaging](../Communication/SysWeaver.TextMessage.AmazonEndUserMessaging/README.md), [SysWeaver.TextMessage.Fake](../Communication/SysWeaver.TextMessage.Fake/README.md), [SysWeaver.TextMessage.Router](../Communication/SysWeaver.TextMessage.Router/README.md), [SysWeaver.TextMessage.Twilio](../Communication/SysWeaver.TextMessage.Twilio/README.md), [SysWeaver.TextMessage.WhatsApp](../Communication/SysWeaver.TextMessage.WhatsApp/README.md), [SysWeaver.Translation.Google](../SysWeaver.Translation.Google/README.md); in [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services/blob/main/README.md): ExchangeRateService, FakeEmailService, FakeTextService, WebServerService

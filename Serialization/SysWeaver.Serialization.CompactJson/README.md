@@ -7,8 +7,7 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ITextSerializerType`) |
-| **Selection priority** | -5 (lowest among the bundled serializers for `json`) |
+| **Kind** | Plug-in (serializer, `ITextSerializerType`) |
 
 ## Purpose
 
@@ -27,14 +26,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
+- Registered for `json` (`application/json`) with priority -5, the lowest of the bundled JSON serializers (SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 - `CompactJsonSerializer` (singleton `Instance`) implements both the binary (UTF-8) and the string APIs.
 - `SerializerOptions.Verbose` produces indented output, the other options compact output.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
-- Byte-based APIs go through intermediate strings / stream readers, so it is not allocation free.
+- [`CompactJsonSerializer`](CompactJsonSerializer.cs) — the serializer type
 
 ## Using it
 
@@ -46,7 +45,13 @@ The service manager recognises serializer types and registers them instead of cr
 
 Or register it from code at startup: `SysWeaver.Serialization.CompactJsonSerializer.Register();`
 
+## Limitations and considerations
+
+- Byte-based APIs go through intermediate strings / stream readers, so it is not allocation free.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.CompactJson.csproj`](SysWeaver.Serialization.CompactJson.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
+- **Third-party:** [CompactJson](https://www.nuget.org/packages/CompactJson)

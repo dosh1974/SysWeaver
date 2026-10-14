@@ -7,12 +7,11 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ITextSerializerType`) |
-| **Selection priority** | -5 (lowest among the bundled serializers for `json`) |
+| **Kind** | Plug-in (serializer, `ITextSerializerType`) |
 
 ## Purpose
 
-An alternative span-based JSON implementation registered with a low priority, mainly useful for comparison and compatibility scenarios.
+An alternative span-based JSON implementation registered with a low priority: it never displaces the other JSON serializers when they are present, which makes it useful mainly for comparison and compatibility scenarios.
 
 ## How it fits into SysWeaver
 
@@ -27,14 +26,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
+- Registered for `json` (`application/json`) with priority -5, the lowest of the bundled JSON serializers (SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 - `SpanJsonSerializer` (singleton `Instance`) implements both the binary (UTF-8) and the string APIs.
 - Writes and reads with the same custom resolver: nulls included, byte arrays as number arrays, enums as integers, original member casing.
 - Registered through the manifest like any service, or with one static call in code.
 
-## Limitations and considerations
+## Key components
 
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
-- `SerializerOptions` are ignored; output is always compact.
+- [`SpanJsonSerializer`](SpanJsonSerializer.cs) — the serializer type
 
 ## Using it
 
@@ -46,7 +45,13 @@ The service manager recognises serializer types and registers them instead of cr
 
 Or register it from code at startup: `SysWeaver.Serialization.SpanJsonSerializer.Register();`
 
+## Limitations and considerations
+
+- `SerializerOptions` are ignored; output is always compact.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.SpanJson.csproj`](SysWeaver.Serialization.SpanJson.csproj)
 - **Builds on:** [SysWeaver.Serialization](../../SysWeaver.Serialization/README.md)
+- **Third-party:** [SpanJson](https://www.nuget.org/packages/SpanJson)
