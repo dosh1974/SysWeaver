@@ -51,6 +51,12 @@ flowchart LR
 - Editing quality depends on the XML documentation and edit attributes on the types.
 - Only public types accepted by the data-type rules of `TypeFinder` are described; sessions with the debug role get additional details.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded web assets: object editor, type information page, text / code editor, vendored Ace and Prettier |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.Edit.csproj`](SysWeaver.MicroService.Edit.csproj)

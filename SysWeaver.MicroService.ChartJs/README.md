@@ -52,6 +52,12 @@ flowchart LR
 - Rendering happens client-side; charts are only as capable as the bundled Chart.js version.
 - Table charts need the local API module (`ApiHttpServerModule`), resolved when the service starts; `TableChartAvailable` reports whether it was found.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded web assets: the chart page, chart type icons and the bundled Chart.js libraries |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.ChartJs.csproj`](SysWeaver.MicroService.ChartJs.csproj)

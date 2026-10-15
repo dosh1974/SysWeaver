@@ -63,6 +63,12 @@ MyService status
 - All changing verbs need elevation (re-run with the `runas` verb). A service that can't be opened (missing, or access denied) is reported as not installed.
 - `pause` of a paused service returns `AlreadyPaused` and `continue` of a running service `AlreadyRunning` (exit code 0, as on Linux).
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`ServiceManager/`](ServiceManager/README.md) | advapi32 Service Control Manager interop: `Win32ServiceManager` and the Win32 enums and structures it uses |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj`](SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj)

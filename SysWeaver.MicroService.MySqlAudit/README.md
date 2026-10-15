@@ -47,6 +47,12 @@ flowchart LR
 - Parameters and results may contain personal data; use `[WebApiAuditFilterParams]` / `[WebApiAuditFilterReturn]` to redact them
 - Requires MySQL; there is no automatic clean-up of old records
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Db/`](Db/README.md) | Database row types for the audited API calls and clients tables |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.MySqlAudit.csproj`](SysWeaver.MicroService.MySqlAudit.csproj)

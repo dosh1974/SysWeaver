@@ -41,6 +41,13 @@ It implements `ILanguageIdentifier` (defined in [SysWeaver.Common](../SysWeaver.
 - Very fast but not very accurate, especially for short texts; use [SysWeaver.LanguageIdentifier.Llm](../SysWeaver.LanguageIdentifier.Llm/README.md) when accuracy matters more than speed and cost
 - Uses native libraries, which must be available for the target platform
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`FastText.NetWrapper/`](FastText.NetWrapper/README.md) | Source of the managed fastText wrapper |
+| [`srcData/`](srcData/README.md) | The `lid.176.ftz` model, embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.LanguageIdentifier.FastText.csproj`](SysWeaver.LanguageIdentifier.FastText.csproj)

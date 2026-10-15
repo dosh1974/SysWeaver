@@ -62,6 +62,15 @@ public sealed class OrderService
 - `[IsMicroService]` and the dependency attributes document intent — the service manager will instantiate any class with a satisfiable constructor and does not enforce the declared dependencies itself; services typically enforce them in their constructors.
 - The namespace is `SysWeaver.MicroService` (singular), while the assembly is `SysWeaver.MicroServices`.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`TextTemplates/`](TextTemplates/README.md) | Interfaces for services that contribute template variables |
+| [`WebApi/`](WebApi/README.md) | Web API attributes: publishing, URL, auth, caching, compression, rate limits, auditing |
+| [`WebDash/`](WebDash/README.md) | Dashboard data types |
+| [`WebMenu/`](WebMenu/README.md) | Menu attributes and the menu data types |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroServices.csproj`](SysWeaver.MicroServices.csproj)

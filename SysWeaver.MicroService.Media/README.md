@@ -50,6 +50,13 @@ flowchart LR
 - Effects require WebGL-capable browsers and GPUs; heavy effects can be demanding on low-end devices
 - The Google map demo only works when a Google Maps key is configured
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Media/`](Media/README.md) | C# media description types (image, video, audio, YouTube, Vimeo, effect) |
+| [`srcWeb/`](srcWeb/README.md) | Embedded web application: media player scripts, viewer pages and GLSL effect libraries |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.Media.csproj`](SysWeaver.MicroService.Media.csproj)

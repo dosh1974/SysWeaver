@@ -54,6 +54,12 @@ All parameters are optional.
 - Passkeys are bound to the host they were created on, unless `RpId` is set to a registrable domain (e.g. `example.org`), then they work on that domain and all its sub domains; changing `RpId` invalidates existing passkeys
 - User verification (PIN / biometrics) and discoverable credentials are required by default (`UserVerification`, `ResidentKey`)
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded passkey pages (`auth/`) and icons (`icons/`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.PassKey.csproj`](SysWeaver.MicroService.PassKey.csproj)

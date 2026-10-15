@@ -54,6 +54,12 @@ Without `Folders`, a `UserStorage` folder in the application data folder is used
 - Public and protected items are reachable by anyone holding the link — enable public uploads deliberately
 - Files are spread over the folders by a hash or at random, not by free space
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | HTML templates for the pages served for stored links (`embed.html`, `img.html`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.UserStorage.csproj`](SysWeaver.MicroService.UserStorage.csproj)

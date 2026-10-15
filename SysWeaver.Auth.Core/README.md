@@ -65,6 +65,12 @@ The manager is normally created by `AuthManagerService` in [SysWeaver.MicroServi
 - `SimpleAuthorizer` passwords can't contain `:` or `|`, and clear-text passwords that fail the password policy are skipped with a warning
 - A managed text string that isn't an existing file or embedded resource is used as the literal text, so a missing file silently becomes its path
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | `SimpleAuthorizer` web pages (password hash generator, API key management), compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Auth.Core.csproj`](SysWeaver.Auth.Core.csproj)

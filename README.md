@@ -214,7 +214,19 @@ All services log through the manager's message hub (console, file). Services imp
 
 ## Hello world
 
-The repository contains no sample application; the steps below use only the framework's public mechanisms.
+The steps below build a minimal application from scratch using only the framework's public mechanisms. This repository contains no sample application, but the two public companion repositories are full of real, working code built on SysWeaver — good references next to (or instead of) this walk-through:
+
+| Looking for | Look at |
+|---|---|
+| The smallest complete server: auth, login, the standard web UI services, HTTPS and folders to serve | [WebServerService](https://github.com/dosh1974/SysWeaver.Services/blob/main/WebServerService/README.md) |
+| A feature service exposed as a stand-alone server with its own manifest | [ExchangeRateService](https://github.com/dosh1974/SysWeaver.Services/blob/main/ExchangeRateService/README.md), [IpLocationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/IpLocationService/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md) |
+| A service with its own embedded web pages (`srcWeb`, compressed at build time) | [FakeEmailService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeEmailService/README.md), [FakeTextService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeTextService/README.md) |
+| Distributed setups: reverse proxy, certificates for LAN machines, remote server management | [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md) / [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md), [SwLanCertManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwLanCertManager/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md) |
+| Command line tools with typed options and generated help ([SysWeaver.CommandLine](SysWeaver.CommandLine/README.md)) | [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md), [SvgOpt](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SvgOpt/README.md), [Touch](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Touch/README.md) |
+| Calling SysWeaver APIs and services from a client | [SwCurl](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwCurl/README.md), [SwSyncTool](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwSyncTool/README.md), [FolderSync](https://github.com/dosh1974/SysWeaver.Tools/blob/main/FolderSync/README.md) |
+| Obtaining certificates with ACME outside a server | [AcmeCertUtil](https://github.com/dosh1974/SysWeaver.Tools/blob/main/AcmeCertUtil/README.md) |
+
+See also [Companion repositories](#companion-repositories).
 
 **1. Project** — an executable referencing the hosting, HTTP server and API projects:
 
@@ -516,17 +528,31 @@ flowchart LR
 
 ## Repository layout
 
+Every folder has a README describing its content and its sub folders; follow the links down from here.
+
 | Location | Content |
 |---|---|
 | `SysWeaver.*` | Framework projects (one folder per project, each with its own README) |
-| `Serialization/` | Serializer plug-in projects |
-| `Compression/` | Compression codec plug-in projects |
-| `Communication/` | E-mail sender, e-mail reader and text message provider projects |
-| `Platform/` | OS-specific platform tools and service host factories (Windows, Linux) |
-| `Internet/` | Headless browser implementations (CEF, WebView2) |
-| `_external/` | Vendored third-party libraries — see [_external](_external/README.md) |
-| `_tools/` | Pre-built tools used by the build, published from SysWeaver.Tools — see [_tools](_tools/README.md) |
-| `_docs/` | Additional documents |
+| [`Serialization/`](Serialization/README.md) | Serializer plug-in projects |
+| [`Compression/`](Compression/README.md) | Compression codec plug-in projects |
+| [`Communication/`](Communication/README.md) | E-mail sender, e-mail reader and text message provider projects |
+| [`Platform/`](Platform/README.md) | OS-specific platform tools and service host factories (Windows, Linux) |
+| [`Internet/`](Internet/README.md) | Headless browser implementations (CEF, WebView2) |
+| [`_external/`](_external/README.md) | Vendored third-party libraries |
+| [`_tools/`](_tools/README.md) | Pre-built tools used by the build, published from SysWeaver.Tools |
+| [`_docs/`](_docs/README.md) | Additional documents |
+
+Recurring sub folders inside projects:
+
+| Folder | Content |
+|---|---|
+| `srcWeb/` | Web assets (HTML, JavaScript, CSS, icons). Build steps optimise and pre-compress them into a generated `web/` folder, which is embedded and served automatically. |
+| `srcData/` | Data files (maps, models, templates, images). Build steps pre-compress them into a generated `data/` folder, which is embedded as resources. |
+| `Db/` | Database table row types (MySQL) of a service. |
+| `runtimes/` | Native libraries per platform, copied to the output and resolved at runtime. |
+| other names | Source code grouped by topic (namespaces of the project). |
+
+The generated `web/`, `data/`, `bin/` and `obj/` folders are build output and are not part of the repository.
 | `SysWeaver.slnx` | Solution file |
 | `Clean_All.bat` | Deletes build output (`bin`, `obj`, generated web/data folders) using `_tools/VsClean` |
 

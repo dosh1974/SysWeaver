@@ -46,6 +46,12 @@ No other SysWeaver project references it; it is a standalone data library for ap
 - Categories are not loaded independently: the first use of `AllInfo` (and any category, since each registers its keywords in `AllInfo`) loads and decompresses every category, which costs startup time and memory.
 - Keyword matching is English-centric (simple English plural rules).
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`data/`](data/README.md) | The embedded knowledge data files (Brotli compressed JSON, `*.db`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Knowledge.csproj`](SysWeaver.Knowledge.csproj)

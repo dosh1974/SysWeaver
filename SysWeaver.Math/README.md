@@ -56,6 +56,13 @@ BigRat third = BigRat.Parse("1/3");
 - `BigRat` results are not automatically reduced (`Normalize()` reduces); there is no NaN / infinity (invalid operations throw); conversions from `double` are exact binary values (parse text such as `"0.1"` for decimal values); multiplication is O(n²), so huge values get slow.
 - The project enables unsafe code (`BigRat` uses stack buffers and pointers).
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Geometry/`](Geometry/README.md) | KD-tree and its supporting types, earth geometry |
+| [`Search/`](Search/README.md) | Genetic-algorithm solver |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Math.csproj`](SysWeaver.Math.csproj)

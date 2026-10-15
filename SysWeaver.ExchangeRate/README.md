@@ -67,6 +67,12 @@ To use another SysWeaver server as the source, register `SysWeaver.ExchangeRate.
 - Rates from different sources are not merged, one source's rates are used at a time
 - Rates are only as fresh as the sources' update schedule
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Sources/`](Sources/README.md) | The rate sources (exchangeratesapi.io, fixer.io, another SysWeaver server) and their parameters |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.ExchangeRate.csproj`](SysWeaver.ExchangeRate.csproj)

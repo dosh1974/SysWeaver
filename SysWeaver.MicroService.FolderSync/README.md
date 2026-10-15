@@ -60,6 +60,12 @@ flowchart TB
 - Folder-level auth must be configured carefully — managed folders can overwrite deployed content (a `null` auth means the `Debug` role).
 - Serving remote folders on the web needs the `FileHttpServerModule` (and `StaticDataHttpServerModule` for versioned data).
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | The iframe shim page template for remote web folders |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.FolderSync.csproj`](SysWeaver.MicroService.FolderSync.csproj)

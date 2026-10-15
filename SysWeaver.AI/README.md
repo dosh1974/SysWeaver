@@ -72,6 +72,12 @@ ai.AddChat(chat, "Weather");
 - A tool call executes the method with the auth of the requesting user — only expose methods that are safe for those users
 - Chat sessions are created by code (`AddChat`, `AddChatSession`), users can't create new AI chats from the chat UI
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Shared AI chat icons (error, debug, working) and predefined smiley images, compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.csproj`](SysWeaver.AI.csproj)

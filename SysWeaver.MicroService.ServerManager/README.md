@@ -59,6 +59,12 @@ flowchart TB
 - Powerful operations (kill processes, reboot, edit hosts and key files) — restrict to administrators; most host APIs require `AdminOps`.
 - Managed services are expected to be SysWeaver service hosts ([SysWeaver.OsServices](../SysWeaver.OsServices/README.md)) so the service verbs work.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded server manager pages (server, services, service/version details, metrics, key files) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.ServerManager.csproj`](SysWeaver.MicroService.ServerManager.csproj)

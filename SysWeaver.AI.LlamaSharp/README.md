@@ -63,6 +63,12 @@ var chat = ai.CreateChatSession(true, new LlamaSharpSessionParams { Model = "qwe
 - The backend is selected process wide when the first model is loaded. To use CUDA, reference a `LLamaSharp.Backend.Cuda*` package from the application
 - The reasoning effort parameter isn't used
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Agent icon of the provider (`srcWeb/ai/icons/LlamaSharp.svg`), optimised, compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.LlamaSharp.csproj`](SysWeaver.AI.LlamaSharp.csproj)

@@ -51,6 +51,12 @@ var chat = ai.CreateChatSession(true, new GoogleSessionParams { Model = "gemini-
 - Gemini has no participant names, the user name is added as a text part
 - Image editing is only supported by Gemini image models (not Imagen)
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Agent icon of the provider (`srcWeb/ai/icons/Google.svg`), optimised, compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.Google.csproj`](SysWeaver.AI.Google.csproj)

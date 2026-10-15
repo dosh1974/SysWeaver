@@ -72,6 +72,12 @@ using var api = new RemoteConnection { BaseUrl = "https://other-server/", Bearer
 - Disposing an instance cancels pending calls; later calls fail.
 - Runtime code generation requires a runtime that supports dynamic code (not AOT-only environments).
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Connection/`](Connection/README.md) | Proxy generation (IL emission), URL parameter and form encoding, per request time-outs |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Remote.Connection.csproj`](SysWeaver.Remote.Connection.csproj)

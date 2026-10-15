@@ -54,6 +54,12 @@ Stands in for the senders ([SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README
 - The API is placed at `Api/fakeEmail/`, so only one instance per server is supported
 - Emails are kept in memory only, and nothing is actually delivered
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Source of the embedded web inbox (Brotli-compressed into `web/` at build time) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Email.Fake.csproj`](SysWeaver.Email.Fake.csproj)

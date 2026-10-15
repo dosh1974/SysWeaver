@@ -54,6 +54,12 @@ flowchart LR
 - Repositories define what is accepted; the uploader itself is generic.
 - Exposing uploaded files requires the `FileHttpServerModule` to be registered.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded web assets: `common/fileUploader.js` and the debug upload page |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.FileUploader.csproj`](SysWeaver.MicroService.FileUploader.csproj)
