@@ -64,6 +64,14 @@ Register an `IEmailSender` (and, for phone numbers, `PhoneComs` with an `ITextMe
 - The default message templates are generic; adapt them for your product and languages
 - `UserManagerRoles.ViewUser` is built by string concatenation without a separating comma (`Roles.Ops + "UserManagement,Debug"`), which yields the tokens `Ops`, `DebugUserManagement` and `Debug`, so the `UserManagement` token alone doesn't grant access to the user table
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Db/`](Db/README.md) | Database row types: users, passwords, passkeys, e-mail addresses, phone numbers, actions, tokens, user data |
+| [`srcData/`](srcData/README.md) | Default e-mail and text message templates for every account action |
+| [`srcWeb/`](srcWeb/README.md) | Embedded account management pages (`auth/`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.UserManager.csproj`](SysWeaver.MicroService.UserManager.csproj)

@@ -35,6 +35,12 @@ Access layered Photoshop documents, e.g. to extract layers, text or the composit
 - The composite image is always saved raw or RLE compressed (like Photoshop), never ZIP
 - Saving writes a `VersionInfo` resource naming "Paint.NET PSD Plugin" if none exists
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`PsdFile/`](PsdFile/README.md) | Vendored Paint.NET PSD plugin code: the `PhotoshopFile` document model, codecs, image resources and layers |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Media.Psd.csproj`](SysWeaver.Media.Psd.csproj)

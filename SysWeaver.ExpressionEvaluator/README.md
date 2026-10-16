@@ -69,6 +69,12 @@ Publish the calculator (optional):
 - Optimized floating point expressions can differ from IEEE arithmetic in the sign of a zero result (`x + 0` is folded to `x`), and optimized decimal results can differ in scale.
 - `CalcService` declares no authentication of its own; if registered it follows the API server's default auth.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`ValueReaders/`](ValueReaders/README.md) | Number literal readers per evaluator type, including `0x` / `0o` / `0b` prefixed integers |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.ExpressionEvaluator.csproj`](SysWeaver.ExpressionEvaluator.csproj)

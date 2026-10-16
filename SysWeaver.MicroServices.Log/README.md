@@ -49,6 +49,12 @@ flowchart LR
 - Only messages produced after the service is registered are written — list it first in the manifest.
 - The web page is embedded as pre-compressed (Brotli) resources produced at build time by `_tools/compress/Compress.exe` (a Windows executable).
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded log file viewer page (`logFile/`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroServices.Log.csproj`](SysWeaver.MicroServices.Log.csproj)

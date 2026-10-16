@@ -53,6 +53,12 @@ Set `EndPoint` (e.g. `"http://localhost:1234/v1"`) to use another OpenAI compati
 - Stateless completions (`IAiService.Complete`) use the base class fallback: the conversation is sent as a transcript and caller defined tools are not supported
 - Compatible endpoints of other vendors often implement only parts of the API (e.g. no Responses API, images or service tiers)
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Agent icon of the provider (`srcWeb/ai/icons/OpenAI.svg`), optimised, compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.AI.OpenAI.csproj`](SysWeaver.AI.OpenAI.csproj)

@@ -62,6 +62,13 @@ To use another SysWeaver server as the source, register `SysWeaver.IpLocation.So
 - The number of retry rounds is currently fixed (10); `MaxRetryCount` only affects how fast the delay grows.
 - Geolocation accuracy is inherently limited by the source data.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Caches/`](Caches/README.md) | The cache contract and the in-memory cache |
+| [`Sources/`](Sources/README.md) | The source contract and the ip2location.io, ipgeolocation.io and SysWeaver server sources |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.IpLocation.csproj`](SysWeaver.IpLocation.csproj)

@@ -81,6 +81,12 @@ public OrderService(ServiceManager manager, OrderParams p)
 - Constructor selection is by parameter count and resolvability, not by attributes; ambiguous constructors can pick an unexpected overload.
 - Type strings should be assembly-qualified (`"Namespace.Type, Assembly"`), otherwise the type is only found if its assembly happens to be loaded already.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Services/`](Services/README.md) | Built-in `CpuService` and `NetworkService`, text message and e-mail receiver contracts and data types |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroServices.ServiceManager.csproj`](SysWeaver.MicroServices.ServiceManager.csproj)

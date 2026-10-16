@@ -38,6 +38,12 @@ Extract video information (size, fps, duration) and decode frames for thumbnails
 - `VideoInfo` calls are serialized by a global lock
 - FFmpeg licensing obligations apply to redistributed binaries
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`runtimes/`](runtimes/README.md) | Gzip compressed native FFmpeg libraries per platform (Windows x64, Linux x64 / arm64) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Media.Video.csproj`](SysWeaver.Media.Video.csproj)

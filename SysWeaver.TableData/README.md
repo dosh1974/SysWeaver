@@ -73,6 +73,14 @@ public TableData OrdersTable(TableDataRequest r) => TableDataTools.Get(r, 5000, 
 - Computed columns only support numeric column types.
 - CSV export doesn't protect values against spreadsheet formula injection.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Edit/`](Edit/README.md) | Table editing operations and the (not yet exposed) column aggregation code |
+| [`Translation/`](Translation/README.md) | `TypeTranslator`: translation of `[AutoTranslate]` members |
+| [`srcData/`](srcData/README.md) | Embedded templates for the HTML table exporter (`Simple/`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.TableData.csproj`](SysWeaver.TableData.csproj)

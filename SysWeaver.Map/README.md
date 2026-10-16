@@ -44,6 +44,12 @@ flowchart LR
 - Map data is a static snapshot; border changes require new data and a rebuild
 - Regional detail is limited to the regions present in the embedded data
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | Source map data (SVG + JSON region index per map), Brotli compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Map.csproj`](SysWeaver.Map.csproj)

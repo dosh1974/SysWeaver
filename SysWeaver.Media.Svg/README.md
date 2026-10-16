@@ -54,6 +54,12 @@ flowchart LR
 - Rendering fidelity follows the Skia-based SVG renderer's feature coverage
 - On Linux the referenced `SkiaSharp.NativeAssets.Linux.NoDependencies` needs no fontconfig or fonts, but installed fonts are not used: text elements fall back to font files from `SvgFont.AddFontPath` folders or the embedded `MontserratBlack`. Convert text to paths (`SvgCanvas.RasterizeText`, `SvgScene.AddText`) for identical output on every machine
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | TrueType fonts embedded for text-to-path conversion (`SvgFont`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Media.Svg.csproj`](SysWeaver.Media.Svg.csproj)

@@ -60,6 +60,12 @@ flowchart LR
 - At least one authorizer is required, and only one auth manager per process is intended
 - `LoginService` requires `AuthManagerService`
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded web assets: login / logout pages, `Auth.js`, `AuthUi.js`, icons |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.Auth.csproj`](SysWeaver.MicroService.Auth.csproj)

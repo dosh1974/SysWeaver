@@ -84,6 +84,12 @@ Combine it with an SMS provider ([SysWeaver.TextMessage.Twilio](../SysWeaver.Tex
 10. **Production numbers** - *WhatsApp Manager → Phone numbers → Add phone number* for each country. The number must be able to receive an SMS or a voice call for verification and must not be in use with the WhatsApp (Business) app (unless using coexistence). Set a display name (reviewed by Meta), register the number for the Cloud API (two-step verification PIN), add a payment method, and complete *business verification* to raise the limits on numbers and messaging. All numbers in all WhatsApp accounts that are subscribed to the app are delivered to the same webhook, the service routes them using the phone number id.
 11. **Costs** - Meta charges per delivered template message (by category and recipient country), replies within the customer service window are free. See <https://developers.facebook.com/docs/whatsapp/pricing>.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`api/`](api/README.md) | The WhatsApp Cloud (Graph) API contract for `RemoteConnection` and its request, response and webhook json types |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.TextMessage.WhatsApp.csproj`](SysWeaver.TextMessage.WhatsApp.csproj)

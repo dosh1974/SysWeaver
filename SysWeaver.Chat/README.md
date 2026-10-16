@@ -59,6 +59,12 @@ flowchart TB
 - `SimpleChatService` keeps messages in memory; use the MySQL provider for persistence
 - Sharing requires a user storage service (`IUserStorageService`), translation requires a translator on the HTTP server
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | The web chat UI (page, script, styles, icons), compressed and embedded at build time |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Chat.csproj`](SysWeaver.Chat.csproj)

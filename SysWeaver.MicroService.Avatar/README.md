@@ -46,6 +46,12 @@ flowchart LR
 - When a disc folder is configured but missing, no images are generated
 - Images are always 256×256 SVG, regardless of the requested size
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | The 648 embedded SVG icons the avatars are built from |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.Avatar.csproj`](SysWeaver.MicroService.Avatar.csproj)

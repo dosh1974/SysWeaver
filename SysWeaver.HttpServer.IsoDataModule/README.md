@@ -46,6 +46,12 @@ Registered by `IsoDataService` from [SysWeaver.MicroService.Edit](../SysWeaver.M
 - The scripts are only published when a `StaticDataHttpServerModule` is registered, and the flag images come from [SysWeaver.HttpServer.IconModule](../SysWeaver.HttpServer.IconModule/README.md), which must be registered too.
 - The build optimises and compresses the embedded SVG assets with Windows tools from `_tools`.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Static web assets served under `iso_data/` (the "unknown" fall-back icon) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.HttpServer.IsoDataModule.csproj`](SysWeaver.HttpServer.IsoDataModule.csproj)

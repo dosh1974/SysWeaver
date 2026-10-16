@@ -42,6 +42,12 @@ Durable chat history for [SysWeaver.Chat](../SysWeaver.Chat/README.md) that surv
 - Requires a MySQL server (schema `Chat` by default)
 - Room providers are not discovered automatically, they must be added in code
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Db/`](Db/README.md) | Database row classes for the room table and the per room message tables |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Chat.MySql.csproj`](SysWeaver.Chat.MySql.csproj)

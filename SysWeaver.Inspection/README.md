@@ -47,6 +47,12 @@ flowchart LR
 - Writing (with an `IWriteInspector`) only reads the collections, so several threads may write the same collection at the same time.
 - The handlers are compiled expression trees: the first use of a type is slow, and every type used stays in memory.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Handlers/`](Handlers/README.md) | Internal handler builders for arrays, enums, collections, `Nullable<U>` and `KeyValuePair<K, V>` |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Inspection.csproj`](SysWeaver.Inspection.csproj)

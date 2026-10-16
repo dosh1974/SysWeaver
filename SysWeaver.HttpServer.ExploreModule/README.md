@@ -49,6 +49,13 @@ Added by `ExploreHttpServerService` from [SysWeaver.MicroService.HttpServer](../
 - `DataRefTable` returns at most `TableDataTools.DefaultMaxAllowedRows` rows per request (a request with no row limit gets the cap).
 - The build pre-compresses the embedded pages with a Windows tool from `_tools`.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | Template of the generated end point list page, loaded by the module |
+| [`srcWeb/`](srcWeb/README.md) | Source of the explorer pages served under `explore/` |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.HttpServer.ExploreModule.csproj`](SysWeaver.HttpServer.ExploreModule.csproj)

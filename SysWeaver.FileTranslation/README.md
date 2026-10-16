@@ -41,6 +41,12 @@ flowchart LR
 
 - Handles HTML and JavaScript only; CSS (also inside HTML) is not handled
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`ExtensionHandlers/`](ExtensionHandlers/README.md) | HTML and JavaScript template builders and shared helpers |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.FileTranslation.csproj`](SysWeaver.FileTranslation.csproj)

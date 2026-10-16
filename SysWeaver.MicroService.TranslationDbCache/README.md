@@ -52,6 +52,12 @@ Register after the internal translator:
 
 - Requires MySQL (schema `Translations` by default) and an internal translator registered before it (`TranslatorInstance` selects one by name)
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcWeb/`](srcWeb/README.md) | Embedded translation editor page |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.MicroService.TranslationDbCache.csproj`](SysWeaver.MicroService.TranslationDbCache.csproj)

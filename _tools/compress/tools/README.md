@@ -1,0 +1,30 @@
+# tools
+
+[⬆ compress](../README.md)
+
+> Third-party Windows executables that Compress runs to minify web files, recompress PNGs and pre-process / minify shaders before compressing them.
+
+| | |
+|---|---|
+| **Project** | [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) (source in SysWeaver.Tools) |
+| **Kind** | Pre-built tool (helper executables) |
+| **Used by the builds** | Yes, through Compress |
+
+## Purpose
+
+Compress looks for its helpers in the `tools` folder next to `Compress.exe`. The files are copied unchanged from [`Compress/tools`](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/tools/README.md) in SysWeaver.Tools (copied to the output by the `Compress.csproj`). If a helper fails, Compress reports a warning and compresses the file without that step; each step can also be turned off (`-OptimizeWebFiles false`, `-RecompressImages false`, `-OptimizeShaders false`).
+
+## Contents
+
+| Item | Description |
+|---|---|
+| [`minify.exe`](minify.exe) | [minify](https://github.com/tdewolff/minify): minifies web files (`.js`, `.css`, `.html`, `.json`, `.svg`, `.xml`, ...) |
+| [`ZopfliPng.exe`](ZopfliPng.exe) | [ZopfliPng](https://github.com/google/zopfli): recompresses `.png` files (the result replaces the original in the output folder) |
+| [`preprocessor.exe`](preprocessor.exe) | GLSL preprocessor run on `.glsl` / `.frag` shaders (with `-DGL_ES`) |
+| [`shader_minifier.exe`](shader_minifier.exe) | [shader_minifier](https://github.com/laurentlb/shader-minifier): minifies the pre-processed shaders |
+| [`glsl_optimizer.exe`](glsl_optimizer.exe) | GLSL optimiser; shipped but currently not used by Compress |
+
+## Relationships
+
+- **Part of:** [compress](../README.md)
+- **Source:** [SysWeaver.Tools/Compress/tools](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/tools/README.md)

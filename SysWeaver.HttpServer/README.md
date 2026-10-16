@@ -104,6 +104,16 @@ Calling an API: `GET /Api/<class url>/<method>?"value"` or POST the value as the
 - Firewall handling: Windows uses `netsh advfirewall` (needs elevation); Linux detects firewalld, ufw or plain nftables (needs root, never uses `sudo`, does nothing when no firewall is active, iptables-only systems aren't supported, nftables rules are runtime only); macOS has no firewall support. Rules the handler didn't add are never changed or removed.
 - The build pre-compresses the embedded web assets with a Windows tool from `_tools`, so the project builds as-is only on Windows.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Auth/`](Auth/README.md) | Exceptions for missing sessions, missing or existing logins and insufficient tokens |
+| [`CachedTransformer/`](CachedTransformer/README.md) | Base class and contracts of the disc-cached file transformers |
+| [`Security/`](Security/README.md) | Firewall handlers for Windows (netsh) and Linux (ufw, firewalld, nftables) |
+| [`Services/`](Services/README.md) | Service contracts for user images and user storage |
+| [`srcWeb/`](srcWeb/README.md) | Source of the embedded web application shell (`index.html`, `app/`, `common/`, `help/`) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.HttpServer.csproj`](SysWeaver.HttpServer.csproj)

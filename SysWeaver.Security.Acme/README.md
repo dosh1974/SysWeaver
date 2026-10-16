@@ -52,6 +52,12 @@ The provider implements `ICertificateProvider` (see [SysWeaver.Security](../SysW
 - Intermediate certificates are only embedded for the Let's Encrypt staging directory; for other CAs use `ImportCertFiles` if needed
 - **Security:** the account key is stored as an unencrypted PEM and the certificate `.pfx` with the configured password (default: the application name), by default under `$(CommonApplicationData)`, readable by all local users; protect the folders
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Certs/`](Certs/README.md) | Embedded issuer certificates per ACME directory (Let's Encrypt staging root) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Security.Acme.csproj`](SysWeaver.Security.Acme.csproj)

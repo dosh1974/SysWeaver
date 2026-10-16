@@ -107,6 +107,24 @@ Deploy `SysWeaver.Common.Windows` and/or `SysWeaver.Common.Linux` next to the ex
 - Path validation and file helpers follow the rules of the OS they run on (e.g. on Linux `\` is a valid file name character); files are memory mapped only on Windows and read into pooled memory elsewhere
 - The `Inspection` contracts live in a folder spelled `Inpsection`; the namespace is `SysWeaver.Inspection`. The public `SysWeaver.ReadOnlyDictionary<K,V>` clashes with `System.Collections.ObjectModel.ReadOnlyDictionary` when both namespaces are imported
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`AI/`](AI/README.md) | AI tool attributes and the tool invocation context (`AiToolAttribute`, `IHaveAiTools`, `IAiToolContext`) |
+| [`Chart/`](Chart/README.md) | Chart exporter contract (`IChartExporter`, `IHaveChartExporters`) |
+| [`Collections/`](Collections/README.md) | `CompactAsciiStringSet`, a memory compact sorted string set |
+| [`Data/`](Data/README.md) | Table data format, requests, filters, exporter contract and `TableData*` attributes |
+| [`Edit/`](Edit/README.md) | `Edit*` attributes for generated object editors |
+| [`IO/`](IO/README.md) | Endianness aware binary readers and a length limited stream view |
+| [`Inpsection/`](Inpsection/README.md) | Inspection contracts (`IInspector`, `IDescribable`, `DescVersionAttribute`); the folder name is misspelled, the namespace is `SysWeaver.Inspection` |
+| [`ManagedFile/`](ManagedFile/README.md) | Local or http(s) files kept current with change notification |
+| [`Markdown/`](Markdown/README.md) | Internal markdown parser and HTML / Slack renderers behind `WebTools` |
+| [`Net/`](Net/README.md) | `HttpResponseException` |
+| [`Search/`](Search/README.md) | Text search contracts and `SimpleTextSearch` |
+| [`Security/`](Security/README.md) | `CertificateTools`, `ICertificateProvider`, `IFirewallHandler` |
+| [`Translation/`](Translation/README.md) | Translator and language identifier contracts, translation requests and options |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Common.csproj`](SysWeaver.Common.csproj)

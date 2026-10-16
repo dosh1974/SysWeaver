@@ -46,6 +46,13 @@ Added by `IconHttpServerService` in [SysWeaver.MicroService.HttpServer](../SysWe
 - The icon optimisation and compression build steps use Windows tools from `_tools`.
 - Icons without fill information depend on page CSS for their colour.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`srcData/`](srcData/README.md) | Icons loaded by the module: document template and overlays for generated icons, folder / API icons, country flags |
+| [`srcWeb/`](srcWeb/README.md) | Source of the icon library served under `icons/` (UI icons, colour, external and file extension icons) |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.HttpServer.IconModule.csproj`](SysWeaver.HttpServer.IconModule.csproj)

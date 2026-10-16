@@ -65,6 +65,13 @@ Or register it from code at startup: `SysWeaver.Serialization.SysWeaverJsonSeria
 - **Security:** `$type` in the input can only name types allowed by the `DataTypePolicy` (see `TypeFinder.GetForData`), and the type must be assignable to the declared type.
 - Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
 
+## Folder layout
+
+| Folder | Content |
+|---|---|
+| [`Reader/`](Reader/README.md) | Internals of `JsonReader`: low level UTF-8 parsing, primitive parsers and the compiled, cached per-type readers |
+| [`Writer/`](Writer/README.md) | Internals of `JsonWriter`: the pinned output buffer and fast UTF-8 value formatting |
+
 ## Relationships
 
 - **Project:** [`SysWeaver.Serialization.SwJson.csproj`](SysWeaver.Serialization.SwJson.csproj)
