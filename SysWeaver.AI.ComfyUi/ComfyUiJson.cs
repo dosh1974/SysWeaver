@@ -87,7 +87,7 @@ namespace SysWeaver.AI
         static String GetFileName(byte[] data)
             => String.Concat("sw_", Convert.ToHexStringLower(SHA256.HashData(data), 0, 16), GetExt(data));
 
-        static String GetExt(ReadOnlySpan<byte> d)
+        internal static String GetExt(ReadOnlySpan<byte> d)
         {
             if (d.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4e, 0x47]))
                 return ".png";
@@ -110,6 +110,8 @@ namespace SysWeaver.AI
                 if (d.Slice(4, 4).SequenceEqual("ftyp"u8))
                     return ".mp4";
             }
+            if (d.StartsWith((ReadOnlySpan<byte>)[0x1a, 0x45, 0xdf, 0xa3]))
+                return ".webm";
             if (d.StartsWith("fLaC"u8))
                 return ".flac";
             if (d.StartsWith("OggS"u8))

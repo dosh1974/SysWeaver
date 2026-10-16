@@ -1,0 +1,169 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Script</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Script.CsAsyncScript`2">
+            <summary>
+            A compiled async script, see <see cref="M:SysWeaver.Script.CsScript.CreateAsync``2(System.String,Microsoft.CodeAnalysis.CSharp.LanguageVersion)"/>
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The result type (of the task)</typeparam>
+        </member>
+        <member name="M:SysWeaver.Script.CsAsyncScript`2.Run(`0)">
+            <summary>
+            Run the script (call its Main method), can be called concurrently (if the script code is thread safe)
+            </summary>
+            <param name="p">The input</param>
+            <returns>The task returned by Main (exceptions thrown by an async Main are in the task)</returns>
+            <exception cref="T:System.ObjectDisposedException">The script is disposed</exception>
+            <exception cref="T:System.Reflection.TargetInvocationException">The script threw an exception synchronously (it's the inner exception)</exception>
+        </member>
+        <member name="F:SysWeaver.Script.CsAsyncScript`2.Fn">
+            <summary>
+            A typed delegate to Main (null when disposed, or when Main's parameter type needs a conversion of the input, then Mi is invoked)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsAsyncScript`2.OnDispose">
+            <summary>
+            Release the delegate (it references the compiled assembly, keeping it would prevent the unloading)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Script.CsScript">
+            <summary>
+            Compiles C# source code (with Roslyn) into a collectible assembly and exposes its static Main method as a function.
+            The source code is the body of a static class (in the namespace "CsScript"), it must contain a static method "Main" with a single parameter of the input type (found with the default binder, so a parameter type that the input type widens to, ex: long for int, is accepted too).
+            The script can use the namespaces of some default types (System, System.Linq, System.Collections.Generic, System.Collections.Concurrent, System.IO, System.Threading, System.Threading.Tasks, System.Runtime),
+            of the input and result types and of the supplied types. All assemblies loaded from a file into the process are referenced.
+            Scripts run with the full permissions of the process, only run trusted code
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsScript.CreateAsync``2(System.String,Microsoft.CodeAnalysis.CSharp.LanguageVersion)">
+            <summary>
+            Compile an async script, the source must contain a "static async Task&lt;R&gt; Main(T p)" method (or any static Main(T) returning a Task&lt;R&gt;)
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The result type (of the task)</typeparam>
+            <param name="sourceCode">The body of the static script class</param>
+            <param name="csVersion">The C# language version to use</param>
+            <returns>The script, dispose it to unload the compiled assembly</returns>
+            <exception cref="T:System.ArgumentNullException">The source code is null</exception>
+            <exception cref="T:System.ArgumentException">The source code doesn't compile (the message contains the compiler errors) or there is no matching Main method</exception>
+        </member>
+        <member name="M:SysWeaver.Script.CsScript.CreateAsync``2(System.String,System.Reflection.Assembly[],System.Type[],Microsoft.CodeAnalysis.CSharp.LanguageVersion)">
+            <summary>
+            Compile an async script, the source must contain a "static async Task&lt;R&gt; Main(T p)" method (or any static Main(T) returning a Task&lt;R&gt;)
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The result type (of the task)</typeparam>
+            <param name="sourceCode">The body of the static script class</param>
+            <param name="assemblies">Extra assemblies to reference (null for none), only assemblies loaded from a file can be referenced</param>
+            <param name="types">Types whose namespaces are imported (with using) and whose assemblies are referenced (null for none)</param>
+            <param name="csVersion">The C# language version to use</param>
+            <returns>The script, dispose it to unload the compiled assembly</returns>
+            <exception cref="T:System.ArgumentNullException">The source code is null</exception>
+            <exception cref="T:System.ArgumentException">The source code doesn't compile (the message contains the compiler errors) or there is no matching Main method</exception>
+        </member>
+        <member name="M:SysWeaver.Script.CsScript.Create``2(System.String,Microsoft.CodeAnalysis.CSharp.LanguageVersion)">
+            <summary>
+            Compile a script, the source must contain a "static R Main(T p)" method
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The result type</typeparam>
+            <param name="sourceCode">The body of the static script class, ex: "static int Main(int x) => x * x;"</param>
+            <param name="csVersion">The C# language version to use</param>
+            <returns>The script, dispose it to unload the compiled assembly</returns>
+            <exception cref="T:System.ArgumentNullException">The source code is null</exception>
+            <exception cref="T:System.ArgumentException">The source code doesn't compile (the message contains the compiler errors) or there is no matching Main method</exception>
+        </member>
+        <member name="M:SysWeaver.Script.CsScript.Create``2(System.String,System.Reflection.Assembly[],System.Type[],Microsoft.CodeAnalysis.CSharp.LanguageVersion)">
+            <summary>
+            Compile a script, the source must contain a "static R Main(T p)" method
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The result type</typeparam>
+            <param name="sourceCode">The body of the static script class, ex: "static int Main(int x) => x * x;"</param>
+            <param name="assemblies">Extra assemblies to reference (null for none), only assemblies loaded from a file can be referenced</param>
+            <param name="types">Types whose namespaces are imported (with using) and whose assemblies are referenced (null for none)</param>
+            <param name="csVersion">The C# language version to use</param>
+            <returns>The script, dispose it to unload the compiled assembly</returns>
+            <exception cref="T:System.ArgumentNullException">The source code is null</exception>
+            <exception cref="T:System.ArgumentException">The source code doesn't compile (the message contains the compiler errors) or there is no matching Main method</exception>
+        </member>
+        <member name="T:SysWeaver.Script.CsScriptBase">
+            <summary>
+            Base class of the compiled scripts
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsScriptBase.Dispose">
+            <summary>
+            Release the script and unload its load context (the assembly is collected when it's no longer used).
+            The script can't be run after this
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsScriptBase.OnDispose">
+            <summary>
+            Called by Dispose before the load context is unloaded, a subclass must release everything that references the compiled assembly (ex: a delegate to Main)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsScriptBase.TryCreateDelegate``1(System.Reflection.MethodInfo)">
+            <summary>
+            A typed delegate to a static method, null if the method can't be bound to the delegate type without a conversion (ex: a value type input to a wider parameter type)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Script.CsScriptBase.Lc">
+            <summary>
+            The load context of the compiled assembly (null when disposed)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Script.CsScriptBase.Mi">
+            <summary>
+            The Main method of the script (null when disposed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsScriptBase.#ctor(SysWeaver.Script.SimpleUnloadableAssemblyLoadContext,System.Reflection.MethodInfo)">
+            <summary>
+            Create a script
+            </summary>
+            <param name="lc">The load context of the compiled assembly</param>
+            <param name="mi">The Main method of the script</param>
+        </member>
+        <member name="T:SysWeaver.Script.CsScript`2">
+            <summary>
+            A compiled script, see <see cref="M:SysWeaver.Script.CsScript.Create``2(System.String,Microsoft.CodeAnalysis.CSharp.LanguageVersion)"/>
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The result type</typeparam>
+        </member>
+        <member name="M:SysWeaver.Script.CsScript`2.Run(`0)">
+            <summary>
+            Run the script (call its Main method), can be called concurrently (if the script code is thread safe)
+            </summary>
+            <param name="p">The input</param>
+            <returns>The result of Main</returns>
+            <exception cref="T:System.ObjectDisposedException">The script is disposed</exception>
+            <exception cref="T:System.Reflection.TargetInvocationException">The script threw an exception (it's the inner exception)</exception>
+        </member>
+        <member name="F:SysWeaver.Script.CsScript`2.Fn">
+            <summary>
+            A typed delegate to Main (null when disposed, or when Main's parameter type needs a conversion of the input, then Mi is invoked)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.CsScript`2.OnDispose">
+            <summary>
+            Release the delegate (it references the compiled assembly, keeping it would prevent the unloading)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Script.SimpleUnloadableAssemblyLoadContext">
+            <summary>
+            A collectible assembly load context, dependencies are resolved by the default context
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Script.SimpleUnloadableAssemblyLoadContext.#ctor">
+            <summary>
+            Create a collectible load context
+            </summary>
+        </member>
+    </members>
+</doc>

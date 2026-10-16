@@ -196,12 +196,20 @@ namespace SysWeaver.AI
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Members declared by ComfyUiParams (or its base types) are connection parameters, never workflow inputs / outputs.
+        /// So an input type can inherit ComfyUiParams (ex: a command line tool that takes both the connection and the inputs).
+        /// </summary>
+        static bool IsConnectionMember(MemberInfo m) => m.DeclaringType?.IsAssignableFrom(typeof(ComfyUiParams)) ?? false;
+
         static IEnumerable<(MemberInfo Member, Type Type)> GetMembers(Type t, bool forWrite)
         {
             const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
             foreach (var p in t.GetProperties(flags))
             {
                 if (p.GetIndexParameters().Length > 0)
+                    continue;
+                if (IsConnectionMember(p))
                     continue;
                 if (forWrite ? (p.SetMethod?.IsPublic != true) : (p.GetMethod?.IsPublic != true))
                     continue;
@@ -212,6 +220,8 @@ namespace SysWeaver.AI
             foreach (var f in t.GetFields(flags))
             {
                 if (forWrite && f.IsInitOnly)
+                    continue;
+                if (IsConnectionMember(f))
                     continue;
                 if (f.IsDefined(typeof(ComfyUiIgnoreAttribute), true))
                     continue;

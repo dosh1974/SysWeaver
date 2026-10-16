@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>RunComfyUi</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.RunComfyUiProgram">
+            <summary>
+            Runs a ComfyUI workflow from the command line.
+            The input and output types are generated from the workflow (ComfyUiTypeGenerator) and compiled at runtime (Roslyn),
+            the input type inherits ComfyUiParams so its members (the connection parameters and the workflow inputs) are the command line options.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.RunComfyUiProgram.ExitRunFailed">
+            <summary>
+            Exit code: running the workflow failed (connection, server or workflow error, cancelled).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.RunComfyUiProgram.ExitNoResults">
+            <summary>
+            Exit code: the workflow returned no results.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.RunComfyUiProgram.BufferedMessages">
+            <summary>
+            Keeps messages to show them later (or not)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.RunComfyUiProgram.BufferedMessages.Replay(SysWeaver.IMessageHost,SysWeaver.MessageLevels)">
+            <summary>
+            Add the kept messages with at least some level to a message host (once)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.RunComfyUiProgram.FindWorkflowFile(System.String[])">
+            <summary>
+            The workflow file: the first argument that is an existing .json file
+            </summary>
+        </member>
+        <member name="M:SysWeaver.RunComfyUiProgram.ParseConnection(System.String[])">
+            <summary>
+            Parse the connection options (the options of ComfyUiParams) only, all other arguments are ignored
+            </summary>
+        </member>
+        <member name="M:SysWeaver.RunComfyUiProgram.GetFileNames(System.Collections.Generic.List{System.ValueTuple{System.Byte[],System.String,System.String}},System.String,System.String)">
+            <summary>
+            The file names of the results.
+            An existing folder (or a name ending with a separator): new files named after the workflow (and the output tag if there are several outputs), with the extension of the result.
+            Else a file name (the extension of the result is added if it has none): the first result is saved to it, other results to new files named after it.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.RunComfyUiProgram.Unique(System.String,System.String,System.String)">
+            <summary>
+            A file name that doesn't exist: "stem.ext", else "stem_2.ext", "stem_3.ext" etc
+            </summary>
+        </member>
+        <member name="T:SysWeaver.WorkflowTypes">
+            <summary>
+            The runtime (Roslyn compiled) input and output types of a workflow.
+            The input type inherits ComfyUiParams, so its members are both the connection parameters and the workflow inputs (used as command line options).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WorkflowTypes.Input">
+            <summary>
+            The input type (inherits ComfyUiParams)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WorkflowTypes.Output">
+            <summary>
+            The output type, each member is a List&lt;byte[]&gt; (all results of an output)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.WorkflowTypes.Outputs">
+            <summary>
+            The outputs: the member of the output type, the output tag and the guessed file extension (from the output node)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.WorkflowTypes.Create(SysWeaver.AI.ComfyUiWorkflow,SysWeaver.IMessageHost)">
+            <summary>
+            Create the types of a workflow
+            </summary>
+            <param name="wf">The (annotated) workflow</param>
+            <param name="msg">Messages</param>
+        </member>
+        <member name="M:SysWeaver.WorkflowTypes.LoadAssembly(System.String)">
+            <summary>
+            Compile the source (or use a cached compilation), the assembly and its xml documentation are written to a cache folder
+            so that the documentation is found for the command line help (SysWeaver.Docs reads "Assembly.xml" next to the assembly)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.WorkflowTypes.GetOutputs(SysWeaver.AI.ComfyUiWorkflow,System.Type)">
+            <summary>
+            The output members, their tags and guessed extensions
+            </summary>
+        </member>
+        <member name="M:SysWeaver.WorkflowTypes.GuessExtension(System.Text.Json.JsonElement,System.String)">
+            <summary>
+            Guess the file extension of an output from its node(s): a "format" like input (ex: "png", "video/h264-mp4"), else the node class (ex: "SaveAudioMP3", "SaveVideo")
+            </summary>
+        </member>
+    </members>
+</doc>

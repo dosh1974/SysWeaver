@@ -1,0 +1,717 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.IsoData</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.AmountExt">
+            <summary>
+            Extension methods that combine an <see cref="T:SysWeaver.Amount"/> with the built-in <see cref="T:SysWeaver.IsoData.IsoCurrency"/> data,
+            e.g. to format money using currency specific symbols and separators.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AmountExt.CurrencyInfo(SysWeaver.Amount)">
+            <summary>
+            Get information about the currency part of the amount.
+            </summary>
+            <param name="amount">The amount, may be null.</param>
+            <returns>Currency information, or null if <paramref name="amount"/> is null or its currency code is unknown (lookup is case insensitive).</returns>
+        </member>
+        <member name="M:SysWeaver.AmountExt.ToAmountString(SysWeaver.Amount)">
+            <summary>
+            Convert the amount to a string using currency specific formatting, i.e. the currency symbol (or ISO code if the currency has no symbol),
+            the currency's thousands separator and automatic rounding (under units are omitted when they round to zero).
+            Ex: "$ 1 234.50", "$ 100", "100 kr".
+            </summary>
+            <param name="amount">The amount, may be null.</param>
+            <returns>The amount as a string, or null if <paramref name="amount"/> is null or an unknown currency is used.</returns>
+            <remarks>Uses <see cref="M:SysWeaver.IsoData.IsoCurrency.ToString(System.Decimal,SysWeaver.IsoData.CurrencyFormatOptions,System.String,System.String)"/> with <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.Symbol"/>,
+            <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.ApplyThousandsSeparator"/> and <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.AutomaticRounding"/>.</remarks>
+        </member>
+        <member name="M:SysWeaver.AmountExt.ToAmountString(SysWeaver.Amount,System.Boolean,System.Boolean)">
+            <summary>
+            Convert the amount to a string using currency specific formatting (symbol and thousands separator).
+            </summary>
+            <param name="amount">The amount, may be null.</param>
+            <param name="autoRound">If true, under units are omitted when they round to zero (<see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.AutomaticRounding"/>).
+            If false, always show decimals, even if they are all zeros.</param>
+            <param name="forceRound">If true, always round to whole units (<see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.ForceRounding"/>, uses banker's rounding).</param>
+            <returns>The amount as a string, or null if <paramref name="amount"/> is null or an unknown currency is used.</returns>
+        </member>
+        <member name="T:SysWeaver.IsoData.CurrencyFormatOptions">
+            <summary>
+            Formatting options when converting an amount value to a displayable string, see <see cref="M:SysWeaver.IsoData.IsoCurrency.ToString(System.Decimal,SysWeaver.IsoData.CurrencyFormatOptions,System.String,System.String)"/>.
+            </summary>
+            <remarks>
+            The two lowest bits select the currency style: <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.IsoPrefix"/>, <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.IsoSuffix"/> or <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.Symbol"/> (both bits), or none.
+            The remaining values are independent flags.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.None">
+            <summary>
+            Only the value is formatted (no currency, no thousands separator, under units are always shown when the currency has any).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.IsoPrefix">
+            <summary>
+            Adds a ISO 4217 currency code as a prefix, ex: "USD 100.00"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.IsoSuffix">
+            <summary>
+            Adds a ISO 4217 currency code as a suffix, ex: "100.00 USD"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.Symbol">
+            <summary>
+            Uses symbol formatting (<see cref="F:SysWeaver.IsoData.IsoCurrency.SymbolPrefix"/> + value + <see cref="F:SysWeaver.IsoData.IsoCurrency.SymbolSuffix"/>), ex: "$ 100.00", "100.00 kr" or "MXV 100.00" (ISO code prefix when the currency has no symbol).
+            Note that this value is the combination of <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.IsoPrefix"/> and <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.IsoSuffix"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.ForceRounding">
+            <summary>
+            Rounds the value to the nearest integer (removing under units), using banker's rounding (midpoints round to even).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.ApplyThousandsSeparator">
+            <summary>
+            Groups the integer part in groups of three digits using the currency's <see cref="F:SysWeaver.IsoData.IsoCurrency.ThousandsSeparator"/> (or the supplied override).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.AutomaticRounding">
+            <summary>
+            Omits the under units when they round to zero, ex: "$ 100.00" => "$ 100" ("$ 100.50" is kept as is).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.CurrencyFormatOptions.Default">
+            <summary>
+            The default formatting option: ISO code prefix and thousands separator, ex: "USD 1 234.50".
+            </summary>
+        </member>
+        <member name="T:SysWeaver.IsoData.IsoCountry">
+            <summary>
+            Contains information about a country or territory (ISO 3166 Alpha 2 code, names, currency, population, area and languages).
+            Use <see cref="M:SysWeaver.IsoData.IsoCountry.TryGet(System.String)"/> to look up by ISO code, <see cref="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.String)"/> to look up by (fuzzy) name, or enumerate <see cref="F:SysWeaver.IsoData.IsoCountry.Countries"/>.
+            </summary>
+            <remarks>
+            All instances are created once from built-in static data and are immutable, so the type is thread safe.
+            Population and land area figures are estimates and zero when unknown.
+            Source: World Bank Open Data API (fetched 2026-10-07), indicators SP.POP.TOTL (population, total; 2025 values) and
+            AG.LND.TOTL.K2 (land area in km², rounded; 2023 values). Countries and territories that the World Bank doesn't cover keep their older
+            (around 2020) curated figures: AI, AQ, AX, BL, BQ, BV, CC, CK, CX, EH, FK, GF, GG, GP, GS, HM, IO, JE, MQ, MS, NF, NU, PM, PN, RE, SH, SJ, TF, TK, TW, UM, VA, WF, YT
+            (and the land area of XK).
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.IsoData.IsoCountry.Flag">
+            <summary>
+            The flag of the country (same value as <see cref="F:SysWeaver.IsoData.IsoCountry.Iso3166a2"/>, rendered as a flag in table data views).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.Iso3166a2">
+            <summary>
+            The ISO 3166 Alpha 2 country code of the country.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.OfficialName">
+            <summary>
+            The official name of the country
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.CommonName">
+            <summary>
+            The common name of the country
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.Currency">
+            <summary>
+            ISO 4217 currency code of the most common currency used in the country, or null if none (ex: Antarctica).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.Population">
+            <summary>
+            The population estimate (number of people, World Bank 2025 where available, else around 2020) of the country, a zero means no information
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.LandArea">
+            <summary>
+            The land area estimate in km² (World Bank 2023 where available, else around 2020) of the country, a zero means no information
+            </summary>
+        </member>
+        <member name="P:SysWeaver.IsoData.IsoCountry.PopDense">
+            <summary>
+            Population density in people per km² (<see cref="F:SysWeaver.IsoData.IsoCountry.Population"/> / <see cref="F:SysWeaver.IsoData.IsoCountry.LandArea"/>) of the country, a zero means no information
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.Languages">
+            <summary>
+            The languages spoken in the country as a comma separated list of ISO 639-1 language codes (most important first), empty if unknown.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.ToString">
+            <summary>
+            Returns a debug friendly description, ex: "SE Sweden [SEK]".
+            </summary>
+            <returns>The ISO code, official name and currency (if any) of the country.</returns>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.Nicks">
+            <summary>
+            Optional comma separated list of alternative names (nick names, abbreviations) for the country, used by <see cref="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.String)"/>.
+            Null if the country has no alternative names.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.TryGet(System.String)">
+            <summary>
+            Get information about a country from a two letter ISO 3166-A2 country code (case insensitive, no trimming).
+            Only the ISO code is accepted, names are not ("Sweden" gives null): use <see cref="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.String)"/> to accept ISO codes and names.
+            Ex:
+              "GB" =&gt; United Kingdom
+              "se" =&gt; Sweden
+            </summary>
+            <param name="iso3166a2">A two letter ISO 3166-A2 country code, may be null.</param>
+            <returns>Information about the country if it's known, or null if it's unknown</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.TryGet(System.ReadOnlySpan{System.Char})">
+            <summary>
+            The same as <see cref="M:SysWeaver.IsoData.IsoCountry.TryGet(System.String)"/> for a span (no allocation)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.String)">
+            <summary>
+            Get information about a country from a country name, nick name, ISO code or a distinctive word of the name (case and diacritics insensitive).
+            Accepts everything <see cref="M:SysWeaver.IsoData.IsoCountry.TryGet(System.String)"/> accepts (every ISO code gives its own country) plus names.
+            Ex:
+              "United Kingdom" =&gt; "GB"
+              "UK" =&gt; "GB"
+              "SWEDEN" =&gt; "SE"
+            </summary>
+            <param name="name">The name of the country, may be null.</param>
+            <returns>Information about the country if it's known, or null if it's unknown</returns>
+            <remarks>
+            The lookup table is built once and contains full names, nick names, ISO codes, single words (4+ letters) of names, and abbreviated variants
+            (ex: "st" for "saint", "rep" for "republic", "is" for "island(s)", "n"/"s"/"e"/"w" for directions). When a single word matches multiple countries,
+            the most populous country wins. The input is not trimmed.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.ReadOnlySpan{System.Char})">
+            <summary>
+            The same as <see cref="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.String)"/> for a span (ex: a part of a string), without allocations for ASCII names of up to 256 chars.
+            </summary>
+            <param name="name">The name of the country (an empty span is the same as a null or empty string).</param>
+            <returns>Information about the country if it's known, or null if it's unknown</returns>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.MaxStackName">
+            <summary>
+            Names up to this length are normalized on the stack
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.NameChanges">
+            <summary>
+            The ASCII chars that FixName(name.FastToLower()) changes or removes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.TryGetNameAscii(System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.IsoData.IsoCountry},System.ReadOnlySpan{System.Char})">
+            <summary>
+            The same as FixName(name.FastToLower()) for ASCII names (no diacritics): lower cased, '-' replaced with ' ' and '.' removed, into a stack buffer
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCountry.FixName(System.String)">
+            <summary>
+            Normalizes a (lower cased) country name for lookup: removes diacritics and periods, and replaces hyphens with spaces.
+            </summary>
+            <param name="name">The name to normalize, must not be null.</param>
+            <returns>The normalized name.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="name"/> is null (DEBUG builds only).</exception>
+        </member>
+        <member name="P:SysWeaver.IsoData.IsoCountry.Aliases">
+            <summary>
+            Enumerates all aliases (lower case lookup keys used by <see cref="M:SysWeaver.IsoData.IsoCountry.TryGetName(System.String)"/>) and the country they map to.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCountry.Countries">
+            <summary>
+            All known countries and territories, ordered (mostly) alphabetically by ISO 3166 Alpha 2 code.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.IsoData.IsoCurrency">
+            <summary>
+            Contains information about a currency (ISO 4217 code and number, symbol and formatting rules).
+            Use <see cref="M:SysWeaver.IsoData.IsoCurrency.TryGet(System.String)"/>, <see cref="M:SysWeaver.IsoData.IsoCurrency.TryGet(System.Int32)"/> or <see cref="M:SysWeaver.IsoData.IsoCurrency.Validate(System.String)"/> to look up a currency, or enumerate <see cref="F:SysWeaver.IsoData.IsoCurrency.Currencies"/>.
+            </summary>
+            <remarks>
+            All instances are created once from built-in static data and are immutable, so the type is thread safe.
+            Also includes a non-ISO "DEM" (number 999) currency intended for demo purposes.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Iso4217">
+            <summary>
+            The three letter ISO 4217 currency code of the currency
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Country">
+            <summary>
+            The "biggest" country that is using this currency as ISO 3166 Alpha 2 country code, can be null for special currencies (funds codes etc).
+            Note that "EU" is used for the Euro.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.IsoData.IsoCurrency.Flag">
+            <summary>
+            The flag of the "biggest" country that is using this currency (same value as <see cref="F:SysWeaver.IsoData.IsoCurrency.Country"/>, rendered as a flag in table data views).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Number">
+            <summary>
+            The ISO 4217 number of the currency
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Symbol">
+            <summary>
+            The symbol of this currency (trimmed), or null if the currency has no symbol.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.UnderUnits">
+            <summary>
+            The number of subdivisions for under units for this currency, ex: USD = 100, MGA = 5, CLF = 10000.
+            A value of 1 means that the currency has no under units.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.DecimalNumbers">
+            <summary>
+            The number of characters used to display the under units of this currency (ceiling of <see cref="F:SysWeaver.IsoData.IsoCurrency.DecimalDigits"/>), ex: USD = 2, MGA = 1.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.DecimalDigits">
+            <summary>
+            The decimal digits for under units for this currency, ex: USD = 2, CLF = 4.
+            Values between 0 and 1 denote a non-decimal subdivision, where the number of under units is 1 / value, ex: MGA = 0.2 (5 iraimbilanja per ariary).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.SymbolPrefix">
+            <summary>
+            Symbol prefix to use when building a string, ex: AmountString = SymbolPrefix + ValueString + SymbolSuffix.
+            Includes any separating space, ex: "$ ". Is the ISO 4217 currency code followed by a space if no symbol is defined, and empty for suffix symbols.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.SymbolSuffix">
+            <summary>
+            Symbol suffix to use when building a string, ex: AmountString = SymbolPrefix + ValueString + SymbolSuffix.
+            Includes any separating space, ex: " kr". Empty for prefix symbols and for currencies without a symbol.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.ThousandsSeparator">
+            <summary>
+            Thousands separator to use when formatting values as text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.DecimalSeparator">
+            <summary>
+            Decimal (under unit) separator to use when formatting values as text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Example">
+            <summary>
+            An example of the formatting, the value 98765.4321 formatted using <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.Symbol"/>, <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.ApplyThousandsSeparator"/> and <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.AutomaticRounding"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Name">
+            <summary>
+            Official name of the currency
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.CommonlyUsed">
+            <summary>
+            Countries / regions where the currency is commonly used (free text).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCurrency.ToString(System.Decimal,SysWeaver.IsoData.CurrencyFormatOptions,System.String,System.String)">
+            <summary>
+            Convert an amount to a displayable string using the formatting rules of this currency.
+            </summary>
+            <param name="amount">The value to convert.</param>
+            <param name="options">Formatting options, see <see cref="T:SysWeaver.IsoData.CurrencyFormatOptions"/>.</param>
+            <param name="decimalSeparatorOverride">Optionally override the default decimal separator (<see cref="F:SysWeaver.IsoData.IsoCurrency.DecimalSeparator"/>).</param>
+            <param name="thousandSeparatorOverride">Optionally override the default thousand separator (<see cref="F:SysWeaver.IsoData.IsoCurrency.ThousandsSeparator"/>), only used with <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.ApplyThousandsSeparator"/>.</param>
+            <returns>A displayable string, ex: "USD 1 234.50" or "$ 1 234.50".</returns>
+            <remarks>
+            The value is rounded to the nearest under unit (banker's rounding). Under units are printed as an integer count padded to
+            <see cref="F:SysWeaver.IsoData.IsoCurrency.DecimalNumbers"/> digits, so for non-decimal currencies (ex: MGA) the digit is the number of under units, not a decimal fraction.
+            Without <see cref="F:SysWeaver.IsoData.CurrencyFormatOptions.ApplyThousandsSeparator"/> the integer part is formatted using the current culture.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCurrency.TryGet(System.String)">
+            <summary>
+            Get currency information given an ISO 4217 currency code, ex: "USD" (case insensitive, no trimming).
+            </summary>
+            <param name="iso4217">The ISO 4217 currency code, ex: "USD", may be null.</param>
+            <returns>Currency information or null if an unknown (or null) currency code was specified.</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCurrency.TryGet(System.Int32)">
+            <summary>
+            Get currency information given an ISO 4217 number, ex: 840
+            </summary>
+            <param name="number">The ISO 4217 number, ex: 840</param>
+            <returns>Currency information or null if an unknown currency number was specified.</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCurrency.Validate(System.String)">
+            <summary>
+            Validate that the input is a known currency, given as an ISO 4217 currency code (case insensitive) or an ISO 4217 number.
+            Leading and trailing white space is ignored.
+            </summary>
+            <param name="currency">The ISO 4217 currency code (ex: "usd") or number (ex: "840") of the currency, may be null.</param>
+            <returns>The normalized (upper case) ISO 4217 currency code, or null if the input is null, empty or not a known currency.</returns>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.Currencies">
+            <summary>
+            A list of all currencies known, ordered (mostly) alphabetically by ISO 4217 code.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoCurrency.ToString">
+            <summary>
+            Returns a debug friendly description, ex: "USD United States dollar [$]".
+            </summary>
+            <returns>The ISO code, name and symbol of the currency.</returns>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.CurrencyGlyphs">
+            <summary>
+            All chars needed to display currency strings (digits, the minus signs '-' and U+2212 (the negative sign of some cultures, ex: sv-SE), ISO codes, symbols and separators of all currencies), sorted by char value.
+            Useful when creating font subsets.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoCurrency.IsCurrencyGlyph">
+            <summary>
+            The set of chars in <see cref="F:SysWeaver.IsoData.IsoCurrency.CurrencyGlyphs"/>, use to test if a char is required to display currency strings.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.IsoData.IsoLanguage">
+            <summary>
+            Contains information about a language (ISO 639-1 and ISO 639-2 codes, name and comments).
+            Use <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGet(System.String)"/>, <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGet(SysWeaver.IsoData.IsoCountry@,System.String)"/>, <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGetName(System.String)"/> or <see cref="M:SysWeaver.IsoData.IsoLanguage.Validate(System.String,System.Boolean)"/>
+            to look up a language, or enumerate <see cref="F:SysWeaver.IsoData.IsoLanguage.Languages"/>.
+            </summary>
+            <remarks>
+            All instances are created once from built-in static data and are immutable.
+            The static initializer also uses <see cref="F:SysWeaver.IsoData.IsoCountry.Countries"/> to compute <see cref="M:SysWeaver.IsoData.IsoLanguage.GetCountries(System.String)"/> and <see cref="F:SysWeaver.IsoData.IsoLanguage.Common"/>.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.ToString">
+            <summary>
+            Returns a debug friendly description, ex: "sv Swedish [swe]" (the comment is appended if present).
+            </summary>
+            <returns>The codes, name and optional comment of the language.</returns>
+        </member>
+        <member name="P:SysWeaver.IsoData.IsoLanguage.Flag">
+            <summary>
+            The flag of the language (same value as <see cref="F:SysWeaver.IsoData.IsoLanguage.Iso639_1"/>, rendered as a language flag in table data views).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.Iso639_1">
+            <summary>
+            The two letter ISO 639-1 language code of this language
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.Iso639_2">
+            <summary>
+            The three letter ISO 639-2 language code of this language
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.Name">
+            <summary>
+            The official name of this language
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.Comment">
+            <summary>
+            Optional comments, null if there are none.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.#ctor(System.String,System.String,System.String,System.String)">
+            <summary>
+            Creates a language instance.
+            </summary>
+            <param name="name">The official name of the language.</param>
+            <param name="iso639_1">The two letter ISO 639-1 language code.</param>
+            <param name="iso639_2">The three letter ISO 639-2 language code.</param>
+            <param name="comment">Optional comment, can be null.</param>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.TryGet(System.String)">
+            <summary>
+            Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code (case insensitive, no trimming).
+            Ex: 
+            "en" =&gt; "English"
+            "afr" =&gt; "Afrikaans"
+            </summary>
+            <param name="iso639">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, may be null.</param>
+            <returns>Information about the language if it's known, or null if it's unknown</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.TryGet(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code (case insensitive, no trimming).
+            The same as <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGet(System.String)"/>, without allocations (ex: for a part of a string).
+            </summary>
+            <param name="iso639">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code.</param>
+            <returns>Information about the language if it's known, or null if it's unknown</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.TryGet(SysWeaver.IsoData.IsoCountry@,System.String)">
+            <summary>
+            Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code.
+            The code can optionally be combined with a two letter ISO 3166-A2 country code using a hyphen.
+            Ex: 
+            "en" =&gt; English, null
+            "en-GB" =&gt; English, United Kingdom
+            "es-MX" =&gt; Spanish, Castilian, Mexico
+            </summary>
+            <param name="country">Information about the country if specified and known, else null</param>
+            <param name="regionalCode">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.</param>
+            <returns>Information about the language if it's known, or null if it's unknown or if a country part is present but unknown.</returns>
+            <remarks>
+            Both the language part and the country part are case insensitive. Everything after the first hyphen is treated as the country part.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.TryGet(SysWeaver.IsoData.IsoCountry@,System.ReadOnlySpan{System.Char})">
+            <summary>
+            The same as <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGet(SysWeaver.IsoData.IsoCountry@,System.String)"/> for a span (ex: a part of a string), without allocations.
+            </summary>
+            <param name="country">Information about the country if specified and known, else null</param>
+            <param name="regionalCode">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.</param>
+            <returns>Information about the language if it's known, or null if it's unknown or if a country part is present but unknown.</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.TryGetName(System.String)">
+            <summary>
+            Get information about a language from a language name (or any comma separated part of the name), ISO 639-1 or ISO 639-2 code (case insensitive).
+            Leading and trailing white space is ignored. If the whole text isn't found, anything from the first hyphen is ignored, so regional codes like "en-GB" are accepted
+            (and names with a hyphen like "Luba-Katanga" are found).
+            Ex:
+              "Swedish" =&gt; "sv"
+              "Maldivian" =&gt; "dv"
+            </summary>
+            <param name="name">The name of the language, may be null.</param>
+            <returns>Information about the language if it's known, or null if it's unknown</returns>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.TryGetName(System.ReadOnlySpan{System.Char})">
+            <summary>
+            The same as <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGetName(System.String)"/> for a span (ex: a part of a string, an empty span is the same as a null or empty string), without allocations for names of up to 256 chars.
+            </summary>
+            <param name="name">The name of the language.</param>
+            <returns>Information about the language if it's known, or null if it's unknown</returns>
+        </member>
+        <member name="P:SysWeaver.IsoData.IsoLanguage.Aliases">
+            <summary>
+            Enumerates all aliases (lower case lookup keys used by <see cref="M:SysWeaver.IsoData.IsoLanguage.TryGetName(System.String)"/>) and the language they map to.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.Languages">
+            <summary>
+            All known languages, ordered (mostly) alphabetically by name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.Common">
+            <summary>
+            ISO 639-1 codes of commonly used languages: languages used in countries with a combined population of at least 10 million,
+            excluding languages whose comment starts with "ancient" (the set is kept identical to the one computed from the previous population data, see <see cref="F:SysWeaver.IsoData.IsoLanguage.KeepCommon"/> and <see cref="F:SysWeaver.IsoData.IsoLanguage.ExcludeCommon"/>).
+            In the same order as <see cref="F:SysWeaver.IsoData.IsoLanguage.Languages"/>.
+            Used as the default set of target languages when no translator is available.
+            </summary>
+            <remarks>This is a shared, mutable array assigned by the static constructor; do not modify it.</remarks>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.KeepCommon">
+            <summary>
+            Languages that were part of <see cref="F:SysWeaver.IsoData.IsoLanguage.Common"/> before the population data was refreshed (2026-10-07) but are now below the threshold,
+            kept so that the default target languages (and user settings using them) keep working.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.IsoData.IsoLanguage.ExcludeCommon">
+            <summary>
+            Languages that are above the threshold with the refreshed population data (2026-10-07) but weren't part of <see cref="F:SysWeaver.IsoData.IsoLanguage.Common"/> before,
+            excluded so that the default target languages (ex: of translators) don't change.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.GetCountries(System.String)">
+            <summary>
+            Get countries where a language is used (according to <see cref="F:SysWeaver.IsoData.IsoCountry.Languages"/>).
+            </summary>
+            <param name="language">The ISO 639-1 language code of the language (case insensitive).</param>
+            <returns>An array of ISO 3166 Alpha 2 country codes where the language is used, or an empty array if unknown.
+            Ordered by a score based on population, where the language's position in the country's language list reduces the score
+            (primary language full population, second 3%, then halved for each further language).</returns>
+            <remarks>The returned array is shared, do not modify it.</remarks>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguage.Validate(System.String,System.Boolean)">
+            <summary>
+            Validate that the input is a valid language code and normalize it.
+            Leading and trailing white space is ignored, and the language may be given as an ISO 639-1 or ISO 639-2 code (case insensitive).
+            </summary>
+            <param name="language">The ISO 639-1 language code of the language with an optional two letter ISO 3166-A2 country code separated by a hyphen ('-')</param>
+            <param name="allowNames">If true a known language name is accepted (only when no country part is present)</param>
+            <returns>The ISO 639-1 language code, optionally followed by a hyphen and the upper case ISO 3166-A2 country code (ex: "en-GB"),
+            or null if <paramref name="language"/> is null, empty or white space.</returns>
+            <exception cref="T:System.FormatException">If the language or country is unknown, or the input contains more than one hyphen (the message is human readable).</exception>
+        </member>
+        <member name="T:SysWeaver.IsoData.IsoLanguageExt">
+            <summary>
+            Extension methods for <see cref="T:SysWeaver.IsoData.IsoLanguage"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IsoData.IsoLanguageExt.GetCountries(SysWeaver.IsoData.IsoLanguage)">
+            <summary>
+            Get countries where a language is used, see <see cref="M:SysWeaver.IsoData.IsoLanguage.GetCountries(System.String)"/>.
+            </summary>
+            <param name="language">The language, may be null.</param>
+            <returns>An array of ISO 3166 Alpha 2 country codes where the language is used, in order of importance (population weighted)</returns>
+            <remarks>The returned array is shared, do not modify it.</remarks>
+        </member>
+        <member name="T:SysWeaver.PhonePrefix">
+            <summary>
+            Information about an international telephone country calling code (optionally narrowed by a region prefix, ex: +1 684 for American Samoa),
+            including dialing prefixes and the valid number of local digits.
+            Use <see cref="M:SysWeaver.PhonePrefix.Identify(System.String,System.Boolean)"/> to find the prefix(es) of a (partial) number, and
+            <see cref="M:SysWeaver.PhonePrefix.GetValidatedPhoneNumber(System.String@,System.String@,System.String)"/> to validate and split a complete international number.
+            </summary>
+            <remarks>
+            The built-in <see cref="F:SysWeaver.PhonePrefix.Codes"/> are indexed into a digit trie once (static constructor), lookups are allocation light and thread safe.
+            Also includes non-country entries (shared, satellite, reserved codes etc) where <see cref="F:SysWeaver.PhonePrefix.IsoCountry"/> is null.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.#ctor(System.String,System.String,System.String,System.String,System.String,System.String,System.Int32,System.Int32[])">
+            <summary>
+            Creates a phone prefix entry.
+            Note that only the entries in <see cref="F:SysWeaver.PhonePrefix.Codes"/> are used by the lookup methods.
+            </summary>
+            <param name="countryCode">The international country calling code digits (without '+'), ex: "46".</param>
+            <param name="name">Name of the country / service.</param>
+            <param name="iso3166a2">Two letter ISO 3166 Alpha 2 country code, or null if this is not a country.</param>
+            <param name="intPrefix">Prefix(es) for dialing an international number from the region, or null.</param>
+            <param name="natPrefix">Prefix(es) for dialing a national number in the region, or null if none is required.</param>
+            <param name="regionPrefix">Comma separated list of region prefix digits that follow the country code (no white space), or null.</param>
+            <param name="rank">Rank used to order multiple matches, higher is more important.</param>
+            <param name="localCounts">Valid number of local digits, in ascending order. Empty means that the code is not usable for phone numbers.</param>
+        </member>
+        <member name="P:SysWeaver.PhonePrefix.Flag">
+            <summary>
+            The flag of the country (same value as <see cref="F:SysWeaver.PhonePrefix.IsoCountry"/>, rendered as a flag in table data views), don't use.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.PhonePrefix.NumLocalDigits">
+            <summary>
+            The number of valid local digits as a human readable string, ex: "7, 8 or 9". Empty if no local counts are defined.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.CountryCode">
+            <summary>
+            The international country calling code digits (without the leading '+'), ex: "46" for Sweden.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.RegionPrefix">
+            <summary>
+            Optional prefix(es) required to identify the region, can be multiple values separated by a comma or null if no region is required.
+            The region prefix digits follow the <see cref="F:SysWeaver.PhonePrefix.CountryCode"/>, ex: "684" for American Samoa (+1 684).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.Name">
+            <summary>
+            Name of phone prefix.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.IsoCountry">
+            <summary>
+            Two letter ISO-3166a2 country code, null means that this is not a country.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.IntPrefix">
+            <summary>
+            Prefix(es) for dialing an international number from the region, ex: "00", null means that this is not a region.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.NatPrefix">
+            <summary>
+            Prefix(es) for dialing a national number in the region, null means that no prefix is required.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.LocalCounts">
+            <summary>
+            Valid number of local digits (excluding region prefix, national prefix and country code), in ascending order.
+            Empty for codes that can't be used for phone numbers (ex: reserved codes).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.Rank">
+            <summary>
+            Approximate rank (higher is more important), roughly according to the population of the country.
+            Methods returning multiple phone prefixes should return the highest ranked first and so on.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.ToString">
+            <summary>
+            Returns a debug friendly description, ex: "+1 (684) American Samoa [AS]".
+            </summary>
+            <returns>The calling code, region prefix (if any), name and country code (if any).</returns>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.Identify(System.Int32@,System.String,System.Boolean)">
+            <summary>
+            Given the start of an international telephone number, identify which phone code(s) it can be.
+            The number is matched digit by digit against all country codes + region prefixes (longest match).
+            </summary>
+            <param name="nextChar">The position in <paramref name="internationalNumber"/> of the next character (the first character that wasn't parsed as part of the prefix), -1 if nothing was parsed.</param>
+            <param name="internationalNumber">An international telephone number as a string (without any international dialing prefix such as "00"), only digits are respected, all other chars are ignored</param>
+            <param name="matchExact">If true, only the exact matches are returned (the longest complete prefix found). This is also the behaviour when the number contains
+            more digits than any matching prefix.</param>
+            <returns>Null if the input is null/empty or no digits matches any prefix, else a list of phone codes that this number could be, highest <see cref="F:SysWeaver.PhonePrefix.Rank"/> first.
+            The list can be empty when no complete prefix was found in exact mode.</returns>
+            <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.Identify(System.Int32@,System.ReadOnlySpan{System.Char},System.Boolean)">
+            <summary>
+            The same as <see cref="M:SysWeaver.PhonePrefix.Identify(System.Int32@,System.String,System.Boolean)"/> for a span (ex: a part of a string, an empty span is the same as a null or empty string).
+            </summary>
+            <param name="nextChar">The position in <paramref name="internationalNumber"/> of the next character (the first character that wasn't parsed as part of the prefix), -1 if nothing was parsed.</param>
+            <param name="internationalNumber">An international telephone number (without any international dialing prefix such as "00"), only digits are respected, all other chars are ignored</param>
+            <param name="matchExact">If true, only the exact matches are returned (the longest complete prefix found).</param>
+            <returns>Null if the input is empty or no digits matches any prefix, else a list of phone codes that this number could be, highest <see cref="F:SysWeaver.PhonePrefix.Rank"/> first.</returns>
+            <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.Identify(System.String,System.Boolean)">
+            <summary>
+            Given the start of an international telephone number, identify which phone code(s) it can be.
+            Ex: "+4" returns all codes starting with 4, "+46 70 123" returns Sweden.
+            </summary>
+            <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
+            <param name="matchExact">If true, only the exact matches are returned</param>
+            <returns>Null if no digits are found, else a list of phone codes that this number could be, highest <see cref="F:SysWeaver.PhonePrefix.Rank"/> first.</returns>
+            <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.GetValidatedPhoneNumber(System.String@,System.String@,System.String)">
+            <summary>
+            Validate a complete international telephone number and split it into a prefix and a local number.
+            </summary>
+            <param name="prefix">The prefix digits with a + at the start, with a space between the country code and any region prefix, ex: "+46" or "+1 684"</param>
+            <param name="localNumber">The local number digits</param>
+            <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
+            <returns>The phone prefix(es) for this number whose <see cref="F:SysWeaver.PhonePrefix.LocalCounts"/> accept the number of local digits (at least one).</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="internationalNumber"/> is null.</exception>
+            <exception cref="T:System.FormatException">If no known prefix matches, or the number of local digits isn't valid for any matching prefix.
+            The message is human readable (ex: "A Sweden phone number must contain at least 9 digits", the digit counts include the prefix digits).</exception>
+        </member>
+        <member name="M:SysWeaver.PhonePrefix.GetValidatedPhoneNumber(System.String@,System.String@,System.String@,System.String@,System.String)">
+            <summary>
+            Validate a complete international telephone number of a country and split it into a prefix and a local number.
+            Same as <see cref="M:SysWeaver.PhonePrefix.GetValidatedPhoneNumber(System.String@,System.String@,System.String)"/> but only country prefixes are accepted.
+            </summary>
+            <param name="name">Name(s) of the countries that the number can be in, ex: "Sweden" or "Canada or United States"</param>
+            <param name="isoCountry">Two letter ISO-3166a2 country code of the highest ranked country</param>
+            <param name="prefix">The prefix digits with a + at the start</param>
+            <param name="localNumber">The local number digits</param>
+            <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
+            <returns>The country phone prefix(es) for this number, highest <see cref="F:SysWeaver.PhonePrefix.Rank"/> first</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="internationalNumber"/> is null.</exception>
+            <exception cref="T:System.FormatException">If the number isn't valid (see <see cref="M:SysWeaver.PhonePrefix.GetValidatedPhoneNumber(System.String@,System.String@,System.String)"/>) or the prefix doesn't belong to a country.</exception>
+        </member>
+        <member name="T:SysWeaver.PhonePrefix.Level">
+            <summary>
+            A node in the digit trie, <see cref="F:SysWeaver.PhonePrefix.Level.Partial"/> holds all codes whose prefix passes through this node and <see cref="F:SysWeaver.PhonePrefix.Level.Exact"/> the codes that end here.
+            <see cref="F:SysWeaver.PhonePrefix.Level.Next"/> is set to null for leaf nodes.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.PhonePrefix.Codes">
+            <summary>
+            List of known phone codes (countries, territories and international services).
+            </summary>
+        </member>
+    </members>
+</doc>

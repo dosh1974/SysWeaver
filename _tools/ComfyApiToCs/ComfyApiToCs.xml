@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ComfyApiToCs</name>
+    </assembly>
+    <members>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Namespace">
+            <summary>
+            The namespace of the generated types, empty for no namespace
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.FileScoped">
+            <summary>
+            Use a file scoped namespace ("namespace X;"), false for a namespace block
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.TypeName">
+            <summary>
+            The base name of the types, if empty the cleaned up file name is used (ex: "AUK_Text_2_speech.json" => "AukText2Speech").
+            Only useful when converting a single file.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.InputSuffix">
+            <summary>
+            Appended to the base name for the input type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.OutputSuffix">
+            <summary>
+            Appended to the base name for the output type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Properties">
+            <summary>
+            Generate properties ({ get; set; }), false for fields
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Defaults">
+            <summary>
+            Initialize the input members with the workflow defaults, false leaves them null (not sent, so the workflow default is used)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Nested">
+            <summary>
+            Generate nested types for inputs with an object value (named the base name + the member name), false uses JsonElement?
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Comments">
+            <summary>
+            Generate xml documentation comments (the node, the input and the workflow default)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.ShortNames">
+            <summary>
+            Use the shortest member names that map unambiguously (ex: "Megapixels"), false includes the tag (ex: "ResolutionMegapixels")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Explicit">
+            <summary>
+            Map all members explicitly with [ComfyUiName("tag.input")], else only members that can't be mapped by name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Bypass">
+            <summary>
+            Generate a bool? member for each annotated node, setting it to false bypasses the node(s)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Casing">
+            <summary>
+            How the member names are formatted: Pascal, Camel, Snake or Original
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.FileType">
+            <summary>
+            The type of inputs that looks like a media file name (ex: the image of a "Load Image" node): ComfyUiFile, byte[], Uri or String
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.OutputType">
+            <summary>
+            The type of the outputs: byte[] (the first result), byte[][] or List&lt;byte[]&gt; (all results), String, String[] or List&lt;String&gt; (base64)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.UiFolder">
+            <summary>
+            Optional folder with UI format workflows (as saved by ComfyUI using "Workflow > Save"), the one with the same name as the API workflow is used to annotate the inputs of subgraphs
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsParams.Overwrite">
+            <summary>
+            Overwrite existing .cs files, false skips them
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ComfyApiToCsProgram.ExitConvertFailed">
+            <summary>
+            Exit code: one or more files couldn't be converted (not an API format workflow, invalid json etc), the others are converted.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ComfyApiToCsProgram.CleanTypeName(System.String)">
+            <summary>
+            Clean up a file name to a type name: words (split at non letters / digits and lower to upper case changes) with the first letter in upper case and the rest in lower case,
+            ex: "AUK_Text_2_speech" => "AukText2Speech", "my-workflow v2" => "MyWorkflowV2"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ComfyApiToCsProgram.Main(System.String[])">
+            <summary>
+            Process exit codes (from SysWeaver.CommandLine FilesToFolderTool), 0 = success, non-zero (1-255) = failure:
+            0 = success or help requested, 1 = an exception while processing, 2 = invalid command line, 3 = one or more files couldn't be converted.
+            </summary>
+        </member>
+    </members>
+</doc>

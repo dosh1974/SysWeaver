@@ -16297,6 +16297,14 @@
             <remarks>The lookup is case insensitive (the input is converted to lower case using the invariant culture).
             The returned tuple is shared, all unknown extensions returns the same instance.</remarks>
         </member>
+        <member name="M:SysWeaver.MimeTypeMap.GetMimeType(System.ReadOnlySpan{System.Char},System.Boolean)">
+            <summary>
+            The same as <see cref="M:SysWeaver.MimeTypeMap.GetMimeType(System.String,System.Boolean)"/> for a span (ex: a part of a string), without allocations (for up to 256 chars).
+            </summary>
+            <param name="str">The file extension (with or without the leading '.') or a MIME type (with or without the "; charset=UTF-8" suffix).</param>
+            <param name="withCharset">If true a "; charset=UTF-8" is added to the MIME type of text documents.</param>
+            <returns>The MIME type and true if the type is compressible, "application/octet-stream" (not compressible) if not found.</returns>
+        </member>
         <member name="M:SysWeaver.MimeTypeMap.GetMimeFromUrl(System.String,System.Boolean)">
             <summary>
             Gets the MIME type from the file extension of the last segment of an url (or a file name / path).
@@ -21182,6 +21190,13 @@
             <param name="value">The value, or default if the key wasn't found</param>
             <returns>True if the key was found</returns>
         </member>
+        <member name="M:SysWeaver.SemiFrozenDictionary`2.GetForRead">
+            <summary>
+            Get the dictionary to read one key from: the frozen copy if available, else the underlying dictionary
+            (counted as one read, like a <see cref="M:SysWeaver.SemiFrozenDictionary`2.TryGetValue(`0,`1@)"/> call, so it's frozen after enough reads without modifications).
+            Used for span lookups (<see cref="M:SysWeaver.SpanKeyLookupExt.TryGetValueSpan``1(SysWeaver.SemiFrozenDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)"/>).
+            </summary>
+        </member>
         <member name="M:SysWeaver.SemiFrozenDictionary`2.TryGetValueNotFrozen(`0,`1@)">
             <summary>
             Read the underlaying dictionary (lock free), and freeze it when it has been read enough times since the last modification
@@ -21622,6 +21637,17 @@
         <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueSpan``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)">
             <summary>
             Get the value of a key in a string keyed dictionary using a span (the same result as a lookup with a string with the same chars)
+            </summary>
+            <typeparam name="V">The value type</typeparam>
+            <param name="d">The dictionary, must not be null</param>
+            <param name="key">The key</param>
+            <param name="value">The value of the key, default if not found</param>
+            <returns>True if the key was found</returns>
+        </member>
+        <member name="M:SysWeaver.SpanKeyLookupExt.TryGetValueSpan``1(SysWeaver.SemiFrozenDictionary{System.String,``0},System.ReadOnlySpan{System.Char},``0@)">
+            <summary>
+            Get the value of a key in a string keyed <see cref="T:SysWeaver.SemiFrozenDictionary`2"/> using a span (the same result as <see cref="M:SysWeaver.SemiFrozenDictionary`2.TryGetValue(`0,`1@)"/> with a string with the same chars).
+            No string is created for the key if the comparer supports span lookups (the ordinal comparers, the default string comparer).
             </summary>
             <typeparam name="V">The value type</typeparam>
             <param name="d">The dictionary, must not be null</param>

@@ -52,6 +52,13 @@ namespace SysWeaver.AI
         /// <param name="fileName">The local file name</param>
         /// <returns></returns>
         public static ComfyUiFile FromFile(String fileName) => new ComfyUiFile { Data = File.ReadAllBytes(fileName) };
+
+        /// <summary>
+        /// Get the file extension of some file data from its signature (png, jpg, gif, bmp, webp, wav, mp4, webm, flac, ogg, mp3)
+        /// </summary>
+        /// <param name="data">The file data (or the start of it)</param>
+        /// <returns>The extension including the '.', ".bin" if unknown</returns>
+        public static String GetExtension(ReadOnlySpan<byte> data) => ComfyUiJson.GetExt(data);
     }
 
 }

@@ -24,8 +24,9 @@ Call [ComfyUI](https://github.com/comfyanonymous/ComfyUI) workflows (image, vide
 - Forgiving name matching (`TagInput`, `Tag` or `Input`; case insensitive, ignoring non letters/digits), explicit mapping with `[ComfyUiName]`, `[ComfyUiIgnore]` to skip a member, and a `bool` named after a tag bypasses that node; unmappable or ambiguous members are reported as warnings
 - Automatic annotation of subgraph inputs, using the matching UI format workflow (from `UiWorkflowFolder` or fetched from the ComfyUI server)
 - File inputs (`byte[]`, `ComfyUiFile`, `Uri`), enum and nullable inputs (null keeps the workflow default); outputs as bytes or base64 strings, first or all results
-- `ComfyUiTypeGenerator` generates the C# source of the input and output types for a workflow
+- `ComfyUiTypeGenerator` generates the C# source of the input and output types for a workflow (`GetInputOutputTypes`: two sources, `GetSource`: one file with both), optionally with nested types for object inputs (`NestedTypes`) and a base type for the input type (`InputBaseType`); the [ComfyApiToCs](https://github.com/dosh1974/SysWeaver.Tools/blob/main/ComfyApiToCs/README.md) tool converts workflow files to `.cs` files
 - Optional API key (`Authorization` header, e.g. for an authenticating proxy) and ComfyUI token
+- An input type can inherit `ComfyUiParams` (members declared by it are connection parameters, never mapped to inputs), ex: the [RunComfyUi](https://github.com/dosh1974/SysWeaver.Tools/blob/main/RunComfyUi/README.md) tool parses both from the command line; `ComfyUiFile.GetExtension(data)` gets a file extension from file data
 
 ## Key components
 

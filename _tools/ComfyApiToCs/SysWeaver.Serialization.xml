@@ -1,0 +1,625 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Serialization</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Serialization.IDeserializer">
+            <summary>
+            Creates objects from binary data produced by a matching <see cref="T:SysWeaver.Serialization.ISerializer"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.IDeserializer.Create``1(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Deserialize an object from binary data (UTF-8 encoded text for text based serializers).
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="data">The serialized data.</param>
+            <returns>The deserialized object (null/default if the data represents a null value).</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.IDeserializer.Create``1(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Deserialize an object from binary data (UTF-8 encoded text for text based serializers).
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="data">The serialized data.</param>
+            <returns>The deserialized object (null/default if the data represents a null value).</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.ITextDeserializer">
+            <summary>
+            Creates objects from text produced by a matching <see cref="T:SysWeaver.Serialization.ITextSerializer"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Deserialize an object from text.
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="text">The serialized text.</param>
+            <returns>The deserialized object (null/default if the text represents a null value).</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.String)">
+            <summary>
+            Deserialize an object from text.
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="text">The serialized text.</param>
+            <returns>The deserialized object (null/default if the text represents a null value).</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.ITextDeserializer.FromSpan``1(System.ReadOnlySpan{System.Char})">
+            <summary>
+            Deserialize an object from text, with the same result and exceptions as <see cref="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.String)"/> of the same text
+            (unlike <see cref="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.ReadOnlySpan{System.Char})"/> that may differ in edge cases for some implementations).
+            The default implementation creates a string and calls <see cref="M:SysWeaver.Serialization.ITextDeserializer.FromString``1(System.String)"/>,
+            implementations that can deserialize from a span with the same result override it (no string is created).
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="text">The serialized text.</param>
+            <returns>The deserialized object (null/default if the text represents a null value).</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.ISerializer">
+            <summary>
+            Serializes objects to binary data.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object to binary data (UTF-8 encoded text for text based serializers).
+            </summary>
+            <typeparam name="T">The static type to serialize as. Some implementations add type information when the runtime type of <paramref name="obj"/> differs from <typeparamref name="T"/>, use <see cref="M:SysWeaver.Serialization.SerTools.SerializeWithoutType(SysWeaver.Serialization.ISerializer,System.Object,SysWeaver.Serialization.SerializerOptions)"/> to serialize as the runtime type.</typeparam>
+            <param name="obj">The object to serialize, may be null.</param>
+            <param name="options">The requested output style, implementations are free to ignore it.</param>
+            <returns>The serialized data, owned by the caller. The memory may be a slice of a larger array.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object to binary data (UTF-8 encoded text for text based serializers), written to a buffer writer
+            (ex: a <see cref="T:SysWeaver.Serialization.SerBufferWriter"/>, so that no array is allocated for data that is only needed temporarily).
+            The data written is the same as the data returned by <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/>, with the same exceptions.
+            </summary>
+            <remarks>
+            The default implementation writes the data returned by <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/>,
+            implementations that can serialize to a pooled buffer override it.
+            </remarks>
+            <typeparam name="T">The static type to serialize as, see <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/>.</typeparam>
+            <param name="obj">The object to serialize, may be null.</param>
+            <param name="output">The writer to write the serialized data to.</param>
+            <param name="options">The requested output style, implementations are free to ignore it.</param>
+        </member>
+        <member name="T:SysWeaver.Serialization.ITextSerializer">
+            <summary>
+            Serializes objects to text.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.ITextSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object to a string.
+            </summary>
+            <typeparam name="T">The static type to serialize as.</typeparam>
+            <param name="obj">The object to serialize, may be null.</param>
+            <param name="options">The requested output style, implementations are free to ignore it.</param>
+            <returns>The serialized text.</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.ISerializerInfo">
+            <summary>
+            Describes a serialization format implementation (name, file extension, MIME type, encoding and priority).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Name">
+            <summary>
+            The name of the serializer implementation (for display and diagnostics).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Extension">
+            <summary>
+            The file extension of the serialized format, all lower case without a leading dot (ex: "json", "xml", "bson").
+            This is the key used to look up serializers in <see cref="T:SysWeaver.Serialization.SerManager"/>.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Mime">
+            <summary>
+            The MIME type of the data created by this serializer (ex: "application/json").
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.MimeHeader">
+            <summary>
+            The Content-Type HTTP header value to use (the MIME type with a "; charset=" suffix for text based serializers).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Encoding">
+            <summary>
+            The text encoding used by text based serializers, null for binary serializers.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Prio">
+            <summary>
+            The priority of the serializer, if multiple serializers are registered for the same extension, the one with the highest priority is returned by <see cref="T:SysWeaver.Serialization.SerManager"/>
+            (on a tie, the one registered last wins).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.ISerializerType">
+            <summary>
+            A complete serializer implementation (both serialization and deserialization) that can be registered in <see cref="T:SysWeaver.Serialization.SerManager"/>.
+            </summary>
+            <remarks>
+            Implementations are stateless singletons exposed through a static <c>Instance</c> field and must be thread safe.
+            The service manager recognises types implementing this interface in a manifest and calls their public static parameterless <c>Register</c> method instead of creating an instance.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.ISerializerType.Register">
+            <summary>
+            Register the implementing serializer in <see cref="T:SysWeaver.Serialization.SerManager"/> (implementations call <see cref="M:SysWeaver.Serialization.SerManager.AddType(SysWeaver.Serialization.ISerializerType)"/> with their singleton instance).
+            </summary>
+            <exception cref="T:System.NotImplementedException">The default implementation always throws, implementing types must provide their own static <c>Register</c> method.</exception>
+        </member>
+        <member name="T:SysWeaver.Serialization.ITextSerializerType">
+            <summary>
+            A text based serializer type, that in addition to binary (UTF-8) data can serialize to and deserialize from strings.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.NetJsonSerializer">
+            <summary>
+            Serializer for the "json" extension using System.Text.Json.
+            Always registered by <see cref="T:SysWeaver.Serialization.SerManager"/> (priority 0), so it is the fallback JSON implementation.
+            </summary>
+            <remarks>
+            Public fields are included, read-only fields and get-only properties are ignored.
+            NaN and Infinity are written and accepted as named literals ("NaN", "Infinity").
+            When reading, trailing commas are allowed and comments are skipped.
+            <see cref="F:SysWeaver.Serialization.SerializerOptions.Verbose"/> produces indented output, <see cref="F:SysWeaver.Serialization.SerializerOptions.Typeless"/> is the same as <see cref="F:SysWeaver.Serialization.SerializerOptions.Compact"/>; no type information is ever written.
+            Output uses <see cref="P:System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping"/>, so HTML sensitive characters (&lt; &gt; &amp; ') and non-ASCII characters are NOT escaped, the output must be escaped before it is embedded in HTML.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetJsonSerializer.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetJsonSerializer.Extension">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetJsonSerializer.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.MimeType">
+            <summary>
+            The MIME type of the data produced by this serializer.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetJsonSerializer.Mime">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetJsonSerializer.MimeHeader">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetJsonSerializer.Encoding">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.Instance">
+            <summary>
+            The singleton instance of this serializer.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.ToString">
+            <summary>
+            Returns the <see cref="P:SysWeaver.Serialization.NetJsonSerializer.Name"/> of this serializer.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.WriterOptions">
+            <summary>
+            The writer options that <see cref="M:System.Text.Json.JsonSerializer.SerializeToUtf8Bytes``1(``0,System.Text.Json.JsonSerializerOptions)"/> uses for each of the <see cref="F:SysWeaver.Serialization.NetJsonSerializer.Options"/> (same as the internal JsonSerializerOptions.GetWriterOptions)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.NoOutput">
+            <summary>
+            A writer that the cached json writers are reset to when not in use (so that they don't keep a reference to the caller's writer), nothing is written to it
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.Writers">
+            <summary>
+            The json writers of the thread (one per <see cref="T:SysWeaver.Serialization.SerializerOptions"/>), an entry is null while in use
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.SysWeaver#Serialization#ISerializer#Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+            <remarks>
+            The json is written directly to <paramref name="output"/> using a cached json writer (no array is allocated).
+            Implemented explicitly, so that code finding the Serialize method of the class by name (reflection) is unaffected.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.FromString``1(System.ReadOnlySpan{System.Char})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.FromString``1(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.FromSpan``1(System.ReadOnlySpan{System.Char})">
+            <inheritdoc/>
+            <remarks>The string overload of <see cref="T:System.Text.Json.JsonSerializer"/> deserializes the span of the string, so the result is the same as <see cref="M:SysWeaver.Serialization.NetJsonSerializer.FromString``1(System.String)"/>.</remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.Create``1(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.Create``1(System.ReadOnlyMemory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Serialization.NetXmlSerializer">
+            <summary>
+            Serializer for the "xml" extension using <see cref="T:System.Xml.Serialization.XmlSerializer"/>.
+            Not registered by default, call <see cref="M:SysWeaver.Serialization.NetXmlSerializer.Register"/> to make it available.
+            </summary>
+            <remarks>
+            The usual <see cref="T:System.Xml.Serialization.XmlSerializer"/> restrictions apply: types must be public with a public parameterless constructor and only public read/write members are serialized.
+            The <see cref="T:SysWeaver.Serialization.SerializerOptions"/> are ignored (output is always indented).
+            The XML declaration of both <see cref="M:SysWeaver.Serialization.NetXmlSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/> and <see cref="M:SysWeaver.Serialization.NetXmlSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)"/> states encoding="utf-8" (the <c>Encoding</c>), so the text encoded as UTF-8 can be read as data.
+            Whitespace only strings are read as empty strings (an <see cref="T:System.Xml.Serialization.XmlSerializer"/> limitation).
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetXmlSerializer.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetXmlSerializer.Extension">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetXmlSerializer.Prio">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetXmlSerializer.MimeType">
+            <summary>
+            The MIME type of the data produced by this serializer.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetXmlSerializer.Mime">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetXmlSerializer.MimeHeader">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Serialization.NetXmlSerializer.Encoding">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetXmlSerializer.Instance">
+            <summary>
+            The singleton instance of this serializer.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.ToString">
+            <summary>
+            Returns the <see cref="P:SysWeaver.Serialization.NetXmlSerializer.Name"/> of this serializer.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Serialization.NetXmlSerializer.Utf8StringWriter">
+            <summary>
+            A string writer that reports UTF-8 as its encoding, so that the XML declaration states the <see cref="P:SysWeaver.Serialization.NetXmlSerializer.Utf8StringWriter.Encoding"/> of the serializer
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.FromString``1(System.ReadOnlySpan{System.Char})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.FromString``1(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.Create``1(System.ReadOnlySpan{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.Create``1(System.ReadOnlyMemory{System.Byte})">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.GetSerializer``1">
+            <summary>
+            Get the (thread safe) XmlSerializer for a type, it's created once per type (a failed creation is not cached, so it throws every time, as before)
+            </summary>
+            <typeparam name="T">The type to serialize</typeparam>
+            <returns>The serializer</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.NetXmlSerializer.XmlSerializerCache`1">
+            <summary>
+            A cached XmlSerializer per type (no static initializer, so creation exceptions aren't wrapped in a TypeInitializationException)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.SerBufferWriter">
+            <summary>
+            A buffer writer that writes into pooled buffers (<see cref="M:SysWeaver.ArrayPoolStream.Rent(System.Int32)"/>), for serialized data that is only needed temporarily
+            (ex: <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)"/> followed by a deserialization) without allocating an array for it.
+            </summary>
+            <remarks>
+            Not thread safe. Get an instance using <see cref="M:SysWeaver.Serialization.SerBufferWriter.Rent(System.Int32)"/> and dispose it when the data is no longer used (the buffer is returned to the pool and the instance is reused,
+            one instance is cached per thread, so renting usually doesn't allocate).
+            The instance must not be used after it's disposed.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.Rent(System.Int32)">
+            <summary>
+            Get an empty writer (dispose it when done)
+            </summary>
+            <param name="initialSize">The minimum size of the first buffer in bytes (at least 256 bytes are used)</param>
+            <returns>An empty writer</returns>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerBufferWriter.WrittenCount">
+            <summary>
+            The number of bytes written
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerBufferWriter.WrittenSpan">
+            <summary>
+            The data written (valid until more data is written or the writer is disposed)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerBufferWriter.WrittenMemory">
+            <summary>
+            The data written (valid until more data is written or the writer is disposed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.Advance(System.Int32)">
+            <inheritdoc/>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="count"/> is negative or larger than the space of the last requested buffer.</exception>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.GetMemory(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.GetSpan(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.Dispose">
+            <summary>
+            Return the buffer to the pool, the writer must not be used after this call
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.SerializerOptions">
+            <summary>
+            Output style requested from a serializer.
+            </summary>
+            <remarks>
+            The value is a hint: each implementation interprets it differently and many ignore it completely
+            (MessagePack, Protobuf-Net, SysWeaver.Binary, SysWeaver.Json, SpanJson and Utf8Json always produce the same output).
+            Several implementations use the underlying integer value as an index into per-option settings arrays, so only the defined values are valid.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Serialization.SerializerOptions.Compact">
+            <summary>
+            Compact output intended for transport and storage (no indentation).
+            Newtonsoft based serializers emit type information only where the runtime type differs from the declared type.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.SerializerOptions.Verbose">
+            <summary>
+            Human readable output (indented where supported).
+            Newtonsoft based serializers emit type information for every object.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.SerializerOptions.Typeless">
+            <summary>
+            Compact output without any type information (Newtonsoft based serializers), other implementations treat this like <see cref="F:SysWeaver.Serialization.SerializerOptions.Compact"/>.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.SerManager">
+            <summary>
+            Process wide registry of serializer implementations, keyed by file extension (with and without a leading dot).
+            </summary>
+            <remarks>
+            <see cref="T:SysWeaver.Serialization.NetJsonSerializer"/> is always registered (by the static constructor).
+            Other serializers are added by calling their static <c>Register</c> method (or by listing them in a service manifest).
+            When several serializers share an extension, lookups return the one with the highest <see cref="P:SysWeaver.Serialization.ISerializerInfo.Prio"/>, on a tie the last registered one.
+            Lookups are thread safe, registration should be done at startup (<see cref="M:SysWeaver.Serialization.SerManager.AddType(SysWeaver.Serialization.ISerializerType)"/> is not safe to call concurrently).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerManager.AddType(SysWeaver.Serialization.ISerializerType)">
+            <summary>
+            Register a serializer.
+            The serializer is added to <see cref="P:SysWeaver.Serialization.SerManager.All"/> and becomes the handler for its extension (both "ext" and ".ext") if no handler with a higher priority exists.
+            Text based serializers (<see cref="T:SysWeaver.Serialization.ITextSerializerType"/>) are also registered as text handlers.
+            </summary>
+            <param name="type">The serializer to register.</param>
+            <returns>True if the serializer was added, false if this instance was already registered.</returns>
+            <remarks>Not thread safe, register serializers at startup.</remarks>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.All">
+            <summary>
+            Get all added serializers in the order that they were added (including those that are shadowed by a higher priority serializer).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.Extensions">
+            <summary>
+            Get all supported "file extensions" (each extension is listed both with and without a leading dot).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.TextExtensions">
+            <summary>
+            Get all supported "file extensions" that serialize to text (each extension is listed both with and without a leading dot).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.ExtensionHandlers">
+            <summary>
+            Get the active (highest priority) handler for every supported "file extension" (each extension is listed both with and without a leading dot).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.TextExtensionHandlers">
+            <summary>
+            Get the active (highest priority) text based handler for every supported "file extension" (each extension is listed both with and without a leading dot).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerManager.Get(System.String)">
+            <summary>
+            Get the implementation for a given "file extension" (the one with highest priority if multiple serializers are available).
+            </summary>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".json"). Matching is ordinal (case sensitive). Must not be null.</param>
+            <returns>A serializer for the given file extension or null if none exist.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerManager.GetText(System.String)">
+            <summary>
+            Get the text based implementation for a given "file extension" (the one with highest priority if multiple text serializers are available).
+            Only text based serializers are considered, so this may return a different (lower priority) implementation than <see cref="M:SysWeaver.Serialization.SerManager.Get(System.String)"/>.
+            </summary>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".json"). Matching is ordinal (case sensitive). Must not be null.</param>
+            <returns>A text based serializer for the given file extension or null if none exist.</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.SerTools">
+            <summary>
+            Helper methods used by serializer implementations and consumers.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.ToUTF8(System.String)">
+            <summary>
+            Encode a string as UTF-8.
+            </summary>
+            <param name="st">The string to encode, must not be null.</param>
+            <returns>The UTF-8 bytes, a newly allocated array of the exact size.</returns>
+            <remarks>
+            Invalid surrogates are replaced with U+FFFD, no BOM is written.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.MakeHeader(System.String,System.Text.Encoding)">
+            <summary>
+            Create a Content-Type header value by appending the encoding's char set to a MIME type (ex: "application/json; charset=utf-8").
+            </summary>
+            <param name="mime">The MIME type.</param>
+            <param name="enc">The text encoding, null for binary formats.</param>
+            <returns>The MIME type with a "; charset=" suffix, or <paramref name="mime"/> unchanged if <paramref name="enc"/> (or its header name) is null.</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.SerializeWithoutType(SysWeaver.Serialization.ISerializer,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object as its runtime type (from <see cref="M:System.Object.GetType"/>) rather than as <see cref="T:System.Object"/>, so serializers that add type information for polymorphic values don't do so for the root.
+            <code>
+                SomeType data = new SomeType();
+                Object obj = data;
+                var a = serializer.Serialize(data);
+                var b = serializer.Serialize(obj);
+                var c = serializer.SerializeWithoutType(obj);
+            </code>
+            For the above, a and c will be equal, b may contain type information (depending on the serializer).
+            </summary>
+            <param name="serializer">The serializer.</param>
+            <param name="obj">The object to serialize, if null it is serialized as a null <see cref="T:System.Object"/>.</param>
+            <param name="options">The requested output style.</param>
+            <returns>The serialized data.</returns>
+            <remarks>A compiled delegate is created and cached (thread safe) per runtime type on first use.</remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.DeepCopy``1(SysWeaver.Serialization.ISerializerType,``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Create a deep copy of an object by serializing it and deserializing the data, the same as <c>serializer.Create&lt;T&gt;(serializer.Serialize(obj, options))</c>
+            (same result and exceptions), but the data is written to a pooled buffer (<see cref="T:SysWeaver.Serialization.SerBufferWriter"/>) instead of a new array.
+            </summary>
+            <typeparam name="T">The static type to serialize as and the type to create.</typeparam>
+            <param name="serializer">The serializer.</param>
+            <param name="obj">The object to copy, may be null.</param>
+            <param name="options">The requested output style.</param>
+            <returns>The copy.</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.TextSerTools">
+            <summary>
+            Helper methods for text based serializers.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.TextSerTools.ToStringWithoutType(SysWeaver.Serialization.ITextSerializer,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object to text as its runtime type (from <see cref="M:System.Object.GetType"/>) rather than as <see cref="T:System.Object"/>, so serializers that add type information for polymorphic values don't do so for the root.
+            <code>
+                SomeType data = new SomeType();
+                Object obj = data;
+                var a = serializer.ToString(data);
+                var b = serializer.ToString(obj);
+                var c = serializer.ToStringWithoutType(obj);
+            </code>
+            For the above, a and c will be equal, b may contain type information (depending on the serializer).
+            </summary>
+            <param name="serializer">The text serializer.</param>
+            <param name="obj">The object to serialize, if null it is serialized as a null <see cref="T:System.Object"/>.</param>
+            <param name="options">The requested output style.</param>
+            <returns>The serialized text.</returns>
+            <remarks>A compiled delegate is created and cached (thread safe) per runtime type on first use.</remarks>
+        </member>
+        <member name="T:SysWeaver.Serialization.TypeNameResolver">
+            <summary>
+            Resolves type names used in serialized data (Newtonsoft "$type" names and SysWeaver.Json type names), see <see cref="T:SysWeaver.TypeFinder"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.TypeNameResolver.Get(System.String)">
+            <summary>
+            Get the type for a trusted type name, see <see cref="M:SysWeaver.TypeFinder.Get(System.String,System.Boolean)"/>.
+            </summary>
+            <param name="typeName">The name of the type to find (full name or assembly qualified name).</param>
+            <returns>The type or null if it can't be found (or <paramref name="typeName"/> is null or empty).</returns>
+            <remarks>Any type can be resolved, use <see cref="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)"/> for names from (untrusted) serialized data.</remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.TypeNameResolver.GetForData(System.String,System.Type)">
+            <summary>
+            Get the type for a type name from (untrusted) serialized data, see <see cref="M:SysWeaver.TypeFinder.GetForData(System.String,System.Type)"/> and <see cref="T:SysWeaver.DataTypePolicy"/>.
+            </summary>
+            <param name="typeName">The name of the type to find (full name or assembly qualified name).</param>
+            <param name="expectedType">The type that the value must be assignable to (the declared type), null for any type</param>
+            <returns>The type or null if no type with the name exists (or <paramref name="typeName"/> is null or empty).</returns>
+            <exception cref="T:SysWeaver.DataTypeNotAllowedException">The type isn't allowed by the <see cref="T:SysWeaver.DataTypePolicy"/>, or it isn't assignable to <paramref name="expectedType"/></exception>
+        </member>
+        <member name="T:SysWeaver.SerExtensions">
+            <summary>
+            Convenience extension methods for converting objects to and from JSON using the "json" serializer registered in <see cref="T:SysWeaver.Serialization.SerManager"/>.
+            </summary>
+            <remarks>
+            The serializer is resolved with <see cref="M:SysWeaver.Serialization.SerManager.GetText(System.String)"/> on every call (a cheap dictionary lookup),
+            so the output doesn't depend on whether a call was made before a higher priority JSON serializer was registered.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.ToJsonString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Create a json string from an object.
+            </summary>
+            <typeparam name="T">The static type to serialize as.</typeparam>
+            <param name="value">The object to serialize, may be null.</param>
+            <param name="options">The output style, defaults to <see cref="F:SysWeaver.Serialization.SerializerOptions.Verbose"/> (the effect depends on the active json serializer).</param>
+            <returns>The json text.</returns>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.ToJsonData``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Create a UTF-8 encoded json data blob from an object.
+            </summary>
+            <typeparam name="T">The static type to serialize as.</typeparam>
+            <param name="value">The object to serialize, may be null.</param>
+            <param name="options">The output style, defaults to <see cref="F:SysWeaver.Serialization.SerializerOptions.Verbose"/> (the effect depends on the active json serializer).</param>
+            <returns>The UTF-8 encoded json data.</returns>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Create an object from some UTF-8 encoded json data.
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="data">The UTF-8 encoded json data.</param>
+            <returns>The deserialized object.</returns>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Create an object from some UTF-8 encoded json data.
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="data">The UTF-8 encoded json data.</param>
+            <returns>The deserialized object.</returns>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.Byte[])">
+            <summary>
+            Create an object from some UTF-8 encoded json data.
+            </summary>
+            <typeparam name="T">The type to create.</typeparam>
+            <param name="data">The UTF-8 encoded json data.</param>
+            <returns>The deserialized object.</returns>
+        </member>
+    </members>
+</doc>

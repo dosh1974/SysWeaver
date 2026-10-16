@@ -1,0 +1,847 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.AI.ComfyUi</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.AI.ComfyUiNameAttribute">
+            <summary>
+            Explicitly map a property or field to a workflow value (matching is case insensitive).
+            Input types (T):
+              "tag.input" maps to an input of the node(s) annotated with "$tag".
+              "tag" maps a bool to a node tag, false will bypass the node(s).
+            Output types (R):
+              "tag" maps to the output of the node(s) annotated with "#tag".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiNameAttribute.Name">
+            <summary>
+            The name of the workflow value, "tag.input" or "tag"
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiIgnoreAttribute">
+            <summary>
+            Don't try to map this property or field to a workflow value (no warnings are emitted)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiFile">
+            <summary>
+            A file used as a workflow input (ex: the image of a "Load Image" node).
+            Supply either Data or Url.
+            Note: ComfyUI-Connect caches files by name, if a file with the same name already exist it's used (even if the content differs).
+            If the name is omitted for data, a name is generated from a hash of the content.
+            A byte[] property is the same as a ComfyUiFile with only Data set.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiFile.Name">
+            <summary>
+            The file name (required to be unique per content).
+            If null, a name is generated from the content hash (for data) or the url.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiFile.Data">
+            <summary>
+            The file content
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiFile.Url">
+            <summary>
+            An url that the ComfyUI-Connect server downloads the file from
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiFile.FromData(System.Byte[],System.String)">
+            <summary>
+            Create from some data
+            </summary>
+            <param name="data">The file content</param>
+            <param name="name">Optional name, if null a name is generated from the content hash</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiFile.FromUrl(System.String,System.String)">
+            <summary>
+            Create from an url
+            </summary>
+            <param name="url">The url to download the file from</param>
+            <param name="name">Optional name, if null the file name of the url is used</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiFile.FromFile(System.String)">
+            <summary>
+            Create from a local file (the content is read now, the name is generated from the content hash)
+            </summary>
+            <param name="fileName">The local file name</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiFile.GetExtension(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get the file extension of some file data from its signature (png, jpg, gif, bmp, webp, wav, mp4, webm, flac, ogg, mp3)
+            </summary>
+            <param name="data">The file data (or the start of it)</param>
+            <returns>The extension including the '.', ".bin" if unknown</returns>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiJson">
+            <summary>
+            Helpers used by the compiled workflow delegates to write inputs and read outputs.
+            Writers: All methods named "WriteInput" are used for the exact type of the third parameter.
+            Writers ignore null values (the workflow default is used).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiJson.GetFileName(System.Byte[])">
+            <summary>
+            ComfyUI-Connect caches input files by name, so the name must be unique for the content
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiParams">
+            <summary>
+            Parameters for the ComfyUI service (using the ComfyUI-Connect REST API).
+            See: https://github.com/Good-Dream-Studio/ComfyUI-Connect
+            The (optional) ApiKey is sent as an "Authorization" header (use when ComfyUI is behind an authenticating proxy).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.EndPoint">
+            <summary>
+            The ComfyUI end point (base url), ex: "http://127.0.0.1:8188"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.AuthScheme">
+            <summary>
+            The authorization scheme used when an api key is supplied
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.ComfyUiToken">
+            <summary>
+            Optional ComfyUI token, sent as "_token" in the payload.
+            ComfyUI-Connect uses this token when talking to ComfyUI (needed if ComfyUI requires a token, ex: comfyui-login).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.NetworkTimeoutSeconds">
+            <summary>
+            The network time out in seconds (a workflow request doesn't return until the workflow has completed)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.WorkflowFolder">
+            <summary>
+            The folder where the workflows are stored (API format json files, as saved by "Workflow > Save API Endpoint" or "Export (API)").
+            The workflow name is the file name without the ".json" extension.
+            Variables can be used and with "$(" and ends with ")", ex: "$(ExecutableDir)/ComfyUi".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.UploadWorkflows">
+            <summary>
+            If true, a workflow is uploaded (saved) to the ComfyUI-Connect server the first time it's used.
+            If false, the workflow must already exist on the server (with the same name).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.AnnotateSubgraphInputs">
+            <summary>
+            If true, all inputs of (top level) subgraphs are annotated automatically when a workflow is loaded.
+            The API format doesn't contain the subgraphs (they are flattened), so the UI format workflow (with the same name) is required, see UiWorkflowFolder and FetchUiWorkflows.
+            Each subgraph input becomes a tag named from the label (or name) of the subgraph input, ex: a subgraph input labeled "seed" can be set using a property named "Seed".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.UiWorkflowFolder">
+            <summary>
+            Optional folder with UI format workflows (as saved by ComfyUI using "Workflow > Save"), the file name must match the API format workflow.
+            Variables can be used and with "$(" and ends with ")".
+            If null or if the file doesn't exist, the UI workflow is fetched from the ComfyUI server if FetchUiWorkflows is true.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiParams.FetchUiWorkflows">
+            <summary>
+            If true, the UI format workflow is fetched from the ComfyUI server (the user's saved workflows, "workflows/[name].json"), unless found in the UiWorkflowFolder.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiService">
+            <summary>
+            Run ComfyUI workflows using typed inputs and outputs, through the ComfyUI-Connect REST API.
+            See: https://github.com/Good-Dream-Studio/ComfyUI-Connect
+            Workflows are loaded from a local folder (API format json files) and uploaded to the server on first use (optional).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.#ctor(SysWeaver.MicroService.ServiceManager,SysWeaver.AI.ComfyUiParams,SysWeaver.IMessageHost)">
+            <summary>
+            Create a ComfyUI service
+            </summary>
+            <param name="sm">The service manager</param>
+            <param name="p">The parameters</param>
+            <param name="msg">Optional message host (if null the service manager is used)</param>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiService.UiWorkflowFolder">
+            <summary>
+            The full path of the folder where UI format workflows are loaded from (used to annotate subgraph inputs), null if not used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiService.EndPoint">
+            <summary>
+            The ComfyUI end point (always ends with a '/')
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiService.WorkflowFolder">
+            <summary>
+            The full path of the folder where workflows are loaded from
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.RunWorkflow``2(``0,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Run a workflow.
+            The public properties and fields of T are mapped to the workflow inputs (case insensitive, ignoring non letters or digits):
+              "TagInput" (or "Tag_Input" etc) maps to the input "input" of the node(s) annotated with "$tag".
+              "Tag" maps to the input of the "$tag" node(s) if the tag only has one input (subgraph inputs are annotated like this).
+              A bool named "Tag" maps to the node(s) annotated with "$tag" or "#tag", false will bypass the node(s).
+              "Input" maps to the input "input" if it's unique among all tags.
+              Use [ComfyUiName("tag.input")] or [ComfyUiName("tag")] to map explicitly, [ComfyUiIgnore] to ignore.
+              Null values are not sent (the workflow default is used).
+              byte[], ComfyUiFile and Uri values are sent as files (ex: for a "Load Image" node).
+            The public settable properties and fields of R are mapped to the outputs (nodes annotated with "#tag").
+              Supported types are: byte[] (first result), byte[][] / List&lt;byte[]&gt; (all results), String / String[] / List&lt;String&gt; (base64 encoded).
+            Mapping warnings are reported (once) to the message host.
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The output type</typeparam>
+            <param name="p">The input values, may be null</param>
+            <param name="workflowName">The name of the workflow (base filename, the ".json" extension is added)</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns>The output values</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.Execute``2(System.Threading.CancellationToken,SysWeaver.AI.ComfyUiWorkflow,``0,System.Action{``0,System.Text.Json.Utf8JsonWriter},System.Func{System.Text.Json.JsonElement,``1})">
+            <summary>
+            Called by the compiled workflow delegates
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetWorkflow(System.String)">
+            <summary>
+            Get a workflow (loaded from disc on first use and cached).
+            If AnnotateSubgraphInputs is enabled, the UI format workflow is loaded (or fetched from the server) to annotate the subgraph inputs.
+            </summary>
+            <param name="name">The name of the workflow (base filename, the ".json" extension is added)</param>
+            <returns>The workflow</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetUiWorkflow(System.String)">
+            <summary>
+            Get the UI format version of a workflow, from the UiWorkflowFolder or the ComfyUI server
+            </summary>
+            <param name="name">The name of the workflow</param>
+            <returns>The UI workflow json or null if not found</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.GetWorkflowNames">
+            <summary>
+            Get the names of all workflows in the workflow folder
+            </summary>
+            <returns>The workflow names</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.ReloadWorkflows">
+            <summary>
+            Clear the loaded workflows, so that they are re-loaded (and uploaded) on next use.
+            Use if the workflow files have changed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiService.UploadWorkflow(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Upload (save) a workflow to the ComfyUI-Connect server
+            </summary>
+            <param name="name">The name of the workflow (base filename, the ".json" extension is added)</param>
+            <param name="cancel">Optional cancellation token</param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiSubgraphs">
+            <summary>
+            Annotates the inputs of subgraphs.
+            The API format flattens subgraphs (a node "452" inside the subgraph instance "459" becomes "459:452") and the subgraph inputs are lost.
+            The UI format workflow (as saved by ComfyUI) contains the subgraph definitions, so it's used to find the inner node input(s) that each subgraph input is connected to.
+            Each subgraph input becomes a tag (named from the label or name of the subgraph input), ex: "$seed(seed)" is added to the title of node "459:458".
+            A tag per subgraph input is required since ComfyUI-Connect requires all nodes with a tag to have the input that is set.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiSubgraphs.InstanceTagRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\$([a-zA-Z0-9_-]+)</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match '$'.<br/>
+            ○ 1st capture group.<br/>
+                ○ Match a character in the set [\-0-9A-Z_a-z] atomically at least once.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiSubgraphs.Annotation">
+            <summary>
+            An annotation to add
+            </summary>
+            <param name="Tag">The tag name (without '$')</param>
+            <param name="Input">The input name of the API node(s)</param>
+            <param name="NodeIds">The API node id's</param>
+            <param name="Source">Description of the source (for messages)</param>
+            <param name="AliasTag">The tag of the subgraph instance ("$tag" in the title, or the sanitized title)</param>
+            <param name="AliasInput">The (sanitized) label of the subgraph input</param>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiSubgraphs.Annotation.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String,System.String,System.String)">
+            <summary>
+            An annotation to add
+            </summary>
+            <param name="Tag">The tag name (without '$')</param>
+            <param name="Input">The input name of the API node(s)</param>
+            <param name="NodeIds">The API node id's</param>
+            <param name="Source">Description of the source (for messages)</param>
+            <param name="AliasTag">The tag of the subgraph instance ("$tag" in the title, or the sanitized title)</param>
+            <param name="AliasInput">The (sanitized) label of the subgraph input</param>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiSubgraphs.Annotation.Tag">
+            <summary>The tag name (without '$')</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiSubgraphs.Annotation.Input">
+            <summary>The input name of the API node(s)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiSubgraphs.Annotation.NodeIds">
+            <summary>The API node id's</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiSubgraphs.Annotation.Source">
+            <summary>Description of the source (for messages)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiSubgraphs.Annotation.AliasTag">
+            <summary>The tag of the subgraph instance ("$tag" in the title, or the sanitized title)</summary>
+        </member>
+        <member name="P:SysWeaver.AI.ComfyUiSubgraphs.Annotation.AliasInput">
+            <summary>The (sanitized) label of the subgraph input</summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiSubgraphs.Annotate(System.Byte[],System.Byte[],System.Collections.Generic.IReadOnlySet{System.String},System.Collections.Generic.List{SysWeaver.AI.ComfyUiSubgraphs.Annotation}@)">
+            <summary>
+            Annotate an API workflow with the subgraph inputs found in an UI workflow
+            </summary>
+            <param name="apiJson">The API format workflow</param>
+            <param name="uiJson">The UI format workflow</param>
+            <param name="existingTags">Tags that already exist in the API workflow</param>
+            <param name="annotations">The annotations that was added</param>
+            <returns>The annotated API workflow (utf8 json), or null if nothing was annotated</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiSubgraphs.Sanitize(System.String)">
+            <summary>
+            Create a valid tag name, ComfyUI-Connect only allows [a-zA-Z0-9_-]
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiSubgraphs.Find(System.Text.Json.JsonElement)">
+            <summary>
+            Find all inputs of all top level subgraph instances
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiSubgraphs.Resolve(System.Collections.Generic.Dictionary{System.String,SysWeaver.AI.ComfyUiSubgraphs.Subgraph},SysWeaver.AI.ComfyUiSubgraphs.Subgraph,System.Text.Json.JsonElement,System.String,System.Collections.Generic.List{SysWeaver.AI.ComfyUiSubgraphs.Target},System.Int32)">
+            <summary>
+            Follow the links of a subgraph input to the inner node input(s), recursing into nested subgraphs
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiNameCasing">
+            <summary>
+            How generated names are formatted
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiNameCasing.Pascal">
+            <summary>
+            Ex: "AspectRatio"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiNameCasing.Camel">
+            <summary>
+            Ex: "aspectRatio"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiNameCasing.Snake">
+            <summary>
+            Ex: "aspect_ratio"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiNameCasing.Original">
+            <summary>
+            The workflow name, with invalid characters replaced by '_'
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiTypeOptions">
+            <summary>
+            Options for generating the source of the input and output types of a workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.Namespace">
+            <summary>
+            The namespace of the generated types, null or empty for no namespace
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.FileScopedNamespace">
+            <summary>
+            If true, a file scoped namespace is used ("namespace X;"), else a block
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.WorkflowName">
+            <summary>
+            The workflow name, used for the type names and comments.
+            If null, the file name is used (or "Workflow" if the stream isn't a file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.TypeName">
+            <summary>
+            The base name of the types, if null the workflow name formatted using TypeCasing is used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.InputTypeSuffix">
+            <summary>
+            Appended to the base name for the input type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.InputBaseType">
+            <summary>
+            Optional base type of the input type, ex: "ComfyUiParams" (its members are connection parameters, never mapped to workflow inputs)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.OutputTypeSuffix">
+            <summary>
+            Appended to the base name for the output type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.TypeCasing">
+            <summary>
+            How the type names are formatted (when TypeName is null)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.MemberCasing">
+            <summary>
+            How the member names are formatted.
+            Matching ignores case and non letters / digits so any casing maps to the same input.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.PreferShortNames">
+            <summary>
+            If true, the shortest name that maps unambiguously is used (ex: "Megapixels"), else the tag is included for normal annotated nodes (ex: "ResolutionMegapixels").
+            Subgraph inputs always use the subgraph input label.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.ExplicitNames">
+            <summary>
+            If true, all members are mapped explicitly using [ComfyUiName("tag.input")], else only members that can't be mapped by name are
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.UseProperties">
+            <summary>
+            If true, properties ({ get; set; }) are generated, else fields
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.Sealed">
+            <summary>
+            If true, the types are sealed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.Comments">
+            <summary>
+            If true, xml documentation comments are generated (describing the node and input and showing the workflow default value)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.InitializeDefaults">
+            <summary>
+            If true, input members are initialized with the workflow default value, else they are null (and the workflow default is used)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.BypassMembers">
+            <summary>
+            If true, a bool? member is generated for each annotated node, setting it to false will bypass the node(s)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.NestedTypes">
+            <summary>
+            If true, inputs with an object value get a generated (nested) type, named the base name + the member name, else JsonElement? is used.
+            The members of a nested type are always initialized with the workflow default (the object is sent as a whole, using System.Text.Json)
+            and use [JsonPropertyName] when the member name differs from the json name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.FileInputType">
+            <summary>
+            The type used for inputs that looks like a media file name (ex: the image of a "Load Image" node), can be "ComfyUiFile", "byte[]", "Uri" or "String"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.FloatInputNames">
+            <summary>
+            Number inputs with an integer default are generated as int? (or long? for seeds), unless the input name contains one of these (case insensitive) or the node class contains "Float", then double? is used.
+            The API format doesn't contain the input types, so this is a heuristic.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.OutputType">
+            <summary>
+            The type used for outputs, can be "byte[]" (first result), "byte[][]" / "List&lt;byte[]&gt;" (all results) or "String" / "String[]" / "List&lt;String&gt;" (base64)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.Usings">
+            <summary>
+            If true, the required using statements are added
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.Indent">
+            <summary>
+            The text used for one level of indentation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.NewLine">
+            <summary>
+            The new line sequence
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.MaxCommentValueLength">
+            <summary>
+            The max number of characters of default values shown in comments
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.UiWorkflow">
+            <summary>
+            Optional UI format workflow (as saved by ComfyUI using "Workflow > Save"), used to annotate the inputs of subgraphs.
+            Has precedence over UiWorkflowFileName and UiWorkflowFolder.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.UiWorkflowFileName">
+            <summary>
+            Optional file name of the UI format workflow, used to annotate the inputs of subgraphs.
+            Has precedence over UiWorkflowFolder.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.UiWorkflowFolder">
+            <summary>
+            Optional folder with UI format workflows (ex: "ComfyUI/user/default/workflows"), the file with the same name as the workflow is used to annotate the inputs of subgraphs.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiTypeOptions.Msg">
+            <summary>
+            Optional message host, the automatic subgraph annotations are reported here
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiTypeGenerator">
+            <summary>
+            Generates the source code of the input and output types (to use with ComfyUiService.RunWorkflow) of a workflow.
+            The member names are validated using the same matching rules as RunWorkflow, members that can't be mapped by name uses the [ComfyUiName] attribute.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.GetInputOutputTypes(System.IO.Stream,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Generate the source code of the input and output types of a workflow
+            </summary>
+            <param name="s">A stream with the API format workflow json</param>
+            <param name="options">Optional options</param>
+            <returns>The source code of the input type and the source code of the output type</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.GetInputOutputTypes(System.String,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Generate the source code of the input and output types of a workflow
+            </summary>
+            <param name="fileName">The file name of the API format workflow json</param>
+            <param name="options">Optional options</param>
+            <returns>The source code of the input type and the source code of the output type</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.GetInputOutputTypes(SysWeaver.AI.ComfyUiWorkflow,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Generate the source code of the input and output types of a loaded workflow (ex: from ComfyUiService.GetWorkflow)
+            </summary>
+            <param name="wf">The workflow</param>
+            <param name="options">Optional options (the subgraph options are ignored, the workflow is already annotated)</param>
+            <returns>The source code of the input type and the source code of the output type</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.GetSource(System.String,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Generate the source code of one file with the input type, the output type and the nested types (see <see cref="F:SysWeaver.AI.ComfyUiTypeOptions.NestedTypes"/>) of a workflow
+            </summary>
+            <param name="fileName">The file name of the API format workflow json</param>
+            <param name="options">Optional options</param>
+            <returns>The source code of the file</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.GetSource(SysWeaver.AI.ComfyUiWorkflow,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Generate the source code of one file with the input type, the output type and the nested types (see <see cref="F:SysWeaver.AI.ComfyUiTypeOptions.NestedTypes"/>) of a loaded workflow
+            </summary>
+            <param name="wf">The workflow</param>
+            <param name="options">Optional options (the subgraph options are ignored, the workflow is already annotated)</param>
+            <returns>The source code of the file</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.Load(System.String,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Load an API format workflow file (and the UI format workflow used to annotate subgraphs, see the options)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.Generate(SysWeaver.AI.ComfyUiWorkflow,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            The input, output and nested types of a workflow
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.AddNestedType(System.Text.Json.JsonElement,System.String,System.String,SysWeaver.AI.ComfyUiTypeOptions,System.Collections.Generic.List{SysWeaver.AI.ComfyUiTypeGenerator.TypeDef},System.Collections.Generic.HashSet{System.String})">
+            <summary>
+            Add a nested type for an object value (recursive for object members), returns the type name.
+            All members are initialized with the value (the object is sent as a whole), arrays of numbers / strings / bools become arrays, other arrays JsonElement.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.GetArrayType(System.String,System.Text.Json.JsonElement,SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            The type of an array value in a nested type: an array of numbers, strings or bools (all elements of the same kind), else JsonElement (parsed from the value)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.WriteSource(System.Collections.Generic.List{SysWeaver.AI.ComfyUiTypeGenerator.TypeDef},SysWeaver.AI.ComfyUiTypeOptions)">
+            <summary>
+            Write a source file with some types (usings, namespace, types)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.SplitWords(System.String)">
+            <summary>
+            Split a name into words, at non letters / digits and at lower to upper case changes, ex: "max_Duration", "MaxDuration" => "max", "Duration"
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiTypeGenerator.FormatName(System.String,SysWeaver.AI.ComfyUiNameCasing)">
+            <summary>
+            Format a name as a valid C# identifier
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiWorkflow">
+            <summary>
+            A ComfyUI workflow (API format) loaded from disc, with the ComfyUI-Connect annotations parsed.
+            Node titles are annotated with:
+              "$tag" exposes all inputs of the node, "$tag(a,b)" exposes only the listed inputs, "$tag()" exposes no inputs.
+              "#tag" returns the (image) output of the node.
+            If the UI format workflow is supplied, all inputs of subgraphs are annotated automatically (one tag per subgraph input).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.Name">
+            <summary>
+            The name of the workflow (base file name, used as the endpoint name)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.FileName">
+            <summary>
+            The full file name of the workflow (null if loaded using FromJson)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.Inputs">
+            <summary>
+            The input tags (case sensitive), each with the inputs that can be set (input name, the json value type of the default value).
+            Inputs that are connected to other nodes are excluded.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.Outputs">
+            <summary>
+            The output tags (case sensitive)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.Tags">
+            <summary>
+            All tags (input and output), these can be bypassed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.SubgraphTags">
+            <summary>
+            The tags that was added automatically for subgraph inputs (tag => description of the subgraph input)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.SubgraphInputs">
+            <summary>
+            Subgraph inputs by the subgraph node tag ("$tag" in the title or the title) and input label, the value is the actual "tag.input" to set.
+            This makes a subgraph node behave like an annotated node with the subgraph inputs as inputs, ex: "Prompt.sampler" => "sampler.sampler_name".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.Json">
+            <summary>
+            The workflow json (utf8, no BOM), including any automatic annotations
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.CacheKey">
+            <summary>
+            Uniquely identifies this version of the workflow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AI.ComfyUiWorkflow.InputTargets">
+            <summary>
+            Key is "tag.input", value identifies the node input(s) that are changed, used to detect when different tags refer to the same thing
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiWorkflow.TagRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>([\\$#!])([a-zA-Z0-9_-]+)(?:\\(([^)]*)\\))?</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ 1st capture group.<br/>
+                ○ Match a character in the set [!#$].<br/>
+            ○ 2nd capture group.<br/>
+                ○ Match a character in the set [\-0-9A-Z_a-z] greedily at least once.<br/>
+            ○ Optional (greedy).<br/>
+                ○ Match '('.<br/>
+                ○ 3rd capture group.<br/>
+                    ○ Match a character other than ')' atomically any number of times.<br/>
+                ○ Match ')'.<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiWorkflow.Load(System.String,System.String,System.Byte[],SysWeaver.IMessageHost)">
+            <summary>
+            Load a workflow from disc
+            </summary>
+            <param name="name">The workflow name</param>
+            <param name="fileName">The full file name</param>
+            <param name="uiJson">Optional UI format workflow, used to annotate all subgraph inputs</param>
+            <param name="msg">Optional message host, the automatic annotations are reported here</param>
+            <returns>The workflow</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiWorkflow.FromJson(System.String,System.Byte[],System.Byte[],SysWeaver.IMessageHost)">
+            <summary>
+            Load a workflow from some json
+            </summary>
+            <param name="name">The workflow name</param>
+            <param name="json">The API format workflow json (utf8)</param>
+            <param name="uiJson">Optional UI format workflow, used to annotate all subgraph inputs</param>
+            <param name="msg">Optional message host, the automatic annotations are reported here</param>
+            <returns>The workflow</returns>
+        </member>
+        <member name="M:SysWeaver.AI.ComfyUiWorkflow.IsUiFormat(System.Text.Json.JsonElement)">
+            <summary>
+            Check if some json is an UI format workflow (and not an API format workflow)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.ComfyUiRunContext">
+            <summary>
+            The context passed to a compiled workflow delegate
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.WorkflowCache`2">
+            <summary>
+            Cache of compiled workflow delegates for some input and output types.
+            The key is the workflow's cache key (identifies the workflow file and version).
+            </summary>
+            <typeparam name="T">The input type</typeparam>
+            <typeparam name="R">The output type</typeparam>
+        </member>
+        <member name="M:SysWeaver.AI.WorkflowCache`2.Get(SysWeaver.AI.ComfyUiWorkflow,SysWeaver.IMessageHost)">
+            <summary>
+            Get (or create) the delegate that runs a workflow
+            </summary>
+            <param name="wf">The workflow</param>
+            <param name="msg">Where to report mapping warnings (only reported when created)</param>
+            <returns>The delegate</returns>
+        </member>
+        <member name="T:SysWeaver.AI.WorkflowMapper">
+            <summary>
+            Builds delegates (using Linq expressions) that maps typed inputs and outputs to a workflow
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.WorkflowMapper.Cand">
+            <summary>
+            A candidate input to match, Tag and Input are the names used for matching, PTag and PInput are the actual tag and input to set
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.WorkflowMapper.Cand.#ctor(System.String,System.String,System.Text.Json.JsonValueKind,System.String,System.String,System.String)">
+            <summary>
+            A candidate input to match, Tag and Input are the names used for matching, PTag and PInput are the actual tag and input to set
+            </summary>
+        </member>
+        <member name="T:SysWeaver.AI.WorkflowMapper.Candidates">
+            <summary>
+            All inputs of a workflow that members can be matched against
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.WorkflowMapper.Candidates.Match(System.String,System.Boolean,System.Collections.Generic.List{System.String}@,System.Int32@)">
+            <summary>
+            Find the input(s) that a member name (without a [ComfyUiName] attribute) matches, the rules are tried in order:
+              1. Tag and input name, ex: "SamplerSeed" or "Sampler_Seed" => "sampler.seed"
+              2. A tag with a single input, ex: "Seed" => "seed.seed" (subgraph inputs are annotated like this) or "Sampler" => "sampler.sampler_name"
+              3. A bool matching a tag name, false => bypass the node(s)
+              4. A (unique) input name, ex: "Seed" => "sampler.seed"
+            </summary>
+            <param name="memberName">The member name</param>
+            <param name="isBool">True if the member is a bool</param>
+            <param name="tags">The matching tags if rule 3 applies (and no inputs are returned), else null</param>
+            <param name="rule">The rule that matched, 0 if nothing matched</param>
+            <returns>The matching inputs, more than one if ambiguous</returns>
+        </member>
+        <member name="M:SysWeaver.AI.WorkflowMapper.Norm(System.String)">
+            <summary>
+            Normalize a name for matching, only letters and digits are used and case is ignored, "my-sampler" and "MySampler" are equal
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.WorkflowMapper.IsConnectionMember(System.Reflection.MemberInfo)">
+            <summary>
+            Members declared by ComfyUiParams (or its base types) are connection parameters, never workflow inputs / outputs.
+            So an input type can inherit ComfyUiParams (ex: a command line tool that takes both the connection and the inputs).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AI.WorkflowMapper.GetTypeWarning(System.Type,System.Text.Json.JsonValueKind)">
+            <summary>
+            Check if a member type is compatible with the type of the workflow (default) value
+            </summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_0">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the InstanceTagRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.InstanceTagRegex_0.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_1">
+            <summary>Custom <see cref="T:System.Text.RegularExpressions.Regex"/>-derived type for the TagRegex method.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.TagRegex_1.Instance">
+            <summary>Cached, thread-safe singleton instance.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.#ctor">
+            <summary>Initializes the instance.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory">
+            <summary>Provides a factory for creating <see cref="T:System.Text.RegularExpressions.RegexRunner"/> instances to be used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.CreateInstance">
+            <summary>Creates an instance of a <see cref="T:System.Text.RegularExpressions.RegexRunner"/> used by methods on <see cref="T:System.Text.RegularExpressions.Regex"/>.</summary>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner">
+            <summary>Provides the runner that contains the custom logic implementing the specified regular expression.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner.Scan(System.ReadOnlySpan{System.Char})">
+            <summary>Scan the <paramref name="inputSpan"/> starting from base.runtextstart for the next match.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner.TryFindNextPossibleStartingPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Search <paramref name="inputSpan"/> starting from base.runtextpos for the next location a match could possibly start.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if a possible match was found; false if no more matches are possible.</returns>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.TagRegex_1.RunnerFactory.Runner.TryMatchAtCurrentPosition(System.ReadOnlySpan{System.Char})">
+            <summary>Determine whether <paramref name="inputSpan"/> at base.runtextpos is a match for the regular expression.</summary>
+            <param name="inputSpan">The text being scanned by the regular expression.</param>
+            <returns>true if the regular expression matches at the current position; otherwise, false.</returns>
+        </member>
+        <member name="T:System.Text.RegularExpressions.Generated.Utilities">
+            <summary>Helper methods used by generated <see cref="T:System.Text.RegularExpressions.Regex"/>-derived implementations.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout">
+            <summary>Default timeout value set in <see cref="T:System.AppContext"/>, or <see cref="F:System.Text.RegularExpressions.Regex.InfiniteMatchTimeout"/> if none was set.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_hasTimeout">
+            <summary>Whether <see cref="F:System.Text.RegularExpressions.Generated.Utilities.s_defaultTimeout"/> is non-infinite.</summary>
+        </member>
+        <member name="M:System.Text.RegularExpressions.Generated.Utilities.StackPush(System.Int32[]@,System.Int32@,System.Int32,System.Int32)">
+            <summary>Pushes 2 values onto the backtracking stack.</summary>
+        </member>
+        <member name="F:System.Text.RegularExpressions.Generated.Utilities.s_asciiLettersAndDigitsAndDashUnderscore">
+            <summary>Supports searching for characters in or not in "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".</summary>
+        </member>
+    </members>
+</doc>

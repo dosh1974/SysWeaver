@@ -83,6 +83,8 @@ namespace SysWeaver
 
         static String GetTypeDesc(Type t)
         {
+            //  Nullable value types (ex: int?) are parsed as the underlying type
+            t = Nullable.GetUnderlyingType(t) ?? t;
             if (t.IsEnum)
                 return String.Concat("valid: ", String.Join(", ", Enum.GetNames(t)));
             if (t == typeof(Boolean))
@@ -92,6 +94,13 @@ namespace SysWeaver
 
         static String GetTypeTag(Type t)
         {
+            //  Nullable value types: the underlying type with a '?', ex: "Int32?"
+            var u = Nullable.GetUnderlyingType(t);
+            if (u != null)
+            {
+                var tag = GetTypeTag(u);
+                return tag.Length == 0 ? "" : tag + "?";
+            }
             if (t.IsEnum)
                 return "";
             if (t == typeof(Boolean))

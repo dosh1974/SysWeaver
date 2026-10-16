@@ -829,6 +829,11 @@
             Empty data is valid if the encoder of this .NET version produces no data for empty data (true for .NET 10 and earlier)
             </summary>
         </member>
+        <member name="P:SysWeaver.Compression.CompInflaterState.CanDetectDeflateTruncation">
+            <summary>
+            True if <see cref="M:SysWeaver.Compression.CompInflaterState.ThrowIfTruncated(System.IO.Stream)"/> can detect truncated DeflateStream data (the internals are as expected)
+            </summary>
+        </member>
         <member name="F:SysWeaver.Compression.CompInflaterState.GZipEmptyIsValid">
             <summary>
             Empty data is valid if the encoder of this .NET version produces no data for empty data (true for .NET 10 and earlier)
@@ -942,6 +947,114 @@
             </summary>
             <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip"), compared ordinally</param>
             <returns>A compressor for the given file extension or null if none exist</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.CompNativeInflater">
+            <summary>
+            A raw deflate decoder for memory input that calls the zlib of the .NET runtime (System.IO.Compression.Native) directly,
+            with the same results and exceptions as a <see cref="T:System.IO.Compression.DeflateStream"/> followed by <see cref="M:SysWeaver.Compression.CompInflaterState.ThrowIfTruncated(System.IO.Stream)"/>.
+            The native state is pooled and reset between uses, so a call doesn't allocate (a DeflateStream allocates ~270 bytes in 4 objects, a finalizable handle and the native zlib state per use).
+            </summary>
+            <remarks>
+            Only used when the native exports, the .NET exception messages and the internals checked by <see cref="T:SysWeaver.Compression.CompInflaterState"/> are as expected
+            (and the strict validation switch of the DeflateStream is off), else <see cref="M:SysWeaver.Compression.CompNativeInflater.TryRent"/> returns null and the caller uses the DeflateStream.
+            The amount of data written to the destination before an exception is thrown may differ from the DeflateStream (it writes in different chunks).
+            </remarks>
+        </member>
+        <member name="T:SysWeaver.Compression.CompNativeInflater.ZStream">
+            <summary>
+            The native stream (layout of PAL_ZStream in System.IO.Compression.Native).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.WindowBits">
+            <summary>
+            Raw deflate with a 32 KB window (the same as the DeflateStream decoder)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.ChunkSize">
+            <summary>
+            The size of the first output chunk written to a destination stream (decoded on the stack)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.LargeChunkSize">
+            <summary>
+            The size of the next output chunks written to a destination stream (a pooled buffer)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.MsgUnsupported">
+            <summary>
+            The message of the exceptions thrown by the .NET inflater, read from the System.IO.Compression resources
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.MsgNoMemory">
+            <summary>
+            The message of the exceptions thrown by the .NET inflater, read from the System.IO.Compression resources
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.MsgInconsistent">
+            <summary>
+            The message of the exceptions thrown by the .NET inflater, read from the System.IO.Compression resources
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.MsgUnexpected">
+            <summary>
+            The message of the exceptions thrown by the .NET inflater, read from the System.IO.Compression resources
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.ZLibExceptionCtor">
+            <summary>
+            The ZLibException(String message, String zlibErrorContext, int zlibErrorCode, String zlibErrorMessage) constructor (not in the reference assemblies)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompNativeInflater.Available">
+            <summary>
+            True if the native decoder can be used
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.TryRent">
+            <summary>
+            Get a decoder (from the pool or a new one), return it using <see cref="M:SysWeaver.Compression.CompNativeInflater.Return"/>
+            </summary>
+            <returns>A decoder or null if the native decoder can't be used (use the DeflateStream)</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.Return">
+            <summary>
+            Reset the decoder and return it to the pool (disposed if it can't be reset)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.Dispose">
+            <summary>
+            Free the native state
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.ThrowIfError(System.Int32)">
+            <summary>
+            Throw the exception that the .NET inflater throws for an error code (returns for the non error codes)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <summary>
+            Decompress raw deflate data to a stream, the same as <see cref="M:SysWeaver.Compression.CompDeflateNET.Decompress(System.IO.Stream,System.IO.Stream)"/> reading from a memory stream
+            </summary>
+            <param name="from">The compressed data</param>
+            <param name="to">The stream to write the decompressed data to</param>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.Next(System.Byte*,System.Int32,System.IO.Stream)">
+            <summary>
+            Decode the next chunk of data (the input is set) and write it to a stream
+            </summary>
+            <param name="o">The chunk buffer</param>
+            <param name="size">The size of the chunk buffer</param>
+            <param name="to">The stream to write the decompressed data to</param>
+            <returns>True when the end of the compressed data was reached</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompNativeInflater.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <summary>
+            Decompress raw deflate data to memory, the same as <see cref="M:SysWeaver.Compression.CompDeflateNET.Decompress(System.IO.Stream,System.Span{System.Byte})"/> reading from a memory stream
+            </summary>
+            <param name="from">The compressed data</param>
+            <param name="to">The memory to write the decompressed data to</param>
+            <returns>The number of bytes written</returns>
+            <exception cref="T:System.ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
         </member>
         <member name="T:SysWeaver.Compression.ICompStreamEncoder`1">
             <summary>

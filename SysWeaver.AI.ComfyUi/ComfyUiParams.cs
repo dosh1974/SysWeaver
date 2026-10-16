@@ -7,7 +7,7 @@ namespace SysWeaver.AI
     /// See: https://github.com/Good-Dream-Studio/ComfyUI-Connect
     /// The (optional) ApiKey is sent as an "Authorization" header (use when ComfyUI is behind an authenticating proxy).
     /// </summary>
-    public sealed class ComfyUiParams : ApiKeyParams
+    public class ComfyUiParams : ApiKeyParams
     {
         #region API setup
 

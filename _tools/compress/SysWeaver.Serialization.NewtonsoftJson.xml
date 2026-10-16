@@ -189,6 +189,13 @@
         <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
             <inheritdoc/>
         </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.SysWeaver#Serialization#ISerializer#Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+            <remarks>
+            The json is UTF-8 encoded directly into <paramref name="output"/> (no array is allocated).
+            Implemented explicitly, so that code finding the Serialize method of the class by name (reflection) is unaffected.
+            </remarks>
+        </member>
         <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.CreateSerPool(Newtonsoft.Json.JsonSerializerSettings)">
             <summary>
             Factory for pooled serializers configured like JsonSerializer.CreateDefault(Formats[i]) without global default settings (only the settings used by <see cref="F:SysWeaver.Serialization.NewtonsoftJsonSerializer.Formats"/> are copied).

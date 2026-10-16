@@ -65,6 +65,11 @@ namespace SysWeaver.AI
         public String InputTypeSuffix = "Input";
 
         /// <summary>
+        /// Optional base type of the input type, ex: "ComfyUiParams" (its members are connection parameters, never mapped to workflow inputs)
+        /// </summary>
+        public String InputBaseType;
+
+        /// <summary>
         /// Appended to the base name for the output type
         /// </summary>
         public String OutputTypeSuffix = "Output";
@@ -119,6 +124,13 @@ namespace SysWeaver.AI
         /// If true, a bool? member is generated for each annotated node, setting it to false will bypass the node(s)
         /// </summary>
         public bool BypassMembers;
+
+        /// <summary>
+        /// If true, inputs with an object value get a generated (nested) type, named the base name + the member name, else JsonElement? is used.
+        /// The members of a nested type are always initialized with the workflow default (the object is sent as a whole, using System.Text.Json)
+        /// and use [JsonPropertyName] when the member name differs from the json name.
+        /// </summary>
+        public bool NestedTypes;
 
         /// <summary>
         /// The type used for inputs that looks like a media file name (ex: the image of a "Load Image" node), can be "ComfyUiFile", "byte[]", "Uri" or "String"
@@ -223,18 +235,8 @@ namespace SysWeaver.AI
         /// <returns>The source code of the input type and the source code of the output type</returns>
         public static async Task<(String Input, String Output)> GetInputOutputTypes(String fileName, ComfyUiTypeOptions options = null)
         {
-            ArgumentNullException.ThrowIfNull(fileName);
             options = options ?? new ComfyUiTypeOptions();
-            var name = GetName(options, fileName);
-            var json = await File.ReadAllBytesAsync(fileName).ConfigureAwait(false);
-            var ui = options.UiWorkflow;
-            if (ui == null)
-            {
-                var uiFile = GetUiFileName(options, name);
-                if (uiFile != null)
-                    ui = await File.ReadAllBytesAsync(uiFile).ConfigureAwait(false);
-            }
-            return GetInputOutputTypes(ComfyUiWorkflow.FromJson(name, json, ui, options.Msg), options);
+            return GetInputOutputTypes(await Load(fileName, options).ConfigureAwait(false), options);
         }
 
         /// <summary>
@@ -247,12 +249,70 @@ namespace SysWeaver.AI
         {
             ArgumentNullException.ThrowIfNull(wf);
             options = options ?? new ComfyUiTypeOptions();
+            var (input, output, nested) = Generate(wf, options);
+            return (WriteSource([input, .. nested], options), WriteSource([output], options));
+        }
+
+        /// <summary>
+        /// Generate the source code of one file with the input type, the output type and the nested types (see <see cref="ComfyUiTypeOptions.NestedTypes"/>) of a workflow
+        /// </summary>
+        /// <param name="fileName">The file name of the API format workflow json</param>
+        /// <param name="options">Optional options</param>
+        /// <returns>The source code of the file</returns>
+        public static async Task<String> GetSource(String fileName, ComfyUiTypeOptions options = null)
+        {
+            options = options ?? new ComfyUiTypeOptions();
+            return GetSource(await Load(fileName, options).ConfigureAwait(false), options);
+        }
+
+        /// <summary>
+        /// Generate the source code of one file with the input type, the output type and the nested types (see <see cref="ComfyUiTypeOptions.NestedTypes"/>) of a loaded workflow
+        /// </summary>
+        /// <param name="wf">The workflow</param>
+        /// <param name="options">Optional options (the subgraph options are ignored, the workflow is already annotated)</param>
+        /// <returns>The source code of the file</returns>
+        public static String GetSource(ComfyUiWorkflow wf, ComfyUiTypeOptions options = null)
+        {
+            ArgumentNullException.ThrowIfNull(wf);
+            options = options ?? new ComfyUiTypeOptions();
+            var (input, output, nested) = Generate(wf, options);
+            return WriteSource([input, output, .. nested], options);
+        }
+
+        /// <summary>
+        /// Load an API format workflow file (and the UI format workflow used to annotate subgraphs, see the options)
+        /// </summary>
+        static async Task<ComfyUiWorkflow> Load(String fileName, ComfyUiTypeOptions options)
+        {
+            ArgumentNullException.ThrowIfNull(fileName);
+            var name = GetName(options, fileName);
+            var json = await File.ReadAllBytesAsync(fileName).ConfigureAwait(false);
+            var ui = options.UiWorkflow;
+            if (ui == null)
+            {
+                var uiFile = GetUiFileName(options, name);
+                if (uiFile != null)
+                    ui = await File.ReadAllBytesAsync(uiFile).ConfigureAwait(false);
+            }
+            return ComfyUiWorkflow.FromJson(name, json, ui, options.Msg);
+        }
+
+        /// <summary>
+        /// The input, output and nested types of a workflow
+        /// </summary>
+        static (TypeDef Input, TypeDef Output, List<TypeDef> Nested) Generate(ComfyUiWorkflow wf, ComfyUiTypeOptions options)
+        {
             var baseName = String.IsNullOrEmpty(options.TypeName) ? FormatName(wf.Name, options.TypeCasing) : options.TypeName;
             using var doc = JsonDocument.Parse(wf.Json);
             var root = doc.RootElement;
+            var inputName = baseName + options.InputTypeSuffix;
+            var outputName = baseName + options.OutputTypeSuffix;
+            var typeNames = new HashSet<String>(StringComparer.Ordinal) { inputName, outputName };
+            var nested = new List<TypeDef>();
             return (
-                GenerateInput(wf, root, baseName + options.InputTypeSuffix, options),
-                GenerateOutput(wf, root, baseName + options.OutputTypeSuffix, options));
+                GenerateInput(wf, root, inputName, baseName, options, nested, typeNames),
+                GenerateOutput(wf, root, outputName, options),
+                nested);
         }
 
         static String GetName(ComfyUiTypeOptions o, String fileName)
@@ -276,7 +336,9 @@ namespace SysWeaver.AI
 
         sealed record Member(String Name, String Type, String Attribute, List<String> Comment, String Init);
 
-        static String GenerateInput(ComfyUiWorkflow wf, JsonElement root, String typeName, ComfyUiTypeOptions o)
+        sealed record TypeDef(String Name, List<String> Comment, List<Member> Members, String BaseType = null);
+
+        static TypeDef GenerateInput(ComfyUiWorkflow wf, JsonElement root, String typeName, String baseName, ComfyUiTypeOptions o, List<TypeDef> nested, HashSet<String> typeNames)
         {
             var cands = new WorkflowMapper.Candidates(wf);
             var members = new List<Member>();
@@ -342,6 +404,14 @@ namespace SysWeaver.AI
                 }
                 usedNames.Add(found.Name);
 
+                //  An object value: a nested type (initialized with the workflow default when the input is)
+                if (o.NestedTypes && hasDef && (def.ValueKind == JsonValueKind.Object))
+                {
+                    var nestedName = MakeUnique(baseName + found.Name.TrimStart('@', '_'), typeNames);
+                    type = AddNestedType(def, nestedName, String.Concat("The value of the ", direct.PInput.ToQuoted(), " input of the ", wf.Name.ToQuoted(), " workflow."), o, nested, typeNames);
+                    init = "new()";
+                }
+
                 List<String> comment = null;
                 if (o.Comments)
                 {
@@ -372,7 +442,69 @@ namespace SysWeaver.AI
                 String.Concat("Inputs of the ", wf.Name.ToQuoted(), " workflow."),
                 "Null values are not sent, so the workflow default is used.",
             };
-            return WriteType(typeName, typeComment, members, o);
+            return new TypeDef(typeName, typeComment, members, String.IsNullOrEmpty(o.InputBaseType) ? null : o.InputBaseType);
+        }
+
+        /// <summary>
+        /// Add a nested type for an object value (recursive for object members), returns the type name.
+        /// All members are initialized with the value (the object is sent as a whole), arrays of numbers / strings / bools become arrays, other arrays JsonElement.
+        /// </summary>
+        static String AddNestedType(JsonElement obj, String typeName, String typeComment, ComfyUiTypeOptions o, List<TypeDef> nested, HashSet<String> typeNames)
+        {
+            typeNames.Add(typeName);
+            var members = new List<Member>();
+            var def = new TypeDef(typeName, [typeComment], members);
+            nested.Add(def);
+            var usedNames = new HashSet<String>(StringComparer.Ordinal) { typeName };
+            foreach (var p in obj.EnumerateObject())
+            {
+                var name = MakeUnique(FormatName(p.Name, o.MemberCasing), usedNames);
+                usedNames.Add(name);
+                var v = p.Value;
+                String type, init;
+                switch (v.ValueKind)
+                {
+                    case JsonValueKind.Object:
+                        type = AddNestedType(v, MakeUnique(typeName + name.TrimStart('@', '_'), typeNames), String.Concat("The value of ", p.Name.ToQuoted(), " in ", typeName, "."), o, nested, typeNames);
+                        init = "new()";
+                        break;
+                    case JsonValueKind.Array:
+                        (type, init) = GetArrayType(p.Name, v, o);
+                        break;
+                    case JsonValueKind.Null:
+                    case JsonValueKind.Undefined:
+                        (type, init) = ("JsonElement?", null);
+                        break;
+                    default:
+                        //  Not nullable, the object is sent as a whole
+                        (type, init) = GetInputType(p.Name, null, v, o);
+                        type = type.TrimEnd('?');
+                        break;
+                }
+                //  Serialized by System.Text.Json, the json name must match
+                var attribute = name.TrimStart('@') == p.Name ? null : String.Concat("[JsonPropertyName(", ToLiteral(p.Name), ")]");
+                var comment = o.Comments ? new List<String> { String.Concat(p.Name.ToQuoted(), ", workflow default: ", FormatValue(v, o.MaxCommentValueLength)) } : null;
+                members.Add(new Member(name, type, attribute, comment, init));
+            }
+            return typeName;
+        }
+
+        /// <summary>
+        /// The type of an array value in a nested type: an array of numbers, strings or bools (all elements of the same kind), else JsonElement (parsed from the value)
+        /// </summary>
+        static (String Type, String Init) GetArrayType(String name, JsonElement a, ComfyUiTypeOptions o)
+        {
+            var items = a.EnumerateArray().ToList();
+            var kinds = items.Select(x => x.ValueKind == JsonValueKind.False ? JsonValueKind.True : x.ValueKind).Distinct().ToList();
+            if ((items.Count == 0) || (kinds.Count != 1) || (kinds[0] is not (JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True)))
+                return ("JsonElement", String.Concat("JsonElement.Parse(", ToLiteral(a.GetRawText()), ")"));
+            var types = items.Select(x => GetInputType(name, null, x, o)).ToList();
+            //  Mixed integer / float numbers: the widest type
+            var t = types.Any(x => x.Type == "double?") ? "double" : types.Any(x => x.Type == "long?") ? "long" : types[0].Type.TrimEnd('?');
+            if (t == "ComfyUiFile")
+                t = "String";
+            var values = items.Select(x => x.ValueKind == JsonValueKind.String ? ToLiteral(x.GetString()) : x.GetRawText());
+            return (t + "[]", String.Concat("[", String.Join(", ", values), "]"));
         }
 
         static readonly HashSet<String> GenericInputNames = new(StringComparer.OrdinalIgnoreCase)
@@ -438,7 +570,7 @@ namespace SysWeaver.AI
 
         #region Outputs
 
-        static String GenerateOutput(ComfyUiWorkflow wf, JsonElement root, String typeName, ComfyUiTypeOptions o)
+        static TypeDef GenerateOutput(ComfyUiWorkflow wf, JsonElement root, String typeName, ComfyUiTypeOptions o)
         {
             var members = new List<Member>();
             var usedNames = new HashSet<String>(StringComparer.Ordinal) { typeName };
@@ -475,14 +607,17 @@ namespace SysWeaver.AI
             {
                 String.Concat("Outputs of the ", wf.Name.ToQuoted(), " workflow"),
             };
-            return WriteType(typeName, typeComment, members, o);
+            return new TypeDef(typeName, typeComment, members);
         }
 
         #endregion//Outputs
 
         #region Source
 
-        static String WriteType(String typeName, List<String> typeComment, List<Member> members, ComfyUiTypeOptions o)
+        /// <summary>
+        /// Write a source file with some types (usings, namespace, types)
+        /// </summary>
+        static String WriteSource(List<TypeDef> types, ComfyUiTypeOptions o)
         {
             var nl = o.NewLine ?? "\r\n";
             var ind = o.Indent ?? "    ";
@@ -490,15 +625,19 @@ namespace SysWeaver.AI
             if (o.Usings)
             {
                 var usings = new SortedSet<String>(StringComparer.Ordinal) { "System" };
-                foreach (var m in members)
+                foreach (var m in types.SelectMany(x => x.Members))
                 {
                     if (m.Type.StartsWith("JsonElement", StringComparison.Ordinal))
                         usings.Add("System.Text.Json");
                     if (m.Type.StartsWith("List<", StringComparison.Ordinal))
                         usings.Add("System.Collections.Generic");
-                    if ((m.Attribute != null) || m.Type.StartsWith("ComfyUiFile", StringComparison.Ordinal))
+                    if (m.Attribute?.StartsWith("[JsonPropertyName", StringComparison.Ordinal) ?? false)
+                        usings.Add("System.Text.Json.Serialization");
+                    else if ((m.Attribute != null) || m.Type.StartsWith("ComfyUiFile", StringComparison.Ordinal))
                         usings.Add("SysWeaver.AI");
                 }
+                if (types.Any(x => x.BaseType != null))
+                    usings.Add("SysWeaver.AI");
                 foreach (var u in usings)
                     sb.Append("using ").Append(u).Append(';').Append(nl);
                 sb.Append(nl);
@@ -519,9 +658,26 @@ namespace SysWeaver.AI
                     sb.Append(';').Append(nl).Append(nl);
                 }
             }
+            for (int i = 0; i < types.Count; ++i)
+            {
+                if (i > 0)
+                    sb.Append(nl);
+                WriteType(sb, types[i], prefix, ind, nl, o);
+            }
+            if (block)
+                sb.Append('}').Append(nl);
+            return sb.ToString();
+        }
+
+        static void WriteType(StringBuilder sb, TypeDef t, String prefix, String ind, String nl, ComfyUiTypeOptions o)
+        {
+            var members = t.Members;
             if (o.Comments)
-                WriteComment(sb, prefix, typeComment, nl);
-            sb.Append(prefix).Append("public ").Append(o.Sealed ? "sealed " : "").Append("class ").Append(typeName).Append(nl);
+                WriteComment(sb, prefix, t.Comment, nl);
+            sb.Append(prefix).Append("public ").Append(o.Sealed ? "sealed " : "").Append("class ").Append(t.Name);
+            if (t.BaseType != null)
+                sb.Append(" : ").Append(t.BaseType);
+            sb.Append(nl);
             sb.Append(prefix).Append('{').Append(nl);
             var mp = prefix + ind;
             var first = true;
@@ -550,9 +706,6 @@ namespace SysWeaver.AI
                 sb.Append(nl);
             }
             sb.Append(prefix).Append('}').Append(nl);
-            if (block)
-                sb.Append('}').Append(nl);
-            return sb.ToString();
         }
 
         static void WriteComment(StringBuilder sb, String prefix, List<String> lines, String nl)

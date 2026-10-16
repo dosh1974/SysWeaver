@@ -1,0 +1,2260 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Media.Svg</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Media.ISvgCss">
+            <summary>
+            A style that can be converted to css declarations (used as a css class by <see cref="M:SysWeaver.Media.SvgScene.AddStyle(SysWeaver.Media.ISvgCss)"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.ISvgCss.GetCss">
+            <summary>
+            Get the css declarations (without a selector or braces)
+            </summary>
+            <returns>The css declarations, may be empty</returns>
+        </member>
+        <member name="T:SysWeaver.Media.Svg3dParams">
+            <summary>
+            The style parameters of <see cref="M:SysWeaver.Media.SvgScene.AddPath(System.String,SysWeaver.Media.Svg3dParams)"/>: a face, an extrusion and a drop shadow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Svg3dParams.Face">
+            <summary>
+            The style of the face (the path itself), null for no face
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Svg3dParams.Shadow">
+            <summary>
+            The drop shadow, null for no shadow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Svg3dParams.Extrude">
+            <summary>
+            The extrusion (3D sides), null for no extrusion
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Svg3dParams.IncludeExtrusionInShadow">
+            <summary>
+            If true (and there is an extrusion), the shadow includes the extrusion
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.Svg3dParams.MaxDecimals">
+            <summary>
+            The maximum number of decimals of the generated coordinates
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgBarcodeCode128">
+            <summary>
+            Creates Code 128 bar codes as svg paths (one closed rectangle sub path per bar, no quiet zone, no text).
+            Only digits can be encoded (code set C, a trailing odd digit is encoded in code set A), optionally as GS1-128 (<see cref="M:SysWeaver.Media.SvgBarcodeCode128.GetGs1Path(System.String,System.Double,System.Double)"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeCode128.Default">
+            <summary>
+            An instance with a module width of 1 and a height of 32
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.#ctor(System.Double,System.Double,System.Int32)">
+            <summary>
+            Create a bar code generator
+            </summary>
+            <param name="width">The width of a module (the most narrow bar), at least 0.001</param>
+            <param name="height">The bar height, at least 4 modules</param>
+            <param name="decimalCount">The maximum number of decimals in the path</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.GetPath(System.String,System.Double,System.Double)">
+            <summary>
+            Get the path of a bar code (only digits are supported)
+            </summary>
+            <param name="data">The data to encode, only the digits 0-9</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>The svg path</returns>
+            <exception cref="T:System.NotSupportedException">The data contains other chars than digits (not implemented)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.GetGs1Path(System.String,System.Double,System.Double)">
+            <summary>
+            Get the path of a GS1-128 bar code: start C, FNC1, digit pairs in code set C, a trailing odd digit in code set A, checksum, stop.
+            The data is the concatenation of the application identifiers and their values (ex: "0109501101530003" for AI 01 (GTIN));
+            no FNC1 separators can be inserted, so a variable length field must be the last one.
+            </summary>
+            <param name="data">The data to encode, only the digits 0-9</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>The svg path</returns>
+            <exception cref="T:System.ArgumentException">The data is empty or contains other chars than digits</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.GetNumericPath(System.String,System.Double,System.Double)">
+            <summary>
+            Get the path of a compact numeric bar code (code set C, a trailing odd digit is encoded in code set A)
+            </summary>
+            <param name="data">The data to encode, only the digits 0-9</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>The svg path</returns>
+            <exception cref="T:System.ArgumentException">The data is empty or contains other chars than digits</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.UnsafeGetCompactNumericPath(System.String,System.Double,System.Double)">
+            <summary>
+            Get the path of a compact numeric bar code without validating the data (other chars than digits gives an invalid bar code or an exception)
+            </summary>
+            <param name="data">The data to encode, only the digits 0-9</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>The svg path</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.UnsafeGetGs1Path(System.String,System.Double,System.Double)">
+            <summary>
+            Get the path of a GS1-128 bar code without validating the data (other chars than digits gives an invalid bar code or an exception), see <see cref="M:SysWeaver.Media.SvgBarcodeCode128.GetGs1Path(System.String,System.Double,System.Double)"/>.
+            Encoded as: start C, FNC1, digit pairs (code set C), a trailing odd digit in code set A, checksum, stop.
+            </summary>
+            <param name="data">The data to encode, only the digits 0-9 (application identifiers and their data)</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>The svg path</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode128.AddNumeric(System.Collections.Generic.List{System.Int32},System.String)">
+            <summary>
+            Add digits when in code set C: digit pairs, a trailing odd digit in code set A (switch with 101)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeCode128.Width">
+            <summary>
+            The width of a module (the most narrow bar)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeCode128.Height">
+            <summary>
+            The bar height
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgBarcodeCode39">
+            <summary>
+            Creates Code 39 bar codes as svg paths (one closed rectangle sub path per bar, with start / stop chars, no check digit, no quiet zone, no text).
+            Supported chars: 0-9, A-Z (upper case), '-', '.', ' ', '$', '/', '+' and '%'.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode39.#ctor(System.Double,System.Double,System.Int32,System.Double)">
+            <summary>
+            Create a bar code generator
+            </summary>
+            <param name="width">The width of a narrow bar / space, at least 0.001</param>
+            <param name="height">The bar height, at least 4 narrow widths</param>
+            <param name="decimalCount">The maximum number of decimals in the path</param>
+            <param name="barRatio">The width ratio of a wide bar / space to a narrow, clamped to [2, 3]</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeCode39.GetPath(System.String,System.Double,System.Double)">
+            <summary>
+            Get the path of a bar code
+            </summary>
+            <param name="data">The data to encode</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>The svg path</returns>
+            <exception cref="T:System.ArgumentException">The data contains a char that can't be encoded</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeCode39.Width">
+            <summary>
+            The width of a narrow bar / space
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeCode39.Height">
+            <summary>
+            The bar height
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeCode39.Default">
+            <summary>
+            An instance with a narrow width of 1, a height of 32 and a wide / narrow ratio of 2
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgBarcodeItf14">
+            <summary>
+            Class used to create itf-14 bar codes as a path
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeItf14.Default">
+            <summary>
+            Default path (narrow width 2, height 64, no decimals)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeItf14.Compact">
+            <summary>
+            Compact path, the height of the bar code need to be scaled up by 64 to show correctly.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeItf14.ComputeCheckSum(System.String)">
+            <summary>
+            Compute the GTIN check digit of 13 digits (the 14th digit of an ITF-14 / GTIN-14)
+            </summary>
+            <param name="digits">Exactly 13 digits</param>
+            <returns>The check digit ('0' - '9')</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="digits"/> is not exactly 13 digits</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeItf14.ComputeCheckSumUnsafe(System.String)">
+            <summary>
+            Compute the GTIN style check digit of any number of digits without validation (weight 3 for even indices counted from the start,
+            so it's only the GTIN check digit for an odd number of digits)
+            </summary>
+            <param name="digits">The digits</param>
+            <returns>The check digit (garbage if the input contains other chars than digits)</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeItf14.#ctor(System.Double,System.Double,System.Int32,System.Double,System.Double)">
+            <summary>
+            Init an instance
+            </summary>
+            <param name="narrowPixelWidth">The width of the most narrow bar in the code, everything else is derviced using best practices</param>
+            <param name="height">Height, less than zero is a multiplier of the narrow width, greater than zero sets the height to that, zero is 32 narrow widths</param>
+            <param name="decimalCount">Number of decimals</param>
+            <param name="wideMultiplier">The multiplier to apply to get a wide bar</param>
+            <param name="barBleed">[0, 0.5] account for ink-bleed by reducing the black bar width by this amount (as a fraction)</param>
+        </member>
+        <member name="P:SysWeaver.Media.SvgBarcodeItf14.Height">
+            <summary>
+            The height in pixels of the bar code
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeItf14.Measure(System.String)">
+            <summary>
+            Measures the width of a given text: from the left edge of the first bar to the right edge of the last bar of <see cref="M:SysWeaver.Media.SvgBarcodeItf14.GetPath(System.String,System.Double,System.Double)"/>
+            </summary>
+            <param name="text">Must be even number of digits, only digits are supported</param>
+            <returns>The width in pixels of the text, 0 if the text is empty or has an odd length</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="text"/> has an even length and contains a char that is not a digit ('0' - '9')</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBarcodeItf14.GetPath(System.String,System.Double,System.Double)">
+            <summary>
+            Get a path (interleaved 2 of 5 with start / stop pattern, one closed rectangle sub path per bar, no quiet zone, no bearer bars, no check digit is added)
+            </summary>
+            <param name="text">Must be even number of digits, only digits are supported</param>
+            <param name="x">The left position</param>
+            <param name="y">The top postion</param>
+            <returns>An svg path with the barcode, null if the text is empty or has an odd length</returns>
+            <exception cref="T:System.ArgumentException"><paramref name="text"/> has an even length and contains a char that is not a digit ('0' - '9')</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeItf14.Wide">
+            <summary>
+            The width of a wide bar / space (narrow width * wide multiplier)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBarcodeItf14.Narrow">
+            <summary>
+            The width of a narrow bar / space
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgBitmapRenderer">
+            <summary>
+            Renders an svg document to png / jpeg images using Svg.Skia (SkiaSharp).
+            The svg is loaded once (in the constructor) and can then be rendered at different sizes.
+            A requested width / height of zero or less uses the svg size (rounded up) with a scale of 1 for that axis, each axis is scaled independently
+            (so only setting the width stretches the image horizontally).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.CreatePng(System.String,System.Int32,System.Int32)">
+            <summary>
+            Render an svg document to a png image (rgba, transparent background)
+            </summary>
+            <param name="svg">The svg document</param>
+            <param name="width">The image width, zero or less to use the svg width (each axis is scaled independently)</param>
+            <param name="height">The image height, zero or less to use the svg height (each axis is scaled independently)</param>
+            <returns>The png file data</returns>
+            <exception cref="T:System.IO.InvalidDataException">The svg can't be loaded (ex: the root element isn't an svg element)</exception>
+            <exception cref="T:System.Xml.XmlException">The data is not valid xml</exception>
+        </member>
+        <member name="T:SysWeaver.Media.SvgBitmapRenderer.FallbackTypefaceProvider">
+            <summary>
+            The last typeface provider used by Svg.Skia (after the system font manager and the default typeface), only used if the font family isn't installed.
+            The SkiaSharp Linux native library (without dependencies) has no system font manager: without this text elements would not be drawn at all.
+            Uses the font files found by <see cref="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String,System.String,System.String,System.String[])"/> (font folders added with
+            <see cref="M:SysWeaver.Media.SvgFont.AddFontPath(System.String)"/> and the system font folder), else the embedded <see cref="P:SysWeaver.Media.SvgFont.MontserratBlack"/> font (like <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.ToPng(System.IO.Stream,System.Int32,System.Int32,System.Boolean)">
+            <summary>
+            Render to a png image (rgba, transparent background) and write it to a stream
+            </summary>
+            <param name="s">The stream to write to</param>
+            <param name="width">The image width, zero or less to use the svg width</param>
+            <param name="height">The image height, zero or less to use the svg height</param>
+            <param name="leaveOpen">If false the stream is disposed</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.ToPng(System.Int32,System.Int32)">
+            <summary>
+            Render to a png image (rgba, transparent background)
+            </summary>
+            <param name="width">The image width, zero or less to use the svg width</param>
+            <param name="height">The image height, zero or less to use the svg height</param>
+            <returns>The png file data</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.ToJpeg(System.IO.Stream,System.Int32,System.Int32,System.Boolean,System.Int32)">
+            <summary>
+            Render to a jpeg image and write it to a stream
+            </summary>
+            <param name="s">The stream to write to</param>
+            <param name="width">The image width, zero or less to use the svg width</param>
+            <param name="height">The image height, zero or less to use the svg height</param>
+            <param name="leaveOpen">If false the stream is disposed</param>
+            <param name="quality">The jpeg quality [0, 100]</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.ToJpeg(System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Render to a jpeg image
+            </summary>
+            <param name="width">The image width, zero or less to use the svg width</param>
+            <param name="height">The image height, zero or less to use the svg height</param>
+            <param name="quality">The jpeg quality [0, 100]</param>
+            <returns>The jpeg file data</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBitmapRenderer.X">
+            <summary>
+            The left position of the svg picture bounds (cull rect)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBitmapRenderer.Y">
+            <summary>
+            The top position of the svg picture bounds (cull rect)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBitmapRenderer.Width">
+            <summary>
+            The width of the svg picture bounds (cull rect)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgBitmapRenderer.Height">
+            <summary>
+            The height of the svg picture bounds (cull rect)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.Dispose">
+            <summary>
+            Release the loaded svg
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.#ctor(System.IO.Stream,System.Boolean)">
+            <summary>
+            Load an svg document from a stream
+            </summary>
+            <param name="svgData">The stream with the svg document</param>
+            <param name="leaveOpen">If false the stream is disposed</param>
+            <exception cref="T:System.IO.InvalidDataException">The svg can't be loaded (ex: the root element isn't an svg element)</exception>
+            <exception cref="T:System.Xml.XmlException">The data is not valid xml</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.#ctor(System.Byte[])">
+            <summary>
+            Load an svg document (utf-8)
+            </summary>
+            <param name="svgData">The svg document</param>
+            <exception cref="T:System.IO.InvalidDataException">The svg can't be loaded (ex: the root element isn't an svg element)</exception>
+            <exception cref="T:System.Xml.XmlException">The data is not valid xml</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgBitmapRenderer.#ctor(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Load an svg document (utf-8)
+            </summary>
+            <param name="svgData">The svg document</param>
+            <exception cref="T:System.IO.InvalidDataException">The svg can't be loaded (ex: the root element isn't an svg element)</exception>
+            <exception cref="T:System.Xml.XmlException">The data is not valid xml</exception>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCanvasTools">
+            <summary>
+            Helpers for svg XElements (all numbers are formatted using the invariant culture)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasTools.Ci">
+            <summary>
+            The culture used for all numbers (the invariant culture)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasTools.Namespace">
+            <summary>
+            The svg namespace ("http://www.w3.org/2000/svg")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvasTools.SvgValue(System.Double,System.String)">
+            <summary>
+            Format a number using the invariant culture
+            </summary>
+            <param name="value">The value</param>
+            <param name="coordFormat">The .NET number format, null for the general format</param>
+            <returns>The formatted number</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvasTools.SvgOpacity(System.Xml.Linq.XElement,System.Double)">
+            <summary>
+            Set the opacity attribute if the opacity is less than 1 (negative values are set as 0)
+            </summary>
+            <param name="e">The element</param>
+            <param name="opacity">The opacity</param>
+            <returns>The element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvasTools.SvgClipPath(System.Xml.Linq.XElement,System.String)">
+            <summary>
+            Set the clip-path attribute (if <paramref name="clipId"/> isn't null or empty)
+            </summary>
+            <param name="e">The element</param>
+            <param name="clipId">The clip path reference, ex: "url(#a)" (as returned by <see cref="M:SysWeaver.Media.SvgCanvas.ClipPathDef(System.String,System.String)"/>)</param>
+            <returns>The element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvasTools.SvgFillOpacity(System.Xml.Linq.XElement,System.Double)">
+            <summary>
+            Set the fill-opacity attribute if the opacity is less than 1 (negative values are set as 0)
+            </summary>
+            <param name="e">The element</param>
+            <param name="opacity">The fill opacity</param>
+            <returns>The element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvasTools.SvgFilter(System.Xml.Linq.XElement,System.String)">
+            <summary>
+            Set the filter attribute (if <paramref name="idRef"/> isn't null)
+            </summary>
+            <param name="e">The element</param>
+            <param name="idRef">The filter reference, ex: "url(#a)" (as returned by <see cref="M:SysWeaver.Media.SvgCanvas.DropShadowDef(System.Double,System.Double,System.Double,System.String,System.Double,System.String)"/>)</param>
+            <returns>The element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvasTools.SvgStroke(System.Xml.Linq.XElement,System.String,System.Double,System.Double)">
+            <summary>
+            Set the stroke attributes: nothing is set if the thickness or opacity is zero or less, or if the color is null or empty.
+            The stroke-width is only set if it isn't 1 and the stroke-opacity only if it's less than 1.
+            </summary>
+            <param name="e">The element</param>
+            <param name="color">The stroke color</param>
+            <param name="thickness">The stroke width</param>
+            <param name="opacity">The stroke opacity</param>
+            <returns>The element</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCanvas">
+            <summary>
+            An svg document (XDocument based) with helpers to add elements, definitions (gradients, filters, clip paths), images and other svg documents.
+            The view box size is read when loading (and the width / height attributes are removed, so the document scales to its container).
+            Numbers are formatted using <see cref="F:SysWeaver.Media.SvgCanvas.DefaultCoordFormat"/> and the invariant culture. Not thread safe.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)">
+            <summary>
+            Replace all svg text elements with paths (glyph outlines), so that the document can be rendered without the fonts.
+            The font is found using <see cref="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String,System.String,System.String,System.String[])"/> (font-family, font-style and font-weight of the style attribute,
+            the folder of <see cref="F:SysWeaver.Media.SvgCanvas.Filename"/> is also searched), <see cref="P:SysWeaver.Media.SvgFont.MontserratBlack"/> is used if no font is found.
+            Supported attributes: x, y (numbers, px or % of the canvas size), text-anchor (start, middle, end), the font-size of the style attribute (default 12),
+            and the non standard "textLength" (max width), "max-height", "max-scale-up" (default 1) and "vertical-align" (baseline (default), top, middle, bottom).
+            The other attributes (and the style without the font) are copied to the path element.
+            </summary>
+            <param name="maxDecimals">The maximum number of decimals of the path coordinates</param>
+            <returns>Always true</returns>
+            <exception cref="T:System.FormatException">A position or size attribute is not a valid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Create(System.String,System.String)">
+            <summary>
+            Create a canvas from svg text, the root must be an svg element in the svg namespace.
+            The view box is normalized (rounded with <paramref name="defaultCoordFormat"/>), the width and height attributes are removed.
+            </summary>
+            <param name="svgText">The svg document</param>
+            <param name="defaultCoordFormat">The .NET number format used for generated numbers</param>
+            <returns>The canvas</returns>
+            <exception cref="T:System.Xml.XmlException">The text is not valid xml</exception>
+            <exception cref="T:System.IO.InvalidDataException">The root element is not an svg element in the svg namespace (DEBUG builds only)</exception>
+            <exception cref="T:System.FormatException">The view box has less than 4 values (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Load(System.String,System.String)">
+            <summary>
+            Load a canvas from an svg file, see <see cref="M:SysWeaver.Media.SvgCanvas.Create(System.String,System.String)"/>.
+            The folder of the file is used when searching for fonts in <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/>.
+            </summary>
+            <param name="filename">The svg file name</param>
+            <param name="defaultCoordFormat">The .NET number format used for generated numbers</param>
+            <returns>The canvas</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Load(System.IO.Stream,System.String,System.Boolean)">
+            <summary>
+            Load a canvas from a stream with an svg document, see <see cref="M:SysWeaver.Media.SvgCanvas.Create(System.String,System.String)"/>
+            </summary>
+            <param name="stream">The stream to read</param>
+            <param name="defaultCoordFormat">The .NET number format used for generated numbers</param>
+            <param name="leaveOpen">If false the stream is disposed</param>
+            <returns>The canvas</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.GetAttributeNumber(System.Xml.Linq.XElement,System.String,System.Double)">
+            <summary>
+            Get the numerical value of an attribute (invariant culture, units are not supported)
+            </summary>
+            <param name="e">The element</param>
+            <param name="attrName">The attribute name</param>
+            <param name="def">The value to return if the attribute is missing or not a number</param>
+            <returns>The value</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.TryRemoveAttribute(System.Xml.Linq.XElement,System.String)">
+            <summary>
+            Remove an attribute
+            </summary>
+            <param name="e">The element</param>
+            <param name="attrName">The attribute name</param>
+            <returns>True if the attribute was found (and removed)</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.ParseNumber(System.String,System.Double)">
+            <summary>
+            Parse a number (invariant culture, units are not supported)
+            </summary>
+            <param name="vv">The text to parse</param>
+            <param name="def">The value to return if the text is null, empty or not a number</param>
+            <returns>The value</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.Filename">
+            <summary>
+            The file name used to load the canvas (null if not loaded from a file name)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.OnAttributes(System.String,System.Func{System.Xml.Linq.XElement,System.Xml.Linq.XAttribute,System.Boolean})">
+            <summary>
+            Call a function for all descendants of the svg element that have a specific attribute (depth first, document order)
+            </summary>
+            <param name="attributeName">The attribute name (local name, no namespace)</param>
+            <param name="onAttr">Called with the element and the attribute, return false to stop</param>
+            <returns>False if stopped by <paramref name="onAttr"/>, else true</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.OnAttributes(System.Xml.Linq.XElement,System.String,System.Func{System.Xml.Linq.XElement,System.Xml.Linq.XAttribute,System.Boolean})">
+            <summary>
+            Call a function for all descendants of an element (not the element itself) that have a specific attribute (depth first, document order)
+            </summary>
+            <param name="e">The element to search below</param>
+            <param name="attributeName">The attribute name (local name, no namespace)</param>
+            <param name="onAttr">Called with the element and the attribute, return false to stop</param>
+            <returns>False if stopped by <paramref name="onAttr"/>, else true</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.ColorParserKeyLengths">
+            <summary>
+            The lengths of the <see cref="F:SysWeaver.Media.SvgCanvas.ColorParsers"/> keys
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Color(System.String)">
+            <summary>
+            Resolve a color specification (space separated):
+            "lineargradient pos0 color0 pos1 color1 ..." (positions in [0, 1]) and "lineargradientdir x1 y1 x2 y2 pos0 color0 ..." add a gradient definition
+            and returns its reference ("url(#id)"), any other value is returned as is.
+            </summary>
+            <param name="color">The color specification</param>
+            <returns>The color to use, null if <paramref name="color"/> is null or empty</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.#ctor(System.Double,System.Double,System.String)">
+            <summary>
+            Create an empty canvas (an svg element with the view box "0 0 width height")
+            </summary>
+            <param name="width">The view box width</param>
+            <param name="height">The view box height</param>
+            <param name="defaultCoordFormat">The .NET number format used for generated numbers</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.ToSvgString">
+            <summary>
+            Get the svg document as text (indented, with an xml declaration that says utf-8, no byte order mark)
+            </summary>
+            <returns>The svg document</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.DefaultCoordFormat">
+            <summary>
+            The .NET number format used for generated numbers (see <see cref="M:SysWeaver.Media.SvgCanvas.Value(System.Double,System.String)"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.OX">
+            <summary>
+            The x origin of the view box (0 for new canvases)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.OY">
+            <summary>
+            The y origin of the view box (0 for new canvases)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.Width">
+            <summary>
+            The view box width (or the width attribute if there is no view box)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.Height">
+            <summary>
+            The view box height (or the height attribute if there is no view box)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Value(System.Double,System.String)">
+            <summary>
+            Format a number (invariant culture)
+            </summary>
+            <param name="value">The value</param>
+            <param name="coordFormat">The .NET number format, null to use <see cref="F:SysWeaver.Media.SvgCanvas.DefaultCoordFormat"/></param>
+            <returns>The formatted number</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.AddFilter(System.Xml.Linq.XElement,System.String)">
+            <summary>
+            Set the filter attribute of an element to "url(#filterId)"
+            </summary>
+            <param name="el">The element</param>
+            <param name="filterId">The filter id (without '#')</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.CreateDropShadowClass(System.String,System.String,System.Double,System.Double,System.Double,System.Double)">
+            <summary>
+            Insert a drop shadow filter (feDropShadow) first in the svg element (not in the defs).
+            Attributes with the svg default value are left out (black color, opacity 1, dx / dy 2, std deviation 2).
+            </summary>
+            <param name="id">The id of the filter</param>
+            <param name="color">The shadow color (shortened using <see cref="M:SysWeaver.HtmlColors.GetShortest(System.String)"/>)</param>
+            <param name="stdDeviation">The blur standard deviation</param>
+            <param name="opacity">The shadow opacity</param>
+            <param name="dx">The x offset</param>
+            <param name="dy">The y offset</param>
+            <returns>The filter element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.CreateElement(System.String)">
+            <summary>
+            Create an element in the svg namespace (not added to the document)
+            </summary>
+            <param name="localName">The element name, ex: "path"</param>
+            <returns>The new element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.SetAttribute(System.Xml.Linq.XElement,System.String,System.Object)">
+            <summary>
+            Set (or remove if null) an attribute (values are converted using the XML rules, i.e. culture invariant)
+            </summary>
+            <param name="element">The element</param>
+            <param name="localName">The attribute name</param>
+            <param name="value">The value, null to remove the attribute</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.AddDef(System.Xml.Linq.XElement)">
+            <summary>
+            Add an element to the defs element created by this canvas (a defs element is inserted first in the svg element on the first call)
+            </summary>
+            <param name="e">The element to add</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.AddElement(System.Xml.Linq.XElement)">
+            <summary>
+            Add an element last in the svg element
+            </summary>
+            <param name="e">The element to add</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.AddElement(System.Xml.Linq.XElement,System.String,System.String,System.Double)">
+            <summary>
+            Set the fill and stroke of an element and add it last in the svg element
+            </summary>
+            <param name="e">The element to add</param>
+            <param name="fill">The fill, null to not set it</param>
+            <param name="stroke">The stroke, null to not set it (stroke-width is only set if there is a stroke)</param>
+            <param name="strokeWidth">The stroke width</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Rect(System.Double,System.Double,System.Double,System.Double,System.String,System.String,System.Double)">
+            <summary>
+            Add a rectangle (zero values are not written since that is the svg default)
+            </summary>
+            <param name="x">The left position</param>
+            <param name="y">The top position</param>
+            <param name="width">The width</param>
+            <param name="height">The height</param>
+            <param name="fill">The fill, null to not set it</param>
+            <param name="stroke">The stroke, null to not set it</param>
+            <param name="strokeWidth">The stroke width</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Circle(System.Double,System.Double,System.Double,System.String,System.String,System.Double)">
+            <summary>
+            Add a circle (zero values are not written since that is the svg default)
+            </summary>
+            <param name="x">The center x</param>
+            <param name="y">The center y</param>
+            <param name="rad">The radius</param>
+            <param name="fill">The fill, null to not set it</param>
+            <param name="stroke">The stroke, null to not set it</param>
+            <param name="strokeWidth">The stroke width</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.GenId">
+            <summary>
+            Generate a new short id that is unique for this canvas instance ("a", "b", .. "z", "ab", "bb", ..), it starts with a lower case letter.
+            Ids already in a loaded document are not checked.
+            </summary>
+            <returns>The id</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.DropShadowDef(System.Double,System.Double,System.Double,System.String,System.Double,System.String)">
+            <summary>
+            Add a drop shadow filter definition (feDropShadow) to the defs
+            </summary>
+            <param name="dx">The x offset</param>
+            <param name="dy">The y offset</param>
+            <param name="stdDeviation">The blur standard deviation</param>
+            <param name="color">The shadow color, null for black</param>
+            <param name="opacity">The shadow opacity, zero or less adds nothing</param>
+            <param name="id">The id of the filter, null to generate one (<see cref="M:SysWeaver.Media.SvgCanvas.GenId"/>)</param>
+            <returns>The filter reference "url(#id)", or an empty string if the opacity is zero or less</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.ClipPathDef(System.String,System.String)">
+            <summary>
+            Add a clip path definition with a single path to the defs
+            </summary>
+            <param name="path">The path data, null adds nothing</param>
+            <param name="id">The id of the clip path, null to generate one (<see cref="M:SysWeaver.Media.SvgCanvas.GenId"/>)</param>
+            <returns>The clip path reference "url(#id)", null if <paramref name="path"/> is null</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.ClipPathDef(System.String,System.Xml.Linq.XElement[])">
+            <summary>
+            Add a clip path definition with some elements to the defs
+            </summary>
+            <param name="id">The id of the clip path, null to generate one (<see cref="M:SysWeaver.Media.SvgCanvas.GenId"/>)</param>
+            <param name="paths">The clip path elements, empty adds nothing</param>
+            <returns>The clip path reference "url(#id)", null if there are no elements</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.LinearGradientDef(SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a (left to right) linear gradient definition with a generated id to the defs
+            </summary>
+            <param name="stops">The gradient stops</param>
+            <returns>The gradient reference "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.LinearGradientDef(System.String,SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a (left to right) linear gradient definition to the defs
+            </summary>
+            <param name="id">The id of the gradient, null to generate one (<see cref="M:SysWeaver.Media.SvgCanvas.GenId"/>)</param>
+            <param name="stops">The gradient stops</param>
+            <returns>The gradient reference "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.LinearGradientDef(System.Double,System.Double,System.Double,System.Double,SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a linear gradient definition with a direction and a generated id to the defs
+            </summary>
+            <param name="x1">The start x (relative to the bounding box)</param>
+            <param name="y1">The start y (relative to the bounding box)</param>
+            <param name="x2">The end x (relative to the bounding box)</param>
+            <param name="y2">The end y (relative to the bounding box)</param>
+            <param name="stops">The gradient stops</param>
+            <returns>The gradient reference "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.LinearGradientDef(System.String,System.Double,System.Double,System.Double,System.Double,SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a linear gradient definition with a direction to the defs
+            </summary>
+            <param name="id">The id of the gradient, null to generate one (<see cref="M:SysWeaver.Media.SvgCanvas.GenId"/>)</param>
+            <param name="x1">The start x (relative to the bounding box)</param>
+            <param name="y1">The start y (relative to the bounding box)</param>
+            <param name="x2">The end x (relative to the bounding box)</param>
+            <param name="y2">The end y (relative to the bounding box)</param>
+            <param name="stops">The gradient stops</param>
+            <returns>The gradient reference "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Path(System.String,System.String,System.String,System.Double)">
+            <summary>
+            Add a path
+            </summary>
+            <param name="d">The path data</param>
+            <param name="fill">The fill, null to not set it</param>
+            <param name="stroke">The stroke, null to not set it</param>
+            <param name="strokeWidth">The stroke width</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Graph(System.String,System.String,System.Double)">
+            <summary>
+            Add a group (g) element
+            </summary>
+            <param name="fill">The fill, null to not set it</param>
+            <param name="stroke">The stroke, null to not set it</param>
+            <param name="strokeWidth">The stroke width</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Image(System.ReadOnlySpan{System.Byte},System.String,System.Double,System.Double,System.Double,System.Double)">
+            <summary>
+            Add an image element with the data embedded as a base64 data uri
+            </summary>
+            <param name="data">The image file data</param>
+            <param name="mime">The mime type of the data</param>
+            <param name="x">The left position (not written if 0)</param>
+            <param name="y">The top position (not written if 0)</param>
+            <param name="width">The width (not written if zero or less)</param>
+            <param name="height">The height (not written if zero or less)</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.GetTransformToFit(SysWeaver.Media.SvgMinMaxState,System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,System.String)">
+            <summary>
+            Get a transform that uniformly scales content with the bounds <paramref name="s"/> to fit inside a box (and optionally rotates it around the box center).
+            The transform is "translate(box center) rotate(angle) scale(scale) translate(-content alignment point)", parts that are identity are left out.
+            </summary>
+            <param name="s">The bounds of the content</param>
+            <param name="x">The left position of the box</param>
+            <param name="y">The top position of the box</param>
+            <param name="width">The width of the box</param>
+            <param name="height">The height of the box</param>
+            <param name="angle">Rotation in degrees (around the box center, applied after the fit, so a rotated content may not fit)</param>
+            <param name="ax">The horizontal alignment in the unused space: 1 = left, 0 = center, -1 = right</param>
+            <param name="ay">The vertical alignment in the unused space: 1 = top, 0 = center, -1 = bottom</param>
+            <param name="coordFormat">The .NET number format, null to use <see cref="F:SysWeaver.Media.SvgCanvas.DefaultCoordFormat"/></param>
+            <returns>The transform, null if no transform is needed</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.PushOpacityToLeafs">
+            <summary>
+            Remove the opacity, fill-opacity and stroke-opacity attributes of all container elements and multiply them into the leaf elements
+            (shapes, text, image, use). Note that the result differs from group opacity when leaf elements overlap.
+            </summary>
+            <exception cref="T:System.FormatException">An opacity attribute is not a number (percentages are not supported)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.ApplyOpacityToImages(System.Func{System.String,System.Double,System.String})">
+            <summary>
+            Bake the opacity into image elements with a data uri (href, without a namespace): <paramref name="func"/> creates a new data uri.
+            The effective opacity is the product of the opacity of the image and its ancestors, but only the image opacity attribute is removed,
+            so call <see cref="M:SysWeaver.Media.SvgCanvas.PushOpacityToLeafs"/> first. Images with an effective opacity of zero or less are removed.
+            </summary>
+            <param name="func">Called with the data uri and the effective opacity (less than 1), returns the new data uri or null to keep the image as is</param>
+            <exception cref="T:System.FormatException">An opacity attribute is not a number (percentages are not supported)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.StyleToInline">
+            <summary>
+            Convert simple css class rules in style elements to attributes on the elements with that class, and remove all style elements.
+            Only the last class / element name of each selector is used (ex: ".a,.b" only applies to "b", ".a .b" to "b").
+            White space around the selectors, braces, ':' and ';' is removed, white space inside values is kept (ex: "stroke-dasharray: 1 2", "font-family: Open Sans").
+            Declarations without a ':' are ignored. If a selector is defined more than once (also in different style elements), the declarations are merged,
+            later values of the same property override earlier ones (like css). Unknown classes are kept in the class attribute.
+            Classes are applied in the order of the class attribute.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Image(System.String,System.Double,System.Double,System.Double,System.Double,System.Boolean,SysWeaver.Media.SvgCanvasSizing,SysWeaver.Media.SvgCanvasGravity,SysWeaver.Media.SvgCanvasGravity)">
+            <summary>
+            Add an image:
+            if <paramref name="url"/> starts with '&lt;' it's treated as an svg document and embedded using <see cref="M:SysWeaver.Media.SvgCanvas.EmbeddSvg(System.String,System.Double,System.Double,System.Double,System.Double,System.Boolean,SysWeaver.Media.SvgCanvasSizing,SysWeaver.Media.SvgCanvasGravity,SysWeaver.Media.SvgCanvasGravity)"/>,
+            if it's an existing local file (not containing "://" and not a data uri) the file is read and embedded as a data uri (the sizing and gravity are not applied),
+            else an image element referencing the url is added (with preserveAspectRatio set from the sizing and gravity).
+            Note: local files are read, so don't pass untrusted urls.
+            </summary>
+            <param name="url">An svg document, a local file name, a data uri or an url</param>
+            <param name="x">The left position</param>
+            <param name="y">The top position</param>
+            <param name="width">The width</param>
+            <param name="height">The height</param>
+            <param name="moveDefsEtc">For embedded svg documents: move the defs, filters and styles to the top level</param>
+            <param name="size">How to size the image in the box</param>
+            <param name="gravityHorizontal">The horizontal alignment in the box</param>
+            <param name="gravityVertical">The vertical alignment in the box</param>
+            <returns>The added element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.EmbeddSvg(System.String,System.Double,System.Double,System.Double,System.Double,System.Boolean,SysWeaver.Media.SvgCanvasSizing,SysWeaver.Media.SvgCanvasGravity,SysWeaver.Media.SvgCanvasGravity)">
+            <summary>
+            Embed another svg document, see <see cref="M:SysWeaver.Media.SvgCanvas.EmbeddSvg(SysWeaver.Media.SvgCanvas,System.Double,System.Double,System.Double,System.Double,System.Boolean,SysWeaver.Media.SvgCanvasSizing,SysWeaver.Media.SvgCanvasGravity,SysWeaver.Media.SvgCanvasGravity)"/>
+            </summary>
+            <param name="svg">The svg document text</param>
+            <param name="x">The left position of the box</param>
+            <param name="y">The top position of the box</param>
+            <param name="width">The width of the box</param>
+            <param name="height">The height of the box</param>
+            <param name="moveDefsEtc">Move the defs, filters and styles of the other document to the top level of this document</param>
+            <param name="size">How to size the document in the box</param>
+            <param name="gravityHorizontal">The horizontal alignment in the box</param>
+            <param name="gravityVertical">The vertical alignment in the box</param>
+            <returns>The added group element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.EmbeddSvg(SysWeaver.Media.SvgCanvas,System.Double,System.Double,System.Double,System.Double,System.Boolean,SysWeaver.Media.SvgCanvasSizing,SysWeaver.Media.SvgCanvasGravity,SysWeaver.Media.SvgCanvasGravity)">
+            <summary>
+            Embed another svg document scaled into a box: a group with the transform "translate(x,y) scale(sx,sy)" containing the content of the other svg element
+            (and its attributes except xmlns, version, viewBox and xlink).
+            The view box origin of the other document is taken into account (the view box is mapped to the box).
+            When <paramref name="moveDefsEtc"/> is true, the other document is modified (its defs, filter and style elements are moved).
+            </summary>
+            <param name="other">The document to embed</param>
+            <param name="x">The left position of the box</param>
+            <param name="y">The top position of the box</param>
+            <param name="width">The width of the box</param>
+            <param name="height">The height of the box</param>
+            <param name="moveDefsEtc">Move the defs, filters and styles of the other document to the top level of this document</param>
+            <param name="size">How to size the document in the box</param>
+            <param name="gravityHorizontal">The horizontal alignment in the box (Fit and Fill only)</param>
+            <param name="gravityVertical">The vertical alignment in the box (Fit and Fill only)</param>
+            <returns>The added group element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.SetFillAndStrokeHue(System.Xml.Linq.XElement,System.Double,System.Double,System.Double)">
+            <summary>
+            Replace the color of all fill and stroke attributes of the descendants of an element (not the element itself) with a color of the given hue and saturation,
+            keeping the (scaled) value and alpha of the original color.
+            Values that are not colors (ex: "none", "url(#a)", "currentColor") are kept unchanged.
+            </summary>
+            <param name="doc">The element to process the descendants of</param>
+            <param name="hue">The new hue</param>
+            <param name="saturation">The new saturation</param>
+            <param name="valueScale">A scale applied to the value of the original color (the result is clamped to 1)</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCanvas.Add(SysWeaver.Media.SvgCanvas,System.Double,System.Double,System.Double,System.Double,System.Action{System.Xml.Linq.XElement})">
+            <summary>
+            Add a copy of the content of another canvas in a group element (the other canvas is not modified).
+            If both <paramref name="maxWidth"/> and <paramref name="maxHeight"/> are greater than zero, the content is uniformly scaled to fit and centered in that box
+            (the view box origin of the other canvas is then taken into account), else it's only translated by (x, y).
+            </summary>
+            <param name="p">The canvas to copy the content from</param>
+            <param name="x">The left position</param>
+            <param name="y">The top position</param>
+            <param name="maxWidth">The width of the box to fit into, zero or less to not scale</param>
+            <param name="maxHeight">The height of the box to fit into, zero or less to not scale</param>
+            <param name="onCopy">Optionally called with the svg element of the copy (before the content is moved), can be used to modify the copy</param>
+            <returns>The added group element</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvas.Svg">
+            <summary>
+            The root svg element
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCanvasSizing">
+            <summary>
+            How to size content in a box
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasSizing.Fit">
+            <summary>
+            Uniformly scaled to fit inside the box (all content is visible)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasSizing.Fill">
+            <summary>
+            Uniformly scaled to fill the box (content may extend outside the box)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasSizing.Stretch">
+            <summary>
+            Non-uniformly scaled to the box size
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCanvasGravity">
+            <summary>
+            Alignment of content in a box
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasGravity.Start">
+            <summary>
+            Left / top
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasGravity.Center">
+            <summary>
+            Centered
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCanvasGravity.End">
+            <summary>
+            Right / bottom
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgColor">
+            <summary>
+            An immutable RGBA color (components are clamped to [0, 255], alpha to [0, 1]) with a short html / css representation (<see cref="F:SysWeaver.Media.SvgColor.Html"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgColor.Lerp(SysWeaver.Media.SvgColor,SysWeaver.Media.SvgColor,System.Double)">
+            <summary>
+            Linear interpolation between two colors (the rgb components are rounded to the nearest integer)
+            </summary>
+            <param name="from">The color at distance 0</param>
+            <param name="to">The color at distance 1</param>
+            <param name="distance">The interpolation factor, values outside [0, 1] extrapolates (the result is clamped)</param>
+            <returns>A new color</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="from"/> or <paramref name="to"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgColor.Parse(System.String)">
+            <summary>
+            Parse a color, supported formats: "#rgb", "#rrggbb", "rgb(r, g, b)" and "rgba(r, g, b, a)" (integer components, alpha as a decimal number, invariant culture).
+            Color names, percentages and other css formats are not supported.
+            </summary>
+            <param name="s">The text to parse</param>
+            <returns>The color</returns>
+            <exception cref="T:System.FormatException">The color can't be parsed</exception>
+            <exception cref="T:System.IndexOutOfRangeException">An rgb / rgba color has too few components</exception>
+            <exception cref="T:System.ArgumentNullException"><paramref name="s"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColor.R">
+            <summary>
+            The red component [0, 255]
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColor.G">
+            <summary>
+            The green component [0, 255]
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColor.B">
+            <summary>
+            The blue component [0, 255]
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColor.A">
+            <summary>
+            The alpha (opacity) [0, 1]
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColor.Html">
+            <summary>
+            The html / css representation: "transparent" if alpha is 0, "rgba(r,g,b,a)" (invariant culture) if alpha is less than 1,
+            else "#rgb" when possible or "#rrggbb" (lower case)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgColor.ToString">
+            <summary>
+            Same as <see cref="F:SysWeaver.Media.SvgColor.Html"/>
+            </summary>
+            <returns>The html / css representation</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgColor.#ctor(System.Int32,System.Int32,System.Int32,System.Double)">
+            <summary>
+            Create a color, out of range components are clamped
+            </summary>
+            <param name="r">The red component [0, 255]</param>
+            <param name="g">The green component [0, 255]</param>
+            <param name="b">The blue component [0, 255]</param>
+            <param name="a">The alpha (opacity) [0, 1]</param>
+        </member>
+        <member name="T:SysWeaver.Media.SvgColorStyle">
+            <summary>
+            A fill and stroke style (css)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColorStyle.FillColor">
+            <summary>
+            The fill color (any css color or "url(#id)"), null or empty for no fill ("none")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColorStyle.StrokeColor">
+            <summary>
+            The stroke color, null to use the <see cref="F:SysWeaver.Media.SvgColorStyle.FillColor"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColorStyle.StrokeWidth">
+            <summary>
+            The stroke width (in px), zero or less for no stroke
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgColorStyle.LineJoin">
+            <summary>
+            The stroke line join, null or empty to not set it
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgColorStyle.GetCss">
+            <summary>
+            Get the css declarations (one per line, indented with three tabs): fill, and if the stroke width is greater than zero and there is a stroke color:
+            stroke, stroke-linejoin and stroke-width.
+            If there is no stroke width and the stroke color is "none", "stroke-width: 0px" is added.
+            </summary>
+            <returns>The css declarations</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgColorStyle.ToString">
+            <summary>
+            The css declarations in a block (without a selector)
+            </summary>
+            <returns>The css block</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCompositionTemplate">
+            <summary>
+            A template that composes an svg image from layers of svg / bitmap files selected by variables (see <see cref="M:SysWeaver.Media.SvgCompositionTemplate.MakeComposite(System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,SysWeaver.Media.SvgTools.FileReader,SysWeaver.Media.SvgCompositionTemplateCache)"/>).
+            Template format (one item per line, lines starting with '#' are comments):
+            an optional first line "WxH" with the size (default 256x256), then one line per layer with '@' separated parts:
+            "x,y,w,h" the layer box (default: the whole image), "#[var]" a color template (applied to the gray scale colors of the svg, see <see cref="T:SysWeaver.Media.SvgCompositionTemplateCache"/>),
+            a 3 char sizing code ("GGS": horizontal and vertical gravity '-' start, '*' center, '+' end, then sizing '-' fit, '*' stretch, '+' fill)
+            and a comma separated list of file name templates ("[var]" is replaced by the variable value), the first file that can be resolved is used.
+            File names starting with '$' are read using the alternative reader, other names are relative to the base path.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplate.Load(System.String,System.String)">
+            <summary>
+            Load a template from a file (may be compressed, see <see cref="T:SysWeaver.Compression.CompFile"/>)
+            </summary>
+            <param name="filename">The template file name</param>
+            <param name="basePath">The base path of the layer files, null to use the folder of the template file</param>
+            <returns>The template, null if the file wasn't found</returns>
+            <exception cref="T:System.FormatException">The template is invalid</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplate.Create(System.String[],System.String)">
+            <summary>
+            Create a template from lines of text (see the class description for the format, comments must already be removed)
+            </summary>
+            <param name="c">The lines, null or empty creates an empty 256x256 template</param>
+            <param name="basePath">The base path of the layer files, null for the current directory</param>
+            <returns>The template</returns>
+            <exception cref="T:System.FormatException">A position doesn't have 4 numbers, or a layer has no file</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCompositionTemplate.Width">
+            <summary>
+            The width of the composed image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCompositionTemplate.Height">
+            <summary>
+            The height of the composed image
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCompositionTemplate.BasePath">
+            <summary>
+            The base path of the layer files (empty for the current directory)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplate.MakeComposite(System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,SysWeaver.Media.SvgTools.FileReader,SysWeaver.Media.SvgCompositionTemplateCache)">
+            <summary>
+            Compose an svg image: for each layer, the first file whose variables all have a non-empty value (and that can be loaded) is added.
+            Svg files get their text elements converted to paths (fonts are also searched in the base path and its "Fonts" sub folder, and in the folder of the svg file),
+            bitmaps are embedded as data uris.
+            </summary>
+            <param name="vars">The variable values, the keys must be lower case</param>
+            <param name="title">An optional title element</param>
+            <param name="altReader">The reader for file names starting with '$', may be null if no such files are used</param>
+            <param name="cache">The file cache to use, null for <see cref="F:SysWeaver.Media.SvgCompositionTemplateCache.Default"/></param>
+            <returns>The svg document</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCompositionTemplateCache">
+            <summary>
+            A cache of the files used by <see cref="T:SysWeaver.Media.SvgCompositionTemplate"/>: svg files (as templates) and bitmaps (as data uris).
+            Files are cached by their full path (base path + name), or for names starting with '$' by the name and the reader (compared with <see cref="M:System.Delegate.Equals(System.Object)"/>, same target and method);
+            svg files for <see cref="F:SysWeaver.Media.SvgCompositionTemplateCache.Keep"/>, bitmaps for 1 hour.
+            In svg files, the double quoted gray colors "#111", "#222" .. "#fff" are replaced by the variables [Col1] .. [Col15]:
+            without a color they get their original value, with a color they are scaled: Col<i>i</i> = color * i / 15 (rounded).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.Clear">
+            <summary>
+            Remove all cached files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCompositionTemplateCache.Default">
+            <summary>
+            The default (shared) cache
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.#ctor(System.Int32)">
+            <summary>
+            Create a cache
+            </summary>
+            <param name="keepTemplatesInMemoryForMinutes">How long svg files are kept in the cache (at least 1 minute)</param>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCompositionTemplateCache.Keep">
+            <summary>
+            How long svg files are kept in the cache
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.GetResolvedSvgFile(SysWeaver.TextTemplate,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,SysWeaver.Media.SvgTools.FileReader,System.String)">
+            <summary>
+            Get an svg file with the variables (and colors) resolved, see <see cref="M:SysWeaver.Media.SvgCompositionTemplateCache.GetResolvedSvgFile(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,SysWeaver.Media.SvgTools.FileReader,System.String)"/>
+            </summary>
+            <param name="nameTemplate">The file name template, the variables are resolved using <paramref name="vars"/> (lower cased keys)</param>
+            <param name="vars">The variable values, the keys must be lower case</param>
+            <param name="basePath">The base path of the file</param>
+            <param name="altReader">The reader for file names starting with '$'</param>
+            <param name="color">An optional color for the gray scale colors</param>
+            <returns>The svg document, null if not found</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.GetResolvedSvgFile(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,SysWeaver.Media.SvgTools.FileReader,System.String)">
+            <summary>
+            Get an svg file (cached as a template) with the [var] variables resolved using <paramref name="vars"/> and the gray scale colors replaced
+            </summary>
+            <param name="name">The file name, relative to <paramref name="basePath"/>, or "$name" to read it using <paramref name="altReader"/> (must return the svg mime type)</param>
+            <param name="vars">The variable values, the keys must be lower case</param>
+            <param name="basePath">The base path of the file</param>
+            <param name="altReader">The reader for file names starting with '$'</param>
+            <param name="color">An optional color for the gray scale colors, null to keep the original gray colors</param>
+            <returns>The svg document, null if not found</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.GetBitmapFile(SysWeaver.TextTemplate,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,SysWeaver.Media.SvgTools.FileReader)">
+            <summary>
+            Get a bitmap file as a data uri, see <see cref="M:SysWeaver.Media.SvgCompositionTemplateCache.GetBitmapFile(System.String,System.String,SysWeaver.Media.SvgTools.FileReader)"/>
+            </summary>
+            <param name="nameTemplate">The file name template, the variables are resolved using <paramref name="vars"/> (lower cased keys)</param>
+            <param name="vars">The variable values, the keys must be lower case</param>
+            <param name="basePath">The base path of the file</param>
+            <param name="altReader">The reader for file names starting with '$'</param>
+            <returns>The data uri, null if not found</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.GetBitmapFile(System.String,System.String,SysWeaver.Media.SvgTools.FileReader)">
+            <summary>
+            Get a bitmap file as a data uri ("data:mime;base64,..."), the mime type is taken from the file extension.
+            The result is cached for 1 hour (by the full path, or the name and the reader for names starting with '$').
+            </summary>
+            <param name="name">The file name (must have an extension), relative to <paramref name="basePath"/>, or "$name" to read it using <paramref name="altReader"/></param>
+            <param name="basePath">The base path of the file</param>
+            <param name="altReader">The reader for file names starting with '$'</param>
+            <returns>The data uri, null if not found</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCompositionTemplateCache.FileKey">
+            <summary>
+            The cache key of a file: the full path of a file, or a name starting with '$' and the reader
+            </summary>
+            <param name="Name">The full path or the name starting with '$'</param>
+            <param name="Reader">The reader for names starting with '$', else null</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.FileKey.#ctor(System.String,SysWeaver.Media.SvgTools.FileReader)">
+            <summary>
+            The cache key of a file: the full path of a file, or a name starting with '$' and the reader
+            </summary>
+            <param name="Name">The full path or the name starting with '$'</param>
+            <param name="Reader">The reader for names starting with '$', else null</param>
+        </member>
+        <member name="P:SysWeaver.Media.SvgCompositionTemplateCache.FileKey.Name">
+            <summary>The full path or the name starting with '$'</summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgCompositionTemplateCache.FileKey.Reader">
+            <summary>The reader for names starting with '$', else null</summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCompositionTemplateCache.GetStats(System.String,System.String)">
+            <summary>
+            Get statistics: the cache statistics of the svg ("Svg.") and bitmap ("Bitmap.") caches, followed by the approximate sizes in bytes
+            ("SvgSize", "BitmapSize" and "Size")
+            </summary>
+            <param name="system">The system name of the stats</param>
+            <param name="prefix">A prefix for the stat names</param>
+            <returns>The statistics</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgExtrudeParams">
+            <summary>
+            The extrusion parameters of <see cref="M:SysWeaver.Media.SvgScene.AddPath(System.String,SysWeaver.Media.Svg3dParams)"/> (the inherited fill / stroke style is used for the sides)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgExtrudeParams.#ctor">
+            <summary>
+            Create extrusion parameters (stroke width 0.25, fill "#066")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgExtrudeParams.ExtrudeX">
+            <summary>
+            The x extrusion delta
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgExtrudeParams.ExtrudeY">
+            <summary>
+            The y extrusion delta
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgExtrudeParams.ExtrudeFillLight">
+            <summary>
+            The side colors are interpolated from this color (sides parallel to the extrusion direction) to the <see cref="F:SysWeaver.Media.SvgColorStyle.FillColor"/> (sides perpendicular to it).
+            Null or empty to use the fill color for all sides.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgFont">
+            <summary>
+            A font (TrueType / OpenType) used to convert text to svg paths (see <see cref="M:SysWeaver.Media.SvgPath.GetSvgTextPaths(System.String,SysWeaver.Media.SvgFont,System.Double,System.Int32)"/>).
+            Some free fonts are embedded (the static properties), other fonts are loaded from files and cached.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.GetEmbeddedData(System.String)">
+            <summary>
+            Get the font file data of an embedded font
+            </summary>
+            <param name="name">The name of the embedded font, ex: "MontserratBlack"</param>
+            <returns>The font file data</returns>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.AsianNinja">
+            <summary>
+            The embedded "Asian Ninja" font (loaded on first use, the same instance is returned)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.AstroSpace">
+            <summary>
+            The embedded "Astro Space" font (loaded on first use, the same instance is returned)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.AtariClassic">
+            <summary>
+            The embedded "Atari Classic" font (loaded on first use, the same instance is returned)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.MontserratBlack">
+            <summary>
+            The embedded "Montserrat Black" font (loaded on first use, the same instance is returned), the fallback font of <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.RedemtionRegular">
+            <summary>
+            The embedded "Redemtion Regular" font (loaded on first use, the same instance is returned)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.RoTwimchRegular">
+            <summary>
+            The embedded "RoTwimch Regular" font (loaded on first use, the same instance is returned)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgFont.VegapunkFree">
+            <summary>
+            The embedded "Vegapunk Free" font (loaded on first use, the same instance is returned)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.GetOrCreateCreateFromStream(System.IO.Stream,System.String,System.Boolean)">
+            <summary>
+            Load a font from a stream (despite the name, nothing is cached, a new instance is returned on every call)
+            </summary>
+            <param name="s">The stream with the font file data</param>
+            <param name="filename">The name of the font (returned by <see cref="M:SysWeaver.Media.SvgFont.ToString"/>), null for "&lt;Stream&gt;"</param>
+            <param name="leaveOpen">If false the stream is disposed</param>
+            <returns>The font</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String,System.String,System.String,System.String[])">
+            <summary>
+            Find a font file by (fuzzy) matching "family style weight" against the font file names (without extension) in the extra folders,
+            the folders added with <see cref="M:SysWeaver.Media.SvgFont.AddFontPath(System.String)"/> and the system font folder, and load it (see <see cref="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String)"/>).
+            The result (also a miss) is cached per family, style and weight (regardless of the folders) until <see cref="M:SysWeaver.Media.SvgFont.ClearCache"/> is called.
+            </summary>
+            <param name="family">The font family</param>
+            <param name="style">The font style, ex: "italic", may be null</param>
+            <param name="weight">The font weight, ex: "bold", may be null</param>
+            <param name="extraFontFolders">Additional folders to search first (null entries are ignored)</param>
+            <returns>The best matching font (the file with the highest rank among the files whose name contains a word of <paramref name="family"/>),
+            or null if no such font file was found (callers choose their own fallback, ex: <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/> uses <see cref="P:SysWeaver.Media.SvgFont.MontserratBlack"/>)</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String)">
+            <summary>
+            Load a font file, the font is cached by its full path (until <see cref="M:SysWeaver.Media.SvgFont.ClearCache"/> is called)
+            </summary>
+            <param name="filename">The font file name</param>
+            <returns>The font, null if the file doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.AddFontPath(System.String)">
+            <summary>
+            Add a (global) folder to search for fonts, reference counted: the folder is searched until <see cref="M:SysWeaver.Media.SvgFont.RemoveFontPath(System.String)"/> has been called as many times
+            </summary>
+            <param name="folder">The folder (case sensitive)</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.RemoveFontPath(System.String)">
+            <summary>
+            Remove a folder added with <see cref="M:SysWeaver.Media.SvgFont.AddFontPath(System.String)"/> (decrements the reference count)
+            </summary>
+            <param name="folder">The folder (case sensitive)</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.ClearCache">
+            <summary>
+            Clear the cache of fonts loaded from files and of family lookups (the embedded fonts are not affected)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgFont.ToString">
+            <summary>
+            The quoted <see cref="F:SysWeaver.Media.SvgFont.Filename"/>
+            </summary>
+            <returns>The quoted file name</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgFont.Filename">
+            <summary>
+            The file name of the font (the font name for embedded fonts, ex: "MontserratBlack", or "&lt;Stream&gt;")
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgGradStop">
+            <summary>
+            A gradient stop
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgGradStop.Pos">
+            <summary>
+            [0, 100] The position as a percentage
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgGradStop.Color">
+            <summary>
+            The css color
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgGradStop.#ctor(System.Double,System.String)">
+            <summary>
+            Create a gradient stop
+            </summary>
+            <param name="pos">[0, 100] The position as a percentage</param>
+            <param name="color">The css color</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgGradStop.ToSvg(System.Func{System.Double,System.String})">
+            <summary>
+            Get the svg stop element, ex: "&lt;stop offset='50%' stop-color='#f00' /&gt;"
+            </summary>
+            <param name="fmt">The number formatter for the position, null to use <see cref="F:SysWeaver.Media.SvgTools.FullFormat"/></param>
+            <returns>The svg stop element</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgGradStop.ToString">
+            <summary>
+            Same as <see cref="M:SysWeaver.Media.SvgGradStop.ToSvg(System.Func{System.Double,System.String})"/> with the default formatter
+            </summary>
+            <returns>The svg stop element</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgMinMaxState">
+            <summary>
+            Axis aligned bounds (min / max of points), updated using <see cref="F:SysWeaver.Media.SvgMinMaxState.Update"/>.
+            A new instance is empty (<see cref="P:SysWeaver.Media.SvgMinMaxState.IsEmpty"/> is true, the min values are <see cref="F:System.Double.MaxValue"/> and the max values <see cref="F:System.Double.MinValue"/>).
+            Not thread safe.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgMinMaxState.ToString">
+            <summary>
+            "Empty" or "[MinX, MinY] - [MaxX, MaxY] WidthxHeight" (2 decimals, invariant culture)
+            </summary>
+            <returns>A text representation</returns>
+        </member>
+        <member name="P:SysWeaver.Media.SvgMinMaxState.IsEmpty">
+            <summary>
+            True if no point has been added, or if an <see cref="M:SysWeaver.Media.SvgMinMaxState.Expand(System.Double,System.Double,System.Double,System.Double)"/> resulted in a width or height that is zero or less
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgMinMaxState.Width">
+            <summary>
+            The width (MaxX - MinX), 0 if empty
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.SvgMinMaxState.Height">
+            <summary>
+            The height (MaxY - MinY), 0 if empty
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgMinMaxState.MinX">
+            <summary>
+            The min x value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgMinMaxState.MinY">
+            <summary>
+            The min y value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgMinMaxState.MaxX">
+            <summary>
+            The max x value
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgMinMaxState.MaxY">
+            <summary>
+            The max y value
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgMinMaxState.Expand(System.Double,System.Double,System.Double,System.Double)">
+            <summary>
+            Expand the bounds (negative values shrinks the bounds).
+            Note that the bounds of a single point (or a horizontal / vertical line) becomes empty when expanded by zero.
+            </summary>
+            <param name="top">Subtracted from MinY</param>
+            <param name="right">Added to MaxX</param>
+            <param name="bottom">Added to MaxY</param>
+            <param name="left">Subtracted from MinX</param>
+            <returns>This instance</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgMinMaxState.Expand(System.Double,System.Double)">
+            <summary>
+            Expand the bounds horizontally and vertically, see <see cref="M:SysWeaver.Media.SvgMinMaxState.Expand(System.Double,System.Double,System.Double,System.Double)"/>
+            </summary>
+            <param name="horizontal">Subtracted from MinX and added to MaxX</param>
+            <param name="vertical">Subtracted from MinY and added to MaxY</param>
+            <returns>This instance</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgMinMaxState.Expand(System.Double)">
+            <summary>
+            Expand the bounds in all directions, see <see cref="M:SysWeaver.Media.SvgMinMaxState.Expand(System.Double,System.Double,System.Double,System.Double)"/>
+            </summary>
+            <param name="d">The amount to expand in all directions</param>
+            <returns>This instance</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgMinMaxState.Update">
+            <summary>
+            Add a point (x, y) to the bounds (clears <see cref="P:SysWeaver.Media.SvgMinMaxState.IsEmpty"/>), can be used as a callback, ex: for <see cref="M:SysWeaver.Media.SvgPath.Process(System.String,System.Action{System.Double,System.Double},System.Action{System.Double,System.Double,System.Char,System.Collections.Generic.IList{System.Double}})"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgMinMaxState.#ctor">
+            <summary>
+            Create an empty state
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgNgonParams">
+            <summary>
+            The parameters of a regular n-gon, see <see cref="M:SysWeaver.Media.SvgTools.GetSvgNCon(System.Int32,SysWeaver.Media.SvgNgonParams)"/> and <see cref="M:SysWeaver.Media.SvgScene.AddNGon(System.Int32,SysWeaver.Media.SvgNgonParams)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgNgonParams.AngleOffset">
+            <summary>
+            Rotation in degrees (clockwise)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgNgonParams.Size">
+            <summary>
+            The size of the square that the n-gon is fitted into
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgNgonParams.OffsetX">
+            <summary>
+            The left position of the square
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgNgonParams.OffsetY">
+            <summary>
+            The top position of the square
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgNgonParams.BackgroundColor">
+            <summary>
+            An optional background color (used by <see cref="M:SysWeaver.Media.SvgTools.GetSvgNCon(System.Int32,SysWeaver.Media.SvgNgonParams)"/>)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgCornerShape">
+            <summary>
+            The shape of a corner, used by <see cref="M:SysWeaver.Media.SvgPath.GetFancyRect(System.Double,System.Double,SysWeaver.Media.SvgCornerShape,SysWeaver.Media.SvgCornerShape,SysWeaver.Media.SvgCornerShape,SysWeaver.Media.SvgCornerShape,System.Int32,System.Double,System.Double)"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCornerShape.#ctor(System.Double,System.Double)">
+            <summary>
+            Create a corner shape with the same horizontal and vertical radius
+            </summary>
+            <param name="rad">The radius</param>
+            <param name="exp">The shape: 1 = Rounded, 0 = Line (bevel), -1 = Scooped (values in between blends the quadratic control point)</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgCornerShape.#ctor(System.Double,System.Double,System.Double)">
+            <summary>
+            Create a corner shape
+            </summary>
+            <param name="radX">The horizontal radius</param>
+            <param name="radY">The vertical radius</param>
+            <param name="exp">The shape: 1 = Rounded, 0 = Line (bevel), -1 = Scooped (values in between blends the quadratic control point)</param>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCornerShape.RadX">
+            <summary>
+            The horizontal radius (negative values are treated as zero)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCornerShape.RadY">
+            <summary>
+            The vertical radius (negative values are treated as zero)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgCornerShape.Exp">
+            <summary>
+            The shape: 1 = Rounded, 0 = Line (bevel), -1 = Scooped
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgPath">
+            <summary>
+            SVG path helpers: parsing (<see cref="M:SysWeaver.Media.SvgPath.Process(System.String,System.Action{System.Double,System.Double},System.Action{System.Double,System.Double,System.Char,System.Collections.Generic.IList{System.Double}})"/>), bounds, transforms, text to paths, shape generators (n-gons, rounded / fancy rectangles) and extrusion.
+            The parser supports the commands M, L, H, V, C, S, Q, T, A and Z (absolute and relative) with implicit repeats; numbers are parsed with the invariant culture
+            and may have an exponent ("1e-3"), they may be separated by any white space, commas or a sign, compact numbers such as "-.5.5" and arc flags without separators ("a1 1 0 015 5") are supported.
+            The generated paths are formatted with the invariant culture (see <see cref="M:SysWeaver.Media.SvgTools.GetFormat(System.Int32)"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.UpdateMinMax(SysWeaver.Media.SvgMinMaxState,System.String)">
+            <summary>
+            Update a min/max state with all points of a path (including control points of curves and the arc end points, so the bounds may be larger than the tight bounds)
+            </summary>
+            <param name="state">The state to update</param>
+            <param name="svgPath">The path data</param>
+            <exception cref="T:System.FormatException">The path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.Extrude(System.String,System.Double,System.Double,System.Int32,System.Boolean)">
+            <summary>
+            Create the side faces of an extrusion of a path in the direction (dx, dy), one closed face per line / curve segment.
+            Supports the absolute commands M (with implicit line to's), L, H, V, Q and Z.
+            A Z extrudes the closing segment (from the current point back to the start of the sub path).
+            Segments shorter than 0.000001 are skipped (ex: the closing segment of a path that ends with an explicit line to its start point).
+            </summary>
+            <param name="path">The path data (absolute commands only)</param>
+            <param name="dx">The x extrusion delta</param>
+            <param name="dy">The y extrusion delta</param>
+            <param name="numDecimals">The maximum number of decimals in the output</param>
+            <param name="doSort">If true the faces are sorted on the lighting value (ascending)</param>
+            <returns>A tuple for each face with: The face path, the max projection of the segment end points on (dx, dy) and the lighting value
+            [0, 1] (the absolute sine of the angle between the segment and the extrusion direction, 1 = perpendicular)</returns>
+            <exception cref="T:System.ArgumentException">Both <paramref name="dx"/> and <paramref name="dy"/> are zero</exception>
+            <exception cref="T:System.NotSupportedException">The path contains a command that is not supported</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.Process(System.String,System.Action{System.Double,System.Double},System.Action{System.Double,System.Double,System.Char,System.Collections.Generic.IList{System.Double}})">
+            <summary>
+            Parse a path and perform some actions on all points and / or commands.
+            For every command letter, <paramref name="onCommand"/> is called once (with all numbers, implicit repeats included), then <paramref name="onPoint"/> is called for each point of the command.
+            A close path (Z / z) moves the current point back to the start of the sub path.
+            Numbers before the first command are ignored.
+            Numbers follow the svg path grammar: an optional sign, digits, an optional '.' with digits and an optional exponent ("1e-3");
+            they are separated by any white space, ',' or the start of the next number ("1-2+3.5.5" is 1, -2, 3.5 and .5).
+            The large-arc-flag and sweep-flag of arcs may be written as single chars without a separator ("a5 5 0 0110 10").
+            </summary>
+            <param name="path">The path data</param>
+            <param name="onPoint">Called with the absolute coordinates of every end point and of the explicit control points of C, S and Q (not for arc radii), may be null</param>
+            <param name="onCommand">Called with the current (absolute) point before the command, the command char and the numbers of the command.
+            The numbers may be modified in place by the callback, the current point tracking (and <paramref name="onPoint"/>) then uses the modified values. May be null</param>
+            <exception cref="T:System.FormatException">The path contains an unsupported command or an invalid number</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">A command has too few numbers</exception>
+            <exception cref="T:System.ArgumentNullException"><paramref name="path"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetMinMaxForPaths(System.Collections.Generic.IList{System.String})">
+            <summary>
+            Get min/max for some paths (all points of all paths, see <see cref="M:SysWeaver.Media.SvgPath.UpdateMinMax(SysWeaver.Media.SvgMinMaxState,System.String)"/>)
+            </summary>
+            <param name="paths">The paths</param>
+            <returns>A new min/max state (<see cref="P:SysWeaver.Media.SvgMinMaxState.IsEmpty"/> is true if there are no points)</returns>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.TransformPaths(System.Collections.Generic.IList{System.String},System.Double,System.Double,System.Double,System.Double,System.Int32)">
+            <summary>
+            Scale and then translate paths in place: x' = x * scaleX + offsetX, y' = y * scaleY + offsetY.
+            Relative coordinates (lower case commands) are only scaled, except the first pair of a relative 'm' that starts a path (it's absolute, as in the svg spec).
+            Arcs are transformed exactly: the radii and the x-axis-rotation describe the transformed ellipse (for a non-uniform scale of a rotated ellipse the radii and the rotation change)
+            and the sweep flag is flipped if the transform mirrors (scaleX * scaleY &lt; 0).
+            The paths are reformatted (numbers separated by a single space, implicit repeats are kept).
+            </summary>
+            <param name="paths">The paths to transform (replaced in the list)</param>
+            <param name="scaleX">The x scale</param>
+            <param name="scaleY">The y scale</param>
+            <param name="offsetX">The x offset (added after scaling)</param>
+            <param name="offsetY">The y offset (added after scaling)</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.TransformArc(System.Collections.Generic.IList{System.Double},System.Int32,System.Double,System.Double)">
+            <summary>
+            Transform the radii, x-axis-rotation and sweep flag of an arc (at offset o in nums) by a scale
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.ArcToCubics(System.Collections.Generic.List{System.Double},System.Double,System.Double,System.Double,System.Double,System.Double,System.Boolean,System.Boolean,System.Double,System.Double)">
+            <summary>
+            Convert an svg arc (endpoint parameterization) to cubic bezier segments (at most 90 degrees each), see https://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes.
+            Six numbers (control point 1, control point 2 and end point) are added per segment.
+            Nothing is added if the end points are equal, a straight line (as one cubic) is added if a radius is zero.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgPath.Point">
+            <summary>
+            A mutable point, used by <see cref="M:SysWeaver.Media.SvgPath.ModifyAbsolutePaths(System.Collections.Generic.IList{System.String},System.Action{SysWeaver.Media.SvgPath.Point},System.Int32)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgPath.Point.X">
+            <summary>
+            The x coordinate
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgPath.Point.Y">
+            <summary>
+            The y coordinate
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.ModifyAbsolutePaths(System.Collections.Generic.IList{System.String},System.Action{SysWeaver.Media.SvgPath.Point},System.Int32)">
+            <summary>
+            Apply a custom function on all points of absolute paths (in place), the paths are reformatted (numbers separated by a single space).
+            The function is called (in path order) with the original coordinates of every end point and every control point of C, S, Q and T.
+            H / V segments are kept if the modified end point is still axis aligned with the modified start point, else the command is written as an L.
+            Arcs are converted to cubic beziers (at most 90 degrees per segment), the function is called for their control points and end points
+            (so a bend or any other non-linear function bends arcs too, a degenerate arc with a zero radius becomes a straight cubic, an arc to the current point is removed).
+            The same <see cref="T:SysWeaver.Media.SvgPath.Point"/> instance is reused for all calls.
+            </summary>
+            <param name="paths">The paths to modify (replaced in the list), may only contain absolute commands (and 'z')</param>
+            <param name="onPoint">Called for each point, change the point to change the path</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <exception cref="T:System.ArgumentException">A path contains a relative command</exception>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.OptimizePaths(System.Collections.Generic.IList{System.String},System.Int32)">
+            <summary>
+            Reformat paths in place: numbers are rounded to <paramref name="maxDecimals"/> decimals and separated by a space (no space before a '-').
+            The commands are kept as is (no conversion between relative and absolute).
+            </summary>
+            <param name="paths">The paths to optimize (replaced in the list)</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.ComputeApproxCentroid(System.Double@,System.Double@,System.String)">
+            <summary>
+            Compute the approximate area of a path and the centroid of its largest region.
+            The path is split into regions at every Z, each region is treated as a polygon of all its points (curve control points included),
+            so a region after a Z should start with an absolute move to.
+            </summary>
+            <param name="x">The x coordinate of the centroid of the region with the largest area (0 if there are no regions with an area)</param>
+            <param name="y">The y coordinate of the centroid of the region with the largest area (0 if there are no regions with an area)</param>
+            <param name="path">The path data</param>
+            <returns>The sum of the (absolute) areas of all regions</returns>
+            <exception cref="T:System.FormatException">The path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.FindInnerMostPoint(System.Double@,System.Double@,System.String,System.Double)">
+            <summary>
+            Find an approximate "pole of inaccessibility": a point inside the path that is as far as possible from the edges of the region (polygon) that contains it.
+            The path is split into regions at every Z (each treated as a polygon of all its points), a 49x49 grid search over the bounds is refined iteratively.
+            Useful for placing a label inside a shape.
+            </summary>
+            <param name="x">The x coordinate of the found point (0 if no grid point is inside the path)</param>
+            <param name="y">The y coordinate of the found point (0 if no grid point is inside the path)</param>
+            <param name="path">The path data</param>
+            <param name="xPrio">The x coordinates are divided by this value during the search, a value greater than 1 makes horizontal distances count less (prefers wide areas)</param>
+            <exception cref="T:System.FormatException">The path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.MakeAbsolute(System.Collections.Generic.IList{System.String},System.Int32)">
+            <summary>
+            Convert the relative commands m, l, t, h, v and z of paths to absolute commands (in place), the numbers are reformatted.
+            </summary>
+            <param name="paths">The paths to convert (replaced in the list)</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <exception cref="T:System.NotSupportedException">A path contains a relative c, s, q or a command</exception>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.FitPaths(System.Collections.Generic.IList{System.String},System.Double,System.Double,System.Double,System.Double,System.Int32)">
+            <summary>
+            Fit some path(s) within an area (in place): uniformly scaled so that the bounds (see <see cref="M:SysWeaver.Media.SvgPath.GetMinMaxForPaths(System.Collections.Generic.IList{System.String})"/>) fit, and centered in the area
+            </summary>
+            <param name="paths">The paths to fit (replaced in the list)</param>
+            <param name="maxWidth">The width of the area</param>
+            <param name="maxHeigth">The height of the area</param>
+            <param name="offsetX">The left position of the area</param>
+            <param name="offsetY">The top position of the area</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.FitPaths(System.Collections.Generic.IList{System.String},SysWeaver.Media.SvgMinMaxState,System.Double,System.Double,System.Double,System.Double,System.Int32)">
+            <summary>
+            Fit some path(s) within an area (in place): uniformly scaled so that the supplied bounds fit, and centered in the area
+            </summary>
+            <param name="paths">The paths to fit (replaced in the list)</param>
+            <param name="mm">The bounds of the paths (or any other bounds to fit)</param>
+            <param name="width">The width of the area</param>
+            <param name="height">The height of the area</param>
+            <param name="offsetX">The left position of the area</param>
+            <param name="offsetY">The top position of the area</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.NormalizeInto(System.Collections.Generic.IList{System.String},System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,System.Int32)">
+            <summary>
+            Uniformly scale paths (in place) to fit within maxWidth x maxHeight and place them inside the margins.
+            The content size gets the max size in the limiting dimension and the scaled size (rounded up) in the other, the paths are centered in it.
+            </summary>
+            <param name="paths">The paths to normalize (replaced in the list)</param>
+            <param name="maxWidth">The max content width</param>
+            <param name="maxHeigth">The max content height</param>
+            <param name="marginTop">The top margin</param>
+            <param name="marginRight">The right margin</param>
+            <param name="marginBottom">The bottom margin</param>
+            <param name="marginLeft">The left margin</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <returns>The total size (content size + margins) as (width, height)</returns>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.NormalizeInto(System.Double@,System.Double@,System.Double@,System.Collections.Generic.IList{System.String},SysWeaver.Media.SvgMinMaxState,System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,System.Int32,System.Boolean)">
+            <summary>
+            Uniformly scale paths (in place) so that the supplied bounds fit within maxWidth x maxHeight and place them inside the margins.
+            The content size gets the max size in the limiting dimension and the scaled size in the other, the paths are centered in it.
+            The applied transform is x' = x * scale + postX, y' = y * scale + postY.
+            </summary>
+            <param name="scale">The applied scale</param>
+            <param name="postX">The applied x offset (after scaling)</param>
+            <param name="postY">The applied y offset (after scaling)</param>
+            <param name="paths">The paths to normalize (replaced in the list)</param>
+            <param name="mm">The bounds of the paths</param>
+            <param name="maxWidth">The max content width</param>
+            <param name="maxHeigth">The max content height</param>
+            <param name="marginTop">The top margin</param>
+            <param name="marginRight">The right margin</param>
+            <param name="marginBottom">The bottom margin</param>
+            <param name="marginLeft">The left margin</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <param name="round">If true, the content size is rounded up to whole units</param>
+            <returns>The total size (content size + margins) as (width, height)</returns>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.NormalizeInto(System.Collections.Generic.IList{System.String},SysWeaver.Media.SvgMinMaxState,System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,System.Int32,System.Boolean)">
+            <summary>
+            Uniformly scale paths (in place) so that the supplied bounds fit within maxWidth x maxHeight and place them inside the margins,
+            see <see cref="M:SysWeaver.Media.SvgPath.NormalizeInto(System.Double@,System.Double@,System.Double@,System.Collections.Generic.IList{System.String},SysWeaver.Media.SvgMinMaxState,System.Double,System.Double,System.Double,System.Double,System.Double,System.Double,System.Int32,System.Boolean)"/>
+            </summary>
+            <param name="paths">The paths to normalize (replaced in the list)</param>
+            <param name="mm">The bounds of the paths</param>
+            <param name="maxWidth">The max content width</param>
+            <param name="maxHeigth">The max content height</param>
+            <param name="marginTop">The top margin</param>
+            <param name="marginRight">The right margin</param>
+            <param name="marginBottom">The bottom margin</param>
+            <param name="marginLeft">The left margin</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <param name="round">If true, the content size is rounded up to whole units</param>
+            <returns>The total size (content size + margins) as (width, height)</returns>
+            <exception cref="T:System.FormatException">A path contains an unsupported command or an invalid number</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetSvgTextPaths(System.String,SysWeaver.Media.SvgFont,System.Double,System.Int32)">
+            <summary>
+            Generate svg paths from text (one path per glyph that has an outline, laid out on a single line starting at x = 0).
+            Characters that are missing in the font are skipped (they don't advance the position), there is no kerning or line breaking.
+            </summary>
+            <param name="text">The text to convert</param>
+            <param name="font">The font to use</param>
+            <param name="size">The font size (em size in output units)</param>
+            <param name="maxDecimals">The maximum number of decimals in the output coordinates</param>
+            <returns>The glyph paths (absolute coordinates, y grows downwards), may be empty</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="font"/> is null, or <paramref name="text"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetSvgTextPaths(System.String,SysWeaver.Media.SvgTextPathParams)">
+            <summary>
+            Create svg paths from some text (one path per glyph).
+            If both <see cref="F:SysWeaver.Media.SvgTextPathParams.FitWidth"/> and <see cref="F:SysWeaver.Media.SvgTextPathParams.FitHeight"/> are greater than zero the text is fitted (and centered)
+            in that area at (<see cref="F:SysWeaver.Media.SvgTextPathParams.MarginX"/>, <see cref="F:SysWeaver.Media.SvgTextPathParams.MarginY"/>), else <see cref="F:SysWeaver.Media.SvgTextPathParams.Size"/> is used as the font size (margins are ignored).
+            </summary>
+            <param name="text">The text to convert</param>
+            <param name="p">The parameters</param>
+            <returns>The glyph paths</returns>
+            <exception cref="T:System.ArgumentNullException">The font is null</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetNGonPath(System.Int32,System.Double,System.Int32,System.Double,System.Double,System.Double)">
+            <summary>
+            Create a svg path in the shape of a regular N-gon, centered in a size x size square.
+            Odd n have a vertex at the top, even n have a flat top edge (before applying <paramref name="angleAdjust"/>).
+            The shape is centered on the square center and scaled so that the vertex farthest from the center (horizontally or vertically) touches the square,
+            so odd n only touch the top (and the sides if wider than high).
+            </summary>
+            <param name="n">The number of vertices, must be at least 3</param>
+            <param name="size">The size (width and height) to fit the shape inside</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <param name="angleAdjust">Rotation in degrees (clockwise, y down)</param>
+            <param name="offsetX">The left position of the square</param>
+            <param name="offsetY">The top position of the square</param>
+            <returns>A closed path: "M" + the last vertex, "L" + all vertices and "z"</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="n"/> is less than 3</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgPath.MaxStackVertex">
+            <summary>
+            The size of the stack buffers used to format a vertex
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.FormatVertex(System.Span{System.Char},System.Double,System.Double,System.String,System.IFormatProvider)">
+            <summary>
+            Format "x y" with the number format (the same text as ToString(numFormat, f) of both)
+            </summary>
+            <returns>The number of chars written, -1 if the text doesn't fit</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetRoundedRect(System.Double,System.Double,System.Double,System.Int32,System.Double,System.Double)">
+            <summary>
+            Create a svg path in the shape of a rounded rectangle (the corners are quadratic curves with the control point in the corner)
+            </summary>
+            <param name="width">The width</param>
+            <param name="height">The height</param>
+            <param name="radius">The corner radius, clamped to half of the smallest side</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>A closed path (ends with "z")</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetFancyRect(System.Double,System.Double,SysWeaver.Media.SvgCornerShape,System.Int32,System.Double,System.Double)">
+            <summary>
+            Create a svg path in the shape of a rectangle with the same shape for all corners
+            </summary>
+            <param name="width">The width</param>
+            <param name="height">The height</param>
+            <param name="shape">Shape of the corners</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>A closed path (ends with "z")</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="shape"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.GetFancyRect(System.Double,System.Double,SysWeaver.Media.SvgCornerShape,SysWeaver.Media.SvgCornerShape,SysWeaver.Media.SvgCornerShape,SysWeaver.Media.SvgCornerShape,System.Int32,System.Double,System.Double)">
+            <summary>
+            Create a svg path in the shape of a rectangle with specific corner shapes.
+            Negative radii are treated as zero (a sharp corner), if the radii of two corners on the same side are larger than that side they are scaled down to fit.
+            </summary>
+            <param name="width">The width</param>
+            <param name="height">The height</param>
+            <param name="topLeft">Shape of top left corner</param>
+            <param name="topRight">Shape of top right corner</param>
+            <param name="bottomRight">Shape of bottom right corner</param>
+            <param name="bottomLeft">Shape of bottom left corner</param>
+            <param name="maxDecimals">The maximum number of decimals in the output</param>
+            <param name="offsetX">The left position</param>
+            <param name="offsetY">The top position</param>
+            <returns>A closed path (ends with "z")</returns>
+            <exception cref="T:System.ArgumentNullException">A corner shape is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.JoinPaths(System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Join multiple paths into one, a "z" is inserted between two paths if the first one isn't closed (doesn't end with 'z' or 'Z').
+            The last path is not closed.
+            </summary>
+            <param name="paths">The paths to join, null and empty paths are skipped</param>
+            <returns>The joined path (empty if there are no non-empty paths)</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgPath.VerticalBend(System.Collections.Generic.IList{System.String},System.Double,System.Double,System.Double,System.Double)">
+            <summary>
+            Bend paths vertically (in place) along a sine wave: y' = y + sin(2π * periods * (x / width + offset)) * amplitude.
+            The paths are first made absolute (see <see cref="M:SysWeaver.Media.SvgPath.MakeAbsolute(System.Collections.Generic.IList{System.String},System.Int32)"/>), then the points are modified (see <see cref="M:SysWeaver.Media.SvgPath.ModifyAbsolutePaths(System.Collections.Generic.IList{System.String},System.Action{SysWeaver.Media.SvgPath.Point},System.Int32)"/>:
+            only end points and control points are moved, so straight lines stay straight; bent H / V segments become L segments, arcs become cubic beziers).
+            </summary>
+            <param name="paths">The paths to bend (replaced in the list)</param>
+            <param name="width">The width that corresponds to one unit of the wave phase</param>
+            <param name="amplitude">The amplitude of the bend</param>
+            <param name="periods">The number of periods over <paramref name="width"/></param>
+            <param name="offset">The phase offset (as a fraction of <paramref name="width"/>)</param>
+            <exception cref="T:System.NotSupportedException">A path contains a relative c, s, q or a command</exception>
+        </member>
+        <member name="T:SysWeaver.Media.SvgScene">
+            <summary>
+            Builds an svg document from styles (css classes), gradients, masks and geometry (svg text snippets), see <see cref="M:SysWeaver.Media.SvgScene.ToSvg"/>.
+            Generated names ("S0", "M1", "G2" etc) use a shared counter, so they are unique within a scene.
+            All generated numbers are formatted using the invariant culture. Not thread safe.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddStyle(SysWeaver.Media.ISvgCss)">
+            <summary>
+            Add a css class with the css of a style
+            </summary>
+            <param name="style">The style</param>
+            <returns>The name of the css class ("S" + index), null if the css is empty (nothing is added)</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="style"/> is null (DEBUG builds only)</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddMask(System.String,System.String,System.String)">
+            <summary>
+            Add a mask
+            </summary>
+            <param name="geometries">The svg elements (text) of the mask content</param>
+            <param name="style">The css class name to apply to the mask content, null or empty to add a style with a white fill</param>
+            <param name="transform">An optional transform of the mask content</param>
+            <returns>The id of the mask ("M" + index), use with mask='url(#id)'</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddVerticalGradient(SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a top to bottom linear gradient
+            </summary>
+            <param name="stops">The gradient stops</param>
+            <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddHorizontalGradient(SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a left to right linear gradient
+            </summary>
+            <param name="stops">The gradient stops</param>
+            <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddDiagonalGradient(SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a top left to bottom right linear gradient
+            </summary>
+            <param name="stops">The gradient stops</param>
+            <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddOtherDiagonalGradient(SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a top right to bottom left linear gradient
+            </summary>
+            <param name="stops">The gradient stops</param>
+            <returns>The fill / stroke value to use the gradient: "url(#id)"</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddLinearGradient(System.Double,System.Double,System.Double,System.Double,System.Boolean,System.String,SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a linear gradient definition
+            </summary>
+            <param name="x0">The start x (x1)</param>
+            <param name="y0">The start y (y1)</param>
+            <param name="x1">The end x (x2)</param>
+            <param name="y1">The end y (y2)</param>
+            <param name="userSpace">If true the coordinates are in user space (gradientUnits='userSpaceOnUse'), else relative to the bounding box</param>
+            <param name="transform">An optional gradientTransform</param>
+            <param name="stops">The gradient stops</param>
+            <returns>The fill / stroke value to use the gradient: "url(#id)", the id is "G" + index</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddRadialGradient(System.Double,System.Double,System.Double,System.Double,System.Double,System.Boolean,System.String,SysWeaver.Media.SvgGradStop[])">
+            <summary>
+            Add a radial gradient definition
+            </summary>
+            <param name="cx">The center x</param>
+            <param name="cy">The center y</param>
+            <param name="r">The radius</param>
+            <param name="fx">The focal point x</param>
+            <param name="fy">The focal point y</param>
+            <param name="userSpace">If true the coordinates are in user space (gradientUnits='userSpaceOnUse'), else relative to the bounding box</param>
+            <param name="transform">An optional gradientTransform</param>
+            <param name="stops">The gradient stops</param>
+            <returns>The fill / stroke value to use the gradient: "url(#id)", the id is "G" + index</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddGeometry(System.String)">
+            <summary>
+            Add some svg elements (text, added as is, one line in the output)
+            </summary>
+            <param name="geometries">The svg elements</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddText(System.String,SysWeaver.Media.SvgTextParams)">
+            <summary>
+            Add a text (converted to paths and fitted into FitWidth x FitHeight at OffsetX, OffsetY) using <see cref="M:SysWeaver.Media.SvgScene.AddPath(System.String,SysWeaver.Media.Svg3dParams)"/>
+            </summary>
+            <param name="text">The text</param>
+            <param name="p">The parameters (the font must be set), null for defaults (fails since there is no default font)</param>
+            <exception cref="T:System.ArgumentNullException">The font is null</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddNGon(System.Int32,SysWeaver.Media.SvgNgonParams)">
+            <summary>
+            Add a regular n-gon (see <see cref="M:SysWeaver.Media.SvgPath.GetNGonPath(System.Int32,System.Double,System.Int32,System.Double,System.Double,System.Double)"/>) using <see cref="M:SysWeaver.Media.SvgScene.AddPath(System.String,SysWeaver.Media.Svg3dParams)"/>
+            </summary>
+            <param name="n">The number of vertices, must be at least 3</param>
+            <param name="p">The parameters, null for defaults</param>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="n"/> is less than 3</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddRect(System.Double,System.Double,System.Double,System.Double,SysWeaver.Media.SvgColorStyle,System.Int32)">
+            <summary>
+            Add a rectangle (with a new css class for the style)
+            </summary>
+            <param name="x">The left position</param>
+            <param name="y">The top position</param>
+            <param name="w">The width</param>
+            <param name="h">The height</param>
+            <param name="color">The style</param>
+            <param name="maxDecimals">The maximum number of decimals of the coordinates</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddPath(System.String,SysWeaver.Media.Svg3dParams)">
+            <summary>
+            Add a path with an optional drop shadow, extrusion (3D sides, see <see cref="M:SysWeaver.Media.SvgPath.Extrude(System.String,System.Double,System.Double,System.Int32,System.Boolean)"/>) and face.
+            The shadow is a rectangle covering the scene, masked by the (translated) face and extrusion.
+            The extrusion only supports absolute M, L, H, V, Q and Z commands.
+            If <see cref="F:SysWeaver.Media.SvgExtrudeParams.ExtrudeFillLight"/> is set, each side face gets a color interpolated between it and the extrusion fill color
+            (both must be colors that <see cref="M:SysWeaver.Media.SvgColor.Parse(System.String)"/> supports).
+            </summary>
+            <param name="facePath">The path data</param>
+            <param name="p">The style parameters, null for defaults. Set Face, Extrude or Shadow (or their colors) to null to skip that part</param>
+            <exception cref="T:System.NotSupportedException">The path contains a command that the extrusion doesn't support</exception>
+            <exception cref="T:System.FormatException">The extrusion light and fill colors can't be parsed</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgScene.Width">
+            <summary>
+            The width of the scene (the view box width)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgScene.Height">
+            <summary>
+            The height of the scene (the view box height)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.#ctor(System.Double,System.Double)">
+            <summary>
+            Create an empty scene
+            </summary>
+            <param name="width">The width of the scene (the view box width)</param>
+            <param name="height">The height of the scene (the view box height)</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.ToString">
+            <summary>
+            Same as <see cref="M:SysWeaver.Media.SvgScene.ToSvg"/>
+            </summary>
+            <returns>The svg document</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.ToSvg">
+            <summary>
+            Get the svg document: the svg element (view box "0 0 Width Height"), followed by the defs (gradients), the style (css classes),
+            the masks and the geometries in the order they were added. Lines are separated by <see cref="P:System.Environment.NewLine"/>.
+            </summary>
+            <returns>The svg document</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.AddFavIcon(System.String,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)">
+            <summary>
+            Add a generated (deterministic) icon for a name: a background plate (n-gon or rounded square), the initials of the name (up to 3 upper case letters,
+            else the first char) using one of the embedded fonts, and an optional sub title plate.
+            The layout is made for a 256 x 256 scene without a sub title and a 512 x 384 scene with a sub title.
+            The same name, sub title, colors and seed always gives the same icon.
+            </summary>
+            <param name="name">The name to make an icon for</param>
+            <param name="subTitle">An optional sub title</param>
+            <param name="color">The colors to use, null to derive them from the name and seed</param>
+            <param name="seed">A seed used to derive the colors (if <paramref name="color"/> is null)</param>
+            <param name="opaque">If true a background rectangle (covering the scene) is added</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgScene.ToPng(System.Int32,System.Int32)">
+            <summary>
+            Render the scene to a png image, see <see cref="M:SysWeaver.Media.SvgBitmapRenderer.CreatePng(System.String,System.Int32,System.Int32)"/>
+            </summary>
+            <param name="width">The image width, zero or less to use the scene width (each axis is scaled independently)</param>
+            <param name="height">The image height, zero or less to use the scene height (each axis is scaled independently)</param>
+            <returns>The png file data</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgShadowParams">
+            <summary>
+            The drop shadow parameters of <see cref="M:SysWeaver.Media.SvgScene.AddPath(System.String,SysWeaver.Media.Svg3dParams)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgShadowParams.ShadowColor">
+            <summary>
+            The shadow color, null for no shadow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgShadowParams.ShadowX">
+            <summary>
+            The x offset of the shadow
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgShadowParams.ShadowY">
+            <summary>
+            The y offset of the shadow
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgShadowParams.GetCss">
+            <summary>
+            Get the css declaration of the shadow fill (indented with three tabs), "none" if the color is null or empty
+            </summary>
+            <returns>The css declaration</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgShadowParams.ToString">
+            <summary>
+            The css declarations in a block (without a selector)
+            </summary>
+            <returns>The css block</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgStrokeStyle">
+            <summary>
+            A stroke only style (css)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgStrokeStyle.StrokeColor">
+            <summary>
+            The stroke color, null or empty to not set it
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgStrokeStyle.StrokeWidth">
+            <summary>
+            The stroke width (in px), zero or less to not set it
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgStrokeStyle.LineJoin">
+            <summary>
+            The stroke line join, null or empty to not set it
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgStrokeStyle.GetCss">
+            <summary>
+            Get the css declarations (one per line, indented with three tabs) for the set values: stroke-width, stroke-linejoin and stroke
+            </summary>
+            <returns>The css declarations, empty if nothing is set</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgStrokeStyle.ToString">
+            <summary>
+            The css declarations in a block (without a selector)
+            </summary>
+            <returns>The css block</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgTextParams">
+            <summary>
+            The parameters of a text, see <see cref="M:SysWeaver.Media.SvgTools.GetSvgImageFromText(System.String,SysWeaver.Media.SvgTextParams)"/> and <see cref="M:SysWeaver.Media.SvgScene.AddText(System.String,SysWeaver.Media.SvgTextParams)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.Font">
+            <summary>
+            The font to use (required)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.FitWidth">
+            <summary>
+            The width of the area that the text is fitted into
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.FitHeight">
+            <summary>
+            The height of the area that the text is fitted into
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.OffsetX">
+            <summary>
+            The left position of the area
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.OffsetY">
+            <summary>
+            The top position of the area
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.Text">
+            <summary>
+            Not used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextParams.BackgroundColor">
+            <summary>
+            An optional background color (used by <see cref="M:SysWeaver.Media.SvgTools.GetSvgImageFromText(System.String,SysWeaver.Media.SvgTextParams)"/>)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgTextPathParams">
+            <summary>
+            The parameters of <see cref="M:SysWeaver.Media.SvgPath.GetSvgTextPaths(System.String,SysWeaver.Media.SvgTextPathParams)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.Font">
+            <summary>
+            The font to use (required)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.Size">
+            <summary>
+            The font size, used if the text is not fitted
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.FitWidth">
+            <summary>
+            The width of the area to fit the text into, the text is only fitted if both the width and height are greater than zero
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.FitHeight">
+            <summary>
+            The height of the area to fit the text into, the text is only fitted if both the width and height are greater than zero
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.MarginX">
+            <summary>
+            The left position of the fit area
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.MarginY">
+            <summary>
+            The top position of the fit area
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTextPathParams.MaxDecimals">
+            <summary>
+            The maximum number of decimals of the coordinates
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgTools">
+            <summary>
+            Svg helpers: number formatting (invariant culture) and simple complete svg documents from text, n-gons and paths
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgTools.FileReader">
+            <summary>
+            Reads a file, used by the composition templates for file names starting with '$'
+            </summary>
+            <param name="filename">The file name (without the '$')</param>
+            <returns>The file data (empty if not found) and the mime type of the data</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTools.Format">
+            <summary>
+            The format provider used for all numbers (the invariant culture)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgTools.GetFormat(System.Int32)">
+            <summary>
+            Get a number formatter that rounds to at most <paramref name="decimalCount"/> decimals without trailing zeros (format "0.##..", invariant culture).
+            Note that small negative values that are rounded to zero are formatted as "-0".
+            </summary>
+            <param name="decimalCount">The maximum number of decimals, 0 rounds to integers</param>
+            <returns>A formatter function</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="decimalCount"/> is negative</exception>
+        </member>
+        <member name="F:SysWeaver.Media.SvgTools.FullFormat">
+            <summary>
+            A number formatter with at most 12 decimals, see <see cref="M:SysWeaver.Media.SvgTools.GetFormat(System.Int32)"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgTools.GetFormat">
+            <summary>
+            Get the number formatter with at most 12 decimals (<see cref="F:SysWeaver.Media.SvgTools.FullFormat"/>)
+            </summary>
+            <returns><see cref="F:SysWeaver.Media.SvgTools.FullFormat"/></returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgTools.GetSvgImageFromText(System.String,SysWeaver.Media.SvgTextParams)">
+            <summary>
+            Create a complete svg document with some text (converted to paths and fitted into FitWidth x FitHeight at OffsetX, OffsetY),
+            rendered with the face, extrusion and shadow styles of <paramref name="p"/>.
+            The document size is (FitWidth + 2 * OffsetX) x (FitHeight + 2 * OffsetY).
+            </summary>
+            <param name="text">The text</param>
+            <param name="p">The parameters (<see cref="F:SysWeaver.Media.SvgTextParams.Font"/> must be set)</param>
+            <returns>The svg document</returns>
+            <exception cref="T:System.ArgumentNullException">The font is null</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgTools.GetSvgNCon(System.Int32,SysWeaver.Media.SvgNgonParams)">
+            <summary>
+            Create a complete svg document with a regular n-gon (see <see cref="M:SysWeaver.Media.SvgPath.GetNGonPath(System.Int32,System.Double,System.Int32,System.Double,System.Double,System.Double)"/>),
+            rendered with the face, extrusion and shadow styles of <paramref name="p"/>.
+            The document size is (Size + 2 * OffsetX) x (Size + 2 * OffsetY).
+            </summary>
+            <param name="n">The number of vertices, must be at least 3</param>
+            <param name="p">The parameters</param>
+            <returns>The svg document</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="n"/> is less than 3</exception>
+        </member>
+        <member name="M:SysWeaver.Media.SvgTools.GetSvgFromPath(System.String,SysWeaver.Media.SvgColorStyle,System.Double,System.Double)">
+            <summary>
+            Create a complete svg document with a single filled path.
+            If the width or height is zero or less, it's computed from the path bounds (the bounds size plus twice the positive min coordinate, i.e. the same margin on both sides).
+            Nothing is drawn if the fill color is null or empty.
+            </summary>
+            <param name="path">The path data</param>
+            <param name="p">The fill and stroke style, null to use the defaults of <see cref="T:SysWeaver.Media.SvgColorStyle"/></param>
+            <param name="width">The view box width, zero or less to compute it from the path</param>
+            <param name="height">The view box height, zero or less to compute it from the path</param>
+            <returns>The svg document (lines separated by <see cref="P:System.Environment.NewLine"/>)</returns>
+            <exception cref="T:System.FormatException">The size is computed and the path contains an unsupported command or an invalid number</exception>
+        </member>
+    </members>
+</doc>

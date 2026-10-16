@@ -1,0 +1,762 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Storage</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.CompressedChunkedStream">
+            <summary>
+            A read only stream of the uncompressed data of several compressed streams (chunks), concatenated.
+            </summary>
+            <remarks>
+            Each chunk is opened when needed, fully decompressed into memory and then the chunk stream is disposed.
+            Memory usage is therefore proportional to the uncompressed size of the largest chunk.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.CompressedChunkedStream.#ctor(System.Func{System.Int32,System.IO.Stream},SysWeaver.Compression.ICompDecoder)">
+            <summary>
+            Create an uncompressed stream as the concatenation of several compressed streams.
+            </summary>
+            <param name="streamOpener">A function that opens one compressed stream chunk, the parameter starts at 0 and is incremented every time a new chunk is required, return null to signal end of data.
+            The returned stream is disposed by this class.</param>
+            <param name="comp">The decoder to use for all chunks.</param>
+        </member>
+        <member name="T:SysWeaver.CompressedFile">
+            <summary>
+            Utility class to open a compressed version of a file.
+            The compressed data is cached on disc (using <see cref="T:SysWeaver.FileMetaData"/>, keyed by the content hash of the source file, compression type and level),
+            so re-opening the same content is fast. Cached files not used for 30 days are pruned at process exit.
+            </summary>
+            <remarks>
+            Used by the HTTP server to serve pre-compressed static files.
+            Concurrent requests for the same content, compression type and level are serialized using a <see cref="T:SysWeaver.SystemLock"/>.
+            If the cache folder is deleted while the process is running, it's re-created (see <see cref="T:SysWeaver.FileMetaData"/>).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.Open(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Open a compressed version of a file, compressing it first if no cached copy exists.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>A read only stream of the cached compressed file, the caller must dispose it.</returns>
+            <exception cref="T:System.IO.FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.OpenAsync(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Open a compressed version of a file, compressing it first if no cached copy exists.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>A read only stream of the cached compressed file, the caller must dispose it.</returns>
+            <exception cref="T:System.IO.FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.ReadAllBytes(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Read all compressed bytes of a file, compressing it first if no cached copy exists.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>The compressed data, the caller must dispose it.</returns>
+            <exception cref="T:System.IO.FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.ReadAllBytesAsync(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Read all compressed bytes of a file, compressing it first if no cached copy exists.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>The compressed data, the caller must dispose it.</returns>
+            <exception cref="T:System.IO.FileNotFoundException"><paramref name="file"/> doesn't exist.</exception>
+        </member>
+        <member name="T:SysWeaver.DecompressedFileHash">
+            <summary>
+            Computes and caches hashes of the decompressed content of compressed files (automatic pruning).
+            The hash is an MD5 of the decompressed data encoded using <see cref="M:SysWeaver.HashTools.GetHashString16(System.ReadOnlySpan{System.Byte})"/> (not suitable for security purposes).
+            Cached values are stored next to the <see cref="T:SysWeaver.FileHash"/> cache (same folders, same cache key with a "_d.txt" suffix).
+            </summary>
+            <remarks>
+            The compression type is determined from the file extension using <see cref="M:SysWeaver.Compression.CompManager.GetFromExt(System.String)"/>.
+            The whole decompressed file is held in memory while hashing.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.DecompressedFileHash.GetHash(System.String)">
+            <summary>
+            Get a hash of the decompressed contents of the supplied file
+            </summary>
+            <param name="filename">The existing file to get the hash of the content, must be in one of the known compressed formats (determined by the file extension)</param>
+            <returns>A hash string (26 chars) or null if the file doesn't exist, the extension isn't a known compression format or decompression fails</returns>
+        </member>
+        <member name="M:SysWeaver.DecompressedFileHash.GetHashAsync(System.String)">
+            <summary>
+            Get a hash of the decompressed contents of the supplied file
+            </summary>
+            <param name="filename">The existing file to get the hash of the content, must be in one of the known compressed formats (determined by the file extension)</param>
+            <returns>A hash string (26 chars) or null if the file doesn't exist, the extension isn't a known compression format or decompression fails</returns>
+        </member>
+        <member name="T:SysWeaver.FileMetaData">
+            <summary>
+            Tools for associating meta data (and derived files, such as compressed copies) with the content of a file, and rebuild it when the file has changed.
+            </summary>
+            <remarks>
+            Meta data is keyed by the content hash of the file (see <see cref="T:SysWeaver.FileHash"/>), so identical files share meta data and any change invalidates it.
+            The meta data is stored as gzip compressed json in a folder per key type (configurable using "FileMetaDataFolders" and "FileMetaData[KeyType]Folders" in the config),
+            and is pruned at process exit when it hasn't been used for the configured number of days.
+            Processing of a given content hash is serialized across processes using a <see cref="T:SysWeaver.SystemLock"/> keyed by the key type, the key suffix and the content hash,
+            so a process callback may process the same content using another key type or key suffix (ex: using <see cref="T:SysWeaver.CompressedFile"/> on the same file),
+            but processing the same content with the same key type and key suffix from inside a callback dead locks (the lock isn't re-entrant).
+            The key type folder is created on first use (per process); if it's deleted while the process is running, it's re-created when a write to it fails with a <see cref="T:System.IO.DirectoryNotFoundException"/>
+            (the failed process callback or meta data write is retried once).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.Process``1(System.String,System.String,System.Func{System.String,System.String,``0,``0},System.Int32,System.String)">
+            <summary>
+            Read/process some meta data assosicated with a file, if the file is modified in anyway (content hash changes), the meta data is invalidated and the caller should create new data.
+            </summary>
+            <typeparam name="T">The data type (must be serializable using json)</typeparam>
+            <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
+            <param name="filename">The file to read/process meta data about</param>
+            <param name="processMetaData">A function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+            Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+            <param name="cacheExpirationDays">Number of days to keep this meta data around (since last use)</param>
+            <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
+            <returns>The meta data associated with the file, or null if the file doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.ProcessAsync``1(System.String,System.String,System.Func{System.String,System.String,``0,System.Threading.Tasks.Task{``0}},System.Int32,System.String)">
+            <summary>
+            Read/process some meta data assosicated with a file, if the file is modified in anyway (content hash changes), the meta data is invalidated and the caller should create new data.
+            </summary>
+            <typeparam name="T">The data type (must be serializable using json)</typeparam>
+            <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
+            <param name="filename">The file to read/process meta data about</param>
+            <param name="processMetaData">A function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+            Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+            <param name="cacheExpirationDays">Number of days to keep this meta data around (since last use)</param>
+            <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
+            <returns>The meta data associated with the file, or null if the file doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.ProcessAsync``1(System.String,System.String,System.Func{System.String,System.String,``0,``0},System.Int32,System.String)">
+            <summary>
+            Read/process some meta data assosicated with a file, if the file is modified in anyway (content hash changes), the meta data is invalidated and the caller should create new data.
+            </summary>
+            <typeparam name="T">The data type (must be serializable using json)</typeparam>
+            <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
+            <param name="filename">The file to read/process meta data about</param>
+            <param name="processMetaData">A synchronous function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+            Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+            <param name="cacheExpirationDays">Number of days to keep this meta data around (since last use)</param>
+            <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
+            <returns>The meta data associated with the file, or null if the file doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.GetTempFolder(System.String,System.String,System.Int32)">
+            <summary>
+            Get the folder to use for meta data of a given key type and key name.
+            The first call for a key type (case insensitive) determines the folders and expiration for that key type, and registers pruning at process exit.
+            </summary>
+            <param name="keyName">The name used to select one of the configured folders (if there are many).</param>
+            <param name="keyType">The key type, only valid file chars are allowed.</param>
+            <param name="cacheExpirationDays">Number of days to keep unused meta data, only used by the first call for a key type.</param>
+            <returns>The full path of the folder.</returns>
+        </member>
+        <member name="F:SysWeaver.FileMetaData.Serializer">
+            <summary>
+            The serializer used for meta data files (json).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FileMetaData.Compressor">
+            <summary>
+            The compressor used for meta data files (gzip).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FileMetaData.FileExt">
+            <summary>
+            The file extension of meta data files, ex: ".json.gz".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FileMetaData.AdditionalCleanup">
+            <summary>
+            Base names (full paths without extension) whose associated files should be deleted at process exit, used when meta data couldn't be saved.
+            Only processed if at least one key type have been used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FileMetaData.MetaPrefix">
+            <summary>
+            Prefix of the meta data files, the rest of the name is the base name (hash + key suffix) followed by FileExt
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FileMetaData.HashLength">
+            <summary>
+            Length of the content hash that starts all file names (except the meta data prefix)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.Touch(System.IO.FileInfo)">
+            <summary>
+            Update the last access time of a meta data file (used to decide when to prune it), at most once per hour to avoid excessive file system writes
+            </summary>
+            <param name="fi">The meta data file</param>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.TryGetMetaBase(System.String,System.String@)">
+            <summary>
+            Get the base name (hash + key suffix) from a meta data file name
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.GetOwner(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            Find the base name that owns a data file, the longest base name that the file name starts with
+            (base names of different key suffixes can be prefixes of each other, ex: "hash" and "hash_x").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.CleanFolder(System.String,System.DateTime)">
+            <summary>
+            Delete expired meta data and all files associated with it, also deletes old files that aren't associated with any meta data
+            </summary>
+            <param name="folder">The folder to clean</param>
+            <param name="killOlderThan">Meta data that hasn't been used since this time is deleted</param>
+        </member>
+        <member name="M:SysWeaver.FileMetaData.CleanBase(System.String)">
+            <summary>
+            Delete all files associated with a base name (used when the meta data couldn't be saved)
+            </summary>
+            <param name="baseFileName">The full path of the base name, either the data base name or the meta data name (without extension)</param>
+        </member>
+        <member name="T:SysWeaver.FileMetaData.CleanUp">
+            <summary>
+            The resolved folders (P) and the negative expiration in days (C) of a key type, registers pruning of the folders at process exit.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FileMetaDataDb`1">
+            <summary>
+            Meta data database for a given type and key, see <see cref="T:SysWeaver.FileMetaData"/> for details.
+            </summary>
+            <typeparam name="T">The type of the meta data (must be json serializable)</typeparam>
+            <remarks>
+            Deserialized meta data is cached in memory (shared with <see cref="T:SysWeaver.FileMetaDataDbAsync`1"/>), the same instance may be returned to many callers so treat it as immutable.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.FileMetaDataDb`1.#ctor(System.String,System.Func{System.String,System.String,`0,`0},System.Int32,System.String)">
+            <summary>
+            Build a database for a given meta data type.
+            </summary>
+            <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
+            <param name="processMetaData">A function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+            Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+            <param name="cacheExpirationDays">Number of days to keep this meta data around</param>
+            <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
+        </member>
+        <member name="M:SysWeaver.FileMetaDataDb`1.Process(System.String)">
+            <summary>
+            Process a single file and return it's meta data.
+            Reads any existing meta data, calls the process function and stores the result if non null.
+            Failure to store the meta data is ignored (the associated files are deleted at process exit).
+            If the key type folder was deleted while the process is running, the process function (or the meta data write) fails with a <see cref="T:System.IO.DirectoryNotFoundException"/>:
+            the folder is then re-created and the failed call is retried once.
+            </summary>
+            <param name="filename">The file to process.</param>
+            <returns>The new meta data if the process function returned non null, else the existing meta data (may be null). Null if the file doesn't exist.</returns>
+        </member>
+        <member name="T:SysWeaver.FileMetaDataDbAsync`1">
+            <summary>
+            Meta data database for a given type and key with an async API, see <see cref="T:SysWeaver.FileMetaData"/> for details.
+            </summary>
+            <typeparam name="T">The type of the meta data (must be json serializable)</typeparam>
+            <remarks>
+            Deserialized meta data is cached in memory (shared with <see cref="T:SysWeaver.FileMetaDataDb`1"/>), the same instance may be returned to many callers so treat it as immutable.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.FileMetaDataDbAsync`1.#ctor(System.String,System.Func{System.String,System.String,`0,System.Threading.Tasks.Task{`0}},System.Int32,System.String)">
+            <summary>
+            Build a database for a given meta data type.
+            </summary>
+            <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
+            <param name="processMetaData">An async function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+            Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+            <param name="cacheExpirationDays">Number of days to keep this meta data around</param>
+            <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
+        </member>
+        <member name="M:SysWeaver.FileMetaDataDbAsync`1.#ctor(System.String,System.Func{System.String,System.String,`0,`0},System.Int32,System.String)">
+            <summary>
+            Build a database for a given meta data type.
+            </summary>
+            <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
+            <param name="processMetaData">A synchronous function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+            Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+            <param name="cacheExpirationDays">Number of days to keep this meta data around</param>
+            <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
+        </member>
+        <member name="F:SysWeaver.FileMetaDataDbAsync`1.Cache">
+            <summary>
+            In-memory cache of deserialized meta data, key is the full meta data file name, value is the last write time of the file and the data.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FileMetaDataDbAsync`1.ProcessAsync(System.String)">
+            <summary>
+            Process a single file and return it's meta data.
+            Reads any existing meta data, calls the process function and stores the result if non null.
+            Failure to store the meta data is ignored (the associated files are deleted at process exit).
+            If the key type folder was deleted while the process is running, the process function (or the meta data write) fails with a <see cref="T:System.IO.DirectoryNotFoundException"/>:
+            the folder is then re-created and the failed call is retried once.
+            </summary>
+            <param name="filename">The file to process.</param>
+            <returns>The new meta data if the process function returned non null, else the existing meta data (may be null). Null if the file doesn't exist.</returns>
+        </member>
+        <member name="T:SysWeaver.KeyValueStore">
+            <summary>
+            Represent a file based key value store.
+            Prefer using the Async methods if possible.
+            Designed to be as reliable as possible, not for speed:
+            - Uses system wide locks (<see cref="T:SysWeaver.SystemLock"/>, one per key) for data read/writes, so it's safe to use from multiple threads and processes.
+            - Uses redundancy by having R copies of the data (one file per copy, in separate sub folders and optionally on separate volumes).
+            - Uses a SHA256 checksum to validate the data (detects corruption, invalid copies are deleted when found).
+            - Compresses data (save disc space).
+            When setting data:
+            - The <see cref="F:SysWeaver.KeyValueStore.WriteRedundancy"/> oldest copies (non-existing and invalid copies count as very old) are overwritten with the new data.
+            When reading data:
+            - The most recent valid copy is returned.
+            </summary>
+            <remarks>
+            The key is used as the file name of the copies, so it MUST be a valid file name: not null or empty, not "." or "..", and no invalid file name chars
+            (no path separators or ':', on Windows also no '*', '?', '"', '&lt;', '&gt;', '|' or control chars), i.e. <see cref="M:SysWeaver.PathExt.SafeFilename(System.String)"/> must return the key unchanged.
+            This is validated in all builds, an <see cref="T:System.ArgumentException"/> is thrown for invalid keys (so a key can't be used to access files outside the store).
+            Keys are never transformed, since changing the file name would make existing data unreadable: callers that build keys from arbitrary text must make them valid file names
+            (ex: using <see cref="M:SysWeaver.PathExt.SafeFilename(System.String)"/>).
+            Values are written with the configured serializer, so the same type should be used when reading.
+            Not intended for large values or high write rates, every operation touches all copies.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.AllApp">
+            <summary>
+            A default key/value store that is the same for all users but application specific.
+            This is the store with the id "Default" (returned by <see cref="M:SysWeaver.KeyValueStore.Get(SysWeaver.KeyValueStoreParams)"/> for the id "Default"), stored in <see cref="F:SysWeaver.Folders.AllAppFolders"/>.
+            </summary>
+            <remarks>
+            Before 2026-10-07 <see cref="F:SysWeaver.KeyValueStore.UserApp"/>, <see cref="F:SysWeaver.KeyValueStore.AllShared"/> and <see cref="F:SysWeaver.KeyValueStore.UserShared"/> were the same instance as this store,
+            so their data was written to this store's location. Those stores read keys that they don't have from this store (see <see cref="F:SysWeaver.KeyValueStore.UserApp"/>).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.UserApp">
+            <summary>
+            A default key/value store that is unique to the user but application specific, stored in <see cref="F:SysWeaver.Folders.UserAppFolders"/>.
+            </summary>
+            <remarks>
+            Legacy fallback (applies to <see cref="F:SysWeaver.KeyValueStore.UserApp"/>, <see cref="F:SysWeaver.KeyValueStore.AllShared"/> and <see cref="F:SysWeaver.KeyValueStore.UserShared"/>):
+            Before 2026-10-07 these stores were the same instance as <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, so existing data is in the <see cref="F:SysWeaver.KeyValueStore.AllApp"/> location.
+            When a key has no valid copy in this store, the value is read from <see cref="F:SysWeaver.KeyValueStore.AllApp"/> and copied to this store (the <see cref="F:SysWeaver.KeyValueStore.AllApp"/> copy is kept, since <see cref="F:SysWeaver.KeyValueStore.AllApp"/> may use the same key).
+            Deleting a key from this store stops the fallback for that key (a marker is written), but doesn't delete the <see cref="F:SysWeaver.KeyValueStore.AllApp"/> copy.
+            Note: <see cref="F:SysWeaver.KeyValueStore.AllApp"/> is common to all users, so (as before) a value written to a per user store by older versions is visible to all users until it's set in their own store.
+            If the store folders can't be created, this is the <see cref="F:SysWeaver.KeyValueStore.AllApp"/> instance (the old behaviour).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.AllShared">
+            <summary>
+            A default key/value store that is the same for all users and all applications, stored in <see cref="F:SysWeaver.Folders.AllSharedFolders"/>.
+            Keys that aren't found are read from (and copied from) <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, see the remarks on <see cref="F:SysWeaver.KeyValueStore.UserApp"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.UserShared">
+            <summary>
+            A default key/value store that is unique to the user but common to all applications, stored in <see cref="F:SysWeaver.Folders.UserSharedFolders"/>.
+            Keys that aren't found are read from (and copied from) <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, see the remarks on <see cref="F:SysWeaver.KeyValueStore.UserApp"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.Get(SysWeaver.KeyValueStoreParams)">
+            <summary>
+            Get a custom store, creating it if needed.
+            Stores are cached by <see cref="F:SysWeaver.KeyValueStoreParams.Id"/> (case insensitive), if a store with that id exist, that store is returned and the other parameters are ignored.
+            </summary>
+            <param name="p">The store parameters, null uses the defaults (id "Default").</param>
+            <returns>The store.</returns>
+            <exception cref="T:System.ArgumentException">No serializer is registered for <see cref="F:SysWeaver.KeyValueStoreParams.Ser"/>, or no compression method is registered for a non-empty <see cref="F:SysWeaver.KeyValueStoreParams.Comp"/> (the store isn't created or cached).</exception>
+            <exception cref="T:System.Exception">The folders couldn't be resolved or created.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.TryGet``1(System.String,``0,System.Boolean)">
+            <summary>
+            Get a value from the key value store, blocking while waiting for the key lock.
+            </summary>
+            <typeparam name="T">The type of the value (should be the same type as used when setting it)</typeparam>
+            <param name="key">The unique key, MUST be a valid file name (it's used as the file name, no path separators, ':' etc, see the remarks on <see cref="T:SysWeaver.KeyValueStore"/>)</param>
+            <exception cref="T:System.ArgumentException"><paramref name="key"/> is null, empty, "." or "..", or contains invalid file name chars (validated in all builds).</exception>
+            <param name="returnWhenNotFound">The value to return when the key is not found (or no valid copy exists)</param>
+            <param name="tryAll">If deserialization fails, retry the second most recent copy and so on</param>
+            <returns>The value in the store (for <see cref="F:SysWeaver.KeyValueStore.UserApp"/>, <see cref="F:SysWeaver.KeyValueStore.AllShared"/> and <see cref="F:SysWeaver.KeyValueStore.UserShared"/> possibly read from <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, see the remarks on <see cref="F:SysWeaver.KeyValueStore.UserApp"/>), or the supplied default</returns>
+            <exception cref="T:System.Exception">Deserialization of the most recent valid copy failed and <paramref name="tryAll"/> is false.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.TryGetAsync``1(System.String,``0,System.Boolean)">
+            <summary>
+            Get a value from the key value store.
+            </summary>
+            <typeparam name="T">The type of the value (should be the same type as used when setting it)</typeparam>
+            <param name="key">The unique key, MUST be a valid file name (it's used as the file name, no path separators, ':' etc, see the remarks on <see cref="T:SysWeaver.KeyValueStore"/>)</param>
+            <exception cref="T:System.ArgumentException"><paramref name="key"/> is null, empty, "." or "..", or contains invalid file name chars (validated in all builds).</exception>
+            <param name="returnWhenNotFound">The value to return when the key is not found (or no valid copy exists)</param>
+            <param name="tryAll">If deserialization fails, retry the second most recent copy and so on</param>
+            <returns>The value in the store (for <see cref="F:SysWeaver.KeyValueStore.UserApp"/>, <see cref="F:SysWeaver.KeyValueStore.AllShared"/> and <see cref="F:SysWeaver.KeyValueStore.UserShared"/> possibly read from <see cref="F:SysWeaver.KeyValueStore.AllApp"/>, see the remarks on <see cref="F:SysWeaver.KeyValueStore.UserApp"/>), or the supplied default</returns>
+            <exception cref="T:System.Exception">Deserialization of the most recent valid copy failed and <paramref name="tryAll"/> is false.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.Set``1(System.String,``0)">
+            <summary>
+            Set a value in the key value store, blocking while waiting for the key lock.
+            All existing copies are read and validated before the oldest / invalid copies are overwritten.
+            </summary>
+            <typeparam name="T">The type of the value</typeparam>
+            <param name="key">The unique key, MUST be a valid file name (it's used as the file name, no path separators, ':' etc, see the remarks on <see cref="T:SysWeaver.KeyValueStore"/>)</param>
+            <exception cref="T:System.ArgumentException"><paramref name="key"/> is null, empty, "." or "..", or contains invalid file name chars (validated in all builds).</exception>
+            <param name="value">The value to set/replace</param>
+            <exception cref="T:System.Exception">Serialization or writing to disc failed.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.SetAsync``1(System.String,``0)">
+            <summary>
+            Set a value in the key value store.
+            All existing copies are read and validated before the oldest / invalid copies are overwritten.
+            </summary>
+            <typeparam name="T">The type of the value</typeparam>
+            <param name="key">The unique key, MUST be a valid file name (it's used as the file name, no path separators, ':' etc, see the remarks on <see cref="T:SysWeaver.KeyValueStore"/>)</param>
+            <exception cref="T:System.ArgumentException"><paramref name="key"/> is null, empty, "." or "..", or contains invalid file name chars (validated in all builds).</exception>
+            <param name="value">The value to set/replace</param>
+            <exception cref="T:System.Exception">Serialization or writing to disc failed.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.Delete(System.String)">
+            <summary>
+            Delete a key/value (all copies), blocking while waiting for the key lock.
+            Deleting a key that doesn't exist does nothing.
+            For <see cref="F:SysWeaver.KeyValueStore.UserApp"/>, <see cref="F:SysWeaver.KeyValueStore.AllShared"/> and <see cref="F:SysWeaver.KeyValueStore.UserShared"/> the legacy copy in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (if any) is kept, but no longer read by this store.
+            </summary>
+            <param name="key">The unique key, MUST be a valid file name (it's used as the file name, no path separators, ':' etc, see the remarks on <see cref="T:SysWeaver.KeyValueStore"/>)</param>
+            <exception cref="T:System.ArgumentException"><paramref name="key"/> is null, empty, "." or "..", or contains invalid file name chars (validated in all builds).</exception>
+            <exception cref="T:System.Exception">A copy couldn't be deleted.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.DeleteAsync(System.String)">
+            <summary>
+            Delete a key/value (all copies).
+            Deleting a key that doesn't exist does nothing.
+            For <see cref="F:SysWeaver.KeyValueStore.UserApp"/>, <see cref="F:SysWeaver.KeyValueStore.AllShared"/> and <see cref="F:SysWeaver.KeyValueStore.UserShared"/> the legacy copy in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> (if any) is kept, but no longer read by this store.
+            </summary>
+            <param name="key">The unique key, MUST be a valid file name (it's used as the file name, no path separators, ':' etc, see the remarks on <see cref="T:SysWeaver.KeyValueStore"/>)</param>
+            <exception cref="T:System.ArgumentException"><paramref name="key"/> is null, empty, "." or "..", or contains invalid file name chars (validated in all builds).</exception>
+            <exception cref="T:System.Exception">A copy couldn't be deleted.</exception>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.Id">
+            <summary>
+            Id of the store
+            </summary>
+        </member>
+        <member name="P:SysWeaver.KeyValueStore.Redundancy">
+            <summary>
+            Store redundancy, the number of copies (files) kept for each key.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.ValidateKey(System.String)">
+            <summary>
+            Validate that a key is a valid file name (always, not only in DEBUG builds), since the key is used as a file name.
+            </summary>
+            <param name="key">The key to validate</param>
+            <exception cref="T:System.ArgumentException">The key is null, empty, "." or "..", or contains invalid file name chars.</exception>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.CreateDefault(System.Boolean,System.Boolean)">
+            <summary>
+            Create one of the default stores (not cached by id, so <see cref="M:SysWeaver.KeyValueStore.Get(SysWeaver.KeyValueStoreParams)"/> with the id "Default" still returns <see cref="F:SysWeaver.KeyValueStore.AllApp"/>).
+            Uses <see cref="F:SysWeaver.KeyValueStore.AllApp"/> as the legacy store (where the data was written before 2026-10-07).
+            </summary>
+            <param name="perApp">Per application or shared between all applications</param>
+            <param name="perUser">Per user or shared between all users</param>
+            <returns>The store, or <see cref="F:SysWeaver.KeyValueStore.AllApp"/> if the store couldn't be created or uses the same location as <see cref="F:SysWeaver.KeyValueStore.AllApp"/></returns>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.Legacy">
+            <summary>
+            If non-null, keys that have no valid copy in this store are read from this store (and copied to this store).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.LegacyDeletedFolder">
+            <summary>
+            Folder with (empty) marker files, one per key that was deleted from this store while the <see cref="F:SysWeaver.KeyValueStore.Legacy"/> store had a copy (stops the fallback).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.TryGetLegacy``1(System.String,``0,System.Boolean)">
+            <summary>
+            Read a value from the <see cref="F:SysWeaver.KeyValueStore.Legacy"/> store and copy the data to this store.
+            Must be called with this store's key lock held.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.TryGetLegacyAsync``1(System.String,``0,System.Boolean)">
+            <summary>
+            Read a value from the <see cref="F:SysWeaver.KeyValueStore.Legacy"/> store and copy the data to this store.
+            Must be called with this store's key lock held.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.MarkLegacyDeleted(System.String)">
+            <summary>
+            If the <see cref="F:SysWeaver.KeyValueStore.Legacy"/> store has a copy of the key, write a marker so that the deleted key isn't read from the legacy store anymore.
+            Must be called with this store's key lock held.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStore.WriteRedundancy">
+            <summary>
+            The minimum number of copies that are overwritten on every write (normally <see cref="P:SysWeaver.KeyValueStore.Redundancy"/> - 1, so the previous value survives a failed write).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.EnsureNewest(System.Tuple{System.String,System.Nullable{System.DateTime}}[],System.Int32)">
+            <summary>
+            Make sure that the copies that were just written are newer than the copies that were kept.
+            The file system time stamp resolution can be coarse, so two writes in quick succession could otherwise get the same last write time (and an old copy could be read).
+            </summary>
+            <param name="f">The files ordered from oldest to newest (as before the write)</param>
+            <param name="writeCount">The number of (oldest) files that were written</param>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.GetOrderedFiles(System.String,System.Boolean)">
+            <summary>
+            Get name of all files, ordered from oldest to newest
+            </summary>
+            <param name="key"></param>
+            <param name="validate"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.KeyValueStore.GetOrderedFilesAsync(System.String,System.Boolean)">
+            <summary>
+            Get name of all files, ordered from oldest to newest.
+            Only use async when validate is true
+            </summary>
+            <param name="key"></param>
+            <param name="validate"></param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.KeyValueStoreParams">
+            <summary>
+            Parameters for creating a custom <see cref="T:SysWeaver.KeyValueStore"/> using <see cref="M:SysWeaver.KeyValueStore.Get(SysWeaver.KeyValueStoreParams)"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.Id">
+            <summary>
+            Id / name of the store, must be unique within an application.
+            Stores are cached by id (case insensitive), so parameters supplied with an id that is already in use are ignored.
+            Null or empty is treated as "Default". Also used as the folder name of the store.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.Ser">
+            <summary>
+            The serializer to use (a serializer name known to the serialization manager, ex: "json").
+            <see cref="M:SysWeaver.KeyValueStore.Get(SysWeaver.KeyValueStoreParams)"/> throws an <see cref="T:System.ArgumentException"/> if no serializer is registered with this name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.Comp">
+            <summary>
+            The compression method to use as an HTTP encoding code, ex: "br", "gzip" (can be null to disable compression, can be useful for small data or incompressible data)
+            <see cref="M:SysWeaver.KeyValueStore.Get(SysWeaver.KeyValueStoreParams)"/> throws an <see cref="T:System.ArgumentException"/> if no compression method is registered for a non-empty code.
+            Migration note: before 2026-10-10 an unknown code silently disabled compression, a store that was configured with an unknown code holds uncompressed values, so change its code to null (or empty).
+            The serializer and the compression method must stay the same for the lifetime of the stored data (they aren't stored with the data, the level may change).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.Level">
+            <summary>
+            The compression level to use
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.Redundance">
+            <summary>
+            The minimum number of file copies of each value.
+            Values below 2 are clamped to 2, the value is increased to a multiple of the number of folders.
+            A write replaces all but one of the copies (the most recent valid copy is kept until the next write).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.Folders">
+            <summary>
+            The location(s) of the files.
+            Can be spread over multiple volumes to increase reliability, separate using the platform path separator (';' on Windows, ':' on Unix).
+            If null, the default folders selected by <see cref="F:SysWeaver.KeyValueStoreParams.PerUser"/> and <see cref="F:SysWeaver.KeyValueStoreParams.PerApp"/> are used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.PerUser">
+            <summary>
+            If <see cref="F:SysWeaver.KeyValueStoreParams.Folders"/> isn't used, indicate if this store should be per user or not.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.KeyValueStoreParams.PerApp">
+            <summary>
+            If <see cref="F:SysWeaver.KeyValueStoreParams.Folders"/> isn't used, indicate if this store should be per app or not.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.StorageTypeExt">
+            <summary>
+            Extensions for reading embedded resources relative to a type, transparently decompressing resources stored compressed (ex: "MyText.txt.br").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceStream(System.Type,System.String,System.Boolean)">
+            <summary>
+            Get a stream to an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            If the resource is stored compressed, the stream returned is the uncompressed data.
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyText.txt.br".
+            
+            Use:
+            using var s = type.GetManifestResourceStream("MyText.txt");
+            </summary>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return null if not found instead of throwing an error</param>
+            <returns>A stream to the (uncompressed) resource data, the caller must dispose it. Null if not found and <paramref name="noThrow"/> is true.
+            Compressed resources are fully decompressed into memory.</returns>
+            <exception cref="T:System.IO.FileNotFoundException">The resource wasn't found (neither uncompressed nor with the file extension of a registered compression method appended) and <paramref name="noThrow"/> is false.</exception>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceData(System.Type,System.String,System.Boolean)">
+            <summary>
+            Get the data contained in an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            If the resource is stored compressed, the data returned is the uncompressed data.
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyText.bin.br".
+            
+            Use:
+            var data = type.GetManifestResourceData("MyText.bin");
+            </summary>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return default if not found instead of throwing an error.</param>
+            <returns>The (uncompressed) data of the embedded resource</returns>
+            <exception cref="T:System.Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceText(System.Type,System.String,System.Boolean,System.Text.Encoding)">
+            <summary>
+            Get the text contained in an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyText.txt.br".
+            
+            Use:
+            var text = type.GetManifestResourceText("MyText.txt");
+            </summary>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return null if not found instead of throwing an error</param>
+            <param name="encoding">The encoding to use, default is to use UTF-8</param>
+            <returns>The text of the embedded resource, without a leading byte order mark (the preamble of the encoding).
+            Null if not found (or empty) and <paramref name="noThrow"/> is true.</returns>
+            <exception cref="T:System.Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceObject``1(System.Type,System.String,System.Boolean)">
+            <summary>
+            Create an object from the data contained in an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            The deserializer to use is based on the file extension.
+            
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyData.json.br".
+            
+            Use:
+            var data = type.GetManifestResourceObject&lt;MyData&gt;("MyData.json");
+            </summary>
+            <typeparam name="T">The type of the stored object</typeparam>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return default if not found (or empty, or if no serializer exists for the extension) instead of throwing an error</param>
+            <returns>The object stored in the embedded resource</returns>
+            <exception cref="T:System.Exception">The resource wasn't found or no serializer exists for the file extension, and <paramref name="noThrow"/> is false, or deserialization failed.</exception>
+            <remarks>A leading UTF-8 byte order mark is skipped for text serializers (ex: json).</remarks>
+        </member>
+        <member name="T:SysWeaver.SystemLock">
+            <summary>
+            System wide (cross process) named locks, implemented using exclusively opened lock files (delete on close) so they work on all OS'es.
+            </summary>
+            <remarks>
+            The lock file name is an MD5 hash of the key, stored in the "SystemLock" <see cref="T:SysWeaver.TempFolder"/>.
+            Locks are NOT re-entrant, taking the same lock twice from the same thread / async flow will dead lock.
+            Waiting is done by polling every 10 ms (no fairness).
+            A lock object that isn't disposed is released by its finalizer.
+            On Unix the exclusivity relies on advisory file locking, so all participants must use this class.
+            On Unix a lock file is only considered taken if the opened file is still the one linked at the path (a waiter may open the old file just before
+            the previous holder unlinks it), and the holder unlinks the path before closing the file (it's not opened with delete on close).
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.SystemLock.Get(System.String)">
+            <summary>
+            Get the lock (or wait forever until it's available), blocking the calling thread.
+            </summary>
+            <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
+            <returns>A lock object, dispose to unlock</returns>
+            <exception cref="T:System.Exception">Opening the lock file failed with a non IO exception (ex: access denied) more than 10 times.</exception>
+        </member>
+        <member name="M:SysWeaver.SystemLock.IsLocked(System.String)">
+            <summary>
+            Check if a lock is currently taken (by briefly trying to take it).
+            The result may be outdated as soon as it's returned.
+            </summary>
+            <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
+            <returns>True if the lock is taken else false</returns>
+        </member>
+        <member name="M:SysWeaver.SystemLock.TryGet(System.String,System.IDisposable@)">
+            <summary>
+            Try to get the lock without waiting.
+            </summary>
+            <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
+            <param name="lockObject">If successful, a lock object, dispose to unlock</param>
+            <returns>True if the lock was taken else false</returns>
+        </member>
+        <member name="M:SysWeaver.SystemLock.GetAsync(System.String)">
+            <summary>
+            Get the lock (or wait forever until it's available), waiting asynchronously.
+            </summary>
+            <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
+            <returns>A lock object, dispose to unlock</returns>
+            <exception cref="T:System.Exception">Opening the lock file failed with a non IO exception (ex: access denied) more than 10 times.</exception>
+        </member>
+        <member name="M:SysWeaver.SystemLock.TryOpen(System.String,System.String)">
+            <summary>
+            Try to take the lock file.
+            </summary>
+            <param name="name">The lock file name</param>
+            <param name="key">The key (for debugging)</param>
+            <returns>The lock, or null if the opened file turned out to be stale (Unix only, retry)</returns>
+            <exception cref="T:System.IO.IOException">The lock is taken</exception>
+        </member>
+        <member name="M:SysWeaver.SystemLock.IsLinked(System.IO.FileStream,System.String)">
+            <summary>
+            Check if the (locked) file is the file currently linked at the path.
+            Sets a random last write time on the open handle and compares it with the last write time of the path (stat, doesn't open the file).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.SystemLock.Lock">
+            <summary>
+            A held lock, closing (and deleting) the exclusively opened lock file releases it.
+            On Unix the path is unlinked (while the lock is still held) before closing the file.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SystemLock.Lock.UnlinkName">
+            <summary>
+            Unix only: the path to unlink before closing the file (null on Windows where delete on close is used)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.TempFolder">
+            <summary>
+            Named folders for temporary / cached files, with automatic pruning of old files at process exit.
+            </summary>
+            <remarks>
+            The folder for a key type is (in priority order): the config value "TempFolder.Folder.[keyType]", "[TempFolder.Folder]/SysWeaver_[keyType]"
+            or "[CommonApplicationData]/SysWeaver_[keyType]". Relative paths are relative to the executable folder.
+            At process exit, files (top folder only) whose last access time is older than the expiration are deleted.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.TempFolder.Get(System.String,System.Int32)">
+            <summary>
+            Get the full path to a temporary files folder (cache), creating it if needed.
+            The first call for a key type (case insensitive) determines the folder and expiration.
+            </summary>
+            <param name="keyType">A unique name for this temp folder, only valid file name chars are allowed</param>
+            <param name="cacheExpirationDays">Number of days to keep files (since last access), zero or less disables pruning</param>
+            <returns>The full path of the folder</returns>
+        </member>
+        <member name="M:SysWeaver.TempFolder.DeleteOnExit(System.String)">
+            <summary>
+            Add a file that should be deleted at process exit (errors are ignored).
+            </summary>
+            <param name="s">The full path of the file to delete</param>
+        </member>
+        <member name="T:SysWeaver.TempFolder.CleanUp">
+            <summary>
+            The resolved folder (P) and the negative expiration in days (C, 0 means no pruning) of a key type.
+            </summary>
+        </member>
+    </members>
+</doc>

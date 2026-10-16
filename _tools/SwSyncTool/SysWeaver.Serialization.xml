@@ -71,6 +71,21 @@
             <param name="options">The requested output style, implementations are free to ignore it.</param>
             <returns>The serialized data, owned by the caller. The memory may be a slice of a larger array.</returns>
         </member>
+        <member name="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object to binary data (UTF-8 encoded text for text based serializers), written to a buffer writer
+            (ex: a <see cref="T:SysWeaver.Serialization.SerBufferWriter"/>, so that no array is allocated for data that is only needed temporarily).
+            The data written is the same as the data returned by <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/>, with the same exceptions.
+            </summary>
+            <remarks>
+            The default implementation writes the data returned by <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/>,
+            implementations that can serialize to a pooled buffer override it.
+            </remarks>
+            <typeparam name="T">The static type to serialize as, see <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)"/>.</typeparam>
+            <param name="obj">The object to serialize, may be null.</param>
+            <param name="output">The writer to write the serialized data to.</param>
+            <param name="options">The requested output style, implementations are free to ignore it.</param>
+        </member>
         <member name="T:SysWeaver.Serialization.ITextSerializer">
             <summary>
             Serializes objects to text.
@@ -196,6 +211,28 @@
         <member name="M:SysWeaver.Serialization.NetJsonSerializer.Serialize``1(``0,SysWeaver.Serialization.SerializerOptions)">
             <inheritdoc/>
         </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.WriterOptions">
+            <summary>
+            The writer options that <see cref="M:System.Text.Json.JsonSerializer.SerializeToUtf8Bytes``1(``0,System.Text.Json.JsonSerializerOptions)"/> uses for each of the <see cref="F:SysWeaver.Serialization.NetJsonSerializer.Options"/> (same as the internal JsonSerializerOptions.GetWriterOptions)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.NoOutput">
+            <summary>
+            A writer that the cached json writers are reset to when not in use (so that they don't keep a reference to the caller's writer), nothing is written to it
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Serialization.NetJsonSerializer.Writers">
+            <summary>
+            The json writers of the thread (one per <see cref="T:SysWeaver.Serialization.SerializerOptions"/>), an entry is null while in use
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.SysWeaver#Serialization#ISerializer#Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)">
+            <inheritdoc/>
+            <remarks>
+            The json is written directly to <paramref name="output"/> using a cached json writer (no array is allocated).
+            Implemented explicitly, so that code finding the Serialize method of the class by name (reflection) is unaffected.
+            </remarks>
+        </member>
         <member name="M:SysWeaver.Serialization.NetJsonSerializer.ToString``1(``0,SysWeaver.Serialization.SerializerOptions)">
             <inheritdoc/>
         </member>
@@ -298,6 +335,54 @@
         <member name="T:SysWeaver.Serialization.NetXmlSerializer.XmlSerializerCache`1">
             <summary>
             A cached XmlSerializer per type (no static initializer, so creation exceptions aren't wrapped in a TypeInitializationException)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Serialization.SerBufferWriter">
+            <summary>
+            A buffer writer that writes into pooled buffers (<see cref="M:SysWeaver.ArrayPoolStream.Rent(System.Int32)"/>), for serialized data that is only needed temporarily
+            (ex: <see cref="M:SysWeaver.Serialization.ISerializer.Serialize``1(``0,System.Buffers.IBufferWriter{System.Byte},SysWeaver.Serialization.SerializerOptions)"/> followed by a deserialization) without allocating an array for it.
+            </summary>
+            <remarks>
+            Not thread safe. Get an instance using <see cref="M:SysWeaver.Serialization.SerBufferWriter.Rent(System.Int32)"/> and dispose it when the data is no longer used (the buffer is returned to the pool and the instance is reused,
+            one instance is cached per thread, so renting usually doesn't allocate).
+            The instance must not be used after it's disposed.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.Rent(System.Int32)">
+            <summary>
+            Get an empty writer (dispose it when done)
+            </summary>
+            <param name="initialSize">The minimum size of the first buffer in bytes (at least 256 bytes are used)</param>
+            <returns>An empty writer</returns>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerBufferWriter.WrittenCount">
+            <summary>
+            The number of bytes written
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerBufferWriter.WrittenSpan">
+            <summary>
+            The data written (valid until more data is written or the writer is disposed)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerBufferWriter.WrittenMemory">
+            <summary>
+            The data written (valid until more data is written or the writer is disposed)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.Advance(System.Int32)">
+            <inheritdoc/>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="count"/> is negative or larger than the space of the last requested buffer.</exception>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.GetMemory(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.GetSpan(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerBufferWriter.Dispose">
+            <summary>
+            Return the buffer to the pool, the writer must not be used after this call
             </summary>
         </member>
         <member name="T:SysWeaver.Serialization.SerializerOptions">
@@ -428,6 +513,17 @@
             <param name="options">The requested output style.</param>
             <returns>The serialized data.</returns>
             <remarks>A compiled delegate is created and cached (thread safe) per runtime type on first use.</remarks>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.DeepCopy``1(SysWeaver.Serialization.ISerializerType,``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Create a deep copy of an object by serializing it and deserializing the data, the same as <c>serializer.Create&lt;T&gt;(serializer.Serialize(obj, options))</c>
+            (same result and exceptions), but the data is written to a pooled buffer (<see cref="T:SysWeaver.Serialization.SerBufferWriter"/>) instead of a new array.
+            </summary>
+            <typeparam name="T">The static type to serialize as and the type to create.</typeparam>
+            <param name="serializer">The serializer.</param>
+            <param name="obj">The object to copy, may be null.</param>
+            <param name="options">The requested output style.</param>
+            <returns>The copy.</returns>
         </member>
         <member name="T:SysWeaver.Serialization.TextSerTools">
             <summary>

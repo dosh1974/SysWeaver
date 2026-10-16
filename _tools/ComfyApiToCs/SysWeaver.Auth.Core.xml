@@ -1,0 +1,2044 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Auth.Core</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Auth.AuthManager">
+            <summary>
+            Validates users across any number of <see cref="T:SysWeaver.Auth.AuthorizerBase"/> instances (asked in the order they were added), and caches successful HTTP Authorization header results.
+            </summary>
+            <remarks>
+            Typically created by the AuthManagerService and used by the HTTP server for every request with an Authorization header, and for login requests.
+            Cached header results expire after <see cref="F:SysWeaver.Auth.AuthManagerParams.CacheDuration"/> seconds, at most <see cref="F:SysWeaver.Auth.AuthManagerParams.MaxCachedHeaders"/> results are cached,
+            and they are re-validated earlier when the owning authorizer's <see cref="P:SysWeaver.Auth.AuthorizerBase.ChangeCounter"/> changes.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.#ctor(SysWeaver.Auth.AuthManagerParams,SysWeaver.Auth.AuthorizerBase[])">
+            <summary>
+            Create an auth manager.
+            </summary>
+            <param name="p">Parameters, null uses the defaults.</param>
+            <param name="authorizers">The initial authorizers, in priority order (an instance that is passed more than once is only added once).</param>
+            <exception cref="T:System.ArgumentException">Two different authorizers have the same <see cref="P:SysWeaver.Auth.AuthorizerBase.GuidPrefix"/>.</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.FindUserFromGuid(System.String)">
+            <summary>
+            Get information about a user (from it's guid).
+            The authorizer is selected using the guid prefix (the text before the first ':').
+            </summary>
+            <param name="userGuid">The user guid, ex: "SI:abc..."</param>
+            <returns>The user information or null if the guid is unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.FindUser(System.String)">
+            <summary>
+            Get information about a user, asking all authorizers in order.
+            </summary>
+            <param name="userName">Name of the user</param>
+            <returns>The user information from the first authorizer that knows the user, or null</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.Http(System.String)">
+            <summary>
+            Get authorization from the Authorization HTTP header.
+            Supports the "Basic" (user:password, UTF8 + base64 encoded) and "Bearer" / "*key" (token) schemes (scheme names are case insensitive).
+            Basic credentials are first validated by the authorizer that knows the user (the one that returns a salt), then by all authorizers in order (using the same hash).
+            Successful results are cached for <see cref="F:SysWeaver.Auth.AuthManagerParams.CacheDuration"/> seconds (keyed by a SHA256 hash of the header value),
+            failures are never cached (so unauthenticated requests can't grow the cache).
+            </summary>
+            <param name="authHeaderString">The Authorization header of the http request</param>
+            <returns>Item1 is the authorization for the given user, null means unknown user, invalid password / token,
+            an unsupported scheme, malformed basic credentials or a header longer than <see cref="F:SysWeaver.Auth.AuthManager.MaxAuthHeaderLength"/> chars.
+            Item2 is true if the basic scheme was used (so the caller can request basic credentials again).</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="authHeaderString"/> is null (DEBUG builds only).</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.HttpAsync(System.String,System.Byte[])">
+            <summary>
+            The part of <see cref="M:SysWeaver.Auth.AuthManager.Http(System.String)"/> after the cache lookup
+            </summary>
+            <param name="s">The trimmed header value</param>
+            <param name="cacheKey">The cache key, null if the cache is disabled or the header is too long</param>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetCached(System.String,System.Byte[]@)">
+            <summary>
+            Get a valid cached result for a (trimmed) header value.
+            The SHA256 key is computed on the stack and looked up by span, so a cache hit doesn't allocate.
+            </summary>
+            <param name="s">The trimmed header value</param>
+            <param name="cacheKey">The cache key: the stored key if there is an entry (valid or not), else a new array</param>
+            <returns>The cache entry, null if there is no valid entry</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.ParseScheme(System.String,System.Boolean@,System.Int32@)">
+            <summary>
+            Get the auth scheme of a (trimmed) header value, same as s.SplitFirst(' ', out var token, false, true) without any allocations.
+            Auth schemes are case insensitive (RFC 9110).
+            </summary>
+            <param name="s">The trimmed header value</param>
+            <param name="isBearer">True if the scheme is "Bearer" or "*key" (and not "Basic")</param>
+            <param name="tokenStart">The start of the token (after the first space and any white space following it), or -1 if there is no space (no token)</param>
+            <returns>True if the scheme is "Basic"</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetToken(System.String,System.Int32)">
+            <summary>
+            Get the token found by <see cref="M:SysWeaver.Auth.AuthManager.ParseScheme(System.String,System.Boolean@,System.Int32@)"/> (same as the right part of SplitFirst)
+            </summary>
+            <param name="s">The trimmed header value</param>
+            <param name="tokenStart">The start of the token, -1 if there is no token</param>
+            <returns>The token, null if there was no space, empty if there is nothing after the space</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.MaxAuthHeaderLength">
+            <summary>
+            Authorization headers longer than this (in chars) are rejected without any processing.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.AuthManager.HttpCacheEntry">
+            <summary>
+            A cached Authorization header result
+            </summary>
+            <param name="Auth">The successful result</param>
+            <param name="ExpiresAt">When the entry expires (<see cref="P:System.Environment.TickCount64"/>)</param>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.HttpCacheEntry.#ctor(System.Tuple{SysWeaver.Auth.Authorization,System.Boolean},System.Int64)">
+            <summary>
+            A cached Authorization header result
+            </summary>
+            <param name="Auth">The successful result</param>
+            <param name="ExpiresAt">When the entry expires (<see cref="P:System.Environment.TickCount64"/>)</param>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthManager.HttpCacheEntry.Auth">
+            <summary>The successful result</summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthManager.HttpCacheEntry.ExpiresAt">
+            <summary>When the entry expires (<see cref="P:System.Environment.TickCount64"/>)</summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.HttpCacheEntry.Result">
+            <summary>
+            A completed task with the result (returned by cache hits, so they don't allocate)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetFakeSalt(System.String)">
+            <summary>
+            Get a deterministic fake salt for an unknown user.
+            If all authorizers are <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
+            else a 24 char salt is returned (the format used by random salts, <see cref="M:SysWeaver.Auth.AuthTools.GetRandomSalt"/>).
+            </summary>
+            <param name="username">The user name</param>
+            <returns>A fake salt</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetSalt(System.String)">
+            <summary>
+            Get the salt for a user (from the first authorizer that knows the user).
+            For unknown users a deterministic fake salt is returned, and a random delay is always added, to make user enumeration harder.
+            </summary>
+            <param name="username">The user name to auth</param>
+            <returns>The salt string required to compute the password hash</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetAuthorizerAndSalt(System.String)">
+            <summary>
+            Get the salt for a user and the authorizer that knows the user.
+            For unknown users a deterministic fake salt is returned, and a random delay is always added, to make user enumeration harder.
+            </summary>
+            <param name="username">The user name to auth</param>
+            <returns>The authorizer (null if no authorizer knows the user) and the salt string required to compute the password hash</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.UserHash(System.String,System.String,System.String)">
+            <summary>
+            Get authorization from a username and a one time password hash (the secure login method, prevents replay attacks), asking all authorizers in order.
+            </summary>
+            <param name="username">The user name to auth</param>
+            <param name="hash">The base64 encoded one time hash, should be: 
+            serverHash = Convert.ToBase64(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', password, userSalt))));
+            hash = Convert.ToBase64(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', serverHash, oneTimePad))));
+            </param>
+            <param name="oneTimePad">The one time pad used</param>
+            <returns>The authorization information for the given user, null means unknown user or invalid password</returns>
+            <exception cref="T:System.FormatException"><paramref name="hash"/> isn't valid base64.</exception>
+            <exception cref="T:System.ArgumentNullException"><paramref name="hash"/> is null.</exception>
+            <remarks>The pad isn't validated here, the caller must make sure that it was issued by the server and is only used once (ex: the login service consumes it).</remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.Realm">
+            <summary>
+            The realm, used in the "WWW-Authenticate" response header for basic auth.
+            Defaults to the entry assembly name if not set in the parameters.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.Dispose">
+            <summary>
+            Stop the periodic cache pruning.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.TokenAuth(System.String)">
+            <summary>
+            Get authorization from a one time token (typically issued by some other site), asking all authorizers in order.
+            </summary>
+            <param name="oneTimeToken">The token</param>
+            <returns>The authorization, or null if the token is null, empty or not accepted by any authorizer</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.PruneCache">
+            <summary>
+            Remove cached Authorization header results that have expired or belong to an authorizer that has been removed.
+            </summary>
+            <returns>Always true (keeps the periodic task running)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.AddAuth(SysWeaver.Auth.AuthorizerBase)">
+            <summary>
+            Add an authorizer (last in priority order).
+            </summary>
+            <param name="auth">The authorizer to add</param>
+            <returns>True if added, false if it was already added</returns>
+            <exception cref="T:System.ArgumentException">Another authorizer have the same <see cref="P:SysWeaver.Auth.AuthorizerBase.GuidPrefix"/> (the authorizer is not added).</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.RemoveAuth(SysWeaver.Auth.AuthorizerBase)">
+            <summary>
+            Remove an authorizer.
+            Cached Authorization header results of the authorizer are removed too.
+            </summary>
+            <param name="auth">The authorizer to remove</param>
+            <returns>True if removed, false if it wasn't added</returns>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthManager.Authorizers">
+            <summary>
+            All authorizers, in priority order
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.HttpCache">
+            <summary>
+            Successful Authorization header results, keyed by the SHA256 hash of the header value (so no credentials are kept in memory)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.HttpCacheLookup">
+            <summary>
+            Span lookups of <see cref="F:SysWeaver.Auth.AuthManager.HttpCache"/> (keys hashed on the stack)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.CacheDurationMs">
+            <summary>
+            How long a successful Authorization header result is cached, in ms
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.MaxCachedHeaders">
+            <summary>
+            The maximum number of cached Authorization header results (0 or less disables the cache)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthManager.CommonPasswordPolicy">
+            <summary>
+            The least restrictive combination of the password policies of all authorizers (see <see cref="M:SysWeaver.Auth.PasswordPolicyExt.Min(System.Collections.Generic.IEnumerable{SysWeaver.Auth.PasswordPolicy})"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManager.GetPasswordPolicy(System.String)">
+            <summary>
+            Get the password policy for a user (return the policy for the authorizer of the user, or the common policy if the user is unknown).
+            </summary>
+            <param name="username">The user name to get password policy for</param>
+            <returns>The password policy</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.AuthManagerParams">
+            <summary>
+            Parameters for <see cref="T:SysWeaver.Auth.AuthManager"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthManagerParams.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManagerParams.CacheDuration">
+            <summary>
+            The number of seconds that a successful Authorization header result is cached (minimum 1), also the interval of the periodic cache pruning.
+            A removed user / API key or a changed password can be used with a cached header for at most this long (unless the authorizer reports the change through its change counter).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManagerParams.MaxCachedHeaders">
+            <summary>
+            The maximum number of cached (successful) Authorization header results, when reached new results are not cached until expired entries are pruned.
+            0 or less disables the cache.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManagerParams.Realm">
+            <summary>
+            The realm name, reported in the "WWW-Authenticate" header for basic auth. Null uses the entry assembly name.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.Authorization">
+            <summary>
+            The authorization of a logged in user: the user information, the authorizer that validated the user and per-user data storage.
+            </summary>
+            <remarks>
+            Authorizations are typically shared by many sessions / requests and must be treated as immutable (except for the user data).
+            Disposing releases the reference to the shared user data.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleDebug">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.Debug"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleAdmin">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.Admin"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleDev">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.Dev"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleOps">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.Ops"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleService">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.Service"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleDisabled">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.Disabled"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleAdminOps">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.AdminOps"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.RoleOpsDev">
+            <summary>
+            Pre-processed tokens of <see cref="F:SysWeaver.Roles.OpsDev"/>, for use with <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.Auth">
+            <summary>
+            The authorizer of this user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.AuthContext">
+            <summary>
+            Some optional data that is only meaningful to the authorizer of this user 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.Cc">
+            <summary>
+            The change counter of the authorizer when this authorization was created, if this doesn't equal to <see cref="P:SysWeaver.Auth.AuthorizerBase.ChangeCounter"/> of <see cref="F:SysWeaver.Auth.Authorization.Auth"/> a new auth will have to be performed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)">
+            <summary>
+            Transform a comma separated token list to a pre processed and faster representation
+            </summary>
+            <param name="requiredTokens">A list of comma separated tokens (case insensitive, white spaces are trimmed)</param>
+            <returns>A readonly list of unique lower case tokens.
+            Null if <paramref name="requiredTokens"/> is null (no auth required), <see cref="F:SysWeaver.Auth.AuthTools.Empty"/> if it's empty (any logged in user) and <see cref="F:SysWeaver.Auth.AuthTools.NoAuth"/> if it's "-" (no one).</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.MaxLinearUniqueSearch">
+            <summary>
+            Above this many (possible) tokens a hash set is used to find duplicates, else a linear search
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.GetUniqueTokens(System.String)">
+            <summary>
+            Split a comma separated token list into unique lower case tokens, white space is trimmed and empty tokens are removed.
+            Same result as Split(',', RemoveEmptyEntries | TrimEntries), FastToLower on every token and a HashSet (first occurrence order), but only the result is allocated.
+            </summary>
+            <param name="requiredTokens">The comma separated tokens</param>
+            <returns>The unique tokens, in the order they first occur</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.LowerToken(System.String,System.Int32,System.Int32)">
+            <summary>
+            Lower case a part of a string, exactly as Substring(start, length).FastToLower() (same as ToLowerInvariant):
+            the string itself if the whole string is used and no char changes
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.GetRequiredTokenSet(System.String)">
+            <summary>
+            Transform a comma separated token list to a pre processed and faster representation
+            </summary>
+            <param name="requiredTokens">A list of comma separated tokens (case insensitive, white spaces are trimmed)</param>
+            <returns>A set of lower case tokens.
+            Null if <paramref name="requiredTokens"/> is null, <see cref="F:SysWeaver.Auth.AuthTools.EmptyTokens"/> if it's empty and <see cref="F:SysWeaver.Auth.AuthTools.NoAuthSet"/> if it's "-".</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.#ctor(SysWeaver.Auth.AuthorizerBase,System.String,System.Collections.Generic.IReadOnlySet{System.String},System.Boolean,System.String,System.String,System.String,System.Object,System.String,System.String)">
+            <summary>
+            Create an authorization, the current <see cref="P:SysWeaver.Auth.AuthorizerBase.ChangeCounter"/> of <paramref name="auth"/> is captured.
+            </summary>
+            <param name="auth">The authorizer that validated the user</param>
+            <param name="username">The user name</param>
+            <param name="tokens">The security tokens (lower case), null means no tokens</param>
+            <param name="weakMethod">True if a weak auth method was used (basic auth, bearer token etc)</param>
+            <param name="guid">The user guid, must start with the authorizer's <see cref="P:SysWeaver.Auth.AuthorizerBase.GuidPrefix"/></param>
+            <param name="email">Optional email</param>
+            <param name="nickName">Optional nick name, null uses the user name</param>
+            <param name="authContext">Optional authorizer specific data</param>
+            <param name="domain">Optional application specific domain</param>
+            <param name="language">Optional preferred language</param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="auth"/>, <paramref name="username"/> or <paramref name="guid"/> is null (DEBUG builds only).</exception>
+            <exception cref="T:System.ArgumentException">A value is too long or the guid contains non ASCII chars.</exception>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.WeakMethod">
+            <summary>
+            If true, a weak auth method was used (Basic auth, Bearer token etc).
+            If false, a proper login request was used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.Authorization.UserLock">
+            <summary>
+            Use this to "lock" some operation for a specific user.
+            Note: this is per <see cref="T:SysWeaver.Auth.Authorization"/> instance, not shared between different instances of the same user.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.RequestLogout(System.String)">
+            <summary>
+            Request a logout of this auth, raises <see cref="E:SysWeaver.Auth.Authorization.OnRequestLogout"/> (the sessions using this auth are expected to log out).
+            </summary>
+            <param name="reason">A reason for the logout</param>
+        </member>
+        <member name="E:SysWeaver.Auth.Authorization.OnRequestLogout">
+            <summary>
+            Raised when request logout is called
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.Dispose">
+            <summary>
+            Release the reference to the shared user data.
+            Using the user data methods after this acquires a new reference (released by calling dispose again).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.GetOrCreate``1(System.String,System.Func{``0})">
+            <summary>
+            Get or create user data.
+            User data is shared between all <see cref="T:SysWeaver.Auth.Authorization"/> instances of the same user (by guid) from the same authorizer.
+            An instance acquires a reference to the shared data on the first use of any user data method, the data is dropped when all references are released (see <see cref="M:SysWeaver.Auth.Authorization.Dispose"/>).
+            </summary>
+            <typeparam name="T">The type of data</typeparam>
+            <param name="key">The unique key for this data</param>
+            <param name="create">The function to call if the data wasn't found (will only be executed once in a concurrent environment)</param>
+            <returns>The found or created value</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.TryAdd``1(System.String,``0)">
+            <summary>
+            Try to add some user data
+            </summary>
+            <typeparam name="T">The type of data</typeparam>
+            <param name="key">The unique key for this data</param>
+            <param name="val">The value to add</param>
+            <returns>True if the value was added to the user data</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.TryGet``1(System.String,``0@)">
+            <summary>
+            Try to get some user data
+            </summary>
+            <typeparam name="T">The type of data</typeparam>
+            <param name="key">The unique key for this data</param>
+            <param name="val">The data (if present)</param>
+            <returns>True if the data exists, else false</returns>
+            <exception cref="T:System.InvalidCastException">The data exists but isn't a <typeparamref name="T"/>.</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.TryRemove``1(System.String,``0@)">
+            <summary>
+            Try to remove some user data
+            </summary>
+            <typeparam name="T">The type of data</typeparam>
+            <param name="key">The unique key for this data</param>
+            <param name="val">The removed data (if present)</param>
+            <returns>True if the data was removed, else false</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.TryRemove(System.String)">
+            <summary>
+            Try to remove some user data
+            </summary>
+            <param name="key">The unique key for this data</param>
+            <returns>True if the data was removed, else false</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.Set``1(System.String,``0)">
+            <summary>
+            Set some user data (add or replace)
+            </summary>
+            <typeparam name="T">The type of data</typeparam>
+            <param name="key">The unique key for this data</param>
+            <param name="val">The value to set (or add)</param>
+        </member>
+        <member name="M:SysWeaver.Auth.Authorization.GetUserImage(System.String,System.String)">
+            <summary>
+            Get the url of the logged in user image
+            </summary>
+            <param name="imageName">"small", "large" or a specific size, can use "" to get the base path to all images</param>
+            <remarks>The url is "[rootUrl]auth/UserImages/[hex encoded guid]/[imageName]".</remarks>
+            <param name="rootUrl">Depends on where the link will be used, this value should "point" to the web root</param>
+            <returns>An url to the specified image</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.AuthExt">
+            <summary>
+            Extensions for checking if an <see cref="T:SysWeaver.Auth.Authorization"/> fulfills a token requirement.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.String)">
+            <summary>
+            Validate that this user have ANY of the supplied tokens.
+            </summary>
+            <param name="auth">The authorization, null means not logged in</param>
+            <param name="requiredTokens">A list of comma separated tokens (case insensitive).
+            Null means no auth required (always true), empty means that any logged in user is valid and "-" means that no one is valid</param>
+            <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Validate that this user have ANY of the supplied tokens.
+            </summary>
+            <param name="auth">The authorization, null means not logged in</param>
+            <param name="requiredTokens">Tokens as returned by <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/> (must be all lower case).
+            Null means no auth required (always true), empty means that any logged in user is valid and <see cref="F:SysWeaver.Auth.AuthTools.NoAuth"/> (reference equality) means that no one is valid</param>
+            <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.AuthorizationInfo">
+            <summary>
+            Public information about a user (identity, tokens and profile data), without any authorizer specific state.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.Username">
+            <summary>
+            The name of the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.Tokens">
+            <summary>
+            The set of security tokens that this user have (all lowercase)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.Language">
+            <summary>
+            Preferred language of the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.Domain">
+            <summary>
+            A domain for a user, the meaning of a domain is application specific
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.Email">
+            <summary>
+            Optional email for the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.Guid">
+            <summary>
+            A user guid, ASCII only, starting with the authorizer's <see cref="P:SysWeaver.Auth.AuthorizerBase.GuidPrefix"/> and a ':'
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.NickName">
+            <summary>
+            The display name of the user, defaults to the user name.
+            If the name contains '@' or '+' (could be an email or phone number) a random name is generated from the guid instead.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.AutoNickName">
+            <summary>
+            If true, the nick name was auto selected
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizationInfo.GetRandomName(System.String)">
+            <summary>
+            Generate a deterministic random nick name based of a users guid (the same guid always gives the same name)
+            </summary>
+            <param name="guid">The user guid</param>
+            <returns>A name with at most <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxNickNameLength"/> chars</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizationInfo.InvalidNick">
+            <summary>
+            If a nick contains any of these it's invalid (email and phone).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizationInfo.#ctor(System.String,System.Collections.Generic.IReadOnlySet{System.String},System.String,System.String,System.String,System.String,System.String)">
+            <summary>
+            Create user information, validating the lengths of the values.
+            </summary>
+            <param name="username">The user name (at most <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxUserNameLength"/> chars)</param>
+            <param name="tokens">The security tokens (lower case), null means no tokens. The set is frozen</param>
+            <param name="language">Preferred language, may be null</param>
+            <param name="domain">Application specific domain (at most <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxDomainName"/> chars), may be null</param>
+            <param name="email">Email (at most <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxEmailLength"/> chars), may be null</param>
+            <param name="guid">The user guid (ASCII, at most <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxGuidLength"/> chars)</param>
+            <param name="nickName">The nick name, null uses the user name</param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="username"/> or <paramref name="guid"/> is null (DEBUG builds only).</exception>
+            <exception cref="T:System.ArgumentException">A value is too long or the guid contains non ASCII chars.</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizationInfo.#ctor(SysWeaver.Auth.AuthorizationInfo)">
+            <summary>
+            Create a copy of the public user information (ex: to strip the authorizer state from an <see cref="T:SysWeaver.Auth.Authorization"/>).
+            </summary>
+            <param name="from">The instance to copy from</param>
+        </member>
+        <member name="T:SysWeaver.Auth.AuthorizerBase">
+            <summary>
+            Base class for a source of users that can validate credentials (used by <see cref="T:SysWeaver.Auth.AuthManager"/>).
+            Implementations override the auth methods they support, the defaults reject everything.
+            </summary>
+            <remarks>
+            Password hashes used by the framework are: hash = SHA256(UTF8(password + "|" + salt)) where the salt is provided by <see cref="M:SysWeaver.Auth.AuthorizerBase.GetSaltAsync(System.String)"/>,
+            see <see cref="M:SysWeaver.Auth.AuthTools.ComputeHash(System.String,System.String)"/>.
+            Implementations must be thread safe.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.Name">
+            <summary>
+            A unique name of this authorizer
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.GuidPrefix">
+            <summary>
+            The unique guid prefix, all user guids from this authorizer starts with this prefix followed by a ':'.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizerBase.NoAuth">
+            <summary>
+            Return this for failed auths
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.FindUserFromGuid(System.String)">
+            <summary>
+            Get information about a user (from it's guid)
+            </summary>
+            <param name="userGuid">The user guid (including the prefix)</param>
+            <returns>The user information, or null if unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.FindUser(System.String)">
+            <summary>
+            Get information about a user
+            </summary>
+            <param name="userName">Name of the user</param>
+            <returns>The user information, or null if unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.BasicAuth(System.String,System.Byte[])">
+            <summary>
+            Authorize a user from the Http header using the basic auth schema (plain text password or hash have been sent, can use replay attacks etc)
+            </summary>
+            <param name="userName">The plain text username</param>
+            <param name="hash">The password hash: SHA256(UTF8.GetBytes(password + "|" + salt)) where salt is the salt returned by <see cref="M:SysWeaver.Auth.AuthorizerBase.GetSaltAsync(System.String)"/></param>
+            <returns>null if password is wrong or user is unknown (or basic auth is not allowed for the user)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.BearerAuth(System.String)">
+            <summary>
+            Authorize a user from the Http header using the bearer token schema (can use replay attacks etc)
+            </summary>
+            <param name="token">The Bearer token found in the header</param>
+            <returns>null if the Bearer token is wrong or unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.SecureAuth(System.String,System.Byte[],System.String)">
+            <summary>
+            Authorize a user using the more secure OneTimePadded hashed data, no replay attacks possible
+            </summary>
+            <param name="userName">The plain text username</param>
+            <param name="hash">The one time hash: SHA256(UTF8.GetBytes(ToBase64(SHA256(UTF8.GetBytes(password + "|" + salt))) + "|" + oneTimePad))</param>
+            <param name="oneTimePad">The one time pad used</param>
+            <returns>null if password is wrong or user is unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.TokenAuth(System.String)">
+            <summary>
+            Authorize a user using a one time use token
+            </summary>
+            <param name="oneTimeToken">A token, typically coming from some other web-site</param>
+            <returns>null if the onTimeToken is wrong or unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.TryLogoutTokenAuth(SysWeaver.Auth.Authorization,System.String)">
+            <summary>
+            Check if the user was logged in using an external session id (used for remote / single sign-out)
+            </summary>
+            <param name="auth">The auth of the current session (must match)</param>
+            <param name="externalSessionId">The session representing the user that a remote service want to logout</param>
+            <returns>True if the currently logged in user is logged in using the external session id</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetSaltAsync(System.String)">
+            <summary>
+            Get salt for a specific user
+            </summary>
+            <param name="userName">The plain text username</param>
+            <returns>The salt, or null if the user is unknown to this authorizer</returns>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.ChangeCounter">
+            <summary>
+            If any authorization information changes (db updates, files reloaded etc), increase this counter (invalidates cached auth's)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.AuthorizerBase.PasswordPolicy">
+            <summary>
+            The required password policy (default is <see cref="F:SysWeaver.Auth.PasswordPolicy.Default"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.GetUserData(System.String)">
+            <summary>
+            Get (and add a reference to) the shared per-user data of a user, used by <see cref="T:SysWeaver.Auth.Authorization"/> so that all sessions of a user share data.
+            The reference is released by disposing the returned object.
+            </summary>
+            <param name="userGuid">The user guid</param>
+            <returns>The user data</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthorizerBase.NoLang">
+            <summary>
+            A completed task with the value true, the default result of <see cref="M:SysWeaver.Auth.AuthorizerBase.SetLanguage(System.String,System.String)"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthorizerBase.SetLanguage(System.String,System.String)">
+            <summary>
+            Override to store the language when the user changes it
+            </summary>
+            <param name="userGuid">Guid of the user</param>
+            <param name="languageCode">The new language code, ex: "en-US"</param>
+            <returns>True if successful (the default implementation does nothing and returns true)</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.UserData">
+            <summary>
+            Reference counted per-user data shared by all <see cref="T:SysWeaver.Auth.Authorization"/> instances of the same user (within one authorizer).
+            Removed from the authorizer when the last reference is disposed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.UserData.RefCount">
+            <summary>
+            Number of references (<see cref="T:SysWeaver.Auth.Authorization"/> instances) to this data.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.UserData.Values">
+            <summary>
+            The user data values.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.UserData.Dispose">
+            <summary>
+            Release a reference, the data is removed from the authorizer when the last reference is released.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.AuthTools">
+            <summary>
+            Hashing, salt and token helpers used by the authorization system.
+            </summary>
+            <remarks>
+            Password hashes are a single SHA256 of "password|salt" (fast hashes, matching what the web clients compute).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.AuditGroup">
+            <summary>
+            The audit group used for auth related API audits.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeHash(System.String)">
+            <summary>
+            Compute a hash for some given text: SHA256(UTF8(text))
+            </summary>  
+            <param name="text">The text to hash, may not be null</param>
+            <returns>Computed hash as a byte array: SHA256(UTF8(text))</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="text"/> is null (DEBUG builds only).</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeHashString(System.String)">
+            <summary>
+            Compute a hash for some given text: SHA256(UTF8(text))
+            </summary>
+            <param name="text">The text to hash, may not be null</param>
+            <returns>The hash as a string: ToBase64(SHA256(UTF8(text))), 44 chars</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="text"/> is null (DEBUG builds only).</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeHash(System.String,System.String)">
+            <summary>
+            Compute a hash for the given password and salt: SHA256(UTF8(password|salt))
+            </summary>
+            <param name="password">Password (null is treated as empty)</param>
+            <param name="userSalt">Salt (null is treated as empty)</param>
+            <returns>Computed hash as a byte array: SHA256(UTF8(password|salt))</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeHashString(System.String,System.String)">
+            <summary>
+            Compute a hash for the given password and salt: SHA256(UTF8(password|salt))
+            </summary>
+            <param name="password">Password (null is treated as empty)</param>
+            <param name="userSalt">Salt (null is treated as empty)</param>
+            <returns>The hash as a string: ToBase64(SHA256(UTF8(password|salt))), 44 chars</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.MaxDirectHashChars">
+            <summary>
+            Above this many chars (password + salt) the password hash is computed from the joined string
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.HashToString(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Convert a byte array hash to a hash string: ToBase64(hash)
+            </summary>
+            <param name="hash">The hash as a byte array</param>
+            <returns>The hash as a string: ToBase64(hash)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.GetRandomSalt">
+            <summary>
+            Get a random salt (from a cryptographically secure RNG), 24 chars using 144 random bits
+            </summary>
+            <returns>A random salt, 24 chars using 144 random bits</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.GetHashSalt(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get a deterministic salt from some data, 24 chars using 144 hashed bits
+            </summary>
+            <param name="data">The data to hash</param>
+            <returns>A salt, 24 chars using 144 hash bits</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.GetHashSalt(System.String)">
+            <summary>
+            Get a deterministic salt from some string (UTF8 encoded), 24 chars using 144 hashed bits
+            </summary>
+            <param name="text">The text to hash</param>
+            <returns>A salt, 24 chars using 144 hash bits</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.PasswordRules">
+            <summary>
+            A description of the password rules enforced by <see cref="M:SysWeaver.Auth.AuthTools.ValidatePassword(System.String)"/>, suitable to show when validation fails.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ValidatePassword(System.String)">
+            <summary>
+            Validate a password using a fixed minimal rule (at least 8 characters), return error string.
+            Use <see cref="M:SysWeaver.Auth.PasswordPolicyExt.Check(SysWeaver.Auth.PasswordPolicy,System.String)"/> for policy based validation.
+            </summary>
+            <param name="password">The password to test</param>
+            <returns>Error string or null if password is valid</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String)">
+            <summary>
+            Compute a simple deterministic salt for given user (unique per user per application), used by <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>.
+            Salt = ToBase64(SHA256(UTF8(lowercase(username + AppAssemblyName) + magic))).
+            </summary>
+            <param name="user">A valid user name</param>
+            <returns>Plain text salt (44 chars)</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String)">
+            <summary>
+            Compute a simple password hash using the salt from <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String)"/>: ToBase64(SHA256(UTF8(password|salt))).
+            This is the hash format that can be used instead of a clear text password in <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.Users"/>.
+            </summary>
+            <param name="user">A valid user name</param>
+            <param name="password">A valid password</param>
+            <returns>Hash as a base64 string (44 chars)</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.NoAuthToken">
+            <summary>
+            A token that no one should have
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.Empty">
+            <summary>
+            An empty token list, as a requirement it means "any logged in user".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.EmptyTokens">
+            <summary>
+            An empty (frozen) token set.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.NoAuth">
+            <summary>
+            A token list that no one can fulfill (the result of the "-" requirement), compared by reference in <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.NoAuthSet">
+            <summary>
+            A token set containing only <see cref="F:SysWeaver.Auth.AuthTools.NoAuthToken"/> (the result of the "-" requirement).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.GetList(System.String)">
+            <summary>
+            Split a comma separated token string into a list of unique, trimmed, lower case tokens.
+            Unlike <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/>, empty entries and "-" are not handled specially.
+            </summary>
+            <param name="tokens">The comma separated tokens</param>
+            <returns>The tokens, or null if <paramref name="tokens"/> is null</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.MaxLinearUniqueSearch">
+            <summary>
+            Above this many (possible) tokens a hash set is used to find duplicates, else a linear search
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.DebugAuth">
+            <summary>
+            The tokens of <see cref="F:SysWeaver.Roles.Debug"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.AdminAuth">
+            <summary>
+            The tokens of <see cref="F:SysWeaver.Roles.Admin"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthTools.DevAuth">
+            <summary>
+            The tokens of <see cref="F:SysWeaver.Roles.Dev"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.AuthTools.ValidateUserGuid(System.String)">
+            <summary>
+            Validate that a user guid is at most <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxGuidLength"/> chars and only contains ASCII chars.
+            </summary>
+            <param name="guid">The guid to validate, may not be null</param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="guid"/> is null (DEBUG builds only).</exception>
+            <exception cref="T:System.ArgumentException">The guid is too long or contains non ASCII chars.</exception>
+        </member>
+        <member name="T:SysWeaver.Auth.AuhorizationLimits">
+            <summary>
+            Limits for user related values, enforced by <see cref="T:SysWeaver.Auth.AuthorizationInfo"/>.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuhorizationLimits.MaxUserNameLength">
+            <summary>
+            Maximum number of chars in a user name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuhorizationLimits.MaxEmailLength">
+            <summary>
+            Maximum number of chars in an email.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuhorizationLimits.MaxGuidLength">
+            <summary>
+            Maximum number of chars in a user guid.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuhorizationLimits.MaxDomainName">
+            <summary>
+            Maximum number of chars in a domain.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.AuhorizationLimits.MaxNickNameLength">
+            <summary>
+            Maximum number of chars in a generated nick name.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.NameGen">
+            <summary>
+            Generates random, human friendly names (ex: for default nick names), formatted as "[adjective] [entity] [first name]".
+            </summary>
+            <remarks>
+            Not cryptographically random, use a seeded <see cref="T:System.Random"/> to get deterministic names.
+            </remarks>
+        </member>
+        <member name="T:SysWeaver.Auth.NameGen.Genus">
+            <summary>
+            The gender of the generated name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.NameGen.Genus.Any">
+            <summary>
+            Any gender (randomly selected).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.NameGen.Genus.Male">
+            <summary>
+            A male name.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.NameGen.Genus.Female">
+            <summary>
+            A female name.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.NameGen.GetRandomName(System.Random,SysWeaver.Auth.NameGen.Genus)">
+            <summary>
+            Generate a random name
+            </summary>
+            <param name="rng">The rng to use, use null for a random rng</param>
+            <param name="genus">The genus to use</param>
+            <returns>A random name</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.NameGen.GetRandomName(SysWeaver.Auth.NameGen.Genus,System.Random)">
+            <summary>
+            Generate a random name
+            </summary>
+            <param name="genus">The genus to use</param>
+            <param name="rng">The rng to use, use null for a random rng</param>
+            <returns>A random name</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.NameGen.GetRandomName(System.Int32,SysWeaver.Auth.NameGen.Genus,System.Random)">
+            <summary>
+            Generate a random name
+            </summary>
+            <param name="maxLength">The maximum length of the generated name, must be at least 16 or null will be returned</param>
+            <param name="genus">The genus to use</param>
+            <param name="rng">The rng to use, use null for a random rng</param>
+            <returns>A random name</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.PasswordPolicy">
+            <summary>
+            Represents a policy to use for a password
+            </summary>
+            <remarks>
+            Validate a password using <see cref="M:SysWeaver.Auth.PasswordPolicyExt.Check(SysWeaver.Auth.PasswordPolicy,System.String)"/>.
+            Policies are reported to clients so the UI can validate early.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordPolicy.Default">
+            <summary>
+            The default policy: 8 to 64 chars, mixed case and at least one number. Shared instance, do not modify.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.PasswordPolicy.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordPolicy.MinLength">
+            <summary>
+            The minimum length of a valid password (values below 1 are treated as 1)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordPolicy.MaxLength">
+            <summary>
+            The maximum length of a valid password (clamped to [<see cref="F:SysWeaver.Auth.PasswordPolicy.MinLength"/>, 128])
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordPolicy.MixedCase">
+            <summary>
+            At least one lower. and one upper-case letter must be present
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordPolicy.MixedNumerical">
+            <summary>
+            At least one numerical in addition to letters must be present (also requires a letter)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordPolicy.MixedSpecial">
+            <summary>
+            At least one non-letter, non-numerical char must be present (also requires a letter)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.PasswordPolicyExt">
+            <summary>
+            Extensions for <see cref="T:SysWeaver.Auth.PasswordPolicy"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.PasswordPolicyExt.Min(SysWeaver.Auth.PasswordPolicy,SysWeaver.Auth.PasswordPolicy)">
+            <summary>
+            Returns a new policy with the lowest common restriction of two policies: the smallest minimum length, the largest maximum length and only the character class requirements that both have.
+            </summary>
+            <param name="a">The first policy</param>
+            <param name="b">The second policy</param>
+            <returns>A new policy</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.PasswordPolicyExt.Min(System.Collections.Generic.IEnumerable{SysWeaver.Auth.PasswordPolicy})">
+            <summary>
+            Returns a new policy with the lowest common restriction: the smallest minimum length, the largest maximum length and only the character class requirements that all have.
+            </summary>
+            <param name="policies">The policies, an empty sequence gives a new default <see cref="T:SysWeaver.Auth.PasswordPolicy"/></param>
+            <returns>A policy with the lowest common restriction of the inputs</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.PasswordPolicyExt.Check(SysWeaver.Auth.PasswordPolicy,System.String)">
+            <summary>
+            Check a password against a password policy
+            </summary>
+            <param name="policy">The policy</param>
+            <param name="password">The password, null is treated as too short</param>
+            <returns>The status of the password, the first failing requirement is reported in the order: length, letter, case, number, special</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.PasswordStatus">
+            <summary>
+            Represents the status of a password
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.UnknownError">
+            <summary>
+            Password is in some unknown state (error)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.Ok">
+            <summary>
+            Password is ok, fulfilling the policy
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.TooShort">
+            <summary>
+            Password is too short
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.TooLong">
+            <summary>
+            Password is too long
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.NeedLetter">
+            <summary>
+            Password need a letter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.NeedUpperCase">
+            <summary>
+            Password need an uppercase letter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.NeedLowerCase">
+            <summary>
+            Password need a lowercase letter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.NeedNumber">
+            <summary>
+            Password need a number
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.PasswordStatus.NeedSpecial">
+            <summary>
+            Password need a special character (non numeric and non letter)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.RequiredTokensCache">
+            <summary>
+            A token requirement string and its pre-processed tokens (<see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/>), for call sites that check a requirement that is stored as a string (ex: a configuration value).
+            Use <see cref="M:SysWeaver.Auth.RequiredTokensCache.Get(SysWeaver.Auth.RequiredTokensCache@,System.String)"/> with a field of the owner to parse the requirement once and call <see cref="M:SysWeaver.Auth.AuthExt.IsValid(SysWeaver.Auth.Authorization,System.Collections.Generic.IReadOnlyList{System.String})"/> (no parsing per check).
+            </summary>
+            <remarks>
+            Instances are immutable, the requirement and its tokens are published together (one reference), so a cache field can be read and updated concurrently.
+            The cache is keyed by the reference of the requirement string: assigning another string (even an equal one) parses it again, a string that is built per call should not be cached.
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Auth.RequiredTokensCache.RequiredTokens">
+            <summary>
+            The requirement string (the cache key, compared by reference)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.RequiredTokensCache.Tokens">
+            <summary>
+            The pre-processed tokens of <see cref="F:SysWeaver.Auth.RequiredTokensCache.RequiredTokens"/>, as returned by <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.RequiredTokensCache.Get(SysWeaver.Auth.RequiredTokensCache@,System.String)">
+            <summary>
+            Get the pre-processed tokens of a requirement, parsed once per requirement string (reference) and stored in a cache field.
+            <c>auth.IsValid(RequiredTokensCache.Get(ref cache, requiredTokens))</c> gives the same result as <c>auth.IsValid(requiredTokens)</c>.
+            </summary>
+            <param name="cache">The cache field (null initially), updated if it doesn't hold the tokens of <paramref name="requiredTokens"/></param>
+            <param name="requiredTokens">A list of comma separated tokens (case insensitive).
+            Null means no auth required, empty means that any logged in user is valid and "-" means that no one is valid</param>
+            <returns>The same as <see cref="M:SysWeaver.Auth.Authorization.GetRequiredTokens(System.String)"/>: null if <paramref name="requiredTokens"/> is null (the cache isn't changed)</returns>
+        </member>
+        <member name="T:SysWeaver.Auth.SimpleAuthorizer">
+            <summary>
+            A simple authorizer with a static set of users defined in the parameters and/or a (monitored) file, and optional API keys.
+            </summary>
+            <remarks>
+            Users are defined as "user:password:tokens:domain" strings, see <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.Users"/>.
+            The password can be clear text (validated against the password policy) or a hash computed using <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String)"/>
+            (the "Generate password hash" debug page can compute it).
+            API keys are stored in <see cref="F:SysWeaver.KeyValueStore.AllApp"/> as "name:key" strings and are accepted as bearer tokens (and basic auth).
+            The user guids are "SI:" followed by a hash of the user name.
+            Thread safe, user changes are applied atomically and users whose password or tokens changed are asked to log out.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.GuidPrefix">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.#ctor(SysWeaver.IMessageHost,SysWeaver.Auth.SimpleAuthorizerParams)">
+            <summary>
+            Create a simple authorizer, users are loaded immediately (and reloaded if the user file changes).
+            </summary>
+            <param name="msg">Optional message host to be used for logging</param>
+            <param name="p">Parameters, null uses the defaults (no users)</param>
+            <exception cref="T:System.Exception">Loading the users failed and <see cref="F:SysWeaver.ManagedFileParams.MustExist"/> is true.</exception>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ManagementAuth">
+            <summary>
+            The effective auth required to manage API keys (<see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/>, null is mapped to <see cref="F:SysWeaver.Roles.AdminOps"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.ManagementTokens">
+            <summary>
+            The pre-processed tokens of <see cref="F:SysWeaver.Auth.SimpleAuthorizer.ManagementAuth"/> (no parsing per check)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.PasswordPolicy">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.Dispose">
+            <summary>
+            Stop monitoring the user file.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.Info.Icon">
+            <summary>
+            Icon for the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.Info.Name">
+            <summary>
+            The name of the user
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.Info.Auth">
+            <summary>
+            The auth token that this user have
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizer.Info.Domain">
+            <summary>
+             The domain for this user
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.UsersTable(SysWeaver.Data.TableDataRequest)">
+            <summary>
+            Get information about all users handled by the simple authorizer
+            </summary>
+            <param name="r">Paramaters</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetAuthSalt(System.String)">
+            <summary>
+            Get the salt to use for a user password hash, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String)"/>.
+            Returns a salt for any user name (known or not), used by the "Generate password hash" page.
+            </summary>
+            <param name="user">The name of the user</param>
+            <returns>The salt</returns>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.ChangeCounter">
+            <summary>
+            Incremented every time the users (including API keys) are updated, so cached authorizations are re-validated.
+            Changed users are also signalled by <see cref="M:SysWeaver.Auth.Authorization.RequestLogout(System.String)"/> on the old authorizations.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.FindUserFromGuid(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.FindUser(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.BasicAuth(System.String,System.Byte[])">
+            <summary>
+            Authorize a user using basic auth, only allowed if <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowBasicAuth"/> is true or the user has the "service" token.
+            The hash is compared in constant time.
+            </summary>
+            <param name="userName">The user name (case insensitive)</param>
+            <param name="hash">The password hash: SHA256(UTF8(password|salt))</param>
+            <returns>A weak authorization, or null</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.BearerAuth(System.String)">
+            <summary>
+            Authorize using an API key (the key part of a "name:key" API key) as a bearer token.
+            </summary>
+            <param name="token">The API key (null is not found, i.e. a "Bearer" header without a token)</param>
+            <returns>A weak authorization for the API key user, or null</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.SecureAuth(System.String,System.Byte[],System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.TokenAuth(System.String)">
+            <summary>
+            Authorize using an API key as a token (same as <see cref="M:SysWeaver.Auth.SimpleAuthorizer.BearerAuth(System.String)"/>, the key is not consumed).
+            </summary>
+            <param name="oneTimeToken">The API key (null is not found)</param>
+            <returns>A weak authorization for the API key user, or null</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetSaltAsync(System.String)">
+            <summary>
+            Get the salt of a known user, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimpleSalt(System.String)"/>.
+            </summary>
+            <param name="userName">The user name (case insensitive), null is treated as empty</param>
+            <returns>The salt, or null if the user is unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetUserNameFromEmail(System.String)">
+            <summary>
+            Get the user name from an email, the simple authorizer uses the user name as email so this is a case insensitive user name lookup.
+            </summary>
+            <param name="email">The email (user name)</param>
+            <returns>The user name with the original casing, or null if unknown</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetPasswordPolicy">
+            <summary>
+            Get the password policy for the Simple Authorizer.
+            </summary>
+            <returns>The password policy</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AppInfo">
+            <summary>
+            Get app information (for the API key management page).
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
+            </summary>
+            <returns>[EnvInfo.AppName, EnvInfo.AppDisplayName]</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.ApiKeysSupported">
+            <summary>
+            Check if API key management is enabled.
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
+            </summary>
+            <returns>True if GetApiKeys, RemoveApiKey, AddApiKey is available</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetApiKeys">
+            <summary>
+            Get a list of ALL api keys (in clear text).
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
+            </summary>
+            <returns>An array of strings with the user/password pairs encoded as "user:key", or null if there are no keys</returns>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.RemoveApiKey(System.String)">
+            <summary>
+            Remove an api key.
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
+            </summary>
+            <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
+            <returns>True if the key was removed, false if it doesn't exist</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddApiKey(System.String)">
+            <summary>
+            Add/create a new API key with a random 40 char alpha numerical key (from a secure RNG).
+            Users authenticated with the key get the <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/> tokens.
+            Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
+            </summary>
+            <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
+            <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
+            <exception cref="T:System.ArgumentNullException">The key name is null.</exception>
+            <exception cref="T:System.ArgumentException">The key name is empty (or only white spaces), contains a ':', starts with a '#' or "//" or is too long.</exception>
+        </member>
+        <member name="P:SysWeaver.Auth.SimpleAuthorizer.MethodAuths">
+            <summary>
+            Runtime auth overrides for the API key management methods (uses <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/>), empty if API keys are disabled.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Auth.SimpleAuthorizerParams">
+            <summary>
+            Parameters for <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>.
+            The inherited <see cref="T:SysWeaver.ManagedFileParams"/> can specify an optional (monitored) user file with one user per line (same syntax as <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.Users"/>, lines starting with "#" or "//" are ignored).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizerParams.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizerParams.#ctor">
+            <summary>
+            Create parameters with the defaults (the user file is optional).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.Users">
+            <summary>
+            One user per string with the following syntax: "username:password".
+            Auth tokens can be specified by appending a colon (:) or bar (|) and a comma separated list of tokens, ex:
+            "username:password:token1, token2, token3"
+            An application specific domain can be appended after another colon or bar, ex: "username:password:tokens:domain".
+            The password may therefore not contain ':' or '|'.
+            Password could be a simple hash (a base64 encoded SHA256, see <see cref="M:SysWeaver.Auth.AuthTools.ComputeSimplePasswordHash(System.String,System.String)"/>, can be generated using the "Generate password hash" debug page).
+            Simple hashes are unique per user per application (entry assembly name).
+            Any 44 char password that is valid base64 of 32 bytes is used as a hash (so such a clear text password can't be used).
+            Clear text passwords must fulfill the <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.PasswordPolicy"/>, users with invalid passwords are skipped.
+            Users with a too long name (over <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxUserNameLength"/> chars) or domain (over <see cref="F:SysWeaver.Auth.AuhorizationLimits.MaxDomainName"/> chars) are skipped with a warning message, the other users are still loaded.
+            User names are case insensitive (the last definition of a name wins), white spaces around the parts are trimmed, empty lines and lines starting with "#" or "//" are ignored.
+            The user guid is "SI:" followed by a hash of the user name (as written, case sensitive).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.PasswordPolicy">
+            <summary>
+            The requirements for clear text passwords, null uses the default policy.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.AllowBasicAuth">
+            <summary>
+            If true (and the server accepts basic auth), then users are allowed to login using basic auth.
+            Users with the "service" token are always allowed to use basic auth.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth">
+            <summary>
+            If non-null, API keys can be created and deleted, users logged in using these keys will have the tokens specified here (comma separated).
+            API keys can be used as bearer tokens, and they are allowed to use basic auth (http server still need to allow for it).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth">
+            <summary>
+            The auth (comma separated tokens) required to manage API keys.
+            null is treated as the default (<see cref="F:SysWeaver.Roles.AdminOps"/>), use <see cref="F:SysWeaver.Roles.Disabled"/> ("-") to disable API key management.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ManagedLanguageMessages">
+            <summary>
+            The localized text and mail message templates of a single language, created by <see cref="T:SysWeaver.ManagedMessages"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageMessages.Language">
+            <summary>
+            The language (as named by the source folder), ex: "en-US"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageMessages.IsFallback">
+            <summary>
+            True if this is used as a fallback (the default language returned when the requested language isn't available)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageMessages.Texts">
+            <summary>
+            Text messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageMessages.Mails">
+            <summary>
+            Mail messages
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageMessages.Notifications">
+            <summary>
+            Notification messages (markdown for web)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedLanguageMessages.AllTexts">
+            <summary>
+            All text messages, key is the lower cased message name.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedLanguageMessages.AllMail">
+            <summary>
+            All mail messages, key is the lower cased message name.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedLanguageMessages.AllNotifications">
+            <summary>
+            All notification (markdown for web) messages, key is the lower cased message name.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.GetMail(System.String)">
+            <summary>
+            Get the mail message for a given key.
+            </summary>
+            <param name="key">The key (one of the names supplied to <see cref="T:SysWeaver.ManagedMessages"/>, including any leading '*', case insensitive)</param>
+            <returns>null if not found, else the mail message template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.GetText(System.String)">
+            <summary>
+            Get the text message for a given key.
+            </summary>
+            <param name="key">The key (one of the names supplied to <see cref="T:SysWeaver.ManagedMessages"/>, including any leading '*', case insensitive)</param>
+            <returns>null if not found, else the text message template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.GetNotification(System.String)">
+            <summary>
+            Get the notification (markdown for web) message for a given key.
+            </summary>
+            <param name="key">The key (one of the names supplied to <see cref="T:SysWeaver.ManagedMessages"/>, including any leading '*', case insensitive)</param>
+            <returns>null if not found, else the text message template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.#ctor(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedTextMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedMailMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedMarkDownMessage})">
+            <summary>
+            Create the messages of a language.
+            </summary>
+            <param name="language">The language</param>
+            <param name="texts">The text messages, keys must be lower case</param>
+            <param name="mails">The mail messages, keys must be lower case</param>
+            <param name="notifications">The web notifications messages, keys must be lower case</param>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.#ctor(SysWeaver.ManagedLanguageMessages,System.Boolean)">
+            <summary>
+            Create a copy (sharing the messages) with a different <see cref="F:SysWeaver.ManagedLanguageMessages.IsFallback"/> value.
+            </summary>
+            <param name="copy">The messages to copy</param>
+            <param name="isFallback">True if the copy is used as a fallback</param>
+        </member>
+        <member name="T:SysWeaver.ManagedLanguageTexts">
+            <summary>
+            The localized text templates of a single language, created by <see cref="T:SysWeaver.ManagedTexts"/>.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageTexts.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageTexts.Language">
+            <summary>
+            The language, ex: "en-US"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedLanguageTexts.IsFallback">
+            <summary>
+            True if this is used as a fallback (the default language returned when the requested language isn't available)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageTexts.#ctor(System.String,System.String)">
+            <summary>
+            Create the texts of a language, the texts are loaded immediately.
+            </summary>
+            <param name="language">The language</param>
+            <param name="filename">A file name, embedded resource name or the actual "key: text" lines, see <see cref="P:SysWeaver.ManagedTextLookup.Text"/></param>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageTexts.#ctor(SysWeaver.ManagedLanguageTexts,System.Boolean)">
+            <summary>
+            Create a copy (sharing the templates) with a different <see cref="F:SysWeaver.ManagedLanguageTexts.IsFallback"/> value.
+            </summary>
+            <param name="texts">The texts to copy</param>
+            <param name="isFallback">True if the copy is used as a fallback</param>
+        </member>
+        <member name="T:SysWeaver.ManagedMailMessage">
+            <summary>
+            A mail message template (subject and body), where each part can be a file name, an embedded resource name or the template text itself.
+            </summary>
+            <remarks>
+            Templates are parsed lazily and cached, if a part is read from a file the cached template is dropped when the file changes.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.ManagedMailMessage.#ctor">
+            <summary>
+            Create a mail message template that only uses the standard variables.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMailMessage.#ctor(System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a mail message template that may use some additional variables.
+            </summary>
+            <param name="vars">Additional variables, ex: "[Amount]"</param>
+        </member>
+        <member name="F:SysWeaver.ManagedMailMessage.Vars">
+            <summary>
+            Additional variables (in addition to <see cref="T:SysWeaver.ManagedVars"/>) that the templates may use, may be null.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMailMessage.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.ManagedMailMessage.Subject">
+            <summary>
+            The subject template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedMailMessage.Body">
+            <summary>
+            The body template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedMailMessage.IsHtml">
+            <summary>
+            Set to true if the body is html (selects <see cref="F:SysWeaver.ManagedVars.HtmlVars"/> instead of <see cref="F:SysWeaver.ManagedVars.TextVars"/>)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMailMessage.GetMessage(System.String@,System.String@,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Evaluate the subject and body templates
+            </summary>
+            <param name="subject">The subject after evaluation</param>
+            <param name="body">The body after evaluation</param>
+            <param name="vars">The variables</param>
+        </member>
+        <member name="M:SysWeaver.ManagedMailMessage.GetSubject">
+            <summary>
+            Get the text template for the subject
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedMailMessage.GetBody">
+            <summary>
+            Get the text template for the body
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="T:SysWeaver.ManagedMarkDownMessage">
+            <summary>
+            A mail message template (subject and body), where each part can be a file name, an embedded resource name or the template text itself.
+            </summary>
+            <remarks>
+            Templates are parsed lazily and cached, if a part is read from a file the cached template is dropped when the file changes.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.ManagedMarkDownMessage.#ctor">
+            <summary>
+            Create a mail message template that only uses the standard variables.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMarkDownMessage.#ctor(System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a mail message template that may use some additional variables.
+            </summary>
+            <param name="vars">Additional variables, ex: "[Amount]"</param>
+        </member>
+        <member name="F:SysWeaver.ManagedMarkDownMessage.Vars">
+            <summary>
+            Additional variables (in addition to <see cref="T:SysWeaver.ManagedVars"/>) that the templates may use, may be null.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMarkDownMessage.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.ManagedMarkDownMessage.Headline">
+            <summary>
+            The subject template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedMarkDownMessage.Body">
+            <summary>
+            The body template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMarkDownMessage.GetMessage(System.String@,System.String@,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Evaluate the subject and body templates
+            </summary>
+            <param name="subject">The subject after evaluation</param>
+            <param name="body">The body after evaluation</param>
+            <param name="vars">The variables</param>
+        </member>
+        <member name="M:SysWeaver.ManagedMarkDownMessage.GetSubject">
+            <summary>
+            Get the text template for the subject
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedMarkDownMessage.GetBody">
+            <summary>
+            Get the text template for the body
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.Text">
+            <summary>
+            Plain text message intended for SMS 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.EmailSubject">
+            <summary>
+            Email message subject (plain text)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.EmailBody">
+            <summary>
+            Email message body (html or plain text)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.NotificationHeadline">
+            <summary>
+            Markdown message headline, intended for web display (plain text).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.NotificationBody">
+            <summary>
+            Markdown message body, intended for web display (md converted to html).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.Email">
+            <summary>
+            Email message, subject as plain text and body as (html or plain text.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.Notification">
+            <summary>
+            Markdown message headline (plain text) and body (using markdown), intended for web display 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.All">
+            <summary>
+            All message types
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ManagedMessages">
+            <summary>
+            Holds a set of localized text and mail message templates, loaded from a folder with one sub folder per language.
+            Used for account related messages (ex: by the user manager).
+            </summary>
+            <remarks>
+            For language codes with a region (ex: "en-GB"), the neutral language ("en") is also mapped to the first (alphabetically) regional variant if no neutral folder exists.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.ManagedMessages.#ctor(System.String,System.String,System.Boolean,SysWeaver.ManagedMessageTypes,SysWeaver.ManagedMessageTypes,System.String[])">
+            <summary>
+            Holds a bunch of messages, localized, text and mail templates
+            </summary>
+            <param name="sourceFolder">The folder where the source files are, should have a subfolder for each language, folder name should match the language iso, ex: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv".
+            Can use a "*" to define a subfolder pattern, ex: "C:\locale\*\UserManager".</param>
+            <param name="defaultLang">The default language if the supplied language isn't found</param>
+            <param name="htmlMail">True if the folder contain html mail templates.
+            If true files are named: "[Name]Mail.html" (body) and "[Name]Mail.txt" (subject)".
+            If false files are named: "[Name]MailBody.txt" (body) and "[Name]Mail.txt" (subject)".
+            Where [Name] is any of the supplies names.
+            </param>
+            <param name="required">The requred message types</param>
+            <param name="optional">The optional message types, data is empty string if they don't exist</param>
+            <param name="names">The names/keys of messages.
+            Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
+            If the name starts with a '*', the data is optional (will return empty strings if not found), note that the '*' is part of the lookup key.</param>
+            <exception cref="T:System.IO.FileNotFoundException">A required message file doesn't exist (checked in the order: mail body, mail subject, text).</exception>
+            <exception cref="T:System.IO.DirectoryNotFoundException">The source folder (the part before any '*') doesn't exist.</exception>
+        </member>
+        <member name="M:SysWeaver.ManagedMessages.#ctor(System.String,System.String,System.Boolean,SysWeaver.ManagedMessageTypes,SysWeaver.ManagedMessageTypes,System.Collections.Generic.IReadOnlySet{System.String},System.String[])">
+            <summary>
+            Holds a bunch of messages, localized, text and mail templates
+            </summary>
+            <param name="sourceFolder">The folder where the source files are, should have a subfolder for each language, folder name should match the language iso, ex: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv".
+            Can use a "*" to define a subfolder pattern, ex: "C:\locale\*\UserManager".</param>
+            <param name="defaultLang">The default language if the supplied language isn't found</param>
+            <param name="vars">Set of optional variables, example: "[Amount]"</param>
+            <param name="htmlMail">True if the folder contain html mail templates.
+            If true files are named: "[Name]Mail.html" (body) and "[Name]Mail.txt" (subject)".
+            If false files are named: "[Name]MailBody.txt" (body) and "[Name]Mail.txt" (subject)".
+            Where [Name] is any of the supplies names.
+            </param>
+            <param name="required">The requred message types</param>
+            <param name="optional">The optional message types, data is empty string if they don't exist</param>
+            <param name="names">The names/keys of messages.
+            Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
+            If the name starts with a '*', the data is optional (will return empty strings if not found), note that the '*' is part of the lookup key.</param>
+            <exception cref="T:System.IO.FileNotFoundException">A required message file doesn't exist (checked in the order: mail body, mail subject, text).</exception>
+            <exception cref="T:System.IO.DirectoryNotFoundException">The source folder (the part before any '*') doesn't exist.</exception>
+        </member>
+        <member name="F:SysWeaver.ManagedMessages.Vars">
+            <summary>
+            The additional variables that the templates may use (frozen), may be null.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMessages.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.ManagedMessages.TryAddTranslatedLanguage(System.String,SysWeaver.ManagedLanguageMessages)">
+            <summary>
+            Add a language (typically machine translated at runtime) if it doesn't exist.
+            </summary>
+            <param name="language">The language code, should be lower case to be found by <see cref="M:SysWeaver.ManagedMessages.GetLang(System.String)"/></param>
+            <param name="data">The messages</param>
+            <returns>True if added, false if the language already exists</returns>
+        </member>
+        <member name="F:SysWeaver.ManagedMessages.Default">
+            <summary>
+            The language used if the supplied language isn't found (null if there are no languages)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedMessages.GetLang(System.String)">
+            <summary>
+            Get the messages for a language, falling back to the neutral language (ex: "en" for "en-US") and then to <see cref="F:SysWeaver.ManagedMessages.Default"/>.
+            </summary>
+            <param name="language">The language code (case insensitive), null returns <see cref="F:SysWeaver.ManagedMessages.Default"/></param>
+            <returns>The messages, null only if no languages exist</returns>
+        </member>
+        <member name="T:SysWeaver.ManagedTextLookup">
+            <summary>
+            A set of named text templates read from "key: text" lines (one per line, lines starting with '#' are ignored, "\n" is replaced with a new line).
+            The source can be a file, an embedded resource or the lines themselves, see <see cref="M:SysWeaver.ManagedTools.GetLines(System.String,System.Type,System.Action)"/>.
+            </summary>
+            <remarks>
+            Keys are case insensitive. The templates are parsed lazily and reloaded if the source file changes.
+            Templates can use <see cref="F:SysWeaver.ManagedVars.TextVars"/>.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.ManagedTextLookup.Text">
+            <summary>
+            This can be an embedded resource name or a filename
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTextLookup.GetText(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Get a text, evaluated with the given variables.
+            </summary>
+            <param name="key">The text key</param>
+            <param name="vars">The variables, if null an <see cref="F:SysWeaver.ManagedTextLookup.Overrides"/> value (exact key match) is returned if present, else the template is evaluated without variables</param>
+            <returns>The text, or null if the key isn't found</returns>
+        </member>
+        <member name="F:SysWeaver.ManagedTextLookup.Overrides">
+            <summary>
+            Texts that override the templates (case sensitive keys), only used by <see cref="M:SysWeaver.ManagedTextLookup.GetText(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})"/> when no variables are supplied.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedTextLookup.AllTexts">
+            <summary>
+            All texts: the overrides followed by the template texts (unevaluated) of keys that are not overridden.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTextLookup.GetTemplate(System.String)">
+            <summary>
+            Get the text template for a key
+            </summary>
+            <param name="key">The text key (case insensitive)</param>
+            <returns>A text template, or null if not found</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextLookup.GetTemplates">
+            <summary>
+            Get all text templates, loading them if needed
+            </summary>
+            <returns>The templates, key is the lower cased text key</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextLookup.#ctor">
+            <summary>
+            Create an empty lookup, set <see cref="P:SysWeaver.ManagedTextLookup.Text"/> before use.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTextLookup.#ctor(System.String)">
+            <summary>
+            Create a lookup and load the templates immediately.
+            </summary>
+            <param name="text">A file name, embedded resource name or the actual "key: text" lines</param>
+        </member>
+        <member name="M:SysWeaver.ManagedTextLookup.#ctor(SysWeaver.ManagedTextLookup)">
+            <summary>
+            Create a copy that shares the source and the currently loaded templates (but not the overrides).
+            </summary>
+            <param name="copy">The lookup to copy</param>
+        </member>
+        <member name="T:SysWeaver.ManagedTextMessage">
+            <summary>
+            A text (SMS / message) template, where the body can be a file name, an embedded resource name or the template text itself.
+            </summary>
+            <remarks>
+            The template is parsed lazily and cached, if the body is read from a file the cached template is dropped when the file changes.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.ManagedTextMessage.Body">
+            <summary>
+            The body template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTextMessage.GetMessage(System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Evaluate the body template
+            </summary>
+            <param name="vars">The variables</param>
+            <returns>The message text</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextMessage.GetBody">
+            <summary>
+            Get the text template for the body
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextMessage.#ctor(System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a text message template, set <see cref="P:SysWeaver.ManagedTextMessage.Body"/> before use.
+            </summary>
+            <param name="vars">Additional variables (in addition to <see cref="F:SysWeaver.ManagedVars.TextVars"/>), may be null</param>
+        </member>
+        <member name="M:SysWeaver.ManagedTextMessage.#ctor(System.String,System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a text message template.
+            </summary>
+            <param name="body">A file name, embedded resource name or the template text</param>
+            <param name="vars">Additional variables (in addition to <see cref="F:SysWeaver.ManagedVars.TextVars"/>), may be null</param>
+        </member>
+        <member name="F:SysWeaver.ManagedTextMessage.Vars">
+            <summary>
+            Additional variables that the template may use (frozen), may be null.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ManagedTexts">
+            <summary>
+            Holds a set of localized text templates, one "key: text" file (see <see cref="T:SysWeaver.ManagedTextLookup"/>) per language.
+            </summary>
+            <remarks>
+            For language codes with a region (ex: "en-GB"), the neutral language ("en") is also mapped to the first (alphabetically) regional variant if no neutral folder exists.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.ManagedTexts.#ctor(System.String,System.String)">
+            <summary>
+            Load localized texts for all language folders found.
+            </summary>
+            <param name="sourceFile">A source file pattern.
+            "*" is used to specify where the subfolders are.".
+            Ex: "C:\locale\*\MyTexts.txt".".
+            "C:\Locale" should then include sub-folders named using a language code like: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv".
+            </param>
+            <param name="defaultLang">The default language if the supplied language isn't found, null uses "en"</param>
+            <exception cref="T:System.ArgumentNullException"><paramref name="sourceFile"/> is null (DEBUG builds only).</exception>
+            <exception cref="T:System.ArgumentException"><paramref name="sourceFile"/> doesn't contain a '*' (DEBUG builds, release builds throw an <see cref="T:System.ArgumentOutOfRangeException"/>).</exception>
+            <exception cref="T:System.IO.DirectoryNotFoundException">The folder before the '*' doesn't exist.</exception>
+        </member>
+        <member name="M:SysWeaver.ManagedTexts.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:SysWeaver.ManagedTexts.TryAddTranslatedLanguage(System.String,SysWeaver.ManagedLanguageTexts)">
+            <summary>
+            Add a language (typically machine translated at runtime) if it doesn't exist.
+            </summary>
+            <param name="language">The language code, should be lower case to be found by <see cref="M:SysWeaver.ManagedTexts.GetLang(System.String)"/></param>
+            <param name="data">The texts</param>
+            <returns>True if added, false if the language already exists</returns>
+        </member>
+        <member name="P:SysWeaver.ManagedTexts.AllLanguages">
+            <summary>
+            All languages, key is the lower cased language code (including neutral language aliases).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedTexts.Default">
+            <summary>
+            The language used if the supplied language isn't found (null if there are no languages)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTexts.GetLang(System.String)">
+            <summary>
+            Get the texts for a language, falling back to the neutral language (ex: "en" for "en-US") and then to <see cref="F:SysWeaver.ManagedTexts.Default"/>.
+            </summary>
+            <param name="language">The language code (case insensitive), null returns <see cref="F:SysWeaver.ManagedTexts.Default"/></param>
+            <returns>The texts, null only if no languages exist</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTexts.TryGetLang(System.String)">
+            <summary>
+            Get the texts for a language, falling back to the neutral language (ex: "en" for "en-US"), without using the default language.
+            </summary>
+            <param name="language">The language code (case insensitive)</param>
+            <returns>The texts, or null if the language isn't available</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTexts.GetText(System.String,System.String)">
+            <summary>
+            Get the text for a given key and language.
+            If the language can't be found the default language is used.
+            </summary>
+            <param name="key">The key</param>
+            <param name="language">The language, ex: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv"</param>
+            <returns>null if not found (or if there are no languages), else the text template</returns>
+        </member>
+        <member name="T:SysWeaver.ManagedTextTemplate">
+            <summary>
+            A class that managed a text template, the text template can be located on disc or as an embedded resource.
+            The template is updated if the file is changed.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTextTemplate.#ctor(System.String,System.Type,System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a managed text template
+            </summary>
+            <param name="location">Can be a file path, the name of a resource or literal text.
+            The location is evaluated in the following order:
+            - If it points to a valid local file, it's read using UTF8 encoding.
+            - If a type is supplied and an embedded resource exist (raw or compressed using any of the supported compressors), the embedded data is read as UTF8.
+            - The string is the input string.
+            </param>
+            <param name="embeddedResourceType">A type in the assembly where the embedded resource exists (the namespace of the type is used as a prefix).
+            If null, embedded resources are searched for in this assembly (using the <see cref="T:SysWeaver.ManagedTextTemplate"/> type).</param>
+            <param name="vars">The variables that the template may use, if null, the EnvInfo.TextVarsCaseInsensitive keys surrounded by [], ex: [AppDisplayName]</param>
+        </member>
+        <member name="M:SysWeaver.ManagedTextTemplate.GetDefVars">
+            <summary>
+            Get the current EnvInfo.TextVarsCaseInsensitive variables with the keys surrounded by [], ex: [AppDisplayName].
+            The result is cached until the EnvInfo variables change.
+            </summary>
+            <returns>The variables (case insensitive keys)</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextTemplate.GetDefVarKeys">
+            <summary>
+            Get the current EnvInfo.TextVarsCaseInsensitive keys surrounded by [], ex: [AppDisplayName]
+            </summary>
+            <returns>The variable names (case insensitive)</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextTemplate.GetText(System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Resolve a text with the given variables
+            </summary>
+            <param name="vars">The variables, if null, the EnvInfo.TextVarsCaseInsensitive keys surrounded by [], ex: [AppDisplayName]</param>
+            <returns>The resolved text</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTextTemplate.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.ManagedTextTemplate.Location">
+            <summary>
+            The location: a file path, an embedded resource name or the template text (never null).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedTextTemplate.Vars">
+            <summary>
+            All variables that the template may use (frozen)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ManagedTools">
+            <summary>
+            Helpers for reading "managed" data, where a string can be a file name (monitored for changes), an embedded resource name or the data itself.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.GetUtf8StringWithoutPreamble(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Decode UTF8 data from a buffer, skipping any UTF8 byte order mark (preamble)
+            </summary>
+            <param name="data">The UTF8 encoded data</param>
+            <returns>The decoded string</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.GetString(System.String,System.Type,System.Action)">
+            <summary>
+            Get some string data from a string.
+            The input is evaluated in the following order:
+            - If it points to a valid local file, it's read using UTF8 encoding.
+            - If a type is supplied and an embedded resource exist (see <see cref="M:SysWeaver.ManagedTools.InternalGet``1(System.String,System.Func{System.String,``0},System.Func{System.ReadOnlyMemory{System.Byte},``0},System.Func{System.String,``0},System.Type,System.Action)"/>), the embedded data is read as UTF8.
+            - The string is the input string
+            </summary>
+            <param name="s">Input data, can be a filename, the actual data or if a type is supplied the embedded resource</param>
+            <param name="embeddedResourceType">If supplied the data can be read from an embedded resource</param>
+            <param name="onFileChange">Optionally called the first time the file changes (reload)</param>
+            <returns>The string, null if <paramref name="s"/> is null or empty</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.GetByteArray(System.String,System.Type,System.Action)">
+            <summary>
+            Get some data from a string.
+            The input is evaluated in the following order:
+            - If it points to a valid local file, it's read.
+            - If a type is supplied and an embedded resource exist (see <see cref="M:SysWeaver.ManagedTools.InternalGet``1(System.String,System.Func{System.String,``0},System.Func{System.ReadOnlyMemory{System.Byte},``0},System.Func{System.String,``0},System.Type,System.Action)"/>), the embedded data is read.
+            - The data is the input string base64 encoded
+            </summary>
+            <param name="s">Input data, can be a filename, the actual data (as base64) or if a type is supplied the embedded resource</param>
+            <param name="embeddedResourceType">If supplied the data can be read from an embedded resource</param>
+            <param name="onFileChange">Optionally called the first time the file changes (reload)</param>
+            <returns>The data, null if <paramref name="s"/> is null or empty, or not valid base64 (when used as the data)</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.GetLines(System.String,System.Type,System.Action)">
+            <summary>
+            Get some text lines from a string.
+            The input is evaluated in the following order:
+            - If it points to a valid local file, the lines are read from it using UTF8 encoding.
+            - If a type is supplied and an embedded resource exist (see <see cref="M:SysWeaver.ManagedTools.InternalGet``1(System.String,System.Func{System.String,``0},System.Func{System.ReadOnlyMemory{System.Byte},``0},System.Func{System.String,``0},System.Type,System.Action)"/>), the embedded data is read as UTF8 and split on new lines.
+            - The string is the input string split on new lines
+            </summary>
+            <param name="s">Input data, can be a filename, the actual data or if a type is supplied the embedded resource</param>
+            <param name="embeddedResourceType">If supplied the data can be read from an embedded resource</param>
+            <param name="onFileChange">Optionally called the first time the file changes (reload)</param>
+            <returns>The lines, null if <paramref name="s"/> is null or empty</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.GetTemplate(System.String,System.Collections.Generic.IReadOnlySet{System.String},System.Type,System.Action)">
+            <summary>
+            Create a text template from a string, see <see cref="M:SysWeaver.ManagedTools.GetString(System.String,System.Type,System.Action)"/> for how the input is evaluated.
+            </summary>
+            <param name="s">Input data, can be a filename, the actual template text or if a type is supplied the embedded resource</param>
+            <param name="vars">The variables that the template may use</param>
+            <param name="embeddedResourceType">If supplied the data can be read from an embedded resource</param>
+            <param name="onFileChange">Optionally called the first time the file changes (reload)</param>
+            <returns>The template (an empty template if no data was found)</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.InternalGet``1(System.String,System.Func{System.String,``0},System.Func{System.ReadOnlyMemory{System.Byte},``0},System.Func{System.String,``0},System.Type,System.Action)">
+            <summary>
+            Get some data from a string using the supplied conversion functions.
+            The input is evaluated in the following order:
+            - If it is a valid path to an existing file (relative paths are relative to the executable), it's read using <paramref name="getFromFile"/>.
+            - If a type is supplied and an embedded resource exist with the name, or the name prefixed with the namespace of the type (case insensitive), it's read (decompressed) using <paramref name="getFromMemory"/>.
+            A compressed resource is found by its full name or by the name without the compression extension (ex: "web.auth.index.html" finds "SysWeaver.Auth.web.auth.index.html.br"), an exact match is preferred.
+            - Else <paramref name="getFromString"/> is called with the input string.
+            </summary>
+            <typeparam name="T">The type of data</typeparam>
+            <param name="s">The input string</param>
+            <param name="getFromFile">Read the data from a file name</param>
+            <param name="getFromMemory">Read the data from (uncompressed) embedded resource data</param>
+            <param name="getFromString">Get the data from the string itself</param>
+            <param name="embeddedResourceType">If supplied the data can be read from an embedded resource</param>
+            <param name="onFileChange">If non null and the input is the path of an existing file, a file monitor is created and this is called (once) the first time the file changes (the monitor is disposed after that).
+            No monitor is created for a non-existing file (so creating the file later doesn't trigger a reload).</param>
+            <returns>The data, null if <paramref name="s"/> is null or empty</returns>
+            <remarks>Errors reading files or resources are ignored (falls through to the next option).</remarks>
+        </member>
+        <member name="M:SysWeaver.ManagedTools.FindResourceName(System.String[],System.String)">
+            <summary>
+            Find the name of a resource that is equal to a name (case insensitive), or the name + "." + a compression extension (ex: ".br").
+            An exact match is preferred over a compressed one.
+            </summary>
+            <param name="names">The resource names</param>
+            <param name="name">The (uncompressed) name to find</param>
+            <returns>The full name of the resource or null if not found</returns>
+        </member>
+        <member name="T:SysWeaver.ManagedVars">
+            <summary>
+            The standard variables available in managed message templates (in addition to any custom variables).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedVars.HtmlVars">
+            <summary>
+            The variables available in html (mail) templates
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedVars.TextVars">
+            <summary>
+            The variables available in text (and plain text mail) templates
+            </summary>
+        </member>
+    </members>
+</doc>
