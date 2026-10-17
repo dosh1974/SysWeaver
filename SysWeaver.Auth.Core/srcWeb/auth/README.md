@@ -114,3 +114,78 @@ The leak check (`CheckPassword` in `Auth.js`) calls `https://api.pwnedpasswords.
 - In `keyManMain`, the code that builds a new row and the code that updates a changed row construct the same `ColorIcon`s (copy, download, remove) separately.
 - `SimpleAuth.css` has global, unscoped `table` / `td` / `th` rules that apply to any table on a page that loads it. The class names `IconCopy` / `IconRemove` / `IconAdd` are generic and can collide with app-shell icon classes of the same name.
 - The two pages use different page frameworks: `index.html` uses the `AuthPage` box, while `KeyMan.html` builds a raw table into `<body>` and uses app-shell pop-ups.
+
+## JavaScript reference
+
+Conventions used in this reference: "async" marks functions returning a Promise; "inner" marks functions local to an enclosing function. Functions marked *(MicroService.Auth)* are defined in `Auth.js` / `AuthUi.js` of [SysWeaver.MicroService.Auth](../../../SysWeaver.MicroService.Auth/srcWeb/auth/README.md), served from the same `auth/` url folder. All user-visible strings are localized with `_TF(text, context)` / `_T(format, args..., context)` from common.js (calls, not definitions).
+
+### `SimpleAuth.js`
+
+Page logic for the two `SimpleAuthorizer` pages. Loaded as a static `<script defer>` by `index.html` (entry `pwdGenMain`) and `KeyMan.html` (entry `keyManMain`), after `../common/common.js`, (`../app/application.js` on KeyMan only), `Auth.js` and `AuthUi.js`. It defines only plain global functions; there are no global variables, classes or immediately executed code. None of its functions are called from any other folder; they are only referenced by the `onload` attributes of the two pages in this folder.
+
+#### Globals
+
+| Name | Kind | Description |
+|---|---|---|
+| *(none)* | | The file declares no top-level variables. API prefixes (`"../Api/debug/simpleAuth/"`, `"../Api/simpleAuth/"`) are local `const apiPrefix` inside each function. |
+
+#### Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `getUserSalt` | async `getUserSalt(user)` -> salt string | `sendRequest("../Api/debug/simpleAuth/GetAuthSalt", user)`; returns the per-user salt from `SimpleAuthorizer.GetAuthSalt`. Throws on request failure. |
+| `getPasswordPolicy` | async `getPasswordPolicy()` -> policy object | `getRequest("../Api/debug/simpleAuth/GetPasswordPolicy")`; the policy is passed to `ValidatePassword`, `AuthPolicyText` and `AuthNewPassword` *(MicroService.Auth)*. |
+| `pwdGenMain` | async `pwdGenMain()` -> undefined | `onload` entry of `index.html`. Calls `AuthPage("IconLock", builder)` *(MicroService.Auth, AuthUi.js)*; the builder fetches the policy, then creates in the auth box: *Username* label + `AuthInput` (autocomplete `username`), *Password* label (tooltip = `AuthPolicyText(policy)`) + `AuthNewPassword` (autocomplete `new-password`, with policy), an `AuthError` info line (tooltip = policy text), a *Generated hash* label + `AuthText` output with an `IconAuthCopy` icon added by `AuthAddIcon` (size 24) that copies the text via `ValueFormat.copyToClipboardInfo` unless it is `"-"`. Both inputs call inner `setStatus` on change; it is run once initially and the username input is focused. Closure variables `userHash` / `userHashName` cache the salt for the last user name; `havePasskey` (`typeof PassKey !== "undefined"`) is computed but unused. |
+| `isApiKeysSupported` | async `isApiKeysSupported()` -> boolean | `getRequest("../Api/simpleAuth/ApiKeysSupported")`. Returns true when the server says so; otherwise shows `Fail` ("Can't manage API keys for this service!", 20 s) or, on exception, `Fail` ("Not authorized to manage API keys!" + error, 20 s) and returns false. |
+| `getApiKeys` | async `getApiKeys()` -> string[] or null | `getRequest("../Api/simpleAuth/GetApiKeys")`; each entry is `"name:key"`. |
+| `removeApiKey` | async `removeApiKey(keyName)` -> boolean / server result | Shows a `Confirm` dialog (app shell; buttons "Yes, remove it!" / "No, keep it!", icons `IconCancel` / `IconOk`). If confirmed, returns `sendRequest("../Api/simpleAuth/RemoveApiKey", keyName)`; on exception shows `Fail(e)` and returns false. Returns false when cancelled. |
+| `createApiKey` | async `createApiKey(rebuildFn)` -> boolean | Opens a `PopUp` (app shell, closable). Inside it creates an auth box via `CreateAuthWrapper()` *(MicroService.Auth)* plus class `SysWeaver-SimpleAuth`, a *Name* `AuthLabel`, an `AuthInput` (maxLength 64) and an `AuthButton` in an `AuthButtonRow` ("Create new API-key", `IconAdd`, initially disabled). The input change handler filters the value to letters (`isLetter`), digits, `_` and `-` (via a local `validMap`), writes the filtered value back (calling `inp.OnChange()`), and enables the button only when non-empty; an `isInternal` flag prevents re-entry. Enter / button run inner `CreateKey`. Resolves to true if a key was created (`didCreate`). |
+| `keyManMain` | async `keyManMain()` -> undefined | `onload` entry of `KeyMan.html`. Returns early if `isApiKeysSupported()` is false. Fetches `../Api/simpleAuth/AppInfo` (`appName` = `[AppName, AppDisplayName]`), derives `baseUrl` as `location.href` up to `/auth/`, calls inner `rebuild()` (not awaited) and then `PageLoaded()`. Closure state: `autoUpdate` (timer handle) and `table` (the `<table>` element). |
+
+#### Inner functions of `pwdGenMain`
+
+| Function | Signature | Description |
+|---|---|---|
+| `setStatus` | async `setStatus(uText, pwText)` -> boolean / undefined | Trims both values (`AuthTrim`). Empty user name: marks the username input as error (`AuthSetError`), shows "Enter a valid username", sets the result to `-`, returns false. Otherwise validates with `ValidatePassword(uText, pwText, null, null, null, policy)`; on a policy error shows it in the info line and `-` as result. When valid: starts `CheckPassword(info, pwText)` (leak check, not awaited), shows "Computing..", fetches the salt with `getUserSalt` if the user name changed (on error clears the info line, shows `Fail` and returns undefined), then shows `"<user> : " + hashString(pwText + "|" + salt)`. Returns true when the password is valid. |
+
+#### Inner functions of `createApiKey`
+
+| Function | Signature | Description |
+|---|---|---|
+| `CreateKey` | async `CreateKey()` | Puts the button in working state (`StartWorking`) and the input read-only, calls `sendRequest("../Api/simpleAuth/AddApiKey", inp.value)`. On a non-null result: sets `didCreate`, awaits the pop-up `closeFn()`, copies the returned `"name:key"` to the clipboard (`ValueFormat.copyToClipboardInfo`) and calls `rebuildFn()`. A null result shows `Fail("Failed to create API-key!")`; exceptions show `Fail(e)`. Finally restores the input and `StopWorking()`. |
+
+#### Inner functions of `keyManMain`
+
+| Function | Signature | Description |
+|---|---|---|
+| `rebuild` | async `rebuild()` | Clears any pending `autoUpdate` timer, fetches keys (`getApiKeys() ?? []`) and renders or updates the key table. On first call creates the `<table>` with a header row (`th.header`, colspan 4, "API keys") and a title row (`th.title` "Name" and `th.title` colspan 3 "Key"), appended to `document.body`. Each key (`"name:key"`, split at the first `:`) occupies row index i+2: new rows get a name cell, a copy cell (`ColorIcon` `IconCopy`/`IconColorThemeMain` 32x32, copies the whole `"name:key"`, key stored in expando `cell.Pwd`), a download cell (`ColorIcon` `IconDownload`/`IconColorThemeAcc1`, `downloadText("<name>_<AppName>.txt", "# API credentials for accessing the <AppDisplayName> service at <baseUrl>\n\n<name:key>\n")`) and a remove cell (`ColorIcon` `IconRemove`, calls `removeApiKey(name)` then `rebuild()`). Existing rows are updated in place: name text replaced if changed, copy/download icons rebuilt if name or key changed, remove icon rebuilt if name changed. If an `action` row sits where a key row is needed (or a key row sits where the action row belongs) all rows from that index are removed. A trailing row with class `action` holds a `SysWeaver-CenterBlock` containing a `Button` "Create new key" (`IconAdd`) that awaits `createApiKey(rebuild)`. Errors show `Fail(e)`. Always reschedules itself with `setTimeout(rebuild, 30000)`. |
+
+## CSS reference
+
+### `SimpleAuth.css`
+
+Styles for `index.html` and `KeyMan.html` of this folder, loaded after `../common/theme.css`, (`../app/application.css` on KeyMan) and `Auth.css` (from SysWeaver.MicroService.Auth, same `auth/` url folder), so its rules override those. Not templated. Uses theme variables from `theme.css`; defines no custom properties, animations or media queries.
+
+#### Auth box overrides
+
+| Selector(s) | Description |
+|---|---|
+| `SysWeaver-AuthText` | Read-only text element created by `AuthText` *(MicroService.Auth, AuthUi.js)*; used by `pwdGenMain` for the generated hash. Overrides `Auth.css`: mono font (`--ThemeFontMono`), bold, `--ThemeAcc1` text on `--ThemeBackground`, input radius `--ThemeRadInp`, 32 px high, 8 px padding, no wrapping, and a 40 px transparent right border leaving room for the `IconAuthCopy` icon. |
+| `form.SysWeaver-AuthBox.SysWeaver-SimpleAuth` | The auth box created by `createApiKey` (`CreateAuthWrapper()` adds `SysWeaver-AuthBox`, the script adds `SysWeaver-SimpleAuth`). Resets background, size, display, position, left/top, transform, radius, shadow, border, padding, margin and box-sizing to `initial`, so the floating centered box of `Auth.css` renders as plain content inside the `PopUp`. |
+
+#### Icons
+
+| Selector(s) | Description |
+|---|---|
+| `.IconLock`, `.IconCopy`, `.IconRemove`, `.IconAdd`, `.IconDownload` | Mask-image icon classes: `IconLock` = `../icons/lock.svg` (page icon passed to `AuthPage` by `pwdGenMain`), `IconCopy` = `../icons/copy.svg` (copy key), `IconRemove` = `../icons/close.svg` (remove key), `IconAdd` = `../icons/plus.svg` (create key buttons), `IconDownload` = `../icons/download.svg` (download credentials). Used via `ColorIcon` / `Button` / `AuthButton` in `SimpleAuth.js`. `IconLock` and `IconDownload` are also defined in `app/application.css`, `IconCopy` in other modules. |
+
+#### API key table (KeyMan.html)
+
+| Selector(s) | Description |
+|---|---|
+| `table` | Global (unscoped) rule for the key table built by `rebuild`: centered with 1em vertical margin, collapsed borders, translucent `--ThemeMainRGB` background, `--ThemeBackgroundRGB` border, `--ThemeRad` radius, 125% font, min width 16em. |
+| `td`, `td:first-child` | Cells: border, `0.25em 1em` padding, centered; the first (name) column is left aligned. |
+| `th`, `th.title`, `th.header` | Header cells on `--ThemeAcc2` background. `.header` (class set by `rebuild` on the "API keys" caption cell) uses 125% font, near-opaque background-color text; `.title` (column titles "Name" / "Key") is small (75%), bold, uppercase, left aligned, half-transparent. |
+| `tr:first-child th` | Rounds the top corners of the caption cell. |
+| `tr:nth-child(3) td`, `tr:nth-last-child(2) td` | Extra top padding on the first key row and extra bottom padding on the last key row (the row before the `action` row). |
+| `tr:last-child SysWeaver-CenterBlock` | Vertical margin around the `SysWeaver-CenterBlock` (common.css element) holding the "Create new key" button in the `action` row. |

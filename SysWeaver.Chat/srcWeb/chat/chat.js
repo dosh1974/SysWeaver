@@ -240,7 +240,7 @@ class SpeechGen
 
     static speakOnce(text, voice, pitch, rate, volume, lang) {
         text = SpeechGen.filterText(text);
-        if (text.lentg <= 0)
+        if (text.length <= 0)
             return;
         const ss = window.speechSynthesis;
         const u = new SpeechSynthesisUtterance(text);
@@ -1335,7 +1335,7 @@ class Chat {
                 const data = previewMessage.Data;
                 if (data) {
                     const parts = data.split(';');
-                    const pl = parts.lengths;
+                    const pl = parts.length;
                     for (let ii = 0; ii < pl; ++ii) {
                         const pr = parts[ii];
                         if (tempFiles.get(pr)) {

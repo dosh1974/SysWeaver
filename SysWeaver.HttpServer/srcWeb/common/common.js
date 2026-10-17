@@ -4283,7 +4283,7 @@ class ValueFormat {
         const prefix = isNeg ? "- " : "";
         if (isNeg)
             value = value.substring(1);
-        const parts = value.split(':');
+        let parts = value.split(':');
         if (parts.length === 1) {
             const vp = parseFloat(value);
             parts = [];
@@ -4653,8 +4653,8 @@ class ValueFormat {
         const urlTarget = ValueFormat.getUrlTarget(ValueFormat.stringFormat(formats[2] ?? "{2}", value, nextValue, text));
         const url = GetAbsolutePath(urlTarget[0]);
         const target = urlTarget[1];
-        const title = ValueFormat.stringFormat(formats[3] ?? _TF('Click to open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element"), value, nextValue, text, url);
-        if (url.length >= 0) {
+        const title = ValueFormat.stringFormat(formats[3] ?? (url ? _TF('Click to open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element") : ""), value, nextValue, text, url);
+        if (url) {
             const a = ValueFormat.LinkNode;
             ValueFormat.setOnClickAttr(a, url, target);
             //a.target = target;
@@ -4696,7 +4696,7 @@ class ValueFormat {
             srcLink = srcLink.substring(1);
         }
         a.src = srcLink;
-        if (url.length > 0) {
+        if (url) {
             ValueFormat.setOnClickAttr(a, url, target);
             a.classList.add("ImgLink");
         } else {
@@ -4718,7 +4718,7 @@ class ValueFormat {
         if (align)
             el.classList.add(align);
         if (ValueFormat.updateHtml(el, a.outerHTML, title, flash)) {
-            if (url.lenght > 0)
+            if (url)
                 keyboardClick(el);
             else
                 removeKeyboardClick(el);
@@ -5755,7 +5755,7 @@ function ConcatUint8Arrays(arrayOfArrays) {
     for (let i = 0; i < l; ++i) {
         const a = arrayOfArrays[i];
         m.set(a, d);
-        d += a.lenght;
+        d += a.length;
     }
     return m;
 }

@@ -125,18 +125,31 @@
 
     RemoveTab(index) {
         const p = this.Element;
+        const e = p.children[index];
+        if (!e)
+            return;
         if (this.Selected == index) {
             let newSel = index > 0 ? (index - 1) : (index + 1);
             const selMax = p.childElementCount - 1;
             if (newSel > selMax)
                 newSel = selMax;
             this.Selected = -1;
-            if (newSel >= 0)
-                Select(newSel);
+            if ((newSel >= 0) && (newSel != index))
+                this.Select(newSel);
         }
         const sel = this.Selected;
-        if (sel > index)
+        if (sel > index) {
             this.Selected = sel - 1;
+            const saveKey = this.SaveKey;
+            if (saveKey) {
+                try {
+                    localStorage.setItem(saveKey, "" + (sel - 1));
+                }
+                catch
+                {
+                }
+            }
+        }
         e.remove();
     }
 }

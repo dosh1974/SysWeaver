@@ -185,3 +185,106 @@ The challenge options carry `challengeId`, `publicKey` and `error`; results carr
 - Token conventions differ inside `auth/`: these pages read the named parameter `?token=`, while the UserManager pages treat the whole query string as the token.
 - `#SetUser` duplicates the `sessionStorage["SysWeaver.User"]` write found in `Auth.js` and `UserManager.js`.
 - `PopUp` / `Confirm` come from the app shell, so only `MyPassKeys.html` loads `application.js`. The other pages rely on not calling them.
+
+## JavaScript reference
+
+Conventions used in this reference: "async" marks functions returning a Promise; "inner" marks functions local to an enclosing function; `#` marks ES private class members; "static" members are called on the class (`PassKey.X`), never on an instance.
+
+### `Passkey.js`
+
+Client side of the passkey (WebAuthn) service. It is loaded with a static deferred `<script src="Passkey.js">` after `common.js`, `Auth.js` and `AuthUi.js` by this folder's pages (`AddPassKey.html`, `AddPassKeyOnOtherDevice.html`, `MyPassKeys.html`, `UsePassKey.html`), and also by pages of other folders: `Login.html` (MicroService.Auth) and `ChoosePassword.html` / `ResetPassword.html` (MicroService.UserManager). It defines two global classes, `PassKeyChallenge` and `PassKey`, plus four page entry points called from `<body onload>`. No code runs at load time. It talks to `../Api/auth/passkey/*` and `../Api/auth/GetUser`, and uses `localStorage` keys `SysWeaver.PassKey.Hint`, `SysWeaver.PassKey.Local`, `SysWeaver.PassKey.UserOnDevice` and `sessionStorage["SysWeaver.User"]`.
+
+#### Globals
+| Name | Kind | Description |
+|---|---|---|
+| `PassKeyChallenge` | class | Pre-fetchable server challenge plus the ceremony that uses it (see below). |
+| `PassKey` | class | Static-only facade for all passkey operations, error codes and device hints (see below). Never instantiated. |
+
+#### Functions
+| Function | Signature | Description |
+|---|---|---|
+| `addPassKeyMain` | async `addPassKeyMain()` | Entry point of `AddPassKey.html`. Calls `AuthPage("IconAddPasskey", ...)`; reads the optional `token` URL parameter (`getUrlParams`). Without a token a signed-in user is required (`PassKey.Attach()`); with a token no user may be signed in (`PassKey.AttachUsingToken(token)`). Pre-fetches the challenge, shows "Add a passkey for {user}" (name from `ceremony.UserName` or the signed-in user) and adds an "Add passkey" `AuthButton` that runs the ceremony. On success shows "Passkey added!" and calls `AuthStartPage()` if a token was used or a user was returned; `TokenExpired`, `AlreadyRegistered`, `AlreadyOnDevice` end the page with a warning; other non-cancel errors call `Fail`. Text element gets class `Info`/`Fail`, the button `Hide`. |
+| `done` (inner of `addPassKeyMain`) | `done(message, icon)` | Ends the page: optionally swaps the header image (`img.ChangeImage(icon)`), shows `message` with class `Info` (removing `Fail`), and hides the add button if created. |
+| `usePassKeyMain` | async `usePassKeyMain()` | Entry point of `UsePassKey.html`. Calls `AuthPage("IconUsePasskey", ...)`. Refuses if passkeys are unsupported or a user is already signed in. Pre-fetches `PassKey.SignIn()` and adds a "Sign in with passkey" button; on success hides the button, shows "Signed in!" and calls `AuthStartPage()`; errors are shown in the text (class `Fail`) and, unless cancelled, via `Fail`. |
+| `done` (inner of `usePassKeyMain`) | `done(message, icon)` | Optionally swaps the header image and shows `message` with class `Info`. |
+| `addPassKeyOtherMain` | async `addPassKeyOtherMain()` | Entry point of `AddPassKeyOnOtherDevice.html`. Requires a signed-in user (otherwise an `IconWarning` page). Reads the QR lifetime in minutes (`PassKey.Call("GetQRLifeTime")`, default 15) and calls `AuthPage(PassKey.ApiPrefix + "GetQR.svg", ..., true)` so the header image is the server-generated QR code; adds an HTML label naming the user (escaped with `makeHtmlSafe`) and a text with the expiry. |
+| `myPassKeysMain` | async `myPassKeysMain()` | Entry point of `MyPassKeys.html`. Calls `AuthPage("IconUsePasskey", ...)`; requires a signed-in user. Creates a `<SysWeaver-AuthList>` element, an optional button row (only when `PassKey.IsSupported()`, class `NoMargin`) and calls `rebuild()`. |
+| `stat` (inner of `myPassKeysMain`) | `stat(parent, label, value, isDate, title)` | Appends an `AuthText` line (class `NoMargin`) with `label` and a `<span>`; dates are rendered live with `ValueFormat.updateDateTimeLive(s, value, agoFormat)` ("{0} ago"), otherwise as text. Optional tooltip `title`. Returns the element. |
+| `remove` (inner of `myPassKeysMain`) | async `remove(key, button)` | Asks for confirmation (`Confirm` from application.js), then `PassKey.Remove(key.Id, user.Guid)`; on success `rebuild()`, otherwise `Fail` with a special text for `LastSignInMethod`. Shows working state on `button`. |
+| `rename` (inner of `myPassKeysMain`) | async `rename(key)` | Opens a `PopUp` (application.js) containing a `CreateAuthWrapper()` box with class `SysWeaver-PassKeyPopUp`, a name `AuthInput` (max 64 chars, prefilled) and a "Rename" button (`IconPasskeyRename`) enabled only when the trimmed name is non-empty and changed. |
+| `newName` (inner of `rename`) | `newName()` | Returns `AuthTrim(inp.value)`. |
+| `canSave` (inner of `rename`) | `canSave()` | True if the new name is non-empty and differs from the old one. |
+| `save` (inner of `rename`) | async `save()` | Calls `PassKey.Rename(key.Id, newName())`; on truthy result closes the pop-up and `rebuild()`s, otherwise `Fail` ("doesn't exist any more"). Input is read-only while working. |
+| `rebuild` (inner of `myPassKeysMain`) | async `rebuild()` | Reloads `PassKey.GetPassKeys()` and re-renders the list: per key an `AuthHr` separator, an `AuthLabel` (class `Highlight`, "(this device)" suffix when on device), Created / Last used / Type stats and Rename / Remove buttons. Then rebuilds the add-button row: if any passkey is known to be on this device (`onDevice` or `PassKey.IsUserOnDevice`) the "Add passkey" button is disabled with an explanatory `title`; otherwise a `PassKey.Attach()` challenge is pre-fetched and the button runs it, calling `PassKey.SetUserOnDevice(user.Guid)` on `AlreadyOnDevice` / `AlreadyRegistered`. |
+| `onDevice` (inner of `rebuild`) | `onDevice(key)` | True if `key.ThisDevice` (server says it was created from this session's device) or `PassKey.IsOnDevice(key.Id)`. |
+
+#### class `PassKeyChallenge`
+A server challenge fetched before the user clicks, so that `navigator.credentials.get` / `create` can be called directly from the user gesture (required by Safari). Created only through the `PassKey` factory methods `SignIn`, `Attach`, `AttachUsingToken`, `NewAccount`; each `Run()` consumes the cached options, so callers re-`Fetch()` after a failure. Used by `AuthUi.js` `loginMain` (MicroService.Auth) and `UserManagerUi.js` `choosePasswordMain` / `resetPasswordMain` (MicroService.UserManager).
+
+| Member | Kind | Signature | Description |
+|---|---|---|---|
+| `constructor` | constructor | `new PassKeyChallenge(challengeName, arg, submitName, isCreate)` | Stores the challenge API name, its argument, the API to submit the browser response to, and whether this is a create (registration) ceremony. |
+| `ChallengeName`, `Arg`, `SubmitName`, `IsCreate` | field | | Constructor arguments as above. |
+| `Options` | field | | Cached server options (`{challengeId, publicKey, error}`) or `null`. |
+| `Fetched` | field | | `Date.now()` of the last fetch (0 initially). |
+| `Fetch` | async method | `Fetch()` → options | Returns the cached options if they have no `error` and are younger than `publicKey.timeout - 15000` ms (or 60 s if the timeout is missing or ≤ 20 s); otherwise calls `PassKey.Call(ChallengeName, Arg)`, strips nulls (`RemoveNulls`) and caches the result. Throws if the server returns nothing. Callers must check `error`. |
+| `Run` | async method | `Run()` → `{Error, User?, Message?}` | Returns `NotSupported` if passkeys are unavailable; otherwise fetches (if needed), clears the cache, returns `{Error: c.error}` on a challenge error, else delegates to `PassKey.Create` or `PassKey.Get` with `SubmitName`. |
+| `UserName` | getter | | `Options.publicKey.user.name` (user name for create ceremonies) or `null`. |
+
+#### class `PassKey`
+Static-only class: API access, error codes and texts, WebAuthn ceremonies, and per-browser hints about which passkeys exist on this device. Consumed from MicroService.Auth `AuthUi.js` (`IsSupported`, `IsAutofillSupported`, `Autofill`, `SignIn`, `HaveHint`, `ErrorText`, `Errors`) and MicroService.UserManager `UserManagerUi.js` (`IsSupported`, `NewAccount`, `AttachUsingToken`, `ErrorText`, `Errors`).
+
+| Member | Kind | Signature | Description |
+|---|---|---|---|
+| `ApiPrefix` | static field | | `"../Api/auth/passkey/"`, base URL of the passkey API (also used for `GetQR.svg`). |
+| `Errors` | static field | | Error codes mirroring server `PassKeyErrors`: `None` 0, `NotSupported` 1, `AlreadySignedIn` 2, `NotSignedIn` 3, `ChallengeExpired` 4, `UnknownCredential` 5, `NoPassKeys` 6, `VerificationFailed` 7, `AlreadyRegistered` 8, `TokenExpired` 9, `AccountExists` 10, `LastSignInMethod` 11; client-only `Cancelled` -1, `AlreadyOnDevice` -2. |
+| `IsSupported` | static method | `IsSupported()` → boolean | True if `window.PublicKeyCredential` and `navigator.credentials` exist and the context is secure. |
+| `ErrorText` | static method | `ErrorText(result)` → string | Localized (`_TF`) user text for `result.Error`; `""` for `None`, `AlreadyRegistered` and `AlreadyOnDevice` share a text, unknown codes get a generic failure text. |
+| `Call` | static async method | `Call(name, arg)` → response | `sendRequest(ApiPrefix + name, arg, true, null, false, null, true)` (common.js). |
+| `GetLoggedInUser` | static async method | `GetLoggedInUser()` → user or null | `getRequest("../Api/auth/GetUser")` (MicroService.Auth API); returns the object only if `Succeeded`. |
+| `#SetUser` | private static method | `#SetUser(result)` | On `Error == 0` with a `User`, writes it as JSON to `sessionStorage["SysWeaver.User"]`. |
+| `#HintKey` | private static field | | `"SysWeaver.PassKey.Hint"` localStorage key. |
+| `HaveHint` | static method | `HaveHint()` → boolean | True if the hint key is set, i.e. a passkey was created or used in this browser on this device (a hint only; storage errors give false). Used by `loginMain` to choose between the full "Use passkey" button and the small `PasskeyIconButton`. |
+| `#SetHint` | private static method | `#SetHint(authenticatorAttachment, credentialId)` | Unless the attachment is `"cross-platform"` (phone / security key), sets the hint key and moves `credentialId` (base64url) to the end of the `#LocalKey` list. Errors ignored. |
+| `#LocalKey` | private static field | | `"SysWeaver.PassKey.Local"`: JSON array of base64url credential ids created or used on this device. |
+| `#UserOnDeviceKey` | private static field | | `"SysWeaver.PassKey.UserOnDevice"`: JSON array of user guids for which the browser refused to add another passkey. |
+| `#GetList` | private static method | `#GetList(key)` → array | Parses a JSON array from localStorage; `[]` on missing, non-array or error. |
+| `#SetList` | private static method | `#SetList(key, list)` | Trims the list to the last 64 entries and stores it as JSON. Errors ignored. |
+| `#ToBase64Url` | private static method | `#ToBase64Url(s)` → string | Converts standard base64 (server ids) to base64url (browser ids): `+`→`-`, `/`→`_`, strips `=`. |
+| `IsOnDevice` | static method | `IsOnDevice(id)` → boolean | True if the server credential id (standard base64) is in the `#LocalKey` list. |
+| `IsUserOnDevice` | static method | `IsUserOnDevice(userGuid)` → boolean | True if the guid is in the `#UserOnDeviceKey` list. |
+| `SetUserOnDevice` | static method | `SetUserOnDevice(userGuid)` | Moves the guid to the end of the `#UserOnDeviceKey` list (no-op for empty guid). |
+| `#ForgetOnDevice` | private static method | `#ForgetOnDevice(id, userGuid)` | After removal: drops the credential id from `#LocalKey` and, if given, the user guid from `#UserOnDeviceKey` (the browser's refusal may have referred to the removed key). |
+| `IsAutofillSupported` | static async method | `IsAutofillSupported()` → boolean | True if supported and `PublicKeyCredential.isConditionalMediationAvailable()` resolves true; false on any error. |
+| `Autofill` | static method | `Autofill(onResult)` → `{Start(), Stop()}` | Starts conditional-mediation sign-in (passkeys shown in the autofill of inputs with `autocomplete="username webauthn"`) and returns a controller; already started on return. Internal `state` holds a run id (`Run`) and the current `AbortController` (`Abort`). |
+| `run` (inner of `Autofill`) | async `run(runId)` | | Loop while `state.Run === runId`: fetch `GetAuthChallenge` (exit on error), arm a timer that aborts before the challenge expires (same age rule as `Fetch`), call `PassKey.Get(c, "Auth", {mediation: "conditional", signal})`. Browser exceptions become `VerificationFailed` with `Message`. `Cancelled` (incl. abort) restarts with a new challenge; other results go to `await onResult(r)`; stops on success, otherwise waits 1 s (`delay`) and restarts. |
+| `Start` (method of the `Autofill` controller) | method | `Start()` | Increments the run id and starts a new `run` loop. |
+| `Stop` (method of the `Autofill` controller) | method | `Stop()` | Increments the run id (ending the loop) and aborts the pending `navigator.credentials.get`. Must be called before starting another WebAuthn request. |
+| `#FromBrowserError` | private static method | `#FromBrowserError(e)` → result | Maps DOMException names: `NotAllowedError` / `AbortError` → `Cancelled`, `InvalidStateError` → `AlreadyOnDevice`, `SecurityError` → `NotSupported` (with `Message`); rethrows others. |
+| `#Ids` | private static method | `#Ids(list)` | Converts each `id` of a credential descriptor list from base64 to an ArrayBuffer (`base64ToArray`), in place. |
+| `#Transports` | private static method | `#Transports(res)` → array or null | `res.getTransports()` if available, null otherwise or on error. |
+| `Get` | static async method | `Get(c, submitName, extra)` → result | Assertion ceremony: decodes `challenge` and `allowCredentials`, calls `navigator.credentials.get({publicKey, ...extra})`, posts `{challengeId, authenticatorAttachment, id, rawId, response: {authenticatorData, clientDataJSON, signature, userHandle}, type}` (base64 via `bufferToBase64`) to `submitName`. Throws on no server response. On `UnknownCredential` calls `PublicKeyCredential.signalUnknownCredential` if available; on success `#SetHint`; always `#SetUser`. Browser errors go through `#FromBrowserError`; null credential → `Cancelled`. |
+| `Create` | static async method | `Create(c, submitName)` → result | Registration ceremony: decodes `challenge`, `user.id`, `excludeCredentials`, calls `navigator.credentials.create`, posts `{..., response: {attestationObject, clientDataJSON, transports}}` to `submitName`. Same error, hint and user handling as `Get` (no unknown-credential signal). |
+| `SignIn` | static method | `SignIn(userIdentifier)` → `PassKeyChallenge` | With an identifier: `GetUserAuthChallenge(userIdentifier)`; without: `GetAuthChallenge` (any passkey). Submits to `Auth`. |
+| `Attach` | static method | `Attach()` → `PassKeyChallenge` | Add a passkey to the signed-in user: `GetCreateChallenge` → `Create`. |
+| `AttachUsingToken` | static method | `AttachUsingToken(token)` → `PassKeyChallenge` | Add a passkey to a token's user (QR, reset-password or add-password link) and sign in: `GetResetChallenge(token)` → `New`. Called by `resetPasswordMain` in UserManagerUi.js. |
+| `NewAccount` | static method | `NewAccount(token)` → `PassKeyChallenge` | Create an account with a passkey from a sign-up token and sign in: `GetNewChallenge(token)` → `New`. Called by `choosePasswordMain` in UserManagerUi.js. |
+| `GetPassKeys` | static async method | `GetPassKeys()` → array | `Call("GetPassKeys")`: passkeys of the signed-in user (`Id, Name, Created, LastUsed, Synced, ThisDevice`). |
+| `Rename` | static async method | `Rename(id, name)` → result | `Call("RenamePassKey", {Id, Name})`; truthy when renamed. |
+| `Remove` | static async method | `Remove(id, userGuid)` → result | `Call("DeletePassKey", id)`; on `Error == 0` calls `#ForgetOnDevice(id, userGuid)`. `LastSignInMethod` when it is the last way to sign in. |
+
+## CSS reference
+
+### `Passkey.css`
+Small add-on stylesheet loaded by a static `<link>` after `theme.css` and `Auth.css` (MicroService.Auth) on this folder's four pages and on `Login.html` (MicroService.Auth), `ChoosePassword.html` and `ResetPassword.html` (MicroService.UserManager). Not templated. Icon classes rely on the mask-based icon base styles (`ColorIcon` / button icons) from common/theme CSS; the icon SVGs are in this service's `icons/` folder (served as `../icons/`). No custom properties, keyframes or media queries.
+
+#### Icons
+| Selector(s) | Description |
+|---|---|
+| `.IconAddPasskey`, `.IconUsePasskey`, `.IconPasskeyKey`, `.IconPasskeyRename` | Mask icons from `../icons/passkey_add.svg`, `passkey_use.svg`, `passkey_key.svg`, `passkey_rename.svg`. Used as `AuthPage` header images and `AuthButton` icons in `Passkey.js` (add / use / rename), in `AuthUi.js` `loginMain` (`IconUsePasskey` button, `IconPasskeyKey` small icon) and in `UserManagerUi.js` (`IconAddPasskey` buttons on choose/reset password pages). |
+
+#### Layout
+| Selector(s) | Description |
+|---|---|
+| `form.SysWeaver-AuthBox.SysWeaver-PassKeyPopUp` | Resets every box styling of the `SysWeaver-AuthBox` form (from `CreateAuthWrapper()`, Auth.css) to `initial` so it renders plainly inside the rename pop-up; the class `SysWeaver-PassKeyPopUp` is added by `rename` in `myPassKeysMain`. |
+| `.PasskeyIconButton` | `align-self: center` for the small 32x32 `IconPasskeyKey` `ColorIcon` that `AuthUi.js` `loginMain` shows instead of the "Use passkey" button when `PassKey.HaveHint()` is false. |

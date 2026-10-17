@@ -772,7 +772,7 @@ class BounceMotion {
 	 * @returns {number} The velocity at the given time and parameters, typically in m/s
 	 */
 	static Velocity(initialVelocity, gravity, restitution, time) {
-		return Velocity2(initialVelocity, gravity, restitution, ProjectileMotion.FlightTime(initialVelocity, gravity), time);
+		return BounceMotion.Velocity2(initialVelocity, gravity, restitution, ProjectileMotion.FlightTime(initialVelocity, gravity), time);
 	}
 
 	/**
@@ -785,11 +785,11 @@ class BounceMotion {
 	 * @returns {number} The velocity at the given time and parameters, typically in m/s
 	 */
 	static Velocity2(initialVelocity, gravity, restitution, flightTime, time) {
-		const p = ProjectileMotion.Period(initialVelocity, gravity, restitution, flightTime, time);
-		const t1 = ProjectileMotion.PeriodEndTime(restitution, p) * flightTime;
-		const tm = ProjectileMotion.PeriodDuration(restitution, p) * flightTime;
+		const p = BounceMotion.Period(initialVelocity, gravity, restitution, flightTime, time);
+		const t1 = BounceMotion.PeriodEndTime(restitution, p) * flightTime;
+		const tm = BounceMotion.PeriodDuration(restitution, p) * flightTime;
 		const dt = Math.max(0, Math.min(tm, time - (t1 - tm)));
-		const v = ProjectileMotion.PeriodVelocity(initialVelocity, restitution, p);
+		const v = BounceMotion.PeriodVelocity(initialVelocity, restitution, p);
 		return ProjectileMotion.Velocity(v, gravity, dt);
 	}
 }

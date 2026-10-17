@@ -492,3 +492,410 @@ A gallery of `TextStyle` presets: fill/stroke, shadow, letter spacing, gradients
   - A commented-out click handler in `mediaViewMain`.
   - The `SsHack` debug class.
   - Demo values in `textEffectMain`.
+
+## JavaScript reference
+
+Conventions used in this reference: "async" marks functions returning a Promise; "inner" marks functions local to an enclosing function; "global" means a classic-script top-level declaration (shared `window` scope, no modules).
+
+### `media.js`
+
+Media viewer/preview/editor logic. Loaded with `<script defer>` by `MediaView.html` (boot `mediaViewMain`) and `MediaPreview.html` (boot `mediaPreviewMain`). `mediaEditMain` is meant for an external host page; nothing in this repository calls it. At parse time it runs `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")`, so `MediaPlayer`, `MediaTypes` and `MediaPlayerTools` come from the mediaPlayer folder. It depends on common.js (`Fail`, `Info`, `Button`, `ButtonStyle`, `badClick`, `keyboardClick`, `ValueFormat`, `isInDocument`, `getUrlParams`, `sendRequest`, `waitEvent`, `Open`, `EditOrOpenUrl`, `InterOp`, `FullScreen`, `PageLoaded`, `getFileExtension`, `isImageExt`/`isVideoExt`/`isAudioExt`, `YaMD5`) and, for the editor, on the Edit service (`Edit`, `EditOptions`, `UndoStack`) and `QuizzRights`. All globals are plain functions plus the class `SsHack`.
+
+#### Globals
+
+| Name | Kind | Description |
+|---|---|---|
+| (top-level call) | immediately executed | `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")` loads the media player framework relative to this script. |
+| `props` | implicit global | `mediaEditMain` assigns `props = info.Data` without a declaration, so it becomes `window.props`. |
+| `objState` | implicit global | Assigned (`objState = JSON.stringify(props)`) by the save callback passed from `mediaEditMain`; the `let objState` inside `mediaEditProps` is a different, local variable. |
+
+#### Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `mediaCreatePlayer` | async `(target, type, data, props, noControls, before, noStats, fit = true, aspectX = 16, aspectY = 9, alignX = 0.5, alignY = 0)` → `[player, mediaControls, mediaStats]` | Creates `<Media-Preview>` (with `<Media-AspectContainer>` and a temporary `<Media-Cache>`), inserted before `before` (with class `Replacing`) or appended to `target`. `type`/`data`/`props` go to `MediaPlayer.Create`; on failure it calls `Fail` and returns `undefined`. Adds `NoVisual` when the player has no visual, caches the media, appends `<Media-Overlay>`, sets `MediaPreviewFit`/`MediaPreviewFill` on the clip and lays it out with inner `UpdateSize` (re-run by a `ResizeObserver` and `player.OnClipChanged`). `aspectX`/`aspectY <= 0` means automatic aspect. Unless `noStats`, appends a `<Media-Stats>` block to `target`; unless `noControls`, appends `<Media-Controls>` with buttons. Sets `player.SetButtonState`, `player.UpdateSize`, `player.TopElement` (the `<Media-Preview>`) and, with controls, `player.MessageElement`. Returns the player and the controls/stats elements (or `null`). |
+| `mediaPlayWithPopup` | async `(player)` | Applies the stored preferences: `localStorage["QuizzWeaver.MediaLoop"]` (`"true"` → `Loop()`, else `Once()`), `QuizzWeaver.MediaVolume` (default `0.25`) and `QuizzWeaver.MediaMute`. Plays directly for media without audio, or when `MediaPlayerTools.CanUnMute()` is true or the user prefers mute. Otherwise appends a full-screen `<Media-NoAudio>` ("Must click once to get audio!") whose click un-mutes, plays and removes it. Always ends with `player.SetButtonState()`. |
+| `mediaEditProps` | async `(target, playerRes, type, data, props, canEdit, saveFn, messagePrefix)` | Appends `<Media-Edit>` to `target` and, when `props` has more than one key, an Edit-service editor for it. `playerRes` is the array from `mediaCreatePlayer`; `type`/`data` are reused to rebuild the player; `canEdit` toggles read-only; `saveFn(reload)` is an async callback returning truthy on success (enables the "Save changes" button); `messagePrefix` (optional) prefixes `InterOp.Post` messages (`Reload`, `SetVolume`, `SetProps`, `UpdateSize`, `Crop`, `Compile`) for a remote `MediaView.html`. Fetches type info with `sendRequest('../edit/GetTypeInfo', props["$type"], false)`; for effect players it registers `player.ScriptTypeInfo` and adds `player.ScriptMember`. Listens for `EditChange` and applies Volume, Speed, AdaptiveSize, Crop and EffectProps live; other changes enable "Apply changes". |
+| `mediaEditMain` | async `()` | Boot function of the assignment media editor. Appends `<SysWeaver-Page class="Media">` and `<Media-Full>` to the body; reads URL params `get`, `aid` (JSON) and `update` (derived from `get` when absent); loads `{Data, Type, Link, Edit}` with `sendRequest(getApi, aid)`; creates the player, a Collapse/Expand button (inner `toggleCollape`) and a "New window" button that opens `MediaView.html?...&ctrl=<messagePrefix>`; calls `mediaEditProps` with a save callback that posts to `'../quizz/' + updateApi`; plays with `mediaPlayWithPopup`; answers `<prefix>GetProps` messages with `<prefix>SetProps` and posts an initial `<prefix>Reload`. Sets `player.OnLoop`/`player.OnEnded` to console-logging wrappers. Calls `PageLoaded()` on success. |
+| `mediaGetTypeFromUrl` | `(url)` → number | Maps the URL's file extension to `MediaTypes.Image`, `MediaTypes.Video`, `MediaTypes.Audio`, `MediaTypes.Effect` (for `.glsl`) or `-1` when unknown. |
+| `mediaViewMain` | async `()` | Boot function of `MediaView.html`. URL params: `link`/`d` (required), `type`/`t` (else guessed with `mediaGetTypeFromUrl`), `props` (JSON), `no_stats`, `no_controls`, `ctrl` (message prefix). With `ctrl`, first asks the opener for props (`<prefix>GetProps`, inner `getPropsFn`, waits up to 100 ms for the `MediaGotProps` event). Creates `<Media-View>` and a player with `fit = false`, auto aspect and centered alignment; clicking the media (inner `showFull`) navigates to `MediaPreview.html?full&back&pos=...`. With `ctrl`, listens for `InterOp` messages, copies matching keys into `props` and handles `Reload` (inner `reload`), `SetVolume`, `UpdateSize`, `Crop` and `Compile`. Plays with `mediaPlayWithPopup`, then `PageLoaded()`. |
+| `mediaPreviewMain` | async `()` | Boot function of `MediaPreview.html` (bare full-window player, also used for screenshots). Adds class `MediaPreview` to the body; binds CefSharp when present; uses a `ScreenShotHost` (from `window`, WebView2 host objects via inner `GetHo`, or `SsHack` when `?hack`) and then adds `NoFade`. URL params: `link`/`d`, `type`/`t`, `pos`, `props`, `fill`, `full` (enter full screen, re-entered on first key/click), `back` (click goes `history.go(-1)`). Creates the player, appends its element directly to the body, caches it, resizes it with `MediaPlayerTools.UpdateSize` from a `ResizeObserver` (inner `updateSize`), seeks, un-mutes when allowed (else on first interaction), plays, shows and calls `MediaPlayerTools.SetupMediaMessages`. With a screenshot host it resizes the window to the media size via `shost.setSize`, measures FPS and reports `shost.doIt(duration, fps, error, compilationTime)`. |
+
+#### Inner functions of `mediaCreatePlayer`
+
+| Function | Signature | Description |
+|---|---|---|
+| `UpdateSize` | `(ev)` | Lays out the clip and player element. When called with an event and the player element has left the document, removes itself as a `resize` listener. Recomputes auto aspect (from the preview box with `AdaptiveSize`, otherwise from the clipped media size). With `AdaptiveSize` the player element gets the box size in px; otherwise it gets `props.Width`/`props.Height` plus a `scale(..%) translate(..)` transform and the clip is positioned with `alignX`/`alignY`. When `player.UseClip` is false, the overlay gets `Show` and red semi-transparent borders marking the cropped margins. With `fit`, moves `Media-Stats` (or `Media-Controls`) just under the media. Copies the transform and size to `<Media-Overlay>`. |
+| `player.OnClipChanged` | `()` | Assigned callback that calls `UpdateSize()`. |
+| `setButtonState` | `()` | Function variable; a no-op until controls exist, then enables/disables Mute/Un mute, Pause/Play, Loop/Once and the four volume buttons from the player state. Exposed as `player.SetButtonState` and returned by every button callback so `Button` refreshes the state. |
+| `createStats` | `(name, title, className)` → `setText` | Appends `<Media-Stat>` (`<Media-StatName>` + `<Media-StatValue>`) to `<Media-Stats>`, with tooltip `title` and optional class (`Adjust`, `Clip`, `Actual`). Click (via `keyboardClick` also keyboard) copies `name: text (value)` to the clipboard with `ValueFormat.copyToClipboard`. |
+| `setText` | `(newText, newValue)` | Inner of `createStats`: hides the stat (class `Hide`) when `newText` is falsy, otherwise shows it and updates the text; stores `newValue` (or the text) in `val.Value`. |
+| `updateStats` | `(atime)` | Reads time, duration, volume, GPU time, compile time, trimmed time/duration, crop and render size from the player and calls the setters; each read is wrapped in `try/catch`. Reschedules itself with `requestAnimationFrame`; stops once `<Media-Stats>` is no longer in the document. |
+
+Buttons created in the controls block (each a common.js `Button` with `ButtonStyle.ButtonElement = "Media-Button"`): Pause, Play, Stop, Loop, Once, Mute, Un mute, VOL 100/75/50/25 % (each writes the matching `QuizzWeaver.Media*` `localStorage` key) and Source (`EditOrOpenUrl(player.Source)`). The `<Media-Controls>` element listens for `mediaEnded` and calls `setButtonState`.
+
+#### Inner functions of `mediaEditProps`
+
+| Function | Signature | Description |
+|---|---|---|
+| `GetApplyState` | `()` → string | `JSON.stringify(props)` with `Volume` temporarily removed; compared to decide whether "Apply changes" is enabled. |
+| `reload` | async `()` | Disables Apply, rebuilds the player with `mediaCreatePlayer(target, type, data, props, !mediaControls, oldTopElement, !mediaStats)`, swaps the new controls/stats elements in, restores `OnEnded`, volume, mute, loop, play state and position, removes the old `<Media-Preview>`, removes `Replacing` from the new one, calls `oldP.OnDispose()`, refreshes buttons and resets the apply state. Also passed to `saveFn`. |
+
+#### Inner functions of `mediaEditMain`
+
+| Function | Signature | Description |
+|---|---|---|
+| `toggleCollape` | `()` | Toggles class `Hide` on `<Media-Full>`; when hiding, remembers whether it was playing and pauses; when showing, resumes. Updates the collapse button text, title and icon (`IconMediaCollapse`/`IconMediaExpand`). |
+| `player.OnLoop`, `player.OnEnded` | `()` | Assigned callbacks: log "Loop"/"End" to the console; `OnEnded` then calls the original handler. |
+
+#### Inner functions of `mediaViewMain`
+
+| Function | Signature | Description |
+|---|---|---|
+| `getPropsFn` | `(ev)` | `InterOp` listener used only during start-up: on `<prefix>SetProps` copies the message (minus `Type`, `From`, `MagicXyz`) to `newProps` and dispatches `MediaGotProps` on the body. |
+| `showFull` | `()` | Function variable; opens `MediaPreview.html?full&back&pos=<pos>&type=&link=&props=` in the same tab. Set as the click handler of the player's parent element. |
+| `reload` | async `()` | Same player rebuild as in `mediaEditProps` (keeps volume/mute/loop/play/position), re-attaches `showFull` and updates `props` to the new `player.Params`. Triggered by a `<prefix>Reload` message. |
+| `player.OnLoop`, `player.OnEnded` | `()` | Console-logging callbacks as in `mediaEditMain`. |
+| `target.onclick` | — | Only inside a commented-out block (old top-right-corner click to open `MediaPreview.html`); not active. |
+
+#### Inner functions of `mediaPreviewMain`
+
+| Function | Signature | Description |
+|---|---|---|
+| `GetHo` | `()` → object\|null | Returns `chrome.webview.hostObjects.ScreenShotHost` or `null` (also on exception). |
+| `onInteraction` (full screen) | async `()` | With `full`: on first `keyup`/`click` on the body removes itself, re-enters full screen and re-enables `back` navigation after 100 ms. |
+| `onInteraction` (audio) | `()` | When un-muting is blocked: on first `keyup`/`click` removes itself, un-mutes the player and re-enables `back` navigation after 100 ms. |
+| `updateSize` | `()` → `[w, h]` | Calls `MediaPlayerTools.UpdateSize(document.body, player, fill)`; the returned clipped size is used to resize the screenshot window. |
+
+#### class `SsHack`
+
+Debug stand-in for a screenshot host object, used by `mediaPreviewMain` when the URL has `hack` and no real `ScreenShotHost` exists. Every method only logs its call to the console.
+
+| Member | Kind | Signature | Description |
+|---|---|---|---|
+| `isSupported` | method | `()` | Logs `isSupported()`. |
+| `setSize` | method | `(width, height)` | Logs the requested window size. |
+| `doIt` | method | `(duration, fps, error, loadDuration)` | Logs the final report values. |
+
+### `parseTools.js`
+
+Static helper class used by the effect sub-folder pages (`backgroundEffects/`, `imageEffects/`, `collageEffects/`, `textEffects/` `index.html` via `../parseTools.js`) and by `TextDemo.html`. It copies URL parameters, JSON side files or objects onto typed default objects, converting each string to the type of the existing member. Defines one global: the class `ParseTools`.
+
+#### class `ParseTools`
+
+Never instantiated; all members are static.
+
+| Member | Kind | Signature | Description |
+|---|---|---|---|
+| `DecodeObject` | static method | `(val)` → object\|string | Decodes a string: `$RGB`, `$RGBA`, `$RRGGBB`, `$RRGGBBAA` hex become `{Red, Green, Blue, Alpha}` with 0–1 components; strings starting with `{` or `[` are `JSON.parse`d; anything else is returned unchanged. |
+| `MessageProxy` | static method | `(iframe)` | Sets `window.onmessage` to forward messages between the parent window and `iframe.contentWindow`: messages from the iframe go to `window.parent`, others go to the iframe (same `origin` argument). Ignores messages from the window itself and does nothing while the iframe has no window. |
+| `SetToObject` | static method | `(obj, key, val, onNotFound, logPrefix = "")` | Sets `obj[key]` from string `val` based on the existing member type: `null` sets `null`; `object` uses `DecodeObject`; `string` maps a leading `$` to `#`; `boolean` is true for `"true"`/`"1"`; `number` uses `parseFloat` (ignored if NaN). When the member does not exist, calls `onNotFound(key, val)` or logs a warning. Logs every assignment to the console with `logPrefix`. |
+| `ParamsToObject` | static method | `(searchParams, dest, onNotFound, logPrefix)` | Runs `SetToObject` for every entry of a `URLSearchParams`; the string `"null"` becomes `null`. |
+| `ObjectToObject` | static method | `(srcObject, dest, onNotFound, logPrefix)` | Runs `SetToObject` for every non-function member of `srcObject`, converting values to strings first. |
+| `ObjectToParams` | static method | `(srcObject)` → string | Serializes an object to a URL query string: skips `undefined` and functions, JSON-encodes objects, writes falsy numbers as `0` and falsy booleans as `false`, and keeps `null` as `"null"`. |
+| `FileToObject` | static async method | `(srcUrl, dest, onNotFound, logPrefix)` | Fetches `srcUrl` (GET, `cors`, default cache); on HTTP 200 parses JSON and applies it with `ObjectToObject`. Network/parse errors and other statuses are silently ignored. |
+
+### `textEffect.js`
+
+Text and counter effect helpers. Loaded by `counterEffects/index.html` (with `../canvasTools.js`, `common.js`, `anim.js`), which boots `textEffectMain`. At parse time it runs `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")`. Uses `TextStyle`, `CanvasTools`, `MediaPlayerParamsEffect`, `MediaPlayerParamsImage`, `MediaPlayer`, `MediaTypes` from the mediaPlayer folder. Defines globals `CounterEffectParams`, `TextEffect` and `textEffectMain`.
+
+#### Globals
+
+| Name | Kind | Description |
+|---|---|---|
+| (top-level call) | immediately executed | `includeJs(..., "../mediaPlayer/media_player.js")`. |
+
+#### Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `textEffectMain` | async `()` | Demo boot function of `counterEffects/index.html`. Builds a hard-coded gold `TextStyle` (bold 160px Tahoma, gradients, shadow) and a `CounterEffectParams` (prefix `"SEK "`, suffix `":-"`, `,` thousands separator, 8 digits), creates `TextEffect.CreateCounterEffect("ScrollUp", ...)`, appends its element to the body, sets `fx.GetValue = x => [(990 + x^1.6) * 100, 500]`, shows and plays it, then appends `CanvasTools.CreateTextGrid` of 16 greetings. A `document.body.onmousemove` handler stores `offsetX` in a local `value` that is only used by commented-out `GetValue` variants. On error writes the message into the body; otherwise calls `PageLoaded()`. |
+
+#### class `CounterEffectParams`
+
+Plain options object for `TextEffect.CreateCounterEffect`; created with `new` and modified by the caller.
+
+| Member | Kind | Signature | Description |
+|---|---|---|---|
+| `Fade` | field | `16.0` | Fade height in pixels at the top/bottom of the digits (minimum 1). |
+| `ExtraSpacing` | field | `10.0` | Extra vertical spacing between the digit glyphs in the image strip. |
+| `MaxDigits` | field | `10` | Number of integer digits (clamped 1–32). |
+| `FlipSpeed` | field | `1` | Speed factor for the digit flip animation. |
+| `FlipFraction` | field | `0.1` | Fraction (0–1) of each unit step spent flipping. |
+| `DecimalDigits` | field | `2` | Number of decimal digits. |
+| `ThousandsSeparator`, `DecimalSeparator` | field | `" "`, `"."` | Separator strings drawn into the glyph image. |
+| `Prefix`, `Suffix` | field | `""` | Text drawn before / after the number. |
+| `DigitSpacing` | field | `0` | Extra horizontal pixels between digits (can be negative). |
+
+#### class `TextEffect`
+
+Factory class with static methods only; returns media players that render text through a GLSL effect.
+
+| Member | Kind | Signature | Description |
+|---|---|---|---|
+| `CreateTextEffect` | static async method | `(effectName = "Rain", text, textStyle = new TextStyle(), effectParams = new MediaPlayerParamsEffect())` → player | Loads `textStyle.FontUrl` as a `FontFace` when set, renders `text` to an image URL with `CanvasTools.CreateTextImageUrl`, maps a bare effect name to `imageEffects/<name>.glsl`, sets `effectParams.Transparent = true`, creates an image player (`MediaPlayer.Create(MediaTypes.Image, url, MediaPlayerParamsImage{Effect, EffectParams})`) and calls `player.Cache()`. Returns the player (caller attaches `.Element`, then `Show()`/`Play()`). |
+| `CreateCounterEffect` | static async method | `(effectName = "ScrollUp", textStyle, counterParams = new CounterEffectParams(), effectParams)` → player | Builds an animated number counter. Loads the font, sets text margins, renders a glyph strip with `CanvasTools.CreateNumberImageUrl` (digits, separators, prefix, suffix), and builds the part list (inner `DefPart`). Maps a bare name to `../counterEffects/<name>.glsl`; sets the effect width/height, `AdaptiveSize = false` and `FxProps` `MaxParts`, `UvScale`, `UvAdd`, `Fade`. Creates and caches the image player, then installs `player.OnNewSize`, `player.GetValue` and `player.OnRender` (below). Returns the player. |
+
+#### Inner functions of `TextEffect.CreateCounterEffect`
+
+| Function | Signature | Description |
+|---|---|---|
+| `DefPart` | `(type, partWidth)` | Appends a part (type `0` digit, `17` thousands separator, `18` prefix, `19` suffix, `20` decimal separator, `-1` end) with its width to `partType`/`partWidths` and adds it (plus `DigitSpacing` for digits) to the total `width`. |
+| `player.OnNewSize` | `(newWidth, oldWidth)` | Assigned callback, called when the visible counter width changes; default is a no-op that callers may replace. |
+| `player.GetValue` | `(time)` → number \| `[value, flipSpeed]` | Assigned callback returning the value to display for a playback time; default returns `time`. An array return also overrides the flip speed. |
+| `player.OnRender` | `(gl, p)` | Assigned per-frame callback: reads the value via `GetValue(p.GetPos())`, walks the parts from the right, computes each part's x position, glyph row (`/11`), UV scale and flip fraction (cosine easing, scroll-in of the leading digit and prefix), stops after the last significant digit, calls `OnNewSize` when the width changes, logs the part list when it changes, and uploads the `digitWidths` (`uniform1fv`) and `digits` (`uniform4fv`) uniforms. |
+| `fx.GetValue`, `document.body.onmousemove` | — | Assigned in `textEffectMain` (see above). |
+
+### `BackgroundEffectsLib.html` (inline script)
+
+Gallery of all background effects. Loads `../common/common.js` and the mediaPlayer `media_player_effect.js`, `media_effect_program.js`, `media_player_tools.js`; boot `<body onload="main()">`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Shows a loading indicator (`AddLoading`), appends `<SysWeaver-Page>`, loads the effect names from `Api/GetBackgroundEffects`, and for each one renders a still with `MediaPlayerEffect.GetImage("Background", "backgroundEffects/<name>.glsl", mp)` (960×540, not adaptive, not static). Appends an `<Effect-Card>` with `<Effect-Title>`, `<Effect-Info>` (compilation time and average draw time, translated with `_T`) and the `<img>`. Clicking the image opens `backgroundEffects/?Effect=<name>`; `ValueFormat.copyOnClick` copies that URL. Effects without an image are skipped. Errors go to `Fail`. |
+
+### `CollageEffectsLib.html` (inline script)
+
+Gallery of the collage effects, rendered with `DemoCollage.svg` as texture atlas. Same scripts as `BackgroundEffectsLib.html`. A header comment documents the URL parameters of the collage effects.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | As in `BackgroundEffectsLib.html`, but uses `Api/GetCollageEffects`, folder `collageEffects`, loads `mp.FxProps` from `DemoCollage.json`, renders with `MediaPlayerEffect.GetImage("Collage", ..., mp, CreateTexture)` and links to `collageEffects/?Effect=<name>&Image=DemoCollage.svg`. |
+| `CreateTexture` | inner `(gl)` → `MediaPlayerImageTexture` | Texture factory for `DemoCollage.svg` with `EffectSizeFromImage: false`. |
+
+### `ImageEffectsLib.html` (inline script)
+
+Gallery of the image effects applied to `../logo.png`. Same scripts as `BackgroundEffectsLib.html`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | As in `BackgroundEffectsLib.html`, but uses `Api/GetImageEffects`, folder `imageEffects`, renders with `MediaPlayerEffect.GetImage("Image", ..., mp, CreateTexture)` and links to `imageEffects/?Effect=<name>&Image=../logo.png`. |
+| `CreateTexture` | inner `(gl)` → `MediaPlayerImageTexture` | Texture factory for `../logo.png` with `EffectSizeFromImage: true`. |
+
+### `MapDemo.html` (inline script)
+
+Demo grid of `MapView.html` variants. Loads only `../common/common.js`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Appends `<SysWeaver-Page>`. Uses URL param `key` or fetches `Api/GetGoogleMapsKey` (JSON string; empty when unavailable), and `center` (default London). Adds sections and cards for map types, pin styles, pin sizes, zoom, DPI scale, links, languages and misc options. |
+| `Section` | inner `(title)` | Appends a `<Map-Section>` heading with `title`. |
+| `Add` | inner `(title, type, pin, link, extra)` | Builds `MapView.html?key=&center=` plus optional `&maptype=`, `&pin=`, `&link=` and the raw `extra` query string; appends a `<Map-Card>` with `<Map-Title>`, an `<iframe>` (`tabIndex -1`) showing that URL and a full-screen `ColorIcon` (`../icons/fullscreen_enter.svg`) that opens it in the same tab; `ValueFormat.copyOnClick` copies the URL. |
+
+### `MapView.html` (inline script)
+
+Stand-alone embeddable map (no common.js). The script at the end of `<body>` calls `main()` immediately.
+
+| Function | Signature | Description |
+|---|---|---|
+| `_T` | `(x, a, c)` → string | Local stub of the translation function: replaces `{0}` in `x` with `a`; `c` (translator comment) is ignored. |
+| `_TF` | `(x, c)` → string | Local stub: returns `x`. |
+| `main` | async `()` | Reads `maptype` (default `roadmap`; `open`/`openstreet`/`openstreetmap` → OpenStreetMap, `opendark`/`darkstreet`/`openstreetdark`/`openstreetmapdark` → dark OpenStreetMap). For Google maps it uses `key` or `Api/GetGoogleMapsKey`, falling back to OpenStreetMap with a console warning. Adds body classes `OpenDark`, `Dark` (Google `dark` → `roadmap` + CSS invert), `Link`, `NoInteraction` (unless `interactive=true`), `NoFade` (screenshot host) and `Show` (after load). Parses `center` (required, `lat,lon`, `S`/`W` suffix negates), `dpi` (100), `zoom` (16), `language`/`lang` (`en`), `link` (`true`/`view`/`dir` map to Google Maps URLs, any other value is used as URL), `title`, `pin` (predefined names map to `map/*.svg` with anchor and height; any other value is used as image URL), `pinX`, `pinY`, `pinHeight`. Writes `--dpi`, `--idpi`, `--pinX`, `--pinY`, `--pinHeight` on `<html>`. Creates the map `<iframe>` (OpenStreetMap embed with a bbox computed from zoom and window size, or Google Maps Embed `v1/view`), an optional pin `<img>`, and either an `<a target=_blank>` overlay for links or a `<Map-Title>` overlay for a non-interactive title. On iframe load waits 100 ms and adds `Show`; with a screenshot host waits 500 ms more and calls `shost.doIt(0, 0, null)`. Errors are written into the body. |
+| `fix` | inner `(x)` → number | Keeps digits, `.` and `-` of a coordinate string and parses it; throws `Invalid coordinate` when empty or NaN. |
+| `last` | inner `(x)` → string | Lower-cased last character of the trimmed string (hemisphere letter). |
+| `GetHo` | inner `()` → object\|null | Returns `chrome.webview.hostObjects.ScreenShotHost` or `null`. |
+| `delay` | inner `(msToWait)` → Promise | Resolves after `msToWait` ms. |
+
+### `TextDemo.html` (inline script)
+
+Demo of `TextStyle` rendering with links to the text effect pages. Loads `../common/common.js`, `parseTools.js`, `../mediaPlayer/canvasTools.js`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Appends `<SysWeaver-Page>`; reads URL params `Text` (default `Abc123`) and `Texts` (comma separated greetings). Defines 5 image effects (`BadVHS`, `Rain`, `SliceGlitch`, `OldMovie`, `3D-flag`) and 4 collage effects (`3d-tiles`, `Stripes`, `Scroll`, `Wheel`) with icon names, then calls `Add` for eight sample styles (fill and stroke, drop shadow, two letter spacings, horizontal and diagonal gradient, gold, neon). |
+| `Add` | inner async `(title, style)` | Sets all margins of `style` to 32; appends a `<Map-Card>` with `<Map-Title>` and an `<img>`. The title gets a copy icon (copies the style JSON with `ValueFormat.copyToClipboardInfo`), one icon per image effect (opens `textEffects/?<style params>&Text=<text>&Effect=<name>`) and one per collage effect (opens `textEffects/?<half-size style params>&Texts=<texts>&Effect=<name>`; the style is scaled with `cscale = 0.5`). Params are built with `ParseTools.ObjectToParams`. The image is `CanvasTools.CreateTextImageUrl(text, style)`; clicking it opens the `None` effect, and `ValueFormat.copyOnClick` copies that URL. |
+
+### `backgroundEffects/index.html` (inline script)
+
+Full-window renderer for one background effect. Loads `../parseTools.js`, `../../common/anim.js` and the mediaPlayer `media_player_tools.js`, `media_effect_program.js`, `media_player_effect.js`; boot `<body onload="main()">`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Starts from a `MediaPlayerParamsEffect`-shaped `props` literal (1920×1080, `AdaptiveSize: true`, ...). Effect from URL param `Effect` (default `SmoothBands`, `.glsl` appended). Applies the side file `../<effect>.json` with `ParseTools.FileToObject` and then the URL params with `ParseTools.ParamsToObject`; unknown keys go to `fxParams` (decoded with `DecodeObject`), which becomes `props.FxProps`. Creates `new MediaPlayerEffect(effect, props)`, appends its element, caches it, sizes it with `MediaPlayerTools.UpdateSize(document.body, player)` from a `ResizeObserver` (inner `updateSize`), plays, shows, calls `MediaPlayerTools.SetupMediaMessages` and `MediaPlayerTools.PostPageLoaded()`. A commented-out block holds the older iframe-to-`MediaPreview.html` variant. |
+| `updateSize` | inner `()` | Calls `MediaPlayerTools.UpdateSize(document.body, player)`. |
+
+### `imageEffects/index.html` (inline script)
+
+Full-window renderer for one image effect applied to an image. Same scripts as `backgroundEffects/index.html`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Uses a `MediaPlayerParamsImage`-shaped `props` literal (`EffectSizeFromImage: true`, `Transparent: true`) and a `MediaPlayerParamsEffect`-shaped `ep` literal. `Image` defaults to `../../logo.png`, `Effect` to `DistortedTv` (`.glsl` appended). Applies `<effect>.json`, `<image>.json` and the URL params in three levels: `props` → `ep` (via nested `ParseTools.SetToObject`) → `fxParams`. Sets `props.Effect`, `props.EffectParams = ep`, `ep.FxProps`, `ep.Transparent`, `ep.AdaptiveSize` (false when `EffectSizeFromImage`). Creates `new MediaPlayerEffect(effect, ep, gl => new MediaPlayerImageTexture(gl, props, image))` and runs it as in `backgroundEffects/index.html`. A commented-out block holds the older iframe variant. |
+| `updateSize` | inner `()` | Calls `MediaPlayerTools.UpdateSize(document.body, player)`. |
+
+### `collageEffects/index.html` (inline script)
+
+URL adapter for collage effects: builds a `MediaPreview.html` URL and shows it in an iframe. Loads `../parseTools.js`, `../../common/anim.js`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Same three-level parameter merge as `imageEffects/index.html` (`props` with `AdaptiveSize: true`; `Image` default `DemoCollage.svg`; `Effect` default `Stripes`, mapped to `collageEffects/<name>.glsl`; side files `../<effect>.json` and `../<image>.json`). Builds `url = '../MediaPreview.html?transparent=true&link=<image>&type=0&props=<encoded JSON>'` (plus `&ShaderDebug=true` when requested), assigned to an implicit global `url`, logs it, creates an `<iframe>` with that `src`, installs `ParseTools.MessageProxy(iframe)` and appends it to the body. |
+
+### `counterEffects/index.html`
+
+No inline script; it loads `../textEffect.js` and boots `textEffectMain` (see `textEffect.js`).
+
+## CSS reference
+
+### `media.css`
+
+Styles the media player pages `MediaView.html` and `MediaPreview.html` (and any host page of `mediaEditMain`). Loaded with `<link rel="stylesheet">` after `../common/theme.css` (and `../app/application.css` in `MediaView.html`). Depends on theme variables `--ThemeBackground`, `--ThemeBackground75`, `--ThemeMain`, `--ThemeMain50`, `--ThemeAcc1`, `--ThemeRad`, `--ThemeFontMono`. Not templated. Icon masks reference `../icons/*.svg`.
+
+#### Page and layout
+
+| Selector(s) | Description |
+|---|---|
+| `body` | No margin/padding, no text selection, centered text, vertical scroll only. |
+| `SysWeaver-Page.Media` | Fixed background page created by `mediaEditMain` (class `Media`). |
+| `Media-Full`, `Media-Full > *`, `Media-Full > Media-Preview` | Editor container from `mediaEditMain`, above the background; children limited to `52em` and centered, except the preview. |
+| `Media-Full.Hide Media-Preview`, `Media-Full.Hide Media-Stats`, `Media-Full.Hide Media-Controls` | Collapsed editor (class `Hide` toggled by `toggleCollape`) hides player, stats and controls. |
+| `Media-NoAudio` | Full-screen blurred click-to-unmute overlay from `mediaPlayWithPopup`, text centered vertically via `line-height: 100vh`. |
+| `Media-Edit` | Property editor container from `mediaEditProps`, full width, left aligned. |
+| `Media-View`, `Media-View Media-PreView`, `Media-View Media-Stats`, `Media-View Media-Controls` | `mediaViewMain` layout: absolute box with a 3-row grid (preview, stats, controls). `Media-PreView` matches the `<Media-Preview>` element because HTML tag selectors are case-insensitive. |
+
+#### Preview and aspect container
+
+| Selector(s) | Description |
+|---|---|
+| `Media-Preview` | Player box; width from `--maxWidth`, 16:9 height, `1em auto` margin. |
+| `Media-Preview.Replacing` | New player being built during `reload`, moved off-screen (`top: -10000px`). |
+| `Media-Preview.NoVisual` | Audio-only player: zero size. |
+| `Media-AspectContainer`, `Media-AspectContainer > *` | Clip box positioned by `UpdateSize`; children are non-interactive, top-left transform origin. |
+| `Media-AspectContainer.MediaPreviewFit > *` | Fit mode: children get the theme background (a second rule with a commented-out drop shadow is empty). |
+| `Media-AspectContainer.MediaPreviewFill` | Fill mode: clips overflow. |
+| `Media-AspectContainer > *.MediaHidden` | Player element hidden (`MediaHidden` set by `media_player_tools.js` until shown). |
+| `Media-AspectContainer > Media-Overlay`, `Media-AspectContainer.MediaPreviewFit > Media-Overlay`, `Media-AspectContainer > Media-Overlay.Show` | Crop overlay: invisible by default; `Show` (set by `UpdateSize` when crop is visualized) makes it visible with a red outline. |
+
+#### Stats
+
+| Selector(s) | Description |
+|---|---|
+| `Media-Stats`, `Media-Stats > *:first-child:last-child` | Wrapping flex row of stats; a single stat is centered. |
+| `Media-Stat`, `Media-Stat:hover`, `Media-Stat:focus` | Clickable stat chip (mono font, theme border, focus outline in `--ThemeAcc1`). |
+| `Media-Stat.Adjust`, `Media-Stat.Adjust:hover` | Green trimmed-time stats. |
+| `Media-Stat.Clip`, `Media-Stat.Clip:hover` | Blue crop stats. |
+| `Media-Stat.Actual`, `Media-Stat.Actual:hover` | Magenta render-size stats. |
+| `Media-Stat.Hide` | Hidden stat (set by `setText` with no text). |
+| `Media-StatName`, `Media-StatValue` | Label and right-aligned value (min `5em`). |
+
+#### Controls
+
+| Selector(s) | Description |
+|---|---|
+| `Media-Controls`, `Media-Controls > *:first-child:last-child` | Wrapping flex row of buttons; a single button is centered. |
+| `Media-Button`, `Media-Button:hover` | Button element used through `ButtonStyle.ButtonElement`: accent background, rounded, shadow, lift on hover. |
+| `Media-Button.Pressed`, `Media-Button.Disabled`, `Media-Button.Disabled:hover` | States set by common.js `Button` (`Pressed` while clicked, `Disabled` when not enabled). |
+| `Media-Button Sysweaver-ButtonText`, `Media-Button Icon-24x24` | Button text (left) and 24×24 icon (right) created by common.js `Button`. |
+
+#### Preview page (`MediaPreview.html`)
+
+| Selector(s) | Description |
+|---|---|
+| `body.MediaPreview`, `body.MediaPreview > *` | Class added by `mediaPreviewMain`: full-window body without scroll; the player element is non-interactive and fades with opacity. |
+| `body.MediaPreview.NoFade`, `body.MediaPreview.NoFade > *` | Screenshot mode (`NoFade`): checkerboard background built from `--c0`/`--c1`, no transitions. |
+| `body.MediaPreview > *.MediaHidden` | Hidden player element before `Show()`. |
+
+#### Icons
+
+| Selector(s) | Description |
+|---|---|
+| `.MediaIconPlay`, `.MediaIconPause`, `.MediaIconStop`, `.MediaIconMute`, `.MediaIconUnMute`, `.MediaIconVolLoud`, `.MediaIconVolLow`, `.MediaIconExpand`, `.MediaIconLoop`, `.MediaIconOnce` | Mask icons of the player buttons from `../icons/preview_play.svg`, `preview_pause.svg`, `preview_stop.svg`, `preview_mute.svg`, `preview_unmute.svg`, `preview_vol_loud.svg`, `preview_vol_low.svg`, `preview_expand.svg`, `preview_loop.svg`, `preview_once.svg`; used by `mediaCreatePlayer`. |
+| `.IconSave`, `.IconApply` | Editor buttons "Save changes" (`../icons/disc.svg`) and "Apply changes" (`../icons/reload.svg`) in `mediaEditProps`. |
+| `.IconMediaNewWindow`, `.IconMediaCollapse`, `.IconMediaExpand` | `mediaEditMain` buttons: `../icons/newtab.svg`, `../icons/expand.svg`, `../icons/collapse.svg`. |
+
+#### Custom properties
+
+| Variable | Default / source | Used for |
+|---|---|---|
+| `--maxWidth` | `Media-Preview`: `min(100vw - 5em, (80vh - 72px - 5em) * 16 / 9)` | Width of the preview box; height is `--maxWidth * 9 / 16`. |
+| `--c0`, `--c1` | `body.MediaPreview.NoFade`: `#bbb`, `#eee` | The two checkerboard colors. |
+| `--hs` | `round(up, min(100vw, 100vh) / 32, 1px)` | Half checker cell size (background positions). |
+| `--s` | `--hs * 2` | Checker cell size (`background-size`). |
+
+#### Animations, media queries, theme variants
+
+None (only `transition`s on `Media-Stat`, `Media-Button` and `body.MediaPreview > *`).
+
+### `textEffect.css`
+
+Loaded by `counterEffects/index.html` after `../../common/theme.css`. Not templated.
+
+| Selector(s) | Description |
+|---|---|
+| `body` | `line-height: 100%`, vertical middle alignment. |
+| `body > *` | Every body child (the effect canvas and the text grid) is a full-width block with automatic height (`!important`), `object-fit: contain`. |
+
+No custom properties, animations or media queries.
+
+### Inline styles of the gallery pages (`BackgroundEffectsLib.html`, `CollageEffectsLib.html`, `ImageEffectsLib.html`)
+
+The three pages share an identical `<style>` block. Theme variables used: `--ThemeMainRGB`, `--ThemeMain`, `--ThemeMain50`, `--ThemeRad`, `--ThemeFadeDuration`, `--ThemeAcc1`, `--ThemeAcc2`, `--ThemeAcc275`.
+
+| Selector(s) | Description |
+|---|---|
+| `*`, `body` | Border-box sizing; no horizontal scroll. |
+| `Effect-Card`, `Effect-Card:hover`, `Effect-Card:focus`, `Effect-Card:focus:hover` | Card per effect created by inline `main()`, with hover/focus outline. |
+| `Effect-Title`, `Effect-Info` | Card title (accent, bold) and timing info (selectable). |
+| `Effect-Card img` | Full-width preview image. |
+| `canvas.MediaHidden` | The off-screen WebGL canvas used by `MediaPlayerEffect.GetImage` while rendering (class `MediaHidden` from `media_player_tools.js`), moved out of view with near-zero opacity. |
+
+### Inline styles of `MapDemo.html`
+
+| Selector(s) | Description |
+|---|---|
+| `*` | Border-box sizing. |
+| `SysWeaver-Page` | Max width `85.1em` (three cards per row). |
+| `Map-Section`, `Map-Section:first-child` | Section header from `Section()`: inverted theme colors, uppercase; the first one has a smaller top margin. |
+| `Map-Card`, `Map-Card:hover`, `Map-Card:focus`, `Map-Card:focus:hover` | Inline-block `26em` card from `Add()`, hover/focus outline. |
+| `Map-Card icon-28x28` | Full-screen `ColorIcon` placed in the top-right corner. |
+| `Map-Title` | Card title. |
+| `Map-Card iframe` | `20em` high borderless `MapView.html` iframe. |
+
+### Inline styles of `MapView.html`
+
+| Selector(s) | Description |
+|---|---|
+| `html` | Transparent, no scroll; declares the custom property defaults below and scales its size by `--dpi`. |
+| `body` | Transparent, no scroll, red 200% text (used for error messages). |
+| `body iframe` | Map iframe centered with `zoom: var(--dpi)`, size scaled by `--idpi` (with extra margins to hide map chrome), fades in. |
+| `body.Dark iframe`, `body.OpenDark iframe` | Dark map variants via `invert(1) hue-rotate(...)` filters (classes set by `main`). |
+| `body.NoInteraction iframe` | Disables pointer events when not `interactive`. |
+| `body.Show iframe`, `body.Show img` | Visible after the iframe loaded. |
+| `body.NoFade iframe`, `body.NoFade img` | Screenshot mode: immediately visible, no transition. |
+| `body img` | Pin image at the window center, height `--pinHeight`, translated by `--pinX`/`--pinY`. |
+| `body a`, `body Map-Title` | Full-window overlays for a link (`<a>`) or a title tooltip (`<Map-Title>`). |
+
+Custom properties (set by `main` on `document.documentElement.style`):
+
+| Variable | Default / source | Used for |
+|---|---|---|
+| `--dpi` | `1`; `dpi / 100` | `zoom` of the iframe and `html` size. |
+| `--idpi` | `1`; `100 / dpi` | Iframe size compensation. |
+| `--pinX`, `--pinY` | `-50%`, `-100%`; negated pin anchor | Pin `translate`. |
+| `--pinHeight` | `96px`; `pinHeight` px | Pin image height. |
+
+### Inline styles of `TextDemo.html`
+
+| Selector(s) | Description |
+|---|---|
+| `*`, `SysWeaver-Page` | Border-box sizing; page max width `85.1em`. |
+| `Map-Card`, `Map-Card:hover`, `Map-Card:focus`, `Map-Card:focus:hover` | Block card per text style from `Add()` (reuses the map demo card names). |
+| `Map-Card icon-28x28` | Effect/copy icons floated right in the title. |
+| `Map-Title` | Card title. |
+| `Map-Card img` | Rendered text image, scaled down to fit. |
+
+### Inline styles of `MediaPreview.html` and `MediaView.html`
+
+| Selector(s) | Description |
+|---|---|
+| `:root` | (`MediaPreview.html`) `color-scheme: normal !important`. |
+| `html, body` | Transparent background (`!important` in `MediaPreview.html`). |
+
+### Inline styles of the effect folder pages (`backgroundEffects/`, `imageEffects/`, `collageEffects/`, `counterEffects/` `index.html`)
+
+| Selector(s) | Description |
+|---|---|
+| `:root` | `color-scheme: normal !important` (all four). |
+| `html, body` | Transparent background (`!important`); full size, no margin, no scroll (all but `counterEffects/`). |
+| `body > *` | Non-interactive children (`backgroundEffects/`, `imageEffects/`). |
+| `iframe` | Borderless full-size non-interactive iframe (`collageEffects/`, `imageEffects/`; commented out in `backgroundEffects/`). |

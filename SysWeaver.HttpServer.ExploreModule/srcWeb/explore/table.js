@@ -1573,6 +1573,7 @@ class Table {
             }
         }
         Update();
+        return { UpdateNow: UpdateNow };
 
     }
 

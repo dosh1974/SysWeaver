@@ -78,3 +78,45 @@ Handled by `FileUploaderService` (`[WebApiUrl("../upload")]`, so it is served at
 - Callbacks can be configured two ways at once: global function names in `data-on*` attributes (resolved with `GetFunction`) and the expando functions `OnUploadStart` / `OnUploadResults`. Both are called if both are set.
 - Consumers all copy the same result-handling pattern (the `UploadCompleted` functions in keys.js and serviceInfo.js and the handlers in home.js and Example.html). The library offers no shared helper for it.
 - Every file is read fully into memory before the status check, so the client has no streaming or chunking.
+
+## JavaScript reference
+
+Conventions used in this reference: "async" marks functions returning a Promise; "inner" marks functions local to an enclosing function. All symbols are classic-script globals.
+
+### `fileUploader.js`
+
+Client side of the file upload protocol of `FileUploaderService`. Loaded as a classic script (`<script defer src="../common/fileUploader.js">` or `includeJs`) after `common.js`, `md5.js` and (optionally) `UZIP.js`. Defines the global `UploadStatus` constant and the global functions below; nothing executes at load time.
+
+#### Globals
+
+| Name | Kind | Description |
+|---|---|---|
+| `UploadStatus` | const object | Named status codes returned by the server (mirror of the C# `FileUploadStatus` enum): `MultipleFilesNotAllowed` -12, `UnknownRepo` -11, `InvalidFileName` -10, `OperationInProgress` -9, `InvalidFile` -8, `DiscQuotaExceeded` -7, `NotAuthorized` -6, `InvalidParams` -5, `RefuseExtension` -4, `RefuseSize` -3, `Refuse` -2, `UploadFailed` -1, `None` 0 (uploaded OK), `AlreadyUploaded` 1, `Upload` 2 (may be uploaded). |
+
+#### Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `fileUploaderStatusText` | `(code: number) → string` | Returns a translated (`_TF`) human-readable text for a status code -12..2; for any other value returns `_T("Unknown upload status [{0}]", code)`. |
+| `fileUploader` | async `(repo: string, files: File[]/FileList, apiBase?: string = "../upload/") → Promise<{Status: number[], Urls: (string\|null)[], Redirected: string\|null} \| {Error}>` | Reads every file into an `ArrayBuffer`, MD5-hashes it with `YaMD5.hashByteArray` and builds `{Name, Length, Hash, LastModified}` infos. Posts them once via `sendRequest(apiBase + "CheckStatus", {Repo, Files}, true)`; a falsy reply returns `{Error: Error("Couldn't check status!")}`. Seeds `Status`/`Urls` from the reply (`Result`, `Url`), then uploads (in parallel, `Promise.all`) only the files whose status is `2`, via inner `doOne`. Logs each check/upload to `console.log`. Any exception yields `{Error: e}`. Arrays are indexed like `files`. |
+| `fileUploaderElement` | async `(element: HTMLElement, files: File[]/FileList) → Promise<void>` | Element-level upload wrapper (used internally by drop/click). Sets `element.IsUploading = true`, adds class `Uploading` and a temporary translated `title`. Reads `data-repo`; calls the global function named by `data-onstart` (via `GetFunction`) and awaits `element.OnUploadStart(element, files, repo)` if set; runs `fileUploader(repo, files, data-apibase)`; then calls the `data-onresults` function and awaits `element.OnUploadResults(element, res, files, repo)`. Restores title/class/`IsUploading` in `finally`. |
+| `fileUploaderDrop` | async `(ev: DragEvent)` | `drop` handler: `preventDefault`, removes `Dragging` (via `fileUploaderDragLeave`), ignores the drop while `IsUploading`. Collects files from `dataTransfer.items` (kind `"file"`) or `dataTransfer.files` (via inner `onFile`), truncates to one file unless `data-multiple` is `"true"`/`"1"`, then calls `fileUploaderElement(currentTarget, files)`. |
+| `fileUploaderDrag` | async `(ev: DragEvent)` | `dragover` handler; only calls `preventDefault()` so the element accepts drops. |
+| `fileUploaderDragEnter` | async `(ev: DragEvent)` | `dragenter` handler; adds CSS class `Dragging` to `ev.currentTarget`. |
+| `fileUploaderDragLeave` | async `(ev: DragEvent)` | `dragleave` handler; removes CSS class `Dragging` from `ev.currentTarget`. |
+| `selectFiles` | async `(allowMultiple: bool) → Promise<FileList\|null>` | Creates a detached `<input type=file>` (with `multiple` when requested), clicks it (must be called from a user gesture), awaits `change` or `cancel` via `waitEvent2`, and returns the selected `FileList` or `null` if none. |
+| `fileUploaderClick` | async `(ev: MouseEvent)` | `click` handler: returns if `badClick(ev)` or the element `IsUploading`. Creates a detached `<input type=file>` (multiple per `data-multiple`), adds class `Selecting` while the dialog is open (removed on `change`/`cancel`), and on `change` with ≥1 file calls `fileUploaderElement(element, files)`. |
+| `fileUploaderSetup` | `(el: HTMLElement, repo?: string, onstart?: fn(el, files, repo), onresults?: fn(el, res, files, repo), apiBase?: string, allowMultiple?: bool)` | Makes an element an upload target: adds `click`, `drop`, `dragover`, `dragenter`, `dragleave` listeners (the handlers above); stores `apiBase` → `data-apibase`, `repo` → `data-repo`, `allowMultiple` → `data-multiple="true"`, and the callbacks as expandos `el.OnUploadStart` / `el.OnUploadResults`. Falsy arguments leave existing attributes untouched. |
+| `fileUploaderInit` | `(tagName?: string = "sysweaver-drop")` | Calls `fileUploaderSetup(el)` (no arguments, configuration from `data-*` attributes) for every element returned by `document.getElementsByTagName(tagName)`, iterating backwards. |
+
+#### Inner functions of `fileUploader`
+
+| Function | Signature | Description |
+|---|---|---|
+| `doOne` | async `(info: {Name, Length, Hash, LastModified}, buffer: ArrayBuffer, index: number) → Promise<void>` | Uploads one file: builds a `Request` POST (`mode: "cors"`, `application/octet-stream`) to `apiBase + "Upload?repo=&name=&length=&hash=&time="` (values not URL-encoded). If `UZIP` exists and `isCompressibleExt(getFileExtension(Name))`, the body is `UZIP.deflateRaw(level 8)` with `Content-Encoding: deflate` when that is smaller than the original. Writes `stats[index]`/`urls[index]` from the JSON reply `{Result, Url}`; non-200, redirect (also sets the closure `redirect` URL) or exception set status `-1`. Logs to console. |
+
+#### Inner functions of `fileUploaderDrop`
+
+| Function | Signature | Description |
+|---|---|---|
+| `onFile` | `(file: File, index: number)` | Pushes `file` onto the local `files` array (`index` is unused). |

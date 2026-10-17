@@ -61,3 +61,17 @@ Served as `upload/Example.html`, the same URL folder as the upload API (`upload/
 - It is an example page: the logic is an inline script with no separate JS or CSS file. Its result-handling switch is the same pattern repeated in `app/home.js`, ServerManager `keys.js` and `serviceInfo.js`.
 - It handles only the first file even when `multiple` is set (an inline comment says so).
 - The page lives in `upload/` because the service's API URL root is `upload/`. The page and the API share one URL folder, while the library it demonstrates lives in the shared `common/`.
+
+## JavaScript reference
+
+Conventions used in this reference: "inner" marks functions local to an enclosing function. The folder has no `.js` or `.css` files; only the inline `<script>` of `Example.html` is documented (its inline `<style>` is summarized under Behavior above).
+
+### `Example.html` (inline script)
+
+A single inline `<script>` at the end of `<body>` that defines one global function. It depends on the deferred scripts `common/common.js` and `common/fileUploader.js`. It is intended to run on load through `onload="exampleMain()"`, which is placed on the closing `</body>` tag.
+
+#### Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `exampleMain` | `()` | Page entry point. Shows a loader (`AddLoading(document.body)`, closed at the end), reads URL parameters via `getUrlParams()`: `repo` (default `"UserImage"`) is written to `#drop`'s `data-repo` and to the `#repo` input, whose `onchange` rewrites `data-repo`; any `multiple` value sets `data-multiple="true"`. Calls `fileUploaderSetup(#drop, null, onstart, onresults)` with two anonymous callbacks: onstart shows `Info("Uploading \"<first file>\"")`; onresults calls `Fail(res.Error)` (and hides `#link`) on error, otherwise uses only the first file: sets `#link` text/`href="../" + Urls[0]` and toggles class `Show`, then for `UploadStatus.AlreadyUploaded` shows an `Info`, for `UploadStatus.None` shows an `Info` and reloads `#userimage` with `SetImageSource(img, img.src, null, true)`, and for any other code calls `Fail` with `fileUploaderStatusText(code)`. Exceptions during setup are reported with `Fail(e)`. |

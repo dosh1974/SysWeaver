@@ -573,7 +573,7 @@ class CanvasChart {
                     CanvasChart.valueLabels(data);
                     break;
                 case 6:
-                    CanvasChart.bareValueLabel(data);
+                    CanvasChart.bareValueLabels(data);
                     break;
                 default:
                     CanvasChart.formattedValueLabels(data);
@@ -1174,11 +1174,11 @@ class CanvasChart {
                 let dataStr = null;
                 switch (format) {
                     case 1:
-                        dataStr = await GetChartAsImage(data, A4_wh, A4_hh, false, false);
+                        dataStr = await GetChartAsImage(data, A4_wh, A4_hh, false, "Png");
                         data = null;
                         break;
                     case 2:
-                        dataStr = await GetChartAsImage(data, A4_wh, A4_hh, false, true);
+                        dataStr = await GetChartAsImage(data, A4_wh, A4_hh, false, "Svg");
                         data = null;
                         break;
                 }

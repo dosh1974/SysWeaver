@@ -95,3 +95,33 @@ This folder holds no shaders of its own. [`index.html`](index.html) reads the te
 - The three-level fallback (props → effect params → shader vars) is expressed as nested `onNotFound` lambdas, repeated for the side file and for the URL.
 - `url` is assigned without a declaration (implicit global). The `text` value is inserted into the `link` parameter without URL encoding, while `props` is encoded.
 - The header comment lists only a subset of the effects (Rain, OldMovie, DistortedTv, BadVHS, VHS). The real set is whatever `.glsl` files exist in the target folder.
+
+## JavaScript reference
+
+Conventions used in this reference: "async" marks functions returning a Promise; "inner" marks functions local to an enclosing function.
+
+### `index.html` (inline script)
+
+The only code in this folder. Loaded scripts: `../parseTools.js` (class `ParseTools`, documented in [../README.md](../README.md)) and `../../common/anim.js`; boot `<body onload="main()">`. Defines the global `main` and, at run time, the implicit global `url`.
+
+#### Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `main` | async `()` | Reads the URL params. The presence of `Texts` selects collage mode. Starts from a `MediaPlayerParamsText`-shaped `props` literal: in collage mode bold 80px Tahoma, `AdaptiveSize: true`, `EffectSizeFromImage: false`, `Texts`, `CollageSeparator` `,` and `CollageColumns` 2; otherwise bold 300px Tahoma, `EffectSizeFromImage: true` and `Text: "SysWeaver"`. Also uses a `MediaPlayerParamsEffect`-shaped `ep` literal (1920×1080, ...) and an empty `fxParams`. `Effect` defaults to `Stripes` (collage) or `DistortedTv`; a bare name is mapped to `collageEffects/<name>.glsl` or `imageEffects/<name>.glsl`. Applies the side file `../<effect>.json` (`ParseTools.FileToObject`), then the URL params (`ParseTools.ParamsToObject`), with nested `onNotFound` callbacks: keys unknown in `props` go to `ep` (`ParseTools.SetToObject`), keys unknown in `ep` go to `fxParams` (`ParseTools.DecodeObject`). Then sets `props.Effect`, takes the text from `Texts`/`Text` (default `SysWeaver`) and deletes both keys, sets `props.EffectParams = ep`, `ep.FxProps = fxParams`, copies `Transparent`/`AdaptiveSize` into `ep` (`AdaptiveSize` false when `EffectSizeFromImage`). Builds `url = '../MediaPreview.html?transparent=true&link=<text>&type=5&props=<encoded JSON>'` (plus `&ShaderDebug=true` when `ShaderDebug=true`), logs it, appends an `<iframe>` with that `src` and installs `ParseTools.MessageProxy(iframe)` to forward `postMessage` traffic between the parent and the iframe. |
+
+The `onNotFound` arrow callbacks passed to `ParseTools` are described in `main`; they have no own entries.
+
+## CSS reference
+
+### `index.html` (inline style)
+
+Makes the page a transparent full-size host for the `MediaPreview.html` iframe. Not templated; uses no theme variables.
+
+| Selector(s) | Description |
+|---|---|
+| `:root` | `color-scheme: normal !important`, so the transparent page is not tinted by a dark color scheme. |
+| `html, body` | Transparent background (`!important`), no margin/padding, 100% width/height, no scroll. |
+| `iframe` | The `MediaPreview.html` iframe created by `main`: borderless, full size, `pointer-events: none`. |
+
+No custom properties, animations or media queries.

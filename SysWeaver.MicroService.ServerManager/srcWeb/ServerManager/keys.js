@@ -1,6 +1,13 @@
 ﻿
 async function keysMain() {
 
+    let table = null;
+
+    function updateNow() {
+        if (table)
+            table.UpdateNow();
+    }
+
     function UploadCompleted(e, res, files) {
         const err = res.Error;
         if (err) {
@@ -46,6 +53,6 @@ async function keysMain() {
         UploadCompleted,
         null,
         true);
-    await Table.addTable("../ServerManager/KeysTable", document.body.getElementsByTagName("kf-table")[0]);
+    table = await Table.addTable("../ServerManager/KeysTable", document.body.getElementsByTagName("kf-table")[0]);
     PageLoaded();
 }
