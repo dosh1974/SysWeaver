@@ -1,12 +1,52 @@
 ﻿
 
 
+/**
+ * @file The SysWeaver web application shell and the reusable menu / pop-up library.
+ *
+ * Loading: a classic (non-module) script. The root `index.html` loads common/common.js, app/application.js and
+ * app/app.js with `<script defer>` and starts the shell with `<body onload="appMain()">`. Many pages in other
+ * projects (explore table/api, chart, edit, chat, media view, server manager, log file, passkeys, KeyMan,
+ * user storage, ...) load `../app/application.js` (statically or via `includeJs`) only to use the pop-up
+ * functions; they must also link app/application.css. Nothing executes at load time.
+ *
+ * Globals defined: classes `WebMenu`, `WebMenuItem`, `MainMenuStyle`, `MainMenu`, `SearchablePoupSelection`,
+ * `AppParams`, `App`; functions `CreateTabBlock`, `CreatePopUpBlocker`, `CreatePopUpAtElement`, `PopUpElement`,
+ * `PopUpElementMenu`, `PopUpMenu`, `PopUp`, `PopUpWorking`, `PopUpSelection`, `PopUpEdit`, `Confirm`, `appMain`;
+ * window globals `SysWeaverAppTitle`, `SysWeaverApp`, `SysWeaverDoneFirst` and the implicit global `contentUrl`.
+ *
+ * Dependencies (common.js): `ColorIcon`, `Button`, `ValueFormat`, `FullScreen`, `InterOp`, `AddLoading`,
+ * `BlockTab`/`UnblockTab`, `badClick`, `isPureClick`, `keyboardClick`, `waitFor`, `delay`, `sendRequest`,
+ * `getRequest`, `createIFrame`, `appendTheme`, `GetAbsolutePath`, `ClearOtherHistoryState`,
+ * `Base64EncodeString`/`Base64DecodeString`, `Open`, `Fail`, `_T`/`_TF`, `window.Mobile`/`window.Narrow` and the
+ * `SwLayout` body event. `PopUpEdit` additionally needs `Edit`, `EditOptions`, `TypeMemberFlags` (edit/ scripts).
+ *
+ * Conventions: pop-up elements use custom tag names `SysWeaver-*` appended to `document.body`; the shell DOM
+ * uses `app-*` tags; menu state is kept as `<body>` classes (`SwPinned`, `SwCollapsed`); embedded pages run in an
+ * iframe inside `<app-content>` and talk to the shell with `postMessage` (`IframeNavigating`, `LoaderRemoved`).
+ * Storage keys: `SysWeaver.Pinned`, `SysWeaver.MenuCollapsed.<menu>.<id>`, `SysWeaver.PopUpRecent.<id>`.
+ */
+
+/**
+ * A menu tree as returned by the server (`Api/application/GetMenu`, C# `WebMenu` from WebMenuService) or built
+ * on the client for pop-up menus. Rendered by `MainMenu`.
+ */
 class WebMenu {
 
+    /** Root URI reported by the server. @type {string} */
     RootUri = "";
+    /** Top level items. @type {WebMenuItem[]} */
     Items = [];
+    /** Menu name; used in the collapsed-state storage key (MainMenu.ExpKey). @type {string} */
     Name = "";
 
+    /**
+     * Converts a plain (JSON) object into a `WebMenu`, converting `Items` recursively to `WebMenuItem`
+     * instances (in place). Note: `name` is only applied when `Items` is non-empty.
+     * @param {object} obj - Plain object with `RootUri` / `Items`.
+     * @param {string} [name] - Menu name to set.
+     * @returns {WebMenu} New WebMenu instance.
+     */
     static From(obj, name) {
         const m = Object.assign(new WebMenu(), obj);
         const c = m.Items;
@@ -25,6 +65,12 @@ class WebMenu {
 }
 
 
+/**
+ * A menu item (C# `WebMenuItem`). `Type` is the numeric C# `WebMenuItemTypes` value: 0 Path (folder),
+ * 1 Table, 2 Embedded, 3 Link, 4 LinkExternal, 5 Js, 6 Chart. For client-built menus `Data` may instead be an
+ * async function `(item, style, isUserClick) => bool` (truthy result hides the menu). `MainMenu.Add` also
+ * stores the click handler on the item as `OnClick` (expando).
+ */
 class WebMenuItem {
     // Id of the item
     Id = "";
@@ -43,6 +89,11 @@ class WebMenuItem {
     // 1 = Disabled, 2 = Checked
     Flags = 0;
 
+    /**
+     * Converts a plain (JSON) object into a `WebMenuItem`, converting `Children` recursively (in place).
+     * @param {object} obj - Plain item object.
+     * @returns {WebMenuItem} New WebMenuItem instance.
+     */
     static From(obj) {
         const m = Object.assign(new WebMenuItem(), obj);
         const c = m.Children;
@@ -59,35 +110,59 @@ class WebMenuItem {
 }
 
 
+/**
+ * Visual settings and host callbacks for a `MainMenu`. One instance per menu (main menu, each pop-up menu).
+ */
 class MainMenuStyle {
 
+    /** Item icon size in pixels (scaled by --ThemeIconSize via ColorIcon). @type {number} */
     IconWidth = 32;
     IconHeight = 32;
 
+    /** Expander icon size in pixels and the indentation per depth level in pixels. @type {number} */
     ExpandIconWidth = 20;
     ExpandIconHeight = 20;
     ExpandTab = 16;
 
+    /** Colour classes for item icons (normal / selected) and for sub-item icons. @type {string} */
     IconColorClass = "IconColorThemeBackground";
     IconSelColorClass = "IconColorThemeAcc1";
     SubIconColorClass = "IconColorThemeBackground";
     SubIconSelColorClass = "IconColorThemeAcc1";
 
+    /** "expanded,collapsed" icon class pairs for nested and top level expanders (see MainMenu.SetExpIcon). @type {string} */
     IconExpander = "IconCollapse,IconExpand";
     IconExpanderMain = "IconCollapseMain,IconExpandMain";
+    /** CSS class added to the element the menu is rendered into. @type {string} */
     MenuStyle = "DefaultMenu";
+    /** Element that hosts the embedded content iframe (`<app-content>`). @type {?HTMLElement} */
     Content = null;
+    /** Called with the selected `WebMenuItem` (or null) whenever the selection changes. @type {?function(?WebMenuItem):void} */
     SelectFn = null;
+    /** Called with no args when navigation starts and with (url, title) when new content is revealed. @type {?function(string=, string=):void} */
     ExternalContentFn = null;
+    /** Called to close / collapse the menu after an action. @type {?function():void} */
     HideFn = null;
 
 
 }
 
+/**
+ * Renders a `WebMenu` as nested `<table>`s (one row per item: indent, expander icon, name, item icon) and
+ * handles item actions, including the central iframe content navigation (`EmbeddContent`) and the
+ * history/hash handling. Used for the main menu (`App.Init`) and for every pop-up menu (`PopUpMenu`).
+ * Create with `new MainMenu(menu, style, toElement)`; the table is in `.Element`.
+ */
 class MainMenu {
 
 
 
+    /**
+     * Sets a ColorIcon image to the first class of a comma separated class list.
+     * @param {ColorIcon} icon - Icon to change.
+     * @param {?string} iconClasses - "class[,class]" list; nothing happens when falsy.
+     * @returns {void}
+     */
     static SetIcon(icon, iconClasses) {
         if (!iconClasses)
             return;
@@ -95,6 +170,13 @@ class MainMenu {
         icon.ChangeImage(x[0].trim());
     }
 
+    /**
+     * Sets an expander icon from an "expandedClass,collapsedClass" pair (single class: always that one).
+     * @param {ColorIcon} icon - Expander icon.
+     * @param {boolean} isExpanded - True selects the first class, false the second.
+     * @param {?string} iconClasses - Class pair; nothing happens when falsy.
+     * @returns {void}
+     */
     static SetExpIcon(icon, isExpanded, iconClasses) {
         if (!iconClasses)
             return;
@@ -107,6 +189,15 @@ class MainMenu {
     }
 
 
+    /**
+     * Builds the menu table. Does nothing beyond setting `Data`/`Style` when the menu has no items (then
+     * `Element` stays undefined). Sets `ExpKey` = "SysWeaver.MenuCollapsed.<menu.Name or NoName>.", adds every
+     * top level item with `Add`, adds `MenuNoExpand` to the table when no item has children, and if
+     * `toElement` is given adds `style.MenuStyle` to it and appends the table.
+     * @param {WebMenu} menu - Menu to render.
+     * @param {MainMenuStyle} [style] - Style and callbacks; a default MainMenuStyle when null/undefined.
+     * @param {HTMLElement} [toElement] - Optional parent element.
+     */
     constructor(menu, style, toElement) {
         style = style ?? new MainMenuStyle();
         this.Data = menu;
@@ -140,6 +231,12 @@ class MainMenu {
 
     
 
+    /**
+     * Reveals the newest content iframe early: if the last child of `style.Content` is an iframe with a pending
+     * `DoRemove`, it is called. Invoked by the shell when an embedded page posts `{Type:"LoaderRemoved"}`.
+     * @param {MainMenuStyle} style - Style whose `Content` hosts the iframe.
+     * @returns {void}
+     */
     LoaderRemoved(style) {
         const content = style.Content;
         if (!content)
@@ -154,6 +251,12 @@ class MainMenu {
     }
 
 
+    /**
+     * Returns the URL currently shown in a content host: the live `contentWindow.location.href` of its last
+     * child iframe when accessible (same origin), else the iframe's `src`.
+     * @param {?HTMLElement} content - The content host element.
+     * @returns {?string} URL, or null if there is no host or the last child is not an iframe.
+     */
     static GetEmbeddedUrl(content) {
         if (!content)
             return null;
@@ -172,6 +275,22 @@ class MainMenu {
         return le.src;
     }
 
+    /**
+     * Central content navigation: loads `url` into a new iframe inside `style.Content`.
+     * 1. Makes the URL absolute (`GetAbsolutePath`); unless `noNewState`, clears stored history state of other
+     *    pages (`ClearOtherHistoryState`).
+     * 2. Calls `style.ExternalContentFn()` with no arguments (navigation started).
+     * 3. If the first child of the host is an iframe it gets class `Hidden` and is removed after 25 ms,
+     *    otherwise the host is cleared.
+     * 4. Creates a hidden iframe (`createIFrame`, frameborder 0, allowtransparency) with an expando
+     *    `DoRemove` that reveals it (see below); `onload` schedules `DoRemove` after 1 s (`RemoveTimer`).
+     * 5. Unless `noNewState`, pushes a history entry (`SetUrl`) - but not for the very first embed;
+     *    then sets `window.SysWeaverDoneFirst = true`, sets `src = appendTheme(url)` and appends the iframe.
+     * @param {string} url - URL to embed (relative URLs resolve against the current page).
+     * @param {MainMenuStyle} style - Style providing `Content` and `ExternalContentFn`.
+     * @param {boolean} [noNewState] - True to not touch history (used for popstate / initial navigation).
+     * @returns {void}
+     */
     EmbeddContent(url, style, noNewState)
     {
         const content = style.Content;
@@ -197,6 +316,14 @@ class MainMenu {
         e.classList.add("Hidden");
         e.setAttribute("frameborder", "0");
         e.setAttribute("allowtransparency", "true");
+        /**
+         * Reveals the iframe (once): adds `Embedded` to the frame's `<html>` (same origin only), looks up the
+         * frame's `location.href` in `RowMap` to select the matching menu row (title = item Name) or else
+         * deselects (title = frame document.title, fallback location.pathname), clears the timer, removes
+         * `Hidden` and calls `ExternalContentFn(newUrl, title)`. Called from the 1 s load timer or early by
+         * `LoaderRemoved`; sets itself to null afterwards.
+         * @returns {void}
+         */
         e.DoRemove = () => {
             const cwin = e.contentWindow;
             let newUrl = null;
@@ -249,17 +376,30 @@ class MainMenu {
         if (!noNewState)
             if (window.SysWeaverDoneFirst)
                 this.SetUrl(url);
+        /** Global flag: true after the first embed; while falsy no history entry is pushed (reset by App popstate). @type {boolean} */
         window.SysWeaverDoneFirst = true;
         e.src = appendTheme(url);
         content.appendChild(e);
     }
 
+    /** The rendered menu. @type {?WebMenu} */
     Data = null;
+    /** The style / callbacks in use. @type {?MainMenuStyle} */
     Style = null;
+    /** Currently selected row (`tr.MenuSel`). @type {?HTMLTableRowElement} */
     Selected = null;
+    /** Original tool tip of the selected row (the title is cleared while selected). @type {?string} */
     SelTitle = null;
+    /** Absolute item URL -> row, used to highlight the row matching the loaded frame URL. @type {Map<string, HTMLTableRowElement>} */
     RowMap = new Map();
 
+    /**
+     * Changes the highlighted row: restores the previous row (removes `MenuSel`, restores its title, re-enables
+     * its icon with the normal colour), then highlights `row` (adds `MenuSel`, clears its title, disables its
+     * icon with the selected colour) and calls `style.SelectFn(row.MenuItem or null)`.
+     * @param {?HTMLTableRowElement} row - Row to select, or null to deselect.
+     * @returns {void}
+     */
     Select(row)
     {
         const s = this.Selected;
@@ -293,6 +433,11 @@ class MainMenu {
             f(data);
     }
 
+    /**
+     * Pushes a history entry with `state = key` and the URL hash set to `Base64EncodeString(key)` (deep link).
+     * @param {string} key - Absolute content URL.
+     * @returns {void}
+     */
     SetUrl(key) {
         const n = new URL(window.location);
         n.hash = Base64EncodeString(key);
@@ -300,6 +445,11 @@ class MainMenu {
         window.history.pushState(key, "", n);
     }
 
+    /**
+     * Same as `SetUrl` but replaces the current history entry (`history.replaceState`).
+     * @param {string} key - Absolute content URL.
+     * @returns {void}
+     */
     ReplaceUrl(key) {
         const n = new URL(window.location);
         n.hash = Base64EncodeString(key);
@@ -307,6 +457,28 @@ class MainMenu {
         window.history.replaceState(key, "", n);
     }
 
+    /**
+     * Appends one item row (`tr.MenuData`, expandos `MenuItem` = item and `MenuIcon` = ColorIcon) to a table,
+     * recursively followed by a `tr.MenuNested` row with a nested table for its children.
+     * - Cells: indentation (width depth*ExpandTab+6 px; also shifts the table's background tree-line position),
+     *   expander, name, icon. `Id === "-"` makes a separator (`MenuSeparator`, optional label span, no action).
+     * - Action by `Data`/`Type`: function Data -> called `(item, style, isUserClick)`, truthy hides the menu;
+     *   1 Table -> embeds `explore/table.html?q=../<Data>`; 2 Embedded -> embeds `<Data>`; 3 Link ->
+     *   `window.location.href = Data`; 4 LinkExternal -> `window.open(Data)`; 5 Js -> calls `window[Data]` if it
+     *   is a function, else `eval(Data)` (truthy hides the menu); 6 Chart -> embeds `chart/chart.html?q=../<Data>`.
+     *   Embedding actions ignore user clicks on the already selected row, select the row and call `HideFn`.
+     * - Embedded URLs are made absolute against the current page directory and stored in `RowMap`.
+     * - Items with children get `SubMenu`; without own action the row toggles expand/collapse (`expandFn`),
+     *   persisted as "1" in `localStorage[ExpKey + (Id || Name)]` when collapsed (`SubMenuHide` / `MenuHide`).
+     *   Expandable items without icon use `style.IconExpanderMain` as icon.
+     * - Flags bit 1 -> `MenuDisabled` and no handler; bit 2 -> `MenuChecked`. Rows with a handler get `MenuClick`.
+     * - The handler is also stored on the item as `data.OnClick` (called without event for programmatic use).
+     * @param {HTMLTableElement} toElement - Table to append to.
+     * @param {WebMenuItem} data - Item to render.
+     * @param {number} depth - Nesting depth (0 = top level).
+     * @param {MainMenuStyle} style - Style and callbacks.
+     * @returns {boolean} True if the item has children (expandable).
+     */
     Add(toElement, data, depth, style)
     {
         let expId = data.Id;
@@ -493,6 +665,12 @@ class MainMenu {
         if (useExpIcon)
             iconClass = style.IconExpanderMain;
 
+        /**
+         * Toggles the child row (`MenuHide` on irow, `SubMenuHide` on hrow), persists the state in localStorage,
+         * updates the row tool tip and both the item and expander icons. Null when the item has no children.
+         * @param {?Event} ev - Click event (propagation is stopped), or undefined for programmatic calls.
+         * @returns {void}
+         */
         const expandFn = canExpand ? function (ev)
         {
             if (badClick(ev))
@@ -592,6 +770,11 @@ class MainMenu {
 }
 
 
+/**
+ * Creates a `<SysWeaver-TabBlock>` element with tabIndex 0, used as a focus sentinel at the end of a pop-up
+ * (appended by `PopUpElement`).
+ * @returns {HTMLElement} The new (unattached) element.
+ */
 function CreateTabBlock() {
     const e = document.createElement("SysWeaver-TabBlock");
     e.tabIndex = "0";
@@ -601,7 +784,10 @@ function CreateTabBlock() {
 /**
  * Creates a "blocker" element that captures all clicks, dims the background etc.
  * Returns [blocker element, async close function]
- * @param {boolean} dontAllowClose If true, the blocker can't be removed be pressing 'Esc'.
+ * The `<SysWeaver-Blocker>` (not yet attached; the caller appends it) traps keyboard focus (`BlockTab`), gets
+ * tabIndex 0, stops propagation of key events, and closes on a primary mouse-down plus mouse-up both on the
+ * backdrop itself or on Escape - unless `dontAllowClose`.
+ * @param {boolean} dontAllowClose If true, the blocker can't be removed be pressing 'Esc' (or clicking the backdrop).
  * @param {function():Promise} onClose Optional async function that get's called when closed.
  * @returns {array} [0] = The HTMLElement of the blocker, [1] = an async function that when called removes the blocker.
  */
@@ -611,6 +797,11 @@ function CreatePopUpBlocker(dontAllowClose, onClose) {
     BlockTab(block);
 
 
+    /**
+     * Closes the blocker: awaits `onClose`, calls `UnblockTab`, removes the element and finally calls the
+     * optional expando `Close.EndFn` (set by callers that wait for the pop-up to close).
+     * @returns {Promise<void>}
+     */
     async function Close() {
         if (onClose)
             await onClose();
@@ -661,8 +852,10 @@ function CreatePopUpBlocker(dontAllowClose, onClose) {
 
 
 /**
-// Position of the popup element is by default at the normal flow position.
-// The position can be adjusted, like: dx = widthScale * element.width + offsetX, dy = heightScale * element.height + offsetY.
+ * Creates a `<SysWeaver-PopupMenu>` inside a new blocker (`CreatePopUpBlocker`), positioned with fixed
+ * coordinates computed once from `element.getBoundingClientRect()`. The blocker is not attached to the DOM.
+ * Position: left = rect.x + widthScale * rect.width + offsetX, top = rect.y + heightScale * rect.height + offsetY.
+ * Non-number scale/offset arguments default to 0.
  * @param {HTMLElement} element The element to position the pop-up relative to
  * @param {number} widthScale Optional scaling of the horizontal position: dx = widthScale * element.width + offsetX
  * @param {number} heightScale Optional scaling of the vertical position: dy = heightScale * element.height + offsetY.
@@ -683,6 +876,10 @@ function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY
         offsetY = 0;
 
     const popupMenuElement = document.createElement("SysWeaver-PopupMenu");
+    /**
+     * Sets the pop-up's left/top style (px) from the current bounding rect of `element` (see above).
+     * @returns {void}
+     */
     function setPos() {
 
         const rect = element.getBoundingClientRect();
@@ -717,10 +914,17 @@ function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY
 
 /**
  * Create a popup menu relative to some element
+ * Opens a closable `PopUpElementMenu` (not blocking) whose `<SysWeaver-PopupMenuBack>` gets class `DefaultMenu`
+ * and renders the `WebMenu` returned by `build` with a new `MainMenu`. The menu style's `Content` is the page's
+ * `<app-content>` (looked up by tag name), so Embedded/Table/Chart items load into the shell's content area;
+ * `HideFn` closes the pop-up. Its `ExternalContentFn` hides `<app-ContentTitle>` (class `Hidden`) when there is no
+ * title, otherwise sets its text/tool tip and `document.title = window.SysWeaverAppTitle + " - " + title`, and
+ * always assigns the undeclared global `contentUrl`. Note: the returned promise is not awaited / returned.
  * @param {HTMLElement} element The element used to position the pop-up.
- * @param {function(function():Promise<void>):Promise<void>, HTMLElement):WebMenu}: build Async function that should build and return a WebMenu object.
+ * @param {function(function():Promise<void>, HTMLElement):WebMenu} build Function (called synchronously, result not awaited) that receives the close function and the menu back element and returns the WebMenu to show.
  * @param {boolean} rightAlign If true the pop-up is right aligned (else it left aligned).
  * @param {boolean} bottomAlign If true the pop-up is bottom aligned (else it top aligned).
+ * @returns {void}
  */
 function PopUpMenu(element, build, rightAlign, bottomAlign) {
 
@@ -733,6 +937,13 @@ function PopUpMenu(element, build, rightAlign, bottomAlign) {
         const appHeaderMiddle = document.getElementsByTagName("app-ContentTitle")[0];
         menuStyle.HideFn = close;
         menuStyle.Content = appContent;
+        /**
+         * Updates the shell title (`<app-ContentTitle>` and document.title) for content opened from this pop-up
+         * menu and stores `url` in the implicit global `contentUrl`.
+         * @param {string} [url] - New content URL (undefined when navigation starts).
+         * @param {string} [title] - New content title; falsy hides the title element.
+         * @returns {void}
+         */
         menuStyle.ExternalContentFn = (url, title) => {
             if (!title) {
                 appHeaderMiddle.classList.add("Hidden");
@@ -763,6 +974,11 @@ function PopUpMenu(element, build, rightAlign, bottomAlign) {
  * @param {number} heightScale Part of the vertical offset of the anchor point, as in a fraction of the element height (offsetY += heightScale * element.height).
  * @param {number} offsetX The horizontal offset of the anchor point in pixels.
  * @param {number} offsetY The vertical offset of the anchor point in pixels.
+ * Creates the pop-up with `CreatePopUpAtElement` (sets the expando `page.Close`), toggles class `Scroll` on the
+ * blocker via a ResizeObserver when the content overflows, appends the blocker to `document.body` and focuses
+ * it, awaits `build`, then appends a `CreateTabBlock()` sentinel. When blocking, waits until `close.EndFn` runs.
+ * The position is computed once (not tracked afterwards).
+ * @returns {Promise<void>}
  */
 async function PopUpElement(element, build, blockUntilClosed, dontAllowClose, onClose, widthScale, heightScale, offsetX, offsetY) {
 
@@ -801,6 +1017,10 @@ async function PopUpElement(element, build, blockUntilClosed, dontAllowClose, on
  * @param {function():Promise<void>} onClose An optional function to call when the pop-up is closed.
  * @param {boolean} rightAlign If true the pop-up is right aligned (else it left aligned).
  * @param {boolean} bottomAlign If true the pop-up is bottom aligned (else it top aligned).
+ * Uses `PopUpElement` with anchor scale x = -0.25 (right aligned) or -0.75 (left aligned), y = 0 / offset -8
+ * (bottom aligned) or y = 1 / offset +8 (below the element), and builds into a `<SysWeaver-PopupMenuBack>`
+ * (class `Right` when right aligned, expando `Close`). Note: `build` receives (backElement, close) here.
+ * @returns {Promise<void>}
  */
 async function PopUpElementMenu(element, build, blockUntilClosed, dontAllowClose, onClose, rightAlign, bottomAlign) {
 
@@ -826,6 +1046,12 @@ async function PopUpElementMenu(element, build, blockUntilClosed, dontAllowClose
  * @param {function():Promise<void>} onClose An optional function to call when the pop-up is closed.
  * @param {boolean} haveCloseButton If true, a close button will be visible (unless dontAllowClose is true).
  * @returns {function():Promise<void>} The async function to use for closing the pop-up (only useful when blockUntilClosed is false).
+ * DOM: a `CreatePopUpBlocker` blocker containing a focusable `<SysWeaver-PopUpBackground>` (clicks do not
+ * propagate) with expandos `Close`, `Block`, `MakeFullWidth()` (adds `FullWidth` to the blocker) and
+ * `MakeMaxHeight()` (adds `MaxHeight`). A ResizeObserver toggles `Scroll` on the blocker on overflow.
+ * `haveCloseButton` defaults to `!dontAllowClose`; when set, a `<SysWeaver-BlockerCloseButton>` is passed to
+ * `build` and afterwards appended to the page with an `IconClosePopUp` ColorIcon that calls Close.
+ * When blocking, the promise resolves (with undefined) once Close has run (`Close.EndFn`).
  */
 async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveCloseButton) {
 
@@ -841,7 +1067,15 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
     page.onclick = ev => ev.stopPropagation();
     page.Close = Close;
     page.Block = block;
+    /**
+     * Makes the pop-up use the full width (adds class `FullWidth` to the blocker).
+     * @returns {void}
+     */
     page.MakeFullWidth = () => block.classList.add("FullWidth");
+    /**
+     * Makes the pop-up use the maximum height (adds class `MaxHeight` to the blocker).
+     * @returns {void}
+     */
     page.MakeMaxHeight = () => block.classList.add("MaxHeight");
     block.appendChild(page);
     page.tabIndex = "0";
@@ -896,6 +1130,10 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
  * @param {number} iconWidth Optional width in pixels of the icon (defaults to 64)
  * @param {number} iconHeight Optional height in pixels of the icon (defaults to 64)
  * @returns {function()} The function to execute to close the pop-up
+ * (Actually a Promise resolving to that async close function.) The pop-up cannot be dismissed by the user and
+ * has no close button. Content: optional `<SysWeaver-PopUpWorkingTitle>`, a `<SysWeaver-PopUpWorkingIcon>` with
+ * a 256x256 `IconWorking`, optional `<SysWeaver-PopUpWorkingText>` and, if `iconClass` is given, a second
+ * `<SysWeaver-PopUpWorkingIcon>` with that icon.
  */
 async function PopUpWorking(title, text, iconClass, iconWidth, iconHeight) {
     return PopUp(el => {
@@ -931,6 +1169,12 @@ async function PopUpWorking(title, text, iconClass, iconWidth, iconHeight) {
 
 /**
  * Pop up a selection of custom items that are searchable
+ * DOM inside a `PopUp`: `<SysWeaver-PopUpText>` (text, tool tip = title), `<SysWeaver-PopUpFilter>` holding the
+ * input (placeholder = title) and an `IconClearInput` clear button, and `<SysWeaver-SelectList>` holding the
+ * elements returned by `getItems`. Enter (without modifiers) clicks the first list element. Results of a search
+ * are dropped if the input changed meanwhile; identical consecutive searches are skipped.
+ * Note: the first parameter is named `text` in code (documented as `header` below).
+ * @returns {Promise<void>} Resolves when built, or when closed if `blockUntilClosed`.
  * @param {string} header Header text
  * @param {string} title Header title (tool tip)
  * @param {function(string, function):HTMLElement[]} getItems Get a list of items as HTML elements given the search text, the function closes the dialog (use when select)
@@ -965,6 +1209,11 @@ async function PopUpSelection(text, title, getItems, startText, getAll, blockUnt
         page.appendChild(items);
 
         let prevSearch = null;
+        /**
+         * Runs `getItems` for the current input value (skipped when empty unless `getAll`, or when equal to the
+         * previous search) and replaces the list content, unless the input changed while waiting.
+         * @returns {Promise<void>}
+         */
         async function update() {
             const search = inputE.value;
             if (!getAll) {
@@ -988,7 +1237,11 @@ async function PopUpSelection(text, title, getItems, startText, getAll, blockUnt
         inputE.focus();
         await update();
 
-        const filterChangeFn = async () => 
+        /**
+         * Input change handler: enables the clear button only when there is text, then runs `update`.
+         * @returns {Promise<void>}
+         */
+        const filterChangeFn = async () =>
         {
             clearButton.SetEnabled(!!inputE.value);
             await update();
@@ -1033,6 +1286,13 @@ async function PopUpSelection(text, title, getItems, startText, getAll, blockUnt
  * @param {string} title Optional title
  * @param {string} titleToolTip Optional tool tip on the title
  * @param {string} primName If the type is primitve, use this as the display name
+ * @returns {Promise<?object>} The edited object (`Edit.GetObject()`) if the accept button was pressed, else null.
+ * Shows a blocking `PopUp` with an optional `<SysWeaver-ConfTitle>`, an `Edit` property editor (from the edit/
+ * scripts, `EditOptions` Title/Border off) and a `<SysWeaver-ConfButtons>` row with the accept `Button`.
+ * A string `type` is first resolved with `sendRequest("../edit/GetTypeInfo", type)` (Fail + empty pop-up on
+ * error); for primitive types (`TypeMemberFlags.IsPrimitive`) the display name is primName ?? title ?? "Value".
+ * NOTE: this function is declared twice in this file with identical bodies; this first declaration is
+ * overridden by the second one below.
  */
 async function PopUpEdit(type, obj, buttonText, buttonIcon, buttonToolTip, title, titleToolTip, primName) {
     let ret = null;
@@ -1090,6 +1350,8 @@ async function PopUpEdit(type, obj, buttonText, buttonIcon, buttonToolTip, title
  * @param {string} title Optional title
  * @param {string} titleToolTip Optional tool tip on the title
  * @param {string} primName If the type is primitve, use this as the display name
+ * @returns {Promise<?object>} The edited object if the accept button was pressed, else null.
+ * NOTE: second (effective) declaration of PopUpEdit; identical to the one above, see its comment for details.
  */
 async function PopUpEdit(type, obj, buttonText, buttonIcon, buttonToolTip, title, titleToolTip, primName) {
     let ret = null;
@@ -1150,19 +1412,11 @@ async function PopUpEdit(type, obj, buttonText, buttonIcon, buttonToolTip, title
  * @param {string} cancelButtonTitle Optional tool tip text on the CANCEL button
  * @param {string} okStyle Optional css class to add to the OK button
  * @param {string} cancelStyle Optional css class to add to the CANCEL button
-/**
- * Popup a confirm dialog that let the user acccept or reject something
- * @param {string} title Title of the confirmation dialog
- * @param {string} text Text of the confirmation dialog
- * @param {string} okButtonText Text on the OK button
- * @param {string} cancelButtonText Text on the CANCEL button
- * @param {string} okButtonImageClass Optional image to use on the OK button (class name or image url)
- * @param {string} cancelButtonImageClass Optional image to use on the CANCEL button (class name or image url)
- * @param {string} okButtonTitle Optional tool tip text on the OK button
- * @param {string} cancelButtonTitle Optional tool tip text on the CANCEL button
- * @param {string} okStyle Optional css class to add to the OK button
- * @param {string} cancelStyle Optional css class to add to the CANCEL button
  * @returns {boolean} True if the user pressed the ok button
+ * (A Promise<boolean>; resolves when the blocking pop-up closes - Cancel, Escape or backdrop click give false.)
+ * DOM: optional `<SysWeaver-ConfTitle>` / `<SysWeaver-ConfText>` (clicking copies the text to the clipboard via
+ * `ValueFormat.copyOnClick`) and a `<SysWeaver-ConfButtons>` row with OK (default icon `IconOk`, text "Ok") and
+ * Cancel (default icon `IconCancel`, text "Cancel") `Button`s.
  */
 async function Confirm(title, text, okButtonText, cancelButtonText, okButtonImageClass, cancelButtonImageClass, okButtonTitle, cancelButtonTitle, okStyle, cancelStyle)
 {
@@ -1199,12 +1453,30 @@ async function Confirm(title, text, okButtonText, cancelButtonText, okButtonImag
     return ok;
 }
 
+/**
+ * A reusable, paged, searchable selection pop-up that remembers the last filter and a most-recently-used list
+ * of ids in `localStorage["SysWeaver.PopUpRecent.<id>"]` (JSON `{Filter: string, Recent: any[]}`).
+ * Create once with the callbacks, then call `Show(...)` each time the selection is needed.
+ * Used e.g. by edit/EditTypeLanguage.js.
+ */
 class SearchablePoupSelection {
+    /** localStorage key "SysWeaver.PopUpRecent.<id>". @type {string} */
     Key;
+    /** Creates the list element for a data item: `(data, onSelect(data), isRecent) => HTMLElement`. @type {function(any, function(any):Promise<void>, boolean):HTMLElement} */
     CreateElementFn;
+    /** Finds items: `async (filter, recentMap, count, offset) => any[]` (recentMap: recent id -> 1-based MRU position). @type {function(string, Map<any,number>, number, number):Promise<any[]>} */
     FindFn;
+    /** Maximum number of recent ids kept. @type {number} */
     MaxRecent;
+    /** Returns the id to remember for a data item. @type {function(any):any} */
     GetRecentIdFn;
+    /**
+     * @param {string} id - Unique id of this selection, used in the storage key.
+     * @param {function(any):any} getRecentIdFn - Maps a data item to its id (stored in the MRU list).
+     * @param {function(any, function(any):Promise<void>, boolean):HTMLElement} createElementFn - Builds a list element; must call the given select function when chosen.
+     * @param {function(string, Map<any,number>, number, number):Promise<any[]>} findFn - Search callback (filter, recentMap, maxCount, offset).
+     * @param {number} [maxRecent=10] - Size of the MRU list (falsy -> 10).
+     */
     constructor(id, getRecentIdFn, createElementFn, findFn, maxRecent) {
         if (!maxRecent)
             maxRecent = 10;
@@ -1216,6 +1488,23 @@ class SearchablePoupSelection {
     }
 
 
+    /**
+     * Shows the selection in a `PopUp`: `<SysWeaver-PopUpText>` title, `<SysWeaver-PopUpFilter>` (input initialised
+     * with the stored filter + `IconClearInput` clear button) and `<SysWeaver-PopSelData>` with the results. Results
+     * are fetched `maxView + 1` at a time; if more exist, a `<SysWeaver-PopSelEnd>` with an `IconMoreData` button
+     * loads the next page (appended), else it says "No more data!" ("Nothing found!" when empty). Enter selects
+     * the first result. Selecting calls `onSelect` (errors ignored), moves the item id to the front of the MRU
+     * list, saves the state and closes the pop-up. The filter is saved when a new first page is fetched.
+     * @param {string} titleText - Title text.
+     * @param {function(any):Promise<void>} [onSelect] - Called with the selected data item.
+     * @param {number} [maxView=20] - Page size.
+     * @param {string} [titleToolTip] - Title tool tip (defaults to titleText).
+     * @param {string} [filterPlaceholder] - Input placeholder (default "Enter some text to filter").
+     * @param {boolean} [blockUntilClose] - Wait until the pop-up is closed.
+     * @param {boolean} [dontAllowClose] - Prevent user dismissal.
+     * @param {function():Promise<void>} [onClose] - Called when closed.
+     * @returns {Promise<void>}
+     */
     async Show(titleText, onSelect, maxView, titleToolTip, filterPlaceholder, blockUntilClose, dontAllowClose, onClose) {
         if (!maxView)
             maxView = 20;
@@ -1269,6 +1558,12 @@ class SearchablePoupSelection {
             const dataEl = document.createElement("SysWeaver-PopSelData");
             const getRecentFn = th.GetRecentIdFn;
             const findFn = th.FindFn;
+            /**
+             * Selects a data item: awaits `onSelect(val)` (exceptions swallowed), updates and persists the MRU
+             * list (exceptions swallowed) and closes the pop-up.
+             * @param {any} val - Selected data item.
+             * @returns {Promise<void>}
+             */
             const onSelectFn = async val => {
                 if (onSelect) {
                     try {
@@ -1298,6 +1593,12 @@ class SearchablePoupSelection {
             let lastSearch = null;
             let lastOffset = -1;
             let topSearch = null;
+            /**
+             * Fetches and renders results for the current filter and `offset` (skipped if neither changed).
+             * Offset 0 replaces the list (and persists the filter once a previous fetch happened); a larger offset
+             * replaces the trailing end element with the next page. Tracks the first result in `topSearch`.
+             * @returns {Promise<void>}
+             */
             const updateList = async () => {
 
                 const filter = inputEl.value;
@@ -1363,6 +1664,10 @@ class SearchablePoupSelection {
 
             await updateList();
 
+            /**
+             * Filter input handler: updates the clear button state, resets paging and refreshes the list.
+             * @returns {Promise<void>}
+             */
             const filterChangedFn = async () => {
                 clearButton.SetEnabled(!!inputEl.value);
                 offset = 0;
@@ -1404,49 +1709,106 @@ class SearchablePoupSelection {
 }
 
 
+/**
+ * Options for `App.Create` / `App.Init`. `appMain` always uses the defaults; pass an instance to
+ * `App.Create(params)` directly to customise the shell.
+ */
 class AppParams {
 
+    /** Element to build the shell in (default `document.body`). @type {?HTMLElement} */
     PageElement = null;
+    /** Create the main menu (`<app-menu>`) and its header button. @type {boolean} */
     MainMenu = true;
+    /** Comma separated server menu names for the main menu (null -> "Default"; "" -> none). @type {?string} */
     MainMenus = null;
+    /** Initial pinned state on desktop when nothing is stored in localStorage["SysWeaver.Pinned"]. @type {boolean} */
     MainMenuPinned = false;
 
+    /** Create the `<app-content>` host. @type {boolean} */
     Content = true;
+    /** Show the back button: true/false, or null = only on mobile (`window.Mobile`). @type {?boolean} */
     Navigation = null;
+    /** Show the user button (pop-up with the server "User" menu; skipped fetch when SettingMenus === ""). @type {boolean} */
     UserButton = true;
+    /** Show the settings button. @type {boolean} */
     SettingsButton = true;
+    /** Comma separated server menus for the settings pop-up (null -> "Theme", or "User,Theme" without a user button). @type {?string} */
     SettingMenus = null;
+    /** Add the "Enter/Exit full screen" item to the settings pop-up. @type {boolean} */
     SettingsFs = true;
+    /** Add the "Open in new tab" item to the settings pop-up (only if Content is also true). @type {boolean} */
     SettingsNewTab = true;
+    /** Optional callback to modify the settings WebMenu before it is shown. @type {?function(WebMenu, function():Promise<void>):void} */
     OnSettingsMenuOpenFn = null; // (webMenu, closeFn)
+    /** Optional async callback to modify the main menu definition before rendering. @type {?function(WebMenu, MainMenuStyle, function():void):Promise<void>} */
     OnMainMenuDefFn = null;  // async (menuDef, mainMenuStyle, hideFn)
 }
 
 
+/**
+ * The application shell. Created once by `appMain` via `App.Create()`; builds the header (`<app-header>` with
+ * menu, back, pin, title, user and settings buttons), the content host `<app-content>` and the main menu
+ * `<app-menu>`, wires history/message navigation and returns the initial-page function in `InitPage`.
+ * The instance is published as `window.SysWeaverApp`.
+ */
 class App {
 
+    /** Element the shell is built in. @type {HTMLElement} */
     Page;
+    /** `<app-header>` element. @type {HTMLElement} */
     AppHeader;
+    /** `<app-menu>` element (main menu host). @type {HTMLElement} */
     AppMenu;
+    /** `<app-content>` element (iframe host). @type {HTMLElement} */
     Content;
+    /** `<app-MenuButton>` element (main menu toggle), only when params.MainMenu. @type {HTMLElement} */
     AppMenuButton;
+    /** `<app-BackButton>` element (history.back()), only when navigation is enabled. @type {HTMLElement} */
     AppBackButton;
+    /** `<app-PinButton>` element (pins the main menu). @type {HTMLElement} */
     PinButton;
+    /** `<app-ContentTitle>` element. @type {HTMLElement} */
     Title;
+    /** Function returned by Init that opens the initial content (URL hash or first menu item). @type {function():void} */
     InitPage;
 
+    /**
+     * Creates an App, runs `Init(params)` and stores its result in `InitPage`.
+     * @param {AppParams} [params] - Options (defaults when falsy).
+     * @returns {Promise<App>} The initialised app.
+     */
     static async Create(params) {
         const app = new App();
         app.InitPage = await app.Init(params);
         return app;
     }
 
+    /**
+     * Builds the shell DOM and wiring. Order: `<app-header>`; optional `<app-BackButton>` (`IconNavBack`, Navigation
+     * or window.Mobile); `<app-PinButton>` (`IconLock`, pins and stores localStorage["SysWeaver.Pinned"]=true);
+     * `<app-ContentTitle>` (click copies its title); `<app-UserButton>` (requests `Api/application/GetMenu("User")`
+     * and `Api/auth/GetUser`; icon `IconCurrentUserFill` + class `WithUser` when logged in, else icons/user.svg;
+     * single-root menus are unwrapped; listens for InterOp `UserImageChanged` to refresh the background image
+     * `../auth/UserImages/Current/small?<n>`); `<app-SettingsButton>` (`IconSettings`; pop-up "AppSettings" menu with
+     * full screen toggle, server menu items, "Open in new tab" and `OnSettingsMenuOpenFn`); `<app-content>`; and
+     * `<app-menu>` with the main menu (name "Main", from `Api/application/GetMenu(MainMenus ?? "Default")`).
+     * Main menu state: body classes `SwPinned` / `SwCollapsed` (see inner functions), `app-capture` overlay,
+     * auto-show when the mouse is within 8 px of the menu strip's left edge. Registers window `popstate`
+     * (string state -> re-embed without new history entry; null -> reset SysWeaverDoneFirst and click the first
+     * item) and `message` (`IframeNavigating` -> embed Url; `LoaderRemoved` -> reveal frame) listeners.
+     * Server requests run sequentially. The pin button does nothing when MainMenu is false (`setPinned` is null).
+     * @param {AppParams} [params] - Options (defaults when falsy).
+     * @returns {Promise<function():void>} Function opening the initial page: embeds the Base64 URL from the
+     *   location hash if present, else the first main menu item's `OnClick`; a no-op without a main menu/items.
+     */
     async Init(params) {
         if (!params)
             params = new AppParams();
         const docTitle = document.title;
+        /** Original document title of the shell, used to build "<app title> - <content title>". @type {string} */
         window.SysWeaverAppTitle = docTitle;
         const t = this;
+        /** The App instance (global shell reference). @type {App} */
         window.SysWeaverApp = t;
         const page = params.PageElement || document.body;
         t.Page = page;
@@ -1494,6 +1856,8 @@ class App {
             const backIcon = new ColorIcon("IconLock", headerIconColor, buttonSize, buttonSize,
                 _TF("Click to lock the menu in the extapnded state", "The tool tip description on a button that when clicked will always show the menu"),
                 ev => {
+                    if (!setPinned)
+                        return;
                     setPinned(true);
                     localStorage.setItem("SysWeaver.Pinned", true);
                 });
@@ -1505,6 +1869,11 @@ class App {
         //  Main title
         const appHeaderMiddle = document.createElement("app-ContentTitle")
         t.Title = appHeaderMiddle;
+        /**
+         * Copies the current content title to the clipboard (with an info toast) on a primary click.
+         * @param {MouseEvent} ev - Click event.
+         * @returns {void}
+         */
         appHeaderMiddle.onclick = ev => {
             if (badClick(ev))
                 return;
@@ -1660,6 +2029,13 @@ class App {
 
 
             let pinned = null;
+            /**
+             * Applies the pinned state as body classes: on narrow layouts always collapsed (`SwCollapsed`, no
+             * `SwPinned`) while remembering `p`; otherwise `SwPinned` (true) or `SwCollapsed` (false). A truthy `p`
+             * is always re-applied. Does not write localStorage (callers do). Re-run on the body `SwLayout` event.
+             * @param {boolean} p - True to pin the menu.
+             * @returns {void}
+             */
             setPinned  = p => {
                 if (window.Narrow) {
                     bcl.add(collapsedStyle);
@@ -1699,13 +2075,24 @@ class App {
             const appMenuCapture = document.createElement("app-capture");
 
             let mouseOverFn = null;
+            /**
+             * Removes the menu's auto-show handler for 250 ms (prevents re-opening right after hiding).
+             * Removes and re-adds the same "mousemove" listener that the handler is registered with.
+             * @returns {void}
+             */
             const tempDisableAutoShow = function () {
-                appMenu.removeEventListener("mouseover", mouseOverFn);
+                appMenu.removeEventListener("mousemove", mouseOverFn);
                 setTimeout(() => {
-                    appMenu.addEventListener("mouseover", mouseOverFn);
+                    appMenu.addEventListener("mousemove", mouseOverFn);
                 }, 250);
             };
 
+            /**
+             * Collapses a temporarily shown menu: no-op if already collapsed or if pinned on a wide layout.
+             * Removes the `app-capture` overlay and the body capture listeners, adds `SwCollapsed` and briefly
+             * disables auto-show. Also used as `HideFn` of the main menu style.
+             * @returns {void}
+             */
             const menuHide = function () {
                 if (bcl.contains(collapsedStyle))
                     return;
@@ -1719,6 +2106,12 @@ class App {
                 tempDisableAutoShow();
             }
 
+            /**
+             * Capture-phase body mouseover handler while the menu is shown: hides the menu when the pointer is over
+             * anything that is not inside `<app-menu>` or `<app-header>`.
+             * @param {MouseEvent} ev - Mouse event.
+             * @returns {void}
+             */
             const menuCapture = function (ev) {
                 let target = ev.target;
                 while (target != document.body) {
@@ -1731,11 +2124,21 @@ class App {
                 menuHide();
             }
 
+            /**
+             * Capture-phase body mouseleave handler: hides the menu when the pointer leaves the body.
+             * @param {MouseEvent} ev - Mouse event.
+             * @returns {void}
+             */
             const menuCaptureLeave = function (ev) {
                 if (ev.target === document.body)
                     menuHide();
             }
 
+            /**
+             * Temporarily shows the collapsed menu: appends the `<app-capture>` overlay, registers the capture
+             * listeners (menuCapture / menuCaptureLeave) and removes `SwCollapsed`. No-op when not collapsed.
+             * @returns {void}
+             */
             const menuShow = function () {
                 if (!bcl.contains(collapsedStyle))
                     return;
@@ -1746,6 +2149,11 @@ class App {
             }
 
 
+            /**
+             * Main menu button handler: when pinned, unpins (stores localStorage["SysWeaver.Pinned"]=false);
+             * otherwise shows or hides the temporary menu.
+             * @returns {void}
+             */
             const menuToggle = function () {
                 if (bcl.contains(pinnedStyle)) {
                     setPinned(false);
@@ -1760,6 +2168,12 @@ class App {
 
             const noOpenWidth = 8;
 
+            /**
+             * Auto-show handler (registered for "mousemove" on `<app-menu>`): shows the collapsed menu when the
+             * pointer's clientX is below 8 px.
+             * @param {MouseEvent} ev - Mouse event.
+             * @returns {void}
+             */
             mouseOverFn = ev => {
                 if (!bcl.contains(collapsedStyle))
                     return;
@@ -1783,9 +2197,21 @@ class App {
             menuStyle.Content = t.Content;
             menuStyle.HideFn = menuHide;
 
+            /**
+             * Selection callback of the main menu (intentionally empty).
+             * @param {?WebMenuItem} data - Selected item.
+             * @returns {void}
+             */
             menuStyle.SelectFn = data => {
 
             };
+            /**
+             * Updates `<app-ContentTitle>` (hidden via class `Hidden` without title) and
+             * `document.title = "<original title> - <title>"` when main-menu content is revealed.
+             * @param {string} [url] - New content URL (unused).
+             * @param {string} [title] - Content title.
+             * @returns {void}
+             */
             menuStyle.ExternalContentFn = (url, title) => {
                 if (!title) {
                     appHeaderMiddle.classList.add("Hidden");
@@ -1818,6 +2244,7 @@ class App {
                 }
                 else {
                     console.log("Navigated to front page");
+                    // Back to the initial (state-less) entry: re-open the first item without pushing history.
                     window.SysWeaverDoneFirst = false;
                     menuDef.Items[0].OnClick();
                 }
@@ -1865,6 +2292,14 @@ class App {
 
 
 
+/**
+ * Shell entry point (`<body onload="appMain()">` in the root index.html). Shows the full-page loading overlay,
+ * creates the shell with default `AppParams` (`App.Create()`), awaits the optional application hook
+ * `window.AppMain()` (typically defined in app/app.js), removes the overlay, waits 1 ms and opens the initial
+ * page (`app.InitPage()`).
+ * @param {*} [settingMenus] - Unused.
+ * @returns {Promise<void>}
+ */
 async function appMain(settingMenus) {
 
     const page = document.body;

@@ -1,10 +1,55 @@
 ﻿
 
 
+/**
+ * @file chart.js - first-party chart viewer logic of SysWeaver.MicroService.ChartJs
+ * (not to be confused with the vendored Chart.js library in external/chart.js).
+ *
+ * Loading: included by chart.html as a deferred classic script (not a module) after
+ * ../common/common.js, external/chart.js (global `Chart`), external/hammerjs.js and
+ * external/chartjs_plugin_datalabels.js (global `ChartDataLabels`). chart.html calls `chartMain()`
+ * from `<body onload>`. Consumers never include this file directly; they open/embed
+ * `chart/chart.html?q=<url>` in an iframe or link (explore/table.js, app/application.js menu type 6,
+ * ServerManager server.js / serviceInfo.js, C# ChartJsService and UserStorageChartExporter links).
+ *
+ * Globals defined: classes `Random`, `CanvasChartOptions`, `CanvasChart`; functions `setValue`, `chartMain`.
+ * The only code executed at load time is the evaluation of the static fields of `CanvasChart`
+ * (`CS` captures `document.currentScript.src`).
+ *
+ * Dependencies (globals from other files):
+ * - common/common.js: getUrlParams, getRequest, sendRequest, includeJs, includeCss, AddLoading, Fail, Info,
+ *   delay, ColorIcon, ValueFormat (toString, copyToClipboardInfo), Base64EncodeString, GetAbsolutePath,
+ *   Open, InterOp.
+ * - app/application.js (loaded lazily by CanvasChart.getChartExportMenu): PopUpMenu, PopUpWorking,
+ *   WebMenu, WebMenuItem.
+ * - Vendored: Chart (Chart.js 4.x), ChartDataLabels, C2S (canvas2svg, loaded lazily for SVG export).
+ * - common/theme.css variables: --ThemeBackground, --ThemeBackgroundRGB, --ThemeFont, --ThemeMain,
+ *   --ThemeMainRGB, --ThemeAcc1.
+ *
+ * Server contract: the `q` URL returns a Chart.js config extended with the C# `ChartJsConfig` fields
+ * (RefreshRate, ValidTypes, Precision, Title, ValuePrefix, ValueSuffix, ValueLabel, DisableOrderMenu,
+ * DisableColorMenu). Exporters come from GET ../Api/GetChartExporters, exports are POSTed to
+ * ../Api/ExportChart.
+ *
+ * Conventions: almost all logic lives in one closure inside `CanvasChart.addChart`; view state (type,
+ * order, colours, export scale) lives only in that closure (no localStorage/sessionStorage). `addChart`
+ * mutates the global `Chart.defaults` and calls `Chart.register` on every call, so one chart per page /
+ * iframe is assumed. Labels act as identity keys in the live-update diff.
+ */
+
+
+/**
+ * Static-only seeded pseudo random number generator (sfc32 style, 4 x 32 bit state).
+ * Used for reproducible colour schemes (random gradients seeded per menu click, label-hash colours).
+ * Never instantiated.
+ */
 class Random {
 
 
-    // Create an array of 4 random integers that can be used as a seed
+    /**
+     * Create an array of 4 random integers that can be used as a seed (from Math.random()).
+     * @returns {number[]} Four int32 values.
+     */
     static GetRandomSeed() {
         return [
             (Math.random() * 4294967295) | 0,
@@ -14,7 +59,12 @@ class Random {
         ];
     }
 
-    // Create an array of 4 integers for a given string (using a non-secure hash)
+    /**
+     * Create an array of 4 integers for a given string (using a non-secure hash: four shift/add rolling hashes).
+     * The same text always gives the same seed.
+     * @param {string} text - Text to hash.
+     * @returns {number[]} Four int32 values.
+     */
     static SeedFromString(text) {
         let a = 98764321234;
         let b = 38764321237;
@@ -35,7 +85,13 @@ class Random {
         return [a, b, c, d];
     }
 
-    // Seed can be: a string, an array of 4 integers, an integer.
+    /**
+     * Create a seeded generator function.
+     * Seed can be: a string (hashed with SeedFromString), an array of 4 integers (the state words),
+     * an integer (used as the first word, `seed | 0`, with the fixed constants 19, 74, 11 for the others).
+     * @param {string|number[]|number} seed - The seed.
+     * @returns {function():number} Generator returning floats in [0, 1).
+     */
     static Create(seed) {
         let a, b, c, d;
         if (typeof seed === "string")
@@ -64,23 +120,52 @@ class Random {
     }
 }
 
+/**
+ * Plain option bag passed to `CanvasChart.addChart`; created with `new CanvasChartOptions()` by `chartMain`
+ * (or defaulted inside `addChart`).
+ * The undeclared optional fields `MinValue`, `MaxValue` and `MaxCount` (numbers) are also read when present
+ * (by FilterData / Limit inside addChart; `chartMain` sets them from URL parameters).
+ */
 class CanvasChartOptions {
 
+    /** @type {boolean} When true, no menu icon and no keyboard handler are created. */
     DisableMenu = false;
+    /** @type {?function(object):(void|Promise<void>)} Awaited on each freshly fetched server config before it is stored as the original (orgDataStr). */
     OnServerData = null;
+    /** @type {?function(object):(void|Promise<void>)} Awaited on the config after ApplyChanges, before it is rendered / diffed (only in DoUpdate). */
     OnFixedData = null;
+    /** @type {?function(object):void} Called with `Chart.defaults` by UpdateColor after the theme has been copied into the defaults. */
     OnDefaults = null;
+    /** @type {?function(string, any, number, number):void} Called from the chart options.onClick with (label, value, datasetIndex, dataIndex) of the first clicked element. */
     OnClick = null;
+    /** @type {boolean} Adds class `Transparent` to the <SysWeaver-Chart> element (no background). */
     Transparent = false;
+    /** @type {boolean} When true addChart awaits the first DoUpdate before returning; otherwise it returns immediately. */
     WaitFirst = true;
+    /** @type {?number} Data label mode 0-6 overriding the config's ValueLabel (see ApplyChanges in addChart). */
     ValueLabel = null;
+    /** @type {boolean} Hides the Order menu and disables the Space sort shortcut. */
     DisableOrderMenu = false;
+    /** @type {boolean} Hides the data colouring part of the Color menu and disables the o/l/g/s/m shortcuts. */
     DisableColorMenu = false;
 }
 
+/**
+ * Static-only class holding shared state, the `addChart` factory and the static data label strategies.
+ * Never instantiated. Each `addChart` call creates one live, self-refreshing chart whose state lives in
+ * the closure of that call.
+ */
 class CanvasChart {
 
 
+    /**
+     * Get the server exporter menu items, loading the lazy export/menu dependencies on first use.
+     * Loads in parallel (relative to CanvasChart.CS) external/canvas2svg.js, ../app/application.js and
+     * ../app/application.css, plus GET ../Api/GetChartExporters (relative to the page); caches the result
+     * in CanvasChart.MenuExportItems.
+     * @returns {Promise<WebMenuItem[]>} Exporter items (Name = exporter id, Title = description, IconClass,
+     *   Data = ChartExportInputTypes as string: "0" Data, "1" Png, "2" Svg).
+     */
     static async getChartExportMenu() {
         const m = CanvasChart.MenuExportItems;
         if (m)
@@ -96,15 +181,29 @@ class CanvasChart {
         return data;
     }
 
+    /** @type {string} URL of this script (document.currentScript.src captured at load); base for the lazy includes. */
     static CS = document.currentScript.src;
+    /** @type {?WebMenuItem[]} Cache of the server exporter list (set by getChartExportMenu). */
     static MenuExportItems = null;
 
+    /**
+     * Parse a text as XML, let a callback mutate the document and serialize it back.
+     * Used to rewrite the SVG root element on SVG export.
+     * @param {string} text - XML text (parsed as "text/xml").
+     * @param {function(XMLDocument):void} onXmlDoc - Callback that mutates the parsed document.
+     * @returns {string} The re-serialized XML.
+     */
     static tweakXmlText(text, onXmlDoc) {
         const xmlDoc = new DOMParser().parseFromString(text, "text/xml");
         onXmlDoc(xmlDoc);
         return new XMLSerializer().serializeToString(xmlDoc);
     }
 
+    /**
+     * Display names of the 12 hue steps (30 degrees apart) used by the fixed gradient menu items
+     * (FixedValue/FixedSeries/FixedMag 0-11). Index 4 and 5 are both "Green".
+     * @type {string[]}
+     */
     static FixedColors =
         [
             "Red",
@@ -121,6 +220,12 @@ class CanvasChart {
             "Pink",
         ];
 
+    /**
+     * Gradient factories for gradient colour strings "name(stop;color;stop;color...)", keyed by name:
+     * down (top to bottom), up (bottom to top), left (x0 to x1), right (x1 to x0) linear gradients and
+     * cone (conic gradient starting at -90 degrees around the centre). Each is called as (ctx, x0, y0, x1, y1).
+     * @type {Map<string, function(CanvasRenderingContext2D, number, number, number, number):CanvasGradient>}
+     */
     static GradientFns = new Map([
         ["down", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y0, 0, y1) ],
         ["up", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y1, 0, y0) ],
@@ -131,17 +236,32 @@ class CanvasChart {
 
     /**
      * Add a chart that get it's data from the server (as a achild to some element)
+     *
+     * Creates `<SysWeaver-Chart>` (class `Transparent` if requested) with a `<canvas>` child appended to
+     * `toElement`, sets up the menu icon (unless DisableMenu), the keyboard handler (assigned to
+     * `toElement.onkeydown`, overwriting any existing handler), registers the Chart.js plugins
+     * (customCanvasBackgroundColor, dropShadow, ChartDataLabels) and replaces global Chart.defaults
+     * (on every call), subscribes to InterOp "Theme.Changed", then starts the polling loop DoUpdate
+     * (GET `url`, or POST `tableParams` to `url` when given; repeats every RefreshRate ms).
+     *
+     * Everything else is a closure: per-chart view state (forceChartType, forcedIndexAxis, forcedColor,
+     * forcedColorSeed, forceColorLabels, forceColorValues, forcedOrder, chartScale), the original server
+     * config as JSON (orgDataStr, every rebuild starts from it) and the live Chart instance (main).
      * @param {string} url The url to the API that returns the chart options
-     * @param {HTMLElement} toElement An optional element to add the canvas and button to (defaults to the body)
-     * @param {any} tableParams An optional parameter (as an object) that is send to the url
-     * @param {function()} onFirstLoad An optional function that is executed after the first successful request
-     * @param {CanvasChartOptions} chartOptions Optional options
+     * @param {HTMLElement} [toElement=document.body] An optional element to add the canvas and button to (defaults to the body)
+     * @param {any} [tableParams] An optional parameter (as an object) that is send to the url
+     * @param {function()} [onFirstLoad] An optional function that is executed after the first successful request
+     *   (also called once after the first failure)
+     * @param {CanvasChartOptions} [chartOptions] Optional options (a default instance is created when missing)
+     * @returns {Promise<HTMLElement>} The `<SysWeaver-Chart>` element (resolved after the first fetch when chartOptions.WaitFirst).
      */
     static async addChart(url, toElement, tableParams, onFirstLoad, chartOptions) {
         if (!toElement)
             toElement = document.body;
         if (!chartOptions)
             chartOptions = new CanvasChartOptions();
+        // A4 landscape export sizes: 297x210 mm minus a 10 mm margin on each side (277x190 mm printable),
+        // converted to pixels at 150 DPI (A4_wl x A4_hl = 1635x1122) and 300 DPI (A4_wh x A4_hh = 3271x2244).
         const margin = 10;
         const ldpi = 150;
         const hdpi = 300;
@@ -153,10 +273,12 @@ class CanvasChart {
         const A4_wh = (A4_w * hdpi * dpiToMmPx) | 0;
         const A4_hh = (A4_h * hdpi * dpiToMmPx) | 0;
 
+        // WebMenuItem flag bits (application.js): checked = 2, readonly = 1.
         const checked = 2;
         const readonly = 1;
         const checkedReadonly = checked | readonly;
 
+        // The <SysWeaver-Chart> container and its <canvas> (canvas is replaced by RebuildChart).
         const chart = document.createElement("SysWeaver-Chart");
         if (chartOptions.Transparent)
             chart.classList.add("Transparent");
@@ -166,28 +288,41 @@ class CanvasChart {
         chart.appendChild(canvas);
 
 
+        // Per-chart view state chosen in the menu / with keys:
+        // forceChartType - Chart.js type forced by the Type menu (null = server type);
+        // forcedIndexAxis - "x" or "y" (horizontal) forced together with the type;
+        // forcedColor - colour mode name (RandomValueGradient, RandomSeriesGradient, RandomMagnitudeGradient,
+        //   LabelText, FixedValue<i>, FixedSeries<i>, FixedMag<i>) or null = original colours;
+        // forcedColorSeed - Random seed picked by SetChartColor for the random modes.
         let forceChartType = null;
         let forcedIndexAxis = null;
         let forcedColor = null;
         let forcedColorSeed = null;
 
 
+        // Coloured labels (legend / axis ticks) and coloured values (datalabels) toggles.
         let forceColorLabels = false;
         let forceColorValues = false;
 
 
+        // Sort order: 0 = original, +-1 = by label, +-(n+2) = by values of dataset n; negative = descending.
         let forcedOrder = 0; // 0 = Orignal, 1 = Label name, 2+ = datasets
 
+        // orgDataStr - JSON of the last server config (after OnServerData), every rebuild starts from it.
+        // orgDataType - the original type plus "h"/"v" (indexAxis), used to filter the Type menu.
+        // main - the live Chart instance. chartScale - export font scale (canvas.Scale, PNG export only).
         let orgDataStr = null;
         let orgDataType = null;
         let main = null;
         let chartScale = 1;
 
+        // Colour mode names (also used in icon class names "IconColor" + name).
         const colorRandomValueGradient = "RandomValueGradient";
         const colorRandomSeriesGradient = "RandomSeriesGradient";
         const colorRandomMagnitudeGradient = "RandomMagnitudeGradient";
         const colorLabelText = "LabelText";
 
+        // Chart types without x/y axes (pie, doughnut, polarArea) and the type that keeps the "r" scale (polarArea).
         const noAxisTypes = new Map();
         noAxisTypes.set("pie", 1);
         noAxisTypes.set("doughnut", 1);
@@ -197,10 +332,20 @@ class CanvasChart {
         keepRAxis.set("polarArea", 1);
 
 
+        // Formatter state, updated by ApplyChanges from Precision / ValuePrefix / ValueSuffix of the config.
+        // Negative precision means "up to N decimals" (ValueFormat.toString).
         let precision = -2;
         let valuePrefix = "";
         let valueSuffix = "";
 
+        /**
+         * Shared value formatter for datalabels, tick labels and tooltips (installed in Chart.defaults).
+         * Objects are replaced by their `label` or `r` property; numbers become
+         * valuePrefix + ValueFormat.toString(value, precision) + valueSuffix, other values
+         * valuePrefix + value + valueSuffix.
+         * @param {any} value - The raw value.
+         * @returns {string} Formatted text.
+         */
         function ValueFormatter(value) {
             if (typeof value === "object") {
                 if (value.label)
@@ -217,6 +362,13 @@ class CanvasChart {
         }
 
 
+        /**
+         * Convert RGB to HSL.
+         * @param {number} r - Red 0..255.
+         * @param {number} g - Green 0..255.
+         * @param {number} b - Blue 0..255.
+         * @returns {number[]} [h, s, l] with all components in [0, 1].
+         */
         function rgbToHsl(r, g, b) {
             r /= 255, g /= 255, b /= 255;
 
@@ -239,6 +391,13 @@ class CanvasChart {
             }
             return [h, s, l];
         }
+        /**
+         * Convert HSL to RGB. The hue is wrapped (h < 0 adds 10, then h >= 1 takes h % 1).
+         * @param {number} h - Hue (1 = full circle).
+         * @param {number} s - Saturation 0..1.
+         * @param {number} l - Lightness 0..1.
+         * @returns {number[]} [r, g, b] as floats 0..255.
+         */
         function hslToRgb(h, s, l) {
             var r, g, b;
 
@@ -250,6 +409,13 @@ class CanvasChart {
             if (s == 0) {
                 r = g = b = l; // achromatic
             } else {
+                /**
+                 * Standard HSL helper computing one colour channel.
+                 * @param {number} p - Lower bound (2l - q).
+                 * @param {number} q - Upper bound.
+                 * @param {number} t - Hue offset for the channel (wrapped into 0..1).
+                 * @returns {number} Channel value 0..1.
+                 */
                 function hue2rgb(p, q, t) {
                     if (t < 0) t += 1;
                     if (t > 1) t -= 1;
@@ -270,6 +436,13 @@ class CanvasChart {
             return [r * 255, g * 255, b * 255];
         }
 
+        /**
+         * Resolve any CSS colour to RGBA bytes by filling a 4x4 rect on a cached off-screen 2D context
+         * (stored in GetRgbaColorValues.Context) and reading pixel (1,1) back.
+         * Note: the line `colorContext.wi` is a no-op expression statement.
+         * @param {string} cssColor - Any CSS colour.
+         * @returns {Uint8ClampedArray} [r, g, b, a] in 0..255.
+         */
         function GetRgbaColorValues(cssColor) {
             const colorContext = GetRgbaColorValues.Context ?? document.createElement('canvas').getContext('2d');
             GetRgbaColorValues.Context = colorContext;
@@ -281,6 +454,16 @@ class CanvasChart {
         }
 
 
+        /**
+         * Generate `count` colours with the saturation/lightness/alpha of `cssColor` and hues fanned from
+         * -spread to +spread degrees around its hue, repeating every `repeatCount` items.
+         * @param {string} cssColor - Base CSS colour.
+         * @param {number} count - Number of colours to generate.
+         * @param {number} [repeatCount=13] - Fan size; a negative value means ceil(count / -repeatCount)
+         *   (min 5). Capped at count.
+         * @param {number} [spread=120] - Half the hue fan in degrees.
+         * @returns {string[]} "rgb(r,g,b)" strings, or "rgba(r,g,b,a)" when the base colour is translucent.
+         */
         function GenerateColorAround(cssColor, count, repeatCount, spread) {
 
             if (!repeatCount)
@@ -323,6 +506,11 @@ class CanvasChart {
             return cols;
         }
 
+        /**
+         * Gradient cache used by gradientCreator: the canvas box the gradients were created for and a
+         * Map from gradient string to CanvasGradient (or fallback colour). Reset when the canvas size changes.
+         * @type {{x0:number, y0:number, x1:number, y1:number, gradients:?Map<string, (CanvasGradient|string)>}}
+         */
         const gradCache = {
             x0: 0,
             y0: 0,
@@ -331,6 +519,19 @@ class CanvasChart {
             gradients: null,
         };
 
+        /**
+         * Scriptable-colour backend for gradient colour strings.
+         * Returns "#000" until chart.chartArea exists. Uses the full canvas (0,0,width,height) as gradient
+         * box; clears gradCache when the canvas size changed and caches per gradData string. Parses gradData
+         * after the "(" at index i as "stop;color;stop;color..."; on a real CanvasRenderingContext2D creates
+         * the gradient with `cf` and adds the stops, otherwise (e.g. the canvas2svg C2S context) returns the
+         * first colour.
+         * @param {object} chartContext - Chart.js scriptable context (uses .chart).
+         * @param {string} gradData - The full gradient string, e.g. "down(0;red;1;blue)".
+         * @param {function(CanvasRenderingContext2D, number, number, number, number):CanvasGradient} cf - Factory from CanvasChart.GradientFns.
+         * @param {number} i - Index of "(" in gradData.
+         * @returns {CanvasGradient|string} The gradient, or a plain colour.
+         */
         function gradientCreator(chartContext, gradData, cf, i) {
 
             const chart = chartContext.chart;
@@ -372,6 +573,15 @@ class CanvasChart {
         }
 
 
+        /**
+         * Convert gradient colour strings "name(stops)" whose name is in CanvasChart.GradientFns into
+         * scriptable functions `ctx => gradientCreator(...)`.
+         * Arrays: empty gives "red", one element gives the resolved element, otherwise entries are resolved
+         * in place and, if any entry became a function, the array is wrapped into a scriptable that picks
+         * entry ctx.dataIndex. Other values are returned unchanged.
+         * @param {any} v - Colour value (string, array or anything else).
+         * @returns {any} The resolved colour value / scriptable function.
+         */
         function resolveColor(v) {
             if (Array.isArray(v)) {
                 const vl = v.length;
@@ -410,6 +620,14 @@ class CanvasChart {
         }
 
 
+        /**
+         * Remove out-of-range x positions. When chartOptions.MinValue and/or MaxValue is set (0 counts),
+         * collects every x index where any dataset value is outside the range and removes those indices
+         * (in descending order) from labels, each dataset's data, backgroundColor, borderColor,
+         * fill.above / fill.below and the same colour arrays of options.elements.point/line/bar/arc.
+         * Arrays shorter than the longest dataset are left alone.
+         * @param {object} data - Chart config (mutated).
+         */
         function FilterData(data) {
             const minValue = chartOptions.MinValue;
             const maxValue = chartOptions.MaxValue;
@@ -443,6 +661,11 @@ class CanvasChart {
                     if (rl > 1)
                         removeO.sort((a, b) => b - a);
 
+                    /**
+                     * Splice the collected indices (removeO, descending) out of an array if it exists and is
+                     * at least as long as the longest dataset.
+                     * @param {?any[]} dsv - Array to fix (mutated).
+                     */
                     function fixArray(dsv) {
                         if (!dsv)
                             return;
@@ -452,6 +675,10 @@ class CanvasChart {
                             dsv.splice(removeO[rc], 1);
                     }
 
+                    /**
+                     * Apply fixArray to backgroundColor, borderColor and fill.above / fill.below.
+                     * @param {object} ds - A dataset or options.elements.* object (must not be undefined).
+                     */
                     function fixCommon(ds) {
                         fixArray(ds.backgroundColor);
                         fixArray(ds.borderColor);
@@ -482,6 +709,11 @@ class CanvasChart {
             }
         }
 
+        /**
+         * Truncate to chartOptions.MaxCount x positions: when set and the longest dataset exceeds it,
+         * truncates labels, data and the same colour arrays as FilterData to MaxCount entries.
+         * @param {object} data - Chart config (mutated).
+         */
         function Limit(data) {
             const maxCount = chartOptions.MaxCount;
             if (maxCount) {
@@ -500,6 +732,11 @@ class CanvasChart {
                 if (valCount > maxCount) {
 
                     const del = valCount - maxCount;
+                    /**
+                     * Remove everything after maxCount (splice(maxCount, valCount - maxCount)) from an array
+                     * that exists and is at least as long as the longest dataset.
+                     * @param {?any[]} dsv - Array to fix (mutated).
+                     */
                     function fixArray(dsv) {
                         if (!dsv)
                             return;
@@ -508,6 +745,11 @@ class CanvasChart {
                         dsv.splice(maxCount, del);
                     }
 
+                    /**
+                     * Apply Limit's fixArray to backgroundColor, borderColor and fill.above / fill.below
+                     * (duplicate of the FilterData helper).
+                     * @param {object} ds - A dataset or options.elements.* object (must not be undefined).
+                     */
                     function fixCommon(ds) {
                         fixArray(ds.backgroundColor);
                         fixArray(ds.borderColor);
@@ -539,6 +781,26 @@ class CanvasChart {
         }
 
 
+        /**
+         * Transform a (freshly parsed) server config into the render config, applying the current view state.
+         * Steps: FilterData; options.responsive = true, maintainAspectRatio = false; reads Precision
+         * (default -2 when not a number), ValuePrefix, ValueSuffix into the formatter state; picks the data
+         * label strategy from chartOptions.ValueLabel (or data.ValueLabel): 1 addDataLabels, 2 onlyDataLabels,
+         * 3 firstLineDataLabels, 4 noLabels, 5 valueLabels, 6 bareValueLabels, else formattedValueLabels.
+         * For a forced "line" type defaults borderColor to backgroundColor and borderWidth <= 0 to 2.
+         * Applies forceChartType / forcedIndexAxis and sets ticks.precision = |precision| on the indexAxis
+         * scale (or "y"). For pie/doughnut/polarArea removes the x/y scales, puts the legend left (not
+         * reversed) and, with more than one label, generates per-label colours with GenerateColorAround where
+         * the colour arrays don't match the label count (dataset 0 around its single colour or a default
+         * green, later datasets copy dataset 0); for other types a single dataset hides the legend. Removes
+         * the "r" scale except for polarArea (which gets a default tick backdropColor from
+         * --ThemeBackgroundRGB). Sets datalabels rotation -80 on vertical axis charts. Reorders labels and
+         * dataset data per forcedOrder. Applies the forcedColor scheme, otherwise resolves gradient colour
+         * strings. If dataset 0 has both colours: forceColorValues colours the datalabels with its border
+         * colours; forceColorLabels colours legend entries and polar point labels (no-axis types) or the
+         * index axis ticks. Then Limit, and installs options.onClick forwarding to chartOptions.OnClick.
+         * @param {object} data - Chart config with `options` present (mutated in place).
+         */
         function ApplyChanges(data) {
             FilterData(data);
 
@@ -693,7 +955,13 @@ class CanvasChart {
                 if (isDesc)
                     newOrder.reverse();
 
-               
+
+                /**
+                 * Permute an array in place according to newOrder (sorted index order: labels by
+                 * localeCompare, or values of dataset otype - 2; reversed for descending).
+                 * Colour arrays are not permuted.
+                 * @param {any[]} a - Labels or dataset data (mutated).
+                 */
                 function reOrder(a) {
                     const org = a.slice(0);
                     for (let i = 0; i < labelCount; ++i)
@@ -707,12 +975,31 @@ class CanvasChart {
 
 
 
+            // Forced colour schemes (all produce border colour = opaque rgb, background = rgba):
+            // RandomValueGradient - one hue sweep over all values of all series (seeded by forcedColorSeed);
+            // RandomMagnitudeGradient - hue proportional to the value between min and max (seeded);
+            // RandomSeriesGradient - one colour per series stepping the hue (seeded);
+            // LabelText - per label colour from Random.Create(label), darker/less saturated per series;
+            // FixedValue<i> - hues i/12..(i+2)/12 over the values, lightness per series;
+            // FixedSeries<i> - hues i/12..(i+2)/12 over the series;
+            // FixedMag<i> - hues i/12..(i+2)/12 by value magnitude.
             if (forcedColor) {
 
+                /**
+                 * Format a colour as "rgb(r,g,b)" with integer-truncated channels.
+                 * @param {number[]} rgb - [r, g, b] 0..255.
+                 * @returns {string} CSS colour.
+                 */
                 function MakeRgb(rgb) {
                     return "rgb(" + (rgb[0] | 0) + "," + (rgb[1] | 0) + "," + (rgb[2] | 0) + ")";
                 }
 
+                /**
+                 * Format a colour as "rgba(r,g,b,o)" with integer-truncated channels.
+                 * @param {number[]} rgb - [r, g, b] 0..255.
+                 * @param {number} o - Opacity 0..1.
+                 * @returns {string} CSS colour.
+                 */
                 function MakeRgba(rgb, o) {
                     return "rgba(" + (rgb[0] | 0) + "," + (rgb[1] | 0) + "," + (rgb[2] | 0) + "," + o + ")";
                 }
@@ -893,6 +1180,11 @@ class CanvasChart {
 
 
             } else {
+                /**
+                 * Run resolveColor on borderColor, backgroundColor and fill.above / fill.below
+                 * (gradient strings become scriptable functions).
+                 * @param {?object} ds - A dataset or options.elements.* object (ignored when missing).
+                 */
                 function resolve(ds) {
                     if (!ds)
                         return;
@@ -936,6 +1228,12 @@ class CanvasChart {
                             data.options.plugins.legend = {};
                         if (!data.options.plugins.legend.labels)
                             data.options.plugins.legend.labels = {};
+                        /**
+                         * Coloured-labels legend generator: one legend item per label with fontColor and
+                         * strokeStyle = border colour i and fillStyle = background colour i of dataset 0.
+                         * @param {Chart} chart - The Chart.js instance.
+                         * @returns {object[]|undefined} Legend items (undefined when there are no labels/datasets).
+                         */
                         data.options.plugins.legend.labels.generateLabels = chart => {
                             if (chart.data.labels.length && chart.data.datasets.length) {
                                 return chart.data.labels.map((label, i) => ({
@@ -957,6 +1255,11 @@ class CanvasChart {
                             const ax = data.options.scales.r;
                             if (!ax.pointLabels)
                                 ax.pointLabels = {};
+                            /**
+                             * Polar point label colour: border colour p.index of dataset 0.
+                             * @param {object} p - Chart.js scriptable context.
+                             * @returns {string} Colour.
+                             */
                             ax.pointLabels.color = p => bc[p.index];
                         }
                     } else {
@@ -979,6 +1282,12 @@ class CanvasChart {
             Limit(data);
 
 
+            /**
+             * Chart.js click handler: forwards the first clicked element as
+             * (label, value, datasetIndex, index) to chartOptions.OnClick (if set).
+             * @param {Event} e - Chart.js event.
+             * @param {object[]} els - Active elements under the pointer.
+             */
             data.options.onClick = (e, els) => {
                 const dl = els.length;
                 if (dl > 0) {
@@ -999,11 +1308,24 @@ class CanvasChart {
             };
         }
 
+        /**
+         * Rebuild the live chart from the original server config with the current view state.
+         * No-op until `main` exists. Re-parses orgDataStr, runs ApplyChanges; unless allowAnimation, forces
+         * options.animation.duration = 0 (creating options / animation as needed). Destroys `main`, replaces
+         * the <canvas> element with a new one, creates a new Chart (expandos Transparent = true, Data = data),
+         * calls update() and, when animation was suppressed, runs `restore` after 10 ms.
+         * restore re-assigns the old duration when it was defined, else deletes `animation.duration`.
+         * @param {boolean} [allowAnimation] - Keep the configured animation.
+         */
         function RebuildChart(allowAnimation) {
             if (!main)
                 return;
             const data = JSON.parse(orgDataStr);
             ApplyChanges(data);
+            /**
+             * Undo function that puts back the original animation duration / removes the objects added
+             * to disable animation.
+             */
             let restore = () => { };
             if (!allowAnimation) {
                 const options = data.options;
@@ -1011,7 +1333,7 @@ class CanvasChart {
                     const animation = options.animation;
                     if (animation) {
                         const duration = animation.duration;
-                        if (typeof duration !== undefined)
+                        if (typeof duration !== "undefined")
                             restore = () => animation.duration = duration;
                         else
                             restore = () => delete animation.duration;
@@ -1048,6 +1370,11 @@ class CanvasChart {
                 setTimeout(restore, 10);
         }
 
+        /**
+         * Get the chart title.
+         * @param {object} data - Chart config.
+         * @returns {string} options.plugins.title.text[0], or "Chart".
+         */
         function GetTitle(data) {
             let title = "Chart";
             const tt = data.options?.plugins?.title?.text;
@@ -1059,6 +1386,23 @@ class CanvasChart {
             return title;
         }
 
+        /**
+         * Render a chart config off-screen and return it as a data URI.
+         * "Png": a hidden <canvas> of the given size is appended to document.body with the expando
+         * Scale = chartScale (font scaling via the background plugin) and removed in `finally`; the result is
+         * ch.toBase64Image(). "Svg": a C2S (canvas2svg) mock context; the serialized SVG root element gets its
+         * width/height replaced by viewBox="0 0 w h" (via CanvasChart.tweakXmlText) and the SVG is
+         * base64-encoded (Base64EncodeString) into a data:image/svg+xml URI.
+         * Sets responsive = false, maintainAspectRatio = false and options.animation.duration = 0 (throws if
+         * options.animation is missing), sets the chart's Transparent expando and waits for
+         * options.animation.onComplete (an assigned callback that captures the image and clears itself).
+         * @param {object} data - Render config (output of ApplyChanges; mutated).
+         * @param {number} width - Image width in pixels.
+         * @param {number} height - Image height in pixels.
+         * @param {boolean} transparent - When true the background plugin does not fill the background.
+         * @param {string} format - "Png" or "Svg"; anything else throws Error("Invalid format ...").
+         * @returns {Promise<string>} Data URI of the image.
+         */
         async function GetChartAsImage(data, width, height, transparent, format) {
             let canvas = null;
             let ctx = null;
@@ -1096,6 +1440,10 @@ class CanvasChart {
                 const ch = new Chart(ctx, data);
                 ch.Transparent = transparent;
                 await new Promise(resolve => {
+                    /**
+                     * One-shot animation completion callback: clears itself, captures the rendered image into
+                     * `img` (serialized and patched SVG, or PNG data URI) and resolves the wait promise.
+                     */
                     ch.options.animation.onComplete = () => {
 
                         ch.options.animation.onComplete = null;
@@ -1134,6 +1482,18 @@ class CanvasChart {
 
         }
 
+        /**
+         * Menu action for a client-side image export (download).
+         * Calls closeFn, builds a fresh config from orgDataStr + ApplyChanges, shows
+         * PopUpWorking("Exporting", "WxH", "IconFile" + format), renders with GetChartAsImage and downloads the
+         * result through a temporary hidden <a download="<chart title>">; errors are reported with Fail.
+         * @param {function():void} closeFn - Closes the popup menu.
+         * @param {number} width - Image width in pixels.
+         * @param {number} height - Image height in pixels.
+         * @param {boolean} transparent - Render without background.
+         * @param {string|boolean} [format="Png"] - "Png" or "Svg"; `true` means "Svg".
+         * @returns {Promise<void>}
+         */
         async function SaveImage(closeFn, width, height, transparent, format) {
 
             if (!format)
@@ -1163,6 +1523,22 @@ class CanvasChart {
             close();
         }
 
+        /**
+         * Menu action for a server-side exporter.
+         * Calls closeFn, rebuilds the config (orgDataStr + ApplyChanges), shows PopUpWorking("Exporting", desc, icon).
+         * For parseInt(format) 1 (Png) or 2 (Svg) (matching C# ChartExportInputTypes) renders an A4 300 DPI
+         * image with GetChartAsImage and sends it as DataStr with Data null; otherwise sends the config as Data.
+         * POSTs {Data, DataStr, ExportAs: name, Options: {Filename: title}} to ../Api/ExportChart (sendRequest).
+         * A MemoryFile reply with Mime and Data is downloaded via a temporary <a download=Name>; a reply with
+         * only Name becomes GetAbsolutePath("../" + Name), is copied to the clipboard
+         * (ValueFormat.copyToClipboardInfo) and opened with Open. Empty replies or exceptions call Fail.
+         * @param {function():void} closeFn - Closes the popup menu.
+         * @param {string} name - Exporter id (WebMenuItem.Name).
+         * @param {string} desc - Exporter description (WebMenuItem.Title), shown while working.
+         * @param {string|number} format - Exporter input type ("0" Data, "1" Png, "2" Svg).
+         * @param {string} icon - Icon class shown while working.
+         * @returns {Promise<void>}
+         */
         async function ExportChart(closeFn, name, desc, format, icon) {
             closeFn();
             let data = JSON.parse(orgDataStr);
@@ -1219,6 +1595,13 @@ class CanvasChart {
             close();
         }
 
+        /**
+         * Force a chart type: sets forceChartType and forcedIndexAxis ("y" when horizontal, else "x"),
+         * closes the menu and rebuilds the chart without animation.
+         * @param {function():void} closeFn - Closes the popup menu (required).
+         * @param {string} newType - Chart.js type (bar, line, pie, doughnut, polarArea).
+         * @param {boolean} [isHorizontal] - Use the y axis as index axis.
+         */
         function SetChartType(closeFn, newType, isHorizontal) {
             console.log("Setting chart type to " + newType);
             closeFn();
@@ -1228,6 +1611,12 @@ class CanvasChart {
             RebuildChart();
         }
 
+        /**
+         * Select a colour mode: picks a new random forcedColorSeed, sets forcedColor, closes the menu (if
+         * given) and rebuilds the chart.
+         * @param {?function():void} closeFn - Closes the popup menu (null from the keyboard handler).
+         * @param {?string} newColor - Colour mode name, or null for the original colours.
+         */
         function SetChartColor(closeFn, newColor) {
             forcedColorSeed = Random.GetRandomSeed();
             if (newColor)
@@ -1240,6 +1629,11 @@ class CanvasChart {
             RebuildChart();
         }
 
+        /**
+         * Set the export font scale (chartScale, applied only to PNG exports via canvas.Scale); no rebuild.
+         * @param {?function():void} closeFn - Closes the popup menu.
+         * @param {number} newScale - Scale factor (1 - 2.5).
+         */
         function SetChartScale(closeFn, newScale) {
             console.log("Setting chart scale to " + newScale);
             if (closeFn)
@@ -1248,6 +1642,11 @@ class CanvasChart {
             //RebuildChart();
         }
 
+        /**
+         * Set the sort order (forcedOrder) and rebuild the chart with animation.
+         * @param {?function():void} closeFn - Closes the popup menu.
+         * @param {number} newOrder - 0 original, +-1 by label, +-(n+2) by dataset n; negative = descending.
+         */
         function SetOrder(closeFn, newOrder) {
             console.log("Setting new order to " + newOrder);
             if (closeFn)
@@ -1257,6 +1656,11 @@ class CanvasChart {
         }
 
 
+        // Menu icon (unless DisableMenu): a 32x32 ColorIcon in the bottom-right corner of <SysWeaver-Chart>.
+        // The async click handler fails with "No data!" before the first fetch, otherwise awaits
+        // getChartExportMenu (lazy loads application.js etc.), rebuilds the config and opens PopUpMenu with a
+        // builder that adds class "Chart" to the popup element and returns a WebMenu "Chart" with the
+        // sub-menus Type, Order, Color and Export (WebMenuItem flags: checked = 2, readonly = 1).
         if (!chartOptions.DisableMenu) {
 
             const menuIcon = new ColorIcon("IconChartMenu", "IconColorThemeAcc2", 32, 32, "Click to show options", async ev => {
@@ -1277,13 +1681,15 @@ class CanvasChart {
                     //  Modify type menu
                     const currentType = data.type;
                     const currentIsHorizontal = data.options.indexAxis === "y";
+                    // Type menu filter: data.ValidTypes (lower-cased) plus the original type; shown only when more
+                    // than one type is valid. An empty ValidTypes array hides the type menu.
                     const validTypes = data.ValidTypes;
                     let haveTypes = true;
                     let validMap = null;
                     if (validTypes) {
                         const l = validTypes.length;
                         if (l <= 0) {
-                            validTypes = haveTypes = false;
+                            haveTypes = false;
                         } else {
                             validMap = new Map();
                             for (let i = 0; i < l; ++i)
@@ -1578,6 +1984,8 @@ class CanvasChart {
                         }
                     }
                     //  Export menu
+                    //  Server exporters (from getChartExportMenu), the "Export font size" sub-menu, then the
+                    //  client-side SVG 16:9 / A4 and PNG HD / 1440p / 4K / A4 low / A4 high DPI downloads.
                     const exportMenu = WebMenuItem.From({
                         Name: "Export",
                         IconClass: "IconChartExport",
@@ -1596,6 +2004,7 @@ class CanvasChart {
                         const desc = menuItem.Title;
                         const icon = menuItem.IconClass;
                         const format = menuItem.Data;
+                        // Replace the exporter's Data (ChartExportInputTypes code) with the click action.
                         sm.Data = () => ExportChart(close, name, desc, format, icon);
                         menuDest.push(sm);
                     });
@@ -1723,6 +2132,16 @@ class CanvasChart {
 
 
 
+            /**
+             * Keyboard shortcuts (assigned to toElement.onkeydown, overwriting any existing handler; logs every key).
+             * Unless the colour menu is disabled (chartOptions or data.DisableColorMenu): o = original colours,
+             * l = label hash, g = random value gradient, s = random series gradient, m = random magnitude gradient.
+             * t / v toggle coloured labels / values and rebuild. Space (unless the order menu is disabled)
+             * cycles forcedOrder 0 -> 1 -> -1 -> 2 -> -2 ... -> +-(datasets + 1) -> 0, shows an Info toast
+             * (1500 ms) and calls SetOrder.
+             * @param {KeyboardEvent} ev - The key event.
+             * @returns {Promise<void>}
+             */
             toElement.onkeydown = async ev => {
                 console.log("Key: " + ev.key);
                 if (!(chartOptions.DisableColorMenu || main?.Data?.DisableColorMenu)) {
@@ -1787,10 +2206,24 @@ class CanvasChart {
 
         }
 
+        /** @type {string} Theme background colour (--ThemeBackground), set by UpdateColor; used by the background plugin. */
         let themeBackgroundColor;
+        /**
+         * Chart.js plugin "customCanvasBackgroundColor": applies the export font scale (canvas.Scale) and paints
+         * the background. Note: the live chart always has the expando Transparent = true (set in DoUpdate /
+         * RebuildChart), so only exports rendered with transparent = false get a filled background.
+         * @type {object}
+         */
         const renderBackgroundPlugin = {
             id: 'customCanvasBackgroundColor',
-            
+
+            /**
+             * When canvas.Scale is set and not 1, sets layout.padding so that the drawing scaled by Scale fills
+             * the canvas (4 px top/left, enlarged right/bottom); otherwise padding 4.
+             * @param {Chart} chart - The chart.
+             * @param {object} args - Plugin hook arguments.
+             * @param {object} options - Plugin options.
+             */
             beforeLayout: (chart, args, options) => {
                 const s = chart.ctx.canvas.Scale;
                 if ((s) && (s !== 1)) {
@@ -1808,6 +2241,14 @@ class CanvasChart {
                 }
             },
 
+            /**
+             * Saves the context and scales it by canvas.Scale; unless chart.Transparent fills the canvas behind
+             * the chart (globalCompositeOperation "destination-over") with options.color or themeBackgroundColor.
+             * The matching ctx.restore() is in afterDraw.
+             * @param {Chart} chart - The chart.
+             * @param {object} args - Plugin hook arguments.
+             * @param {object} options - Plugin options (color).
+             */
             beforeDraw: (chart, args, options) => {
                 const { ctx } = chart;
                 ctx.save();
@@ -1824,15 +2265,32 @@ class CanvasChart {
                 ctx.fillRect(0, 0, chart.width / s, chart.height / s);
                 ctx.restore();
             },
+            /**
+             * Restores the context saved (and scaled) in beforeDraw.
+             * @param {Chart} chart - The chart.
+             * @param {object} args - Plugin hook arguments.
+             * @param {object} options - Plugin options.
+             */
             afterDraw: (chart, args, options) => {
                 const { ctx } = chart;
                 ctx.restore();
             }
         };
 
+        /**
+         * Chart.js plugin "dropShadow": draws dataset elements with a canvas shadow when the config has
+         * options.plugins.shadow = {dx, dy, rad, color} (color defaults to rgba(0,0,0,0.5)).
+         * @type {object}
+         */
         const dropShadowPlugin = {
             id: 'dropShadow',
 
+            /**
+             * Raises layout.padding (number or per side) to at least max(|dx|, |dy|) + rad so the shadow fits.
+             * @param {Chart} chart - The chart.
+             * @param {object} args - Plugin hook arguments.
+             * @param {object} options - Plugin options.
+             */
             beforeLayout: (chart, args, options) => {
                 const so = chart.config?.options?.plugins?.shadow;
                 if (!so)
@@ -1870,6 +2328,12 @@ class CanvasChart {
                     };
                 }
             },
+            /**
+             * Saves the context and sets shadowColor, shadowOffsetX/Y and shadowBlur before each dataset is drawn.
+             * @param {Chart} chart - The chart.
+             * @param {object} args - Plugin hook arguments.
+             * @param {object} options - Plugin options.
+             */
             beforeDatasetDraw: (chart, args, options) => {
                 const so = chart.config?.options?.plugins?.shadow;
                 if (!so)
@@ -1890,6 +2354,12 @@ class CanvasChart {
                 ctx.shadowOffsetY = dy;
                 ctx.shadowBlur = rad;
             },
+            /**
+             * Restores the context saved in beforeDatasetDraw (only when a shadow is configured).
+             * @param {Chart} chart - The chart.
+             * @param {object} args - Plugin hook arguments.
+             * @param {object} options - Plugin options.
+             */
             afterDatasetDraw: (chart, args, options) => {
                 const so = chart.config?.options?.plugins?.shadow;
                 if (!so)
@@ -1900,10 +2370,13 @@ class CanvasChart {
 
 
 
+        // Global Chart.js setup (runs on every addChart call): register the plugins and replace the
+        // datalabels defaults and tick / tooltip callbacks with ValueFormatter based ones.
         Chart.register(renderBackgroundPlugin);
         Chart.register(dropShadowPlugin);
         Chart.register(ChartDataLabels);
 
+        /** @type {object} Chart.defaults (global, shared by all charts on the page). */
         const def = Chart.defaults;
         def.plugins.datalabels = {
             display: "auto",
@@ -1931,6 +2404,13 @@ class CanvasChart {
 
         def.scales.timeseries.ticks.callback = ValueFormatter;
 
+        /**
+         * Category tick label callback: shows only the first line of the label (up to "\n", trimmed).
+         * @param {number} value - Tick value (category index).
+         * @param {number} index - Tick index.
+         * @param {object[]} ticks - All ticks.
+         * @returns {string} Tick text.
+         */
         def.scales.category.ticks.callback = function (value, index, ticks) {
             value = this.getLabelForValue(value);
             const i = value.indexOf('\n');
@@ -1939,6 +2419,11 @@ class CanvasChart {
             return value;
         };
 
+        /**
+         * Tooltip label callback: "<dataset label>: " + ValueFormatter(context.raw) (no prefix without label).
+         * @param {object} context - Chart.js tooltip item context.
+         * @returns {string} Tooltip text.
+         */
         def.plugins.tooltip.callbacks.label = context => {
             let label = context.dataset.label || '';
             if (label)
@@ -1946,6 +2431,14 @@ class CanvasChart {
             label += ValueFormatter(context.raw);
             return label;
         };
+        /**
+         * Copy the theme CSS variables of document.body into Chart.defaults and rebuild the chart.
+         * themeBackgroundColor = --ThemeBackground, font.family = --ThemeFont, font sizes 14 (datalabels 11),
+         * color = --ThemeMain, borderColor = rgba(--ThemeMainRGB, 0.07), arc border = background colour with
+         * width 1, datalabels background rgba(--ThemeBackgroundRGB, 0.65) and colour --ThemeAcc1; then calls
+         * chartOptions.OnDefaults(def) and RebuildChart(). Runs once during addChart and 10 ms after each
+         * InterOp "Theme.Changed" message.
+         */
         function UpdateColor()
         {
             const style = getComputedStyle(document.body);
@@ -1971,12 +2464,20 @@ class CanvasChart {
         UpdateColor();
 
 
+        // Re-apply the theme when another page / frame broadcasts "Theme.Changed" (common.js InterOp).
         InterOp.AddListener(ev => {
             if (InterOp.GetMessage(ev).Type === "Theme.Changed")
                 setTimeout(UpdateColor, 10);
         });
 
 
+        /**
+         * Check that an array exists and has exactly the given length; used by the live diff to decide whether
+         * per-point colour arrays must be spliced / copied along with the data.
+         * @param {?any[]} a - Array (or anything falsy).
+         * @param {number} l - Expected length.
+         * @returns {boolean} True when `a` is truthy and a.length === l.
+         */
         function HaveArrayOffLen(a, l) {
             if (!a)
                 return false;
@@ -1999,8 +2500,24 @@ class CanvasChart {
         }).observe(chart.parentElement);
         */
 
+        /** @type {number} Polling interval in ms (data.RefreshRate, min 500; default 15000). */
         let refreshRate = 15000;
 
+        /**
+         * Polling loop: fetch the server config and render or diff it into the live chart, then reschedule.
+         * Fetches with sendRequest(url, tableParams) (POST) when tableParams is set, else getRequest(url) (GET);
+         * awaits chartOptions.OnServerData; ensures options, options.plugins, options.layout; stores
+         * orgDataStr and orgDataType; runs ApplyChanges; awaits chartOptions.OnFixedData; updates
+         * document.title from options.plugins.title.text[0].
+         * First time: creates `main = new Chart(canvas, data)` (Transparent = true) and calls onFirstLoad once.
+         * Later: copies the title and diffs into main.data so animations stay smooth: datasets matched by
+         * `label` (removed, or inserted as placeholders then filled), x positions matched by label text (labels,
+         * data and same-length colour arrays spliced), values and array colours copied per index, then
+         * main.update(). Updates refreshRate from data.RefreshRate (min 500) and sets main.Data = data.
+         * On exception: Fail("Failed to fetch data: ..."), calls onFirstLoad if still pending, waits 3 s.
+         * Always reschedules itself with setTimeout(DoUpdate, refreshRate).
+         * @returns {Promise<void>}
+         */
         async function DoUpdate() {
             try {
                 let data = tableParams ? await sendRequest(url, tableParams) : await getRequest(url);
@@ -2214,6 +2731,7 @@ class CanvasChart {
                 await DoUpdate();
             }, refreshRate);
         }
+        // Start polling; await the first fetch only when WaitFirst.
         if (chartOptions.WaitFirst)
             await DoUpdate();
         else
@@ -2222,12 +2740,23 @@ class CanvasChart {
     }
 
 
+    /**
+     * Data label mode 1 (label + value): ensures options.plugins.datalabels, sets display = true and a
+     * formatter showing the x label, a newline and the formatted value.
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static addDataLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l) {
             l = {};
             config.options.plugins.datalabels = l;
         }
+        /**
+         * Returns labels[dataIndex] + "\n" + ValuePrefix + ValueFormat.toString(value, Precision ?? 0) + ValueSuffix.
+         * @param {any} value - Data value.
+         * @param {object} context - datalabels context (dataIndex).
+         * @returns {string} Label text.
+         */
         l.formatter = (value, context) => {
 
             const precision = config.Precision ?? 0;
@@ -2238,18 +2767,33 @@ class CanvasChart {
         l.display = true;
     }
 
+    /**
+     * Data label mode 2 (label only): ensures options.plugins.datalabels, sets display = true and a formatter
+     * returning the x label.
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static onlyDataLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l) {
             l = {};
             config.options.plugins.datalabels = l;
         }
+        /**
+         * Returns labels[dataIndex].
+         * @param {any} value - Data value (unused).
+         * @param {object} context - datalabels context (dataIndex).
+         * @returns {string} Label text.
+         */
         l.formatter = (value, context) => {
             return config.data.labels[context.dataIndex];
         };
         l.display = true;
     }
 
+    /**
+     * Data label mode 4 (none): ensures options.plugins.datalabels and sets display = false.
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static noLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l) {
@@ -2259,22 +2803,45 @@ class CanvasChart {
         l.display = false;
     }
 
+    /**
+     * Data label mode 3 (first line of the label): ensures options.plugins.datalabels, sets display = true and
+     * a formatter returning the first line of the x label.
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static firstLineDataLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l) {
             l = {};
             config.options.plugins.datalabels = l;
         }
+        /**
+         * Returns the first line of labels[dataIndex] ("" when missing).
+         * @param {any} value - Data value (unused).
+         * @param {object} context - datalabels context (dataIndex).
+         * @returns {string} Label text.
+         */
         l.formatter = (value, context) => {
             return (config.data.labels[context.dataIndex] ?? "").split('\n')[0];
         };
         l.display = true;
     }
 
+    /**
+     * Default data label mode (0, formatted value): only if options.plugins.datalabels exists, sets
+     * display = true and a formatter returning prefix + formatted value + suffix; otherwise does nothing
+     * (the global ValueFormatter default applies).
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static formattedValueLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l)
             return;
+        /**
+         * Returns ValuePrefix + ValueFormat.toString(value, Precision ?? 0) + ValueSuffix.
+         * @param {any} value - Data value.
+         * @param {object} context - datalabels context (unused).
+         * @returns {string} Label text.
+         */
         l.formatter = (value, context) => {
 
             const precision = config.Precision ?? 0;
@@ -2285,10 +2852,21 @@ class CanvasChart {
         l.display = true;
     }
 
+    /**
+     * Data label mode 6 (bare number): only if options.plugins.datalabels exists, sets display = true and a
+     * formatter returning the formatted value without prefix/suffix.
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static bareValueLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l)
             return;
+        /**
+         * Returns ValueFormat.toString(value, Precision ?? 0).
+         * @param {any} value - Data value.
+         * @param {object} context - datalabels context (unused).
+         * @returns {string} Label text.
+         */
         l.formatter = (value, context) => {
 
             const precision = config.Precision ?? 0;
@@ -2297,6 +2875,11 @@ class CanvasChart {
         l.display = true;
     }
 
+    /**
+     * Data label mode 5 (raw value): only if options.plugins.datalabels exists, sets display = true and
+     * formatter = null (the datalabels plugin renders the raw value).
+     * @param {object} config - Chart config (options.plugins must exist; mutated).
+     */
     static valueLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l)
@@ -2309,6 +2892,14 @@ class CanvasChart {
 
 }
 
+/**
+ * Assign a value at a dot-separated path below an object, e.g. "options.scales.*x.ticks.font.size".
+ * Intermediate segments are created as {} when missing, except segments prefixed with "*", which must
+ * already exist (otherwise the function returns without assigning). The last segment is always assigned.
+ * @param {object} obj - Root object (mutated).
+ * @param {string} path - Dot-separated path.
+ * @param {any} v - Value to assign.
+ */
 function setValue(obj, path, v) {
     const s = path.split('.');
     const sl = s.length - 1;
@@ -2329,6 +2920,18 @@ function setValue(obj, path, v) {
     obj[s[sl]] = v;
 }
 
+/**
+ * Entry point of chart.html (called from <body onload>).
+ * Shows a loader (AddLoading; removed in `finally` and also passed as onFirstLoad), hides the body overflow,
+ * reads the URL parameters with getUrlParams() (lower-cased keys). Without `q` calls
+ * Fail("No query parameter specified!") and returns. Parses `p` as JSON (POST body for the data request) and
+ * builds a CanvasChartOptions: m / mo / mc = "false" disable the menu / order menu / colour menu;
+ * l=true -> ValueLabel 1, novalues=true -> 2, nolabels=true -> 4, valuelabel=N overrides; minvalue, maxvalue,
+ * maxcount -> MinValue, MaxValue, MaxCount; transparent=true -> Transparent; plus the callbacks OnServerData,
+ * OnFixedData, OnDefaults and OnClick (see below). Awaits CanvasChart.addChart(q, null, p, removeLoader,
+ * options) and adds class ChartCenter to the returned element when center=true.
+ * @returns {Promise<void>}
+ */
 async function chartMain() {
     const removeLoader = AddLoading();
     try {
@@ -2343,6 +2946,12 @@ async function chartMain() {
             return;
         }
 
+        /**
+         * Normalise a colour URL parameter: a 3- or 6-character value not starting with "r" gets a "#"
+         * prefix (hex without "#"); anything else is returned unchanged.
+         * @param {string} text - Parameter value.
+         * @returns {string} CSS colour.
+         */
         function parseCol(text) {
             const tl = text.length;
             if ((tl === 3) || (tl === 6)) {
@@ -2363,6 +2972,11 @@ async function chartMain() {
         if (ps.get("mc") === "false")
             o.DisableColorMenu = true;
 
+        /**
+         * Overrides config.type with the `type` URL parameter when present and sets document.title from
+         * config.Title.
+         * @param {object} config - Raw server config (mutated).
+         */
         o.OnServerData = config => {
             let val = ps.get("type");
             if (val != null)
@@ -2394,6 +3008,13 @@ async function chartMain() {
         if (mac)
             o.MaxCount = parseInt(mac);
 
+        /**
+         * Applies display URL parameters after ApplyChanges: bordersize / bordercol on dataset 0 (borderWidth,
+         * borderColor via parseCol); scale-font-size (or font-size), scale-font (or font), scale-font-style
+         * (or font-style), scale-font-weight (or font-weight, parsed as float) into ticks.font.* of the existing
+         * x, x2, y, r scales (setValue with "*" segments); aspect -> options.maintainAspectRatio (=== "true").
+         * @param {object} config - Render config (mutated).
+         */
         o.OnFixedData = config => {
             let val = ps.get("bordersize");
             if (val != null)
@@ -2436,6 +3057,14 @@ async function chartMain() {
             if (val != null)
                 setValue(config, "options.maintainAspectRatio", val === "true");
         };
+        /**
+         * Applies URL parameters to the global Chart.js defaults on every theme refresh: legend=false hides the
+         * legend; textcol, backgroundcol, bordercol (via parseCol) set def.color / backgroundColor / borderColor
+         * and the matching datalabels colours; font, font-style, font-weight set def.font and the datalabels
+         * font; font-size sets both sizes and scales datalabels borderRadius (8) and padding (4) by size / 11;
+         * label-padding, label-radius override those; line-height sets def.font.lineHeight.
+         * @param {object} def - Chart.defaults (mutated).
+         */
         o.OnDefaults = def =>
         {
             if (ps.get("legend") === "false")
@@ -2502,6 +3131,15 @@ async function chartMain() {
         o.Transparent = ps.get("transparent") === "true";
         const par = window.parent;
         if (par) {
+            /**
+             * Logs the label and posts {Type: "ChartClick", Label, Value, DatasetIndex, DataIndex} to window.parent
+             * (postMessage without a targetOrigin argument; exceptions are swallowed). Installed whenever
+             * window.parent is truthy, i.e. always (at top level it is the window itself).
+             * @param {string} label - X label of the clicked element.
+             * @param {any} value - Value of the clicked element.
+             * @param {number} datasetIndex - Dataset index.
+             * @param {number} dataIndex - Data index.
+             */
             o.OnClick = (label, value, datasetIndex, dataIndex) => {
 
                 console.log("Clicked on label: " + label);

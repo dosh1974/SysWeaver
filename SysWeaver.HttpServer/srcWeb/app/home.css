@@ -1,4 +1,12 @@
 ﻿
+/*
+ * Styles of the Home page (app/Home.html, linked after ../common/theme.css; script home.js).
+ * Centred layout of the welcome heading, the user image and the logo; upload states of the user image.
+ * Depends on theme variables from common/theme.css (--ThemeFont, --ThemeBackground, --ThemeMain,
+ * --ThemeAcc1, --ThemeAcc125, --ThemeFadeDuration). Home.html itself is a server template, this file is not.
+ */
+
+/* Page body: theme font/colours, full size, everything centred. */
 body {
     margin: 0;
     font-family: var(--ThemeFont);
@@ -9,6 +17,11 @@ body {
     text-align: center;
 }
 
+/*
+ * All images (the logo): centred block, limited to --size.
+ * --size: local custom property, the maximum edge length (60% of the smaller viewport dimension here;
+ * overridden on img.UserImage).
+ */
 img {
     display: block;
     margin: auto;
@@ -17,6 +30,8 @@ img {
     max-height: var(--size);
 }
 
+    /* ===== User image ===== */
+    /* img.UserImage (class set in Home.html): small (--size = 10% of the smaller viewport edge), rounded, accent outline. */
     img.UserImage {
         position: relative;
         display: block;
@@ -29,16 +44,19 @@ img {
     }
 
 
+    /* .CanUpload: added by home.js homeMain when the custom user image service exists; image is a click/drop upload target. */
     img.CanUpload {
         cursor: pointer;
         transition: outline linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration);
     }
 
+    /* .Dragging: set by fileUploader.js while a file is dragged over the image; dashed accent outline. */
     img.CanUpload.Dragging {
        outline: 4px dashed var(--ThemeAcc1); 
     }
 
 
+        /* .Selecting / .Uploading: set by fileUploader.js while the file dialog is open / the upload runs; dimmed. */
         img.CanUpload.Selecting {
             opacity: 0.5;
         }

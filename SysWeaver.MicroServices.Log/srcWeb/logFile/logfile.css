@@ -1,4 +1,16 @@
 ﻿
+/*
+ * logfile.css - styles for logFile/logfile.html, the fallback log viewer shown when the Edit project's
+ * text viewer (edit/text.html) is not available (see logfile.js / logFileMain).
+ * Loaded by a static <link> after ../common/theme.css and ../app/application.css.
+ * Depends on theme variables from common/theme.css: --ThemeBackground, --ThemeFont, --ThemeMain, --ThemeFontMono.
+ * Not templated. (logfile.html also has an inline <style> making html, body transparent; the body rule below
+ * sets the theme background again.) No animations, media queries or theme variants.
+ */
+
+/* ===== Page layout ===== */
+
+/* Page body: no margin, theme background and font, centered text, not selectable (the pre re-enables selection). */
 body {
     margin: 0;
     background-color: var(--ThemeBackground);
@@ -8,6 +20,11 @@ body {
 }
 
 
+/*
+ * SysWeaver-CenterBlock: the button row created by Button.CreateRow() (common.js) and appended by logFileMain.
+ * Fixed at the top-left, full width minus 2em (compensating the 1em left/right padding), with a drop shadow and the
+ * theme background so it stays visible above the scrolling log text.
+ */
 SysWeaver-CenterBlock
 {
     margin-top: 0;
@@ -20,6 +37,10 @@ SysWeaver-CenterBlock
     background-color: var(--ThemeBackground);
 }
 
+/*
+ * The log text element created by logFileMain: theme main color, monospace theme font, left-aligned and selectable.
+ * 128px top/bottom padding keeps the text clear of the fixed SysWeaver-CenterBlock button bar.
+ */
 pre {
     color: var(--ThemeMain);
     font-size: 100%;
@@ -30,6 +51,12 @@ pre {
     padding-bottom: 128px;
 }
 
+/* ===== Icons ===== */
+
+/*
+ * Mask icons for the Button instances created in logFileMain: IconDownload (Download button, ../icons/download.svg)
+ * and IconDelete (Delete button, ../icons/trash.svg). Color/shape come from the shared button/icon CSS.
+ */
 .IconDownload {
     mask-image: url("../icons/download.svg");
 }

@@ -1,22 +1,45 @@
 ﻿
 
+/*
+ * Passkey.css - styles for the SysWeaver.MicroService.PassKey pages, served as auth/Passkey.css.
+ *
+ * Loaded by UsePassKey.html, AddPassKey.html, AddPassKeyOnOtherDevice.html, MyPassKeys.html (this project) and by
+ * Login.html (SysWeaver.MicroService.Auth) and ChoosePassword.html / ResetPassword.html
+ * (SysWeaver.MicroService.UserManager), after ../common/theme.css and Auth.css (SysWeaver.MicroService.Auth).
+ * Builds on Auth.css (form.SysWeaver-AuthBox) and the mask-image icon technique of common.css / ColorIcon (the
+ * element's background color shows through the SVG mask, so icons follow the theme colors).
+ * Icon SVGs come from this project's srcWeb/icons folder (served as icons/). No templating.
+ */
+
+/* ===== Icons (mask images, used as ColorIcon / AuthPage / AuthButton icon classes) ===== */
+
+/* IconAddPasskey: add passkey icon (AddPassKey page image and "Add passkey" buttons in Passkey.js) */
 .IconAddPasskey {
     mask-image: url("../icons/passkey_add.svg");
 }
 
+/* IconUsePasskey: sign in with passkey icon (UsePassKey / MyPassKeys page images, sign in button) */
 .IconUsePasskey {
     mask-image: url("../icons/passkey_use.svg");
 }
 
+/* IconPasskeyKey: small key icon of the passkey sign in icon button on the login page (AuthUi.js) */
 .IconPasskeyKey {
     mask-image: url("../icons/passkey_key.svg");
 }
 
+/* IconPasskeyRename: rename passkey icon (Rename buttons on MyPassKeys.html) */
 .IconPasskeyRename {
     mask-image: url("../icons/passkey_rename.svg");
 }
 
-/* An auth box inside a pop up (the rename passkey dialog) */
+/* ===== Rename pop up ===== */
+
+/*
+ * An auth box inside a pop up (the rename passkey dialog)
+ * form.SysWeaver-AuthBox (created by CreateAuthWrapper in AuthUi.js) with SysWeaver-PassKeyPopUp (added by rename()
+ * in myPassKeysMain): resets the centered, fixed, card styling from Auth.css so the box flows inside the PopUp.
+ */
 form.SysWeaver-AuthBox.SysWeaver-PassKeyPopUp {
     background: initial;
     width: initial;
@@ -34,7 +57,12 @@ form.SysWeaver-AuthBox.SysWeaver-PassKeyPopUp {
     box-sizing: initial;
 }
 
-/* The small passkey icon button (used instead of a text button when no passkey is known to be on the device) */
+/* ===== Login page ===== */
+
+/*
+ * The small passkey icon button (used instead of a text button when no passkey is known to be on the device)
+ * PasskeyIconButton: class added by AuthUi.js to the IconPasskeyKey ColorIcon on the login page; centered vertically in its row.
+ */
 .PasskeyIconButton {
     align-self: center;
 }

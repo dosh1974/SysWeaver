@@ -22,7 +22,7 @@ A counter shader gets the rendered digits as a texture (`tex`) together with per
 
 ## Limitations and considerations
 
-- `index.html` includes `../canvasTools.js`, but that file lives in [`../../mediaPlayer/`](../../mediaPlayer/README.md). It is also loaded through `media_player.js`, so the direct include appears to be redundant.
+- `index.html` loads `canvasTools.js` only through `media_player.js` (in [`../../mediaPlayer/`](../../mediaPlayer/README.md)); `TextEffect.LoadPlayers()` loads the image and effect player scripts before the counter is created.
 
 ## Relationships
 

@@ -1,65 +1,108 @@
-﻿
+﻿/**
+ * UserManager.css - icon definitions for the self-service account pages of SysWeaver.MicroService.UserManager
+ * (served as auth/...).
+ *
+ * Loaded by all 15 HTML shells of this folder (SignUp, InviteUser, ChoosePassword, SetPassword, AddPassword,
+ * DeletePassword, ForgotPassword, ResetPassword, Add/Change/DeleteEmail, Add/Change/DeletePhone, DeleteAccount)
+ * after ../common/theme.css and Auth.css (SysWeaver.MicroService.Auth, also served as auth/).
+ * ChoosePassword.html and ResetPassword.html additionally load Passkey.css (SysWeaver.MicroService.PassKey).
+ * Not templated; defines no custom properties, keyframes, media queries or theme variants.
+ *
+ * The file contains only mask-image rules. Each class is an icon "shape": the size and the colour come from
+ * the shared mask-icon styling (theme / ColorIcon from common.js), the shape is the SVG mask set here.
+ * The class names are passed by name to AuthPage(icon, build) (AuthUi.js) by the *Main() entry points in
+ * UserManagerUi.js (rendered as a ColorIcon with IconColorThemeMain) and some are reused as AuthButton icons.
+ * SVG paths resolve to ../icons/ (the shared icon folder of SysWeaver.HttpServer's icon module).
+ * All layout of the auth box comes from Auth.css; passkey icons (IconAddPasskey) come from Passkey.css.
+ */
+
+/* ===== Account creation / password page icons ===== */
+
+/* IconAuthSignUp: user_add.svg; page icon of signUpMain (SignUp.html). */
 .IconAuthSignUp {
     mask-image: url("../icons/user_add.svg");
 }
 
+/* IconChoosePassword: user_add.svg; page icon of choosePasswordMain (ChoosePassword.html, completing a new account from a token). */
 .IconChoosePassword {
     mask-image: url("../icons/user_add.svg");
 }
 
+/* IconAuthSetPassword: user_password.svg; page icon of setPasswordMain (SetPassword.html, change password). */
 .IconAuthSetPassword {
     mask-image: url("../icons/user_password.svg");
 }
 
+/* IconAuthForgotPassword: user_check.svg; page icon of forgotPasswordMain (ForgotPassword.html). */
 .IconAuthForgotPassword {
     mask-image: url("../icons/user_check.svg");
 }
 
+/* IconAuthResetPassword: user_check.svg; page icon of resetPasswordMain (ResetPassword.html, token link). */
 .IconAuthResetPassword {
     mask-image: url("../icons/user_check.svg");
 }
 
 
+/* ===== Account deletion / invite icons ===== */
+
+/* IconAuthDeleteAccount: user_delete.svg; deleteAccountMain page icon in token mode and icon of its "Click to delete account" confirm button. */
 .IconAuthDeleteAccount {
     mask-image: url("../icons/user_delete.svg");
 }
 
+/* IconAuthDeleteMail: user_delete.svg; deleteAccountMain page icon in request mode (sending the delete-account message). */
 .IconAuthDeleteMail {
     mask-image: url("../icons/user_delete.svg");
 }
 
+/* IconAuthInviteUser: user_add.svg; page icon of inviteUserMain (InviteUser.html, privileged). */
 .IconAuthInviteUser {
     mask-image: url("../icons/user_add.svg");
 }
 
+/* ===== Add / delete password icons ===== */
+
+/* IconAuthAddPassword: user_password_add.svg; page icon of addPasswordMain (AddPassword.html). */
 .IconAuthAddPassword {
     mask-image: url("../icons/user_password_add.svg");
 }
 
+/* IconAuthDeletePassword: user_password_delete.svg; page and confirm button icon of deletePasswordMain (DeletePassword.html). */
 .IconAuthDeletePassword {
     mask-image: url("../icons/user_password_delete.svg");
 }
 
+/* ===== E-mail address icons ===== */
+
+/* IconAuthChangeEmail: user_email_change.svg; page / button icon of changeEmailMain (ChangeEmail.html). */
 .IconAuthChangeEmail {
     mask-image: url("../icons/user_email_change.svg");
 }
 
+/* IconAuthDeleteEmail: user_email_delete.svg; page / button icon of deleteEmailMain (DeleteEmail.html). */
 .IconAuthDeleteEmail {
     mask-image: url("../icons/user_email_delete.svg");
 }
 
+/* IconAuthAddEmail: user_email_add.svg; page / button icon of addEmailMain (AddEmail.html). */
 .IconAuthAddEmail {
     mask-image: url("../icons/user_email_add.svg");
 }
 
+/* ===== Phone number icons ===== */
+
+/* IconAuthChangePhone: user_phone_change.svg; page / button icon of changePhoneMain (ChangePhone.html). */
 .IconAuthChangePhone {
     mask-image: url("../icons/user_phone_change.svg");
 }
 
+/* IconAuthDeletePhone: user_phone_delete.svg; page / button icon of deletePhoneMain (DeletePhone.html). */
 .IconAuthDeletePhone {
     mask-image: url("../icons/user_phone_delete.svg");
 }
 
+/* IconAuthAddPhone: user_phone_add.svg; page / button icon of addPhoneMain (AddPhone.html). */
 .IconAuthAddPhone {
     mask-image: url("../icons/user_phone_add.svg");
 }

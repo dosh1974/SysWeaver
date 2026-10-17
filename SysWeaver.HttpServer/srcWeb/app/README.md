@@ -234,7 +234,7 @@ body
 - **Duplication:** `PopUpEdit` is defined twice (identical), the `Confirm` JSDoc header is duplicated, `.IconLock` is defined twice in the CSS, the `MainMenu.Add` click handlers for types 1, 2 and 6 are near-identical, `SetUrl`/`ReplaceUrl` duplicate code, and the user and settings buttons repeat the same build pattern.
 - **State lives in many places:** `<body>` classes, module-level closure variables inside `App.Init` (`pinned`, `setPinned`, `menuShow`/`menuHide`), `window.*` globals, element expando properties (`row.MenuItem`, `row.MenuIcon`, `iframe.DoRemove`, `iframe.RemoveTimer`, `page.Close`, `Close.EndFn`).
 - **Extension points:** `AppParams` hooks are only reachable by calling `App.Create(params)` directly; `appMain` always uses defaults and offers only the `window.AppMain` hook. Since `app/app.js` loads after `application.js`, an application could also redeclare `appMain`.
-- **Tags gallery:** `tags.js`/`tags.css` are not referenced by any first-party page (an optional library). `FilterTags` calls `slice` without using the result, so `maxCount` has no effect.
+- **Tags gallery:** `tags.js`/`tags.css` are not referenced by any first-party page (an optional library). `FilterTags` truncates the sorted result to `maxCount` when more tags match.
 
 ## JavaScript reference
 
@@ -364,7 +364,7 @@ The shell. Created via `App.Create(params)` (from `appMain`).
 | Function | Signature | Description |
 |---|---|---|
 | `setPinned` | `(p)` | On `window.Narrow`: always adds `SwCollapsed`, removes `SwPinned`, remembers `p`. Otherwise applies `p` by toggling `SwPinned`/`SwCollapsed` on `<body>`. Used by the pin button, `menuToggle` and the `SwLayout` listener. |
-| `tempDisableAutoShow` | `()` | Removes the `mouseover` listener `mouseOverFn` from `<app-menu>` and re-adds it after 250 ms. |
+| `tempDisableAutoShow` | `()` | Removes the `mousemove` listener `mouseOverFn` from `<app-menu>` and re-adds it after 250 ms. |
 | `menuHide` | `()` | If the menu is shown and not pinned (or narrow): removes `<app-capture>` and the body capture listeners, adds `SwCollapsed`, calls `tempDisableAutoShow`. Also the main menu's `HideFn`. |
 | `menuCapture` | `(ev)` | Capture-phase body `mouseover`: hides the menu unless the target is inside `<app-menu>` or `<app-header>`. |
 | `menuCaptureLeave` | `(ev)` | Capture-phase body `mouseleave`: hides the menu when the body itself is left. |
@@ -407,7 +407,7 @@ Tag gallery control library. Not loaded by any first-party page; a consumer must
 
 | Function | Signature | Description |
 |---|---|---|
-| `FilterTags` | `(tags, searchFor, maxCount)` → `Tag[]` | Returns `tags` unchanged for an empty search. Otherwise keeps tags whose lower-cased `Name` contains the search or whose `Desc` contains it, sets `s.Rank = (0.25/searchLength) * removedLength + (100 - namePos)` (where `namePos` ≤ 0 is replaced by 100 and `removedLength` is the search length when the first occurrence in `Desc` exists, else 0) on each kept tag (mutates input objects) and returns them sorted by `Rank` descending. The `slice` for `maxCount` discards its result, so the list is not truncated. Requires `Desc` to be a string. |
+| `FilterTags` | `(tags, searchFor, maxCount)` → `Tag[]` | Returns `tags` unchanged for an empty search. Otherwise keeps tags whose lower-cased `Name` contains the search or whose `Desc` contains it, sets `s.Rank = (0.25/searchLength) * removedLength + (100 - namePos)` (where `namePos` < 0, i.e. no name match, is replaced by 100, so earlier name matches rank higher, and `removedLength` is the search length when the first occurrence in `Desc` exists, else 0) on each kept tag (mutates input objects) and returns them sorted by `Rank` descending. When more than `maxCount` tags match, the sorted list is truncated to `maxCount`. Requires `Desc` to be a string. |
 | `SetTagClassName` | `(tagRet, className)` → `tagRet` | Sets `Class = className` on every element of `tagRet.Tags`; returns `tagRet`. |
 | `CreateTagsGallery` | async `(findTags, getTags, removeTag, addTag, maxTagCount, options = new TagGalleryParams())` → `{ Element, Update, GetTags }` | Creates `<SysWeaver-TagsGallery>` (class `Embedded` when `options.Embedded`, plus `options.Class`; expando `AllTags`) and renders it with the inner `update`. `findTags(search)` and `getTags()` return `{ Tags: [] }`; `removeTag(tag)`/`addTag(tag)` are optional and return truthy on success. `Update` re-renders, `GetTags()` returns the last fetched tags. |
 | `update` (inner of `CreateTagsGallery`) | async `()` | Awaits `getTags()`, clears the gallery and adds a `<SysWeaver-TagEdit>` (tag `Class`, tool tip `Desc`) with a `<SysWeaver-TagText>` per tag; with `removeTag` adds a remove `ColorIcon` (`options.RemoveIcon`, `RemoveIconSize`, `RemoveClass`) that shows working state, awaits `removeTag`, shows `Fail(RemoveError)` on failure and re-renders. While fewer than `maxTagCount` tags and `addTag` is given, adds an add `Button` (front or end per `AddAtFront`, class `AddClass`) that opens `PopUpSelection` (texts from Search* or Filter* depending on `ShowAllTags`, which is also passed as `getAll`); its item builder calls `findTags`, skips existing codes and creates `<SysWeaver-TagEdit class="TagSel">` items (`tabIndex 0`) whose `tagE.onclick` / `tagE.onkeyup` (Enter) await `addTag`, report `Fail(AddError)` on failure, re-render and close the pop-up. |
@@ -495,7 +495,7 @@ Styles the application shell (`index.html`) and the pop-up/menu library from `ap
 | `SysWeaver-Blocker`, `SysWeaver-Blocker:focus` | Fixed full-screen dimmed, blurred overlay (z-index 100) from `CreatePopUpBlocker`. |
 | `SysWeaver-Blocker SysWeaver-BlockerClose`, `SysWeaver-Blocker.FullWidth SysWeaver-BlockerClose` | Centered close-bar container; only created by commented-out code in `PopUp`. |
 | `SysWeaver-Blocker SysWeaver-BlockerCloseButton`, `> *` | Close button container at the top right of the pop-up (`PopUp` with `haveCloseButton`). |
-| `SysWeaver-Blocker .FullWidth SysWeaver-PopupBackground` | Near-full-width pop-up when a `.FullWidth` ancestor is inside the blocker (descendant selector; `MakeFullWidth()` adds `FullWidth` to the blocker itself). Element names are case-insensitive, so `SysWeaver-PopupBackground` matches `SysWeaver-PopUpBackground`. |
+| `SysWeaver-Blocker.FullWidth SysWeaver-PopupBackground` | Near-full-width pop-up when the blocker has `.FullWidth` (set by `MakeFullWidth()`). Element names are case-insensitive, so `SysWeaver-PopupBackground` matches `SysWeaver-PopUpBackground`. |
 | `SysWeaver-Blocker.MaxHeight SysWeaver-PopupBackground` | Full-height pop-up (`MakeMaxHeight()`). |
 | `SysWeaver-Blocker.Scroll SysWeaver-PopupBackground`, `SysWeaver-Blocker.Scroll SysWeaver-BlockerCloseButton` | When the pop-up overflows (`Scroll` toggled by the `ResizeObserver`): square right corners, close button shifted left of the scrollbar. |
 | `SysWeaver-PopUpBackground`, `:focus`, `.Wide`, `.Resize` | Centered 40em dialog box (top padding for the close button), scrollable; `Wide` = 75em (set by `edit/type.js`, `Translator.js`), `Resize` = user-resizable (set by `common.js`). |
@@ -527,7 +527,7 @@ All are `mask-image` icons (applied to `ColorIcon` elements via `IconClass`/clas
 | `.IconOk`, `.IconCancel`, `.IconClosePopUp` | `fav_on`, `close`, `close` — `Confirm` buttons and the `PopUp` close button. |
 | `.IconDb`, `.IconDbRemove`, `.IconDbAdd`, `.IconDbMinus` | `db*.svg`. |
 | `.IconCashBill`, `.IconCashBills`, `.IconCoin`, `.IconRefund` | `cash_bill`, `cash_bills` (also `IconCoin`), `refund`. |
-| `.IconImage`, `.IconChat`, `.IconNotes`, `.IconDisc`, `.IconSync`, `.IconUpload`, `.IconDownload` | `image`, `chat`, `notes`, `disc`, `sync`, `upload`; `IconDownload` uses `icons/download.svg` relative to `app/` (not `../icons/`). |
+| `.IconImage`, `.IconChat`, `.IconNotes`, `.IconDisc`, `.IconSync`, `.IconUpload`, `.IconDownload` | `image`, `chat`, `notes`, `disc`, `sync`, `upload`, `download`. |
 
 #### Custom properties
 

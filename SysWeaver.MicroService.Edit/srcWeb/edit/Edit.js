@@ -1,8 +1,81 @@
 ﻿
 
 
+/**
+ * @file The object editor engine: renders an editable form for any type described by `TypeService`.
+ *
+ * Loading: host pages include it with a static `<script defer src="../edit/Edit.js">` (e.g. explore/api.html of the
+ * API explorer, ServerManager/services.html, mediaView, and the "Edit test" page edit/index.html which calls
+ * `editTestMain`). On evaluation it runs `Edit.Init()` (not awaited), which loads type.js, UndoStack.js,
+ * EditOptions.js, EditDesktop.js, EditMobile.js and the EditType*.js handlers with `includeJs` relative to this script.
+ * Optional handlers such as EditTypeLanguage.js plug in by defining a global `EditType<Spec>Factory` function.
+ *
+ * Globals defined: class `Edit`, function `editTestMain`.
+ *
+ * Dependencies (globals from other files): `includeJs`, `ValueFormat`, `ColorIcon`, `PopUpElementMenu`,
+ * `TrackElement`, `WebMenu`, `WebMenuItem`, `MainMenu`, `MainMenuStyle`, `badClick`, `isPureClick`, `_T`, `_TF`
+ * (common.js / menu scripts of the host page); `TypeMemberFlags`, `TypeInfoCache` (type.js); `UndoStack`,
+ * `EditOptions`, `EditDesktop`, `EditMobile`, `EditType*` (this folder).
+ *
+ * Conventions: type metadata are `TypeDesc` / `TypeMemberDesc` objects from `TypeService.GetTypeInfo` (fields
+ * `TypeName`, `DisplayName`, `Flags` (TypeMemberFlags), `Members`, `Name`, `Default`, `Min`, `Max`, `Type` (special
+ * type specification), `ElementTypeName`, `ElementInst`, `Summary`, `Remarks`, ...). A primitive type is edited as an
+ * object with one member (`{ [Members[0].Name]: value }`). Every change dispatches a bubbling-free `EditChange`
+ * `CustomEvent` on the editor element (see `Edit.CreateChangeEvent`); child editors re-dispatch to their parent with
+ * `detail.Next` chaining. Undo paths are dotted names built from `ObjName` + `KeyName` segments (see `Invoke`).
+ */
+
+/**
+ * The form engine. One instance edits one object (or one primitive value) of one type description.
+ *
+ * Usage: `const e = new Edit(type, style, options, parent, member, evListener)` (or `await Edit.FromServer(typeName)`
+ * / `await Edit.Boolean(...)`), then `await e.SetObject(value)` and append `e.Element` to the page. Listen for
+ * `EditChange` on `e.Element`, read the value with `e.GetObject()`, validate with `e.Validate(true)`.
+ * Child editors (nested objects, collection items) are created by the type handlers with the parent editor as
+ * `parentEditor`; they share the root's `UndoStack`.
+ *
+ * Layout strategy: `EditDesktop` / `EditMobile` (stored in `this.Edit`) create the table rows (`AddTypeInfo`,
+ * `AddMember`) and call back into `Edit.SetMember` / `SetTypeInfo`.
+ *
+ * Type-handler contract (duck-typed). Each `EditType*` handler (and the object returned by a global
+ * `EditType<Spec>Factory(typeName, specParts)`) is a plain object returned and cached by `Edit.GetTypeHandler`.
+ * The engine calls:
+ * - `CreateDefault(member, options)` -> value written into a new object for this member (`Edit.CreateDefault`,
+ *   collection "add").
+ * - `GetDefault(member, options)` -> default described by the metadata (shape varies per handler).
+ * - `IsOfType(obj, member, options)` -> boolean: whether a pasted / dropped value is acceptable.
+ * - `Condition(obj, member, options)` -> coerced / clamped value to store for an accepted pasted / dropped value.
+ * - `Validate(obj, member, options, name)` (async) -> `null` or `[path, message]`.
+ * - `ToString(obj, member, options)` -> display text.
+ * - `AddEditor(obj, editor, editContext, member, title, options)` (async) -> item. Builds the editor DOM inside
+ *   `editContext.Element` (optionally a data row via `editContext.CreateData()`; `editContext.PrevRow` is the value
+ *   row), writes the default into `obj[member.Name]` when undefined and returns an item.
+ * - `IgnoreMembers` (optional field): if truthy the type is treated as a single-member primitive (constructor,
+ *   EditTypeCollection).
+ *
+ * The item returned by `AddEditor` has:
+ * - `SetValue(v)`: store `v` into `obj[member.Name]` and dispatch `EditChange` (used by undo/redo, menu, drop).
+ * - `UpdateValue(isFirst)`: refresh the UI from the object (called after each undo/redo step by `Invoke`).
+ * - `Focus`: element focused when validation fails for this member.
+ * - `Title`: constraint text prepended to the member tooltip.
+ * - `DefValue` / `DefValueText`: default value and its text, for the member menu's "Set default".
+ * - optional `DataRow` (row toggled by `Hide:` expressions), `AddMenuItems(menu, close)` (extra member-menu items),
+ *   `FindItem(path)` (resolve deeper undo paths) and `GetValue()`.
+ * The layout adds `Hide()`, `Show()` and `Icon` (icon cell); `Edit.SetMember` adds `TypeHandler` and `TitleElement`.
+ */
 class Edit {
 
+    /**
+     * Builds a stand-alone editor for a single boolean value (a one-member primitive `System.Boolean` type) using
+     * the Desktop layout and one of the `EditOptions.Clean*` presets, sets `value` and forwards every change.
+     * @param {string} name - Member name and display name.
+     * @param {boolean} value - Initial value.
+     * @param {string} title - Summary (tooltip) of the member.
+     * @param {function(boolean):(Promise<void>|void)} [onChange] - Called with `ev.detail.Value` on every `EditChange`.
+     * @param {boolean} [readOnly] - Use a read-only preset.
+     * @param {boolean} [showMenu] - Use a `*Menu` preset (`CleanMenu` / `CleanReadOnlyMenu`).
+     * @returns {Promise<Edit>} The editor; append `Element` to the page.
+     */
     static async Boolean(name, value, title, onChange, readOnly, showMenu) {
         const e = new Edit({
             Flags: TypeMemberFlags.IsPrimitive,
@@ -29,6 +102,12 @@ class Edit {
 
 
 
+    /**
+     * Loads the dependent editor scripts in parallel with `includeJs(document.currentScript.src, ...)`: type.js,
+     * UndoStack.js, EditOptions.js, EditDesktop.js, EditMobile.js, EditTypeBoolean/Default/Enum/Integer/Number/String/
+     * Collection/Object/DateTime.js. Called once while this script is evaluated (so `currentScript` is Edit.js).
+     * @returns {Promise<void>} Resolves when all scripts are loaded (the caller does not await it).
+     */
     static async Init() {
         const current = document.currentScript.src;
         await Promise.all([
@@ -50,10 +129,26 @@ class Edit {
         );
     }
 
+    /**
+     * Whether a type (or member) description is primitive.
+     * @param {{Flags:number}} type - A `TypeDesc` or `TypeMemberDesc`.
+     * @returns {boolean} True when `TypeMemberFlags.IsPrimitive` is set in `type.Flags`.
+     */
     static IsPrimitive(type) {
         return (type.Flags & TypeMemberFlags.IsPrimitive) !== 0;
     }
 
+    /**
+     * Creates the default value of a type.
+     * Primitive: the first member's handler `CreateDefault(member0, options)`.
+     * Object: the server default instance from `TypeInfoCache.GetInstance(type.TypeName)` (errors ignored), else a
+     * new object with every member set to its handler's `CreateDefault`. With `setTypeName` a `$type` property is
+     * added (prepended to the server instance when missing).
+     * @param {object} type - The `TypeDesc`.
+     * @param {EditOptions} [options] - Options passed to the handlers (default `new EditOptions()`).
+     * @param {boolean} [setTypeName] - Add `$type: type.TypeName`.
+     * @returns {Promise<*>} The default value.
+     */
     static async CreateDefault(type, options, setTypeName) {
         if (!options)
             options = new EditOptions();
@@ -87,6 +182,14 @@ class Edit {
         return o;
     }
 
+    /**
+     * Changes the displayed title of this editor (used when collection items are renumbered).
+     * Replaces the text of the first `SysWeaver-TypeTitle` and, for a primitive editor without title row, of the first
+     * `SysWeaver-MemberTitle`, when different; with `options.MenuIcon` also refreshes the parent cell's copy-on-click
+     * tooltip (`BaseTitle` + `ValueFormat.copyOnClick`).
+     * @param {string} name - New title, e.g. `"[3]"`.
+     * @returns {void}
+     */
     ChangeTitle(name) {
         const opt = this.Options;
         let texts = this.Element.getElementsByTagName("SysWeaver-TypeTitle");
@@ -116,6 +219,14 @@ class Edit {
         }
     }
 
+    /**
+     * Resolves a dotted undo path relative to this editor (the first segment is this editor's own name).
+     * One segment: returns `this`, or for a primitive editor its single member item. Otherwise looks up `MemberMap`
+     * by the second segment (stripped of any `[key]`); returns that item when the path ends there without a key,
+     * else recurses with `item.FindItem(path without the first segment)`.
+     * @param {string} name - Dotted path such as `"Edit.Items[2].Name"`.
+     * @returns {Promise<object|Edit|null>} The item / editor, or null when the member is unknown.
+     */
     async FindItem(name) {
         const p = name.split('.');
         const pl = p.length;
@@ -139,6 +250,10 @@ class Edit {
     }
 
 
+    /**
+     * Path of this editor used in undo paths: the parent's `GetObjectName()` + `"."` + `ObjName` + `KeyName`.
+     * @returns {string} E.g. `"Edit.Items[2]"`.
+     */
     GetObjectName() {
         let n = this.ObjName;
         const kn = this.KeyName;
@@ -150,6 +265,19 @@ class Edit {
         return n;
     }
 
+    /**
+     * Performs and records an undoable change on the shared `UndoStack`. The target is addressed by path, not by
+     * reference, so it survives re-rendering: path = `GetObjectName()` (+ `"." + name` for non-primitive editors).
+     * The callbacks are wrapped so that on do/redo/undo the target is looked up with `root.FindItem(path)`, passed to
+     * `doChange(item)` / `doReverse(item)` and then refreshed with `item.UpdateValue(isFirst)`.
+     * Callers sometimes pass extra arguments (e.g. a focus element); they are ignored.
+     * @param {function(object):Promise<void>} doChange - Applies the change to the found item.
+     * @param {function(object):Promise<void>} doReverse - Reverts the change on the found item.
+     * @param {string} title - Description of the change.
+     * @param {string} [name] - Member name appended to the path.
+     * @param {*} [tracking] - Coalescing token (see `UndoStack.Invoke`).
+     * @returns {Promise<void>}
+     */
     async Invoke(doChange, doReverse, title, name, tracking) {
         let n = this.GetObjectName();
         const t = this.Type;
@@ -162,6 +290,11 @@ class Edit {
             edit = edit.Parent;
         const root = edit;
 
+        /**
+         * Do/redo closure registered on the undo stack: finds the target by path, applies `doChange` and refreshes it.
+         * @param {boolean} [isFirst] - True on the first execution, false on redo.
+         * @returns {Promise<void>}
+         */
         const onRedo = async isFirst => {
             const item = await root.FindItem(n);
             await doChange(item);
@@ -169,6 +302,10 @@ class Edit {
                 await item.UpdateValue(isFirst);
         }; 
 
+        /**
+         * Undo closure registered on the undo stack: finds the target by path, applies `doReverse` and refreshes it.
+         * @returns {Promise<void>}
+         */
         const onUndo = async () => {
             const item = await root.FindItem(n);
             await doReverse(item);
@@ -180,11 +317,43 @@ class Edit {
         await this.UndoStack.Invoke(onRedo, onUndo, title, n, tracking);
     }
 
+    /**
+     * Re-renders the editor from its current value (`SetObject(GetObject())`); used when an `Edit` itself is the
+     * target of an undo path. The `SetObject` promise is not awaited.
+     * @returns {Promise<void>}
+     */
     async UpdateValue()
     {
         this.SetObject(this.GetObject());
     }
 
+    /**
+     * Creates the editor element and title row (the value is set later with `SetObject`).
+     * - Undo stack: `options.UndoStack`, else the parent's, else a new `UndoStack`.
+     * - `ObjName`: `options.Name`, else the last dot segment of `type.TypeName`, else `"Edit"`.
+     * - Style: when falsy, `"Mobile"` if the window is portrait and (width <= 800 (400 on mobile portrait) or
+     *   `window.Mobile`), else `"Desktop"`. On `window.Mobile` the element gets a CSS `zoom` scaling it to fit.
+     * - Creates `SysWeaver-Edit<style>` (class `NoBorder` when `!options.Border`) containing a `<table>`, and the
+     *   layout strategy via `eval("new Edit" + style + "()")`.
+     * - Resolves `TypeHandler` (with `member`, or the first member for collection/primitive types); when the handler
+     *   has `IgnoreMembers` the type is converted to a one-member primitive.
+     * - Sets `Element.Editor = this`; with `options.Title` adds the title row through the layout's `AddTypeInfo`
+     *   (tooltip: type name/assembly in Dev mode, summary, remarks).
+     * - A child editor re-dispatches each of its `EditChange` events on the parent element via
+     *   `Edit.CreateChangeEvent(member, GetObject(), ev, parent.Key, parent.KeyName)`.
+     * - Keyboard: Ctrl+Z / Ctrl+Y on the element call `Undo` / `Redo`; records `Edit.LastEdit` and installs the global
+     *   listener (`Edit.AddGlobalListener`).
+     * Instance fields set here: `Element`, `Table`, `Edit` (layout), `Type`, `Member`, `Parent`, `Options`, `Style`,
+     * `ObjName`, `UndoStack`, `TypeHandler`, `AddMenuItems` (null; optional object-menu hook set by collections),
+     * `Key` (null; collection key set by EditTypeCollection, which also sets `KeyName` and `ArrayEntry`) and
+     * `RemoveListerners` (Hide-expression listeners). `Object` is set by `SetObject`.
+     * @param {object} type - The `TypeDesc` to edit.
+     * @param {?string} [style] - `"Desktop"`, `"Mobile"` or falsy for automatic.
+     * @param {EditOptions} [options] - Options (default `new EditOptions()`).
+     * @param {?Edit} [parentEditor] - Enclosing editor for child editors.
+     * @param {?object} [member] - Member description used for the handler lookup (child editors).
+     * @param {function(CustomEvent):void} [evListener] - Optional `EditChange` listener added to the element.
+     */
     constructor(type, style, options, parentEditor, member, evListener) {
 
         if (!options)
@@ -316,8 +485,14 @@ class Edit {
 
     }
 
+    /** @type {?Edit} Editor most recently created or that last received a keydown; target of the global Ctrl+Z / Ctrl+Y handler. */
     static LastEdit = null;
 
+    /**
+     * Installs (once, guarded by `HaveGlobalListener`) a `keydown` listener on `document.body` that sends Ctrl+Z /
+     * Ctrl+Y (without Shift/Alt/Meta) to `Edit.LastEdit.UndoStack.Undo()` / `Redo()` and prevents the default.
+     * @returns {void}
+     */
     static AddGlobalListener() {
         if (Edit.HaveGlobalListener)
             return;
@@ -342,9 +517,20 @@ class Edit {
         });
     }
 
+    /** @type {boolean} True once `AddGlobalListener` has installed the body keydown listener. */
     static HaveGlobalListener = false;
 
 
+    /**
+     * Creates an `EditChange` event (not bubbling). A truthy value of a password member (`member.Flags & 2`) is
+     * replaced by `"***"`.
+     * @param {?object} member - The changed `TypeMemberDesc` (null for whole-object changes).
+     * @param {*} value - The new value.
+     * @param {?CustomEvent} [next] - The child event this one wraps (re-dispatch chain), or null.
+     * @param {*} [key] - Collection key of the editor, or null.
+     * @param {?string} [keyName] - Display form of the key (`"[i]"`), or null.
+     * @returns {CustomEvent} Event with `detail { Next, Member, Value, Key, KeyName }`.
+     */
     static CreateChangeEvent(member, value, next, key, keyName) {
         if (member)
             if ((member.Flags & 2) != 0)
@@ -362,6 +548,12 @@ class Edit {
         });
     }
 
+    /**
+     * Compares two values: different `typeof`, `!==` for non-objects, JSON text comparison for objects (and null).
+     * @param {*} a - First value.
+     * @param {*} b - Second value.
+     * @returns {boolean} True when different.
+     */
     static IsDifferent(a, b) {
         const aa = typeof (a);
         const bb = typeof (b);
@@ -372,6 +564,10 @@ class Edit {
         return JSON.stringify(a) !== JSON.stringify(b);
     }
 
+    /**
+     * Current value: `Object`, or for primitive types the unwrapped member value.
+     * @returns {*} The edited value.
+     */
     GetObject() {
         const t = this.Type;
         const obj = this.Object;
@@ -380,6 +576,11 @@ class Edit {
         return obj[t.Members[0].Name];
     }
 
+    /**
+     * Copy of a value containing only the declared members (not used within this folder).
+     * @param {*} src - Source value.
+     * @returns {*} `src` itself for primitive types, else a JSON deep copy with only the `Type.Members` names.
+     */
     GetCleanCopy(src) {
         const t = this.Type;
         if (Edit.IsPrimitive(t))
@@ -395,6 +596,14 @@ class Edit {
         return JSON.parse(s);
     }
 
+    /**
+     * Removes (in place) own properties of `obj` that are not declared in `type.Members` (`$type` is kept), recursing
+     * into non-primitive members: arrays element-wise with the element type, objects with the member type (types
+     * loaded with `Edit.GetType(..., mi.ElementInst)`).
+     * @param {object} type - The `TypeDesc`.
+     * @param {*} obj - The value to clean.
+     * @returns {Promise<*>} `obj` for primitive types, otherwise undefined.
+     */
     static async CleanUp(type, obj) {
         if (!obj)
             return;
@@ -439,6 +648,21 @@ class Edit {
 
 
 
+    /**
+     * Sets the edited value and rebuilds all member rows.
+     * `undefined` (or a falsy value for non-primitive types) is replaced by `Edit.CreateDefault(type, options)`;
+     * primitive values are wrapped as `{ [member0.Name]: value }` and stored in `Object`. Deletes all table rows except
+     * the title row, removes previous `Hide:` listeners, then for each member without `TypeMemberFlags.Hide` builds the
+     * tooltip (Dev: member name, type name, summary, remarks; else the summary) and calls the layout's `AddMember`.
+     * For each returned item it:
+     * - evaluates a `member.Type` of `"Hide:<expr>"` with `new Function("return " + expr).call(obj)` now and on every
+     *   `EditChange` (inner `ls`), toggling `item.Hide()` / `item.Show()` and class `Hide` on `item.DataRow`;
+     * - stores the item in `MemberMap` and adds class `EditButton` to `item.Icon`;
+     * - wires the member menu (inner `popupMenu`) to the title cell's click / context menu and, with
+     *   `options.MenuIcon`, to a `ColorIcon(options.MenuIconClass, options.MenuColorClass)` in the icon cell.
+     * @param {*} [obj] - The new value.
+     * @returns {Promise<void>}
+     */
     async SetObject(obj) {
         const editor = this;
         const options = this.Options;
@@ -508,6 +732,11 @@ class Edit {
                         if (dataRow)
                             dataRow.classList.add("Hide");
                     }
+                    /**
+                     * `EditChange` listener re-evaluating the `Hide:` expression against `obj` and hiding / showing the
+                     * member (and its data row). Removed on the next `SetObject`.
+                     * @returns {void}
+                     */
                     const ls = () => {
                         if (fn.call(obj)) {
                             item.Hide();
@@ -526,11 +755,25 @@ class Edit {
                 editor.MemberMap.set(mn, item);
                 item.Icon.classList.add("EditButton");
 
+                /**
+                 * Opens the member menu (`PopUpElementMenu` on the title cell, class `DefaultMenu`, `WebMenu` named
+                 * `EditObject`, positioned with `TrackElement`). Ignores bad clicks; reads the clipboard first.
+                 * Items: "Set default" (`item.DefValue`; disabled when undefined, equal to the value or read only),
+                 * "Copy" (disabled for Password members), "Paste" (clipboard JSON-parsed for non-string types, accepted
+                 * on matching `$type`, null with `AcceptNull`, or the handler's `IsOfType`; then `Condition`ed),
+                 * `item.AddMenuItems`, the editor's `AddMenuItems` (primitive editors), "Copy name" and, in Dev mode,
+                 * "Copy member name" / "Copy type name". Copy items require `navigator.clipboard`.
+                 * Changes go through `editor.Invoke(...SetValue...)`.
+                 * For `System.String` members the paste check replaces `clipText` with the conditioned text (used in
+                 * the undo log text).
+                 * @param {MouseEvent|HTMLElement} ev - The click / context-menu event.
+                 * @returns {Promise<void>}
+                 */
                 const popupMenu = async ev => {
                     if (badClick(ev))
                         return;
                     window.focus();
-                    const clipText = await ValueFormat.readFromClipboard();
+                    let clipText = await ValueFormat.readFromClipboard();
                     const clip = navigator.clipboard;
                     const val = clip ? editor.GetCopyMember(member) : null;
 
@@ -553,6 +796,11 @@ class Edit {
                             title = _TF("Value is read only", "Tool tip description on a property value that can't be edited");
                             enabled = false;
                         }
+                        /**
+                         * Dispatches `EditChange` for the member's current value on the editor element.
+                         * Declared but never called.
+                         * @returns {void}
+                         */
                         function notifyChange() {
                             e.dispatchEvent(Edit.CreateChangeEvent(member, obj[mn], null, editor.Key, editor.KeyName));
                         }
@@ -732,6 +980,7 @@ class Edit {
         }
     }
 
+    /** @type {Map<string, object>} Member name -> item returned by the layout/handler; filled by `SetObject` (entries are overwritten, not cleared). */
     MemberMap = new Map();
 
 
@@ -739,8 +988,14 @@ class Edit {
  
 
 
+    /** @type {Map<string, ?object>} Type name -> `TypeDesc` (client-registered via `AddType` or fetched by `GetType`; null cached for unknown server types). */
     static Types = new Map();
 
+    /**
+     * Registers a client-side `TypeDesc` in `Edit.Types` unless its `TypeName` is already present.
+     * @param {object} type - The `TypeDesc`.
+     * @returns {void}
+     */
     static AddType(type)
     {
         const tn = type.TypeName;
@@ -750,6 +1005,12 @@ class Edit {
         m.set(tn, type);
     }
 
+    /**
+     * JSON deep clone of a value with optional properties assigned on top (also used to clone default values).
+     * @param {*} src - Value to clone.
+     * @param {?object} [props] - Properties to `Object.assign` onto the clone.
+     * @returns {*} The clone, or null for a falsy `src`.
+     */
     static CloneType(src, props) {
         if (!src)
             return null;
@@ -760,6 +1021,15 @@ class Edit {
     }
 
 
+    /**
+     * Gets a type description: a clone (with `props` applied) of the cached entry in `Edit.Types`; when missing and
+     * not `isJsType`, fetches it with `TypeInfoCache.GetType(typeName)` (server request through type.js) and caches
+     * it (null for unknown types, which are then not fetched again).
+     * @param {string} typeName - .NET type name.
+     * @param {?object} [props] - Properties assigned on the clone (e.g. `member.ElementInst`).
+     * @param {boolean} [isJsType] - Only look in the client registry.
+     * @returns {Promise<?object>} The `TypeDesc` clone, or null.
+     */
     static async GetType(typeName, props, isJsType)
     {
         const m = Edit.Types;
@@ -779,6 +1049,15 @@ class Edit {
         return Edit.CloneType(r, props);
     }
 
+    /**
+     * Creates an editor for a server type: `Edit.GetType` + `new Edit(t, style, options)` + `SetObject(obj)`.
+     * @param {string} serverTypeName - .NET type name.
+     * @param {?string} [style] - Layout style (falsy = automatic).
+     * @param {EditOptions} [options] - Editor options.
+     * @param {?object} [props] - Properties assigned on the type description.
+     * @param {*} [obj] - Initial value (undefined = default).
+     * @returns {Promise<?Edit>} The editor, or null when the type is unknown.
+     */
     static async FromServer(serverTypeName, style, options, props, obj) {
 
         const t = await Edit.GetType(serverTypeName, props);
@@ -789,10 +1068,32 @@ class Edit {
         return e;
     }
 
+    /**
+     * Whether a value is defined.
+     * @param {*} value - Value to test.
+     * @returns {boolean} `typeof value !== "undefined"`.
+     */
     static IsValid(value) {
         return typeof value !== "undefined";
     }
 
+    /**
+     * Builds the editor of one member (called by the layouts' `AddMember`): resolves the handler with
+     * `GetTypeHandler(member.TypeName, member, options)`, calls `handler.AddEditor(...)` and, when an item is returned,
+     * sets `item.TypeHandler` / `item.TitleElement = c` and makes the title cell draggable (class `EditDraggable`,
+     * `application/json` from `editor.GetCopyMember(member, true)`). Unless read only (options or flag 16) the cell is
+     * also a drop target: JSON with matching `$type` (or null with `AcceptNull`) or accepted by `IsOfType`, or
+     * `text/plain` accepted by `IsOfType`, is `Condition`ed and, when different (`!=`), applied undoably with
+     * `editor.Invoke(item.SetValue ...)`. Mismatches / parse errors are logged with `console.warn`.
+     * @param {object} obj - The object being edited.
+     * @param {Edit} editor - The owning editor.
+     * @param {object} editContext - Layout context `{ PrevRow, Element, CreateData() }`.
+     * @param {object} member - The `TypeMemberDesc`.
+     * @param {string} title - Member tooltip.
+     * @param {EditOptions} options - Editor options.
+     * @param {HTMLTableCellElement} c - The member title cell.
+     * @returns {Promise<?object>} The handler's item (see the contract on class `Edit`).
+     */
     static async SetMember(obj, editor, editContext, member, title, options, c) {
         const th = this.GetTypeHandler(member.TypeName, member, options);
         const res = await th.AddEditor(obj, editor, editContext, member, title, options);
@@ -876,6 +1177,11 @@ class Edit {
 
     }
 
+    /**
+     * Interprets a value as boolean text.
+     * @param {*} val - Value (converted to string).
+     * @returns {boolean} True for `"1"`, `"true"` or `"True"`.
+     */
     static IsTrue(val) {
         val = "" + val;
         if (val === "1")
@@ -888,6 +1194,19 @@ class Edit {
     }
 
 
+    /**
+     * Creates an `<input>` of the given type bound to a value (helper for type handlers).
+     * `change` and `input` events run the inner `onChange`; Escape (pure key) restores the original value and
+     * commits it. Read only sets `readOnly` and class `EditReadOnly`. Adds `i.UpdateValue()`.
+     * @param {string} inputType - The input `type` attribute (e.g. `"number"`, `"date"`).
+     * @param {function():*} getValue - Returns the current value.
+     * @param {function(*, Event):Promise<void>} setValue - Stores a new value.
+     * @param {function(string):*} parseValue - Parses the input text.
+     * @param {function(*):string} toString - Formats a value for the input.
+     * @param {?function(*):*} validateValue - Optional coercion / clamping of the parsed value.
+     * @param {boolean} readOnly - Make the input read only.
+     * @returns {HTMLInputElement} The input (with `UpdateValue`).
+     */
     static CreateGenericInput(inputType, getValue, setValue, parseValue, toString, validateValue, readOnly) {
         const i = document.createElement("input");
         i.type = inputType;
@@ -899,6 +1218,14 @@ class Edit {
             i.classList.add("EditReadOnly");
         }
         let isInternal = false;
+        /**
+         * Input -> value handler (guarded by `isInternal` against re-entrance): parses the text, applies
+         * `validateValue`, on a final change (`isTemp` falsy) rewrites the input with the formatted value, then
+         * awaits `setValue(newValue, ev)`.
+         * @param {Event} ev - The `change` / `input` / keyup event.
+         * @param {boolean} [isTemp] - True for `input` events (typing in progress; text not reformatted).
+         * @returns {Promise<void>}
+         */
         const onChange = async (ev, isTemp)  => {
             if (isInternal)
                 return;
@@ -926,6 +1253,10 @@ class Edit {
                 }
             }
         };
+        /**
+         * Reloads the input text from `getValue()` (skipped while a change is being processed).
+         * @returns {void}
+         */
         i.UpdateValue = () => {
             if (isInternal)
                 return;
@@ -936,6 +1267,25 @@ class Edit {
         return i;
     }
 
+    /**
+     * Creates a text `<input>` (or a `<textarea>` when `numberOfLines > 1`) bound to a value; like
+     * `CreateGenericInput` plus `maxlength`, a placeholder (first line of `placeHolder`, not when read only) and key
+     * filtering: `validateKeyOrPattern` (a string of allowed characters, or `fn(ch, pos, value)`) filters the data of
+     * `beforeinput` events; when some characters are dropped the filtered text is inserted manually (respecting
+     * `maxLength`) and a `change` event is dispatched. Adds `i.UpdateValue()`.
+     * @param {function():*} getValue - Returns the current value.
+     * @param {function(*, Event):Promise<void>} setValue - Stores a new value.
+     * @param {function(string):*} parseValue - Parses the text.
+     * @param {function(*):string} toString - Formats a value.
+     * @param {?string} placeHolder - Placeholder text.
+     * @param {?function(*):*} validateValue - Optional coercion of the parsed value.
+     * @param {?(string|function(string, number, string):boolean)} validateKeyOrPattern - Allowed characters filter.
+     * @param {?number} maxLength - Maximum text length.
+     * @param {*} def - Unused.
+     * @param {boolean} readOnly - Make the input read only (class `EditReadOnly`).
+     * @param {?number} numberOfLines - More than 1 creates a `<textarea>`.
+     * @returns {HTMLInputElement|HTMLTextAreaElement} The element (with `UpdateValue`).
+     */
     static CreateTextInput(getValue, setValue, parseValue, toString, placeHolder, validateValue, validateKeyOrPattern, maxLength, def, readOnly, numberOfLines) {
         const isMultiLine = numberOfLines && (numberOfLines > 1);
         let i;
@@ -1003,6 +1353,13 @@ class Edit {
                 ta.dispatchEvent(new Event("change"));
             });
         }
+        /**
+         * Input -> value handler (same as in `CreateGenericInput`): parses, validates, reformats on final change and
+         * awaits `setValue(newValue, ev)`; guarded by `isInternal`.
+         * @param {Event} ev - The `change` / `input` / keyup event.
+         * @param {boolean} [isTemp] - True for `input` events (text not reformatted).
+         * @returns {Promise<void>}
+         */
         const onChange = async (ev, isTemp)  => {
             if (isInternal)
                 return;
@@ -1030,6 +1387,10 @@ class Edit {
                 }
             }
         };
+        /**
+         * Reloads the text from `getValue()` (skipped while a change is being processed).
+         * @returns {void}
+         */
         i.UpdateValue = () =>
         {
             if (isInternal)
@@ -1041,6 +1402,15 @@ class Edit {
         return i;
     }
 
+    /**
+     * Creates an `<input type="range">` with range 0..`stepCount` bound to a step index; disabled when read only.
+     * Adds `i.UpdateValue()`.
+     * @param {function():number} getStep - Returns the current step.
+     * @param {function(string):Promise<void>} setStep - Stores a new step (receives `i.value`, a string).
+     * @param {number} stepCount - Maximum step.
+     * @param {boolean} readOnly - Disable the slider.
+     * @returns {HTMLInputElement} The slider (with `UpdateValue`).
+     */
     static CreateSliderInput(getStep, setStep, stepCount, readOnly) {
         const i = document.createElement("input");
         i.type = "range";
@@ -1051,6 +1421,11 @@ class Edit {
         if (readOnly) {
             i.disabled = true;
         } else {
+            /**
+             * Slider `change` / `input` handler: awaits `setStep(i.value)`, guarded by `isInternal`.
+             * @param {Event} ev - The event.
+             * @returns {Promise<void>}
+             */
             const cf = async ev => {
                 if (isInternal)
                     return;
@@ -1061,6 +1436,10 @@ class Edit {
             i.addEventListener("change", cf);
             i.addEventListener("input", cf);
         }
+        /**
+         * Reloads the slider position from `getStep()` (suppressing the change handler meanwhile).
+         * @returns {void}
+         */
         i.UpdateValue = () => {
             isInternal = true;
             i.value = getStep();
@@ -1069,6 +1448,22 @@ class Edit {
         return i;
     }
 
+    /**
+     * Creates a `<select>` bound to a value (used by enum-like handlers). Each option stores its `[value, text, title]`
+     * entry as `KeyValue` (title is `kv[2]`, which yields "undefined" for 2-element entries).
+     * With `flags` it is a `multiple` select (size <= 4) for bit flags: changed options are OR-ed into / masked out
+     * of the current value and all selections are then recomputed; otherwise single selection storing
+     * `option.value` (a string). `onOpenFn(options)` runs on `focusin`. Disabled + `EditReadOnly` when read only.
+     * Adds `i.UpdateValue()`.
+     * @param {function():*} getValue - Returns the current value.
+     * @param {function(*):Promise<void>} setValue - Stores a new value.
+     * @param {Array<Array>} values - `[value, text, title]` entries.
+     * @param {*} def - Unused.
+     * @param {boolean} readOnly - Disable the select.
+     * @param {boolean} flags - Bit-flag (multi select) mode.
+     * @param {?function(HTMLOptionElement[]):void} onOpenFn - Called with the option elements on focus.
+     * @returns {HTMLSelectElement} The select (with `UpdateValue`).
+     */
     static CreateSelectionInput(getValue, setValue, values, def, readOnly, flags, onOpenFn) {
         const i = document.createElement("select");
         const vl = values.length;
@@ -1130,6 +1525,10 @@ class Edit {
             }
             isInternal = false;
         });
+        /**
+         * Reloads the option selection from `getValue()`.
+         * @returns {void}
+         */
         i.UpdateValue = () => {
             isInternal = true;
             val = getValue();
@@ -1144,6 +1543,17 @@ class Edit {
         return i;
     }
 
+    /**
+     * Validates a value against a type: for each member without `TypeMemberFlags.Hide`, an `undefined` value yields
+     * "<DisplayName>: No value found!", otherwise the member handler's `Validate(value, member (or the type for
+     * primitives), options, path)` runs; the first error is returned.
+     * @param {object} type - The `TypeDesc`.
+     * @param {*} obj - The value (the raw value for primitive types).
+     * @param {EditOptions} options - Editor options.
+     * @param {?string} name - Path prefix; member paths are `name + "." + member` (or `name` for primitives, or just
+     *   the member name when `name` is falsy).
+     * @returns {Promise<?Array<string>>} Null when valid, else `[path, message]`.
+     */
     static async ValidateType(type, obj, options, name) {
         const members = type.Members;
         if (!members)
@@ -1170,6 +1580,12 @@ class Edit {
         return null;
     }
 
+    /**
+     * Validates the edited value with `Edit.ValidateType(Type, Object, Options, primitive ? null : "Edit")`.
+     * With `focusOnError` resolves the error path with `FindItem` and focuses the item's `Focus` element.
+     * @param {boolean} [focusOnError] - Focus the failing member.
+     * @returns {Promise<?Array<string>>} Null when valid, else `[path, message]`.
+     */
     async Validate(focusOnError)
     {
         const e = await Edit.ValidateType(this.Type, this.Object, this.Options, Edit.IsPrimitive(this.Type) ? null : "Edit");
@@ -1187,6 +1603,12 @@ class Edit {
         return e;
     }
 
+    /**
+     * Parses an integer metadata parameter (e.g. `Min` / `Max`).
+     * @param {*} val - The value; when defined `parseInt(val)` is returned (may be NaN; parseInt does not throw).
+     * @param {number} def - Returned when `val` is undefined.
+     * @returns {number} The parsed value or `def`.
+     */
     static GetIntParam(val, def) {
         try {
             if (Edit.IsValid(val))
@@ -1198,6 +1620,14 @@ class Edit {
         return def;
     }
 
+    /**
+     * Text used for copy / drag of a value: `"null"` for null, the string itself (unless `forceJson`), JSON for
+     * non-objects and arrays, and for objects JSON with `$type: typeName` prepended when missing.
+     * @param {*} obj - The value.
+     * @param {boolean} [forceJson] - Always produce JSON (drag and drop).
+     * @param {string} typeName - .NET type name for `$type`.
+     * @returns {string} The text.
+     */
     static GetTypedTextOrJson(obj, forceJson, typeName) {
         if (obj === null)
             return "null";
@@ -1213,12 +1643,23 @@ class Edit {
 
     }
 
+    /**
+     * Clipboard / drag text of the whole edited value (`Edit.GetTypedTextOrJson` with `Type.TypeName`).
+     * @param {boolean} [forceJson] - Always produce JSON.
+     * @returns {string} The text.
+     */
     GetCopyObject(forceJson) {
         const t = this.Type;
         const tn = t.TypeName;
         return Edit.GetTypedTextOrJson(this.GetObject(), forceJson, tn);
     }
 
+    /**
+     * Clipboard / drag text of one member's value (`obj[member.Name]`, or the primitive value itself).
+     * @param {object} member - The `TypeMemberDesc`.
+     * @param {boolean} [forceJson] - Always produce JSON.
+     * @returns {string} The text.
+     */
     GetCopyMember(member, forceJson) {
         let obj = this.GetObject();
         if (!Edit.IsPrimitive(this.Type))
@@ -1226,6 +1667,13 @@ class Edit {
         return Edit.GetTypedTextOrJson(obj, forceJson, member.TypeName);
     }
 
+    /**
+     * Whether a pasted / dropped value can replace the whole edited value. Primitive editor: `obj` must not be an
+     * object and must pass the type handler's `IsOfType`. Object editor: `obj.$type` (before the first comma) must
+     * equal `Type.TypeName` (a null `obj` throws a TypeError here).
+     * @param {*} obj - Candidate value.
+     * @returns {boolean} True if acceptable.
+     */
     CanConsumeCopy(obj) {
         const isObject = typeof (obj) === "object";
         const type = this.Type;
@@ -1243,11 +1691,34 @@ class Edit {
         return true;
     }
 
+    /**
+     * Dispatches an `EditChange` (no member, value `GetObject()`, the editor's `Key` / `KeyName`) on `Element`.
+     * @returns {void}
+     */
     NotifyChange() {
-        this.Element.dispatchEvent(Edit.CreateChangeEvent(null, this.GetObject()), null, this.Key, this.KeyName);
+        this.Element.dispatchEvent(Edit.CreateChangeEvent(null, this.GetObject(), null, this.Key, this.KeyName));
 
     }
 
+    /**
+     * Fills the title cell `c` (called by the layout's `AddTypeInfo`):
+     * - optional expand/collapse `ColorIcon` (when `options.CanExpand` and not primitive; inner `setExpand` /
+     *   `toggleExpand` toggle class `EditorCollapsed` on `expandElement`, initial state `options.IsExpanded`);
+     * - a `SysWeaver-PopupMenuIcon` with the object menu (inner `menuPop`), also opened by `c.oncontextmenu`;
+     * - `options.AddToHeader(c)` hook;
+     * - a `SysWeaver-TypeTitle` (`options.KeyName` or `type.DisplayName`; `BaseTitle` = tooltip) and a copy-on-click
+     *   tooltip (`ValueFormat.copyOnClick`).
+     * Makes `c` draggable (class `EditDraggable`, `application/json` from `GetCopyObject(true)`) and, unless
+     * `options.ReadOnly`, a drop target: JSON accepted by `CanConsumeCopy` is `Condition`ed and applied undoably with
+     * `SetObject` + `NotifyChange`; `text/plain` accepted by `CanConsumeCopy` is `Condition`ed and applied directly
+     * with an `EditChange`.
+     * @param {HTMLTableCellElement} c - The title cell.
+     * @param {HTMLElement} expandElement - Element that gets class `EditorCollapsed` (the editor table).
+     * @param {object} type - The `TypeDesc`.
+     * @param {string} title - Tooltip text.
+     * @param {EditOptions} options - Editor options.
+     * @returns {void}
+     */
     SetTypeInfo(c, expandElement, type, title, options) {
 
         let name = options.KeyName;
@@ -1256,6 +1727,14 @@ class Edit {
         const edit = this;
         const e = edit.Element;
         const th = edit.TypeHandler;
+        /**
+         * Opens the object menu (`PopUpElementMenu` at the menu icon, `WebMenu` named `EditProp`): "Set default"
+         * (`SetObject()` + `NotifyChange`, disabled when read only), and when `navigator.clipboard` exists "Copy"
+         * (`GetCopyObject()`) and "Paste" (clipboard JSON-parsed unless the type is `System.String`, accepted on matching
+         * `$type`, null with `AcceptNull`, or `IsOfType`; then `Condition`ed), followed by the editor's `AddMenuItems`.
+         * Changes are undoable via `Invoke`. Uses `menuIcon` / `isReadOnly`, declared later in `SetTypeInfo`.
+         * @returns {Promise<void>}
+         */
         const menuPop = async () => {
             window.focus();
             const clip = navigator.clipboard;
@@ -1384,6 +1863,11 @@ class Edit {
 
             let expandIcon;
 
+            /**
+             * Applies `isExpanded`: removes / adds class `EditorCollapsed` on `expandElement` and switches the icon
+             * (`SysWeaverEditIconCollapse` / `SysWeaverEditIconExpand`) and its tooltip.
+             * @returns {void}
+             */
             function setExpand() {
                 if (isExpanded) {
                     expandElement.classList.remove("EditorCollapsed");
@@ -1400,6 +1884,10 @@ class Edit {
                 }
             }
 
+            /**
+             * Click handler of the expand icon: flips `isExpanded` and applies it with `setExpand`.
+             * @returns {void}
+             */
             function toggleExpand() {
                 isExpanded ^= true;
                 setExpand();
@@ -1489,7 +1977,7 @@ class Edit {
                         console.warn("Invalid data: " + json);
                     }
                 } else {
-                    const obj = ev.dataTransfer.getData("text/plain");
+                    let obj = ev.dataTransfer.getData("text/plain");
                     if (obj) {
                         if (edit.CanConsumeCopy(obj)) {
                             console.log("Dropped: \"" + obj + "\"");
@@ -1506,6 +1994,16 @@ class Edit {
         }
     }
 
+    /**
+     * Writes a short summary of a value into `element.innerText` / `element.title` (object member summary).
+     * Falsy -> `"null"`. Non-objects: the value itself is shown (not truncated).
+     * Objects: the first non-empty of `toString()` (called unbound, so normally `"[object Undefined]"`, which is
+     * skipped), `ToString()` (also unbound) and `JSON.stringify`, else `"Value"`; longer than 24 chars it is truncated
+     * to 21 chars + `"..."` with the full text as tooltip.
+     * @param {HTMLElement} element - Target element (`SysWeaver-EditInfo`).
+     * @param {*} obj - The value.
+     * @returns {void}
+     */
     static SetToString(element, obj) {
         if (!obj) {
             element.innerText = "null";
@@ -1514,18 +2012,18 @@ class Edit {
         }
         const ot = typeof (obj);
         if (ot === "string") {
-            element.innerText = ot;
-            element.title = _T("The text is: \"{0}\"", ot, "Tool tip description of a property text value.{0} is replaced with the value text.");
+            element.innerText = obj;
+            element.title = _T("The text is: \"{0}\"", obj, "Tool tip description of a property text value.{0} is replaced with the value text.");
             return;
         }
         if (ot === "number") {
-            element.innerText = "" + ot;
-            element.title = _T("The number is: {0}", ot, "Tool tip description of a property numerical value.{0} is replaced with the numerical value.");
+            element.innerText = "" + obj;
+            element.title = _T("The number is: {0}", obj, "Tool tip description of a property numerical value.{0} is replaced with the numerical value.");
             return;
         }
         if (ot !== "object") {
-            element.innerText = "" + ot;
-            element.title = _T("The value is: {0}", ot, "Tool tip description of a property value.{0} is replaced with the value.");
+            element.innerText = "" + obj;
+            element.title = _T("The value is: {0}", obj, "Tool tip description of a property value.{0} is replaced with the value.");
             return;
         }
         let text = null;
@@ -1580,6 +2078,14 @@ class Edit {
         }
     }
 
+    /**
+     * Writes the item count of a collection into `element.innerText` (+ tooltip): `"null"`, "empty", "1 item" or
+     * "{n} items" (localized).
+     * @param {HTMLElement} element - Target element (`SysWeaver-EditInfo`).
+     * @param {?(Array|Map)} collection - The collection.
+     * @param {EditCollectionArray|EditCollectionMap} container - Strategy used for `countVal`.
+     * @returns {void}
+     */
     static SetCollectionCount(element, collection, container) {
         if (!collection) {
             element.innerText = "null";
@@ -1601,6 +2107,14 @@ class Edit {
         element.title = _T("There are {0} items in the collection", c, "Tool tip description on a property value that is a .NET collection when the collection contains multiple items.{0} is replaced with the number of items in the collection.");
     }
 
+    /**
+     * Builds a new map of the built-in handlers by .NET type name: signed / unsigned integers -> `EditTypeInteger`
+     * (64-bit limited to the JS safe integer range), `Single` / `Double` / `Decimal` -> `EditTypeNumber`, `Boolean` ->
+     * `EditTypeBoolean`, `DateTime` / `DateOnly` / `TimeOnly` -> `EditTypeDateTime`, the same for the
+     * ``System.Nullable`1[[...]]`` names (nullable variants), `String` -> `EditTypeString`, `Object` -> read-only
+     * `EditTypeString`.
+     * @returns {Map<string, object>} Type name -> handler.
+     */
     static GetTypeMap() {
         const map = new Map();
         map.set("System.SByte", new EditTypeInteger(true, 1));
@@ -1622,6 +2136,11 @@ class Edit {
         map.set("System.DateOnly", new EditTypeDateTime(false, true));
         map.set("System.TimeOnly", new EditTypeDateTime(false, false, true));
         
+        /**
+         * Builds the .NET nullable type name of a value type.
+         * @param {string} n - Type name, e.g. `"System.Int32"`.
+         * @returns {string} ``"System.Nullable`1[[" + n + "]]"``.
+         */
         function N(n) {
             return "System.Nullable`1[[" + n + "]]";
         }
@@ -1651,10 +2170,22 @@ class Edit {
         return map;
     }
 
+    /** @type {?EditTypeCollection} Shared collection handler, created on first use by `GetTypeHandler`. */
     static CollectionTypeHandler = null;
-    static DefaultTypeHandler = null; 
+    /** @type {?EditTypeDefault} Shared fallback handler, created on first use by `GetTypeHandler`. */
+    static DefaultTypeHandler = null;
+    /**
+     * Handler cache for lookups without a member (built by `GetTypeMap` on first use). `Edit.TypeMapMember` (lookups
+     * with a member), `Edit.ObjectTypeHandler` and `Edit.EnumTypeHandler` are created on demand as undeclared static
+     * properties the same way.
+     * @type {?Map<string, object>}
+     */
     static TypeMap = null;
 
+    /**
+     * Returns the shared `EditTypeObject` handler, creating it on first use (`Edit.ObjectTypeHandler`).
+     * @returns {EditTypeObject} The handler.
+     */
     static GetObjectTypeHandler()
     {
         let c = Edit.ObjectTypeHandler;
@@ -1665,6 +2196,19 @@ class Edit {
         return c;
     }
 
+    /**
+     * Resolves (and caches) the type handler for a type / member. Uses `Edit.TypeMapMember` when a member is given,
+     * else `Edit.TypeMap` (each initialized with `GetTypeMap()`). Cache key: `typename`, or `typename + "|" +
+     * member.Type` when the member has a special type specification.
+     * Unknown key, in order: a global `window["EditType" + spec.split(':')[0] + "Factory"](typename, specParts)` when
+     * defined (e.g. EditTypeLanguage.js); the handler of the plain `typename`; by member flags `Collection` ->
+     * `EditTypeCollection`, `IsObject` -> `EditTypeObject`, `IsEnum` -> `EditTypeEnum` (shared instances); otherwise
+     * the shared `EditTypeDefault`. The result is cached under the key.
+     * @param {string} typename - .NET type name.
+     * @param {?object} [member] - The `TypeMemberDesc` (flags and `Type` spec drive the lookup).
+     * @param {EditOptions} [options] - Unused.
+     * @returns {object} The handler (see the contract on class `Edit`).
+     */
     static GetTypeHandler(typename, member, options) {
 
         let tm = member ? Edit.TypeMapMember : Edit.TypeMap;
@@ -1740,8 +2284,16 @@ class Edit {
 
 }
 
+//  Start loading the dependent editor scripts (not awaited).
 Edit.Init();
 
+/**
+ * Entry point of the "Edit test" page (edit/index.html): creates an editor with
+ * `Edit.FromServer("SysWeaver.MicroService.EditTest")`, appends it to `document.body` and logs every `EditChange`
+ * to the console as `path = value` (path built from `detail.Member.Name` and the `KeyName` / member chain following
+ * `detail.Next`, `*` for whole-object changes; object values JSON-stringified).
+ * @returns {Promise<void>}
+ */
 async function editTestMain()
 {
     const edit = await Edit.FromServer("SysWeaver.MicroService.EditTest");

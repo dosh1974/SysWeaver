@@ -53,7 +53,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 ### Files
 
 #### `media_player.js`
-- `MediaTypes`: static integer constants `Image=0, Video=1, Audio=2, YouTube=3, Effect=4, Text=5`, a frozen `Names` array, and `GetTypeName(mediaType)`, which returns `"SysWeaver.MicroService.Media.Media" + Names[...]` (it refers to `Names` without the class qualifier).
+- `MediaTypes`: static integer constants `Image=0, Video=1, Audio=2, YouTube=3, Effect=4, Text=5`, a frozen `Names` array, and `GetTypeName(mediaType)`, which returns `"SysWeaver.MicroService.Media.Media" + MediaTypes.Names[...]`.
 - `MediaPlayer.Init()`, `MediaPlayer.CurrentUrl`: see above.
 - `MediaPlayer.Create(type, data, mediaParams)` / `CreateSync(...)`: the factory. Mapping:
   - `Image`: `MediaPlayerImage(data, params)`, or, if `params.Effect` is set, `MediaPlayerEffect(params.Effect, params.EffectParams, gl => new MediaPlayerImageTexture(gl, params, data))`.
@@ -222,7 +222,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 - Parameter mirroring with the C# types is by name only:
   - JS `MediaTypes` includes `Text=5`, which the C# enum lacks; C# has `MediaVimeo`, which JS has no player for.
   - `MediaEffect.DpiAdjust` defaults to true in C# and false in JS.
-  - JS params declare `WrapY` while the render reads `WrapV`, and C# uses `WrapV`.
+  - JS params declare `WrapY` while C# uses `WrapV`; the render accepts either name.
 - Effect parameter editing rewrites the GLSL source and recompiles (no uniforms). The editable schema is hand-built in the server's type-info JSON format (`Flags` bit values, `System.Single` type names), which ties this code to the generic editor in another project.
 - Cross-window reach: dark-mode detection and `GetElementFromId` read `window.top` / parent frames directly, which assumes same-origin framing. Control is through untyped `postMessage(..., "*")` with string `Type` keys, and there is no origin check.
 - Expando properties are used as data channels: `canvas.This`, `gl.PCompile`, number-atlas widths on the canvas, `style.ComputedMargins`, grid stats written into `EffectParams.FxProps`.
@@ -255,7 +255,7 @@ Static constant holder; never instantiated.
 | `Effect` | static field | `= 4` | GLSL pixel shader effect (GlslSandbox / ShaderToy style); data is the `.glsl` URL (`MediaPlayerEffect`). |
 | `Text` | static field | `= 5` | Stylized text, optionally with an effect; data is the text itself (`MediaPlayerText`, or `MediaPlayerEffect` + `MediaPlayerTextTexture`). |
 | `Names` | static field | frozen `["Image","Video","Audio","YouTube","Effect","Text"]` | Display names indexed by type id. |
-| `GetTypeName` | static method | `GetTypeName(mediaType)` → string | Returns `"SysWeaver.MicroService.Media.Media" + Names[mediaType]` (the C# params type name). The body references the bare identifier `Names`, not `MediaTypes.Names`, so it resolves against the global scope. |
+| `GetTypeName` | static method | `GetTypeName(mediaType)` → string | Returns `"SysWeaver.MicroService.Media.Media" + MediaTypes.Names[mediaType]` (the C# params type name). |
 
 #### class `MediaPlayer`
 Static factory; never instantiated.
@@ -648,7 +648,7 @@ WebGL effect player and image texture provider. Loaded by `MediaPlayer.Init` (`M
 | `Transparent` | field | `= false` | Context `alpha`; clear color transparent instead of opaque green. |
 | `AdaptiveSize` | field | `= true` | Backing store follows the element's client size × devicePixelRatio; set to false when a texture dictates the size. |
 | `WrapU` | field | `= false` | `REPEAT` wrap on S for the texture (applied in `render` when `ApplyTextue`). |
-| `WrapY` | field | `= false` | Declared wrap flag; `render` reads `p.WrapV` (not `WrapY`) for the T-axis wrap. |
+| `WrapY` | field | `= false` | `REPEAT` wrap on T for the texture (applied in `render` when `ApplyTextue`); `render` honors both `WrapY` and the C# name `WrapV`. |
 | `Texture` | field | `= null` | Declared; not read in this folder. |
 | `WebGL2` | field | `= false` | Request a `webgl2` context instead of `webgl`. |
 | `MipMap` | field | `= false` | Read by the texture providers (via `EffectParams.MipMap`) to generate mipmaps. |
@@ -703,7 +703,7 @@ Created by `MediaPlayer.Create` (Effect, or Image/Text with `Effect`), by `GetIm
 | `MouseX`, `MouseY` | field | `= 0.5` each | Last mouse client position. |
 | `OnRender` | field | `= null` | Optional hook `(gl, player)` called before each draw (used by `mediaView/textEffect.js` to upload extra uniforms). |
 | `ZeroDate` | static field | `new Date("2001-01-01T11:37:42Z")` | `iDate` value when `Speed ≤ 0`. |
-| `render` | static method | `render(t, animTime)` | Draws one frame of player `t` (no-op without `Program`). With `animTime` (from rAF) computes time from `RenderTime`/`ResumeTime` and uses the GPU timer. Computes the backing-store size (adaptive client size × dpr × `DpiScale` × global scale, or `Width/Height × DpiScale`; `LimitSize` clamp), resizes the canvas, skips repeated `Static` frames and invisible canvases (`checkVisibility`), sets viewport and all uniforms (`scroll` ratios are computed as `scrollLeft / Math.abs(1.0, scrollWidth)`, i.e. divided by 1), re-applies the texture when `ApplyTextue` (plus `WrapU`/`WrapV` repeat), calls `OnRender`, draws, and feeds `AccTime` (GPU query thresholds 12/2 ms, else CPU frame delta 35/17 ms). |
+| `render` | static method | `render(t, animTime)` | Draws one frame of player `t` (no-op without `Program`). With `animTime` (from rAF) computes time from `RenderTime`/`ResumeTime` and uses the GPU timer. Computes the backing-store size (adaptive client size × dpr × `DpiScale` × global scale, or `Width/Height × DpiScale`; `LimitSize` clamp), resizes the canvas, skips repeated `Static` frames and invisible canvases (`checkVisibility`), sets viewport and all uniforms (`scroll` ratios are computed as `scrollLeft / Math.max(1.0, scrollWidth)`), re-applies the texture when `ApplyTextue` (plus `WrapU`/`WrapV`-or-`WrapY` repeat), calls `OnRender`, draws, and feeds `AccTime` (GPU query thresholds 12/2 ms, else CPU frame delta 35/17 ms). |
 | `draw` | inner (of `render`) | `()` | `gl.drawArrays(TRIANGLES, 0, 3)`. |
 | `Validate` | async method | `Validate()` | If there is no context or it is lost: `ReleaseGL`, replaces the canvas with `cloneNode()` in the DOM, and re-runs `Create()`. |
 | `Play` | async method | `Play()` | `Validate`, unpause, `ResumeTime = CurrentPosition`, reset `RenderTime` and counters; unless an already-rendered `Static` effect, sets `IsAnimating` and starts `renderFrame`. |
@@ -714,7 +714,7 @@ Created by `MediaPlayer.Create` (Effect, or Image/Text with `Effect`), by `GetIm
 | `Seek` | async method | `Seek(time)` | Negative → `null`. Paused: sets the position, `Validate`, renders one frame. Playing: sets `ResumeTime = time - CurrentPosition` and `CurrentPosition = time`. |
 | `Params`, `Url`, `Source`, `Src`, `Etag`, `CreateTextureFn`, `Texture`, `GL`, `Pos`, `Query`, `ProgramData`, `Program` | fields | | Params; `.glsl` URL; fetched source; ETag; texture factory; texture provider; context; vertex buffer; `{E: ext, Q: query, IsQ}` timer query; parsed source; current `EffectProgram`. |
 | `CompilationTime`, `AvgDrawTimeMs`, `TotalTime`, `MeasureCount`, `PrintCounter` | fields | | Compile ms (−1 compiling, −2 aborted, −3 failed); performance counters. |
-| `CurrentPosition`, `ResumeTime`, `RenderTime`, `PrevTime`, `FrameIndex`, `Rendered`, `IsAnimating`, `Compiling`, `CompileAgain`, `ApplyTextue` | fields | | Timeline and render-loop state (`FrameIndex` is first assigned by `++` in `render`). |
+| `CurrentPosition`, `ResumeTime`, `RenderTime`, `PrevTime`, `FrameIndex`, `Rendered`, `IsAnimating`, `Compiling`, `CompileAgain`, `ApplyTextue` | fields | | Timeline and render-loop state (`FrameIndex` starts at 0 in the constructor and is incremented in `render`). |
 | `IsDarkMode`, `SmoothDark`, `ClientWidth`, `ClientHeight`, `ResizeObserver`, `ScriptTypeInfo`, `ScriptMember` | fields | | Dark state and smoother, observed element size, editor schema from `ProgramData`. |
 
 #### class `MediaPlayerImageTexture`

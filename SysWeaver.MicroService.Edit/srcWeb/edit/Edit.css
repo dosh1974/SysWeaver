@@ -1,7 +1,23 @@
-﻿:root {
+﻿/*
+ * Edit.css - shared styles of the object editor (Edit.js), independent of the layout style.
+ * Loaded with <link> by pages that host the editor: edit/index.html (test page), explore/api.html and
+ * ServerManager/services.html, always together with EditDesktop.css and EditMobile.css (layout specific) and
+ * after common/theme.css (theme variables such as --ThemeMain).
+ * Contents: shared custom properties, member/type title elements, read-only and drag state classes, and the
+ * mask-image icon classes used by the editor's popup menus (IconClass in Edit.js menu items).
+ */
+
+/*
+ * Custom properties:
+ * --SysWeaverEditFadeDuration: duration (seconds) of the hover / focus colour transitions in EditDesktop.css,
+ *   EditMobile.css and EditLanguage.css.
+ * --white: plain white (#ffffff); defined here, not referenced by the edit stylesheets.
+ */
+:root {
     --SysWeaverEditFadeDuration: 0.1s;
     --white: #ffffff;
 }
+/* Disabled (commented out) page-level html/body styles, kept for reference. */
 /*
 html {
     margin: 0;
@@ -23,12 +39,16 @@ body {
 }
 */
 
+/* ===== Titles and info text ===== */
+
+/* SysWeaver-MemberTitle: the member display name in the title cell (created by EditDesktop.js / EditMobile.js); selectable text. */
 SysWeaver-MemberTitle {
     display: inline-block;
     padding: 5px;
     user-select: text;
 }
 
+/* SysWeaver-TypeTitle: small, left-floating 24px high type caption (created by Edit.SetTypeInfo / EditDesktop / EditMobile AddTypeInfo). */
 SysWeaver-TypeTitle {
     font-size: 80%;
     display: inline-block;
@@ -40,6 +60,7 @@ SysWeaver-TypeTitle {
 }
 
 
+/* SysWeaver-EditInfo: italic summary next to the 36px expand icon of object / collection members (EditTypeObject.js, EditTypeCollection.js); line-height matches the icon. */
 SysWeaver-EditInfo {
     display: inline;
     line-height: 36px;
@@ -49,6 +70,9 @@ SysWeaver-EditInfo {
 }
 
 
+/* ===== State classes ===== */
+
+/* EditReadOnly: set on the title cell of read-only members (EditDesktop.js / EditMobile.js) and on read-only inputs (Edit.Create*Input); shown in italics. */
 td.EditReadOnly SysWeaver-MemberTitle {
     font-style: italic;
 }
@@ -59,6 +83,7 @@ input.EditReadOnly
 }
 
 
+/* EditDraggable: cells that can be dragged (drag & drop of values, added in Edit.js); grab cursor, grabbing while pressed. */
 td.EditDraggable
 {
     cursor: move; /* fallback: no `url()` support or images disabled */
@@ -69,16 +94,28 @@ td.EditDraggable
         cursor: grabbing;
     }
 
+/* EditFloatRight: forces an element (the collection item remove icon, EditTypeCollection.js) to float right in its cell. */
 td > .EditFloatRight
 {
     float: right !important;
 }
 
+/* Hide: rows of hidden members / collapsed data rows (toggled by Edit.js, EditDesktop.js, EditMobile.js). */
 tr.Hide {
     display: none;
 }
 
 /*############# Icons ###################*/
+/*
+ * Icon classes for ColorIcon / popup menu items (IconClass in Edit.js, EditTypeCollection.js). Each sets only a
+ * mask-image from ../icons/; the colour comes from the background colour set by the ColorIcon base styles.
+ * SysWeaverEditIconMenu = menu, SysWeaverEditIconDefault = reset to default (reload.svg),
+ * SysWeaverEditIconCopy / SysWeaverEditIconPaste = copy / paste, SysWeaverEditIconExpand /
+ * SysWeaverEditIconCollapse = expand / collapse, SysWeaverEditIconAddItem = add item (plus.svg),
+ * SysWeaverEditIconClearCollection = clear collection, SysWeaverEditIconAddItemBefore / SysWeaverEditIconAddItemAfter
+ * = insert above / below, SysWeaverEditIconMoveItemTop / SysWeaverEditIconMoveItemUp / SysWeaverEditIconMoveItemDown /
+ * SysWeaverEditIconMoveItemBottom = move item.
+ */
 .SysWeaverEditIconMenu {
     mask-image: url("../icons/menu.svg");
 }

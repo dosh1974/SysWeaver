@@ -1,4 +1,17 @@
-﻿
+﻿/*
+ * chart.css - styles for the standalone chart viewer page chart.html (linked after ../common/theme.css)
+ * and for the chart popup menu that chart.js builds with app/application.js / application.css (loaded lazily
+ * by CanvasChart.getChartExportMenu).
+ * Dependencies: theme variables from common/theme.css (--ThemeBackgroundRGB); generic icon rendering of
+ * ColorIcon (common.js), which paints the element background through mask-image, so the Icon* classes below
+ * only set mask-image (classes that set background-image instead show multi-coloured file-type images).
+ * Not templated. No @keyframes and no @media queries; the only theme variant is the html:not([data-theme])
+ * rule for SysWeaver-Chart.
+ */
+
+/* ===== Page and chart container ===== */
+
+/* Page body: no padding/margin, forced 100% width and height, block display. */
 body {
     padding: 0;
     margin: 0;
@@ -8,14 +21,20 @@ body {
     display: block;
 }
 
+    /* body.FillScreen: full small-viewport height (100svh); class FillScreen is added to <html> and <body>
+       by common.js when the URL has a fillscreen parameter. */
     body.FillScreen {
         height: 100svh !important;
     }
 
+/* html: custom property --Margin (page margin used by the theme.css body padding, theme default 24px)
+   is set to 0 so the chart fills the frame. */
 html {
     --Margin: 0;
 }
 
+/* html.Embedded body: 16px top padding and reduced height in embedded documents (class Embedded is set
+   on <html> by app/application.js). */
 html.Embedded body {
     padding-top: 16px;
     height: calc(100% - 16px) !important;
@@ -23,6 +42,8 @@ html.Embedded body {
 
 
 
+/* SysWeaver-Chart: custom element created by CanvasChart.addChart (chart.js) holding the <canvas> and the
+   menu icon; positioned relative for the icon, 100% x 100%, 50% opaque theme background. */
 SysWeaver-Chart {
     box-sizing: border-box;
     margin: 0;
@@ -34,22 +55,28 @@ SysWeaver-Chart {
     background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
 }
 
+    /* SysWeaver-Chart.ChartCenter canvas: centres the canvas horizontally; class ChartCenter is added by
+       chartMain for the URL parameter center=true. */
     SysWeaver-Chart.ChartCenter canvas
     {
         margin: 0 auto;
     }
 
 
+    /* Theme variant: without a data-theme attribute on <html> the SysWeaver-Chart background is 90% opaque. */
     html:not([data-theme]) SysWeaver-Chart {
         background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
     }
 
 
 
+/* SysWeaver-Chart.Transparent: no background; class Transparent is added by addChart when
+   CanvasChartOptions.Transparent (URL parameter transparent=true). */
 SysWeaver-Chart.Transparent {
     background: none transparent !important;
 }
 
+/* The chart canvas fills the SysWeaver-Chart element (Chart.js runs responsive with maintainAspectRatio off). */
 SysWeaver-Chart canvas {
     box-sizing: border-box;
     margin: 0;
@@ -58,6 +85,8 @@ SysWeaver-Chart canvas {
     height: 100% !important;
 }
 
+    /* The 32x32 menu button: ColorIcon element icon-32x32 with the default button class IconButton,
+       placed 0.5em from the bottom-right corner at 10% opacity. */
     SysWeaver-Chart icon-32x32.IconButton {
         position: absolute;
         right: 0.5em;
@@ -66,11 +95,16 @@ SysWeaver-Chart canvas {
     }
 
 
+/* Chart popup menu: class Chart is added to the SysWeaver-PopupMenu element by the menu builder in
+   addChart; anchors the SysWeaver-PopupMenuBack element (created by PopUpMenu in application.js) at bottom 0. */
 SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     bottom: 0;
 }
 
 
+/* ===== Menu and chart type icons (mask-image) ===== */
+
+/* IconChartMenu: the menu button icon; IconChartExport: the Export sub-menu. */
 .IconChartMenu {
     mask-image: url("../icons/menu.svg");
 }
@@ -80,6 +114,9 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
 }
 
 
+/* Type sub-menu (IconChartType) and its items IconChartTypeBar, IconChartTypeBarHorizontal,
+   IconChartTypeLine, IconChartTypeLineHorizontal, IconChartTypePie, IconChartTypeDoughnut,
+   IconChartTypePolarArea (icons from this folder's icons/). */
 .IconChartType {
     mask-image: url("icons/chart_mixed.svg");
 }
@@ -112,10 +149,14 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     mask-image: url("icons/chart_polar.svg");
 }
 
+/* IconChartSize: the "Export font size" sub-menu. */
 .IconChartSize {
     mask-image: url("../icons/fullscreen_exit.svg");
 }
 
+/* Export font scale items: pie icon with growing mask-size - IconChartSize50 (12px), IconChartSize75 (14px),
+   IconChartSize100 (16px), IconChartSize125 (20px), IconChartSize150 (24px), IconChartSize200 (28x38px),
+   IconChartSize250 (default size). IconChartSize50 / IconChartSize75 are only referenced in commented-out JS. */
 .IconChartSize50 {
     mask-image: url("icons/chart_pie.svg");
     mask-size: 12px 12px;
@@ -151,6 +192,11 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     mask-image: url("icons/chart_pie.svg");
 }
 
+/* ===== File type and exporter icons ===== */
+
+/* Full-colour background-image file icons: IconFilePng / IconFileSvg are used by the client-side export
+   items and PopUpWorking ("IconFile" + format); IconFilePdf / IconFileXlsx are IconClass values of server
+   exporters (ChartJsPdfExporter, ChartJsExcelExporter). */
 .IconFilePng {
     background-color: transparent !important;
     background-image: url("../icons/ext/png.svg");
@@ -172,10 +218,14 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
 }
 
 
+/* ===== Color menu icons ===== */
+
+/* IconColors: the Color sub-menu and the three fixed gradient sub-menus. */
 .IconColors {
     mask-image: url("../icons/color_palette.svg");
 }
 
+/* Toggles: IconColoredLabels (coloured labels, key t) and IconColoredValues (coloured values, key v). */
 .IconColoredLabels {
     mask-image: url("../icons/text.svg");
 }
@@ -186,11 +236,14 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
 }
 
 
+/* IconColorOriginal: "Original" colours (key o). */
 .IconColorOriginal {
     mask-image: url("../icons/home.svg");
 }
 
 
+/* Random gradient modes (class built as "IconColor" + mode name): IconColorRandomValueGradient (key g),
+   IconColorRandomSeriesGradient (key s), IconColorRandomMagnitudeGradient (key m). */
 .IconColorRandomValueGradient {
     mask-image: url("../icons/gradient.svg");
 }
@@ -203,11 +256,18 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     mask-image: url("../icons/gradient.svg");
 }
 
+/* IconColorLabelText: label hash colour mode (key l). */
 .IconColorLabelText {
     mask-image: url("../icons/text.svg");
 }
 
 
+/* Fixed gradient swatches IconColorGradient0, IconColorGradient1, IconColorGradient2, IconColorGradient3,
+   IconColorGradient4, IconColorGradient5, IconColorGradient6, IconColorGradient7, IconColorGradient8,
+   IconColorGradient9, IconColorGradient10, IconColorGradient11 ("IconColorGradient" + i in chart.js):
+   28x28 rounded swatches with a black outline and a linear-gradient in hsl from hue i*30 to i*30+60
+   (80% saturation, 70% lightness), matching the hue ranges i/12 .. (i+2)/12 of the FixedValue<i> /
+   FixedSeries<i> / FixedMag<i> colour modes. Hard-coded duplicates of the JS computation. */
 .IconColorGradient0 {
     border-radius: 8px;
     margin: 2px;
@@ -326,6 +386,8 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     background-image: linear-gradient(in hsl, hsl(330, 80%, 70%), hsl(390, 80%, 70%) );
 }
 
+/* Exporter icons of UserStorageChartExporter items ("IconShareLink" + scope index): IconShareLink0 (disc),
+   IconShareLink1 (user_check), IconShareLink2 (share). */
 .IconShareLink0 {
     mask-image: url("../icons/disc.svg");
 }
@@ -338,11 +400,16 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     mask-image: url("../icons/share.svg");
 }
 
+/* ===== Order menu icons ===== */
+
+/* IconOrder: the Order sub-menu. */
 .IconOrder {
     mask-image: url("../icons/table_log.svg");
 }
 
 
+/* Selected order item icons (the Order menu builder appends "Sel" for the active order):
+   IconOrderOriginalSel, IconOrderAscendingSel, IconOrderDescendingSel. */
 .IconOrderOriginalSel {
     mask-image: url("../icons/home.svg");
 }
@@ -355,6 +422,8 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     mask-image: url("../icons/m_sort_desc.svg");
 }
 
+/* Unselected order item icons, same masks dimmed to 10% opacity: IconOrderOriginal, IconOrderAscending,
+   IconOrderDescending. */
 .IconOrderOriginal {
     opacity: 0.1 !important;
     mask-image: url("../icons/home.svg");

@@ -66,7 +66,7 @@ All pages use classic (non-module) scripts loaded with `defer` and are booted fr
 | `backgroundEffects/index.html` | inline `main()` | `../parseTools.js`, `../../common/anim.js`, `../../mediaPlayer/media_player_tools.js`, `media_effect_program.js`, `media_player_effect.js` (no `common.js`) | inline |
 | `imageEffects/index.html` | inline `main()` | same set as `backgroundEffects/index.html` | inline |
 | `collageEffects/index.html` | inline `main()` | `../parseTools.js`, `../../common/anim.js` only; renders through an iframe of `../MediaPreview.html` | inline |
-| `counterEffects/index.html` | `textEffectMain()` (textEffect.js) | `../../common/common.js`, `../../common/anim.js`, `../canvasTools.js`, `../textEffect.js` (+ `media_player.js` via `includeJs`) | `../../common/theme.css`, `../textEffect.css`; preloads a Nunito font from fonts.gstatic.com |
+| `counterEffects/index.html` | `textEffectMain()` (textEffect.js) | `../../common/common.js`, `../../common/anim.js`, `../textEffect.js` (+ `media_player.js` via `includeJs`, which also loads `canvasTools.js`) | `../../common/theme.css`, `../textEffect.css`; preloads a Nunito font from fonts.gstatic.com |
 | `textEffects/index.html` | inline `main()` | `../parseTools.js`, `../../common/anim.js`; renders through an iframe of `../MediaPreview.html` | inline |
 
 `media.js` and `textEffect.js` both start with `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")` at parse time. `MediaPlayer` and `MediaTypes` therefore load asynchronously, and the code expects them to be ready when `onload` fires. On each `MediaPlayer.Create`, `media_player.js` lazily includes the player script for that media type, unless `window.MediaLoadAll` is set.
@@ -176,7 +176,7 @@ Global functions (no class, no module):
     2. After playback starts: if the player has `ResetCounters()`, calls it and waits 600 ms to measure.
     3. Pauses and seeks back to `pos`.
     4. Calls `shost.doIt(duration, fps, error, compilationTime)`, where fps = `1000 * MeasureCount / TotalTime`.
-    5. On error, calls `doIt(0, 0, message, 0)` instead.
+    5. On error, calls `doIt(0, 0, message, 0)` instead (steps 2-4 are then skipped, so `doIt` is called once).
 
 #### media.css
 
@@ -482,9 +482,7 @@ A gallery of `TextStyle` presets: fill/stroke, shadow, letter spacing, gradients
 - **Product coupling**: the localStorage keys (`QuizzWeaver.*`), `QuizzRights`, the `../quizz/` save endpoint and the `MediaGetAssignedInfo`/`MediaSet…Data` naming in `mediaEditMain` tie this generic framework folder to the QuizzWeaver application.
 - **References that the hosting pages do not satisfy**:
   - `mediaEditMain` needs Edit, YaMD5 and QuizzRights from the host page.
-  - `counterEffects/index.html` references `../canvasTools.js`, which resolves to `mediaView/` while `canvasTools.js` lives in `mediaPlayer/`. (`media_player.js` also includes it.)
   - `MapView.html` references `map/GreenStaticFlag.svg`, which is not in `map/`.
-  - `TextEffect.CreateTextEffect` and `CreateCounterEffect` call the async `MediaPlayer.Create` without `await`.
   - `MediaView.html` loads `app/application.js`; `MediaPreview.html` does not.
 - **Global leaks**: `collageEffects/index.html` and `textEffects/index.html` assign `url` without declaring it, which creates an implicit global.
 - **Dead or commented code**:
@@ -597,7 +595,7 @@ Never instantiated; all members are static.
 
 ### `textEffect.js`
 
-Text and counter effect helpers. Loaded by `counterEffects/index.html` (with `../canvasTools.js`, `common.js`, `anim.js`), which boots `textEffectMain`. At parse time it runs `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")`. Uses `TextStyle`, `CanvasTools`, `MediaPlayerParamsEffect`, `MediaPlayerParamsImage`, `MediaPlayer`, `MediaTypes` from the mediaPlayer folder. Defines globals `CounterEffectParams`, `TextEffect` and `textEffectMain`.
+Text and counter effect helpers. Loaded by `counterEffects/index.html` (with `common.js`, `anim.js`; `canvasTools.js` comes through `media_player.js`), which boots `textEffectMain`. At parse time it runs `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")`. Uses `TextStyle`, `CanvasTools`, `MediaPlayerParamsEffect`, `MediaPlayerParamsImage`, `MediaPlayer`, `MediaTypes` from the mediaPlayer folder. Defines globals `CounterEffectParams`, `TextEffect` and `textEffectMain`.
 
 #### Globals
 
@@ -633,7 +631,7 @@ Factory class with static methods only; returns media players that render text t
 
 | Member | Kind | Signature | Description |
 |---|---|---|---|
-| `CreateTextEffect` | static async method | `(effectName = "Rain", text, textStyle = new TextStyle(), effectParams = new MediaPlayerParamsEffect())` → player | Loads `textStyle.FontUrl` as a `FontFace` when set, renders `text` to an image URL with `CanvasTools.CreateTextImageUrl`, maps a bare effect name to `imageEffects/<name>.glsl`, sets `effectParams.Transparent = true`, creates an image player (`MediaPlayer.Create(MediaTypes.Image, url, MediaPlayerParamsImage{Effect, EffectParams})`) and calls `player.Cache()`. Returns the player (caller attaches `.Element`, then `Show()`/`Play()`). |
+| `CreateTextEffect` | static async method | `(effectName = "Rain", text, textStyle = new TextStyle(), effectParams = new MediaPlayerParamsEffect())` → player | Loads `textStyle.FontUrl` as a `FontFace` when set, renders `text` to an image URL with `CanvasTools.CreateTextImageUrl`, maps a bare effect name to `imageEffects/<name>.glsl`, sets `effectParams.Transparent = true`, creates an image player (`await MediaPlayer.Create(MediaTypes.Image, url, MediaPlayerParamsImage{Effect, EffectParams})`) and awaits `player.Cache()`. Returns the player (caller attaches `.Element`, then `Show()`/`Play()`). |
 | `CreateCounterEffect` | static async method | `(effectName = "ScrollUp", textStyle, counterParams = new CounterEffectParams(), effectParams)` → player | Builds an animated number counter. Loads the font, sets text margins, renders a glyph strip with `CanvasTools.CreateNumberImageUrl` (digits, separators, prefix, suffix), and builds the part list (inner `DefPart`). Maps a bare name to `../counterEffects/<name>.glsl`; sets the effect width/height, `AdaptiveSize = false` and `FxProps` `MaxParts`, `UvScale`, `UvAdd`, `Fade`. Creates and caches the image player, then installs `player.OnNewSize`, `player.GetValue` and `player.OnRender` (below). Returns the player. |
 
 #### Inner functions of `TextEffect.CreateCounterEffect`
@@ -801,7 +799,7 @@ Styles the media player pages `MediaView.html` and `MediaPreview.html` (and any 
 |---|---|
 | `.MediaIconPlay`, `.MediaIconPause`, `.MediaIconStop`, `.MediaIconMute`, `.MediaIconUnMute`, `.MediaIconVolLoud`, `.MediaIconVolLow`, `.MediaIconExpand`, `.MediaIconLoop`, `.MediaIconOnce` | Mask icons of the player buttons from `../icons/preview_play.svg`, `preview_pause.svg`, `preview_stop.svg`, `preview_mute.svg`, `preview_unmute.svg`, `preview_vol_loud.svg`, `preview_vol_low.svg`, `preview_expand.svg`, `preview_loop.svg`, `preview_once.svg`; used by `mediaCreatePlayer`. |
 | `.IconSave`, `.IconApply` | Editor buttons "Save changes" (`../icons/disc.svg`) and "Apply changes" (`../icons/reload.svg`) in `mediaEditProps`. |
-| `.IconMediaNewWindow`, `.IconMediaCollapse`, `.IconMediaExpand` | `mediaEditMain` buttons: `../icons/newtab.svg`, `../icons/expand.svg`, `../icons/collapse.svg`. |
+| `.IconMediaNewWindow`, `.IconMediaCollapse`, `.IconMediaExpand` | `mediaEditMain` buttons: `../icons/newtab.svg`, `../icons/collapse.svg`, `../icons/expand.svg`. |
 
 #### Custom properties
 

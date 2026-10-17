@@ -1,25 +1,81 @@
 ﻿
 
+/**
+ * @file Passkey.js - client side WebAuthn (passkey) support for the SysWeaver.MicroService.PassKey service.
+ *
+ * Served as auth/Passkey.js (compressed into web/auth of SysWeaver.MicroService.PassKey, the same virtual folder
+ * as the other auth services). Loaded with a deferred script tag, after ../common/common.js
+ * (and ../app/application.js on MyPassKeys.html), Auth.js and AuthUi.js, by:
+ *  - this project's pages: UsePassKey.html (usePassKeyMain), AddPassKey.html (addPassKeyMain),
+ *    AddPassKeyOnOtherDevice.html (addPassKeyOtherMain), MyPassKeys.html (myPassKeysMain), called from body onload;
+ *  - Login.html (SysWeaver.MicroService.Auth) and ChoosePassword.html / ResetPassword.html
+ *    (SysWeaver.MicroService.UserManager). Those pages test `typeof PassKey !== "undefined"`, so this file is an
+ *    optional plug-in: AuthUi.js uses PassKey.Autofill, PassKey.SignIn, PassKey.HaveHint, PassKey.ErrorText and the
+ *    IconPasskeyKey / PasskeyIconButton classes from Passkey.css; UserManagerUi.js uses PassKey.AttachUsingToken /
+ *    PassKey.NewAccount.
+ *
+ * Globals defined:
+ *  - class PassKeyChallenge: one pre-fetchable WebAuthn ceremony (challenge API + submit API).
+ *  - class PassKey: static-only helper (API calls, error codes/texts, navigator.credentials.get/create wrappers,
+ *    device hints in localStorage, ceremony factories).
+ *  - addPassKeyMain, usePassKeyMain, addPassKeyOtherMain, myPassKeysMain: page entry points.
+ *
+ * Dependencies (globals from other files):
+ *  - common/common.js (SysWeaver.HttpServer): sendRequest, getRequest, RemoveNulls, base64ToArray, bufferToBase64,
+ *    delay, getUrlParams, makeHtmlSafe, Fail, ValueFormat, _T, _TF.
+ *  - app/application.js (SysWeaver.HttpServer, only loaded by MyPassKeys.html): Confirm, PopUp (used by myPassKeysMain).
+ *  - Auth.js / AuthUi.js (SysWeaver.MicroService.Auth, same auth/ folder): AuthPage, CreateAuthWrapper, AuthLabel,
+ *    AuthText, AuthButtonRow, AuthButton, AuthInput, AuthHr, AuthTrim, AuthStartPage.
+ *
+ * Server API: POST ../Api/auth/passkey/{name} (PassKeyService), GET ../Api/auth/GetUser (MicroService.Auth),
+ * image ../Api/auth/passkey/GetQR.svg.
+ *
+ * Storage: sessionStorage "SysWeaver.User" (signed in AuthInfo, written after a successful ceremony);
+ * localStorage "SysWeaver.PassKey.Hint", "SysWeaver.PassKey.Local" (credential ids used/created here),
+ * "SysWeaver.PassKey.UserOnDevice" (user guids the browser reported a passkey for).
+ *
+ * Conventions: results of ceremonies are objects with an Error member (0 = success, see PassKey.Errors), an
+ * optional Message and an optional User. Challenges are fetched before the click so navigator.credentials.* is
+ * invoked directly inside the user gesture (Safari requirement).
+ */
+
 //https://github.com/passwordless-lib/fido2-net-lib?tab=readme-ov-file#examples
 //https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredentialCreationOptions#pubkeycredparams
 
 /**
  * A server challenge that is fetched before the user starts the ceremony, so that navigator.credentials.get / create is called directly from the user gesture (required by Safari).
+ *
+ * Instances are created by the PassKey factories (PassKey.SignIn, Attach, AttachUsingToken, NewAccount).
+ * Lifecycle: optionally call Fetch() early (e.g. on page load) to cache the options, then call Run() from a click
+ * handler. Run() consumes the cached options (a challenge is single use); call Fetch() again to pre-fetch a new
+ * one for a retry.
  */
 class PassKeyChallenge {
 
+    /**
+     * Create a ceremony description (no request is sent until Fetch / Run).
+     * @param {string} challengeName - API name (under PassKey.ApiPrefix) that returns the WebAuthn options, e.g. "GetAuthChallenge".
+     * @param {*} arg - Argument posted to the challenge API (user identifier, token or null).
+     * @param {string} submitName - API name that the browser response is posted to ("Auth", "Create" or "New").
+     * @param {boolean} isCreate - True for a registration (navigator.credentials.create), false for an assertion (get).
+     */
     constructor(challengeName, arg, submitName, isCreate) {
         this.ChallengeName = challengeName;
         this.Arg = arg;
         this.SubmitName = submitName;
         this.IsCreate = isCreate;
+        /** @type {object|null} Cached server options ({challengeId, publicKey, error?}), null when none/consumed. */
         this.Options = null;
+        /** @type {number} Date.now() when Options was fetched (used for the freshness check). */
         this.Fetched = 0;
     }
 
     /**
      * Fetch a challenge (if there isn't a fresh one).
-     * @returns {object} The options from the server (check the error member)
+     * Cached options without an error are reused while younger than publicKey.timeout - 15 s (60 s when the timeout
+     * is missing or <= 20 s). Otherwise posts to PassKey.ApiPrefix + ChallengeName with Arg and applies RemoveNulls.
+     * @returns {Promise<object>} The options from the server (check the error member)
+     * @throws {Error} When the server returned nothing.
      */
     async Fetch() {
         const o = this.Options;
@@ -41,7 +97,9 @@ class PassKeyChallenge {
 
     /**
      * Run the ceremony (fetches a challenge if needed).
-     * @returns {object} The result, with an Error member (0 = success, see PassKey.Errors) and a User member if a user was signed in
+     * Returns NotSupported without any request if PassKey.IsSupported() is false. Clears the cached options, returns
+     * {Error: options.error} if the server refused, else delegates to PassKey.Create or PassKey.Get with SubmitName.
+     * @returns {Promise<object>} The result, with an Error member (0 = success, see PassKey.Errors) and a User member if a user was signed in
      */
     async Run() {
         if (!PassKey.IsSupported())
@@ -55,6 +113,8 @@ class PassKeyChallenge {
 
     /**
      * The user name (when creating a passkey), or null
+     * Read from the cached Options (publicKey.user.name), so it is only available after Fetch() and before Run().
+     * @returns {string|null}
      */
     get UserName() {
         const o = this.Options;
@@ -63,8 +123,14 @@ class PassKeyChallenge {
 }
 
 
+/**
+ * Static-only passkey helper (never instantiated): server API calls, error codes and texts, wrappers around
+ * navigator.credentials.get / create, device "hints" kept in localStorage, passkey autofill and factories that
+ * create PassKeyChallenge ceremonies. Used by the page entry points below and by AuthUi.js / UserManagerUi.js.
+ */
 class PassKey {
 
+    /** @type {string} Relative base url of the PassKeyService API (pages are served from auth/). */
     static ApiPrefix = "../Api/auth/passkey/";
 
     /**
@@ -98,7 +164,7 @@ class PassKey {
     /**
      * Get a user friendly text for a result
      * @param {object} result The result of a passkey operation
-     * @returns {string} The text
+     * @returns {string} The text (translated with _TF; "" for None, a generic failure text for unknown codes)
      */
     static ErrorText(result) {
         const e = PassKey.Errors;
@@ -134,10 +200,20 @@ class PassKey {
         return _TF("The passkey operation failed.", "Generic error message for a failed passkey operation");
     }
 
+    /**
+     * Call a PassKeyService API method (POST via common.js sendRequest, reload on auth failure, as JSON post).
+     * @param {string} name - API method name relative to ApiPrefix, e.g. "GetAuthChallenge".
+     * @param {*} arg - Request argument (serialized as JSON), may be null.
+     * @returns {Promise<*>} The deserialized server response.
+     */
     static async Call(name, arg) {
         return await sendRequest(PassKey.ApiPrefix + name, arg, true, null, false, null, true);
     }
 
+    /**
+     * Get the signed in user from ../Api/auth/GetUser (SysWeaver.MicroService.Auth).
+     * @returns {Promise<object|null>} The AuthInfo (Username, Guid, ...) when Succeeded, otherwise null.
+     */
     static async GetLoggedInUser() {
         const u = await getRequest(PassKey.ApiPrefix + "../GetUser", true);
         if (!u)
@@ -145,11 +221,16 @@ class PassKey {
         return u.Succeeded ? u : null;
     }
 
+    /**
+     * Store the signed in user of a successful result in sessionStorage "SysWeaver.User" (JSON), like a password login does.
+     * @param {object} result - Ceremony result ({Error, User}); ignored unless Error is 0 and User is set.
+     */
     static #SetUser(result) {
         if (result && (result.Error == 0) && result.User)
             sessionStorage.setItem("SysWeaver.User", JSON.stringify(result.User));
     }
 
+    /** @type {string} localStorage key set to "1" once a platform passkey was created or used in this browser. */
     static #HintKey = "SysWeaver.PassKey.Hint";
 
     /**
@@ -170,6 +251,8 @@ class PassKey {
      * Remember that a passkey is available on this device (if the passkey was on this device and not on a phone or security key)
      * @param {string} authenticatorAttachment The authenticatorAttachment of the credential
      * @param {string} credentialId The credential id (base64url, as in PublicKeyCredential.id)
+     * Side effects: sets localStorage #HintKey and appends the id to the #LocalKey list (moved to the end if present);
+     * nothing is stored for "cross-platform" authenticators; storage errors are swallowed.
      */
     static #SetHint(authenticatorAttachment, credentialId) {
         if (authenticatorAttachment === "cross-platform")
@@ -196,6 +279,11 @@ class PassKey {
      */
     static #UserOnDeviceKey = "SysWeaver.PassKey.UserOnDevice";
 
+    /**
+     * Read a JSON array from localStorage.
+     * @param {string} key - localStorage key (#LocalKey or #UserOnDeviceKey).
+     * @returns {string[]} The list, or [] when missing, not an array or storage/JSON fails.
+     */
     static #GetList(key) {
         try {
             const v = JSON.parse(localStorage.getItem(key) ?? "[]");
@@ -206,6 +294,12 @@ class PassKey {
         }
     }
 
+    /**
+     * Write a list as JSON to localStorage, dropping the oldest entries so at most 64 remain (mutates list).
+     * Storage errors are swallowed.
+     * @param {string} key - localStorage key.
+     * @param {string[]} list - Entries, oldest first.
+     */
     static #SetList(key, list) {
         try {
             //  Keep it small
@@ -219,6 +313,8 @@ class PassKey {
 
     /**
      * Convert a standard base64 string (as used by the server) to base64url (as used by the browser)
+     * @param {string} s - Standard base64 (null/undefined treated as "").
+     * @returns {string} base64url without padding.
      */
     static #ToBase64Url(s) {
         return (s ?? "").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -270,7 +366,7 @@ class PassKey {
 
     /**
      * Check if the browser supports passkey autofill (conditional mediation)
-     * @returns {boolean} True if passkey autofill is supported
+     * @returns {Promise<boolean>} True if passkey autofill is supported
      */
     static async IsAutofillSupported() {
         try {
@@ -286,13 +382,23 @@ class PassKey {
      * The request is restarted with a new challenge before the challenge expires and after a failed sign in.
      * Only one WebAuthn request can be active, so call Stop() before starting another request, and Start() again when it's done.
      * @param {function(object)} onResult Called with the result when a user selected a passkey (the user is signed in if the Error member is 0)
-     * @returns {object} An object with Start() and Stop() methods, the autofill is started
+     * @returns {{Start:function():void, Stop:function():void}} An object with Start() and Stop() methods, the autofill is started
+     * Used by AuthUi.js (login page). Requests GetAuthChallenge and submits to "Auth".
      */
     static Autofill(onResult) {
+        /** Shared state: Run is the id of the active loop (incremented to cancel), Abort the AbortController of the pending get. */
         const state = {
             Run: 0,
             Abort: null,
         };
+        /**
+         * The autofill loop: fetch a challenge, run a conditional-mediation PassKey.Get, and repeat.
+         * Aborts and restarts the request before the challenge expires (timeout - 15 s, or 60 s), restarts on Cancelled,
+         * calls onResult for other results, stops on success, waits 1 s after a failure, and exits silently if the
+         * challenge can't be fetched or the loop was superseded (state.Run !== runId).
+         * @param {number} runId - Id of this loop instance.
+         * @returns {Promise<void>}
+         */
         async function run(runId) {
             while (state.Run === runId) {
                 let c;
@@ -332,11 +438,20 @@ class PassKey {
                 await delay(1000);
             }
         }
+        /** The returned controller. */
         const ctl = {
+            /**
+             * (Re)start the autofill loop with a new run id (a previous loop exits at its next check).
+             * @returns {void}
+             */
             Start() {
                 const id = ++state.Run;
                 run(id);
             },
+            /**
+             * Stop the autofill loop and abort the pending navigator.credentials.get (so another WebAuthn request can run).
+             * @returns {void}
+             */
             Stop() {
                 ++state.Run;
                 const a = state.Abort;
@@ -349,6 +464,13 @@ class PassKey {
         return ctl;
     }
 
+    /**
+     * Map an exception thrown by navigator.credentials.get / create to a result.
+     * NotAllowedError / AbortError -> Cancelled, InvalidStateError -> AlreadyOnDevice (create with an excluded
+     * credential), SecurityError -> NotSupported (with Message); any other exception is re-thrown.
+     * @param {Error} e - The DOMException.
+     * @returns {{Error:number, Message?:string}}
+     */
     static #FromBrowserError(e) {
         const n = e?.name;
         if ((n === "NotAllowedError") || (n === "AbortError"))
@@ -360,11 +482,20 @@ class PassKey {
         throw e;
     }
 
+    /**
+     * Decode the base64 id of each credential descriptor in place to an ArrayBuffer view (base64ToArray).
+     * @param {Array<{id:string}>|null} list - allowCredentials / excludeCredentials (may be null).
+     */
     static #Ids(list) {
         if (list)
             list.forEach(x => x.id = base64ToArray(x.id));
     }
 
+    /**
+     * Get the transports of a new credential (AuthenticatorAttestationResponse.getTransports) if the browser supports it.
+     * @param {AuthenticatorAttestationResponse} res - The attestation response.
+     * @returns {string[]|null} e.g. ["internal","hybrid"], or null when unavailable or it throws.
+     */
     static #Transports(res) {
         try {
             return res.getTransports ? res.getTransports() : null;
@@ -379,6 +510,11 @@ class PassKey {
      * @param {object} c The options from the server
      * @param {string} submitName The api to submit the response to
      * @param {object} extra Optional additional options to navigator.credentials.get, ex: { mediation: "conditional", signal: abortSignal }
+     * @returns {Promise<object>} Server result ({Error, User?, Message?}) or a client side result from #FromBrowserError / Cancelled.
+     * @throws {Error} When the server doesn't respond, or for unmapped browser exceptions.
+     * Side effects: decodes c.publicKey in place; posts the assertion (base64) to submitName; on UnknownCredential
+     * calls PublicKeyCredential.signalUnknownCredential (if available); on success records the device hint and
+     * stores the user in sessionStorage.
      */
     static async Get(c, submitName, extra) {
         const pk = c.publicKey;
@@ -426,6 +562,13 @@ class PassKey {
 
     /**
      * Run a navigator.credentials.create ceremony with options from the server and submit the response
+     * Decodes challenge, user.id and excludeCredentials ids in place, then posts {challengeId, authenticatorAttachment,
+     * id, rawId, response:{attestationObject, clientDataJSON, transports}, type} to submitName.
+     * On success records the device hint and stores the user (if any) in sessionStorage.
+     * @param {object} c The options from the server ({challengeId, publicKey})
+     * @param {string} submitName The api to submit the response to ("Create" or "New")
+     * @returns {Promise<object>} Server result ({Error, User?, Message?}) or a client side result (Cancelled, AlreadyOnDevice, NotSupported).
+     * @throws {Error} When the server doesn't respond, or for unmapped browser exceptions.
      */
     static async Create(c, submitName) {
         const pk = c.publicKey;
@@ -502,7 +645,7 @@ class PassKey {
 
     /**
      * Get the passkeys of the signed in user
-     * @returns {object[]} The passkeys (Id, Name, Created, LastUsed, Synced, ThisDevice)
+     * @returns {Promise<object[]>} The passkeys (PassKeyInfo: Id, Name, Created, LastUsed, Synced, ThisDevice)
      */
     static async GetPassKeys() {
         return await PassKey.Call("GetPassKeys", null);
@@ -510,6 +653,9 @@ class PassKey {
 
     /**
      * Rename a passkey of the signed in user
+     * @param {string} id The credential id (PassKeyInfo.Id)
+     * @param {string} name The new name
+     * @returns {Promise<boolean>} Truthy if renamed, falsy if the passkey doesn't exist (any more)
      */
     static async Rename(id, name) {
         return await PassKey.Call("RenamePassKey", { Id: id, Name: name });
@@ -519,7 +665,8 @@ class PassKey {
      * Remove a passkey of the signed in user
      * @param {string} id The credential id (PassKeyInfo.Id)
      * @param {string} userGuid Optional guid of the signed in user (to forget that a passkey of the user is on this device)
-     * @returns {object} The result (Error = LastSignInMethod if it can't be removed)
+     * @returns {Promise<object>} The result (Error = LastSignInMethod if it can't be removed)
+     * On success the local device hints for the id (and the user's "on device" flag) are forgotten.
      */
     static async Remove(id, userGuid) {
         const r = await PassKey.Call("DeletePassKey", id);
@@ -532,6 +679,16 @@ class PassKey {
 
 
 
+/**
+ * Entry point of AddPassKey.html (body onload): add a passkey on this device.
+ * With a ?token= url parameter (link / QR code from AddPassKeyOnOtherDevice, reset or add password links) it uses
+ * PassKey.AttachUsingToken and requires that no user is signed in; without a token it uses PassKey.Attach and
+ * requires a signed in user. The challenge is pre-fetched, the label shows the account name, and an "Add passkey"
+ * button runs the ceremony. On success navigates with AuthStartPage() when a token was used or a user was returned;
+ * TokenExpired / AlreadyRegistered / AlreadyOnDevice end the page with a warning; other errors (except Cancelled)
+ * are shown with Fail().
+ * @returns {Promise<void>}
+ */
 async function addPassKeyMain()
 {
     await AuthPage("IconAddPasskey", async (target, img) => {
@@ -544,6 +701,12 @@ async function addPassKeyMain()
         const buttons = AuthButtonRow(target);
         let button = null;
 
+        /**
+         * Show a final message (Info style), optionally change the page icon and hide the add button.
+         * @param {string} message - Text to show.
+         * @param {string} [icon] - Icon class for the page image (e.g. "IconWarning").
+         * @returns {void}
+         */
         function done(message, icon) {
             if (icon)
                 img.ChangeImage(icon);
@@ -616,12 +779,24 @@ async function addPassKeyMain()
 
 
 
+/**
+ * Entry point of UsePassKey.html (body onload): sign in with any passkey of this site (PassKey.SignIn()).
+ * Shows a warning if passkeys aren't supported or a user is already signed in, pre-fetches the challenge and adds a
+ * "Sign in with passkey" button. On success calls AuthStartPage(); errors other than Cancelled are shown with Fail().
+ * @returns {Promise<void>}
+ */
 async function usePassKeyMain() {
     await AuthPage("IconUsePasskey", async (target, img) => {
 
         const text = AuthText(target, "");
         const buttons = AuthButtonRow(target);
 
+        /**
+         * Show a message (Info style) and optionally change the page icon.
+         * @param {string} message - Text to show.
+         * @param {string} [icon] - Icon class for the page image.
+         * @returns {void}
+         */
         function done(message, icon) {
             if (icon)
                 img.ChangeImage(icon);
@@ -678,6 +853,12 @@ async function usePassKeyMain() {
 }
 
 
+/**
+ * Entry point of AddPassKeyOnOtherDevice.html (body onload): show a single use QR code (../Api/auth/passkey/GetQR.svg
+ * as the page image) that opens AddPassKey.html with a token on another device.
+ * Requires a signed in user (else shows a warning). The life time text comes from GetQRLifeTime (minutes, default 15).
+ * @returns {Promise<void>}
+ */
 async function addPassKeyOtherMain() {
     const user = await PassKey.GetLoggedInUser();
     if (!user) {
@@ -699,6 +880,13 @@ async function addPassKeyOtherMain() {
 }
 
 
+/**
+ * Entry point of MyPassKeys.html (body onload): list the signed in user's passkeys in a SysWeaver-AuthList with
+ * created / last used / type info and Rename / Remove buttons, plus an "Add passkey" button (only if passkeys are
+ * supported; disabled when a passkey of the user is known to be on this device).
+ * Requires app/application.js (Confirm, PopUp). Shows a warning when no user is signed in.
+ * @returns {Promise<void>}
+ */
 async function myPassKeysMain() {
     await AuthPage("IconUsePasskey", async (target, img) => {
 
@@ -718,6 +906,15 @@ async function myPassKeysMain() {
         if (buttons)
             buttons.classList.add("NoMargin");
 
+        /**
+         * Add a "label value" text line (NoMargin) to parent.
+         * @param {HTMLElement} parent - Container.
+         * @param {string} label - Label text.
+         * @param {*} value - Value; for dates it's kept live updated with ValueFormat.updateDateTimeLive ("{0} ago").
+         * @param {boolean} isDate - True if value is a date/time.
+         * @param {string} [title] - Optional tool tip.
+         * @returns {HTMLElement} The created text element.
+         */
         function stat(parent, label, value, isDate, title) {
             const e = AuthText(parent, "");
             e.classList.add("NoMargin");
@@ -733,6 +930,13 @@ async function myPassKeysMain() {
             return e;
         }
 
+        /**
+         * Ask for confirmation (Confirm dialog) and remove a passkey via PassKey.Remove, then rebuild the list.
+         * LastSignInMethod and other failures are shown with Fail().
+         * @param {object} key - The PassKeyInfo.
+         * @param {object} button - The Remove button (StartWorking / StopWorking).
+         * @returns {Promise<void>}
+         */
         async function remove(key, button) {
             const name = key.Name || _TF("Passkey", "Default name of a passkey without a name");
             if (!await Confirm(
@@ -763,6 +967,12 @@ async function myPassKeysMain() {
             }
         }
 
+        /**
+         * Open a pop up (PopUp, blocking) with an auth box (class SysWeaver-PassKeyPopUp) containing a name input
+         * (max 64 chars) and a Rename button; saving calls PassKey.Rename, closes the pop up and rebuilds the list.
+         * @param {object} key - The PassKeyInfo to rename.
+         * @returns {Promise<void>}
+         */
         async function rename(key) {
             const oldName = key.Name ?? "";
             await PopUp(async (el, closeFn) => {
@@ -771,15 +981,28 @@ async function myPassKeysMain() {
                 el.appendChild(box);
                 AuthLabel(box, _TF("Name", "Label of an input field where the user enters a new name of a passkey"));
 
+                /**
+                 * The trimmed (AuthTrim) value of the name input.
+                 * @returns {string}
+                 */
                 function newName() {
                     return AuthTrim(inp.value);
                 }
 
+                /**
+                 * True if the new name is non-empty and differs from the current name.
+                 * @returns {boolean}
+                 */
                 function canSave() {
                     const n = newName();
                     return (n.length > 0) && (n !== oldName);
                 }
 
+                /**
+                 * Save the new name (if canSave): input is read only while working; on success closes the pop up and
+                 * rebuilds the list, otherwise shows Fail() and re-enables the input.
+                 * @returns {Promise<void>}
+                 */
                 async function save() {
                     if (!canSave())
                         return;
@@ -817,6 +1040,13 @@ async function myPassKeysMain() {
             }, true);
         }
 
+        /**
+         * (Re)build the passkey list from PassKey.GetPassKeys(): one block per passkey (name marked "(this device)"
+         * when ThisDevice or PassKey.IsOnDevice, stats, Rename / Remove buttons) and the Add passkey button row.
+         * The add ceremony (PassKey.Attach) is pre-fetched; the button is disabled when any passkey of the user is
+         * known to be on this device. AlreadyOnDevice / AlreadyRegistered results call PassKey.SetUserOnDevice.
+         * @returns {Promise<void>}
+         */
         async function rebuild() {
             const keys = (await PassKey.GetPassKeys()) ?? [];
             list.innerHTML = "";
@@ -835,6 +1065,7 @@ async function myPassKeysMain() {
                     AuthHr(list).classList.add("NoMargin");
                 first = false;
                 const name = key.Name || _TF("Passkey", "Default name of a passkey without a name");
+                //  Highlighted passkey name, suffixed with "(this device)" when known to be on this device
                 AuthLabel(list, onDevice(key)
                     ? _T("{0} (this device)", name, "Name of a passkey that is available on the current device, {0} is replaced with the name of the passkey")
                     : name).classList.add("Highlight");

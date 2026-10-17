@@ -1,4 +1,12 @@
-﻿
+﻿/*
+ * type.css - styles of the type information page edit/type.html (rendered by typeAdd() in type.js).
+ * Loaded with <link> by type.html after common/theme.css and common/tab.css. Depends on theme variables
+ * (--ThemeMain, --ThemeMainRGB, --ThemeAcc1, --ThemeAcc1RGB, --ThemeAcc2, --ThemeAcc2RGB, --ThemeFont, --ThemeFontMono).
+ */
+
+/* ===== Sections ===== */
+
+/* SysWeaver-TypeSection: one framed section (type name, summary, remarks, assembly, members / enum values), created by typeAddSection(). */
 SysWeaver-TypeSection {
     box-sizing: border-box;
     display: block;
@@ -12,6 +20,7 @@ SysWeaver-TypeSection {
     overflow-x: auto;
 }
 
+/* SysWeaver-TypeTitle: the small upper-case, half-transparent heading of a section (overrides the editor's Edit.css styling on this page). */
 SysWeaver-TypeTitle {
     display: block;
     margin-bottom: 4px;
@@ -26,6 +35,7 @@ SysWeaver-TypeTitle {
 }
 
 
+/* Section classes set by typeAdd(): TypeCol = type name section of a collection (monospace, faded accent), TypeItalic = summary / remarks, TypeCode = type name section of other types (monospace; SysWeaver-Text parts slightly faded). */
 SysWeaver-TypeSection.TypeCol {
     font-family: var(--ThemeFontMono);
     color: rgba(var(--ThemeAcc1RGB), 0.7);
@@ -43,6 +53,7 @@ SysWeaver-TypeSection.TypeCode {
         opacity: 0.8;
     }
 
+/* Type name links (BuildLink / ValueFormat.createLink) aligned to the 24px text line. */
 SysWeaver-TypeSection a {
     font-weight: normal;
     display: inline-block;
@@ -53,6 +64,7 @@ SysWeaver-TypeSection a {
 }
 
 
+/* SysWeaver-Link (link element of ValueFormat.createLink, common.js) and SysWeaver-Text parts (AddTextElement) laid out inline on a 24px line. */
 SysWeaver-TypeSection > SysWeaver-Link{
     display: inline-block;
     line-height: 24px;
@@ -64,6 +76,7 @@ SysWeaver-TypeSection > SysWeaver-Text {
     padding-bottom: 2px;
 }
 
+/* Icon-24x24 / icon-24x24: the 24x24 ColorIcon element (external documentation link icon, SysWeaverTypeIconExternal); tag names are case-insensitive so both rules match it. */
 SysWeaver-TypeSection > Icon-24x24 {
     margin-top: 2px;
 }
@@ -82,6 +95,9 @@ SysWeaver-TypeSection icon-24x24 {
 }
 
 
+/* ===== Tables ===== */
+
+/* TypeMembers: members table (TYPE | NAME | SUMMARY) of a class / struct; zebra rows, accent hover; column 1 monospace type names, column 2 member name in accent, column 3 italic summary. */
 SysWeaver-TypeSection table.TypeMembers {
     border: none;
     border-collapse: collapse;
@@ -176,6 +192,7 @@ SysWeaver-TypeSection table.TypeMembers {
         }
 
 
+/* TypeEnumValues: enum values table (VALUE | NAME | SUMMARY); same look as TypeMembers, value column right aligned monospace. */
 SysWeaver-TypeSection table.TypeEnumValues {
     border: none;
     border-collapse: collapse;
@@ -248,6 +265,9 @@ SysWeaver-TypeSection table.TypeEnumValues {
 
 
 
+/* ===== Icons ===== */
+
+/* SysWeaverTypeIconExternal: mask icon (newtab.svg) of the external documentation ColorIcon in the type name section. */
 .SysWeaverTypeIconExternal {
     mask-image: url("../icons/newtab.svg");
 }

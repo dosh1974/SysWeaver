@@ -1,4 +1,12 @@
 ﻿
+/*
+ * Styles of the Welcome page (app/Welcome.html, linked after ../common/theme.css; script welcome.js).
+ * Centres the logo and styles the optional sign-in affordances added by welcomeMain.
+ * Depends on theme variables from common/theme.css (--ThemeFont, --ThemeBackground, --ThemeMain,
+ * --ThemeRadInp, --ThemeAcc1, --ThemeAcc150, --ThemeAcc250).
+ */
+
+/* Page body: theme font/colours, centred text, no text selection. */
 body {
     margin: 0;
     font-family: var(--ThemeFont);
@@ -9,6 +17,7 @@ body {
     user-select: none;
 }
 
+/* The single wrapper div: absolutely centred horizontally, 40% from the top (translate trick). */
 div
 {
     display: block;
@@ -19,6 +28,9 @@ div
 }
 
 
+/*
+ * The logo image. --size: local custom property, edge length = 70% of the smaller viewport dimension.
+ */
 img {
     --size: calc(min(70vw, 70vh));
     display: block;
@@ -30,6 +42,7 @@ img {
     margin-bottom: 1em;
 }
 
+/* The "Click to sign in" paragraph appended by welcomeMain (only when login is available). */
 p {
     display: inline-block;
     padding: 0.25em 1em;
@@ -37,6 +50,7 @@ p {
     outline: 2px solid transparent;
 }
 
+/* img.Click: class added by welcomeMain to make the logo a sign-in button; glows (drop-shadow) on hover. */
 img.Click
 {
     cursor: pointer;
@@ -48,6 +62,7 @@ img.Click
         filter: drop-shadow(0 0 1em var(--ThemeAcc150));
     }
 
+/* p.KeyClick: class added by common.js keyboardClick on the sign-in paragraph; focus outline and hover inversion. */
 p.KeyClick {
     cursor: pointer;
     transition: background-color 0.1s linear, color 0.1s linear, outline 0.1s linear;

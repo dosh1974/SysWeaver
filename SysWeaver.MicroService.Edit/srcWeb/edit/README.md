@@ -245,7 +245,7 @@ The *item* has the shape `{ Focus, Title, DefValue, DefValueText, SetValue(v), U
   - Creates the editor with `ace.edit(SysWeaver-AceEditor, options)`: `readOnly = !u`, autocompletion enabled, `useWorker` only when editable, `setMode("ace/mode/<type>")`, no print margin.
   - A `MutationObserver` on `body` adds the `ace-sysweaver` class to Ace popups and tooltips appended there.
   - Ends with `PageLoaded()`.
-- `beautifyButton` is assigned without a declaration, so it becomes an implicit global. The "No read url" path calls `TF(...)`, which neither common.js nor application.js defines; only `_TF` exists.
+- `beautifyButton` is assigned without a declaration, so it becomes an implicit global.
 
 #### CSS
 
@@ -274,7 +274,7 @@ The *item* has the shape `{ Focus, Title, DefValue, DefValueText, SetValue(v), U
   | `html` | `html` (after `SanitizeHtml`) |
   | `markdown` | `markdown` |
   | `javascript` | `typescript` |
-  | `xml` | `xml` (no XML plugin is vendored, so this formatter throws and the error is shown or logged) |
+  | `xml` | none (no XML plugin is vendored, so XML files get no Beautify button) |
 
   The plugins `acorn`, `angular`, `flow`, `glimmer`, `graphql`, `meriyah` and `yaml` are vendored but not loaded.
 - The object editor and the type page use no third-party code.
@@ -434,7 +434,7 @@ One instance edits one object (or one primitive value) of one type description. 
 | `GetCopyObject` | method | `(forceJson)` → string | `Edit.GetTypedTextOrJson(GetObject(), forceJson, Type.TypeName)`; clipboard / drag text of the whole value. |
 | `GetCopyMember` | method | `(member, forceJson)` → string | Same for one member's value (`obj[member.Name]`, or the primitive value). |
 | `CanConsumeCopy` | method | `(obj)` → bool | Primitive editor: `obj` must be a non-object accepted by the handler's `IsOfType`. Object editor: `obj.$type` (before the first comma) must equal `Type.TypeName`. |
-| `NotifyChange` | method | `()` | Dispatches an `EditChange` (no member, value `GetObject()`) on `Element`. |
+| `NotifyChange` | method | `()` | Dispatches an `EditChange` (no member, value `GetObject()`, the editor's `Key` / `KeyName`) on `Element`. |
 | `SetTypeInfo` | method | `(c, expandElement, type, title, options)` | Called by the layout's `AddTypeInfo` to fill title cell `c`: optional expand/collapse `ColorIcon` (when `options.CanExpand` and not primitive; inner `setExpand` / `toggleExpand` toggle class `EditorCollapsed` on `expandElement`), a `SysWeaver-PopupMenuIcon` with the object menu (inner `menuPop`: *Set default* → `SetObject()`, *Copy* `GetCopyObject()`, *Paste* from clipboard after `$type`/`IsOfType` check and `Condition`, then `this.AddMenuItems`), also opened by `c.oncontextmenu`; calls `options.AddToHeader(c)`; appends `SysWeaver-TypeTitle` (`options.KeyName` or `type.DisplayName`, `BaseTitle` = tooltip) and a copy-on-click tooltip. Makes `c` draggable (class `EditDraggable`, `application/json` from `GetCopyObject(true)`) and, unless read only, a drop target (`c.ondragover` / `c.ondrop`): JSON accepted via `CanConsumeCopy` is applied undoably with `SetObject` + `NotifyChange`; `text/plain` is applied directly with an `EditChange`. |
 | `LastEdit` | static field | | Editor that most recently was created or received a keydown; target of the global Ctrl+Z / Ctrl+Y handler. |
 | `HaveGlobalListener` | static field | bool | Guard so `AddGlobalListener` installs only once. |
@@ -462,7 +462,7 @@ One instance edits one object (or one primitive value) of one type description. 
 | `ValidateType` | static async method | `(type, obj, options, name)` → `[path, message]` / null | Validates each non-hidden member with its handler's `Validate`; an `undefined` value yields "No value found!". Path is `name.member` (or `name` for primitives). |
 | `GetIntParam` | static method | `(val, def)` | `parseInt(val)` when `val` is defined, else `def`. |
 | `GetTypedTextOrJson` | static method | `(obj, forceJson, typeName)` → string | `"null"`, the string itself (unless `forceJson`), JSON for non-objects/arrays, or JSON with `$type: typeName` added to objects. |
-| `SetToString` | static method | `(element, obj)` | Writes a summary of `obj` into `element.innerText` / `title`: `"null"`, the `typeof` name for non-objects, else `toString()` / `ToString()` / JSON, truncated to 21 chars + `...` (full text in title) when longer than 24. |
+| `SetToString` | static method | `(element, obj)` | Writes a summary of `obj` into `element.innerText` / `title`: `"null"`, the value itself for non-objects, else `toString()` / `ToString()` / JSON, truncated to 21 chars + `...` (full text in title) when longer than 24. |
 | `SetCollectionCount` | static method | `(element, collection, container)` | Writes `null`, `empty`, `1 item` or `{n} items` (+ tooltip) using `container.countVal`. |
 | `GetTypeMap` | static method | `()` → `Map` | Builds the built-in handler map: signed/unsigned integers → `EditTypeInteger`, `Single/Double/Decimal` → `EditTypeNumber`, `Boolean` → `EditTypeBoolean`, `DateTime/DateOnly/TimeOnly` → `EditTypeDateTime`, the same for `System.Nullable`1[[...]]` names (inner helper `N(n)` builds them), `String` → `EditTypeString`, `Object` → read-only `EditTypeString`. |
 | `GetObjectTypeHandler` | static method | `()` | Lazily creates the shared `EditTypeObject` (`Edit.ObjectTypeHandler`). |
@@ -607,7 +607,7 @@ Stateless; used through `EditCollectionMap.Inst`, returned by `EditTypeCollectio
 | `getVal` | method | `(c, key)` | `c.get(key)`. |
 | `setVal` | method | `(c, key, newValue)` | `c.set(key, newValue)`. |
 | `getKeyName` | method | `(key)` → string | `"[" + key + "]"`. |
-| `íterate` | async method | `(c, onKeyValue)` → bool | Iterates `c.entries()` with `while (i.next())`, passing `i.value[0]` / `i.value[1]` to `onKeyValue`; returns false when the callback returns falsy. |
+| `íterate` | async method | `(c, onKeyValue)` → bool | Iterates `c.entries()`, passing each key / value to `onKeyValue`; stops and returns false when the callback returns falsy, true when all ran (undefined for falsy `c`). |
 | `onKeys` | async method | `(c, onKey)` | Awaits `onKey(key)` for each key of `c.keys()`. |
 | `addVal` | method | `(c, newValue, key)` → key | `c.set(key, newValue)`. |
 | `removeVal` | method | `(c, key)` → `false` | `c.delete(key)`; returns false (no renumbering needed). |
@@ -722,7 +722,7 @@ Type handler for `System.DateTime`, `System.DateOnly` and `System.TimeOnly` and 
 | `GetMinDate` | static method | `GetMinDate(d)` → `Date` | Local date of `d` at 00:00:00. |
 | `GetMaxDate` | static method | `GetMaxDate(d)` → `Date` | Local date of `d` at 23:59:59.999. |
 | `GetMinMax` | method | `GetMinMax(member, options)` → `[min, max, def, typeTitle, haveMin, haveMax, parsedDef, defText]` | Parses `member.Min` (start of day) and `member.Max` (end of day) with `ToDateTime`, clamps both to `MinDate`/`MaxDate` and makes `max >= min`. The default is `member.Default` (parsed), else the current local date at the current hour (minutes and seconds zeroed), clamped to `[min, max]`. `haveMin`/`haveMax` are true when the member value was valid and survived clamping. Tooltip lines "Minimum value", "Maximum value" and "Default value" are added when the value was given, or always when `options.Dev` is set. If `member.Default` is a string, the returned `def` is converted to an ISO string. `defText` is `ToString(def)`. |
-| `Validate` | async method | `Validate(obj, member, options, name)` → `null` or `[name, message]` | A non-`Date` must be a string ("Value must be a string"). Time-only strings are accepted without further checks. Other strings must parse ("Value must be a valid date / time string"). The value is then compared with `min`/`max` from `GetMinMax`. Below `min` is an error only when the member lacks `AcceptNull`. The date-only message branches pass an identifier `unspecifiedDate` that is not declared in this method. |
+| `Validate` | async method | `Validate(obj, member, options, name)` → `null` or `[name, message]` | A non-`Date` must be a string ("Value must be a string"). Time-only strings are accepted without further checks. Other strings must parse ("Value must be a valid date / time string"). The value is then compared with `min`/`max` from `GetMinMax`. Below `min` is an error only when the member lacks `AcceptNull`. The date-only messages show the limit with `GetLocalDateString`. |
 | `ToString` | method | `ToString(obj, member, options)` → string | `"<date> <time>"` for full DateTime, else only the date or the time part, using `GetLocalDateString` / `GetLocalTimeString`. |
 | `AddEditor` | async method | `AddEditor(obj, editor, editContext, member, title, options)` → editor record | Initialises `obj[mn]` to the default when `undefined`. Unless time-only, creates a date input (`Edit.CreateGenericInput("date", …)`) whose parser merges the picked date into the current value with `SetLocalDateString`, and whose formatter is `GetLocalDateString`; `min`/`max` attributes are set when `haveMin`/`haveMax`. Unless date-only, creates a time input with `step="1"` using `SetLocalTimeString` / `GetLocalTimeString`. Both inputs get the class `HalfWidth` when both are shown (the time input always gets it). Read-only from `options.ReadOnly`, the `ReadOnly` member flag or `ForceReadOnly`. Returns `{Focus, Title, DefValue, DefValueText, SetValue, UpdateValue}` with the same `SetValue`/`UpdateValue` behaviour as the other primitive handlers (`EditChange` event; refresh both inputs and focus the first unless `isFirst`). |
 
@@ -764,7 +764,7 @@ Type handler for enum members (`IsEnum` flag), including `[Flags]` enums. Loaded
 | `CreateDefault` | method | `CreateDefault(member, options)` → number | Returns `GetDefault(member, options)`. |
 | `IsOfType` | method | `IsOfType(obj)` → bool | True for any string and for numbers where `parseInt` is not `NaN`. |
 | `Decode` | method | `Decode(obj, member, options)` → number or `null` | A number is split into its set bits; a string is split on `+`. Each part is looked up in the value map (a numeric part only matches if it is a known value) and the results are OR-ed. Returns `null` if any part is unknown. |
-| `Condition` | method | `Condition(obj, member, options)` → value | Decodes `obj`; if the result is not a number, uses `GetDefault`. Returns element `[0]` of that number (the code indexes the number). |
+| `Condition` | method | `Condition(obj, member, options)` → value | Decodes `obj`; if the result is not a number, uses `GetDefault`. Returns that number. |
 | `Validate` | async method | `Validate(obj, member, options, name)` → `null` or `[name, message]` | Error for `null`, and for values that `Decode` cannot turn into a number ("not a valid enum value, expecting a number or enum text"). |
 | `ToString` | method | `ToString(obj, member, options)` → string | Normal enum: the display name of `obj`, or `obj` itself if unknown. Flag enum: the display names of all set single-bit values joined with `" + "`, or `"0"` when none is set. |
 | `GetDefault` | method | `GetDefault(member, options)` → number | `parseInt` of the text before the first `;` in `member.Default`, or `0` when there is no valid default. |
@@ -980,7 +980,7 @@ All are `mask-image` classes used as `IconClass` / `ColorIcon` image names by `E
 
 ### `EditDesktop.css`
 
-Desktop layout of the object editor: styles the `SysWeaver-EditDesktop` element that `Edit.js` creates (`"SysWeaver-Edit" + style`) when the desktop style (`EditDesktop.js`) is used. Loaded statically with `Edit.css` (see there). A desktop editor is a table with a title row, a value row and an optional expandable data row per member. Depends on `Edit.css` for `--SysWeaverEditFadeDuration` and on the theme variables. The textarea rule refers to `--SysWeaverEditMobileRadInp` from `EditMobile.css`.
+Desktop layout of the object editor: styles the `SysWeaver-EditDesktop` element that `Edit.js` creates (`"SysWeaver-Edit" + style`) when the desktop style (`EditDesktop.js`) is used. Loaded statically with `Edit.css` (see there). A desktop editor is a table with a title row, a value row and an optional expandable data row per member. Depends on `Edit.css` for `--SysWeaverEditFadeDuration` and on the theme variables.
 
 #### Container
 
@@ -1021,14 +1021,14 @@ Row classes are set by `EditDesktop.js` (`TitleRow`, `ValueRow`, `SeparatorRow`)
 | `td.EditSlider input:first-child`, `td.EditSlider input:last-child` (+ `:disabled`, `::-webkit-slider-thumb`, `:focus::-webkit-slider-thumb`, `::-moz-range-thumb`, `:focus::-moz-range-thumb`) | Number with slider (`EditSlider`, set by `EditTypeInteger.js` / `EditTypeNumber.js`): text 28%, range input 70% floated right, custom thumb in `--ThemeMain` (`--ThemeAcc1` when focused), default cursor when disabled. |
 | `tr.ValueRow > td.EditBoolean input` (+ `:disabled`), `td.EditBoolean input::-webkit-slider-thumb`, `::-moz-range-thumb`, `td.EditBoolean.EditTrue input::-webkit-slider-thumb`, `::-moz-range-thumb` | Boolean as a 3.5em two-position range with a 2em thumb in `--ThemeMain`, `--ThemeAcc1` when `EditTrue` (toggled by `EditTypeBoolean.js`). |
 | `tr.ValueRow > td select` (+ `[multiple]`, `:disabled`, `:focus`) | Enum selector: full width, 125%, themed; `select[multiple]` (flag enums) scrolls, 4em to 75vh, resizable; disabled shows italic, full opacity. |
-| `select option`, `option:checked`, `option:disabled`, `select:focus option`, `select:focus option:checked`, `select:disabled option`, `select:disabled option:checked` | Option colours: checked inverted (`--ThemeMain` background), `--ThemeAcc2` when the select has focus; disabled options italic (their colour uses `rgba(--ThemeMainRGB, 0.1)` without `var()`). |
+| `select option`, `option:checked`, `option:disabled`, `select:focus option`, `select:focus option:checked`, `select:disabled option`, `select:disabled option:checked` | Option colours: checked inverted (`--ThemeMain` background), `--ThemeAcc2` when the select has focus; disabled options italic (colour `rgba(var(--ThemeMainRGB), 0.1)`). |
 
 #### Custom properties
 
 | Variable | Default / source | Used for |
 |---|---|---|
 | `--SysWeaverEditDesktopRad` | `var(--ThemeRad)` | Editor box and row cell radius. |
-| `--SysWeaverEditDesktopRadInp` | `var(--ThemeRadInp)` | Input, select and option radius; also used by `EditLanguage.css`. |
+| `--SysWeaverEditDesktopRadInp` | `var(--ThemeRadInp)` | Input, textarea, select and option radius; also used by `EditLanguage.css`. |
 | `--SysWeaverEditDesktopRadInp2` | `var(--ThemeRadInp2)` | Slider thumb radius. |
 
 ### `EditMobile.css`
@@ -1076,7 +1076,7 @@ Row classes are set by `EditMobile.js` (`TitleRow`, `HeaderRow`, `ValueRow`, `Se
 | Variable | Default / source | Used for |
 |---|---|---|
 | `--SysWeaverEditMobileRad` | `var(--ThemeRad)` | Box, header and value cell radius. |
-| `--SysWeaverEditMobileRadInp` | `var(--ThemeRadInp)` | Input, textarea, select and option radius (also the desktop textarea). |
+| `--SysWeaverEditMobileRadInp` | `var(--ThemeRadInp)` | Input, textarea, select and option radius. |
 | `--SysWeaverEditMobileRadInp2` | `var(--ThemeRadInp2)` | Slider thumb radius. |
 
 ### `EditLanguage.css`

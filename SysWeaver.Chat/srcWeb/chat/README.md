@@ -21,7 +21,7 @@ The page can be embedded in an iframe and controlled with `postMessage` (e.g. `c
 |---|---|
 | [`icons/`](icons/README.md) | Chat specific mask icons (speech input, text format, preview) |
 | [`Chat.html`](Chat.html) | The chat page (`chatMain`) |
-| [`ChatTest.html`](ChatTest.html) | Test page that hosts `Chat.html?id=Test` in an iframe, with buttons that send `postMessage` commands |
+| [`ChatTest.html`](ChatTest.html) | Test page that hosts `Chat.html?id=Simple.Generic` in an iframe, with buttons that send `postMessage` commands |
 | [`chat.js`](chat.js) | The chat client: message list, input, menus, speech input, translation, file and link sharing |
 | [`chat.css`](chat.css) | Styles of the chat UI, including the `IconChat…` icon classes |
 
@@ -53,7 +53,7 @@ The page can be embedded in an iframe and controlled with `postMessage` (e.g. `c
 The host page described above. The `body.ChatMain` CSS makes it full-viewport (`100svh`, `html.Embedded` shrinks by 8px when embedded in the app shell).
 
 #### `ChatTest.html`
-A standalone test harness (no SysWeaver scripts). It embeds `Chat.html?id=Test&options={"UserColor":false}` in an iframe and has buttons that call `iframe.contentWindow.postMessage({Type: "chat.clear" | "chat.scrolltop" | "chat.scrollbottom" | "chat.showall" | "chat.hideall"})`.
+A standalone test harness (no SysWeaver scripts). It embeds `Chat.html?id=Simple.Generic&options={"UserColor":false}` in an iframe and has buttons that call `iframe.contentWindow.postMessage({Type: "chat.clear" | "chat.scrolltop" | "chat.scrollbottom" | "chat.showall" | "chat.hideall"})`.
 
 #### `chat.js`
 Classic script (no modules). Four top-level classes and one entry function, all global.
@@ -330,7 +330,7 @@ All user-visible strings go through the common.js i18n helpers `_TF(text, descri
 
 ### `ChatTest.html` (inline script)
 
-Standalone harness (no SysWeaver scripts). Each function posts a command to the embedded `Chat.html?id=Test&options={"UserColor":false}` iframe (`document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({Type})`) and is bound to a button's `onclick`.
+Standalone harness (no SysWeaver scripts). Each function posts a command to the embedded `Chat.html?id=Simple.Generic&options={"UserColor":false}` iframe (`document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({Type})`) and is bound to a button's `onclick`.
 
 | Function | Signature | Description |
 |---|---|---|

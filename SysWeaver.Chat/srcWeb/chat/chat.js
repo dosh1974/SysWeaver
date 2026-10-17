@@ -1,8 +1,54 @@
 ﻿
 
+/**
+ * @file chat.js - the web chat client of SysWeaver.Chat (served under `chat/`).
+ *
+ * Loading: classic (non-module) script, loaded with `<script defer src="chat.js">` by `Chat.html`
+ * (whose `<body class="ChatMain" onload="chatMain()">` is empty and built entirely from script).
+ * Any other page may include it and call `Chat.addChat` directly (that is what `apiBase` is for).
+ *
+ * Globals defined:
+ * - `SpeechGen`   (class, static only) - text-to-speech on `window.speechSynthesis`, incl. incremental
+ *                 speech of a message that is still streaming.
+ * - `SpeechInput` (class, static only) - keyword / push-to-talk speech recognition on
+ *                 `SpeechRecognition`/`webkitSpeechRecognition` + `SpeechGrammarList`.
+ * - `ChatOptions` (class) - options bag for `Chat.addChat`.
+ * - `Chat`        (class, static only) - `Chat.addChat` builds the complete chat UI (one ~2500 line closure).
+ * - `chatMain`    (async function) - page entry point of `Chat.html`.
+ * - `window.ChatColors`, `window.SpeakCurrentText`, `window.SpeakCurrentQueue`, `window.SpeakCurrentInit`
+ *   (window globals created lazily at runtime, see `Chat.chatColor` and `SpeechGen`).
+ *
+ * Dependencies (must be loaded first):
+ * - common.js: `sendRequest`, `getUrlParams`, `AddLoading`, `Fail`, `Confirm`, `_T`/`_TF` (i18n), `ColorIcon`,
+ *   `includeJs`, `SessionManager`, `InterOp`, `StickToBottom`, `IsAtMaxScrollV`, `ValueFormat`, `legacySha256`,
+ *   `isLetter`, `isMobile`, `getPlatform`, `insertAtCursor`, `imageExtensions`, `createImg`, `createIFrame`,
+ *   `appendTheme`, `SetImageSource`, `GetAbsolutePath`, `Open`, `downloadFile`, `badClick`, `keyboardClick`
+ *   and the `UserInteracted` document event.
+ * - application.js: `PopUpMenu`, `PopUpSelection`, `WebMenu`, `WebMenuItem`.
+ * - Optional, loaded on demand via `includeJs` when the chat has an `UploadRepo` (FileUploader project):
+ *   `md5.js`, `UZIP.js`, `fileUploader.js` (`fileUploader`, `fileUploaderStatusText`, `UploadStatus`, `selectFiles`).
+ *
+ * Server: all API calls go to `ChatService` (`/chat/<Method>`, page relative) through `sendRequest`;
+ * live updates arrive as session push messages `chat.post|replace|remove|clear.<chatid lowercased>`.
+ *
+ * Conventions: message `Format` (0 text, 1 markdown, 2 HTML) and `Flags` mirror C# enums; `Data` is a
+ * `;`-separated list of `../`-prefixed URLs; DOM rows double as the state store (expando members);
+ * static field initializers run at load time and call `isMobile()` / `getPlatform()` from common.js.
+ */
+
+/**
+ * Static-only text-to-speech helper around `window.speechSynthesis`.
+ * Supports one-shot speech (`speakOnce`) and incremental speech of a streamed message
+ * (`speakNew` followed by `speakContinue`). All state lives in the `window.SpeakCurrent*` globals,
+ * so there is only one TTS stream per page. Never instantiated.
+ */
 class SpeechGen
 {
 
+    /**
+     * Checks if speech synthesis is available.
+     * @returns {boolean} true if `window.speechSynthesis` exists.
+     */
     static supportSpeechGen() {
         const ss = window.speechSynthesis;
         if (!ss)
@@ -10,18 +56,32 @@ class SpeechGen
         return true;
     }
 
+    /**
+     * Substrings of voice names that are replaced by "male" before gender scoring in `findVoice`.
+     * @type {string[]}
+     */
     static MaleNames = [
         "George",
         "Bengt",
     ];
 
 
+    /**
+     * Substrings of voice names that are replaced by "female" before gender scoring in `findVoice`.
+     * @type {string[]}
+     */
     static FemaleNames = [
         "Hazel",
         "Susan",
     ];
 
 
+    /**
+     * Case-insensitive containment similarity of two strings.
+     * @param {string} s1 - First string.
+     * @param {string} s2 - Second string.
+     * @returns {number} If the shorter string occurs in the longer one at index f: 1 / (1 + 0.02 * f), else 0.
+     */
     static similarity(s1, s2) {
         let longer = s1;
         let shorter = s2;
@@ -38,6 +98,17 @@ class SpeechGen
     }
 
 
+    /**
+     * Finds the best matching speech synthesis voice.
+     * Each voice from `speechSynthesis.getVoices()` is scored as
+     * `similarity(language, voice.lang) * 10 + similarity("male"|"female", fixedName) + (localService ? 0.8 : 0)`,
+     * where fixedName is the voice name with `MaleNames`/`FemaleNames` replaced by "male"/"female".
+     * A local voice whose name equals `exact` gets score 10000 (wins outright).
+     * @param {string} language - Language code to match (e.g. "en-US").
+     * @param {boolean} male - True to prefer a male voice, false for a female voice.
+     * @param {string} [exact] - Exact voice name to prefer (only if it is a local voice).
+     * @returns {SpeechSynthesisVoice|null} The highest scoring voice, or null if none scored above 0.
+     */
     static findVoice(language, male, exact) {
         const g = male ? "male" : "female";
         const ss = window.speechSynthesis;
@@ -71,6 +142,10 @@ class SpeechGen
 
 
 
+    /**
+     * Phrase end characters (`! ? . ,`). While a message is incomplete, `speakContinue` only speaks up to the last of these.
+     * @type {Map<string, boolean>}
+     */
     static EndChars = function () {
         const m = new Map();
         m.set('!', true);
@@ -81,6 +156,10 @@ class SpeechGen
     }();
 
 
+    /**
+     * Punctuation kept by `filterText` (`! ? . ,`).
+     * @type {Map<string, boolean>}
+     */
     static ValidChars = function () {
         const m = new Map();
         m.set('!', true);
@@ -90,6 +169,10 @@ class SpeechGen
         return m;
     }();
 
+    /**
+     * White space characters recognized by `filterText` (space, tab, \n, \r).
+     * @type {Map<string, boolean>}
+     */
     static WhiteSpaces = function () {
         const m = new Map();
         m.set(' ', true);
@@ -100,6 +183,11 @@ class SpeechGen
     }();
 
 
+    /**
+     * Math operator characters and their spoken form (`*` " times ", `+` " plus ", `-` " minus ", `/` " divided by ",
+     * `%` " modulo ", `^` " to the power of ", `=` " equals ", `≈` " is approximately "), used by `filterText`.
+     * @type {Map<string, string>}
+     */
     static MathOps = function () {
         const m = new Map();
         m.set('*', " times ");
@@ -115,6 +203,16 @@ class SpeechGen
 
 
 
+    /**
+     * Converts text into speakable text.
+     * - Collapses white space runs to one space; white space between two digits is removed (joins digit groups).
+     * - Keeps digits and `ValidChars`; a comma directly after a digit is dropped (thousands separators).
+     * - A `MathOps` operator followed by a number is replaced by its words if preceded by a number (or always for `-`).
+     * - `(` becomes ", ".
+     * - Keeps letters (`isLetter` from common.js), drops everything else.
+     * @param {string} text - Raw text (plain or markdown).
+     * @returns {string} The filtered text ("" for empty input).
+     */
     static filterText(text) {
         const tl = text.length;
         if (tl <= 0)
@@ -125,6 +223,11 @@ class SpeechGen
         const white = SpeechGen.WhiteSpaces;
         const mathOps = SpeechGen.MathOps;
 
+        /**
+         * Checks if the next non white space character after `pos` in `text` is a digit.
+         * @param {number} pos - Index to scan forward from (exclusive).
+         * @returns {boolean} true if a digit follows (skipping white space).
+         */
         function NextIsNumber(pos) {
             for (; ;) {
                 ++pos;
@@ -139,6 +242,11 @@ class SpeechGen
             return false;
         }
 
+        /**
+         * Checks if the previous non white space character before `pos` in `text` is a digit.
+         * @param {number} pos - Index to scan backward from (exclusive).
+         * @returns {boolean} true if a digit precedes (skipping white space).
+         */
         function PrevIsNumber(pos) {
             for (; ;) {
                 --pos;
@@ -210,6 +318,10 @@ class SpeechGen
 
 
 
+    /**
+     * `onend` handler of every utterance: if `window.SpeakCurrentQueue` holds non-empty (trimmed) text,
+     * clears the queue and speaks the text as a new utterance initialized by `window.SpeakCurrentInit`.
+     */
     static onSpeakEnd() {
         //console.log("SpeachSyntesis: onSpeakEnd");
         const queue = window["SpeakCurrentQueue"];
@@ -228,6 +340,9 @@ class SpeechGen
         ss.speak(u);
     }
 
+    /**
+     * Clears `window.SpeakCurrentQueue` and cancels any ongoing speech (`speechSynthesis.cancel()` if speaking).
+     */
     static cancelSpeak() {
         const ss = window.speechSynthesis;
         window["SpeakCurrentQueue"] = "";
@@ -238,6 +353,16 @@ class SpeechGen
     }
 
 
+    /**
+     * Speaks a complete text once (not incremental). Cancels any current speech first.
+     * Does nothing if the filtered text is empty. Not called inside this file.
+     * @param {string} text - Text to speak (filtered with `filterText`).
+     * @param {SpeechSynthesisVoice} [voice] - Voice to use (browser default if falsy).
+     * @param {number} pitch - Utterance pitch (assigned as is).
+     * @param {number} [rate] - Utterance rate (browser default if falsy).
+     * @param {number} [volume=0.5] - Volume 0-1 (0.5 if falsy).
+     * @param {string} [lang="en"] - Utterance language.
+     */
     static speakOnce(text, voice, pitch, rate, volume, lang) {
         text = SpeechGen.filterText(text);
         if (text.length <= 0)
@@ -257,6 +382,17 @@ class SpeechGen
         ss.speak(u);
     }
 
+    /**
+     * Starts a new incremental speech stream (used for newly posted messages).
+     * Resets `window.SpeakCurrentText` to "", stores an utterance initializer with the given settings in
+     * `window.SpeakCurrentInit` (lang, voice, pitch, rate, volume, onend = `onSpeakEnd`), then calls `speakContinue(text)`.
+     * @param {string} text - The (possibly incomplete) message text.
+     * @param {SpeechSynthesisVoice} [voice] - Voice to use (browser default if falsy).
+     * @param {number} pitch - Utterance pitch.
+     * @param {number} [rate] - Utterance rate (browser default if falsy).
+     * @param {number} [volume=0.5] - Volume 0-1 (0.5 if falsy).
+     * @param {string} [lang="en"] - Utterance language.
+     */
     static speakNew(text, voice, pitch, rate, volume, lang) {
         text = SpeechGen.filterText(text);
         window["SpeakCurrentText"] = "";
@@ -273,6 +409,17 @@ class SpeechGen
         SpeechGen.speakContinue(text);
     }
 
+    /**
+     * Continues speaking a streamed message whose text has grown (used for `replace` push events).
+     * The text is filtered; if it no longer starts with the already spoken prefix (`window.SpeakCurrentText`),
+     * the prefix is reset and speech is cancelled. Unless `isCompleted`, returns while already speaking, and only
+     * takes the new suffix up to (and including) the last `EndChars` character. The taken part is appended to
+     * `SpeakCurrentText` and then either appended to `window.SpeakCurrentQueue` (if speaking, flushed by `onSpeakEnd`)
+     * or spoken immediately with `window.SpeakCurrentInit` (cancelling first if it is the first chunk).
+     * Requires a prior `speakNew` (uses `window.SpeakCurrentInit`).
+     * @param {string} text - The full current message text.
+     * @param {boolean} [isCompleted] - True when the message is complete: speak all remaining text.
+     */
     static speakContinue(text, isCompleted) {
         //console.log("Continue " + text);
         text = SpeechGen.filterText(text);
@@ -325,13 +472,30 @@ class SpeechGen
 
 }
 
+/**
+ * Static-only speech recognition helper around `SpeechRecognition` / `webkitSpeechRecognition` and
+ * `SpeechGrammarList`. `triggerOnSpeech` creates a recognizer for wake words (open mic) or push-to-talk
+ * and returns its stop function. Never instantiated.
+ */
 class SpeechInput {
+    /**
+     * `isMobile()` (common.js) evaluated at load; open mic and joining of final results are disabled on mobile.
+     * @type {boolean}
+     */
     static IsMobile = isMobile();
 
+    /**
+     * Checks if continuous (open mic, keyword triggered) listening is supported.
+     * @returns {boolean} false on mobile devices.
+     */
     static supportOpenMic() {
         return !SpeechInput.IsMobile;
     }
 
+    /**
+     * Checks if speech recognition is supported.
+     * @returns {boolean} true if both a `SpeechRecognition` and a `SpeechGrammarList` constructor (standard or webkit prefixed) exist.
+     */
     static supportSpeechRec() {
         const sr = window.SpeechRecognition ?? window.webkitSpeechRecognition;
         const sgl = window.SpeechGrammarList ?? window.webkitSpeechGrammarList;
@@ -343,6 +507,11 @@ class SpeechInput {
     }
 
 
+    /**
+     * Stop words (abort, stop, cancel, reset, restart): a final result whose last word is one of these aborts the current input.
+     * Note: compared case sensitively against `GetLastWord` (which preserves case).
+     * @type {Map<string, number>}
+     */
     static StopWords = function () {
         const m = new Map();
         m.set('abort', 1);
@@ -353,6 +522,10 @@ class SpeechInput {
         return m;
     }();
 
+    /**
+     * Characters that separate words for `GetLastWord`: white space and `! ? . , ¡ ¿`.
+     * @type {Map<string, number>}
+     */
     static NonWordChars = function () {
         const m = new Map();
         m.set(' ', 1);
@@ -369,6 +542,11 @@ class SpeechInput {
     }();
 
 
+    /**
+     * Question words (who/what/where/when/why/which/whose/how and their "'s" forms, lower case):
+     * any occurrence makes a sentence a question (ends with "?").
+     * @type {Map<string, number>}
+     */
     static QuestionWordMap = function () {
         const m = new Map();
         m.set("who", 1);
@@ -390,6 +568,10 @@ class SpeechInput {
         return m;
     }();
 
+    /**
+     * Words (are/aren't/am/is/isn't/do/don't/does/doesn't) that make a sentence a question only when they are its first word.
+     * @type {Map<string, number>}
+     */
     static QuestionWordStartMap = function () {
         const m = new Map();
         m.set("are", 1);
@@ -404,6 +586,12 @@ class SpeechInput {
         return m;
     }();
 
+    /**
+     * Gets the last word of a text (trailing `NonWordChars` are skipped).
+     * @param {string} text - Text to inspect.
+     * @returns {string} The last run of non `NonWordChars` characters (case preserved), or "".
+     * Note: because of the `l > 0` loop bound, returns "" when the last word is a single character at index 0.
+     */
     static GetLastWord(text) {
 
         let l = text.length;
@@ -430,6 +618,30 @@ class SpeechInput {
         return text.substring(l, e);
     }
 
+    /**
+     * Creates and starts a speech recognizer that activates on wake words (open mic) or immediately (push-to-talk).
+     * - Builds a JSGF grammar `public <keyword> = k1,k2...`, sets `continuous`, `interimResults`, `maxAlternatives = 1`.
+     * - If `start()` throws (no user gesture yet), retries on the common.js `UserInteracted` document event.
+     * - With `noOpenMic`, calls `onActivate(true, true)` right after starting.
+     * - `onend` restarts (open mic) or stops (`noOpenMic`).
+     * - `onerror`: "no-speech" ignored; "aborted" stops (`noOpenMic`) or calls `onActivate(null, false)`;
+     *   other errors are logged with `console.warn` and stop.
+     * - `onresult`: detects the keyword once per sentence (`onActivate(key, true)`), streams `filter(part)` as interim
+     *   text via `onSentance(text, false)`. On a final result: if the last word is a `StopWords` entry the input is
+     *   aborted (`onSentance("", true)`), else a 1500 ms debounce timer delivers `onSentance(filter(final), true)`;
+     *   new results reset the timer. On non mobile, consecutive results of one activation are joined with ". ".
+     * @param {string|string[]} keyword - Wake word entries `"wakeword|prefix"`; the wake word is lowercased, the
+     *   optional prefix is prepended to every produced sentence.
+     * @param {function(?(string|boolean), boolean):(void|Promise<void>)} [onActivate] - Called with the detected keyword
+     *   on activation (`true` for push-to-talk start), `(null, true)` after a sentence completes in open mic mode,
+     *   `(null, false)` when stopped.
+     * @param {function(string, boolean):(void|Promise<void>)} [onSentance] - Receives filtered text; second arg false
+     *   for interim text, true for the final sentence.
+     * @param {string} [language="en-US"] - Recognition language.
+     * @param {boolean} [ignoreKeyword] - If true any speech activates (the first keyword is used for prefix/filtering).
+     * @param {boolean} [noOpenMic] - If true, stop after one sentence instead of restarting (push-to-talk).
+     * @returns {?function():Promise<void>} The async stop function, or null if speech recognition is unsupported.
+     */
     static triggerOnSpeech(keyword, onActivate, onSentance, language, ignoreKeyword, noOpenMic) {
 
         const keywordMap = new Map();
@@ -449,6 +661,11 @@ class SpeechInput {
         const keywords = keywordArray.join(",");
         const keywordCount = keywordArray.length;
 
+        /**
+         * Finds the first keyword contained in a transcript.
+         * @param {string} str - Transcript (compared lowercased).
+         * @returns {?string} The first matching keyword; with `ignoreKeyword` the first keyword when none matches; else null.
+         */
         function haveKeyword(str) {
             str = str.toLowerCase();
             for (let i = 0; i < keywordCount; ++i) {
@@ -478,12 +695,21 @@ class SpeechInput {
         recognition.lang = language ?? "en-US";
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
+        /**
+         * Starts the recognizer and removes itself as a `UserInteracted` listener. Also used as `onend` handler in open mic mode (restart).
+         * @throws If the browser refuses to start (e.g. no user gesture yet).
+         */
         const start = () => {
             recognition.start();
             //console.log("Speech recognition: Started");
             document.removeEventListener("UserInteracted", start);
         };
 
+        /**
+         * Stops recognition for good: detaches handlers, stops the recognizer, nulls it and calls `onActivate(null, false)`.
+         * No-op if already stopped. This is the function returned by `triggerOnSpeech`.
+         * @returns {Promise<void>}
+         */
         const stop = async () => {
             if (!recognition)
                 return;
@@ -497,19 +723,38 @@ class SpeechInput {
         };
 
 
+        /** Accumulated final text of the current activation (joined with ". " on non mobile). @type {string} */
         let add = "";
+        /** Pending debounce timer (setTimeout handle) that delivers the final sentence, or null. */
         let del = null;
+        /** The keyword of the current activation, or null when not activated. @type {?string} */
         let isKey = null;
 
+        /**
+         * Tests for white space.
+         * @param {string} s - Text (usually one character).
+         * @returns {boolean} true if `s` contains white space.
+         */
         function hasWhiteSpace(s) {
             return RegExp(/\s/g).test(s);
         }
 
+        /**
+         * Tests if `s` starts with a Unicode letter. Not used.
+         * @param {string} s - Text.
+         * @returns {boolean} true if the first character is a letter.
+         */
         function isChar(s) {
             return RegExp(/^\p{L}/, 'u').test(s);
         }
 
 
+        /**
+         * Checks if a word makes its sentence a question.
+         * @param {string} word - The word (compared lowercased).
+         * @param {boolean} isFirstWord - True if it is the first word of the sentence (enables `QuestionWordStartMap`).
+         * @returns {boolean} true for a question word.
+         */
         function isQuestionWord(word, isFirstWord) {
             word = word.toLowerCase();
             if (isFirstWord && (SpeechInput.QuestionWordStartMap.get(word) === 1))
@@ -517,6 +762,14 @@ class SpeechInput {
             return SpeechInput.QuestionWordMap.get(word) === 1;
         }
 
+        /**
+         * Turns a raw transcript into a sentence: removes text up to and including the keyword, trims, capitalizes the
+         * first letter of each sentence, replaces `.` by `?` for question sentences, strips trailing space/`.`/`!`/`?`,
+         * appends "? " or ". " and prepends the keyword's prefix (from `keywordMap`).
+         * @param {string} text - Transcript.
+         * @param {string} keyw - The active keyword.
+         * @returns {string} The filtered sentence, or "" for empty text.
+         */
         function filter(text, keyw) {
             const ff = text.toLowerCase().indexOf(keyw);
             if (ff >= 0)
@@ -587,6 +840,12 @@ class SpeechInput {
 
 
 
+        /**
+         * Recognition error handler: ignores "no-speech"; "aborted" stops (push-to-talk) or deactivates (open mic);
+         * other errors are logged and stop recognition.
+         * @param {SpeechRecognitionErrorEvent} ev - The error event.
+         * @returns {Promise<void>}
+         */
         recognition.onerror = async ev => {
             if (ev.error === "no-speech")
                 return;
@@ -601,6 +860,12 @@ class SpeechInput {
             await stop();
         };
         recognition.onend = noOpenMic ? stop : start;
+        /**
+         * Recognition result handler: keyword detection, interim streaming, stop word abort and the 1500 ms
+         * debounced delivery of the final sentence (see `triggerOnSpeech`).
+         * @param {SpeechRecognitionEvent} event - The result event (`event.results[event.resultIndex][0].transcript`).
+         * @returns {Promise<void>}
+         */
         recognition.onresult = async event => {
             const res = event.results[event.resultIndex];
             const a = res[0];
@@ -686,6 +951,10 @@ class SpeechInput {
 }
 
 
+/**
+ * Options bag for `Chat.addChat`. Created with `new ChatOptions()` (by `chatMain`, merged with the `options`
+ * URL parameter via `Object.assign`, or by `addChat` when no options are given).
+ */
 class ChatOptions {
     /** The size in pixels of the top right menu icon (scaled with theme) */
     MenuIconSize = 48;
@@ -704,6 +973,10 @@ class ChatOptions {
 
 }
 
+/**
+ * Static-only chat UI factory. `Chat.addChat` builds the complete UI of one chat inside a container element
+ * (message list, input, preview, menus, speech, uploads, push updates); all logic lives in closures inside it.
+ */
 class Chat {
 
     /** If this flag is set on a message it means that it's not completed yet, like streaming chat */
@@ -714,12 +987,15 @@ class Chat {
 
 
     /**
-     * Convert a text (user guid) to a color
-     * @param {string} text Guid
-     * @returns {string} html color
+     * Converts a text (the sender name, `m.From`) to a stable set of colors.
+     * Hashes `text` with `legacySha256` (common.js) into hue/saturation/lightness; results are cached in the
+     * lazily created `window.ChatColors` Map.
+     * @param {string} text - The sender name.
+     * @returns {string[]} `[border, headerBackground, headerText]`: `"hsl(h s l / 0.5)"`, `"hsl(h s l / 0.05)"`, `"hsl(h s l)"`.
      */
     static chatColor(text) {
         const t = window.ChatColors ?? new Map();
+        /** Global cache: sender name -> [border, headerBackground, headerText] colors. @type {Map<string, string[]>} */
         window.ChatColors = t;
         let c = t.get(text);
         if (c)
@@ -738,18 +1014,30 @@ class Chat {
         return c;
     }
 
-    /** Cache if we're on mobile or not */
+    /** Cache if we're on mobile or not (`isMobile()` at load); on mobile no "ALT+Enter" hint is added to the placeholder. @type {boolean} */
     static IsMobile = isMobile();
 
-    /** Cache platform name */
+    /** Cache platform name (`getPlatform()` at load); a value starting with "mac" selects the "Option+Enter" hint. @type {string} */
     static Platform = getPlatform();
 
     /**
-     * @param {HTMLElement} chatBackground The html element that the chat should be created as a child to
-     * @param {string} chatId The ID of the chat (cahnnel)
-     * @param {string} apiBase An optional api base (depends where the html resides)
-     * @param {ChatOptions} options Optional options for more control
-     * @returns {HTMLElement} The html element that was created
+     * Builds the complete chat UI for one chat inside `chatBackground`. In order it:
+     * cancels ongoing speech synthesis; computes the localStorage key names; creates `<SysWeaver-ChatMain>`;
+     * calls `Join {ChatId, MaxCount: 10, FromId: 0}` (`ChatJoinResponse`); loads dynamic deps in parallel
+     * (`GetInputLanguages` if `CanTranslate`, `md5.js`/`UZIP.js`/`fileUploader.js` if `UploadRepo`);
+     * if `CanPost` builds the input area, preview row, drag and drop, language picker, speech input and uploads and
+     * restores the draft; registers postMessage commands (window `message`), server push events
+     * (`chat.post|replace|remove|clear.<chatid lowercased>` via `SessionManager.AddServerEvent` / `InterOp`) and speech
+     * synthesis; adds the top-right menu; renders the initial messages; installs `StickToBottom` with lazy loading of
+     * older messages (`GetMessages`); restores the saved split height and scrolls to the bottom; finally runs `doLast`.
+     * localStorage keys (`<s>` = "", "." + chatId or "." + SettingsName): `SysWeaver.Chat.ShowTimeStamp<s>`,
+     * `.SpeechGenVol<s>`, `.SpeechGen<s>`, `.SpeechSend<s>`, `.UseMarkDown<s>`, `.Preview<s>`, `.Size<s>`;
+     * per chat: `SysWeaver.Chat.SpeechListen<chatId>`, `.Hide.<chatId>`, `.Input.<chatId>`, `.Data.<chatId>`, `.Lang.<chatId>`.
+     * @param {HTMLElement} chatBackground - The html element that the chat should be created as a child to (normally `<SysWeaver-Chat>`).
+     * @param {string} chatId - The ID of the chat (channel), `<provider>.<providerChatId>`.
+     * @param {string} [apiBase=""] - An optional api base prefix for all `sendRequest` calls (depends where the html resides).
+     * @param {ChatOptions} [options=new ChatOptions()] - Optional options for more control.
+     * @returns {Promise<HTMLElement>} The created `SysWeaver-ChatMain` element (the message list).
      */
     static async addChat(chatBackground, chatId, apiBase, options) {
 
@@ -763,10 +1051,17 @@ class Chat {
         else
             console.warn("No speech synthesis supported");
 
+        /** Input languages from `GetInputLanguages` (null until loaded). @type {?Array<{Iso:string, Name:string, LocalName:string, EnName:string, Comment:string}>} */
         let languages = null;
+        /** Iso code to LanguageInfo map built from `languages` (null until loaded). @type {?Map<string, object>} */
         let languageMap = null;
 
 
+        /**
+         * Loads the input languages once: `sendRequest("GetInputLanguages")` into `languages` and builds `languageMap`.
+         * Awaited at startup when `CanTranslate`, and lazily by `selectLanguage`.
+         * @returns {Promise<void>}
+         */
         async function GetLanguages() {
             if (languages)
                 return;
@@ -780,6 +1075,7 @@ class Chat {
             }
         }
 
+        /** Settings key suffix: "" (shared), "." + chatId (SettingsName "*") or "." + SettingsName. @type {string} */
         let sname = options.SettingsName;
         if (!sname) {
             sname = "";
@@ -787,6 +1083,7 @@ class Chat {
             sname = "." + (sname === "*" ? chatId : sname);
         }
 
+        // localStorage key names: settings (scoped by sname) followed by per chat keys (scoped by chatId)
         const timeStampName = "SysWeaver.Chat.ShowTimeStamp" + sname;
         const volumeKey = "SysWeaver.Chat.SpeechGenVol" + sname;
         const genKey = "SysWeaver.Chat.SpeechGen" + sname;
@@ -805,11 +1102,14 @@ class Chat {
         const dataSaveKey = "SysWeaver.Chat.Data." + chatId;
         const langSaveKey = "SysWeaver.Chat.Lang." + chatId;
 
+        /** True once `GetMessages` returned no older messages (stops history paging). @type {boolean} */
         let isAtTop = false;
 
 
+        /** The scrolling message list `<SysWeaver-ChatMain>`; its children are the message rows. @type {HTMLElement} */
         const chatE = document.createElement("SysWeaver-ChatMain");
 
+        /** Saved split height fraction (string from `sizeKey`), restored at the end (only when posting). @type {?string} */
         let initSize;
 
         chatBackground.appendChild(chatE);
@@ -819,7 +1119,9 @@ class Chat {
 
         const titleVisible = _TF("Click to hide message content and future message content from {0}", "A tool tip message for a buttan that when clicked will hide the content of a specific chat message and all further messages from that user.{0} is replaced with the user name. ");
         const titleHidden = _TF("Click to show message content and future message content from {0}", "A tool tip message for a buttan that when clicked will show the hidden content of a specific chat message and all continue to show all further messages from that user.{0} is replaced with the user name. ");
+        /** True to show absolute time stamps, false to show live age ("x ago"). @type {boolean} */
         let showTimeStamp = localStorage.getItem(timeStampName) === "true";
+        /** Sender names whose message content is hidden (value 1), persisted in `hideName`. @type {Map<string, number>} */
         const hideFrom = new Map();
         const hideData = localStorage.getItem(hideName);
         if (hideData) {
@@ -829,14 +1131,20 @@ class Chat {
         }
         const hiddenClass = "Hidden";
 
+        /**
+         * Checks if the content from a sender is hidden.
+         * @param {string} name - The sender name.
+         * @returns {boolean} true if `name` is in `hideFrom`.
+         */
         function isHidden(name) {
             return hideFrom.get(name) === 1;
         }
 
         /**
-         * Hide or show a message from a user
-         * @param {string} name The user guid
-         * @param {boolean} hide True to hide future messages from this user
+         * Hide or show messages from a user; persists the hidden names as a JSON array in `SysWeaver.Chat.Hide.<chatId>`.
+         * Does not update existing rows (callers do that with `row.Show` / `row.Hide`).
+         * @param {string} name - The sender name (`m.From`).
+         * @param {boolean} hide - True to hide (current and future) messages from this user, false to show.
          */
         function setHideFrom(name, hide) {
             if (hide)
@@ -846,7 +1154,7 @@ class Chat {
             localStorage.setItem(hideName, JSON.stringify(Array.from(hideFrom.keys())));
         }
 
-        /** Expand all items (none collapsed) */
+        /** Expand all items (none collapsed): clears `hideFrom` and removes the `SysWeaver.Chat.Hide.<chatId>` key. Does not update rows. */
         function setHideNone() {
             hideFrom.clear();
             localStorage.removeItem(hideName);
@@ -857,6 +1165,12 @@ class Chat {
 
 
 
+        /**
+         * The `Join` response (`ChatJoinResponse`): session config (UserName, UserGuid, UserStore, Lang, MaxTextLength,
+         * MaxDataLength, MaxDataCount, CanClear, CanPost, DoNotConfirmClear, Menus, SpeechName, Voices, AllowMarkDown,
+         * CanTranslate, CanShowProfile, UploadRepo, AllowPublicStore, EnableListenByDefault, EnableGenByDefault) and the latest `Messages`.
+         * @type {object}
+         */
         const data = await sendRequest(apiBase + "Join", {
             ChatId: chatId,
             MaxCount: 10,
@@ -881,9 +1195,12 @@ class Chat {
                 currentLang = sl;
         }
 
+        /** postMessage commands: `{Type}` string to handler (chat.scrolltop, chat.scrollbottom, chat.showall, chat.hideall, chat.clear). @type {Map<string, function():any>} */
         const commandMap = new Map();
+        /** Uploaded (not already existing) URLs of the draft that are not sent yet; deleted again if removed from the draft. @type {Map<string, *>} */
         const tempFiles = new Map();
 
+        // Draft / input state; the functions below are declared here but only assigned when canPost.
         let useMarkDown = false;
         let canSend = null;
         let previewMessage;
@@ -908,6 +1225,7 @@ class Chat {
             deps.push(includeJs(null, "fileUploader.js", true));
         }
         await Promise.all(deps);
+        /** The upload repository name; only set if `data.UploadRepo` is set and `fileUploader` got defined (upload enabled). @type {?string} */
         let uploadRepo = null;
         if (data.UploadRepo && (typeof fileUploader !== "undefined")) {
             uploadRepo = data.UploadRepo;
@@ -916,6 +1234,10 @@ class Chat {
 
 
         //  Input
+        /**
+         * Run at the very end of `addChat`. Default no-op; with `canPost` it is replaced to call `sendEnable()` and focus
+         * the textarea (temporarily read-only so no on-screen keyboard is forced).
+         */
         let doLast = () => { };
         if (canPost) {
             initSize = localStorage.getItem(sizeKey);
@@ -926,21 +1248,32 @@ class Chat {
 
 
 
+            /** The input area `<SysWeaver-ChatInput>` (children: textarea, send button, optional mic button). @type {HTMLElement} */
             const chatInput = document.createElement("SysWeaver-ChatInput");
+            /** The message textarea (`NextLast` expando used by `insertAtCursor`). @type {HTMLTextAreaElement} */
             const write = document.createElement("textarea");
             chatBackground.appendChild(chatInput);
             chatInput.appendChild(write);
 
+            /** Sent texts (max 100), browsed with Alt+Up/Down. @type {string[]} */
             const inputHistory = [];
+            /** History position: 0 = the text being typed, -1 = empty, n = n-th last history entry. @type {number} */
             let inputHistoryPos = 0;
+            /** The text being typed before history browsing started. @type {string} */
             let inputCurrent = "";
 
 
+            /** True while a `UserMessage` request is in flight. @type {boolean} */
             let isSending = false;
             /**
-             * Send the message
-             * @param {boolean} doFocus If true, the input box will be focused when done
-             * @returns
+             * Sends the draft (text and attachments) with `UserMessage {ChatId, Body:{Format, Data, Text, Lang}}`.
+             * Returns if both text and data are empty or a send is in progress. Pushes the text into the input history,
+             * clears the input (showing the sent text as placeholder, read-only) and the preview. On success clears
+             * `tempFiles` and calls `StickForAwhile()`; on false/exception shows `Fail` and restores text/data if the input
+             * is still empty. Finally restores the input, calls `sendEnable()` and focuses unless `doFocus === "NoFocus"`.
+             * Bound to the send button, Alt+Enter and speech auto-send.
+             * @param {*} [doFocus] - Pass "NoFocus" to not focus the input box when done (any other value focuses).
+             * @returns {Promise<void>}
              */
             async function Send(doFocus) {
                 const t = write.value.trim();
@@ -1008,9 +1341,13 @@ class Chat {
                 }
             }
 
+            /** True while the textarea is changed by history browsing (so `onInputChangeFn` keeps the history position). @type {boolean} */
             let isInternalUpdate = false;
 
-            /** Set the input text from a history value */
+            /**
+             * Set the input text from a history value: `inputHistoryPos` 0 restores `inputCurrent`, -1 clears, n takes the
+             * n-th last history entry. Updates `write.NextLast` and calls `sendEnable()`, flagged as internal update.
+             */
             function SetFromHistory() {
                 isInternalUpdate = true;
                 if (inputHistoryPos === 0) {
@@ -1037,6 +1374,7 @@ class Chat {
                 write.scrollIntoView({ behavior: "smooth" })
             }
 
+            // Pure Alt (no Ctrl/Meta/Shift) shortcuts: Enter sends, ArrowUp/ArrowDown browse the input history.
             write.onkeydown = async e => {
                 if (!e.altKey)
                     return;
@@ -1067,8 +1405,10 @@ class Chat {
 
             };
 
+            /** The send button (`IconSend`). @type {ColorIcon} */
             const send = new ColorIcon("IconSend", "IconColorThemeAcc1", options.SendIconSize, options.SendIconSize, _TF("Click to send the message", "A tool tip description on a button that when clicked will send the entered chat message to the server"), Send);
             chatInput.appendChild(send.Element);
+            /** The push-to-talk mic button (`IconChatMicOn`, third child of chatInput), null if speech recognition is unsupported. @type {?ColorIcon} */
             let listen = null;
             if (SpeechInput.supportSpeechRec()) {
                 listen = new ColorIcon("IconChatMicOn", "IconColorThemeAcc1", options.AudioIconSize, options.AudioIconSize, _TF("Click to listen for speech input using the selected language", "A tool tip description on a button that when clicked will start listening to speech input"), () => {
@@ -1077,7 +1417,11 @@ class Chat {
                 chatInput.appendChild(listen.Element);
             }
 
-            /** Called to enable/disable the send button (every time the input text changes) */
+            /**
+             * Called to enable/disable the send button (every time the input text changes).
+             * Recomputes `canSend` (trimmed text or data present), saves or removes the draft keys
+             * `SysWeaver.Chat.Input.<chatId>` / `SysWeaver.Chat.Data.<chatId>` and updates the preview text.
+             */
             function sendEnable() {
                 const t = write.value.trim();
                 const d = previewMessage.Data;
@@ -1097,12 +1441,17 @@ class Chat {
                 send.SetEnabled(canSend);
             }
 
+            /** The saved draft text (restored into the textarea). @type {?string} */
             const start = localStorage.getItem(inputSaveKey);
             if (start) {
                 write.value = start;
                 write.NextLast = write.value.length;
             }
 
+            /**
+             * Textarea `oninput` handler (also called after drops): `sendEnable()` and, unless the change came from
+             * history browsing, resets the history position and remembers the current text in `inputCurrent`.
+             */
             const onInputChangeFn = () => {
                 sendEnable();
                 if (!isInternalUpdate) {
@@ -1125,6 +1474,7 @@ class Chat {
             useMarkDown &= data.AllowMarkDown;
 
             showPreview = localStorage.getItem(previewKey); // null means auto (on for md and off for text)
+            // The preview pseudo message (Id 0), rendered as the last row (class Preview); Data is restored from the draft.
             previewMessage = {
                 Data: localStorage.getItem(dataSaveKey) ?? null,
                 Time: null,
@@ -1142,6 +1492,12 @@ class Chat {
             previewElement.classList.add("Preview");
 
 
+            /**
+             * Updates the preview row visibility: shown (removes `Hide`, smooth-scrolls to the bottom) if it has data,
+             * or has text and preview is on (`showPreview`, or `useMarkDown` when `showPreview` is not a boolean);
+             * otherwise class `Hide` is added.
+             * @returns {boolean} true if the preview is visible.
+             */
             previewChanged = () => {
                 const pm = previewElement.Msg;
                 const sp = (!!previewMessage.Data) || ((typeof showPreview !== "boolean" ? useMarkDown : showPreview) && (!!pm.Text));
@@ -1163,6 +1519,7 @@ class Chat {
                 return sp;
             };
 
+            // Placeholders for text / markdown mode; on desktop a send hint (Option+Enter on mac, else ALT+Enter) is appended on a new line.
             let placeholderText = _TF("Write your text here..", "A placeholder text for an input box where a user can enter a text message for a chat");
             let placeholderMD = _TF("Write your Mark Down text here..", "A placeholder text for an input box where a user can enter a markdown formatted text message for a chat");
             if (!Chat.IsMobile) {
@@ -1180,6 +1537,11 @@ class Chat {
             }
 
 
+            /**
+             * Applies `useMarkDown` to the preview message format and the textarea placeholder (text vs markdown, plus
+             * the platform send hint), re-renders the preview body and calls `previewChanged()`.
+             * @returns {Promise<void>}
+             */
             markDownChanged = async () => {
                 const pm = previewElement.Msg;
                 pm.Format = useMarkDown ? 1 : 0;
@@ -1188,6 +1550,13 @@ class Chat {
                 previewChanged();
             };
 
+            /**
+             * Sets the preview message text: if it changed, stores it on `previewElement.Msg`, re-renders the preview body
+             * and, if the preview is visible (`previewChanged()`), smooth-scrolls the list to the bottom.
+             * No-op before the preview element exists.
+             * @param {?string} newText - The new draft text (null when nothing can be sent).
+             * @returns {Promise<void>}
+             */
             async function setPreviewText(newText) {
                 if (!previewElement)
                     return;
@@ -1209,9 +1578,12 @@ class Chat {
 
 
             // Drag and drop on text
+            /** URL schemas whose dropped image URLs are wrapped as markdown images (`![](url)`). @type {Map<string, number>} */
             const validSchemas = new Map();
             validSchemas.set("http", 1);
             validSchemas.set("https", 1);
+            // Drop: uploads dropped files (if uploads are enabled), then inserts the first string item at the cursor
+            // (in markdown mode http(s) URLs with an image extension become `![](url)`).
             write.addEventListener("drop", async ev => {
                 ev.preventDefault();
                 ev.target.classList.remove("Dragging");
@@ -1254,6 +1626,14 @@ class Chat {
             write.addEventListener("dragleave", ev => ev.target.classList.remove("Dragging"));
 
 
+            /**
+             * Opens a `PopUpSelection` (application.js) with a searchable list (Name/LocalName/EnName) of
+             * `<SysWeaver-ChatLangItem>` elements (flag background, tooltip with names, ISO code and comment).
+             * Clicking one sets `currentLang`, stores it in `SysWeaver.Chat.Lang.<chatId>` (removed when equal to the server
+             * default `data.Lang`), updates the input flag background and the preview flag (`UpdateLang`), restarts open
+             * mic listening if it is enabled, and closes the popup.
+             * @returns {Promise<void>}
+             */
             selectLanguage = async () => {
                 const speechRec = SpeechInput.supportSpeechRec();
                 await PopUpSelection(
@@ -1331,6 +1711,12 @@ class Chat {
                     true);
             }
 
+            /**
+             * Clears the draft. Deletes every `tempFiles` entry referenced by the preview data with
+             * `../Api/UserStorage/DeleteStoredFile` (failures are logged with `console.warn`), then clears the preview
+             * data, the textarea and the preview text, and calls `previewChanged()` and `sendEnable()`.
+             * @returns {Promise<void>}
+             */
             clearCurrentMessage = async () => {
                 const data = previewMessage.Data;
                 if (data) {
@@ -1359,6 +1745,7 @@ class Chat {
                 sendEnable();
             };
 
+            /** Default `stopListening` (nothing is listening): only re-enables the mic button. */
             const defStopListening = () => {
                 if (listen)
                     listen.SetEnabled(true);
@@ -1367,6 +1754,18 @@ class Chat {
 
             stopListening = defStopListening;
 
+            /**
+             * Starts speech input with `SpeechInput.triggerOnSpeech(data.SpeechName, ...)` in `currentLang`.
+             * Disables the mic button in open mic mode. Activation toggles class `Listening` on the textarea and the mic
+             * button's working state; deactivation stores "false" in the listen key (open mic only) and calls `stopListening()`.
+             * Sentences are inserted live with `insertAtCursor(write, text, !isLast)` (interim text is replaceable); a final
+             * non empty sentence is sent with `Send("NoFocus")` in open mic mode, or in push-to-talk mode when
+             * `SysWeaver.Chat.SpeechSend<s>` is "true"; otherwise `sendEnable()`.
+             * On success replaces `stopListening` with a function that stops the recognizer; else resets it to `defStopListening`.
+             * The mic button calls `startListening(true, true)` (push-to-talk).
+             * @param {boolean} [ignoreKeyword] - If true any speech activates (no wake word needed).
+             * @param {boolean} [noOpenMic] - If true stop after one sentence (push-to-talk).
+             */
             startListening = (ignoreKeyword, noOpenMic) => {
 
                 if (!noOpenMic) {
@@ -1409,6 +1808,7 @@ class Chat {
                     },
                     currentLang, ignoreKeyword, noOpenMic);
                 if (stop) {
+                    /** Stops the active recognizer: ends the mic button's working state, re-enables it and calls the recognizer's stop function. */
                     stopListening = () => {
                         if (listen) {
                             listen.StopWorking();
@@ -1435,6 +1835,16 @@ class Chat {
                 }
             }
 
+            /**
+             * Uploads files and attaches them to the draft. Fails if the attachment count would exceed `data.MaxDataCount`;
+             * calls the global `fileUploader(uploadRepo, files)` -> `{Error, Urls, Status}` and shows `Fail` on `Error` or no
+             * URLs. Per URL: shows `fileUploaderStatusText` for a negative status, adds non `UploadStatus.AlreadyUploaded`
+             * URLs to `tempFiles` and appends `"../" + url` to the `;`-separated data unless that exceeds `data.MaxDataLength`
+             * (then `Fail` and stop). Updates `previewMessage.Data`, the preview attachments, `previewChanged()` and `sendEnable()`.
+             * Used by drop and the "Attach file" menu items. Only assigned when canPost.
+             * @param {File[]|FileList} files - The files to upload.
+             * @returns {Promise<void>}
+             */
             uploadFiles = async (files) => {
                 if (files.length <= 0)
                     return;
@@ -1487,7 +1897,11 @@ class Chat {
                 sendEnable();
             };
 
-            /** Try to clear all messages from the chat room */
+            /**
+             * Try to clear all messages from the chat room: `sendRequest("ClearAllMessages", chatId)`; `Fail` on false/exception.
+             * Registered as the `chat.clear` postMessage command when `CanClear`, and used by "Remove ALL messages".
+             * @returns {Promise<void>}
+             */
             cmdClear = async () => {
                 try {
                     if (!await sendRequest(apiBase + "ClearAllMessages", chatId))
@@ -1501,6 +1915,7 @@ class Chat {
             if (data.CanClear)
                 commandMap.set("chat.clear", cmdClear);
 
+            /** Final step with canPost: `sendEnable()` and focus the textarea (read-only during focus so no on-screen keyboard is forced). */
             doLast = () => {
                 sendEnable();
                 write.readOnly = true;
@@ -1533,6 +1948,7 @@ class Chat {
 
 
 
+        // Dispatches `{Type}` messages from the parent window to commandMap (origin is only logged, not checked).
         window.addEventListener("message", ev => {
             const evd = ev.data;
             if (!evd)
@@ -1549,7 +1965,7 @@ class Chat {
 
 
         /**
-        * A function that checks if we can listen to user audio (open mic)
+        * A function that checks if we can listen to user audio (open mic): speech recognition supported and not mobile.
         * @returns {boolean} True if we can listen to user audio
         */
         function canListen() {
@@ -1562,7 +1978,9 @@ class Chat {
 
 
         // Set up speech generation
+        /** Server voice settings by sender name (`data.Voices`, entry with null Name is the fallback). @type {Map<?string, object>} */
         const userVoices = new Map();
+        /** True if the server sent `Voices` (speech synthesis possible). @type {boolean} */
         const userSpeak = !!data.Voices;
         if (userSpeak) {
             for (const voice of data.Voices)
@@ -1570,7 +1988,7 @@ class Chat {
         }
 
         /**
-        * A function that checks if we can use speech generation
+        * A function that checks if we can use speech generation (server sent `Voices` and speech synthesis is supported)
         * @returns {boolean} True if we can use speech generation
         */
         function canSpeak() {
@@ -1581,6 +1999,7 @@ class Chat {
          * Get a language text string from a language iso id
          * @param {string} langId A language id, like: "en"
          * @returns {string} A string like "English [en]" or "[xx]" for unknown language ids
+         * Requires `languageMap` (only loaded when `CanTranslate`).
          */
         function getLangText(langId) {
             var mLang = languageMap.get(langId);
@@ -1588,12 +2007,14 @@ class Chat {
         }
 
         /**
-         * Add server side menu items
-         * @param {WebMenuItem} dest The destination menu object
-         * @param {array} menuList Array of items to add
-         * @param {number} messageId The message id (if we're adding it to a message menu)
-         * @param {function(void)} close Function that when invoked closes pop-up menu
-         * @returns {WebMenuItem} The destination menu object
+         * Add server side menu items: recursively converts server `ChatMenuItem[]` (`Id, Name, Desc, Icon, Value, Children`)
+         * into `WebMenuItem`s. Leaf items send `SetValue {ChatId, Key: Id, Value, Id: messageId}` (Fail on false/exception)
+         * and then call `close()`.
+         * @param {?WebMenuItem[]} dest The destination item array (created if null)
+         * @param {?Array<object>} menuList Array of server `ChatMenuItem`s to add (nothing added if null/empty)
+         * @param {?number} messageId The message id (if we're adding it to a message menu), defaults to 0
+         * @param {function():void} close Function that when invoked closes pop-up menu
+         * @returns {?WebMenuItem[]} The destination item array (unchanged `dest` when there is nothing to add)
          */
         function addRec(dest, menuList, messageId, close) {
             if (!menuList)
@@ -1637,16 +2058,25 @@ class Chat {
             return dest;
         }
 
+        /** Attachment extensions shown as sandboxed iframes by `UpdateData`. @type {Readonly<Object<string, number>>} */
         const htmlExtensions = Object.freeze({
             html: 1,
             htm: 1,
         });
 
         /**
-         * Add a message to the chat window
-         * @param {any} m The message data to add
+         * Add a message to the chat window. Creates the row structure
+         * `SysWeaver-ChatRow > SysWeaver-ChatMsg > (SysWeaver-ChatHeader > [SysWeaver-ChatLanguage], SysWeaver-ChatName,
+         * SysWeaver-ChatTime, SysWeaver-ChatIcon), SysWeaver-ChatContent, SysWeaver-ChatData`.
+         * The row is inserted first if `onTop`, else before the last child when `canPost` (the preview row stays last),
+         * else appended. Adds class `Mine` for own messages, sender colors (if `options.UserColor`), `Hidden` for hidden
+         * senders, header click (toggle hide/show + `setHideFrom`, not for the preview) and context menus.
+         * Expando members on the row: `Msg`, `Body`, `Translated`, `UpdateLang`, `UpdateBody`, `UpdateData`,
+         * `UpdateFormat`, `Show`, `Hide`. Renders time, body and data before returning.
+         * @param {object} m The message data to add (`ChatMessage`: Id, From, FromImage, Time, Flags, Text, Data, Format, Lang, MenuItems)
          * @param {boolean} onTop If true, the message is added to the top, else to the bottom
          * @param {boolean} isPreview If true, the message is the preview message
+         * @returns {Promise<HTMLElement>} The `SysWeaver-ChatContent` element of the new row
          */
         async function addMessage(m, onTop, isPreview) {
             const msgRow = document.createElement("SysWeaver-ChatRow");
@@ -1689,7 +2119,17 @@ class Chat {
                 msgData.classList.add(hiddenClass);
             }
 
-            /** Context menu handler for a message */
+            /**
+             * Context menu handler for a message: opens the message `PopUpMenu` at the sender icon (root gets class `Chat`;
+             * a `ResizeObserver` on `body` keeps it aligned). Items: preview -> "Attach file" (if uploads), copy items,
+             * "Clear"; others -> "View profile" (`parent.postMessage({Type:"ViewProfile", Name, Image}, "*")` if
+             * `CanShowProfile`), copy text / markdown / HTML (by `Format`; HTML items hidden on mobile), copy time stamp,
+             * copy user name, hide/show content, server `m.MenuItems` via `addRec`, and "Remove message"
+             * (`RemoveMessage {ChatId, MessageId}`; confirmation unless the message has `FlagCanRemove`).
+             * Bound to the icon click and to `contextmenu` on header and image.
+             * @param {Event} ev - The click / contextmenu event (ignored if `badClick`).
+             * @returns {Promise<void>}
+             */
             const onMenuClick = async ev => {
                 if (badClick(ev))
                     return;
@@ -1704,6 +2144,11 @@ class Chat {
                         pp.style.left = cr.right + "px";
                     }).observe(document.body);
 
+                    /**
+                     * Copies text to the clipboard with an info toast (`ValueFormat.copyToClipboardInfo`), then closes the menu.
+                     * @param {string} text - Text to copy.
+                     * @returns {Promise<void>}
+                     */
                     async function Copy(text) {
                         await ValueFormat.copyToClipboardInfo(text);
                         close();
@@ -1922,6 +2367,11 @@ class Chat {
                 msgHeader.style.color = cols[2];
             }
             msgHeader.title = isPreview ? _TF("Preview", "Tool tip description indicating that this is a chat preview message") : ("#" + m.Id);
+            /**
+             * Header context menu: opens the message menu (`onMenuClick`) instead of the browser menu.
+             * @param {MouseEvent} ev - The contextmenu event.
+             * @returns {boolean} true to allow the default menu (bad click), false to suppress it.
+             */
             msgHeader.oncontextmenu = ev => {
                 if (badClick(ev, true))
                     return true;
@@ -1934,6 +2384,13 @@ class Chat {
                 const langFlag = createImg("img");
                 msgLanguage.appendChild(langFlag);
 
+                /**
+                 * Expando (translation enabled): sets the flag image to `m.Lang` and the tooltip, and (re)binds the flag click.
+                 * Preview row: the flag click opens `selectLanguage`. Other rows: the flag click toggles between the original
+                 * and the translation from `Translate {ChatId, MessageId}` (cached in `msgRow.Translated`), toggling classes
+                 * `Translating` (while requesting) and `Translated` and switching the flag to `data.Lang`; `Fail` on error.
+                 * Note: uses the `m` captured when the row was created (the preview message object is shared and mutated).
+                 */
                 msgRow.UpdateLang = () => {
                     langFlag.src = "../iso_data/language/" + m.Lang + ".svg";
                     const mLang = getLangText(m.Lang);
@@ -1945,6 +2402,11 @@ class Chat {
                             "\n\n" +
                             _T("If the text is not written in \"{0}\", click to specify a different language", cLang, "Tool tip description for a button that when clicked will show a list of languages that the user can select.{0} is the current language")
                             ;
+                        /**
+                         * Preview flag click: opens the input language selection.
+                         * @param {MouseEvent} ev - The click event (ignored if `badClick`).
+                         * @returns {Promise<void>}
+                         */
                         msgLanguage.onclick = async ev => {
                             if (badClick(ev))
                                 return;
@@ -1964,7 +2426,13 @@ class Chat {
 
 
                         msgLanguage.title = msgLangTitle0;
+                        /** True while a translate toggle is running (ignores further clicks). @type {boolean} */
                         let isTranslating = false;
+                        /**
+                         * Message flag click: toggles between the original text and the (cached or requested) translation.
+                         * @param {MouseEvent} ev - The click event (ignored if `badClick`).
+                         * @returns {Promise<void>}
+                         */
                         msgLanguage.onclick = async ev => {
                             if (badClick(ev))
                                 return;
@@ -2008,6 +2476,7 @@ class Chat {
                 };
                 msgRow.UpdateLang();
             } else {
+                /** Expando (no translation): no-op. */
                 msgRow.UpdateLang = () => { };
             }
 
@@ -2019,7 +2488,7 @@ class Chat {
 
 
 
-            //  Header icon
+            //  Header icon: the sender image (own image rewritten to ../auth/UserImages/Current/small), falling back to an IconMenu ColorIcon
             let fi = m.FromImage;
             if (fi === currentImage)
                 fi = "../auth/UserImages/Current/small";
@@ -2058,6 +2527,16 @@ class Chat {
             //  Body
             msgE.appendChild(msgBody);
             msgRow.Body = msgBody;
+            /**
+             * Expando: renders the message body. Toggles class `Working` on the row; if text or format changed, renders into
+             * `SysWeaver-ChatContent` by format: 0 -> `innerText`, 1 -> `innerHTML = await ValueFormat.MarkDownToHTML(text)`,
+             * 2 -> raw `innerHTML`, with a format tooltip; falls back to `innerText` on error. Stores `CurrentText` /
+             * `CurrentFormat` on the content element.
+             * @param {?string} newText - The text to show (empty clears the body).
+             * @param {number} newFormat - 0 text, 1 markdown, 2 HTML.
+             * @param {boolean} isWorking - True while the message is still being produced (`FlagIsWorking`).
+             * @returns {Promise<void>}
+             */
             msgRow.UpdateBody = async (newText, newFormat, isWorking) => {
                 if (msgRow.classList.contains(workingAttribute) !== isWorking) {
                     if (isWorking)
@@ -2097,6 +2576,22 @@ class Chat {
             };
             //  Data
             msgE.appendChild(msgData);
+            /**
+             * Expando: rebuilds `SysWeaver-ChatData` from a `;`-separated URL list (skipped if unchanged). Per URL a
+             * `<SysWeaver-ChatHolder>` is created: image -> `<img>` (click opens with `Open`); `.html/.htm` -> sandboxed
+             * `<iframe>` (`allow-forms allow-presentation allow-scripts allow-same-origin allow-downloads allow-popups`,
+             * src through `appendTheme`); other -> `../icons/ext/<ext>.svg` plus a `<SysWeaver-ChatLabel>` (copies the URL on
+             * click), class `Extension`, click downloads (`downloadFile`). Clickable holders get class `Clickable`.
+             * Each holder has a `<SysWeaver-ChatExpand>` with a menu `ColorIcon` that opens a `PopUpMenu` (root class `ChatData`):
+             * preview only "Copy image Mark Down" (markdown mode, images), "Copy url", "Delete file" (removes it from the data
+             * and deletes a temp upload via `../Api/UserStorage/DeleteStoredFile`), "Hide file" (removes it from the data and
+             * copies a markdown reference); "Open in new tab" (non forced-download items); "Download" (temporary `<a download>`);
+             * with `canPost` a "Store file" submenu (`StoreFile {Url, Scope}`: Private 0, Protected 1, Public also sends 1 and
+             * is only shown if `AllowPublicStore`; not for HTML or URLs already under `../storage/<UserStore>/`) and a
+             * "Create link" submenu (`StoreLink {Url, Scope 0/1/2}`, non absolute URLs only). Store results are made absolute
+             * (`GetAbsolutePath`), copied to the clipboard and opened.
+             * @param {?string} newData - `;`-separated list of `../`-prefixed URLs, or null/empty to clear.
+             */
             msgRow.UpdateData = newData => {
                 if (!newData)
                     newData = null;
@@ -2488,6 +2983,11 @@ class Chat {
             };
 
             //  Timestamp
+            /**
+             * Expando: renders the header time. Clears a pending `msgTime.Updater` timer, then uses
+             * `ValueFormat.updateDateTime` (absolute, when `showTimeStamp`) or `ValueFormat.updateDateTimeLive` ("x ago").
+             * Uses the `m` captured at row creation (`m.Time`).
+             */
             msgRow.UpdateFormat = () => {
                 const up = msgTime.Updater;
                 if (up) {
@@ -2499,6 +2999,10 @@ class Chat {
                 else
                     ValueFormat.updateDateTimeLive(msgTime, m.Time, ["", "", _TF("{0} ago", "Text that indicates how old a chat message is.{0} is replaced with the elapsed time, examples: \"10 minutes\", \"5.4 seconds\", \"3 days\" or \"1 hour\"")], null, false, null, null, true);
             };
+            /**
+             * Expando: shows the content: removes class `Hidden` from content and data, clears `msgHeader.IsHidden` and sets
+             * the "click to hide" tooltip. Does not persist (callers use `setHideFrom` / `setHideNone`).
+             */
             msgRow.Show = () => {
                 msgHeader.IsHidden = false;
                 const tf = ValueFormat.stringFormat(titleVisible, m.From);
@@ -2507,6 +3011,10 @@ class Chat {
                 msgBody.classList.remove(hiddenClass);
                 msgData.classList.remove(hiddenClass);
             };
+            /**
+             * Expando: hides the content: adds class `Hidden` to content and data, sets `msgHeader.IsHidden` and the
+             * "click to show" tooltip. Does not persist (callers use `setHideFrom` / `setHideNone`).
+             */
             msgRow.Hide = () => {
                 msgHeader.IsHidden = true;
                 const tf = ValueFormat.stringFormat(titleHidden, m.From);
@@ -2518,6 +3026,11 @@ class Chat {
 
 
             if (!isPreview) {
+                /**
+                 * Header click (not for the preview): toggles show/hide of this row and persists it for the sender (`setHideFrom`).
+                 * Other rows of the same sender are not updated until reloaded.
+                 * @param {MouseEvent} ev - The click event (ignored if `badClick`).
+                 */
                 msgHeader.onclick = ev => {
                     if (badClick(ev))
                         return;
@@ -2538,9 +3051,9 @@ class Chat {
         }
 
         /**
-         * Find the message element from message id
-         * @param {number} msgId The message element to find
-         * @returns {HTMLElement} The element of the message or null if not found
+         * Find the message element from message id (linear scan of `chatE.children` by `Msg.Id`)
+         * @param {number} msgId The message id to find
+         * @returns {?HTMLElement} The row element of the message or null if not found
          */
         function findMessageE(msgId) {
             const e = chatE.children;
@@ -2565,7 +3078,8 @@ class Chat {
         }
 
         /** 
-         * Update the message format (time or age) 
+         * Update the message format (time or age)
+         * by calling `UpdateFormat()` on every row (after toggling `showTimeStamp`).
          * */
         function updateMessageFormat() {
             onAllMessages(e => e.UpdateFormat());
@@ -2573,6 +3087,7 @@ class Chat {
 
 
         //  Handling server side messages
+        // Push event names (must match ChatService.Controller.MessageName, case folded): chat.<op>.<chatid lowercased>
         const chatIdL = chatId.toLowerCase();
         const msgClear = "chat.clear." + chatIdL;
         const msgPost = "chat.post." + chatIdL;
@@ -2584,6 +3099,8 @@ class Chat {
         SessionManager.AddServerEvent(msgRemove);
         SessionManager.AddServerEvent(msgReplace);
 
+        // Push handler: post (append unless the id exists; speak if enabled and from another user), replace (update Msg,
+        // body and data; speech continues incrementally), remove (remove the row), clear (empty the list, keep the preview).
         InterOp.AddListener(async ev => {
             const m = InterOp.GetMessage(ev);
             if (!m)
@@ -2644,7 +3161,9 @@ class Chat {
 
 
 
+        /** True if incoming messages from other users are spoken (`SysWeaver.Chat.SpeechGen<s>` === "true"). @type {boolean} */
         let enableSpeech = localStorage.getItem(genKey) === "true";
+        /** Speech volume in percent (25/50/75/100, default 50) from `SysWeaver.Chat.SpeechGenVol<s>`. @type {number} */
         let speechVolume = localStorage.getItem(volumeKey);
         if (!speechVolume)
             speechVolume = 50;
@@ -2657,6 +3176,11 @@ class Chat {
             }
         }
 
+        /**
+         * Counts the attachments of the draft.
+         * @returns {number} Number of `;`-separated entries in `previewMessage.Data` (0 if none).
+         * Note: only valid when `canPost` (otherwise `previewMessage` is undefined); callers check `uploadRepo`/preview first.
+         */
         function GetDataCount() {
             const data = previewMessage.Data;
             if (!data)
@@ -2664,6 +3188,15 @@ class Chat {
             return data.split(';').length;
         }
 
+        /**
+         * The top-right menu button (`IconMenu`, `<SysWeaver-Chat> > .IconButton`). Its click opens a `PopUpMenu` (root class
+         * `Chat`) with: scroll top/bottom (disabled when already there), show all, time vs age toggle; with `canPost`: text /
+         * markdown toggle (if `AllowMarkDown`) with a markdown help link, show/hide preview, set input language, clear draft,
+         * attach file, auto-send toggle, open mic toggle (lists the keywords); speech synthesis toggle and a volume submenu
+         * (25/50/75/100, Flags 3 = disabled+checked marks the selected one); server `data.Menus` via `addRec`; and
+         * "Remove ALL messages" (if `CanClear`, confirmed unless `DoNotConfirmClear`).
+         * @type {ColorIcon}
+         */
         const menu = new ColorIcon("IconMenu", "IconColorThemeAcc2", options.MenuIconSize, options.MenuIconSize,
             _TF("Click to show menu option", "Tool tip description of a button that when clicked will show a context menu")
             , ev => {
@@ -2887,6 +3420,7 @@ class Chat {
 
                     if (uploadRepo) {
                         const filesLeft = data.MaxDataCount - GetDataCount();
+                        // The handler below only calls `uploadFiles(files)` when files were selected.
                         menu.Items.push(WebMenuItem.From({
                             Name:
                                 _TF("Attach file", "Text of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
@@ -2897,9 +3431,7 @@ class Chat {
                             Data: async () => {
                                 const files = await selectFiles(filesLeft > 1);
                                 if (files)
-
-                                    fileUploader
-                                await uploadFiles(files);
+                                    await uploadFiles(files);
                                 close();
                             },
                         }));
@@ -3147,7 +3679,11 @@ class Chat {
 
 
 
+        /** True while older messages are being fetched by the StickToBottom top callback. @type {boolean} */
         let isLoading = false;
+        // StickToBottom (common.js): toggles class Stick while stuck to the bottom; when scrolled to the top, loads older
+        // messages with GetMessages {ChatId, MaxCount: -10, FromId: <first row id>}, prepends them keeping the scroll
+        // position, shows a 64x64 IconWorking spinner after 200 ms, and sets isAtTop when none are returned.
         StickToBottom(chatE, true,
             () => chatE.classList.add("Stick"),
             () => chatE.classList.remove("Stick"),
@@ -3212,8 +3748,14 @@ class Chat {
             }
         );
 
+        /**
+         * Forces the list to stay scrolled to the bottom for 500 ms (every animation frame), then scrolls once more.
+         * Covers async layout (images, markdown). Called after sending and at startup.
+         * @param {boolean} [direct] - True for `behavior: "instant"`, else "smooth".
+         */
         function StickForAwhile(direct) {
             let stick = true;
+            /** Per frame scroll-to-bottom callback; re-queues itself with `requestAnimationFrame` while `stick` is true. */
             const stickFn = () => {
                 if (!stick)
                     return;
@@ -3236,6 +3778,7 @@ class Chat {
             }, 500);
         }
 
+        // Restore the saved split height (fraction of the container height)
         if (initSize) {
             initSize = parseFloat(initSize) * chatBackground.offsetHeight;
             chatE.style.height = initSize + "px";
@@ -3251,6 +3794,14 @@ class Chat {
 }
 
 
+/**
+ * Page entry point of `Chat.html` (`<body class="ChatMain" onload="chatMain()">`).
+ * Shows a loader (`AddLoading`), reads URL params `id` (required, else throws "No id supplied!"), `options` (JSON merged
+ * into a new `ChatOptions` with `Object.assign`) and `nobackground` (adds class `NoBackground`), creates
+ * `<SysWeaver-Chat>` in `document.body` and awaits `Chat.addChat(chatBackground, chatId, null, options)`.
+ * Errors are shown with `Fail(e.message)`; the loader is always removed.
+ * @returns {Promise<void>}
+ */
 async function chatMain() {
     const stopLoading = AddLoading(null, _TF("Loading chat messages", "Message shown while waiting for chat messages to be loaded"), true);
     try {

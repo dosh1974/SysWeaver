@@ -1,8 +1,46 @@
 ﻿
 
 /**
- * Function called by the hacker theme (never call manually)
- * @param {number} time The current animation time for the theme
+ * @file common.js - the core client-side library shared by (almost) all SysWeaver web pages.
+ *
+ * Loading:
+ *  - Loaded as a CLASSIC (non-module) script, typically `<script defer src="../common/common.js">` placed
+ *    before the page's own deferred scripts (some pages use `${@Base Url}common/common.js` via templating).
+ *    It must NOT be loaded as a module or through includeJs: several static class initialisers read
+ *    `document.currentScript.src` (SessionManager.Current, ValueFormat.Current) to derive the API,
+ *    `serverTime` and include base URLs.
+ *  - The server-side JS translation transformer rewrites the string literals passed to _T/_TH/_TF/_TFH
+ *    before the file is served.
+ *  - The last two lines run `SessionManager.Create(); SysWeaverInit();` when the script is evaluated
+ *    (SysWeaverInit is async and not awaited).
+ *
+ * Provides (all as globals):
+ *  - Translation markers: _T, _TH, _TF, _TFH.
+ *  - Theming: getTheme, applyTheme, setTheme, resetTheme, toggleTheme, appendTheme, hackerThemeAnimate.
+ *  - Server time: GetServerTime, GetServerTick (window.SysWeaverServerTimeOffset).
+ *  - SessionManager (cross-tab master election + server message long-poll), InterOp / InterOpBroadcast /
+ *    InterOpWindows (cross-window messaging via BroadcastChannel or window.postMessage fallback).
+ *  - Encoding/hashing/random helpers, DOM/focus/click helpers, HTML-safety and validation helpers.
+ *  - Smooth `src` loading for img/iframe (data-sw-fade*), dynamic includes (includeJs, includeCss), async
+ *    utilities, AbortHandler, navigation and postMessage helpers, cache flushing, toasts (Fail/Info/Message).
+ *  - UI blocks: ColorIcon, ButtonStyle, Button; ValueFormat (value formatting / table cell rendering);
+ *    FullScreen, NoSleep helpers, requests (sendRequest, getRequest), ProgressBar, Animator, PendingImages,
+ *    Cache, history-state helpers and SysWeaverInit (page initialisation, layout classes/events).
+ *
+ * Dependencies: browser APIs only; marked.js (global `marked`) is loaded lazily by ValueFormat.MarkDownToHTML.
+ * Theme CSS variables (--ThemeMain etc.) come from common/theme.css.
+ *
+ * Conventions: localStorage keys are prefixed "SysWeaver." (e.g. "SysWeaver.Theme", "SysWeaver.Mobile");
+ * InterOp message types are "Area.Name" strings (e.g. "Theme.Changed", "SessionManager.Ping");
+ * window-level state uses window.X globals and expando properties on DOM elements.
+ */
+
+/**
+ * Function called by the hacker theme (never call manually).
+ * Registered with Animator by applyTheme (looked up as window[theme + "ThemeAnimate"]); sets the CSS
+ * custom property --ThemePos on <html> to a stepped negative pixel offset (multiples of 4px, 0..-60px)
+ * used to scroll the hacker background pattern.
+ * @param {number} time The current animation time for the theme (ms)
  */
 function hackerThemeAnimate(time) {
 
@@ -89,8 +127,11 @@ function _TFH(text, translationContext) {
 }
 
 /**
- * Read theme from local storage / OS
- * @returns The theme name
+ * Read theme from local storage / OS.
+ * Priority: window.UseTheme (forced, e.g. URL "usetheme"), then localStorage "SysWeaver.Theme" (if non-empty),
+ * then the OS preference (prefers-color-scheme light/dark), default "dark".
+ * A theme name may carry an "@css" suffix ("name@url") naming an extra stylesheet (see applyTheme).
+ * @returns {string} The theme name
  */
 function getTheme() {
     let theme = window.UseTheme;
@@ -112,7 +153,14 @@ function getTheme() {
 }
 
 /**
- * Apply the current theme
+ * Apply the current theme (from getTheme) to the document.
+ * Does nothing if document.documentElement.Theme already equals the theme string.
+ * If the theme has an "@css" suffix, that stylesheet is included first (includeCss relative to common.js).
+ * Sets/removes the data-theme attribute on <html> ("light" removes it), computes derived RGB custom properties
+ * for --ThemeBackground/--ThemeMain/--ThemeAcc1/--ThemeAcc2 (see inner fix), sets
+ * document.documentElement.Theme / .IsDarkMode and window.IsDarkMode (from body's computed color-scheme),
+ * and swaps the per-frame theme animation (window[theme + "ThemeAnimate"]) registered with Animator.
+ * @returns {Promise<void>}
  */
 async function applyTheme() {
     let theme = getTheme();
@@ -134,6 +182,12 @@ async function applyTheme() {
     console.log("Theme: Applying theme \"" + themeOrg + "\"");
 
     const ss = document.documentElement.style;
+    /**
+     * Read a hex color custom property (#rgb or #rrggbb) from <html>'s computed style and write derived
+     * properties on <html>'s inline style: name+"R", name+"G", name+"B" (0-255), name+"RGB" ("r,g,b")
+     * and name+"25"/"50"/"75" (rgba with 0.25/0.50/0.75 alpha). Other formats yield 0,0,0.
+     * @param {string} name - Custom property name, e.g. "--ThemeMain".
+     */
     const fix = function (name) {
         const hexVal = getComputedStyle(document.documentElement, null).getPropertyValue(name);
         if (!hexVal)
@@ -184,8 +238,9 @@ async function applyTheme() {
 
 
 /**
- * Reset to the default theme.
- * @returns true if the theme changed
+ * Reset to the default theme: removes localStorage "SysWeaver.Theme", re-applies the theme and
+ * posts the InterOp message "Theme.Changed" to other windows.
+ * @returns {Promise<boolean>} true if the theme changed
  */
 async function resetTheme() {
     const theme = getTheme();
@@ -196,8 +251,9 @@ async function resetTheme() {
     return theme != getTheme();
 }
 
-/** 
- * Toggle theme between light and dark
+/**
+ * Toggle theme between light and dark (any non-"light" theme becomes "light"), via setTheme.
+ * @returns {Promise<void>}
  */
 async function toggleTheme() {
     await setTheme(getTheme() === "light" ? "dark" : "light");
@@ -205,12 +261,15 @@ async function toggleTheme() {
 
 /**
  * Set the theme
- * @param {string} themeName The name of the theme to use
- * @returns return true if the theme changed
+ * Clears any forced window.UseTheme, persists the name in localStorage "SysWeaver.Theme", applies it and
+ * posts the InterOp message "Theme.Changed".
+ * @param {string} themeName The name of the theme to use (optionally "name@cssUrl")
+ * @returns {Promise<boolean>} return true if the theme changed
  */
 async function setTheme(themeName) {
 
     const theme = getTheme();
+    /** Clear the forced theme so the stored choice takes effect. */
     window.UseTheme = null;
     localStorage.setItem("SysWeaver.Theme", themeName);
     await applyTheme();
@@ -220,6 +279,12 @@ async function setTheme(themeName) {
 }
 
 
+/**
+ * Append the forced theme (window.UseTheme) to a url as "useTheme=<name>" query parameter, so that
+ * a page opened from this one uses the same forced theme.
+ * @param {string} url - The url to extend.
+ * @returns {string} The url, unchanged if no theme is forced.
+ */
 function appendTheme(url) {
     const t = window.UseTheme;
     if (!t)
@@ -254,22 +319,40 @@ function GetServerTick() {
 }
 
 
-/** Static class that manages server session messages */
+/**
+ * Static class that manages server session messages.
+ * One top-level window per browser (same origin) is elected "master" (via InterOp Ping/Pong messages); the
+ * master long-polls the server (SessionManager.Url = /Api/application/GetMessages) for server events and
+ * relays received messages to all windows over InterOp, and also keeps the server time offset in sync.
+ * Other windows (slaves, iframes) register the events they want (ref counted) by posting AddEvents/RemoveEvents.
+ * Message handlers are registered with AddMessageHandler and dispatched by message type.
+ * Lifecycle: SessionManager.Create() runs at script evaluation (buffers messages), SysWeaverInit calls Init().
+ */
 class SessionManager
 {
 
+    /**
+     * Called once when common.js is evaluated: starts buffering every InterOp message into
+     * SessionManager.StartUp (via InternalOnMsg) until Init processes them.
+     */
     static Create() {
         SessionManager.StartUp = [];
         InterOp.AddListener(SessionManager.InternalOnMsg);
     }
 
 
+    /**
+     * InterOp listener installed by Create: queues the message in SessionManager.StartUp.
+     * @param {object} msg - The received InterOp message.
+     */
     static InternalOnMsg(msg) {
         SessionManager.StartUp.push(msg);
     }
 
+    /** @type {object[]} InterOp messages received before Init completed (set by Create). */
     static StartUp;
 
+    /** @type {string} Absolute url of common.js (document.currentScript.src at evaluation), base for server urls. */
     static Current = document.currentScript.src;
 
     /**
@@ -307,6 +390,13 @@ class SessionManager
     }
 
 
+    /**
+     * Increment the reference count of name in map.
+     * @param {Map<string,number>} map - Ref count map (e.g. SessionManager.ServerEvents).
+     * @param {string} name - Key (lower-cased event name).
+     * @param {boolean} [isOwned] - If true, also increment the count in SessionManager.OwnedEvents.
+     * @returns {boolean} true if this was the first reference (count became 1).
+     */
     static AddRef(map, name, isOwned) {
         let count = map.get(name);
         if (!count)
@@ -318,6 +408,13 @@ class SessionManager
         return count === 1;
     }
 
+    /**
+     * Decrement the reference count of name in map, removing the key when it reaches 0.
+     * @param {Map<string,number>} map - Ref count map.
+     * @param {string} name - Key (lower-cased event name).
+     * @param {boolean} [isOwned] - If true, also decrement the count in SessionManager.OwnedEvents.
+     * @returns {boolean} true if this was the last reference (key removed); false if not present or still referenced.
+     */
     static DecRef(map, name, isOwned) {
         if (isOwned)
             SessionManager.DecRef(SessionManager.OwnedEvents, name);
@@ -341,17 +438,30 @@ class SessionManager
     /** Server registered by this page, ref counted */
     static OwnedEvents = new Map();
 
+    /** @type {string} Absolute url of the server long-poll api (/Api/application/GetMessages, relative to common.js). */
     static Url = new URL(SessionManager.Current + "/../../Api/application/GetMessages").href;
 
 
+    /** @type {boolean} True while this window is the elected master (polls the server). */
     static IsMaster = false;
 
+    /**
+     * Initialise the session manager for this window (once, guarded by window.HaveSessionManager).
+     * Iframes (same-origin non-top windows): register a beforeunload/pagehide handler that unregisters
+     * the events owned by this frame, listen for "SessionManager.TimeOffset" and request it; then return.
+     * Top windows: run master election (Ping/Pong), start the server time sync and the message long-poll
+     * when master, mirror ServerEvents between master and slaves, and replay the buffered StartUp messages.
+     * Messages posted: SessionManager.Ping/Pong/MasterClosed/AddEvents/RemoveEvents/GetEvents/TimeOffset/GetTimeOffset.
+     * @returns {Promise<void>}
+     */
     static async Init() {
         if (window.HaveSessionManager)
             return;
+        /** Guard: Init already ran in this window. */
         window.HaveSessionManager = true;
 
         const id = InterOp.Id;
+        /** The InterOp id of this window. */
         window.SysWeaverId = id;
 
         const prefix = "SessionManager";
@@ -380,6 +490,10 @@ class SessionManager
         }
         const isTop = (wtop === wself) || (!isSameDomain);
         if (!isTop) {
+            /**
+             * beforeunload/pagehide handler of an iframe: removes itself, decrements every event owned by
+             * this frame (OwnedEvents) in ServerEvents and posts "SessionManager.RemoveEvents" with them.
+             */
             function WindowClose() {
                 window.removeEventListener("beforeunload", WindowClose);
                 window.removeEventListener("pagehide", WindowClose);
@@ -400,6 +514,7 @@ class SessionManager
             window.addEventListener("pagehide", WindowClose);
             SessionManager.AddMessageHandler(timeOffset, async data => {
                 if (data.From !== id)
+                    // Adopt the server time offset computed by the master
                     window.SysWeaverServerTimeOffset = data.O;
             }, true);
             InterOp.Post(getTimeOffset);
@@ -412,6 +527,12 @@ class SessionManager
         let isMaster = false;
         let gotMasterPong = false;
 
+        /**
+         * Start the periodic server time synchronisation (only does work while isMaster).
+         * GETs <common>/../../../serverTime (the first request appends "?<timeZone>;<language>"), estimates the
+         * latency as half the round trip, computes offset = serverTime - browserTime and stores it in
+         * window.SysWeaverServerTimeOffset, posting "SessionManager.TimeOffset" ({O: offset}) to other windows.
+         */
         function StartServerTimeSync() {
             let haveFirst = false;
             const rFirst = new Request(SessionManager.Current + "../../../serverTime?" + Intl.DateTimeFormat().resolvedOptions().timeZone + ";" + navigator.language, {
@@ -427,6 +548,10 @@ class SessionManager
             });
             let nextUpdate = 5000;
             let updateDelay = 2;
+            /**
+             * One time sync step (re-schedules itself with setTimeout, see below); returns early if no longer master.
+             * @returns {Promise<void>}
+             */
             const update = async () => {
                 try {
                     if (!isMaster)
@@ -443,6 +568,7 @@ class SessionManager
                         const offset = serverTime - browserTime;
                         if (!haveFirst) {
                             haveFirst = true;
+                            // First measurement: use the offset as is
                             window.SysWeaverServerTimeOffset = offset;
                             console.log("Initial server time adjustment: " + offset + " ms (latency: " + latency + " ms)");
                             InterOp.Post(timeOffset, { O: offset });
@@ -452,17 +578,23 @@ class SessionManager
                                 const doffset = offset - dstart;
                                 //console.log("Got new server time adjustment: " + offset + " ms" + ", adjusting " + doffset + " ms (over " + (updateDelay * 500) + " ms)");
                                 let step = 0;
+                                /**
+                                 * Smoothly move window.SysWeaverServerTimeOffset from dstart to offset in updateDelay
+                                 * steps of 500 ms, posting "SessionManager.TimeOffset" at each step; stops if no longer master.
+                                 */
                                 const updateTime = () => {
                                     if (!isMaster)
                                         return;
                                     ++step;
                                     if (step >= updateDelay) {
+                                        // Final step: reached the measured offset
                                         window.SysWeaverServerTimeOffset = offset;
                                         InterOp.Post(timeOffset, { O: offset });
                                         //console.log("Server time adjustment changed to: " + offset + " ms (latency: " + latency + " ms)");
                                         return;
                                     }
                                     const offs = (doffset * step) / updateDelay + dstart;
+                                    // Intermediate (linearly interpolated) offset
                                     window.SysWeaverServerTimeOffset = offs;
                                     InterOp.Post(timeOffset, { O: offs });
                                     setTimeout(updateTime, 500);
@@ -487,11 +619,17 @@ class SessionManager
             update();
         }
 
+        /** Detached element used only as an event target for the internal "GotPong"/"GotTimeOut" events. */
         const eventElement = document.createElement("SysWeaver-EventHandler");
 
+        /** Aborted to restart the master's long-poll request (e.g. when the set of server events changes). */
         let masterAbort = new AbortController();
 ;
 
+        /**
+         * Called (master only) when the ref counted ServerEvents set gained or lost a key: aborts the current
+         * long-poll request so RunMaster re-issues it with the new MessageTypes.
+         */
         function serverEventsChanged() {
             //const evs = Array.from(SessionManager.ServerEvents.keys());
             //console.log(logPrefix + "Server events changed to: " + evs);
@@ -510,11 +648,23 @@ class SessionManager
 
 
         // The master "thread""
+        /** Server message change counter (Cc) of the last long-poll response; handed over on master change. */
         let cc = 0;
+        /**
+         * The master loop: starts the server time sync, replays the buffered StartUp messages through
+         * eventHandler, then while isMaster POSTs {Cc, MessageTypes:[ServerEvents keys]} (typed json) to
+         * SessionManager.Url. Each returned message gets the response Prefix and is posted to all windows via
+         * InterOp.Post(type, msg, true). After 3 consecutive failures "server.error" is posted (and cc reset);
+         * the first success after that posts "server.restore" (removes the blocking overlay). Failures wait 5 s before retrying; aborts
+         * (masterAbort) retry immediately.
+         * @param {number} [startCc] - Change counter to continue from (from a previous master), default 0.
+         * @returns {Promise<void>} Resolves when this window stops being master.
+         */
         async function RunMaster(startCc) {
             cc = startCc ? startCc : 0;
             let errCount = 0;
             const sendErrorOn = 3;
+            /** Count a failed poll; on the 3rd consecutive failure post "server.error" and reset cc to 0. */
             function onError() {
                 ++errCount;
                 if (errCount === sendErrorOn) {
@@ -576,7 +726,7 @@ class SessionManager
                             }
                         }
                         if (errCount >= sendErrorOn)
-                            InterOp.Post("server.restored");
+                            InterOp.Post("server.restore");
                         errCount = 0;
                         continue;
                     } else {
@@ -598,6 +748,7 @@ class SessionManager
 
 
 
+        /** Post "SessionManager.AddEvents" with all currently registered server events (currently unused). */
         function sendEvents() {
             const evs = Array.from(SessionManager.ServerEvents.keys());
             if (evs.length > 0)
@@ -605,7 +756,13 @@ class SessionManager
         }
 
         //  Master message responses
+        /** @type {Map<string, function(object)>} Message type -> handler used while this window is master. */
         const masterMap = new Map();
+        /**
+         * Register a handler in the current map (first masterMap, later reassigned to register in childMap).
+         * @param {string} name - Message type.
+         * @param {function(object)} fn - Handler receiving the message data.
+         */
         let response = (name, fn) => masterMap.set(name, fn);
         response(addEvents, data => {
             const events = data.Events;
@@ -642,6 +799,7 @@ class SessionManager
                 });
         });*/
         //  Child message responses
+        /** @type {Map<string, function(object)>} Message type -> handler used while this window is a child (slave). */
         const childMap = new Map();
         response = (name, fn) => childMap.set(name, fn);
         response(pong, async data => {
@@ -669,6 +827,7 @@ class SessionManager
 
         response(timeOffset, async data => {
             if (data.From !== id)
+                // Child: adopt the offset broadcast by the master
                 window.SysWeaverServerTimeOffset = data.O;
         });
 
@@ -681,6 +840,12 @@ class SessionManager
         };
         */
 
+        /**
+         * InterOp listener of the session manager: dispatches the message to the handler registered for its
+         * Type in masterMap (if master) or childMap (otherwise).
+         * @param {MessageEvent|{data:object}} ev - The InterOp event.
+         * @returns {Promise<void>}
+         */
         async function eventHandler(ev) {
             const data = InterOp.GetMessage(ev);
             const messageType = data.Type;
@@ -695,8 +860,15 @@ class SessionManager
         //console.log(InterOp.Id + ": Started event listener!");
         InterOp.AddListener(eventHandler);
 
+        /** Interval timer id of the child's periodic MaybeStartMaster check (cleared when becoming master). */
         let checkMasterTimer = null;
 
+        /**
+         * Check whether another window is master: posts "SessionManager.Ping" and waits for a matching Pong
+         * (GotPong) or a 100 ms timeout (GotTimeOut).
+         * @param {boolean} [first] - Unused.
+         * @returns {Promise<boolean>} true if a master answered.
+         */
         async function HaveMaster(first) {
             gotMasterPong = false;
             let time = null;
@@ -710,10 +882,20 @@ class SessionManager
             return gotMasterPong;
         }
 
+        /** Re-entrancy guard for StartMaster. */
         let isStarting = false;
 
+        /**
+         * Try to become master, inside the Web Lock "SysWeaver.SessionManager" when navigator.locks exists.
+         * Becomes master only if no other master answers a ping; then clears the child check timer, sets
+         * isMaster / SessionManager.IsMaster and starts RunMaster (not awaited). Always stops StartUp buffering.
+         * @param {number} how - Reason, for logging: 0 = initial start, 1 = from MasterClosed message, 2 = from polling.
+         * @param {number} [startCc] - Change counter to continue from.
+         * @returns {Promise<void>}
+         */
         async function StartMaster(how, startCc) {
 
+            /** The locked part of StartMaster (see above). @returns {Promise<void>} */
             async function Start() {
                 if (isStarting)
                     return;
@@ -757,10 +939,16 @@ class SessionManager
                 await Start();
         }
 
+        /**
+         * Periodic (1 s) child check: become master if none answers.
+         * @param {boolean} [first] - true to log as initial start (0), otherwise as polling (2).
+         * @returns {Promise<void>}
+         */
         async function MaybeStartMaster(first) {
             await StartMaster(first === true ? 0 : 2);
         }
 
+        /** Run as child: request the time offset from the master and poll MaybeStartMaster every second. */
         function StartChild() {
             console.log(logPrefix + "Starting as child " + id);
             InterOp.Post(getTimeOffset);
@@ -777,6 +965,13 @@ class SessionManager
         //  Send events incase some have been registered already
         //sendEvents();
 
+        /**
+         * beforeunload/pagehide handler of a top window: removes the listeners and eventHandler, and decrements
+         * the owned events. Note: the loop uses the key (k) as the bound instead of the count (v), so evs stays
+         * empty in practice. A child clears its master check timer and posts RemoveEvents (if any);
+         * the master posts "SessionManager.MasterClosed" with {Cc, ServerEvents (entries)} so a child can take
+         * over, and clears isMaster.
+         */
         function WindowClose() {
             window.removeEventListener("pagehide", WindowClose);
             window.removeEventListener("beforeunload", WindowClose);
@@ -813,6 +1008,11 @@ class SessionManager
 
     }
 
+    /**
+     * Get (lazily creating) the message handler map window.SessionManagerFns (lower-cased type -> handlers).
+     * On creation, installs an InterOp listener that awaits every handler registered for the message's Type.
+     * @returns {Map<string, Array<function(object)>>}
+     */
     static GetMap() {
         let map = window["SessionManagerFns"];
         if (map)
@@ -882,10 +1082,23 @@ class SessionManager
 
 
 
+/**
+ * InterOp transport based on a BroadcastChannel (all same-origin windows/frames/tabs).
+ * Created once as InterOp.B = new InterOpBroadcast("SysWeaver"). Posting also delivers the message
+ * synchronously to the local listeners (a BroadcastChannel does not echo to its sender).
+ */
 class InterOpBroadcast {
+    /**
+     * @param {string} name - BroadcastChannel name (throws if BroadcastChannel is unsupported).
+     */
     constructor(name) {
         const s = new BroadcastChannel(name);
         const listeners = [];
+        /**
+         * Post a message to all other channel members and call local listeners with {data: m}
+         * (exceptions in listeners are logged as warnings).
+         * @param {object} m - The message (must be structured-cloneable).
+         */
         this.Post = m =>
         {
             s.postMessage(m);
@@ -907,11 +1120,19 @@ class InterOpBroadcast {
                 }
             }
         }
+        /**
+         * Add a listener (called for remote and local messages).
+         * @param {function(MessageEvent|{data:object})} l - Listener.
+         */
         this.AddListener = l => {
 
             listeners.push(l);
             s.addEventListener('message', l);
         };
+        /**
+         * Remove a listener added with AddListener.
+         * @param {function} l - Listener.
+         */
         this.RemoveListener = l => {
             s.removeEventListener('message', l);
             const t = listeners.lastIndexOf(l);
@@ -921,7 +1142,14 @@ class InterOpBroadcast {
     }
 }
 
+/**
+ * Fallback InterOp transport used when BroadcastChannel is unavailable: posts via window.postMessage
+ * to a list of known windows (the parent chain plus same-origin windows opened by this window).
+ * Side effect: replaces window.open (original saved in window._open) to track opened windows.
+ * Note: the parent chain loop relies on w.parent eventually being falsy (window.top.parent === window.top).
+ */
 class InterOpWindows {
+    /** Collects the parent windows and hooks window.open; defines Post/AddListener/RemoveListener. */
     constructor() {
         const windows = [];
         let w = window.parent;
@@ -929,7 +1157,16 @@ class InterOpWindows {
             windows.push(w);
             w = w.parent;
         }
+        /** The original window.open (saved before it is replaced below). */
         window._open = window.open;
+        /**
+         * Replacement for window.open: calls the original and remembers the returned window if the url is
+         * relative or same-origin.
+         * @param {string} url - Url to open.
+         * @param {string} [name] - Target name.
+         * @param {string} [params] - Window features.
+         * @returns {Window|null} The opened window.
+         */
         window.open = (url, name, params) => {
             const win = window._open(url, name, params);
             if (!win)
@@ -939,6 +1176,11 @@ class InterOpWindows {
             return win;
         }
 
+        /**
+         * postMessage m to every known window; closed or failing windows are removed from the list.
+         * Note: the local window itself does not receive the message.
+         * @param {object} m - The message.
+         */
         this.Post = m => {
             const wl = windows.length;
             if (wl <= 0)
@@ -962,20 +1204,31 @@ class InterOpWindows {
                 windows.splice(toRemove[rl], 1);
             }
         };
+        /** Add a "message" listener on this window. @param {function(MessageEvent)} l - Listener. */
         this.AddListener = l => window.addEventListener('message', l);
+        /** Remove a "message" listener from this window. @param {function(MessageEvent)} l - Listener. */
         this.RemoveListener = l => window.removeEventListener('message', l);
 
     }
 }
 
+/**
+ * Static class for cross-window messaging between all SysWeaver windows/frames/tabs of the same origin.
+ * Messages are plain objects with reserved fields Type (message type), From (sender InterOp.Id or "Server"),
+ * optional To, and MagicXyz = "SysWeaver" (marker checked by GetMessage).
+ * Transport: InterOp.B, an InterOpBroadcast("SysWeaver") or the InterOpWindows fallback.
+ */
 class InterOp {
 
+    /** @type {number} Unique id of this window (Date.now() + Math.random()); also stored in window.SysWeaverId. */
     static Id = function () {
         const id = new Date().valueOf() + Math.random();
+        /** @type {number} This window's InterOp id (also set again by SessionManager.Init). */
         window.SysWeaverId = id;
         return id;
     }();
 
+    /** @type {InterOpBroadcast|InterOpWindows} The transport (BroadcastChannel, or opened-windows fallback with a console warning). */
     static B = function () {
         try {
             return new InterOpBroadcast("SysWeaver");
@@ -991,7 +1244,8 @@ class InterOp {
      * Post a message to all windows
      * @param {string} type The message type as a string (will be added into data.Type)
      * @param {object} data Optional object with data (must be an object, can't be string, number, etc). Field names Type, From and To are reserved and may not be used.
-     * @param {bool} isFromServer Never use, always set to false
+     * @param {bool} isFromServer Never use, always set to false (true sets From = "Server", used by the SessionManager master)
+     * Side effect: mutates data (sets Type, From and MagicXyz).
      */
     static Post(type, data, isFromServer) {
         if (typeof data === "object")
@@ -1005,17 +1259,34 @@ class InterOp {
 
 
     // Use InterOp.GetMessage to check/get a message.
+    /**
+     * Add a listener for all InterOp messages (and, with the window fallback, any window "message" event).
+     * Use InterOp.GetMessage(ev) in the listener to validate/extract the message.
+     * @param {function(MessageEvent|{data:object})} fn - Listener.
+     * @returns {function} fn (so it can be stored for RemoveListener).
+     */
     static AddListener(fn) {
         InterOp.B.AddListener(fn);
         return fn;
     }
 
+    /**
+     * Remove a listener added with AddListener.
+     * @param {function} fn - Listener.
+     * @returns {function} fn.
+     */
     static RemoveListener(fn) {
         InterOp.B.RemoveListener(fn);
         return fn;
     }
 
-    // Always returns an object that will have the Type and From fields populated (no need to null check)
+    /**
+     * Always returns an object that will have the Type and From fields populated (no need to null check).
+     * Returns ev.data if it is an InterOp message (MagicXyz === "SysWeaver" and Type is a string),
+     * otherwise {Type: null, From: null}.
+     * @param {MessageEvent|{data:object}} ev - Event received by an InterOp listener.
+     * @returns {{Type:string|null, From:(number|string|null)}} The message.
+     */
     static GetMessage(ev) {
         const data = ev.data;
         if (data)
@@ -1029,7 +1300,12 @@ class InterOp {
 
 }
 
-// Downloads some text (without going through the server)
+/**
+ * Downloads some text (without going through the server).
+ * Creates a hidden <a download> with a data:text/plain url, clicks it and removes it.
+ * @param {string} filename - Suggested file name.
+ * @param {string} text - The text content (UTF-8).
+ */
 function downloadText(filename, text) {
     const element = document.createElement('a');
     element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
@@ -1040,7 +1316,11 @@ function downloadText(filename, text) {
     document.body.removeChild(element);
 }
 
-// Downloads some url
+/**
+ * Downloads some url, using a temporary hidden <a download> element that is clicked.
+ * @param {string} [filename] - Suggested file name; defaults to the last path segment of url.
+ * @param {string} url - The url to download.
+ */
 function downloadFile(filename, url) {
     if (!filename) {
         const l = url.lastIndexOf('/');
@@ -1055,7 +1335,12 @@ function downloadFile(filename, url) {
     document.body.removeChild(element);
 }
 
-// Returns true if an element is attached to the dom
+/**
+ * Returns true if an element is attached to the dom (has document.body as an ancestor).
+ * Note: document.body itself (and elements in <head>) return false.
+ * @param {Element} el - Element to test.
+ * @returns {boolean}
+ */
  function isInDocument(el) {
     const d = document.body;
     while (el) {
@@ -1069,6 +1354,7 @@ function downloadFile(filename, url) {
 
 /**
  * Get the url params of the current url, all keys are lower-cased.
+ * The result is cached in window.sysweaverParams (computed once per page).
  * @returns {URLSearchParams} Search parameters where all keys are lower-cased
  */
 function getUrlParams()
@@ -1078,14 +1364,16 @@ function getUrlParams()
         return p;
     const o = new URLSearchParams(window.location.search);
     p = new URLSearchParams();
-    for (const [k, v] of o) 
+    for (const [k, v] of o)
         p.append(k.toLowerCase(), v);
+    /** Cached url parameters with lower-cased keys. */
     window.sysweaverParams = p;
     return p;
 }
 
 /**
- * Get a (decimal) number from a paramater
+ * Get a (decimal) number from a paramater.
+ * Note: parseFloat does not throw, so an unparsable value returns NaN rather than null.
  * @param {URLSearchParams} params The url search paramaters (use result of getUrlParams)
  * @param {string} name The name of the paramater (case sensitive, usewr lowercase if using getUrlParams)
  * @returns {number|null} The value or null if not found or invalid
@@ -1104,7 +1392,8 @@ function getNumberParam(params, name) {
 }
 
 /**
- * Get an integer number from a paramater
+ * Get an integer number from a paramater.
+ * Note: parseInt does not throw, so an unparsable value returns NaN rather than null.
  * @param {URLSearchParams} params The url search paramaters (use result of getUrlParams)
  * @param {string} name The name of the paramater (case sensitive, usewr lowercase if using getUrlParams)
  * @returns {number|null} The value or null if not found or invalid
@@ -1123,7 +1412,9 @@ function getIntParam(params, name) {
 }
 
 /**
- * Test if it's likely that this is running on a mobile device
+ * Test if it's likely that this is running on a mobile device.
+ * Uses navigator.userAgentData.mobile when available, otherwise the well-known detectmobilebrowsers
+ * user agent regular expressions.
  * @returns {boolean} True if it's likely that this code is running on a mobile device
  */
 function isMobile() {
@@ -1184,6 +1475,9 @@ function getPlatform() {
  * [1] boolean : true if it's a narrow device and a single columns is prefered (typically mobile portrait).
  * [2] boolean : true if in portrait.
  * [3] number : Scale to use, 1.0.
+ * Details: single column when portrait and (mobile or width <= 400/800 px); scale (mobile only) is
+ * width/maxScale above maxScale or width/minScale below minScale (min/max = 200/400 for mobile portrait,
+ * else 400/800).
  * @returns {array} Paramaters:
  * [0] boolean : true if it's a mobile device.
  * [1] boolean : true if it's a narrow device and a single columns is prefered (typically mobile portrait).
@@ -1217,6 +1511,10 @@ function getMobileParams() {
 }
 
 
+/**
+ * Get a random signed 32-bit integer, using crypto.getRandomValues when available, else Math.random.
+ * @returns {number} Random int32.
+ */
 function CryptRandomInt32() {
     if (crypto) {
         try {
@@ -1230,7 +1528,12 @@ function CryptRandomInt32() {
     return (Math.random() * 0xffffffff) | 0;
 }
 
-// Get a random GUID (uses crypto if available else a simple unsafe random is used)
+/**
+ * Get a random GUID (uses crypto if available else a simple unsafe random is used).
+ * crypto.randomUUID throws in insecure contexts; then a version 4 style GUID is built from Math.random
+ * using a hex lookup table cached in CryptRandomGuid.lut.
+ * @returns {string} GUID like "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx" (lower-case hex).
+ */
 function CryptRandomGuid() {
     if (crypto) {
         try {
@@ -1256,6 +1559,12 @@ function CryptRandomGuid() {
         lut[d3 & 0xff] + lut[d3 >> 8 & 0xff] + lut[d3 >> 16 & 0xff] + lut[d3 >> 24 & 0xff];
 }
 
+/**
+ * Pure JavaScript SHA-256 (fallback when crypto.subtle is unavailable, e.g. over plain HTTP).
+ * The hash implementation is created lazily on first call and cached in legacySha256.data.
+ * @param {ArrayBuffer|Uint8Array} buffer - Data to hash.
+ * @returns {*} The digest as produced by the inner implementation (see its return below).
+ */
 function legacySha256(buffer)
 {
     const func = legacySha256.data ?? (legacySha256.data = function () {
@@ -1269,6 +1578,11 @@ function legacySha256(buffer)
         // if our system is LittleEndian (which is about 99% of CPUs)
         const LittleEndian = !!new uint8Array(new uint32Array([1]).buffer)[0];
 
+        /**
+         * Swap the byte order of a 32-bit word on little endian systems (no-op on big endian).
+         * @param {number} word - 32-bit word.
+         * @returns {number} Big endian word.
+         */
         function convertEndian(word) {
             if (LittleEndian) {
                 return (
@@ -1287,6 +1601,12 @@ function legacySha256(buffer)
             }
         }
 
+        /**
+         * Rotate a 32-bit word right.
+         * @param {number} word - 32-bit word.
+         * @param {number} bits - Number of bits (1..31).
+         * @returns {number} Rotated word.
+         */
         function rightRotate(word, bits) {
             return (word >>> bits) | (word << (32 - bits));
         }
@@ -1320,6 +1640,11 @@ function legacySha256(buffer)
         // constants is smaller than the output. More importantly, this serves as a
         // good educational aide for anyone wondering where the magic numbers come
         // from. No magic numbers FTW!
+        /**
+         * First 32 bits of the fractional part of n (used for the SHA-256 initial state / round constants).
+         * @param {number} n - Real number (square or cube root of a prime).
+         * @returns {number} 32-bit integer.
+         */
         function getFractionalBits(n) {
             return ((n - (n | 0)) * pow(2, 32)) | 0;
         }
@@ -1353,6 +1678,11 @@ function legacySha256(buffer)
 
             n++;
         }
+        /**
+         * The cached SHA-256 implementation.
+         * @param {Uint8Array|ArrayBuffer} data - Data to hash (copied into a padded buffer with bytes.set).
+         * @returns {Uint8Array} The 32 byte digest.
+         */
         return function(data) {
             // Copy default state
             const STATE = DEFAULT_STATE.slice();
@@ -1461,6 +1791,12 @@ function legacySha256(buffer)
     return func(buffer);
 }
 
+/**
+ * Recursively delete all properties whose value is null from an object graph (in place).
+ * Arrays are traversed but null array elements are kept.
+ * @param {*} o - Value to clean.
+ * @returns {boolean|undefined} true if o itself is null (so the caller removes it), undefined for arrays, else false.
+ */
 function RemoveNulls(o) {
     const t = typeof o;
     if (t === "object") {
@@ -1543,14 +1879,22 @@ function MakeCsObject(o) {
 
 
 
-// Encode an arbitary string to a base64 encoded string
+/**
+ * Encode an arbitary string to a base64 encoded string (the string is UTF-8 encoded first).
+ * @param {string} anyString - Text to encode.
+ * @returns {string} Base64 (standard alphabet, padded).
+ */
 function Base64EncodeString(anyString) {
     const bytes = new TextEncoder().encode(anyString);
     const binString = Array.from(bytes, byte => String.fromCodePoint(byte)).join("");
     return btoa(binString);
 }
 
-// Decode a base64 encoded string
+/**
+ * Decode a base64 encoded string (the decoded bytes are interpreted as UTF-8).
+ * @param {string} base64String - Standard base64 text (atob throws on invalid input).
+ * @returns {string} Decoded text.
+ */
 function Base64DecodeString(base64String) {
     const binString = atob(base64String);
     const bytes = Uint8Array.from(binString, m => m.codePointAt(0));
@@ -1573,7 +1917,8 @@ function MakeUriSafeBase64(str) {
 }
 
 /**
- * Convert a Uint8Array byte buffer to base 64
+ * Convert a Uint8Array byte buffer to base 64.
+ * Uses the native Uint8Array.prototype.toBase64 when available, else btoa over a binary string.
  * @param {Uint8Array} bytes The byte buffer to convert
  * @param {boolean} uriSafe If true, use the Uri safe alphabet '-' instead of '+' and '_' instead of '/' also trim's the padding.
  * @returns {string} The base64 encoded string.
@@ -1604,6 +1949,11 @@ function Uint8ArrayToBase64(bytes, uriSafe) {
 }
 
 
+/**
+ * Convert binary data to a lower-case hex string.
+ * @param {ArrayBuffer|Uint8Array|number[]} buffer - The data.
+ * @returns {string|null} Hex string (2 chars per byte), or null if buffer is falsy.
+ */
 function bufferToHex(buffer) {
     if (!buffer)
         return null;
@@ -1621,9 +1971,10 @@ function bufferToHex(buffer) {
 
 
 /**
- * Convert data contained in the buffer to a base64 encoded string
- * @param {ArrayBuffer|Uint8Array|Blob} The data
- * @returns {string} The data contained in the buffer as a base64 encoded string
+ * Convert data contained in the buffer to a base64 encoded string (via FileReader.readAsDataURL).
+ * @param {ArrayBuffer|Uint8Array|Blob} buffer The data (non-Blobs are wrapped in a Blob)
+ * @param {boolean} [keepUri] If true, return the full "data:...;base64,..." url instead of only the base64 part
+ * @returns {Promise<string|null>} The data contained in the buffer as a base64 encoded string (null if buffer is falsy)
  */
 async function bufferToBase64(buffer, keepUri) {
     if (!buffer)
@@ -1643,6 +1994,11 @@ async function bufferToBase64(buffer, keepUri) {
     return base64url.slice(base64url.indexOf(',') + 1);
 }
 
+/**
+ * Decode a (standard alphabet) base64 string to bytes.
+ * @param {string} base64String - Base64 text.
+ * @returns {Uint8Array|null} The bytes, or null if the input is falsy.
+ */
 function base64ToArray(base64String) {
     if (!base64String)
         return null;
@@ -1652,12 +2008,21 @@ function base64ToArray(base64String) {
 }
 
 
-// Hash a UInt8Array data blob to SHA1 and return the hash as a UInt8Array
+/**
+ * Hash a UInt8Array data blob to SHA1 and return the hash (crypto.subtle only, no fallback; requires a
+ * secure context).
+ * @param {BufferSource} hashData - Data to hash.
+ * @returns {Promise<ArrayBuffer>} The 20 byte digest (an ArrayBuffer, not a Uint8Array).
+ */
 async function hashDataSha1(hashData) {
     return await crypto.subtle.digest("SHA-1", hashData);
 }
 
-// Create a base64 encoded SHA1 hash from a string
+/**
+ * Create a base64 encoded SHA1 hash from a string (UTF-8 encoded).
+ * @param {string} hashSrc - Text to hash.
+ * @returns {Promise<string>} Base64 digest.
+ */
 async function hashStringSha1(hashSrc) {
     const hashAsData = new TextEncoder().encode(hashSrc);
     const hashBuffer = await hashDataSha1(hashAsData);
@@ -1668,7 +2033,12 @@ async function hashStringSha1(hashSrc) {
 
 
 
-// Hash a UInt8Array data blob to SHA 256 and return the hash as a UInt8Array
+/**
+ * Hash a UInt8Array data blob to SHA 256 and return the hash.
+ * Uses crypto.subtle; if that throws (e.g. insecure context) falls back to legacySha256.
+ * @param {BufferSource} hashData - Data to hash.
+ * @returns {Promise<ArrayBuffer|Uint8Array>} The 32 byte digest (ArrayBuffer from subtle, Uint8Array from the fallback).
+ */
 async function hashData(hashData) {
     let hashBuffer;
     try {
@@ -1680,13 +2050,22 @@ async function hashData(hashData) {
     return hashBuffer;
 }
 
-// Create a base64 encoded hash from a string
+/**
+ * Create a base64 encoded SHA-256 hash from a string (UTF-8 encoded).
+ * @param {string} hashSrc - Text to hash.
+ * @returns {Promise<string>} Base64 digest.
+ */
 async function hashString(hashSrc) {
     const hashAsData = new TextEncoder().encode(hashSrc);
     const hashBuffer = await hashData(hashAsData);
     return await bufferToBase64(hashBuffer);
 }
 
+/**
+ * Concatenate several byte arrays into one new Uint8Array.
+ * @param {Uint8Array[]} uint8arrays - Arrays to join (in order).
+ * @returns {Uint8Array} The concatenated bytes.
+ */
 function concatArrays(uint8arrays) {
     // Determine the length of the result.
     const totalLength = uint8arrays.reduce(
@@ -1704,6 +2083,11 @@ function concatArrays(uint8arrays) {
 
 // Test if an element is hidden, does NOT test parents!
 // An element is hidden if it's computed style have "display: none".
+/**
+ * Also returns true for the <head> element.
+ * @param {Element} element - Element to test.
+ * @returns {boolean} true if hidden.
+ */
 function isHidden(element) {
     const cs = getComputedStyle(element);
     if (cs.display === "none")
@@ -1716,6 +2100,13 @@ function isHidden(element) {
 // Traverse the child elements (including children to children etc) on the supplied element in DOM order.
 // okFn: takes the current element as argument, return anything "non-false" to stop traversal (and return the same value).
 // traverseHidden: set to true to traverse hidden nodes (isHidden(element) returns true), default is to not traverse hiiden.
+/**
+ * Iterative pre-order traversal (explicit stack). The root element itself is not passed to okFn.
+ * @param {Element} element - Root element.
+ * @param {function(Element):*} okFn - Visitor; a truthy return stops the traversal.
+ * @param {boolean} [traverseHidden] - Also visit hidden elements (and their subtrees).
+ * @returns {*} The first truthy value returned by okFn, or null.
+ */
 function traverseChildren(element, okFn, traverseHidden) {
     const stack = [];
     let e = element;
@@ -1753,6 +2144,15 @@ function traverseChildren(element, okFn, traverseHidden) {
 // element: the element to start at, this is never supplied to the okFn.
 // okFn: takes the current element as argument, return anything "non-false" to stop traversal (and return the same value).
 // traverseHidden: set to true to traverse hidden nodes (isHidden(element) returns true), default is to not traverse hiiden.
+/**
+ * Builds a stack of the ancestors (with the next sibling to continue from), walks the descendants of element
+ * and then the rest of the document in DOM order; on reaching the end it wraps around to
+ * document.documentElement and stops (returns null) when the start element is reached again.
+ * @param {Element} element - Start element.
+ * @param {function(Element):*} okFn - Visitor; a truthy return stops the traversal.
+ * @param {boolean} [traverseHidden] - Also visit hidden elements.
+ * @returns {*} The first truthy okFn result, or null.
+ */
 function traverseForward(element, okFn, traverseHidden) {
     const start = element;
     const stack = [];
@@ -1805,6 +2205,15 @@ function traverseForward(element, okFn, traverseHidden) {
 // element: the element to start at, this is never supplied to the okFn.
 // okFn: takes the current element as argument, return anything "non-false" to stop traversal (and return the same value).
 // traverseHidden: set to true to traverse hidden nodes (isHidden(element) returns true), default is to not traverse hiiden.
+/**
+ * Reverse (post-order, last child first) walk starting before element, wrapping around to
+ * document.documentElement; stops with null when the start element is reached again.
+ * Note: traverseHidden is not used by the implementation (hidden elements are always visited).
+ * @param {Element} element - Start element.
+ * @param {function(Element):*} okFn - Visitor; a truthy return stops the traversal.
+ * @param {boolean} [traverseHidden] - Ignored.
+ * @returns {*} The first truthy okFn result, or null.
+ */
 function traverseBackward(element, okFn, traverseHidden) {
     const start = element;
     const stack = [];
@@ -1850,6 +2259,11 @@ function traverseBackward(element, okFn, traverseHidden) {
 }
 
 
+/**
+ * Test if an element can receive keyboard focus via tab: tabIndex >= 0, or a non read-only <input>.
+ * @param {HTMLElement} element - Element to test.
+ * @returns {boolean}
+ */
 function isTabable(element) {
     if (element.tabIndex >= 0)
         return true;
@@ -1861,7 +2275,12 @@ function isTabable(element) {
 }
 
 
-// Set the focus to the next element after the supplied element that isTabable 
+// Set the focus to the next element after the supplied element that isTabable
+/**
+ * Uses traverseForward (visible elements only, wrapping around the document).
+ * @param {Element} element - Element to start after.
+ * @returns {HTMLElement|null} The focused element, or null if none was found.
+ */
 function focusNextTab(element) {
     /*
     traverseChildren(document.body, e => console.log(e), false);
@@ -1877,7 +2296,12 @@ function focusNextTab(element) {
     return f;
 }
 
-// Set the focus to the previous element after the supplied element that isTabable 
+// Set the focus to the previous element after the supplied element that isTabable
+/**
+ * Uses traverseBackward (wrapping around the document).
+ * @param {Element} element - Element to start before.
+ * @returns {HTMLElement|null} The focused element, or null if none was found.
+ */
 function focusPrevTab(element) {
     const f = traverseBackward(element, e => isTabable(e) ? e : null);
     if (f)
@@ -1886,7 +2310,15 @@ function focusPrevTab(element) {
 }
 
 
+/**
+ * Make Enter (without modifier keys) in an input move the focus to the next tabable element.
+ * Replaces inputElement.onkeyup.
+ * @param {HTMLElement} inputElement - The input element.
+ * @param {function(HTMLElement|null, HTMLElement):Promise<void>} [onNextItemFn] - Called (awaited) with the newly
+ * focused element (or null) and the input element.
+ */
 function tabToNextOnEnter(inputElement, onNextItemFn) {
+    /** Enter key handler (other keys and modified Enter are ignored; badClick prevents the default action). */
     inputElement.onkeyup = async ev => {
         const k = ev.key;
         if (k != "Enter")
@@ -1900,7 +2332,9 @@ function tabToNextOnEnter(inputElement, onNextItemFn) {
 }
 
 /**
- * Enabled keyboard focus on an element and "click" the elemnt of Space or Enter press (when focused)
+ * Enabled keyboard focus on an element and "click" the elemnt of Space or Enter press (when focused).
+ * Sets tabIndex to 0 when it is 0/unset or negative, adds the CSS class "KeyClick" and
+ * replaces element.onkeyup (keys with modifiers are ignored).
  * @param {HTMLElement} element The element to enable keyboard focus for
  * @returns {HTMLElement} The supplied element (allowing for chaining)
  */
@@ -1922,7 +2356,7 @@ function keyboardClick(element) {
 }
 
 /**
- * Disable keyboard click on an element
+ * Disable keyboard click on an element (resets tabIndex, removes class "KeyClick" and clears onkeyup).
  * @param {HTMLElement} element The element to disable keyboard click for
  * @returns {HTMLElement} The supplied element (allowing for chaining)
  */
@@ -1935,7 +2369,8 @@ function removeKeyboardClick(element) {
 }
 
 /**
- * Enabled right clicking of an element (performing the click action on right click)
+ * Enabled right clicking of an element (performing the click action on right click).
+ * Replaces element.oncontextmenu; with a modifier key held the normal context menu is shown instead.
  * @param {HTMLElement} element The element to enable right click for
  * @returns {HTMLElement} The supplied element (allowing for chaining)
  */
@@ -1951,16 +2386,21 @@ function rightClick(element) {
 }
 
 /**
- * Disable right clicking of an element
+ * Disable right clicking of an element (clears element.oncontextmenu).
  * @param {HTMLElement} element The element to disable right click for
  * @returns {HTMLElement} The supplied element (allowing for chaining)
  */
 function removeRightClick(element) {
-    e.oncontextmenu = null;
-    return e;
+    element.oncontextmenu = null;
+    return element;
 }
 
 
+/**
+ * Test if an event has no modifier keys (shift, alt, ctrl, meta) held.
+ * @param {MouseEvent|KeyboardEvent} [ev] - Event (missing = pure).
+ * @returns {boolean} true if no modifiers are held.
+ */
 function isPureClick(ev) {
     if (!ev)
         return true;
@@ -1975,6 +2415,13 @@ function isPureClick(ev) {
     return true;
 }
 
+/**
+ * Common click guard: unless keepProp, calls preventDefault() and stopPropagation() on the event, then
+ * reports whether a modifier key (shift, alt, ctrl, meta) is held (i.e. the click should be ignored).
+ * @param {Event} [ev] - Event (missing = not bad).
+ * @param {boolean} [keepProp] - If true, do not prevent default / stop propagation.
+ * @returns {boolean} true if a modifier key is held.
+ */
 function badClick(ev, keepProp) {
     if (!ev)
         return false;
@@ -1994,6 +2441,13 @@ function badClick(ev, keepProp) {
 }
 
 
+/**
+ * Escape a value for use inside a (quoted) HTML/XML attribute: & ' " < > become entities and line
+ * breaks (\r\n, \r, \n) become "&#13;" (preserveCR) or "\n".
+ * @param {*} s - Value (converted to string).
+ * @param {boolean} [preserveCR] - Encode line breaks as "&#13;".
+ * @returns {string} The escaped text.
+ */
 function makeHtmlAttributeSafe(s, preserveCR) {
     preserveCR = preserveCR ? '&#13;' : '\n';
     return ('' + s) /* Forces the conversion to string. */
@@ -2012,12 +2466,24 @@ function makeHtmlAttributeSafe(s, preserveCR) {
     ;
 }
 
+/**
+ * Escape text for use as HTML content, by assigning it as innerText of a temporary SysWeaver-Temp element
+ * and reading back innerHTML (line breaks become <br>).
+ * @param {string} text - Plain text.
+ * @returns {string} HTML-safe text.
+ */
 function makeHtmlSafe(text) {
     const e = document.createElement("SysWeaver-Temp");
     e.innerText = text;
     return e.innerHTML;
 }
 
+/**
+ * Simple email syntax check: no surrounding whitespace, exactly one '@' not at position 0, and a domain of
+ * 2-4 non-empty dot separated parts without surrounding whitespace.
+ * @param {string} s - Candidate email address.
+ * @returns {boolean} true if it looks valid.
+ */
 function isValidEmail(s)
 {
     if (s.trim() != s)
@@ -2085,6 +2551,12 @@ function getIntegerAttribute(element, attribute, defValue) {
     return defValue ?? 0;
 }
 
+/**
+ * Test if a node opts in to smooth src handling (has data-sw-fade, data-sw-fadein or data-sw-useevent).
+ * Used by SysWeaverInit and its MutationObserver.
+ * @param {Node} e - Node (non-elements return false).
+ * @returns {boolean}
+ */
 function doHandleSrc(e) {
     if (typeof e.hasAttribute !== "function")
         return false;
@@ -2106,6 +2578,14 @@ function doHandleSrc(e) {
  * @param {number} fadeDelay Optional fade delay in duration in ms.
  * @param {string} fadeChannel Optional fade channel information "Name;DelayMs".
  * @param {integer} fadeParent Optionally animate parent element instead, this is the number of parents to step up (0 = default = none)
+ * Unset parameters are read from the attributes data-sw-fadein (default 150), data-sw-fadedelay (0),
+ * data-sw-fadechannel and data-sw-fadeparent (0). Iframes with data-sw-useevent wait for a window message
+ * {Type:"PageLoaded"} (see PageLoaded) instead of the load event.
+ * Fade channels ("Name,DelayMs", default delay 100): elements sharing a channel are revealed in sequence,
+ * each FadeChannelIndex * DelayMs after the first element; channel state lives in window.FadeChannels.
+ * Expandos set on the element: FadeIn, FadeDelay, FadeInCount, FadeChannel, FadeChannelIndex, FadeStyle,
+ * StopListen, SrcObs (MutationObserver on the src attribute that hides and re-arms on change), AnimReq.
+ * Images get draggable="false". Calling it again on the same element does nothing.
  * @returns {HTMLElement} The element
  */
 function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, fadeParent) {
@@ -2141,6 +2621,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
             let channels = window.FadeChannels;
             if (!channels) {
                 channels = new Map();
+                /** @type {Map<string, {Name:string, Count:number, StartTime:number, Delay:number, FirstElement:HTMLElement, Index:number, Delayed:HTMLElement[], ItemCount:number}>} Active fade channels (deleted when empty). */
                 window.FadeChannels = channels;
             }
             let cdata = channels.get(cn);
@@ -2171,6 +2652,11 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
         se = se.parentElement;
     const s = se.style;
     e.FadeStyle = s;
+    /**
+     * Window "message" handler (iframes with data-sw-useevent): a {Type:"PageLoaded"} message is treated as
+     * the load event of this element. Note: messages from any frame are accepted.
+     * @param {MessageEvent} ev - The message event.
+     */
     const msgHandler = ev => {
         const d = ev.data;
         if (!d)
@@ -2179,14 +2665,16 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
             return;
         InternalSrcElementOnLoad({ target: e });
     };
+    /** Attach the load listener (or the PageLoaded message handler) and, if showError, the error listener. */
     const startListen = () => {
-        if (useEvent) 
+        if (useEvent)
             window.addEventListener("message", msgHandler);
         else
             e.addEventListener("load", InternalSrcElementOnLoad);
         if (showError)
             e.addEventListener("error", InternalSrcElementOnError);
     }
+    /** Cancel a running reveal animation frame and remove the load/error/message listeners. */
     e.StopListen = () => {
         const a = e.AnimReq;
         if (a) {
@@ -2280,6 +2768,11 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
     return e;
 }
 
+/**
+ * Detach an element from its fade channel (deletes FadeChannel/FadeChannelIndex); when the channel's
+ * ItemCount reaches 0 the channel is removed from window.FadeChannels, and the global is deleted when empty.
+ * @param {HTMLElement} e - Element set up by fixElementWithSrc.
+ */
 function removeFadeChannel(e) {
     delete e.FadeChannelIndex;
     const ch = e.FadeChannel;
@@ -2301,6 +2794,8 @@ function removeFadeChannel(e) {
 
 /**
  * Remove event handlers set by the fixElementWithSrc function.
+ * Also deletes FadeIn/FadeDelay/FadeStyle, leaves the fade channel and hides the faded element
+ * (visibility hidden, opacity 0). Note: the src MutationObserver (SrcObs) is not disconnected.
  * @param {HTMLElement} e The html element, typically an img or iframe.
  * @returns {HTMLElement} The element
  */
@@ -2320,10 +2815,22 @@ function cleanElementWithSrc(e) {
     return e;
 }
 
+/**
+ * Unused placeholder (empty).
+ * @param {Event} ev - Ignored.
+ */
 function InternalSrcElementOnEvent(ev) {
 
 }
 
+/**
+ * Load handler of elements set up by fixElementWithSrc (also called directly with {target: e}).
+ * Stops listening and reveals the element: with FadeIn > 0 it waits FadeDelay (plus the channel offset
+ * Delay * FadeChannelIndex relative to the channel start; non-first channel members are queued in
+ * ch.Delayed until the first element has started) and then animates opacity 0 -> 1 with a smootherstep
+ * curve over FadeIn ms using requestAnimationFrame (id in e.AnimReq). Without fade it is shown at once.
+ * @param {Event|{target:HTMLElement}} ev - Event whose target is the element.
+ */
 function InternalSrcElementOnLoad(ev)
 {
     const e = ev.target;
@@ -2365,6 +2872,11 @@ function InternalSrcElementOnLoad(ev)
         //  Reveal anim
         let start = -1;
 
+        /**
+         * Smootherstep easing.
+         * @param {number} t - 0..1.
+         * @returns {number} 6t^5 - 15t^4 + 10t^3.
+         */
         function smooth(t) {
             return t * t * t * (t * (t * 6 - 15) + 10);
         }
@@ -2373,6 +2885,10 @@ function InternalSrcElementOnLoad(ev)
             d = 0;
         s.opacity = 0;
         s.visibility = null;
+        /**
+         * requestAnimationFrame step of the reveal animation; clears the inline styles when done.
+         * @param {number} t - Frame timestamp (ms).
+         */
         function anim(t) {
             if (start < 0)
                 start = t + d;
@@ -2400,6 +2916,11 @@ function InternalSrcElementOnLoad(ev)
     }
 }
 
+/**
+ * Error handler of elements set up by fixElementWithSrc (when showError): stops listening and shows the
+ * element itself (clears opacity/visibility of e.style, not of FadeStyle when fading a parent).
+ * @param {Event|{target:HTMLElement}} ev - Event whose target is the element.
+ */
 function InternalSrcElementOnError(ev) {
     const e = ev.target;
     e.StopListen();
@@ -2444,6 +2965,11 @@ function createImg(showError, fadeIn) {
 }
 
 
+/**
+ * Minimal phone number check: no surrounding whitespace and at least 3 characters.
+ * @param {string} s - Candidate phone number.
+ * @returns {boolean}
+ */
 function isValidPhone(s) {
     if (s.trim() != s)
         return false;
@@ -2458,6 +2984,11 @@ function isValidPhone(s) {
   * @param {string} file A relative path to the js file to load (relative to current) or an absolute path (starting with http:// or https://).
   * @param {boolean} noThrow If true, no exception is thrown.
  * @returns {Promise} A promise that resolves to an object with the members: "HTMLElement element", "string error", "bool loaded" and "object errorEv".
+ * Details: relative files resolve as new URL(current + "/../" + file). Loads are de-duplicated per absolute
+ * url through window.IncMap; concurrent callers poll every 10 ms until the first load finishes (they get the
+ * shared entry, whose loaded flag stays false). The script is appended to <head> as <script async>.
+ * On a load error the first caller's promise is settled (resolved if noThrow, else rejected) with the shared
+ * state object (error and errorEv set, loaded false); the failed <script> element is removed.
   */
 function includeJs(current, file, noThrow)
 {
@@ -2471,10 +3002,12 @@ function includeJs(current, file, noThrow)
             let map = window["IncMap"];
             if (!map) {
                 map = new Map();
+                /** @type {Map<string, {element:HTMLElement, error:string, errorEv:Event, Pending:boolean, loaded:boolean}>} Include state per absolute url. */
                 window["IncMap"] = map;
             }
             const e = map.get(file);
             if (e) {
+                /** Poll (10 ms) until the pending include finishes, then resolve/reject with the shared entry. */
                 function ResCaches() {
                     if (e.Pending)
                     {
@@ -2509,9 +3042,9 @@ function includeJs(current, file, noThrow)
                 n.errorEv = ev;
                 delete n.Pending;
                 if (noThrow)
-                    resolve(e);
+                    resolve(n);
                 else
-                    reject(e);
+                    reject(n);
             });
             s.src = file;
             document.head.appendChild(s);
@@ -2533,6 +3066,8 @@ function includeJs(current, file, noThrow)
  * @param {string} file A relative path to the css file to load (relative to current) or an absolute path (starting with http:// or https://).
  * @param {boolean} noThrow If true, no exception is thrown.
  * @returns {Promise} A promise that resolves to an object with the members: "HTMLElement element", "string error", "bool loaded" and "object errorEv".
+ * Works like includeJs (shared window.IncMap de-duplication, 10 ms polling, a load error settles with the
+ * shared state object) but appends a <link rel="stylesheet"> to <head>.
  */
 function includeCss(current, file, noThrow) {
     if (!current)
@@ -2549,6 +3084,7 @@ function includeCss(current, file, noThrow) {
             }
             const e = map.get(file);
             if (e) {
+                /** Poll (10 ms) until the pending include finishes, then resolve/reject with the shared entry. */
                 function ResCaches() {
                     if (e.Pending) {
                         setTimeout(ResCaches, 10);
@@ -2580,9 +3116,9 @@ function includeCss(current, file, noThrow) {
                 n.errorEv = ev;
                 delete n.Pending;
                 if (noThrow)
-                    resolve(e);
+                    resolve(n);
                 else
-                    reject(e);
+                    reject(n);
             });
             s.href = file;
             document.head.appendChild(s);
@@ -2602,7 +3138,7 @@ function includeCss(current, file, noThrow) {
  * @param {boolean} lowPrecision Optional, if true, low precision is acceptable (usually faster)
  * @param {number} timeout Optional, a positive long value representing the maximum length of time (in milliseconds) the device is allowed to take in order to return a position. The default value is Infinity, meaning that getCurrentPosition() won't return until the position is available.
  * @param {number} maximumAge Optional, a positive long value indicating the maximum age in milliseconds of a possible cached position that is acceptable to return. If set to 0, it means that the device cannot use a cached position and must attempt to retrieve the real current position. If set to Infinity the device must return a cached position regardless of its age. Default: 0.
- * @returns {GeolocationPosition} The position if available
+ * @returns {Promise<GeolocationPosition>} The position if available (throws an Error on failure or if geolocation is unavailable)
  */
 async function getDevicePosition(lowPrecision, timeout, maximumAge) {
 
@@ -2651,11 +3187,15 @@ async function getDevicePosition(lowPrecision, timeout, maximumAge) {
  * @param {String} eventName Name of the event to wait for (uses addEventListener on that event).
  * @param {function(HTMLElement)} fn An optional function that is called after event hooking is done.
  * @param {number} timeout An optional time out in milliseconds (if the event haven't triggered before the timeout the function will return null).
- * @returns {Event} The event that was triggered or null if it timed out.
+ * @returns {Promise<Event|null>} The event that was triggered or null if it timed out.
  */
 function waitEvent(element, eventName, fn, timeout) {
     return new Promise(resolve => {
         let timeoutT = null;
+        /**
+         * Finish the wait: clear the timeout, unhook the listener and resolve.
+         * @param {Event|null} ev - The event, or null on timeout.
+         */
         const end = ev => {
             if (timeoutT)
                 clearTimeout(timeoutT);
@@ -2677,14 +3217,18 @@ function waitEvent(element, eventName, fn, timeout) {
  * Wait for one of two event in some async manner, returns the event.
  * @param {HTMLElement} element The element that will recieve the event to wait for.
  * @param {String} eventName1 Name of one event to wait for (uses addEventListener on that event).
- * @param {String} eventName1 Name of another event to wait for (uses addEventListener on that event).
+ * @param {String} eventName2 Name of another event to wait for (uses addEventListener on that event).
  * @param {function(HTMLElement)} fn An optional function that is called after event hooking is done.
  * @param {number} timeout An optional time out in milliseconds (if the event haven't triggered before the timeout the function will return null).
- * @returns {Event} The event that was triggered first (one of the two) or null if it timed out.
+ * @returns {Promise<Event|null>} The event that was triggered first (one of the two) or null if it timed out.
 */
 function waitEvent2(element, eventName1, eventName2, fn, timeout) {
     return new Promise(resolve => {
         let timeoutT = null;
+        /**
+         * Finish the wait: clear the timeout, unhook both listeners and resolve.
+         * @param {Event|null} ev - The event, or null on timeout.
+         */
         const end = ev => {
             if (timeoutT)
                 clearTimeout(timeoutT);
@@ -2706,15 +3250,29 @@ function waitEvent2(element, eventName1, eventName2, fn, timeout) {
 
 
 // First argument to the async function is a function that should be called to end the wait
+/**
+ * Wait until fn calls the supplied end callback (implemented with a detached SysWeaver-Wait element and
+ * the event "SysWeaverWaitCompleted"). Note: fn is called without being awaited by waitEvent.
+ * @param {function(function():void):Promise<void>} fn - Async function receiving the end callback.
+ * @returns {Promise<void>}
+ */
 async function waitFor(fn) {
     const e = document.createElement("SysWeaver-Wait");
     const evName = "SysWeaverWaitCompleted";
     await waitEvent(e, evName, async () => {
+        /** End the wait (dispatches the completion event). */
         const end = () => e.dispatchEvent(new Event(evName));
         await fn(end);
     });
 }
 
+/**
+ * Set the src of a media element and wait until it can play through ("canplaythrough") or fails ("error").
+ * @param {HTMLMediaElement} mediaElement - Audio/video element.
+ * @param {string} url - The new src.
+ * @param {function(boolean, HTMLMediaElement, string):void} [onResult] - Called with (success, element, url).
+ * @returns {Promise<void>} Resolves in both cases.
+ */
 function setMediaSrcAndWait(mediaElement, url, onResult) {
     const eo = "canplaythrough";
     const ee = "error";
@@ -2741,24 +3299,35 @@ function setMediaSrcAndWait(mediaElement, url, onResult) {
     });
 }
 
+/**
+ * Minimal abort signal: listeners registered with addListener are called when raise() is called.
+ * Create with new AbortHandler(), pass to delayWithAbort etc. Implemented with a detached <div> and the
+ * DOM event "AbortHandlerEvent"; can be raised multiple times.
+ */
 class AbortHandler {
 
+    /** Creates the event object (Event) and the detached event target element (Element). */
     constructor() {
+        /** @type {Event} The event dispatched by raise. */
         this.Event = new Event("AbortHandlerEvent");
+        /** @type {HTMLDivElement} Detached event target. */
         this.Element = document.createElement("div");
     }
 
     // Raise the abort event
+    /** Calls all registered listeners synchronously. */
     raise() {
         this.Element.dispatchEvent(this.Event);
     }
 
     // Add a listener for abort events
+    /** @param {function(Event):void} fn - Listener. */
     addListener(fn) {
         this.Element.addEventListener("AbortHandlerEvent", fn);
     }
 
     // Remove a listener from abort events
+    /** @param {function(Event):void} fn - Listener previously added. */
     removeListener(fn) {
         this.Element.removeEventListener("AbortHandlerEvent", fn);
 
@@ -2768,7 +3337,7 @@ class AbortHandler {
 
 /**
  * Delay execution until the next animation frame
- * @returns
+ * @returns {Promise<number>} Resolves with the requestAnimationFrame timestamp
  */
 function delayOneFrame() {
     return new Promise(resolve => requestAnimationFrame(resolve));
@@ -2778,7 +3347,7 @@ function delayOneFrame() {
 /**
  * Delay execution some duration
  * @param {number} msToWait Number of milliseconds to wait
- * @returns
+ * @returns {Promise<void>} Resolves after the delay (setTimeout)
  */
 function delay(msToWait)
 {
@@ -2789,7 +3358,7 @@ function delay(msToWait)
  * Delay execution some duration, with the option to abort
  * @param {number} msToWait Number of milliseconds to wait
  * @param {AbortHandler} abortHandler The abort handler that can abort
- * @returns
+ * @returns {Promise<boolean>} true if aborted (abortHandler raised), false if the full delay elapsed
  */
 function delayWithAbort(msToWait, abortHandler)
 {
@@ -2811,6 +3380,11 @@ function delayWithAbort(msToWait, abortHandler)
     });
 }
 
+/**
+ * Reload the current page.
+ * @param {boolean} [flushCache] - Call location.reload(true) (the forceGet flag is only honoured by Firefox).
+ * @param {boolean} [clearHash] - Remove the hash from the url first (history.replaceState with ' ').
+ */
 function ReloadAll(flushCache, clearHash)
 {
     if (clearHash)
@@ -2821,6 +3395,13 @@ function ReloadAll(flushCache, clearHash)
         location.reload();
 }
 
+/**
+ * postMessage {Type: name, ...data} to window.opener, or window.top if there is no opener
+ * (errors are swallowed). Note: data is mutated (Type is set).
+ * @param {string} name - Message type.
+ * @param {object} [data] - Payload object.
+ * @param {string} [targetOrigin="*"] - postMessage target origin.
+ */
 function PostAll(name, data, targetOrigin) {
     if (!data) {
         data = {
@@ -2841,6 +3422,13 @@ function PostAll(name, data, targetOrigin) {
     }
 }
 
+/**
+ * postMessage {Type: name, ...data} to window.top (also when this is the top window; errors are swallowed).
+ * Note: data is mutated (Type is set).
+ * @param {string} name - Message type.
+ * @param {object} [data] - Payload object.
+ * @param {string} [targetOrigin="*"] - postMessage target origin.
+ */
 function PostTop(name, data, targetOrigin) {
     if (!data) {
         data = {
@@ -2861,6 +3449,13 @@ function PostTop(name, data, targetOrigin) {
     }
 }
 
+/**
+ * postMessage {Type: name, ...data} to the parent window, or to window.opener when this is the top window
+ * (errors are swallowed). Note: data is mutated (Type is set).
+ * @param {string} name - Message type.
+ * @param {object} [data] - Payload object.
+ * @param {string} [targetOrigin="*"] - postMessage target origin.
+ */
 function PostParent(name, data, targetOrigin) {
     if (!data) {
         data = {
@@ -2881,9 +3476,12 @@ function PostParent(name, data, targetOrigin) {
     }
 }
 /**
- * Open an url
+ * Open an url (the forced theme is appended via appendTheme).
+ * For target "_self" with a relative or same-origin url, first posts "IframeNavigating" {Url: absolute url}
+ * to window.top (so a hosting app can navigate itself) and then, after 100 ms, opens the url in _self anyway
+ * (logging "Parent didn't respond in time!"; the timer is never cancelled).
  * @param {string} l The url to open
- * @param {string} target Optional target ("_self", "_blank")
+ * @param {string} target Optional target ("_self", "_blank"), default "_blank"
  */
 function Open(l, target) {
     if (target === "_self") {
@@ -2909,10 +3507,13 @@ function Open(l, target) {
 
 /**
  * Edit an url if there is an editor (that doesn't match the viewer)
+ * Calls /Api/GetExtensionEditor ({Read, Save, Delete} absolute urls) and /Api/GetExtensionViewer; opens
+ * the editor url (absolute in a new window, relative in _self) or else the url itself via Open.
  * @param {String} read The url to use for reading
  * @param {string} target Optional target to use for non editable files ("_self", "_blank")
  * @param {String} save Optional url to use for saving
  * @param {String} remove Optional url to use for removing
+ * @returns {Promise<void>}
  */
 async function EditOrOpenUrl(read, target, save, remove) {
     const rr = GetAbsolutePath(read);
@@ -2937,11 +3538,13 @@ async function EditOrOpenUrl(read, target, save, remove) {
 
 
 /**
- * Edit an url
+ * Edit an url: asks /Api/GetExtensionEditor for an editor page; opens it (absolute in a new window,
+ * relative in _self) or, if there is none, opens the url itself via Open.
  * @param {String} read The url to use for reading
  * @param {string} target Optional target to use for non editable files ("_self", "_blank")
  * @param {String} save Optional url to use for saving
  * @param {String} remove Optional url to use for removing
+ * @returns {Promise<void>}
  */
 async function EditUrl(read, target, save, remove) {
     const u = await sendRequest("/Api/GetExtensionEditor", {
@@ -2960,9 +3563,11 @@ async function EditUrl(read, target, save, remove) {
 }
 
 /**
- * View an url
+ * View an url: asks /Api/GetExtensionViewer for a viewer page; opens it (absolute in a new window,
+ * relative in _self) or, if there is none, opens the url itself via Open.
  * @param {String} read The url to use for reading
  * @param {string} target Optional target to use for non editable files ("_self", "_blank")
+ * @returns {Promise<void>}
  */
 async function ViewUrl(read, target) {
     const u = await sendRequest("/Api/GetExtensionViewer", GetAbsolutePath(read));
@@ -3017,7 +3622,11 @@ function GetAbsolutePath(url, current) {
 /**
  * Flush an url from the local cache.
  * Returns a promise so use with await.
+ * Sends an async XMLHttpRequest GET with no-cache headers (Cache-Control/Pragma/Expires) and a 1 ms timeout;
+ * the wait ends on timeout, when headers are received (readyState >= 2) or on an exception.
+ * Note: x.cancel() is not a standard XHR method, so it throws and the catch ends the wait immediately.
  * @param {string} url The url to flush
+ * @returns {Promise<void>}
  */
 function FlushCache(url) {
     const x = new XMLHttpRequest();
@@ -3053,6 +3662,8 @@ function FlushCache(url) {
 
 /**
  * Start a flush of an url from the local cache.
+ * Same request as FlushCache but callback based (whenDone is called at most once; note that the
+ * non-standard x.cancel() throws, so whenDone is typically called synchronously from the catch).
  * @param {string} url The url to flush
  * @param {function():Promise} whenDone An optional function to call when the flush is completed
  */
@@ -3095,6 +3706,11 @@ function FlushCacheSync(url, whenDone) {
  * @param {Boolean} flushCache If is true, a clean copy will be downloaded.
  * @param {function(Boolean)} onLoaded An optional callback to call when done (or error), a boolean parameter is supplied with true if src is loaded, else false.
  * @param {String} reloadOnMessage An optional string with an event name, that will cause a reload.
+ * Details: replaces img.onerror/img.onload; the image is hidden (opacity 0) while loading and the previous
+ * opacity (or 1) restored afterwards; the first error switches to fallback. With reloadOnMessage an InterOp
+ * listener (stored in img.MsgHandler, installed once) is added and the server event is registered with
+ * SessionManager.AddServerEvent; on the message the url is flushed (FlushCache, shared per message via
+ * msg.Waiter) and reloaded; once the img is no longer in the document the listener unregisters itself.
  */
 function SetImageSource(img, src, fallback, flushCache, onLoaded, reloadOnMessage) {
     const s = src ?? img.src;
@@ -3144,6 +3760,12 @@ function SetImageSource(img, src, fallback, flushCache, onLoaded, reloadOnMessag
     }
     if (reloadOnMessage) {
         if (!img.MsgHandler) {
+            /**
+             * InterOp listener: on a reloadOnMessage message, flush and reload the image (or unregister
+             * when the image has left the document).
+             * @param {MessageEvent|{data:object}} ev - InterOp event.
+             * @returns {Promise<void>}
+             */
             async function handler(ev) {
                 const msg = InterOp.GetMessage(ev);
                 const type = msg.Type;
@@ -3166,9 +3788,18 @@ function SetImageSource(img, src, fallback, flushCache, onLoaded, reloadOnMessag
     }
 }
 
-/** Represents a (clickable) monochrome image */
+/**
+ * Represents a (clickable) monochrome image.
+ * The icon is a custom element "icon-WxH" whose image is a CSS mask (mask-image) filled with the
+ * background color given by a color class (IconColorThemeBackground/Main/Acc1/Acc2 are predefined), or a
+ * plain background image for urls ending with '*'. Size dependent CSS rules are generated once per size
+ * into the <style id="ColorIcon"> sheet (scaled by the --ThemeIconSize custom property).
+ * Usage: const i = new ColorIcon("IconReload", "IconColorThemeMain", 24, 24, "Reload", onClick);
+ * parent.appendChild(i.Element). Button extends the same idea with text.
+ */
 class ColorIcon {
 
+    /** @type {Map<string, boolean>} Sizes ("WxH") and size+color keys whose CSS rules have been generated. */
     static GenCss = new Map();
     /*
         CSS for an image class:
@@ -3184,6 +3815,10 @@ class ColorIcon {
 
     */
 
+    /**
+     * Get (creating if needed) the <style id="ColorIcon"> element in <head> used for generated icon CSS.
+     * @returns {CSSStyleSheet} Its sheet.
+     */
     static GetStyleSheet() {
         //return [].slice.call(document.head.getElementsByTagName("link")).find(o => o.getAttribute("href").indexOf("theme.css") >= 0).sheet;
         let ss = [].slice.call(document.head.getElementsByTagName("style")).find(o => o.getAttribute("id") == "ColorIcon");
@@ -3196,6 +3831,15 @@ class ColorIcon {
     }
 
 
+    /**
+     * Set the image of an icon element.
+     * - falsy: clears mask/background styles and hides the element (visibility hidden).
+     * - contains '.' (an url): ending with '*' = full color background-image (mask removed, transparent
+     *   background color); otherwise used as mask-image (colored by the color class).
+     * - otherwise: added as a CSS class (which should define the mask-image).
+     * @param {HTMLElement} element - The icon element.
+     * @param {string} imageClass - Image class or url.
+     */
     static SetImageClass(element, imageClass) {
         const st = element.style;
         if (!imageClass) {
@@ -3229,6 +3873,12 @@ class ColorIcon {
         }
     }
 
+    /**
+     * Undo SetImageClass: clears the inline mask/background styles and removes imageClass from the class
+     * list if it starts with a letter (i.e. is a class name rather than a url).
+     * @param {HTMLElement} element - The icon element.
+     * @param {string} imageClass - The image class or url previously set.
+     */
     static RemoveImageClass(element, imageClass) {
         const st = element.style;
         st.maskImage = null;
@@ -3251,6 +3901,10 @@ class ColorIcon {
      * @param {string} buttonClass Optional class to give the button (default is "IconButton")
      * @param {string} disabledClass Optional class to give the button when disabled (default is "IconDisabled")
      * @param {boolean} captureContextMenu If true, the context menu is captured.
+     * Width/height default to 16. The first icon of a size inserts the icon-WxH rules (size, mask settings,
+     * .IconButton hover/focus/active lift, .IconDisabled) and the four predefined color classes.
+     * With onClick the element gets buttonClass and keyboardClick; clicks are ignored when a modifier key is
+     * held, when disabled (IsEnabled false) or while working (OldImage set, see StartWorking).
      */
     constructor(imageClass, colorClass, width, height, title, onClick, buttonClass, disabledClass, captureContextMenu) {
         if ((!width) || (width <= 0))
@@ -3316,6 +3970,7 @@ class ColorIcon {
         t.ImageClass = imageClass;
         t.ColorClass = colorClass;
         t.Title = title;
+        /** Guarded click handler (see constructor description); also used for the captured context menu. */
         let clickFn = null;
         if (onClick != null) {
             clickFn = async ev => {
@@ -3343,6 +3998,10 @@ class ColorIcon {
         this.setTitleAttr(title);
     }
 
+    /**
+     * Set or remove (if falsy) the title attribute (tooltip) of the element.
+     * @param {string} tit - Title text.
+     */
     setTitleAttr(tit) {
         const e = this.Element;
         if (tit)
@@ -3355,8 +4014,11 @@ class ColorIcon {
     Element = null;
 
 
+    /** @type {boolean} If true, an enabled clickable icon gets tabindex 0 when re-enabled. */
     TabStop = true;
+    /** @type {boolean} Current enabled state (see SetEnabled). */
     IsEnabled = true;
+    /** @type {string} Title (tooltip) text; not shown while disabled. */
     Title = "";
 
     /**
@@ -3399,6 +4061,14 @@ class ColorIcon {
         return this;
     }
 
+    /**
+     * Add a color class for icons of a given size (once per size+name): inserts the rule
+     * "icon-WxH.name{background-color:col}" into the ColorIcon style sheet.
+     * @param {string} name - Color class name.
+     * @param {number} width - Icon width.
+     * @param {number} height - Icon height.
+     * @param {string} col - CSS color value.
+     */
     static AddIconColor(name, width, height, col) {
         const key = width + "x" + height;
         const kn = key + "_" + name;
@@ -3464,6 +4134,8 @@ class ColorIcon {
      * If the async function takes a long time, the button will show a "working" animation.
      * @param {string} iconName Optional class name of the "working" icon, default is IconWorking.
      * @param {number} changeAfterMs Number of ms before the "working" icon is shown, default is 250 ms.
+     * Stores the current image in OldImage (clicks are ignored while set) and the timer in WorkTimer;
+     * the working image is remembered in WorkImage. Does nothing if already working.
      */
     StartWorking(iconName, changeAfterMs) {
         const t = this;
@@ -3506,6 +4178,9 @@ class ColorIcon {
  * @param {HTMLElement} myField INPUT or TEXTAREA element.
  * @param {string} myValue The Text to insert.
  * @param {boolean} updateSelection Optionally set the newly inserted value as the new selection.
+ * Without updateSelection the end position is remembered in myField.NextLast and used as the insert
+ * position by the next call when selectionStart is 0/unset (allows consecutive inserts after focus loss).
+ * @returns {number} The position after the inserted text.
  */
 function insertAtCursor(myField, myValue, updateSelection) {
     const v = myField.value;
@@ -3531,24 +4206,54 @@ function insertAtCursor(myField, myValue, updateSelection) {
     return e;
 }
 
+/**
+ * Style options for Button (create with new ButtonStyle() and modify fields; Button.DefaultStyle is shared).
+ */
 class ButtonStyle {
 
+    /** @type {string} Tag name of the button element. */
     ButtonElement = "Sysweaver-Button";
+    /** @type {string|null} Optional extra CSS class added to the button element. */
     ButtonStyle = null;
+    /** @type {number} Minimum time (ms) the "Pressed" class stays after a click. */
     MinPressed = 20;
+    /** @type {number} Icon width (px, before --ThemeIconSize scaling). */
     IconWidth = 24;
+    /** @type {number} Icon height (px). */
     IconHeight = 24;
+    /** @type {string} Color class of the icon. */
     IconColor = "IconColorThemeBackground";
 }
 
+/**
+ * A text button with an optional ColorIcon.
+ * DOM: <Sysweaver-Button> (style.ButtonElement) containing <Sysweaver-ButtonText> and optionally the icon
+ * element; the element gets an expando Button pointing back to this instance. CSS classes used:
+ * "Pressed" (while pressed / click running) and "Disabled".
+ * Usage: const b = new Button(null, "Save", "Save changes", "IconSave", true, async btn => {...});
+ */
 class Button {
 
+    /**
+     * Create a container element for a row of buttons.
+     * @returns {HTMLElement} A new SysWeaver-CenterBlock element.
+     */
     static CreateRow() {
         return document.createElement("SysWeaver-CenterBlock");
     }
 
+    /** @type {ButtonStyle} Style used when none is supplied. */
     static DefaultStyle = new ButtonStyle();
 
+    /**
+     * @param {ButtonStyle} [style] - Style (default Button.DefaultStyle).
+     * @param {string} text - Button text.
+     * @param {string} title - Tooltip (only set while enabled).
+     * @param {string} [imageClass] - Icon image class/url (no icon if empty).
+     * @param {boolean} enabled - Initial enabled state.
+     * @param {function(Button):Promise<(function():void)|void>} [onclick] - Click handler (stored in UserClick);
+     * exceptions are swallowed; a returned function is called after the press ends.
+     */
     constructor(style, text, title, imageClass, enabled, onclick) {
         if (!style)
             style = Button.DefaultStyle;
@@ -3566,6 +4271,12 @@ class Button {
 
         let haveMouseDown = false;
 
+        /**
+         * Click handler: ignores modified clicks, adds "Pressed", detaches onclick while running UserClick,
+         * waits MinPressed ms, re-attaches onclick if still enabled and removes "Pressed".
+         * @param {Event} ev - Click (or Enter keyup) event.
+         * @returns {Promise<void>}
+         */
         const clickFn = async ev => {
             if (badClick(ev))
                 return;
@@ -3590,6 +4301,7 @@ class Button {
                 exitFn();
         };
 
+        // Mouse handlers show "Pressed" while the left button is held over the button
         e.onmousedown = ev => {
             if (ev.button != 0)
                 return;
@@ -3635,27 +4347,47 @@ class Button {
             e.classList.add("Disabled");
 
     }
+    /** @type {HTMLElement} The button element. */
     Element = null;
+    /** @type {string} Tooltip text. */
     Title = null;
+    /** @type {boolean} Enabled state (see Enable/Disable). */
     IsEnabled = false;
+    /** @type {function(Event):Promise<void>} The internal click handler (attached while enabled). */
     OnClick = null;
 
+    /**
+     * Change the icon image (no-op without an icon).
+     * @param {string} imageClass - New image class/url.
+     */
     ChangeImage(imageClass) {
         const i = this.Icon;
         if (i)
             i.ChangeImage(imageClass);
     }
 
+    /**
+     * Change the icon color class (no-op without an icon).
+     * @param {string} imageColorClass - New color class.
+     */
     ChangeImageColor(imageColorClass) {
         const i = this.Icon;
         if (i)
             i.ChangeColor(imageColorClass);
     }
 
+    /**
+     * Change the button text.
+     * @param {string} newText - New text.
+     */
     ChangeText(newText) {
         this.Text.textContent = newText;
     }
 
+    /**
+     * Change the tooltip of the button and its icon. Note: sets element.title even while disabled.
+     * @param {string} newTitle - New title.
+     */
     ChangeTitle(newTitle) {
         if (this.Title === newTitle)
             return;
@@ -3666,6 +4398,10 @@ class Button {
             i.SetTitle(newTitle);
     }
 
+    /**
+     * Enable or disable the button.
+     * @param {boolean} enable - True to enable.
+     */
     SetEnabled(enable) {
         if (enable)
             this.Enable();
@@ -3673,6 +4409,9 @@ class Button {
             this.Disable();
     }
 
+    /**
+     * Enable: tabIndex 0, restore title, attach onclick and an Enter onkeyup handler, remove "Disabled".
+     */
     Enable() {
         if (this.IsEnabled)
             return;
@@ -3689,6 +4428,9 @@ class Button {
         e.classList.remove("Disabled");
     }
 
+    /**
+     * Disable: remove tabindex, clear title, onclick and onkeyup, add "Disabled".
+     */
     Disable() {
         if (!this.IsEnabled)
             return;
@@ -3702,12 +4444,18 @@ class Button {
     }
 
     // Will change the icon after some time (unless StopWorking is called before that)
+    /**
+     * Forwards to ColorIcon.StartWorking of the icon (no-op without an icon).
+     * @param {string} [iconName] - Working icon class (default IconWorking).
+     * @param {number} [changeAfterMs] - Delay before showing it (default 250).
+     */
     StartWorking(iconName, changeAfterMs) {
         const i = this.Icon;
         if (i)
             i.StartWorking(iconName, changeAfterMs);
     }
 
+    /** Forwards to ColorIcon.StopWorking of the icon (restores the original image). */
     StopWorking() {
         const i = this.Icon;
         if (i)
@@ -3722,6 +4470,12 @@ class Button {
     Get a function by name.
     context will default to window.
 */
+/**
+ * Resolve a dotted name ("A.B.fn") starting at context.
+ * @param {string} functionName - Dotted path.
+ * @param {object} [context=window] - Root object.
+ * @returns {function|undefined} The value found (throws if an intermediate namespace is missing).
+ */
 function GetFunction(functionName, context)
 {
     if (!context)
@@ -3759,6 +4513,10 @@ function Info(text, duration, noCopyOnClick) {
  * @param {number} duration An optional duration in milliseconds to show the message (default to 5 seconds).
  * @param {string} className The class to aaply to the message (for styling), currently MsgInfo and MsgError is used (use the Fail or Info function instead).
  * @param {boolean} noCopyOnClick By default the text message is copied to the clipboard on click (and then removed), set to true to disable the copying.
+ * Details: logs the text, then shows it in a single <SysWeaver-Fail> toast element appended to <body>
+ * (reused and its timer restarted if already shown; stored in document.body.FailElement / FailTimer).
+ * duration === true means 24 hours. Note: the tooltip and noCopyOnClick of an existing toast are the ones
+ * from when it was created.
  */
 function Message(text, duration, className, noCopyOnClick) {
     console.log(text);
@@ -3773,6 +4531,7 @@ function Message(text, duration, className, noCopyOnClick) {
     const el = document.body;
     let fe = el[ke];
 
+    /** Remove the toast element and clear the body expandos. */
     function Del() {
         fe.remove();
         el[ke] = null;
@@ -3806,7 +4565,8 @@ function Message(text, duration, className, noCopyOnClick) {
  * Compute a rank as to how well as set of string matches a search string, all string supplied must have the same casing.
  * @param {string} searchFor The string to search for, may not be null or empty.
  * @param {...string} inTexts Any number of strings to match against, the first string gets slighly better score and so on.
- * @returns A number with a score, zero means that no matching is found what so over
+ * Each occurrence adds 1/(1+textIndex*0.5) * 1/(1+position*0.5) (earlier texts and positions score higher).
+ * @returns {number} A number with a score, zero means that no matching is found what so over
  */
 function RankScoreMatch(searchFor, ...inTexts) {
     let rank = 0;
@@ -3830,6 +4590,15 @@ function RankScoreMatch(searchFor, ...inTexts) {
 }
 
 
+/**
+ * Click handler for links created by ValueFormat.createLink: a modified click copies the url to the
+ * clipboard (with an info toast); otherwise ViewUrl (useView), EditUrl (useEdit) or Open.
+ * @param {Event} ev - Click event.
+ * @param {string} url - Link url.
+ * @param {string} [target] - Window target.
+ * @param {boolean} [useEdit] - Open with the registered editor.
+ * @param {boolean} [useView] - Open with the registered viewer (takes precedence).
+ */
 function onLink(ev, url, target, useEdit, useView) {
     if (badClick(ev)) {
         ValueFormat.copyToClipboardInfo(url);
@@ -3848,6 +4617,11 @@ function onLink(ev, url, target, useEdit, useView) {
 
 
 
+/**
+ * Replace every <a> in the document with a ValueFormat.createLink link (target defaults to "_self").
+ * Anchors whose first child is an <img> become image links; other anchors with child elements are left
+ * as is (warning logged); text anchors become text links.
+ */
 function fixLinks() {
     const els = Array.prototype.slice.call(document.getElementsByTagName("a"));
     const el = els.length;
@@ -3874,8 +4648,14 @@ function fixLinks() {
 
 
 
+/**
+ * Bit flags for currency formatting, consumed by ValueFormat.toAmount.
+ * The low two bits (mask Symbol = 3) select the style: None, IsoPrefix, IsoSuffix or Symbol.
+ * @type {Readonly<{None:number, IsoPrefix:number, IsoSuffix:number, Symbol:number, ForceRounding:number, ApplyThousandsSeparator:number, AutomaticRounding:number, Default:number}>}
+ */
 const CurrencyFormatOptions = Object.freeze({
 
+    /** No currency code or symbol */
     None: 0,
     /** Adds a ISO 4217 currency code as a prefix, ex: "USD 100.00" */
     IsoPrefix: 1,
@@ -3899,8 +4679,10 @@ const CurrencyFormatOptions = Object.freeze({
  * Wrap a stringFormat argument in a html element (typically a span), ex: "John Doe" => <span>John Doe</span>
  * @param {any} argValue The value to wrap
  * @param {string} elementClass Optional class(es) to add to the element that wraps the argument.
- * @param {string} elementType Optional element type name to use, defaults to "span".
- * @returns {string} HTML with the argument value wrapped in a html element
+ * @param {string} elementType Optional element type name to use; note: the code defaults to "b" (not "span").
+ * @returns {function(string, function(string,number):string, number):string|undefined} A formatter function
+ * (called by ValueFormat.stringFormatArgs with (argNumber, caseFormatter, position)) that returns the HTML of
+ * the wrapping element with the (case formatted) value as its text; undefined if argValue is undefined.
  */
 function ArgAsHtml(argValue, elementClass, elementType) {
     if (typeof argValue === "undefined")
@@ -3916,12 +4698,19 @@ function ArgAsHtml(argValue, elementClass, elementType) {
 }
 
 
+/**
+ * Resolve any CSS color (keyword, hex, var() etc.) to its computed "rgb(...)"/"rgba(...)" string, using a
+ * hidden <div> (cached in window.DivGetRgbColor) that is temporarily appended to <body>.
+ * @param {string} colorKeyword - CSS color value.
+ * @returns {string} The computed color.
+ */
 function GetRgbColor(colorKeyword)
 {
     let el = window.DivGetRgbColor;
     if (!el) {
         el = document.createElement('div');
         el.style.display = "none";
+        /** @type {HTMLDivElement} Reusable hidden element for GetRgbColor. */
         window.DivGetRgbColor = el;
     }
     el.style.color = colorKeyword;
@@ -3931,12 +4720,33 @@ function GetRgbColor(colorKeyword)
     return rgbValue;
 }
 
+/**
+ * Static class with value formatting helpers (numbers, amounts, sizes, time spans, string formatting,
+ * Markdown) and the table-cell renderers update* (functions with signature (element, value, ...)
+ * that render a value into an element; used by the table/explore pages and selected via typeFormatter /
+ * formatFormatter). Also holds detached template nodes (TextNode, LinkNode, ImgNode, TagSpanNode, Temp*)
+ * that are cloned when rendering.
+ *
+ * Common renderer signature: update<Format>(el, value, formats, nextValue, flash, type, onRefresh)
+ *  - el {HTMLElement}: the cell element (its expandos Format/Updater track the current renderer).
+ *  - value {*}: the value to render; nextValue {*}: an optional second value referenced as {1} in formats.
+ *  - formats {Array}: the parsed format specification; formats[0] is the format kind and the remaining
+ *    entries are renderer specific (text template, title template, copy flag, ...).
+ *  - flash {string|false}: CSS class added briefly when the content changes.
+ *  - type {string}: the C# type name of the value; onRefresh {function}: called to request a refresh.
+ */
 class ValueFormat {
 
 
+    /** @type {string} Url of common.js (document.currentScript), base for includeJs/includeCss when current is null. */
     static Current = document.currentScript?.src ?? ".";
 
     // Set the element text (textContent) but respecting leading and trailing spaces
+    /**
+     * Leading/trailing spaces are converted to &nbsp; entities so they are not collapsed.
+     * @param {HTMLElement} element - Target element.
+     * @param {*} text - Value (converted to string).
+     */
     static setElementText(element, text) {
         text = "" + text;
         const tl = text.length;
@@ -3972,6 +4782,14 @@ class ValueFormat {
     }
 
 
+    /**
+     * Append a "header: value" line to a text, skipping null/undefined/empty values.
+     * Multi-line values are written as "header:\nvalue". The value is trimmed.
+     * @param {string} to - Text to append to (may be null).
+     * @param {string} [header] - Optional header.
+     * @param {*} value - Value.
+     * @returns {string} The extended text (or to unchanged).
+     */
     static AddNonNullLine(to, header, value) {
         if (value == null)
             return to;
@@ -3992,6 +4810,13 @@ class ValueFormat {
         return to;
     }
 
+    /**
+     * Split a CamelCase identifier into words: "MaxValueCount" => "Max value count" (an upper-case char
+     * after a non upper-case char becomes space + lower-case char).
+     * @param {string} str - Identifier.
+     * @param {string} [space=' '] - Separator to insert.
+     * @returns {string}
+     */
     static removeCamelCase(str, space) {
         if (!space)
             space = ' ';
@@ -4114,6 +4939,12 @@ class ValueFormat {
     }
 
 
+    /**
+     * Split text at the first occurrence of split into a trimmed [key, value] pair.
+     * @param {string} text - Text.
+     * @param {string} split - Separator.
+     * @returns {string[]} [key, value]; [text, ""] (untrimmed text) if the separator is missing.
+     */
     static keyValueSplit = function (text, split) {
         const s = text.indexOf(split);
         if (s < 0)
@@ -4122,6 +4953,14 @@ class ValueFormat {
         return [text.substring(0, s).trim(), v];
     }
 
+    /**
+     * Spell out a count with a suffix: 0-9 as (translated) words, e.g. countSuffix(1, " banana", " bananas")
+     * => "one banana"; other numbers as digits + pluralSuffix.
+     * @param {number} count - The count.
+     * @param {string} singularSuffix - Suffix for 1.
+     * @param {string} pluralSuffix - Suffix for other counts.
+     * @returns {string}
+     */
     static countSuffix(count, singularSuffix, pluralSuffix) {
         switch (count) {
             case 0:
@@ -4176,6 +5015,7 @@ class ValueFormat {
     }
     */
 
+    /** @type {Map<string, function(string, number):string>} Placeholder prefix ('_', '^', '$') -> case formatter (val, position). */
     static FormatMaps = function () {
         const m = new Map();
         m.set('_', (val, index) => val.toLowerCase());
@@ -4191,8 +5031,9 @@ class ValueFormat {
      * {_0} = Makes the first argument lower-cased.
      * {^0} = Makes the first argument upper-cased.
      * {$0} = Makes the first argument lower-cased, unless it's at position 0 in the format template string (start of the string).
-     * @param {any} args Any number of arguments.
-     * @returns {string} The formatted string.
+     * @param {any[]} args The arguments array. Undefined arguments leave the placeholder as is; function
+     * arguments (e.g. from ArgAsHtml) are called with (number, caseFormatter, position) and their result used.
+     * @returns {string} The formatted string (undefined if format is falsy).
      */
     static stringFormatArgs = function (format, args) {
         if (!format)
@@ -4214,11 +5055,26 @@ class ValueFormat {
             return val;
         });
     };
+    /**
+     * Same as stringFormatArgs but with the arguments as varargs: stringFormat("Hi {0}", name).
+     * @param {string} format - The format template.
+     * @returns {string} The formatted string.
+     */
     static stringFormat = function (format) {
         const args = Array.prototype.slice.call(arguments, 1);
         return ValueFormat.stringFormatArgs(format, args);
     };
 
+    /**
+     * Format a value with a k/M/G/T/E unit prefix: values below 5*k are shown as integers with emptySuffix,
+     * otherwise divided by k until below 5*k and shown with 1 decimal and " k"/" M"/" G"/" T" + suffix;
+     * anything larger uses " E" (note: there is no P step). Negative values get a "- " prefix.
+     * @param {number} value - The value.
+     * @param {string} suffix - Unit appended after the prefix letter (e.g. "B").
+     * @param {string} emptySuffix - Unit used without prefix (e.g. "bytes").
+     * @param {number} [k=1024] - Step factor.
+     * @returns {string}
+     */
     static formatSuffix(value, suffix, emptySuffix, k)
     {
         const isNeg = value < 0;
@@ -4247,6 +5103,13 @@ class ValueFormat {
     }
 
 
+    /**
+     * Format a duration in milliseconds as human readable (translated) text: "N ms" (< 100 ms), seconds
+     * (1 decimal below 10 s, then integer below 600 s), minutes (< 600), hours (< 72), days (< 3 years), years.
+     * @param {number} value - Duration in ms.
+     * @param {boolean|string} [blankIfNeg] - For negative values return "" (true) or this string; otherwise a "-" prefix.
+     * @returns {string}
+     */
     static formatTimeSpanMs(value, blankIfNeg) {
         const isNeg = value < 0;
         if (isNeg) {
@@ -4275,6 +5138,14 @@ class ValueFormat {
         return prefix + _T("{0} years", ValueFormat.toString(value, 0), 'Text formatting for elapsed number of years, example: "7 years"');
     }
 
+    /**
+     * Format a .NET TimeSpan string ("[-][d.]hh:mm:ss[.fffffff]") or a number of seconds as human readable
+     * (translated) text using the largest fitting unit: years (>= 3*365 days), days (>= 3), hours (>= 10),
+     * minutes (>= 10), seconds (>= 10, 1 decimal), ms (>= 10), else µs. Negative values get a "- " prefix.
+     * @param {string|number} value - TimeSpan text or seconds.
+     * @param {string} [zeroAsThis] - Text for a zero duration (default "0").
+     * @returns {string} The text ("-" for an empty value).
+     */
     static formatTimeSpan(value, zeroAsThis) {
         value = "" + value;
         if (value.length == 0)
@@ -4319,8 +5190,19 @@ class ValueFormat {
 //        return prefix + ValueFormat.toString(ns, ns >= 10 ? 1 : 3) + " ns";
     }
 
+    /** @type {HTMLTableCellElement} Detached template <td> node. */
     static TextNode = document.createElement("td");
 
+    /**
+     * Set the (trimmed) text and optionally the title of an element, if changed.
+     * When changed and flash is given, the flash class is removed and re-added on the next tick (restarting
+     * its CSS animation) and removed again after 1050 ms.
+     * @param {HTMLElement} el - Target element.
+     * @param {*} text - Text (null/undefined = "").
+     * @param {string} [title] - Tooltip (only set when truthy).
+     * @param {string} [flash] - CSS class used to flash the change.
+     * @returns {boolean} true if the text was changed (or el had child elements).
+     */
     static updateText = function (el, text, title, flash) {
         text = (typeof text === 'undefined') || (text === null) ? '' : ('' + text);
         text = text.trim();
@@ -4347,6 +5229,14 @@ class ValueFormat {
 
 
 
+    /**
+     * Like updateText but sets innerHTML (compared with the current innerHTML).
+     * @param {HTMLElement} el - Target element.
+     * @param {*} html - HTML (null/undefined = "").
+     * @param {string} [title] - Tooltip (only set when truthy).
+     * @param {string} [flash] - CSS class used to flash the change.
+     * @returns {boolean} true if changed.
+     */
     static updateHtml = function (el, html, title, flash) {
         html = (typeof html === 'undefined') || (html === null) ? '' : ('' + html);
         if (title) {
@@ -4368,6 +5258,14 @@ class ValueFormat {
         return true;
     }
 
+    /**
+     * Track which renderer owns a cell (el.Format). When the format changes, the cell is reset: the
+     * Updater interval is cleared, inline color/background cleared, text set to "error", the classes
+     * Right/Center/Null/False/Monospaced/Text/Toggle removed, onclick cleared and keyboard click removed.
+     * @param {HTMLElement} el - The cell.
+     * @param {string} formatName - Renderer name.
+     * @returns {boolean} true if the format is new (first use or changed) so the renderer must set up the cell.
+     */
     static updateFormat = function (el, formatName) {
         const c = el["Format"];
         if (!c) {
@@ -4400,6 +5298,11 @@ class ValueFormat {
     }
 
     // Returns null if there is an error, else an array where [0] = true if the data is json, else it's text, [1] = is the text.
+    /**
+     * Read text from the clipboard (navigator.clipboard.readText). Note: despite the comment above, the
+     * text itself is returned, not an array.
+     * @returns {Promise<string|null>} The text, or null if unavailable / denied.
+     */
     static async readFromClipboard() {
         const c = navigator.clipboard;
         if (!c)
@@ -4414,6 +5317,11 @@ class ValueFormat {
         }
     }
 
+    /**
+     * Copy text to the clipboard (logs the result to the console).
+     * @param {string} v - Text.
+     * @returns {Promise<boolean>} true on success.
+     */
     static async copyToClipboard(v) {
         try {
             await navigator.clipboard.writeText(v);
@@ -4426,6 +5334,12 @@ class ValueFormat {
         }
     }
 
+    /**
+     * Copy text to the clipboard and show an Info toast (or a Fail toast on error).
+     * @param {string} v - Text.
+     * @param {boolean} [genericText] - Use a generic message instead of quoting the copied text.
+     * @returns {Promise<boolean>} true on success.
+     */
     static async copyToClipboardInfo(v, genericText) {
         try {
             await navigator.clipboard.writeText(v);
@@ -4452,10 +5366,20 @@ class ValueFormat {
         }
     }
 
+    /**
+     * Make clicking an element copy a value (or its textContent when value is null/undefined) to the
+     * clipboard with an info toast. Adds class "MouseClick" and replaces el.onclick.
+     * @param {HTMLElement} el - Element.
+     * @param {*} value - Value to copy (null = the element's current text).
+     * @param {boolean} [addKeyboard] - Also enable keyboardClick and the copy event (el.oncopy).
+     * @param {boolean} [addTitleToElement] - Append the tooltip text to el.title.
+     * @returns {string} The (translated) "Click to copy..." tooltip text.
+     */
     static copyOnClick(el, value, addKeyboard, addTitleToElement) {
         const v = (value === null || (typeof(value) === "undefined")) ? null : ('' + value);
         const e = el;
         e.classList.add("MouseClick");
+        /** Copy the value (or current text) with an info toast. @returns {Promise<void>} */
         async function Copy() {
             const val = v === null ? e.textContent : v;
             await ValueFormat.copyToClipboardInfo(val);
@@ -4475,12 +5399,26 @@ class ValueFormat {
         return title;
     }
 
+    /**
+     * Join the truthy arguments.
+     * @param {string} [delim="\n"] - Delimiter.
+     * @param {...*} args - Values (falsy ones are skipped).
+     * @returns {string}
+     */
     static joinNonEmpty(delim, ...args) {
         return args.filter(Boolean).join(delim ?? '\n');
     }
 
 
 
+    /**
+     * Renderer "WebColor": shows the color text (formats[1], default "{0}") with the color as cell background,
+     * adds class "False" for dark colors (luma < 128, so the text color can contrast), and a tooltip
+     * (formats[2] + R/G/B/A components + copy hint). Click copies the color text. Empty values clear the cell.
+     * Note: the alpha component is parsed with parseInt, so fractional alpha values become 0.
+     * See the class description for the parameters.
+     * @returns {boolean|undefined} true when a color was rendered.
+     */
     static updateWebColor(el, value, formats, nextValue, flash, type, onRefresh) {
         if (!value) {
             ValueFormat.updateFormat(el, "");
@@ -4522,6 +5460,12 @@ class ValueFormat {
     }
 
 
+    /**
+     * Renderer "Default" (class "Text"): text = formats[1] (default "{0}"; null value = ""), title =
+     * formats[2] (default "Raw: {2}" when the text differs from the value). formats[3]: copy on click
+     * (default on; a string is a template for the copied value). Template args: {0} text, {1} nextValue, {2} value.
+     * See the class description for the parameters.
+     */
     static updateDefault(el, value, formats, nextValue, flash, type, onRefresh) {
 
         if (ValueFormat.updateFormat(el, "Default"))
@@ -4539,6 +5483,11 @@ class ValueFormat {
         ValueFormat.updateText(el, text, title, flash);
     }
 
+    /**
+     * Renderer for C# type names: when no formats are given, uses an url format linking to
+     * ../edit/type.html?q=<value> in the same window, then delegates to updateUrl.
+     * Note: mutates the formats array. See the class description for the parameters.
+     */
     static updateType(el, value, formats, nextValue, flash, type, onRefresh) {
 
         if (formats.length <= 0)
@@ -4547,6 +5496,13 @@ class ValueFormat {
     }
     
 
+    /**
+     * Renderer "Number" (classes "Right", "Monospaced"): formats[1] = decimals (negative/missing = that many
+     * decimals only for decimal types per isDecimal, default -2), formats[2] = text template ({0} formatted
+     * value, {1} nextValue, {2} raw value), formats[3] = title template (default "Raw: {2}"), formats[4] =
+     * copy on click (default on). Sets class "False" for negative and "Null" for zero values.
+     * See the class description for the parameters.
+     */
     static updateNumber(el, value, formats, nextValue, flash, type, onRefresh) {
         if (ValueFormat.updateFormat(el, "Number")) {
             el.classList.add("Right");
@@ -4588,10 +5544,18 @@ class ValueFormat {
     }
 
 
+    /** @type {HTMLElement} Detached template SysWeaver-Link node. */
     static LinkNode = document.createElement("SysWeaver-Link");
+    /** @type {HTMLImageElement} Detached template img node. */
     static ImgNode = document.createElement("img");
 
     // Returns [url, target]
+    /**
+     * Split a target prefix from an url: '+' = _blank, '*' = _self, '^' = _top, '-' = _parent,
+     * no prefix = _blank.
+     * @param {string} url - Url with optional prefix char.
+     * @returns {string[]} [url, target] (["", ""] for empty urls).
+     */
     static getUrlTarget(url) {
         if (!url)
             return ["", ""];
@@ -4611,12 +5575,32 @@ class ValueFormat {
     }
 
 
+    /**
+     * Set an inline onclick attribute "onLink(event,'url','target')" (survives outerHTML serialization).
+     * Note: the url is not escaped, so quotes in it break the attribute.
+     * @param {HTMLElement} element - Element.
+     * @param {string} url - Url.
+     * @param {string} target - Window target.
+     */
     static setOnClickAttr(element, url, target) {
         element.setAttribute("onclick", "onLink(event,'" + url + "','" + target + "')");
     }
 
 
 
+    /**
+     * Create a clickable SysWeaver-Link element (tabIndex 0) that opens url through onLink.
+     * @param {string} url - Link url.
+     * @param {string} [text] - Link text, or the image src when isImage.
+     * @param {string} [target="_self"] - Window target.
+     * @param {string} [title] - Tooltip.
+     * @param {boolean} [isImage] - Show an <img> (createImg) instead of text; adds class "Image".
+     * @param {boolean} [useAttr] - Use an inline onclick attribute (setOnClickAttr) instead of a handler
+     * property + keyboardClick (needed when the element is serialized to HTML).
+     * @param {boolean} [useEdit] - Open with the registered editor (handler variant only).
+     * @param {boolean} [useView] - Open with the registered viewer (handler variant only).
+     * @returns {HTMLElement} The link element.
+     */
     static createLink(url, text, target, title, isImage, useAttr, useEdit, useView) {
         const a = document.createElement("SysWeaver-Link");
         a.tabIndex = "0";
@@ -4643,6 +5627,13 @@ class ValueFormat {
         return a;
     }
 
+    /**
+     * Renderer "Url": text = formats[1] (default "{0}"), url = formats[2] (default "{2}" = the text; may
+     * start with a target prefix, see getUrlTarget), title = formats[3] (default 'Click to open "{3}".').
+     * Template args: {0} value, {1} nextValue, {2} text, {3} absolute url. Renders the serialized LinkNode
+     * (inline onclick) as HTML plus keyboardClick, or plain text when there is no url.
+     * See the class description for the parameters.
+     */
     static updateUrl(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Url");
         if (typeof value === "undefined" || value === null) {
@@ -4668,6 +5659,13 @@ class ValueFormat {
             removeKeyboardClick(el);
     }
 
+    /**
+     * Renderer "Img": formats[1] = src template (a leading '-' aligns Left, '+' Right, '*' none), formats[2] =
+     * optional click url template (target prefix allowed), formats[3] = title, formats[4]/[5] = max width/height
+     * (px, scaled by --ThemeIconSize), formats[6] = prefix for relative values. Renders the serialized
+     * ImgNode (class "ImgLink" + inline onclick when it has an url). Note: the alignment class is added
+     * to the cell but never removed. See the class description for the parameters.
+     */
     static updateImg(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Img");
         if (typeof value === "undefined" || value === null) {
@@ -4727,7 +5725,9 @@ class ValueFormat {
 
 
 /**
- * 
+ * Build the tooltip and display text for a time stamp. The display text is "yyyy-mm-dd hh:mm:ss" (or only
+ * the date); unless fmt is "local", the tooltip also lists Local/Full/UTC/ISO representations.
+ * Default (no fmt): the value is treated as UTC and shifted to local time for display.
  * @param {string|number|Date} dd The date
  * @param {boolean} onlyDate True to only show the date part
  * @param {string} prefix Optional prefix
@@ -4774,6 +5774,13 @@ class ValueFormat {
         return [title, c];
     }
 
+    /**
+     * Shift a Date by the local timezone offset (so that its local fields show the UTC time).
+     * Note: the time is shifted twice (getTime offset and then setHours); in practice the result is the
+     * time shifted by the offset with the hour field recomputed.
+     * @param {Date} date - Input date.
+     * @returns {Date} A new shifted Date.
+     */
     static convertLocalDateToUTCDate(date) {
         const newDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
         const offset = date.getTimezoneOffset() / 60;
@@ -4782,6 +5789,12 @@ class ValueFormat {
         return newDate;
     }
 
+    /**
+     * Inverse of convertLocalDateToUTCDate: shift a Date by minus the local timezone offset so that its
+     * UTC fields (toISOString) show the local time.
+     * @param {Date} date - Input date.
+     * @returns {Date} A new shifted Date.
+     */
     static convertUTCDateToLocalDate(date) {
         const newDate = new Date(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
         const offset = date.getTimezoneOffset() / 60;
@@ -4790,6 +5803,17 @@ class ValueFormat {
         return newDate;
     }
 
+    /**
+     * Renderer "DateTimeLive" (classes "Monospaced", "Right"): shows the elapsed time since value
+     * (formatTimeSpanMs, wrapped in formats[2], default "{0}") and keeps it updated with setTimeout
+     * (every 100 ms, or at minute boundaries after 10 minutes; id in el.Updater) until the element has been
+     * attached and is detached again. "0001-01-01T00:00:00" shows "-" (not set); a falsy value shows "Now".
+     * See the class description for the common parameters.
+     * @param {boolean} [noCopy] - Do not add copy-on-click.
+     * @param {boolean|string} [blankIfNeg] - Passed to formatTimeSpanMs for future times.
+     * @param {boolean} [invert] - Show the time until value instead of since.
+     * @returns {HTMLElement} el.
+     */
     static updateDateTimeLive(el, value, formats, nextValue, flash, type, onRefresh, noCopy, blankIfNeg, invert) {
         const fmt = (formats ? formats[2] : null) ?? "{0}";
         if (ValueFormat.updateFormat(el, "DateTimeLive" + (fmt ?? ""))) {
@@ -4817,6 +5841,7 @@ class ValueFormat {
         const tt = ValueFormat.stringFormat(fmt, ValueFormat.formatTimeSpanMs(elapsed, blankIfNeg));
         ValueFormat.updateText(el, tt, title, flash);
         let haveBeenAttached = isInDocument(el);
+        /** Refresh the elapsed text and schedule the next refresh (stops once detached after being attached). */
         const update = () => {
             const isAttached = isInDocument(el);
             if (haveBeenAttached) {
@@ -4837,6 +5862,15 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Renderer "DateTime" (classes "ValueFormatDt", "ValueFormatDt<fmt>", "Monospaced", "Right"): shows the
+     * time stamp from getTimeStampTitle with formats[0] as fmt ("utc"/"local"). "0001-01-01T00:00:00" shows
+     * "-"; a falsy value shows the current time, updated every second (el.Updater) while attached.
+     * See the class description for the common parameters.
+     * @param {boolean} [onlyDate] - Unused by the implementation.
+     * @param {boolean} [noCopy] - Do not add copy-on-click.
+     * @returns {HTMLElement} el.
+     */
     static updateDateTime(el, value, formats, nextValue, flash, type, onRefresh, onlyDate, noCopy) {
         const fmt = formats ? formats[0] : null;
         const cl = el.classList;
@@ -4852,6 +5886,7 @@ class ValueFormat {
         }
         if (!value) {
             let haveBeenAttached = isInDocument(el);
+            /** Show the current time and re-schedule every second (stops once detached after being attached). */
             const update = () => {
                 const isAttached = isInDocument(el);
                 if (haveBeenAttached) {
@@ -4878,6 +5913,13 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Renderer "TimeSpan" (classes "Monospaced", "Right"): formatTimeSpan(value, formats[4] = zero text),
+     * text = formats[1] (default "{0}"), title = formats[2] (default "Raw: {2}"), copy = formats[3] (see the
+     * inline comment). Template args: {0} formatted, {1} nextValue, {2} raw value, {3} text.
+     * See the class description for the parameters.
+     * @returns {HTMLElement} el.
+     */
     static updateTimeSpan(el, value, formats, nextValue, flash, type, onRefresh) {
 
         if (ValueFormat.updateFormat(el, "TimeSpan")) {
@@ -4899,6 +5941,11 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Syntax highlight json text: HTML-escapes it and wraps tokens in <span class="key|string|number|boolean|null">.
+     * @param {string} jsonText - (Pretty printed) json.
+     * @returns {string} HTML.
+     */
     static jsonToHtml(jsonText) {
         jsonText = jsonText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return jsonText.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
@@ -4918,6 +5965,13 @@ class ValueFormat {
         });
     }
 
+    /**
+     * Renderer "Json" (class "Monospaced"): shows the text capped at formats[1] chars (min 4) or the first line
+     * break (class "Capped" when cut). Title = formats[2] (default "{1}" = pretty printed json; {0} raw,
+     * {2} capped text). Clicking (without a text selection) opens a PopUp with the highlighted json and, if
+     * formats[3] (copy template) is set, a copy icon. See the class description for the parameters.
+     * @returns {HTMLElement|undefined} el (undefined for empty values).
+     */
     static updateJson(el, value, formats, nextValue, flash, type, onRefresh) {
 
         if (ValueFormat.updateFormat(el, "Json"))
@@ -4986,10 +6040,23 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Render Markdown into an element (innerHTML = MarkDownToHTML(text)).
+     * @param {HTMLElement} el - Target element.
+     * @param {string} text - Markdown.
+     * @returns {Promise<void>}
+     */
     static async SetMarkDown(el, text) {
         el.innerHTML = await ValueFormat.MarkDownToHTML(text);
     }
 
+    /**
+     * Convert Markdown to (sanitised) HTML using marked.js (loaded lazily with includeJs from common/).
+     * Raw HTML tags in the Markdown are only kept if they are in a small allow list (formatting tags such
+     * as b/strong/i/em/br/hr/img/figure...); links and images get custom renderers (see inner functions).
+     * @param {string} text - Markdown.
+     * @returns {Promise<string>} HTML.
+     */
     static async MarkDownToHTML(text) {
         const res = await includeJs(null, "marked.js");
         if (res.loaded) {
@@ -5043,8 +6110,16 @@ class ValueFormat {
             okMap.set("/<cite>", 1);
             okMap.set("/<bdo>", 1);
 
+            /** True while rendering the inline content of a link (so nested images render as plain img). */
             let inLink = false;
+            /** Custom marked renderers (registered with marked.use the first time marked.js is loaded here). */
             const renderer = {
+                /**
+                 * Render a link as <a target="_blank"> with a tooltip (title or 'Click to open ...'); relative
+                 * hrefs get the forced theme appended (appendTheme); links around images get class "Image".
+                 * @param {object} l - marked link token.
+                 * @returns {string} HTML.
+                 */
                 link(l) {
                     let text = null;
                     inLink = true;
@@ -5065,6 +6140,12 @@ class ValueFormat {
                         escapedText += '" class="Image"';
                     return `<a target="_blank" title="${makeHtmlAttributeSafe(title)}" href="${escapedText}">${text}</a>`;
                 },
+                /**
+                 * Render an image as a clickable <a class="Image" target="_blank"><img></a> (alt text prepended to
+                 * the tooltip); inside a link returns false to use marked's default renderer.
+                 * @param {object} l - marked image token.
+                 * @returns {string|false} HTML or false.
+                 */
                 image(l) {
                     if (inLink)
                         return false;
@@ -5077,6 +6158,12 @@ class ValueFormat {
                         title = l.text + "\n\n" + title;
                     return `<a class="Image" target="_blank" title="${makeHtmlAttributeSafe(title)}" href="${escapedText}"><img src="${escapedText}" /></a>`;
                 },
+                /**
+                 * Raw HTML filter: keeps tags from okMap and "<img " tags (returns false = default rendering),
+                 * drops everything else (returns "").
+                 * @param {object} l - marked html token.
+                 * @returns {string|false}
+                 */
                 html(l) {
                     const e = l.raw.indexOf('>');
                     if (e > 0) {
@@ -5094,6 +6181,11 @@ class ValueFormat {
         return marked.parse(text);
     }
 
+    /**
+     * Test if a selection contains any non-collapsed range.
+     * @param {Selection} [selection] - Selection (default window.getSelection()).
+     * @returns {boolean}
+     */
     static isAnythingSelected(selection) {
         selection = selection ?? window.getSelection();
         const selCount = selection.rangeCount;
@@ -5108,6 +6200,12 @@ class ValueFormat {
     }
 
 
+    /**
+     * Test if the user has selected text directly inside el (selection anchor's parent is el); used to avoid
+     * treating text selection as a click.
+     * @param {HTMLElement} el - Element.
+     * @returns {boolean}
+     */
     static haveElementSelection(el) {
         try {
             const sel = window.getSelection();
@@ -5122,6 +6220,13 @@ class ValueFormat {
         return false;
     }
 
+    /**
+     * Renderer "MarkDown": shows the raw text capped at formats[1] chars (min 4) or the first line break
+     * (class "Capped"), title = formats[2] (default "{0}" = full text; {1} capped text). Clicking (without a
+     * text selection) opens a PopUp with the rendered Markdown (SysWeaver-MdText) and, if formats[3] (copy
+     * template) is set, a copy icon. See the class description for the parameters.
+     * @returns {HTMLElement|undefined} el (undefined for empty values).
+     */
     static updateMarkDown(el, value, formats, nextValue, flash, type, onRefresh) {
 
         ValueFormat.updateFormat(el, "MarkDown");
@@ -5185,6 +6290,12 @@ class ValueFormat {
     }
 
 
+    /**
+     * Renderer "LongText": like updateMarkDown but the PopUp shows the plain text (SysWeaver-LongText,
+     * class "Mono" and cell class "Monospaced" when formats[4] === "True").
+     * See the class description for the parameters.
+     * @returns {HTMLElement|undefined} el (undefined for empty values).
+     */
     static updateLongText(el, value, formats, nextValue, flash, type, onRefresh) {
 
         const isMonoSpace = formats[4] === "True";
@@ -5254,6 +6365,11 @@ class ValueFormat {
     }
     
 
+    /**
+     * Renderer "Boolean": "☑ True" (class "Text") or "☐ False" (class "False"), copy on click.
+     * See the class description for the parameters.
+     * @returns {HTMLElement} el.
+     */
     static updateBoolean(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Boolean");
         const c = value ? _TF('☑ True', 'A boolean true indicator, displayed when something is true') : _TF('☐ False', 'A boolean false indicator, displayed when something is false');
@@ -5270,10 +6386,20 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Format a byte count, e.g. "1 000 bytes", "12.3 kb", "5.0 Mb" (formatSuffix with k = 1024).
+     * @param {number} value - Number of bytes.
+     * @returns {string}
+     */
     static formatByteSize(value) {
         return ValueFormat.formatSuffix(value, "b", "bytes", 1024)
     }
 
+    /**
+     * Renderer "ByteSize" (classes "Right", "Monospaced"): formatByteSize, text = formats[2] (default "{0}"),
+     * title = formats[3] (default "Raw: {2}"), always copy on click. See the class description for the parameters.
+     * @returns {HTMLElement} el.
+     */
     static updateByteSize(el, value, formats, nextValue, flash, type, onRefresh) {
         if (ValueFormat.updateFormat(el, "ByteSize")) {
             el.classList.add("Right");
@@ -5291,6 +6417,11 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Renderer for byte speeds (registers itself as format "ByteSize"): like updateByteSize with units
+     * "b/s"/"bytes/s". Note: formats must not be null here. See the class description for the parameters.
+     * @returns {HTMLElement} el.
+     */
     static updateByteSpeed(el, value, formats, nextValue, flash, type, onRefresh) {
         if (ValueFormat.updateFormat(el, "ByteSize")) {
             el.classList.add("Right");
@@ -5309,8 +6440,17 @@ class ValueFormat {
     }
 
 
+    /** @type {HTMLSpanElement} Detached template span used to build tag HTML. */
     static TagSpanNode = document.createElement("span");
 
+    /**
+     * Renderer "Tags": value is a comma separated list ('¤' inside a tag stands for ','; an empty string shows
+     * "🔑"); each tag "key:value" becomes a <span> with text formats[1] (default "{1}" = key) and title formats[2]
+     * (default "{2}" = value); template args {0} tag, {1} key, {2} value, {3} text, {4} title. formats[3] =
+     * per tag copy template; formats[4] === "true" copies the whole raw value on cell click.
+     * See the class description for the parameters.
+     * @returns {HTMLElement|undefined} el.
+     */
     static updateTags(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Tags");
         if (value == null) {
@@ -5352,6 +6492,12 @@ class ValueFormat {
         return el;
     }
 
+    /**
+     * Renderer where each row supplies its own format in nextValue as "type|format|nextValue": delegates to
+     * ValueFormat.update with that type (first comma part), format and next value; without nextValue renders
+     * as default string. See the class description for the parameters.
+     * @returns {HTMLElement|undefined} el.
+     */
     static updatePerRowFormat(el, value, formats, nextValue, flash, type, onRefresh) {
         if (!nextValue) {
             ValueFormat.updateDefault(el, value, formats, nextValue, flash, "System.String");
@@ -5363,8 +6509,17 @@ class ValueFormat {
     }
 
 
+    /** @type {HTMLElement} Detached template SysWeaver-toggle node. */
     static TempToggle = document.createElement("SysWeaver-toggle");
 
+    /**
+     * Renderer "Toggle" (cell class "Toggle"): value is "bool[,arg2,...]" ("true"/"1" = checked); args for
+     * templates are [bool, nextValue, ...rest]. Shows "☑ " + formats[1] (default "True") or "☐ " + formats[2]
+     * (default "False"), tooltip formats[3]/formats[4]. Clicking the SysWeaver-toggle child sends
+     * getRequest(formats[5] formatted with args) (class "Null" while busy) and then calls onRefresh().
+     * See the class description for the parameters.
+     * @returns {HTMLElement} el.
+     */
     static updateToggle(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Toggle");
         const args = ("" + value).split(',');
@@ -5412,10 +6567,21 @@ class ValueFormat {
     }
 
 
+    /** @type {HTMLElement} Detached template SysWeaver-action node. */
     static TempAction = document.createElement("SysWeaver-action");
+    /** @type {HTMLElement} Detached template SysWeaver-actionText node. */
     static TempSpan = document.createElement("SysWeaver-actionText");
+    /** @type {HTMLImageElement} Detached template img node for action icons. */
     static TempImage = document.createElement("img");
 
+    /**
+     * Renderer "Actions": renders one SysWeaver-action per formats entry 1..n, each "text|title|link|image"
+     * formatted with args [value parts..., with nextValue inserted at index 1]; the image is a 20x20 ColorIcon.
+     * Clicking an action with a link: "&url" opens url in _self, "@url" in _blank, otherwise getRequest(url)
+     * (class "Null" while busy); then onRefresh() is called. Actions without link get class "Disabled".
+     * The cell gets class "Toggle". See the class description for the parameters.
+     * @returns {HTMLElement|undefined} el.
+     */
     static updateActions(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Actions");
         if (value === null) {
@@ -5499,12 +6665,14 @@ class ValueFormat {
         return el;
     }
 
+    /** @type {Map<string, boolean>} C# types that are non-integer numbers (used by updateNumber for default decimals). */
     static isDecimal = new Map([
         ["System.Single", true],
         ["System.Double", true],
         ["System.Decimal", true],
     ]);
 
+    /** @type {Map<string, function>} C# type name -> default renderer (others use updateDefault). */
     static typeFormatter = new Map([
         ["System.SByte", ValueFormat.updateNumber],
         ["System.Int16", ValueFormat.updateNumber],
@@ -5523,6 +6691,7 @@ class ValueFormat {
         ["System.Type", ValueFormat.updateType],
     ]);
 
+    /** @type {Map<string, function>} Format kind (first ';' separated part of the format string) -> renderer; overrides typeFormatter. */
     static formatFormatter = new Map([
         ["Number", ValueFormat.updateNumber],
         ["Url", ValueFormat.updateUrl],
@@ -5541,6 +6710,19 @@ class ValueFormat {
         ["WebColor", ValueFormat.updateWebColor],
     ]);
 
+    /**
+     * Render a value into a cell: splits format by ';' into formats, picks the renderer from
+     * formatFormatter[formats[0]], else typeFormatter[type], else updateDefault, keeps exactly one
+     * "ValueFormat<kind>" class on the element (removing other ValueFormat* classes) and calls the renderer.
+     * @param {HTMLElement} el - The cell.
+     * @param {string} type - C# type name of the value.
+     * @param {*} value - Value.
+     * @param {string|false} flash - Flash CSS class.
+     * @param {string} [format] - Format specification ("Kind;arg1;arg2...").
+     * @param {*} [nextValue] - Optional second value.
+     * @param {function} [onRefresh] - Refresh callback (used by Toggle/Actions).
+     * @returns {HTMLElement} el.
+     */
     static update = function (el, type, value, flash, format, nextValue, onRefresh) {
         const formats = format ? format.split(';') : [];
         const ts = ValueFormat.typeFormatter.get(type);
@@ -5573,10 +6755,13 @@ class ValueFormat {
 
 }
 
+/** Static helpers for the browser full screen mode (document.documentElement). */
 class FullScreen {
 
     /**
-     * Returns true if the page is in fullscreen mode
+     * Returns true if the page is in fullscreen mode.
+     * Checks fullscreenElement, then the display-mode standalone/fullscreen media queries; only if
+     * matchMedia throws, falls back to comparing the window's outer size with the screen size (16 px margin).
      * @returns {boolean} True if the application is in full screen
      */
     static IsFull() {
@@ -5617,6 +6802,10 @@ class FullScreen {
         return (dw <= margin) && (dh <= margin);
     }
 
+    /**
+     * Request full screen for <html> (standard or vendor prefixed method).
+     * @returns {Promise<boolean>} true if the request succeeded.
+     */
     static async Enter() {
 
         const e = document.documentElement;
@@ -5636,19 +6825,27 @@ class FullScreen {
         return false;
     }
 
+    /**
+     * Exit full screen; falls back to the webkit-prefixed `document.webkitCancelFullScreen()` (errors ignored).
+     * @returns {Promise<void>}
+     */
     static async Exit() {
         try {
             await document.exitFullscreen();
         }
         catch (e) {
             try {
-                documnet.webkitCancelFullScreen();
+                document.webkitCancelFullScreen();
             }
             catch (e) {
             }
         }
     }
 
+    /**
+     * Toggle full screen (Exit if IsFull, else Enter).
+     * @returns {Promise<void>}
+     */
     static async Toggle() {
         if (FullScreen.IsFull())
             await FullScreen.Exit();
@@ -5660,6 +6857,14 @@ class FullScreen {
 
 
 
+/**
+ * Serialize to json with the .NET polymorphic type marker "$type" as the FIRST property (as required by the
+ * server deserializer). Uses data.$type or optionalType (optionalType wins only when data has no $type... i.e.
+ * data.$type is used when optionalType is not given); without any type plain JSON.stringify is used.
+ * @param {*} data - Value to serialize (null/undefined => "null").
+ * @param {string} [optionalType] - Type name to use for "$type".
+ * @returns {string} Json text.
+ */
 function ToTypedJson(data, optionalType) {
     if (data == null)
         return "null";
@@ -5680,6 +6885,12 @@ function ToTypedJson(data, optionalType) {
     return JSON.stringify(data);
 }
 
+/**
+ * Prevent the device from sleeping (ref counted): plays a tiny looping, muted, detached <video>
+ * (embedded webm/mp4 data urls) whose playback is kept within the first 0.25 s. State is stored in
+ * document.NoSleep = {Video, Count}; the video starts on the first call. Pair with ExitNoSleep.
+ * @returns {Promise<void>}
+ */
 async function EnterNoSleep() {
     let state = document["NoSleep"];
     if (!state) {
@@ -5688,6 +6899,11 @@ async function EnterNoSleep() {
         e.setAttribute("title", "No Sleep");
         e.setAttribute("playsinline", "");
         e.setAttribute("loop", "");
+        /**
+         * Add a <source> child to the video.
+         * @param {string} type - Video sub type ("webm", "mp4").
+         * @param {string} dataURI - Source url.
+         */
         function Add(type, dataURI) {
             const source = document.createElement("source");
             source.src = dataURI;
@@ -5713,6 +6929,10 @@ async function EnterNoSleep() {
         await state.Video.play();
     }
 }
+/**
+ * Test if EnterNoSleep is active.
+ * @returns {boolean} true if the NoSleep ref count is above 0.
+ */
 function IsSleepPrevented() {
     const state = document["NoSleep"];
     if (!state)
@@ -5722,6 +6942,10 @@ function IsSleepPrevented() {
 
 
 
+/**
+ * Release one EnterNoSleep reference; pauses the video when the count drops from 1 to 0.
+ * @returns {Promise<void>}
+ */
 async function ExitNoSleep() {
     const state = document["NoSleep"];
     if (!state)
@@ -5739,7 +6963,7 @@ async function ExitNoSleep() {
 /**
  * Merge an array of Uint8Array's
  * @param {Uint8Array[]} arrayOfArrays The arrays to merge
- * @returns {Uint8Array} The merged arrays
+ * @returns {Uint8Array} The merged arrays (the single input array itself when only one is given)
  */
 function ConcatUint8Arrays(arrayOfArrays) {
     const l = arrayOfArrays.length;
@@ -5762,8 +6986,8 @@ function ConcatUint8Arrays(arrayOfArrays) {
 
 /**
  * Read all data from a stream into a buffer.
- * @param {Stream} stream The source stream to read
- * @returns {Uint8Array} The data read from the stream
+ * @param {ReadableStream<Uint8Array>} stream The source stream to read (async iterable)
+ * @returns {Promise<Uint8Array>} The data read from the stream
  */
 async function ReadAllData(stream) {
     const b = [];
@@ -5776,10 +7000,14 @@ async function ReadAllData(stream) {
  * A function that compresses a buffer using the deflate-raw algorithm.
  * This function uses the browsers built in functionality.
  * @param {Buffer} buffer Any buffer
- * @returns {Uint8Array} A buffer with the compressed bytes.
+ * @returns {Promise<Uint8Array>} A buffer with the compressed bytes.
  */
 async function DeflateCompress(buffer) {
     const inp = new ReadableStream({
+        /**
+         * Underlying source: enqueue the whole buffer as one chunk and close the stream.
+         * @param {ReadableStreamDefaultController} controller - Stream controller.
+         */
         start(controller) {
             controller.enqueue(buffer);
             controller.close();
@@ -5796,10 +7024,11 @@ async function DeflateCompress(buffer) {
  * @param {string} url Server target (url).
  * @param {any} data Post payload (serialized to json).
  * @returns {boolean} True is successful (does not mean that the server have processed it, just that it's queued).
+ * Uses navigator.sendBeacon; with data the body is a JSON Blob of JSON.stringify(data).
  */
 function postData(url, data) {
     if (data) {
-        const blob = new Blob([JSON.stringify(obj, data)], {
+        const blob = new Blob([JSON.stringify(data)], {
             type: "application/json",
         });
         return navigator.sendBeacon(url, blob);
@@ -5817,7 +7046,16 @@ function postData(url, data) {
  * @param {boolean} returnBlob If true, return the raw blob instead of the json decoded data.
  * @param {function(Request)} setupRequestFn Optional function to setup the Request object.
  * @param {boolean} usePost Always use POST with uncompressed data, if false data may be sent using GET and it may be compressed using deflate-raw.
- * @returns {object|Blob} The repsonse object (decoded JSON) or a blob if returnBlob is true.
+ * @returns {Promise<object|Blob|null|undefined>} The repsonse object (decoded JSON) or a blob if returnBlob is true.
+ * Details: data is serialized with ToTypedJson. Within the //DEBUG_BEGIN..//DEBUG_END markers (presumably
+ * stripped by the server in release builds) usePost defaults to true. Without usePost and json < 16384 chars:
+ * url-encoded json < 128 chars => GET url?json; otherwise the UTF-8 json is deflate-raw compressed and used
+ * if it is < 7/8 of the original, the query becomes "_d"+base64url(compressed) or "_u"+base64url(raw) when
+ * shorter than the url-encoded json, and a GET is used if that is < 4096 chars. Else POST (with
+ * "Content-Encoding: deflate" for compressed data). Non-200 responses (or redirects when errHandler is
+ * given) call errHandler (retry on true) or throw Error("status - statusText[\n500 body]"). A redirect
+ * navigates the page there (Open _self) and returns null (a second redirect throws). Undecodable bodies
+ * return undefined.
  */
 async function sendRequest(url, data, reload, errHandler, returnBlob, setupRequestFn, usePost) {
 //DEBUG_BEGIN
@@ -5952,8 +7190,12 @@ async function sendRequest(url, data, reload, errHandler, returnBlob, setupReque
  * @param {boolean} returnBlob If true, return the raw blob instead of the json decoded data.
  * @param {function(Request)} setupRequestFn Optional function to setup the Request object.
  * @param {function(Request)} returnFn Optional method used to read the response, the first argument is the request object, return whatever.
- * @param {number} maxRetryCount The maximum number to retry the request.
- * @returns {object|Blob} The repsonse object (decoded JSON) or a blob if returnBlob is true.
+ * @param {number} maxRetryCount The maximum number to retry the request (default 10000; note: every path in
+ * the loop returns or throws, so no retry actually happens).
+ * @returns {Promise<object|Blob|null|undefined>} The repsonse object (decoded JSON) or a blob if returnBlob is true.
+ * url may also be a prepared Request (then setupRequestFn is not called). Non-200 responses throw
+ * Error("status - statusText[: 500 body]"); a redirect navigates the page there (Open _self) and returns
+ * null; undecodable bodies return undefined.
  */
 async function getRequest(url, reload, returnBlob, setupRequestFn, returnFn, maxRetryCount) {
     let r = url;
@@ -6012,6 +7254,11 @@ async function getRequest(url, reload, returnBlob, setupRequestFn, returnFn, max
 }
 
 
+/**
+ * Get the extension of a path (text after the last '.'; note: a dot in a directory name also counts).
+ * @param {string} path - File path or name.
+ * @returns {string} Extension without dot (case preserved), "" if none.
+ */
 function getFileExtension(path)
 {
     const i = path.lastIndexOf('.');
@@ -6021,6 +7268,7 @@ function getFileExtension(path)
 }
 
 
+/** Lower-case image file extensions (value 1 = member), used by isImageExt / isImageFile. */
 const imageExtensions = Object.freeze({
     png: 1,
     gif: 1,
@@ -6034,6 +7282,7 @@ const imageExtensions = Object.freeze({
     jfif: 1,
 });
 
+/** Lower-case video file extensions, used by isVideoExt / isVideoFile. */
 const videoExtensions = Object.freeze({
     webm: 1,
     mp4: 1,
@@ -6042,12 +7291,14 @@ const videoExtensions = Object.freeze({
 });
 
 
+/** Lower-case audio file extensions, used by isAudioExt. */
 const audioExtensions = Object.freeze({
     mp3: 1,
     wav: 1,
     aac: 1,
 });
 
+/** Lower-case source code / text-markup extensions, used by isProgrammingExt and isCompressibleExt. */
 const programmingExtensions = Object.freeze({
     js: 1,
     json: 1,
@@ -6063,6 +7314,7 @@ const programmingExtensions = Object.freeze({
     vb: 1,
 });
 
+/** Additional lower-case extensions of well compressible (text) files, used by isCompressibleExt. */
 const compressExtensions = Object.freeze({
     txt: 1,
     log: 1,
@@ -6070,37 +7322,71 @@ const compressExtensions = Object.freeze({
     svg: 1,
 });
 
+/**
+ * @param {string} ext - Lower-case extension without dot.
+ * @returns {boolean} true if it is an image extension.
+ */
 function isImageExt(ext) {
     return imageExtensions[ext] == 1;
 }
 
+/**
+ * @param {string} ext - Lower-case extension without dot.
+ * @returns {boolean} true if it is an audio extension.
+ */
 function isAudioExt(ext) {
     return audioExtensions[ext] == 1;
 }
 
+/**
+ * @param {string} ext - Lower-case extension without dot.
+ * @returns {boolean} true if it is a programming / markup extension.
+ */
 function isProgrammingExt(ext) {
     return programmingExtensions[ext] == 1;
 }
 
+/**
+ * @param {string} ext - Lower-case extension without dot.
+ * @returns {boolean} true if it is a video extension.
+ */
 function isVideoExt(ext) {
     return videoExtensions[ext] == 1;
 }
 
+/**
+ * @param {string} ext - Lower-case extension without dot.
+ * @returns {boolean} true if files with this extension compress well (programming or text extensions).
+ */
 function isCompressibleExt(ext) {
     return (programmingExtensions[ext] == 1) || (compressExtensions[ext] == 1);
 }
 
+/**
+ * @param {string} path - File path (extension compared case-insensitively).
+ * @returns {boolean} true if the path has an image extension.
+ */
 function isImageFile(path) {
     const ext = getFileExtension(path).toLowerCase();
     return imageExtensions[ext] == 1;
 }
 
+/**
+ * @param {string} path - File path (extension compared case-insensitively).
+ * @returns {boolean} true if the path has a video extension.
+ */
 function isVideoFile(path) {
     const ext = getFileExtension(path).toLowerCase();
     return videoExtensions[ext] == 1;
 }
 
 
+/**
+ * Test if a character is a letter: true if it has distinct upper/lower case; false for other ASCII; for other
+ * non-ASCII characters, tests whether it is a valid JavaScript identifier by eval'ing "function <c>(){}".
+ * @param {string} c - A single character.
+ * @returns {boolean}
+ */
 function isLetter(c) {
     if (c.toUpperCase() != c.toLowerCase())
         return true;
@@ -6114,6 +7400,11 @@ function isLetter(c) {
     }
 }
 
+/**
+ * Test if an element is scrolled to the bottom (1 px tolerance).
+ * @param {HTMLElement} element - Scrollable element.
+ * @returns {boolean}
+ */
 function IsAtMaxScrollV(element) {
     const maxh = element.scrollHeight - element.clientHeight - 1;
     return element.scrollTop >= maxh;
@@ -6127,6 +7418,9 @@ function IsAtMaxScrollV(element) {
  * @param {function(HTMLElement)} onFree An optional function that is called when the scroll is "freed".
  * @param {function(HTMLElement)} onTop An optional function that is called when the scroll is scrolled top the top.
  * @param {boolean} instant If true, do not smooth scroll
+ * Replaces element.onscroll; toggles class "Stick" while stuck (within 4 px of the bottom); re-scrolls to the
+ * bottom on element resize (ResizeObserver) and on child list changes (MutationObserver, subtree) while stuck.
+ * The observers are never disconnected.
  */
 function StickToBottom(element, stickByDefault, onBottom, onFree, onTop, instant) {
     if (typeof stickByDefault !== "boolean")
@@ -6135,6 +7429,10 @@ function StickToBottom(element, stickByDefault, onBottom, onFree, onTop, instant
     let isInternal = false;
 
 
+    /**
+     * Scroll to the bottom; isInternal suppresses the onscroll handling until the next animation frame.
+     * @param {boolean} [isMutating] - Unused.
+     */
     function stickIt(isMutating) {
         isInternal = true;
         try {
@@ -6194,6 +7492,10 @@ function StickToBottom(element, stickByDefault, onBottom, onFree, onTop, instant
         requestAnimationFrame(() => stickIt());
 }
 
+/**
+ * Signal that the page has finished loading: posts "PageLoaded" to the parent (or opener) window (used by
+ * fixElementWithSrc for iframes with data-sw-useevent) and "LoaderRemoved" to the top window.
+ */
 function PageLoaded() {
     PostParent("PageLoaded");
     PostTop("LoaderRemoved", null, "*");
@@ -6202,14 +7504,23 @@ function PageLoaded() {
 /**
  * Prevents tabbing outside of this element (useful for pop-ups), should call UnblockTab when element is deleted
  * @param {HTMLElement} element The element to keep focused
+ * Blockers are stacked in window.TabBlockers ([element, previously focused element] pairs; the last one is
+ * active). On first use a capturing "focus" listener (window.TabBlockFn) is added to <body> that moves the
+ * focus back into the active blocker (to the last focused element inside it, or the block itself) when focus
+ * lands outside it or on a SYSWEAVER-TABBLOCK sentinel; a detached blocker is removed automatically.
  */
 function BlockTab(element) {
     let tabBlockers = window.TabBlockers;
     if (typeof tabBlockers === "undefined") {
         tabBlockers = [];
+        /** @type {Array<Array<HTMLElement>>} Stack of [blockElement, previousActiveElement]. */
         window.TabBlockers = tabBlockers;
         //console.log("Creating tab block hook");
         let prevFocus = null;
+        /**
+         * Capturing focus listener enforcing the active tab block (see BlockTab).
+         * @param {FocusEvent} ev - Focus event.
+         */
         const tabBlockFn = ev => {
 
             const l = tabBlockers.length;
@@ -6248,6 +7559,7 @@ function BlockTab(element) {
                 block.focus();
         }
         document.body.addEventListener("focus", tabBlockFn, true);
+        /** The installed focus listener (kept for reference). */
         window.TabBlockFn = tabBlockFn;
     }
     //console.log("Adding tab block");
@@ -6256,6 +7568,9 @@ function BlockTab(element) {
 
 /**
  * Re-enable tabbing outside of the element
+ * Removes the element from window.TabBlockers; when it was the last blocker the focus hook is removed
+ * (window.TabBlockFn / TabBlockers deleted); when it was the active (top) blocker, the focus is restored to
+ * the element that was focused when BlockTab was called (if still attached).
  * @param {HTMLElement} element The element to keep focused
  */
 function UnblockTab(element) {
@@ -6298,6 +7613,13 @@ function UnblockTab(element) {
  * @param {boolean} opaque If true, make the loader background opaque
  * @param {boolean} useIcon Override an icon class with this, use "" to disable any icon
  * @returns {function(boolean):void} A function that when executed removes the loading overlay, if the argument is true, no events ('LoaderRemoved
+ * Details: with the url parameter "noloader" nothing is shown and PageLoaded is returned. The overlay is a
+ * SysWeaver-Loading element (class "Opaque" if opaque) that swallows mouse/key events and blocks tabbing
+ * (BlockTab), with optional SysWeaver-LoadingText (class "Center" when no icon) and a 64x64 ColorIcon
+ * (default IconWorking). The returned remover (unless noEvents) calls PageLoaded, posts InterOp
+ * "WindowLoaded" and restores the scroll position saved in history state (ScrollX/ScrollY), retrying each
+ * frame (counting window.ScrollCounter) until the document height has been stable for 1.5 s or the user
+ * interacted (window.DidInteract).
  */
 function AddLoading(page, text, opaque, useIcon) {
     const ps = getUrlParams();
@@ -6344,6 +7666,10 @@ function AddLoading(page, text, opaque, useIcon) {
             te.classList.add("Center");
     }
     page.appendChild(le);
+    /**
+     * Remove the loading overlay (only once).
+     * @param {boolean} [noEvents] - If true, skip PageLoaded / "WindowLoaded" and the scroll restoration.
+     */
     return noEvents => {
         if (le) {
             UnblockTab(le);
@@ -6355,12 +7681,18 @@ function AddLoading(page, text, opaque, useIcon) {
                     //console.log("Scroll target: " + scroll.left + ", " + scroll.top);
                     let lastChanged = performance.now();
                     let lastHeight = document.scrollHeight;
+                    /**
+                     * Scroll to the saved position and re-try next frame while the layout is still changing.
+                     * Note: document.scrollHeight is undefined (it is a property of elements), so the height
+                     * never changes and retries stop after 1.5 s.
+                     */
                     function tryScroll() {
                         if (window.DidInteract)
                             return;
                         let s = window.ScrollCounter;
                         if (!s)
                             s = 0;
+                        /** Counts programmatic scrolls (so scroll handlers can ignore them). */
                         window.ScrollCounter = s + 1;
                         window.scrollTo(scroll);
                         requestAnimationFrame(() => {
@@ -6385,7 +7717,14 @@ function AddLoading(page, text, opaque, useIcon) {
     };
 }
 
+/**
+ * A progress bar element: <SysWeaver-ProgressBar> containing SysWeaver-ProgressBarTextInside (TI, text over
+ * the filled part), SysWeaver-ProgressBarTextOutside (TO, text over the empty part) and
+ * SysWeaver-ProgressBarFill (Prog). Usage: const p = new ProgressBar(); parent.appendChild(p.Element);
+ * p.SetValue(3, 10);
+ */
 class ProgressBar {
+    /** Creates the elements (Element, Prog, TI, TO). */
     constructor() {
         const e = document.createElement("SysWeaver-ProgressBar");
         const f = document.createElement("SysWeaver-ProgressBarFill");
@@ -6400,6 +7739,13 @@ class ProgressBar {
         this.TO = to;
     }
 
+    /**
+     * Set the progress as current / max.
+     * @param {number} current - Current value.
+     * @param {number} max - Maximum value (<= 0 shows 0%).
+     * @param {string} [text] - Text template: {1} current, {2} max, {0} kept for the percentage (default "cur / max").
+     * @param {string} [title] - Tooltip template, same arguments (default "cur / max - {0}").
+     */
     SetValue(current, max, text, title) {
         const val = max <= 0 ? 0 : (current * 100 / max);
         const pc = ValueFormat.toString(current, -2);
@@ -6418,6 +7764,13 @@ class ProgressBar {
         this.SetPercentage(val, text, title);
     }
 
+    /**
+     * Set the progress in percent (clamped to 0..100). Moves the fill (style.left = -(100-value)%), sizes the
+     * inside/outside text elements and marks the one covering the larger part with class "Active".
+     * @param {number} value - Percentage.
+     * @param {string} [text] - Text template, {0} = "NN.NN%" (default the percentage).
+     * @param {string} [title] - Tooltip template, {0} = percentage (default the percentage).
+     */
     SetPercentage(value, text, title) {
         if (value < 0)
             value = 0;
@@ -6461,7 +7814,12 @@ class ProgressBar {
 }
 
 
-/** Static functions that performas animation every frame */
+/**
+ * Static functions that performas animation every frame.
+ * A single requestAnimationFrame loop (Animator.HaveAnimation) runs while Animator.Functions is non-empty;
+ * each function gets the time in ms since its first frame. Exceptions in functions are swallowed.
+ * Used e.g. by applyTheme for theme animations (hackerThemeAnimate).
+ */
 class Animator {
 
 
@@ -6474,6 +7832,11 @@ class Animator {
         const fns = Animator.Functions;
         if (!Animator.HaveAnimation) {
 
+            /**
+             * The frame loop: calls every registered function (start time recorded on its first frame), removes
+             * those returning true, and stops (clearing HaveAnimation) when no functions remain.
+             * @param {number} timeStamp - requestAnimationFrame time stamp.
+             */
             const fn = timeStamp => {
 
                 let empty = true;
@@ -6514,7 +7877,9 @@ class Animator {
             Animator.Functions.delete(func);
     }
 
+    /** @type {Map<function(number):boolean, number>} Registered function -> start time stamp (-1 until its first frame). */
     static Functions = new Map();
+    /** @type {function(number)|null} The running frame loop function, or null/undefined when not running. */
     static HaveAnimation;
 
 }
@@ -6540,11 +7905,13 @@ class PendingImages {
         const t = this;
         const ol = imgElement.onload;
         const oe = imgElement.onerror;
+        // Wrapped handlers: update the counters, then chain to the previous handlers
         imgElement.onload = ev => {
             --t.InProgress;
             if (ol)
                 ol(ev);
         };
+        // Error: also count the failure
         imgElement.onerror = ev => {
             --t.InProgress;
             ++t.Fails;
@@ -6558,8 +7925,8 @@ class PendingImages {
     }
 
     /**
-     * Wait for all pending images (in progress) to complete
-     * @returns {Promise} a Promise that is resolved when all pending images have been loaded.
+     * Wait for all pending images (in progress) to complete (polls every 10 ms).
+     * @returns {Promise<void>} a Promise that is resolved when all pending images have been loaded.
      */
     async WaitAll() {
         const t = this;
@@ -6588,6 +7955,13 @@ function IsAttached(el) {
 }
 
 
+/**
+ * Get the document-relative rectangle of an element (bounding client rect minus that of a hidden absolute
+ * positioned <div> at 0,0 appended to <body> once and cached in GetAbsoluteRect.offsetBase).
+ * @param {Element} el - Element (must belong to this document).
+ * @returns {{found:boolean|undefined, left:number, top:number, width:number, height:number, right:number, bottom:number}}
+ * found is true when measured, otherwise all values are 0.
+ */
 function GetAbsoluteRect(el) {
     let
         found,
@@ -6624,6 +7998,17 @@ function GetAbsoluteRect(el) {
 
 // Track an elements movement and move a fixed element along with it.
 // If margin is 0 or greater the target element will be kept on screen (using that margin)
+/**
+ * Position a fixed targetElement (style.left/top) next to an element or the point of a mouse event on it,
+ * anchored at the same relative position; the target is placed left/above the point when the point is in
+ * the right/bottom half of the body. Updates on resize (ResizeObserver on tracked element, body and target)
+ * and on document scroll (throttled to animation frames); stops when targetElement is detached (checked on
+ * observer callbacks). Note: a margin of 0 is treated as no clamping (the check is `margin && margin >= 0`).
+ * @param {MouseEvent|HTMLElement} mouseEventOrElement - Event (its target is tracked; untrusted events use the
+ * target's center) or element (center).
+ * @param {HTMLElement} targetElement - Fixed position element to move.
+ * @param {number} [margin] - Keep the target on screen with this margin.
+ */
 function TrackElement(mouseEventOrElement, targetElement, margin) {
     const b = document.body;
     let relX = 0.5;
@@ -6653,6 +8038,11 @@ function TrackElement(mouseEventOrElement, targetElement, margin) {
     const ay = y >= (b.clientHeight * 0.5) ? 1 : 0;
     const css = targetElement.style;
     let obs = null;
+    /**
+     * Recompute and apply the target position; when called by the observer (ev set) and the target is
+     * detached, removes the scroll listener and disconnects the observer instead.
+     * @param {*} [ev] - ResizeObserver entries or animation frame time stamp.
+     */
     const updatePos = ev => {
         if (ev && obs) {
             if (!IsAttached(targetElement)) {
@@ -6691,6 +8081,7 @@ function TrackElement(mouseEventOrElement, targetElement, margin) {
     obs.observe(b);
     obs.observe(targetElement);
     let scrollFn = null;
+    /** Document scroll listener: schedules updatePos on the next animation frame (coalescing). */
     function OnScrollFn() {
         if (scrollFn)
             cancelAnimationFrame(scrollFn);
@@ -6703,6 +8094,11 @@ function TrackElement(mouseEventOrElement, targetElement, margin) {
 
 
 
+/**
+ * Get the page state object (cached in window.HistoryState). Top windows use history.state; iframes use
+ * sessionStorage keyed by window.location.href (json).
+ * @returns {object} The state object (empty object if none).
+ */
 function InternalGetHistoryState() {
     let state = window.HistoryState;
     if (state)
@@ -6718,11 +8114,17 @@ function InternalGetHistoryState() {
         else
             state = JSON.parse(state);
     }
+    /** @type {object} Cached page state (see InternalGetHistoryState). */
     window.HistoryState = state;
     return state;
 }
 
+/**
+ * Clear the page state (history.replaceState(null) for top windows, sessionStorage entry for iframes).
+ * Called by SysWeaverInit when the page was reloaded.
+ */
 function ClearHistoryState() {
+    /** Drop the cached state. */
     window.HistoryState = null;
     if (window.top === window.self)
         history.replaceState(null, "");
@@ -6730,10 +8132,19 @@ function ClearHistoryState() {
         sessionStorage.removeItem(window.location.href);
 }
 
+/**
+ * Remove the stored (iframe) state of another page.
+ * @param {string} url - The page url (sessionStorage key).
+ */
 function ClearOtherHistoryState(url) {
     sessionStorage.removeItem(url);
 }
 
+/**
+ * Set a value in the page state and persist it (history.replaceState or sessionStorage).
+ * @param {string} key - Key.
+ * @param {*} value - Value (must be cloneable / json serializable).
+ */
 function SetHistoryState(key, value) {
     const state = InternalGetHistoryState();
     if (window.top === window.self) {
@@ -6745,6 +8156,14 @@ function SetHistoryState(key, value) {
     }
 }
 
+/**
+ * Show a text in an element for a while, then restore the previous text (or optionalNewText), unless the
+ * text was changed meanwhile or another temporary text was set (tracked with element.TempId / TempText).
+ * @param {HTMLElement} element - Element.
+ * @param {string} text - Temporary text.
+ * @param {number} duration - Duration in ms.
+ * @param {string} [optionalNewText] - Text to show afterwards (default the current text).
+ */
 function SetTemporaryInnerText(element, text, duration, optionalNewText) {
     const nt = optionalNewText ?? element.textContent;
     if (element.TempText)
@@ -6763,6 +8182,10 @@ function SetTemporaryInnerText(element, text, duration, optionalNewText) {
 }
 
 // bool onStateFn(stateObject), return true to update the data
+/**
+ * Modify the page state in place and persist it when onStateFn returns true.
+ * @param {function(object):boolean} onStateFn - Mutator.
+ */
 function UpdateHistoryState(onStateFn) {
     const state = InternalGetHistoryState();
     if (onStateFn(state)) {
@@ -6774,6 +8197,12 @@ function UpdateHistoryState(onStateFn) {
 }
 
 
+/**
+ * Read a value from the page state.
+ * @param {string} key - Key.
+ * @param {*} [ifNotFoundValue] - Returned when the key is missing.
+ * @returns {*} The value.
+ */
 function GetHistoryState(key, ifNotFoundValue) {
 
     const state = InternalGetHistoryState();
@@ -6788,7 +8217,8 @@ function GetHistoryState(key, ifNotFoundValue) {
 
 /**
  * A simple in-memory cache.
- * Automatic pruning of old data.
+ * Automatic pruning of old data (a 5 s timer, Cache.InternalPrune, runs while entries exist).
+ * Entries are keyed by cacheName + "|" + JSON.stringify(cacheKey). Concurrent misses are not merged.
  */
 class Cache {
 
@@ -6807,6 +8237,7 @@ class Cache {
         const cache = Cache.InternalCache;
         if (!Cache.InternalPrune) {
             Cache.InternalPrune = true;
+            /** Remove expired entries; re-schedules itself every 5 s until the cache is empty. */
             function Prune() {
                 const toDel = [];
                 const n = new Date();
@@ -6871,7 +8302,8 @@ class Cache {
  * @param {HtmlVideoElement} video The video element to get a frame of
  * @param {string} mime The mime type of the image format to use, default is "image/jpeg"
  * @param {number} quality [0, 100] encoding quality (depends on the mime type), default is 80.
- * @returns {Uint8Array} The image bytes
+ * @returns {Promise<string>} The encoded image bytes as a base64 string (via bufferToBase64), not a Uint8Array.
+ * The frame size comes from the video's MediaStream track settings (video.srcObject must be a MediaStream).
  */
 async function CaptureVideoFrame(video, mime, quality) {
     if (!mime)
@@ -6911,7 +8343,12 @@ async function CaptureVideoFrame(video, mime, quality) {
 }
 
 
+/**
+ * Suppress the automatic page reloads on user login/logout changes (sets window.IgnoreUserChanged).
+ * Also triggered by the url parameter ignoreuserchanges=true.
+ */
 function SysWeaverIgnoreUserChanges() {
+    /** @type {boolean} When true, user change messages do not reload the page. */
     window.IgnoreUserChanged = true;
 }
 
@@ -6957,11 +8394,18 @@ function SysWeaverIgnoreUserChanges() {
  *      ..or set "data-sw-fadein"="500" to enable and set the fade duration (in ms).
  *      For iframe's, optionally add "data-sw-useevent" to wait for the "PageLoaded" event instead of using the "load" event.
  *      Optionally add "data-sw-fadedelay"="200" to add a delay (in ms) before fading in.
- * @returns
+ * Also: url "css=<url>" includes an extra stylesheet, "colorscheme=<v>" adds a color-scheme <meta>,
+ * String.prototype.replaceAll polyfill, window.load classes (SwMobile/SwDesktop, Transparent, FillScreen),
+ * ClearHistoryState on reload, user interaction detection (window.DidInteract, window.OnInteraction,
+ * "UserInteracted" event), scroll position saving, window.IsTop, the InterOp message handlers and
+ * SessionManager.Init() (not awaited). Guarded by window.HaveSysWeaverInit; called (not awaited) at the end
+ * of this file.
+ * @returns {Promise<void>}
  */
 async function SysWeaverInit() {
     if (window.HaveSysWeaverInit)
         return;
+    /** Guard: SysWeaverInit already ran. */
     window.HaveSysWeaverInit = true;
 
     const id = InterOp.Id;
@@ -6975,11 +8419,17 @@ async function SysWeaverInit() {
     if (setTheme)
         localStorage.setItem("SysWeaver.Theme", setTheme);
     if (useTheme)
+        /** @type {string} Forced theme (url "usetheme"), not persisted. */
         window.UseTheme = useTheme;
     applyTheme();  // Start async without waiting
 
 
     //  Setup smooth img / iframe loading changing
+    /**
+     * Apply fn to root and to all img/iframe descendants that opt in (doHandleSrc).
+     * @param {Node} root - Root node.
+     * @param {function(HTMLElement)} fn - fixElementWithSrc or cleanElementWithSrc.
+     */
     function onSmooth(root, fn) {
         if (doHandleSrc(root))
             fn(root);
@@ -7036,6 +8486,7 @@ async function SysWeaverInit() {
         mob = JSON.parse(mob);
     else 
         mob = isChild ? parentMobile : isMobile();
+    /** @type {boolean} Mobile mode (url "mobile", localStorage "SysWeaver.Mobile", parent window, or isMobile()). */
     window.Mobile = mob;
 //  Forced color scheme
     const colorScheme = ps.get("colorscheme");
@@ -7050,12 +8501,19 @@ async function SysWeaverInit() {
     if (ps.get("ignoreuserchanges") === "true")
         SysWeaverIgnoreUserChanges();
 
+    /**
+     * Update the layout globals, classes and events (see the SysWeaverInit description) when the window size
+     * changed (compared with window.SwWidth/SwHeight). Classes are set on both <body> and <html>; events are
+     * CustomEvents on <body> with detail = the boolean.
+     */
     function onSizeChange() {
         const ww = window.innerWidth;
         const wh = window.innerHeight;
         if ((ww === window.SwWidth) && (wh === window.SwHeight))
             return;
+        /** @type {number} Last handled window inner width. */
         window.SwWidth = ww;
+        /** @type {number} Last handled window inner height. */
         window.SwHeight = wh;
         const swp = ww <= wh;
         const swn = ww <= 600;
@@ -7065,13 +8523,17 @@ async function SysWeaverInit() {
 
         const nwp = window.Portrait !== wp;
         const nwn = window.Narrow !== wn;
+        /** @type {boolean} Portrait (from the parent window when this is a SysWeaver child frame). */
         window.Portrait = wp;
+        /** @type {boolean} Narrow (width <= 600, from the parent window when this is a SysWeaver child frame). */
         window.Narrow = wn;
 
 
         const snwp = window.SelfPortrait !== swp;
         const snwn = window.SelfNarrow !== swn;
+        /** @type {boolean} This window's own portrait state. */
         window.SelfPortrait = swp;
+        /** @type {boolean} This window's own narrow state (width <= 600). */
         window.SelfNarrow = swn;
 
 
@@ -7160,16 +8622,17 @@ async function SysWeaverInit() {
                 b.dispatchEvent(new CustomEvent(wn ? "SwNarrow" : "SwWide", o));
             }
 
+            // The Self* event names below are chosen from swp/swn (this window's own values)
             if (snwp) {
                 const o = { detail: swp };
                 b.dispatchEvent(new CustomEvent("SwSelfOrientation", o));
-                b.dispatchEvent(new CustomEvent(wp ? "SwSelfPortrait" : "SwSelfLandscape", o));
+                b.dispatchEvent(new CustomEvent(swp ? "SwSelfPortrait" : "SwSelfLandscape", o));
             }
 
             if (snwn) {
                 const o = { detail: swn };
                 b.dispatchEvent(new CustomEvent("SwSelfLayout", o));
-                b.dispatchEvent(new CustomEvent(wn ? "SwSelfNarrow" : "SwSelfWide", o));
+                b.dispatchEvent(new CustomEvent(swn ? "SwSelfNarrow" : "SwSelfWide", o));
             }
         }
     }
@@ -7220,8 +8683,14 @@ async function SysWeaverInit() {
     const b = document;
 
 
+    /**
+     * First user interaction (mousedown/keydown/touchstart on document): sets window.DidInteract, calls the
+     * optional window.OnInteraction(ev), removes the listeners and dispatches "UserInteracted" on <body>.
+     * @param {Event} ev - The interaction event.
+     */
     function onInteraction(ev) {
         console.log("User interacted!");
+        /** @type {boolean} True once the user has interacted with the page (stops scroll restoration). */
         window.DidInteract = true;
         const cb = window.OnInteraction;
         if (cb)
@@ -7236,6 +8705,10 @@ async function SysWeaverInit() {
     b.addEventListener("mousedown", onInteraction);
     b.addEventListener("keydown", onInteraction);
     b.addEventListener("touchstart", onInteraction);
+    /**
+     * Store the current scroll position (ScrollX/ScrollY) in the page state (restored by AddLoading).
+     * Registered on window "beforeunload", so the position is saved when the page is left or reloaded.
+     */
     function saveScroll() {
 /*        if (!isProcessingScroll) {
             isProcessingScroll = true;
@@ -7269,7 +8742,7 @@ async function SysWeaverInit() {
     });
     */
     //document.addEventListener("scrollend", saveScroll);
-    b.addEventListener("beforeunload ", saveScroll);
+    window.addEventListener("beforeunload", saveScroll);
     const logPrefix = "SysWeaver: "
     //const childLogPrefix = "SysWeaver [" + id + "]: ";
     const wtop = window.top;
@@ -7282,11 +8755,17 @@ async function SysWeaverInit() {
     {
     }
     const isTop = (wtop === wself) || (!isSameDomain);
+    /** @type {boolean} True for the top window, or a frame whose top window is cross-origin. */
     window.IsTop = isTop;
     const sin = "SysWeaver.ServerInstance";
     let serverInstance = sessionStorage.getItem(sin) ?? null;
     if (serverInstance === "")
         serverInstance = null;
+    /**
+     * Remember the server instance id (sessionStorage "SysWeaver.ServerInstance"; removed when falsy), used to
+     * detect server restarts.
+     * @param {string|null} newValue - Instance id.
+     */
     function setServerInstance(newValue) {
         serverInstance = newValue;
         if (newValue)
@@ -7295,6 +8774,11 @@ async function SysWeaverInit() {
             sessionStorage.removeItem(sin);
     }
 
+    /**
+     * Event swallower used while the server block overlay is shown.
+     * @param {Event} ev - Any input event.
+     * @returns {boolean} false.
+     */
     function blockFn(ev) {
         ev.stopPropagation();
         ev.preventDefault();
@@ -7302,6 +8786,13 @@ async function SysWeaverInit() {
         return false;
     }
 
+    /**
+     * Install (fn set) or remove (fn null) input blocking on an element: sets the on* handler properties for
+     * keydown/click/mousedown/mouseover/mousemove/mouseenter/mouseleave/mouseout and adds/removes fn (blockFn
+     * when removing) as listeners (add/removeEventListener is bound to el).
+     * @param {EventTarget} el - Element or document.
+     * @param {function(Event)|null} fn - Handler, or null to remove.
+     */
     function setElementBlock(el, fn) {
         el.onkeydown = fn;
         el.onclick = fn;
@@ -7312,7 +8803,7 @@ async function SysWeaverInit() {
         el.onmouseleave = fn;
         el.onmouseout = fn;
 
-        const m = fn ? el.addEventListener : el.removeEventListener;
+        const m = (fn ? el.addEventListener : el.removeEventListener).bind(el);
         if (!fn)
             fn = blockFn;
         m("keydown", fn);
@@ -7329,7 +8820,18 @@ async function SysWeaverInit() {
 
 
     //  Server blocker
+    /** @type {HTMLElement|null} The SysWeaver-ServerBlock overlay while shown. */
     let isBlocking = null;
+    /**
+     * Show (or update when replace) the full page server block overlay: SysWeaver-ServerBlock with
+     * SysWeaver-ServerImage (128px ColorIcon), SysWeaver-ServerTitle, SysWeaver-ServerText,
+     * SysWeaver-ServerWaiting (working icon) and SysWeaver-ServerTime (live elapsed time since now).
+     * Input on the overlay and document is blocked.
+     * @param {string} title - Title (also logged as warning).
+     * @param {string} waiting - Explanation text.
+     * @param {string} icon - Icon image class.
+     * @param {boolean} [replace] - Update an already shown overlay (otherwise it is left as is).
+     */
     function StartBlock(title, waiting, icon, replace) {
         console.warn(title);
         if (!isBlocking) {
@@ -7360,6 +8862,7 @@ async function SysWeaverInit() {
         ValueFormat.updateDateTimeLive(isBlocking.children[4], new Date());
     }
 
+    /** Remove the server block overlay (if shown) and unblock document input. */
     function RemoveBlock() {
         if (!isBlocking)
             return;
@@ -7368,6 +8871,11 @@ async function SysWeaverInit() {
         setElementBlock(b, null);
     }
 
+    /**
+     * Message handler: after 100 ms reload the page (flush cache, clear hash) unless window.IgnoreUserChanged.
+     * @param {object} ev - The message.
+     * @returns {Promise<void>}
+     */
     async function delayedReload(ev) {
         if (window.IgnoreUserChanged)
             return;
@@ -7377,6 +8885,11 @@ async function SysWeaverInit() {
         ReloadAll(true, true);
     }
 
+    /**
+     * Message handler: after 100 ms location.reload(true) (keeps the hash) unless window.IgnoreUserChanged.
+     * @param {object} ev - The message.
+     * @returns {Promise<void>}
+     */
     async function delayedRefresh(ev) {
         if (window.IgnoreUserChanged)
             return;
@@ -7386,6 +8899,11 @@ async function SysWeaverInit() {
         location.reload(true);
     }
 
+    /**
+     * Message handler for user changes: same as delayedReload.
+     * @param {object} ev - The message.
+     * @returns {Promise<void>}
+     */
     async function delayedUserReload(ev) {
         if (window.IgnoreUserChanged)
             return;
@@ -7395,17 +8913,29 @@ async function SysWeaverInit() {
         ReloadAll(true, true);
     }
 
+    /** @type {Map<string, function(object):Promise<void>>} InterOp message type -> handler for this window. */
     const map = new Map();
 
     //  All windows
     map.set("Theme.Changed", async msg => {
         if (msg.From !== id) {
             console.log("Theme changed!!");
+            /** Another window changed the theme: drop the forced theme and re-apply. */
             window.UseTheme = null;
             await applyTheme(true);
         }
     });
 
+    /**
+     * Hot reload of changed server files (message {Prefix, Value: relative file names, DidReload}).
+     * The master flushes the browser cache for each url (FlushCache) and re-posts the message with
+     * DidReload = true; children act only on that re-posted message. Then every element in <body> whose
+     * href/src/data attributes or inline backgroundImage/maskImage urls reference a changed url is collected;
+     * the urls are re-fetched (getRequest with reload) and the attributes / inline styles are re-set to force
+     * the element to reload. (The style sheet scan using updateCss is commented out.)
+     * @param {{Type:string, Prefix:string, Value:string[], DidReload:boolean}} msg - The message.
+     * @returns {Promise<void>}
+     */
     async function ReloadFiles(msg) {
         //  Flush cache and build a map of uri's that need refresh
         const fileMap = new Map();
@@ -7445,6 +8975,12 @@ async function SysWeaverInit() {
         const postCssRefreshActions = [];
 
         // Check and fix attributes
+        /**
+         * If attribute atr of el (query string ignored) references a changed url, queue an action that
+         * removes and re-sets the attribute (forcing a reload).
+         * @param {Element} el - Element.
+         * @param {string} atr - Attribute name ("src", "href" ...).
+         */
         function updateAttribute(el, atr) {
             const a = el.getAttribute(atr);
             if (!a)
@@ -7464,6 +9000,11 @@ async function SysWeaverInit() {
             });
         }
 
+        /**
+         * Separator test used before "url": whitespace or ','.
+         * @param {string} c - Character.
+         * @returns {boolean}
+         */
         function IsWs(c) {
             if (("" + c).trim() === "")
                 return true;
@@ -7472,6 +9013,11 @@ async function SysWeaverInit() {
             return false;
         }
 
+        /**
+         * Whitespace test inside url( ... ); note: identical to IsWs (also accepts ',').
+         * @param {string} c - Character.
+         * @returns {boolean}
+         */
         function IsPureWs(c) {
             if (("" + c).trim() === "")
                 return true;
@@ -7483,6 +9029,11 @@ async function SysWeaverInit() {
         // Extract urls from a css property value string
         // [0] = Url's for search and replace
         // [1] = Absolute url's (resources)
+        /**
+         * Parse url(...) references (quoted or not) from a css value and keep those pointing at changed files.
+         * @param {string} a - Css property value.
+         * @returns {Array<string[]>|null} [url(...) source snippets, absolute urls], or null if none match.
+         */
         function getUrls(a) {
             if (!a)
                 return null;
@@ -7542,6 +9093,12 @@ async function SysWeaverInit() {
         }
 
         // Check and fix inline styles
+        /**
+         * If the inline style property references changed urls, register them for reload and queue an action
+         * that clears and re-sets the property.
+         * @param {HTMLElement} el - Element.
+         * @param {string} style - CSSStyleDeclaration property name (e.g. "backgroundImage").
+         */
         function updateStyle(el, style) {
             const els = el.style;
             const a = els[style];
@@ -7561,8 +9118,18 @@ async function SysWeaverInit() {
 
 
         const rid = ("" + Math.random()).replaceAll(".", "");
+        /** Cache busting query parameter appended to urls rewritten by updateCss. */
         const r = "__forceRefresh__=" + rid;
 
+        /**
+         * (Currently unused - its caller is commented out.) For a style sheet rule property referencing changed
+         * urls: queue an action setting it to "inherit" and a post action setting it to the url(...) value with a
+         * "__forceRefresh__=<random>" query parameter. Note: assigns the undeclared variable cleanUrl (implicit
+         * global, or a ReferenceError in strict mode).
+         * @param {StylePropertyMap} sm - The rule's styleMap.
+         * @param {string} style - Css property name ("background-image", "mask-image").
+         * @param {CSSStyleRule} rule - The rule (for logging).
+         */
         function updateCss(sm, style, rule) {
             const a = sm.get(style);
             if (!a)
@@ -7674,6 +9241,9 @@ async function SysWeaverInit() {
     
     if (isTop) {
         //  Interop responses for top windows
+        // (server messages relayed by the SessionManager master: reload/refresh, user.login/logout,
+        // server.connect/reconnect (reload if the server instance id changed), and server.pause/restart/
+        // shutdown/error which show the blocking overlay, and server.restore which removes it.)
         map.set("reload", delayedReload);
         map.set("refresh", delayedRefresh);
         map.set("user.logout", async () => {
@@ -7750,11 +9320,13 @@ async function SysWeaverInit() {
             });
         if (useTheme)
             map.set("theme.use", async msg => {
+                // Forced theme pushed by the hosting window
                 window.UseTheme = msg.Value;
                 await applyTheme();
             });
     }
 
+    // Dispatch InterOp messages to the handlers in map (exact, case sensitive type match)
     InterOp.AddListener(async ev => {
         const msg = InterOp.GetMessage(ev);
         const type = msg.Type;

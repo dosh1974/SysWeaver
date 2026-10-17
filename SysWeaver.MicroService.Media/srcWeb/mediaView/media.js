@@ -1,6 +1,75 @@
-﻿
+﻿/**
+ * @file media.js - media viewer / preview / editor page logic (plain global functions, no module).
+ *
+ * Loaded with a classic `<script defer>` by:
+ * - `MediaView.html` (boot `mediaViewMain()` from `<body onload>`): player + stats + controls, remote-controllable.
+ * - `MediaPreview.html` (boot `mediaPreviewMain()`): bare full-window player, also used for screenshots.
+ * - `mediaEditMain()` is the boot function of an embeddable "assignment media editor" for an external host page;
+ *   nothing in this repository calls it.
+ *
+ * Globals defined: functions `mediaCreatePlayer`, `mediaPlayWithPopup`, `mediaEditProps`, `mediaEditMain`,
+ * `mediaGetTypeFromUrl`, `mediaViewMain`, `mediaPreviewMain` and class `SsHack`. Implicit globals:
+ * `props` (assigned without declaration in `mediaEditMain`, i.e. `window.props`) and `objState` (assigned by the
+ * save callback created in `mediaEditMain`; NOT the local `objState` of `mediaEditProps`).
+ *
+ * Dependencies:
+ * - mediaPlayer/media_player.js (loaded below via includeJs): `MediaPlayer`, `MediaTypes`, and through it
+ *   `MediaPlayerTools` (media_player_tools.js) and the per-type player classes (lazily included).
+ * - common.js: `includeJs`, `Fail`, `Info`, `Button`, `ButtonStyle`, `badClick`, `keyboardClick`, `ValueFormat`,
+ *   `isInDocument`, `getUrlParams`, `sendRequest`, `waitEvent`, `Open`, `EditOrOpenUrl`, `InterOp`, `FullScreen`,
+ *   `PageLoaded`, `getFileExtension`, `isImageExt`/`isVideoExt`/`isAudioExt`, `YaMD5`.
+ * - Edit service scripts (only for the editor): `Edit`, `EditOptions`, `UndoStack`; and `QuizzRights`.
+ * - Styles: media.css (custom elements Media-Preview, Media-AspectContainer, Media-Overlay, Media-Stats, ...).
+ *
+ * Conventions:
+ * - User preferences are stored in localStorage keys `QuizzWeaver.MediaLoop` ("true"/"false"),
+ *   `QuizzWeaver.MediaVolume` (float string, default 0.25) and `QuizzWeaver.MediaMute` ("true"/"false").
+ * - Editor <-> MediaView.html remote control uses `InterOp.Post(<messagePrefix><Name>, data)` messages with names
+ *   GetProps, SetProps, Reload, SetVolume, UpdateSize, Crop, Compile.
+ */
+
+/**
+ * Top-level call executed at parse time: loads the media player framework relative to this script's URL.
+ * The load is asynchronous; the boot functions expect `MediaPlayer`/`MediaTypes` to be ready when `onload` fires.
+ */
 includeJs(document.currentScript.src, "../mediaPlayer/media_player.js");
 
+/**
+ * Creates a media player with its preview box and (optionally) a stats block and a controls block.
+ *
+ * DOM: creates `<Media-Preview>` (the player's TopElement) holding `<Media-AspectContainer>` (the clip box) and a
+ * temporary `<Media-Cache>` (removed once laid out). With `before` the preview gets class `Replacing` (built
+ * off-screen) and is inserted before `before`; otherwise it is appended to `target`. The player element is put in
+ * the clip, followed by a `<Media-Overlay>` (crop visualization). The clip gets class `MediaPreviewFit` or
+ * `MediaPreviewFill`; the preview gets `NoVisual` for media without a visual. Unless `noStats`, `<Media-Stats>`
+ * is appended to `target`; unless `noControls`, `<Media-Controls>` is appended to `target`.
+ *
+ * Layout: the inner `UpdateSize` runs now, from a ResizeObserver on `<Media-Preview>` and from `player.OnClipChanged`.
+ *
+ * Members added to the player: `SetButtonState` (refresh the control buttons), `UpdateSize` (re-layout),
+ * `TopElement` (the `<Media-Preview>`), and with controls `MessageElement` (the `<Media-Controls>`, which listens
+ * for the `mediaEnded` event).
+ *
+ * Errors: when no player can be created, calls `Fail(...)`, removes the preview and returns undefined; when
+ * `player.Cache()` fails, calls `Fail(...)` and returns undefined (the preview stays in the DOM).
+ *
+ * @param {HTMLElement} target - Container that receives the preview, stats and controls.
+ * @param {number} type - Media type (one of `MediaTypes`).
+ * @param {string} data - Media URL (or other type specific data, e.g. YouTube id).
+ * @param {?object} props - Media params (mirrors the C# Media* params types); when null, `player.Params` is used.
+ * @param {boolean} [noControls] - True to skip the `<Media-Controls>` block.
+ * @param {?HTMLElement} [before] - Existing element (old TopElement) to insert the new preview before (player rebuild).
+ * @param {boolean} [noStats] - True to skip the `<Media-Stats>` block.
+ * @param {boolean} [fit=true] - True: scale the media to fit inside the box (MediaPreviewFit) and position the
+ *   stats/controls right under it; false: scale to fill (MediaPreviewFill, overflow clipped).
+ * @param {number} [aspectX=16] - Box aspect X; `<= 0` (either aspect) means automatic aspect (from the clipped media
+ *   size, or from the preview box when `AdaptiveSize` is set).
+ * @param {number} [aspectY=9] - Box aspect Y.
+ * @param {number} [alignX=0.5] - Horizontal alignment (0..1) of the clip inside the preview box.
+ * @param {number} [alignY=0] - Vertical alignment (0..1) of the clip inside the preview box.
+ * @returns {Promise<(Array|undefined)>} `[player, mediaControls, mediaStats]` (controls/stats are null when not
+ *   created), or undefined on failure.
+ */
 async function mediaCreatePlayer(target, type, data, props, noControls, before, noStats, fit, aspectX, aspectY, alignX, alignY) {
     const p = document.createElement("Media-Preview");
     if (before) {
@@ -57,6 +126,25 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
     let mediaStats = null;
 
 
+    /**
+     * Lays out the clip box and the player element inside `<Media-Preview>`.
+     * - When called with an event and the player element is no longer in the document, removes itself as a window
+     *   `resize` listener and returns (legacy: the resize listener registration is commented out).
+     * - Re-reads `props = player.Params`; with automatic aspect recomputes it (preview box size with AdaptiveSize,
+     *   otherwise the clipped media size).
+     * - A zero/negative clipped size collapses the clip to 0x0.
+     * - AdaptiveSize: the player element gets the box size in px, no transform, clip inline styles reset.
+     * - Otherwise: the player element gets `props.Width`/`props.Height` px plus a `scale(..%) translate(..px, ..px)`
+     *   transform (fit = min scale, fill = max scale, honoring ClipX/ClipY/ClipWidth/ClipHeight when `player.UseClip`),
+     *   and the clip is sized to the aspect and positioned with alignX/alignY.
+     *   When `player.UseClip` is false, the overlay gets class `Show` and semi-transparent red borders
+     *   (rgba(255,0,0,0.25)) whose widths equal the cropped margins; otherwise `Show` is removed.
+     * - With `fit`, sets `style.top` of `<Media-Stats>` (or, without stats, `<Media-Controls>`) to just below the media
+     *   (+2% of the window height).
+     * - Copies the player transform and client size to `<Media-Overlay>`.
+     * @param {Event} [ev] - Optional resize event.
+     * @returns {void}
+     */
     function UpdateSize(ev) {
         if (ev) {
             if (!isInDocument(player.Element)) {
@@ -188,6 +276,10 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
         overlayS.height = e.clientHeight + "px";
     }
     UpdateSize();
+    /**
+     * Player callback invoked when the clip (crop) changes; re-runs `UpdateSize()`.
+     * @returns {void}
+     */
     player.OnClipChanged = () => {
 
         UpdateSize();
@@ -197,6 +289,13 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
 //    window.addEventListener("resize", UpdateSize);
     cache.remove();
 
+    /**
+     * Refreshes the enabled state of the control buttons from the player state. A no-op until the controls are
+     * created (only when `player.CanPlay`); then it enables Mute/Un mute, Pause/Play, Loop/Once and the four volume
+     * buttons so that only the actions that change the state are enabled. Exposed as `player.SetButtonState` and
+     * returned by every button callback so common.js `Button` calls it after the click.
+     * @returns {void}
+     */
     let setButtonState = () => { };
 
     if (!noStats) {
@@ -205,6 +304,15 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
         mediaStats = p;
         target.appendChild(p);
 
+        /**
+         * Appends one stat chip `<Media-Stat>` (`<Media-StatName>` "name:" + `<Media-StatValue>`) to `<Media-Stats>`.
+         * The tooltip is `title` plus "Click to copy value to the clipboard."; clicking (or keyboard activation via
+         * `keyboardClick`) copies `name: text (value)` with `ValueFormat.copyToClipboard`.
+         * @param {string} name - Display name of the stat.
+         * @param {string} [title] - Tooltip description.
+         * @param {string} [className] - Optional category class: "Adjust" (trim), "Clip" (crop) or "Actual" (render size).
+         * @returns {function(string=, *=):void} The `setText(newText, newValue)` setter of this stat.
+         */
         function createStats(name, title, className) {
             const statE = document.createElement("Media-Stat");
             if (title)
@@ -224,6 +332,13 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
             statE.appendChild(val);
             let currentText = "-";
             const statStyle = statE.classList;
+            /**
+             * Updates the stat. A falsy `newText` hides the chip (class `Hide`); otherwise shows it and, when the
+             * text changed, sets the displayed text and stores `newValue` (or the text) in `val.Value` (used by copy).
+             * @param {string} [newText] - Text to display; omit to hide the stat.
+             * @param {*} [newValue] - Raw value copied together with the text.
+             * @returns {void}
+             */
             function setText(newText, newValue) {
                 if (!newText) {
                     statStyle.add("Hide");
@@ -277,9 +392,20 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
         }
 
 
+        /**
+         * Animation-frame loop that refreshes all stat chips from the player: size, position, duration ("?" when
+         * negative), true volume, GPU time (AvgDrawTimeMs, or TotalTime / MeasureCount when <= 0), build time
+         * (-3 = "error", other negatives = "compiling"), trimmed time/duration (hidden unless StartAt > 0 or
+         * EndAt > StartAt), crop values (hidden when nothing is cropped) and render size (only with AdaptiveSize).
+         * Each read is wrapped in try/catch. Reschedules itself with requestAnimationFrame and stops once
+         * `<Media-Stats>` has left the document. The document check is skipped on the first direct call (no atime)
+         * and runs on every requestAnimationFrame call.
+         * @param {number} [atime] - requestAnimationFrame timestamp (unused otherwise).
+         * @returns {void}
+         */
         function updateStats(atime) {
 
-            if (typeof atime !== "undefiend")
+            if (typeof atime !== "undefined")
                 if (!isInDocument(p))
                     return;
             const par = player.Params;
@@ -559,6 +685,19 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
 
     return [player, mediaControls, mediaStats];
 }
+/**
+ * Applies the stored user preferences and starts playback, asking for a click when audio can't be un-muted.
+ * - Loop: `localStorage["QuizzWeaver.MediaLoop"] === "true"` -> `Loop()`, else `Once()`.
+ * - Volume: `QuizzWeaver.MediaVolume` (default "0.25") -> `SetVolume` (not awaited).
+ * - No audio: plays (if `CanPlay`) and returns.
+ * - `MediaPlayerTools.CanUnMute()`: un-mutes unless `QuizzWeaver.MediaMute` is "true", then plays.
+ * - Un-mute blocked but the user prefers mute: plays muted.
+ * - Otherwise appends a full-screen `<Media-NoAudio>` ("Must click once to get audio!") to the body; its click
+ *   un-mutes, plays, refreshes the buttons and removes the overlay (playback does not start before that click).
+ * Calls `player.SetButtonState()` after starting playback.
+ * @param {object} player - Player returned by `mediaCreatePlayer` (needs `SetButtonState`).
+ * @returns {Promise<void>}
+ */
 async function mediaPlayWithPopup(player) {
     if (localStorage.getItem("QuizzWeaver.MediaLoop") !== "true")
         await player.Once();
@@ -596,6 +735,37 @@ async function mediaPlayWithPopup(player) {
     }
     document.body.appendChild(e);
 }
+/**
+ * Appends a property editor for the media params below the player.
+ *
+ * Always appends `<Media-Edit>` to `target`; the editor itself is only created when `props` has more than one key.
+ * Then: forces `props.Crop.VisualizeMargins = false`; fetches the type info with
+ * `sendRequest('../edit/GetTypeInfo', props["$type"], false)`; for effect players (`player.ScriptTypeInfo`) registers
+ * the script type with `Edit.AddType`, copies `player.Params.EffectProps` into `props.EffectProps` and adds
+ * `player.ScriptMember` (the shader's `//var:` constants) to the members; creates an `Edit` (ReadOnly = !canEdit,
+ * no title, Dev only if canEdit, with an UndoStack) bound to `props`.
+ *
+ * When editable, adds a `<SysWeaver-CenterBlock>` with "Save changes" (IconSave, only if `saveFn`) and
+ * "Apply changes" (IconApply) buttons, and listens for the Edit `EditChange` event:
+ * - Live (no reload): Volume (`ResetVolume`, posts SetVolume), Speed (posts SetProps), AdaptiveSize (`UpdateSize`,
+ *   posts UpdateSize), Crop (`UseClip`/`ApplyClip`/`UpdateSize`, posts Crop), EffectProps (`LazyCompile`, mirrors
+ *   `props.FxProps = JSON.stringify(EffectProps)`, posts Compile; compile errors are logged).
+ * - Any other member enables "Apply changes" while `GetApplyState()` differs from the applied state.
+ * - "Save changes" is enabled while `JSON.stringify(props)` differs from the initial object state.
+ * Messages are posted as `InterOp.Post(messagePrefix + <Name>, ...)` only when `messagePrefix` is given;
+ * Save and Apply also post `<prefix>Reload` with `props`.
+ *
+ * @param {HTMLElement} target - Container (same one used for the player).
+ * @param {Array} playerRes - `[player, mediaControls, mediaStats]` as returned by `mediaCreatePlayer`.
+ * @param {number} type - Media type, reused to rebuild the player.
+ * @param {string} data - Media data/URL, reused to rebuild the player.
+ * @param {?object} props - The media params object to edit (modified in place).
+ * @param {boolean} canEdit - False makes the editor read-only and adds no buttons.
+ * @param {function(function():Promise<void>):Promise<boolean>} [saveFn] - Async save callback; receives the inner
+ *   `reload` function and returns truthy on success.
+ * @param {string} [messagePrefix] - Prefix for InterOp messages to a remote `MediaView.html` (its `ctrl` param).
+ * @returns {Promise<void>}
+ */
 async function mediaEditProps(target, playerRes, type, data, props, canEdit, saveFn, messagePrefix) {
     let player = playerRes[0];
     const editE = document.createElement("Media-Edit");
@@ -613,6 +783,12 @@ async function mediaEditProps(target, playerRes, type, data, props, canEdit, sav
             if (props.Crop)
                 props.Crop.VisualizeMargins = false;
 
+            /**
+             * Returns `JSON.stringify(props)` with `Volume` temporarily removed (volume changes never need Apply).
+             * Compared with the last applied state to decide whether "Apply changes" is enabled.
+             * Side effect: `Volume` is re-added, so it moves to the end of the key order.
+             * @returns {string} The serialized apply-relevant state.
+             */
             function GetApplyState() {
 
                 const oldVol = props.Volume;
@@ -650,6 +826,15 @@ async function mediaEditProps(target, playerRes, type, data, props, canEdit, sav
 
                 let applyButton = null;
 
+                /**
+                 * Rebuilds the player with the current `props` (used by Apply and passed to `saveFn`).
+                 * Disables Apply; calls `mediaCreatePlayer(target, type, data, props, !mediaControls, oldTopElement,
+                 * !mediaStats)` (default fit/aspect); swaps the new controls/stats elements in place of the old ones;
+                 * restores OnEnded, volume, un-mute (only if it was un-muted), Once (only if it was not looping),
+                 * Play (if it was playing) and position; removes the old `<Media-Preview>`, removes `Replacing` from the
+                 * new one, awaits `oldP.OnDispose()`, refreshes the buttons and resets the applied state.
+                 * @returns {Promise<void>}
+                 */
                 async function reload() {
 
                     applyButton.Disable();
@@ -797,6 +982,25 @@ async function mediaEditProps(target, playerRes, type, data, props, canEdit, sav
     }
 
 }
+/**
+ * Boot function of the embeddable "assignment media editor" (used by an external host page, not by this folder).
+ *
+ * Appends `<SysWeaver-Page class="Media">` (fixed background) and `<Media-Full>` (editor container) to the body.
+ * URL params: `get` (API that returns the media info), `aid` (JSON assignment id: a number or an object; required),
+ * `update` (save API name; when missing it is derived from `get`: "MediaGetAssignedInfo" -> "MediaSet...Data",
+ * otherwise "Get" -> "Update").
+ * Loads `{Data, Type, Link, Edit}` with `sendRequest(getApi, aid)`, assigns the implicit global `props = info.Data`,
+ * creates the player (default fit/aspect), wraps `player.OnLoop`/`player.OnEnded` with console logging, and adds a
+ * `<SysWeaver-CenterBlock>` with a Collapse/Expand button (inner `toggleCollape`) and a "New window" button that
+ * collapses the player and opens `MediaView.html?type=&link=&props=&ctrl=<messagePrefix>` in a new tab.
+ * `messagePrefix = YaMD5.hashAsciiStr(getApi + "_" + aid + "_" + type + "_" + data)`.
+ * Calls `mediaEditProps` with `canEdit = (info.Edit & QuizzRights.UpdatePrivateData) !== 0` and a save callback that
+ * posts `{AssignmentId: aid}` (number aid) or the aid object, plus `Data = props`, to `'../quizz/' + updateApi`;
+ * on success it sets the implicit global `objState` and reloads the player.
+ * Plays with `mediaPlayWithPopup`, answers `<prefix>GetProps` InterOp messages with `<prefix>SetProps` (a copy of
+ * props) and posts an initial `<prefix>Reload`. On error clears the container and calls `Fail`; otherwise `PageLoaded()`.
+ * @returns {Promise<void>}
+ */
 async function mediaEditMain() {
     let target = document.body;
 
@@ -837,8 +1041,16 @@ async function mediaEditMain() {
         let player = pd[0];
         if (!props)
             props = JSON.parse(JSON.stringify(player.Params));
+        /**
+         * Player callback on loop: logs "Loop" to the console.
+         * @returns {void}
+         */
         player.OnLoop = () => console.log("Loop");
         const orgE = player.OnEnded;
+        /**
+         * Player callback on end: logs "End" and then calls the original OnEnded handler (if any).
+         * @returns {*} The result of the original handler.
+         */
         player.OnEnded = () => {
             console.log("End");
             if (orgE)
@@ -850,6 +1062,12 @@ async function mediaEditMain() {
         let collapseButton;
         const pcl = page.classList;
         let didPlay;
+        /**
+         * Toggles class `Hide` on `<Media-Full>` (hides player, stats and controls via media.css).
+         * Hiding remembers whether the player was playing and pauses it; showing resumes playback if it was playing.
+         * Updates the collapse button text, title and icon (IconMediaCollapse / IconMediaExpand).
+         * @returns {void}
+         */
         function toggleCollape() {
             if (pcl.contains("Hide")) {
                 pcl.remove("Hide");
@@ -931,21 +1149,48 @@ async function mediaEditMain() {
     PageLoaded();
 }
 
+/**
+ * Debug stand-in for the native `ScreenShotHost` host object (CefSharp / WebView2) used by `mediaPreviewMain`.
+ * Instantiated there when the URL has the `hack` parameter and no real host exists; every method only logs its call.
+ */
 class SsHack {
+    /**
+     * Logs "isSupported()".
+     * @returns {void}
+     */
     isSupported() {
         console.log("isSupported()");
     }
 
+    /**
+     * Logs the requested window size (a real host resizes the window).
+     * @param {number} width - Requested width in px.
+     * @param {number} height - Requested height in px.
+     * @returns {void}
+     */
     setSize(width, height) {
         console.log("setSize(" + width + ", " + height + ")");
     }
 
+    /**
+     * Logs the final report (a real host takes the screenshot / stores the measurements).
+     * @param {number} duration - Media duration in seconds.
+     * @param {number} fps - Measured frames per second (0 if unknown).
+     * @param {?string} error - Error message, or null on success.
+     * @param {number} loadDuration - Compilation/load time in ms (player.CompilationTime).
+     * @returns {void}
+     */
     doIt(duration, fps, error, loadDuration) {
         console.log("doIt(" + duration + ", " + fps + ", " + error + ", " + loadDuration + ")");
 
     }
 }
 
+/**
+ * Guesses the media type from the file extension of a URL (common.js isImageExt/isVideoExt/isAudioExt).
+ * @param {string} url - Media URL.
+ * @returns {number} `MediaTypes.Image`, `MediaTypes.Video`, `MediaTypes.Audio`, `MediaTypes.Effect` (".glsl"), or -1.
+ */
 function mediaGetTypeFromUrl(url) {
     const ext = getFileExtension(url).toLowerCase();
     if (isImageExt(ext))
@@ -961,6 +1206,20 @@ function mediaGetTypeFromUrl(url) {
 
 
 
+/**
+ * Boot function of `MediaView.html` (called from `<body onload>`).
+ * URL params: `link`/`d` (required), `type`/`t` (else guessed with `mediaGetTypeFromUrl`), `props` (JSON),
+ * `no_stats`, `no_controls`, `ctrl` (InterOp message prefix of a controlling editor, see mediaEditMain).
+ * With `ctrl`, first asks the opener for the current props: posts `<ctrl>GetProps` and waits up to 100 ms for the
+ * `MediaGotProps` event raised by the inner `getPropsFn` on `<ctrl>SetProps`.
+ * Creates `<Media-View>` (3-row grid) and a player with fit = false, automatic aspect (0:0) and centered alignment;
+ * clicking the media (inner `showFull`) navigates to `MediaPreview.html?full&back&pos=...` in the same tab.
+ * Wraps OnLoop/OnEnded with console logging. With `ctrl`, listens for `<ctrl>*` InterOp messages, copies message
+ * fields that already exist in `props` into it, and handles Reload (inner `reload`), SetVolume (`ResetVolume`),
+ * UpdateSize, Crop (UseClip + ApplyClip + UpdateSize) and Compile (`LazyCompile`).
+ * Plays with `mediaPlayWithPopup`, then `PageLoaded()`; on error clears the body and calls `Fail`.
+ * @returns {Promise<void>}
+ */
 async function mediaViewMain() {
     const target = document.body;
     try {
@@ -997,6 +1256,12 @@ async function mediaViewMain() {
 
         if (messagePrefix) {
             let newProps = null;
+            /**
+             * Start-up InterOp listener: on `<prefix>SetProps` copies the message (minus Type, From, MagicXyz) into
+             * `newProps` and dispatches a `MediaGotProps` event on the body (ends the wait).
+             * @param {MessageEvent} ev - The InterOp message event.
+             * @returns {void}
+             */
             function getPropsFn(ev) {
                 const m = InterOp.GetMessage(ev);
                 const type = m.Type;
@@ -1043,6 +1308,11 @@ async function mediaViewMain() {
         const pd = await mediaCreatePlayer(mview, type, data, props, !controls, null, !stats, false, 0, 0, 0.5, 0.5);
         let player = pd[0];
 
+        /**
+         * Opens `MediaPreview.html?full&back&pos=<current pos>&type=&link=&props=<player.Params JSON>` in the same tab
+         * (full-screen preview; a click there goes back). Set as click handler of the player's parent (the clip box).
+         * @returns {void}
+         */
         const showFull = () => Open("MediaPreview.html?full&back&pos=" + player.GetPos() + "&type=" + type + "&link=" + encodeURIComponent(data) + "&props=" + JSON.stringify(player.Params), "_self");
 
         player.Element.parentElement.onclick = showFull;
@@ -1055,13 +1325,27 @@ async function mediaViewMain() {
             mediaStats = pd[2];
         props = player.Params;
 
+        /**
+         * Player callback on loop: logs "Loop" to the console.
+         * @returns {void}
+         */
         player.OnLoop = () => console.log("Loop");
         const orgE = player.OnEnded;
+        /**
+         * Player callback on end: logs "End" and then calls the original OnEnded handler (if any).
+         * @returns {*} The result of the original handler.
+         */
         player.OnEnded = () => {
             console.log("End");
             if (orgE)
                 return orgE();
         };
+        /**
+         * Rebuilds the player with the current `props` (triggered by a `<prefix>Reload` message); same procedure as
+         * the `reload` of mediaEditProps (keeps volume, un-mute, once, play state and position), re-attaches
+         * `showFull` and sets `props` to the new `player.Params`.
+         * @returns {Promise<void>}
+         */
         async function reload() {
 
             const oldP = player;
@@ -1148,6 +1432,26 @@ async function mediaViewMain() {
     PageLoaded();
 }
 
+/**
+ * Boot function of `MediaPreview.html`: a bare player that fills the window, also used to take screenshots.
+ * Adds class `MediaPreview` to the body and binds CefSharp objects when CefSharp is present.
+ * Screenshot host: `window.ScreenShotHost` ?? WebView2 host object (inner `GetHo`) ?? `new SsHack()` when `hack` is
+ * set. With a host: awaits `isSupported()`, stores it as `window.ScreenShotHost`, adds class `NoFade` and uses fill mode.
+ * URL params: `link`/`d` (required), `type`/`t` (else guessed), `pos` (seek position, s), `props` (JSON), `fill`,
+ * `full` (enter FullScreen; re-entered on the first key/click), `back` (a click calls `history.go(-1)`, suppressed
+ * while full screen or audio still has to be enabled by the first interaction).
+ * Playback: creates the player with `MediaPlayer.Create`, appends its element to the body, `Cache(true)`, sizes it
+ * with `MediaPlayerTools.UpdateSize` under a ResizeObserver (inner `updateSize`), seeks, un-mutes when allowed
+ * (else on the first interaction), waits 50 ms, resizes the host window (`shost.setSize`) to the clipped size (or to
+ * the aspect ratio with AdaptiveSize) and waits for `resize`, then `Play()`, `Show()` and
+ * `MediaPlayerTools.SetupMediaMessages(player)` (window message commands like MediaPlay/MediaPause/MediaSeek).
+ * Screenshot report: after playback starts, calls `ResetCounters()` (if available) and measures for 600 ms,
+ * pauses, seeks back to `pos` and calls `shost.doIt(duration, fps, null, compilationTime)` with
+ * fps = 1000 * MeasureCount / TotalTime. On a playback error `doIt(0, 0, message, 0)` is called and `Fail` shown;
+ * the final report block is then skipped, so `doIt` is called exactly once.
+ * On an outer error the body text is replaced with "Generic failure."; otherwise `PageLoaded()` is called.
+ * @returns {Promise<void>}
+ */
 async function mediaPreviewMain() {
     const target = document.body;
     try {
@@ -1155,6 +1459,11 @@ async function mediaPreviewMain() {
         target.classList.add("MediaPreview");
         if (window["CefSharp"])
             await CefSharp.BindObjectAsync();
+        /**
+         * Returns the WebView2 host object `chrome.webview.hostObjects.ScreenShotHost`, or null when absent
+         * (also when accessing it throws).
+         * @returns {?object} The screenshot host proxy or null.
+         */
         function GetHo() {
             try {
                 return chrome?.webview?.hostObjects?.ScreenShotHost ?? null;
@@ -1203,6 +1512,11 @@ async function mediaPreviewMain() {
         let enabledFull = true;
         if (full) {
             await FullScreen.Enter();
+            /**
+             * One-shot keyup/click handler (full screen mode): removes itself, re-enters full screen (entering may
+             * require a user gesture) and re-enables `back` navigation after 100 ms.
+             * @returns {Promise<void>}
+             */
             const onInteraction = async () => {
                 target.removeEventListener("keyup", onInteraction);
                 target.removeEventListener("click", onInteraction);
@@ -1229,11 +1543,16 @@ async function mediaPreviewMain() {
         e.draggable = false;
         const es = e.style;
         target.appendChild(e);
+        let failed = false;
         try {
             await player.Cache(true);
             const pw = player.Width;
             const ph = player.Height;
             const adapt = !!player.Params.AdaptiveSize;
+            /**
+             * Sizes the player to the body with `MediaPlayerTools.UpdateSize(target, player, fill)`.
+             * @returns {Array<number>} The clipped media size `[w, h]` (used to resize the screenshot window).
+             */
             function updateSize() {
                 return MediaPlayerTools.UpdateSize(target, player, fill);
             }
@@ -1245,6 +1564,11 @@ async function mediaPreviewMain() {
                     await player.UnMute();
                 } else {
                     enabledAudio = false;
+                    /**
+                     * One-shot keyup/click handler (un-mute blocked by the browser): removes itself, un-mutes the
+                     * player and re-enables `back` navigation after 100 ms.
+                     * @returns {void}
+                     */
                     const onInteraction = () => {
                         target.removeEventListener("keyup", onInteraction);
                         target.removeEventListener("click", onInteraction);
@@ -1283,11 +1607,12 @@ async function mediaPreviewMain() {
             MediaPlayerTools.SetupMediaMessages(player);
         }
         catch (e) {
+            failed = true;
             if (shost)
                 await shost.doIt(0, 0, "" + e, 0);
             Fail(e);
         }
-        if (shost) {
+        if (shost && !failed) {
             await MediaPlayerTools.delay(200);
             if (typeof player.ResetCounters !== "undefined") {
                 player.ResetCounters();

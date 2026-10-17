@@ -1,8 +1,66 @@
-﻿
+﻿/**
+ * @file UserManagerUi.js - page logic of the self-service account pages of SysWeaver.MicroService.UserManager
+ * (served as auth/...).
+ *
+ * Loading: `<script defer>` as the LAST script of all 15 HTML shells of this folder, after ../common/common.js,
+ * Auth.js, AuthUi.js (SysWeaver.MicroService.Auth, same auth/ folder at runtime) and UserManager.js.
+ * ChoosePassword.html and ResetPassword.html also load Passkey.js (SysWeaver.MicroService.PassKey) before Auth.js.
+ * Each page calls exactly one entry point from `<body onload="...">`:
+ * SetPassword -> setPasswordMain, ChoosePassword -> choosePasswordMain, DeleteAccount -> deleteAccountMain,
+ * SignUp -> signUpMain, ForgotPassword -> forgotPasswordMain, ResetPassword -> resetPasswordMain,
+ * AddPassword -> addPasswordMain, DeletePassword -> deletePasswordMain, InviteUser -> inviteUserMain,
+ * ChangeEmail / AddEmail / DeleteEmail -> changeEmailMain / addEmailMain / deleteEmailMain,
+ * ChangePhone / AddPhone / DeletePhone -> changePhoneMain / addPhoneMain / deletePhoneMain.
+ *
+ * Globals defined: only the global async *Main() functions above; no variables, nothing runs at load.
+ * None of them is called from another folder (the server links to the HTML pages from the User menu and
+ * from e-mail / text message links).
+ *
+ * Dependencies:
+ * - AuthUi.js (SysWeaver.MicroService.Auth): AuthPage, AuthLabel, AuthInput, AuthInputPhone, AuthPassword,
+ *   AuthNewPassword, AuthError, AuthText, AuthTab, AuthButton, AuthButtonRow, AuthSetText, AuthSetError,
+ *   AuthUserHtml, AuthPageValidation (the shared short-code step, which in turn calls validateShortCode /
+ *   cleanUpShortCode from UserManager.js), AuthStartPage.
+ * - Auth.js (SysWeaver.MicroService.Auth): AuthTrim, AuthPolicyText, ValidatePassword, CheckPassword,
+ *   AuthGetEmailError, AuthGetPhoneError.
+ * - UserManager.js (this folder): all request wrappers (setPasswordRequest, addUserRequest, ...).
+ * - Passkey.js (SysWeaver.MicroService.PassKey, optional, only checked with `typeof PassKey`): PassKey.IsSupported,
+ *   PassKey.NewAccount, PassKey.AttachUsingToken, PassKey.Errors, PassKey.ErrorText.
+ * - common.js: sendRequest, getRequest, getUrlParams, isValidEmail, _T / _TF / _TH (localization), Fail,
+ *   SetTemporaryInnerText.
+ * - Icon classes: UserManager.css (page icons), Auth.css (IconAuthPassword, IconAuthPost, IconAuthEmail,
+ *   IconAuthPhone), Passkey.css (IconAddPasskey).
+ *
+ * Conventions:
+ * - Every entry point wraps its work in AuthPage(icon, build): builds the floating auth box, shows the icon,
+ *   calls build(box, img), calls PageLoaded once and passes exceptions thrown by build to Fail.
+ * - Token pages read the token as `decodeURIComponent(window.location.search)` without the leading "?"
+ *   (the whole query string is the long token or the session short code; no named parameters).
+ * - "Standard form": AuthLabel + inputs, an info line `AuthError(target, "", policyText)`, an AuthButtonRow with
+ *   a main AuthButton created disabled; an inner setStatus validates on every input (Enter clicks the button
+ *   when setStatus returns true). Click: StartWorking, inputs readOnly, request; success -> message,
+ *   AuthStartPage() or AuthPageValidation(..., "<Page>.html?"); failure -> Fail(...), StopWorking, setStatus,
+ *   5 s SetTemporaryInnerText retry text, inputs editable again.
+ * - "Token mode / request mode" pages: with a query string a single confirm button calls the token API; without
+ *   one the page sends the request message and hands over to AuthPageValidation.
+ * - Naming carried over from the login form: the current-password input is called `uname` and the second
+ *   input `pwd`, even when it holds an e-mail or phone number. The current password is validated against the
+ *   CREATE password policy.
+ */
+
 ////// Set password ///////////////////////////////
 
 
 
+/**
+ * Entry point of SetPassword.html (change the password of the signed-in user), page icon IconAuthSetPassword.
+ * Standard form: current password (AuthPassword, `uname`) and new password (AuthNewPassword with the create
+ * policy from getCreatePasswordPolicy, `pwd`). Button "Set password" (IconAuthPassword): GET ../Api/auth/GetUser
+ * for the user name (throws "No user signed in!" unless Succeeded and Username), then
+ * setPasswordRequest(username, current, new). On success shows "Password set." and disables the button;
+ * the user stays on the page.
+ * @returns {Promise<void>}
+ */
 async function setPasswordMain() {
 
     await AuthPage("IconAuthSetPassword", async target => {
@@ -13,6 +71,17 @@ async function setPasswordMain() {
         const uname = AuthPassword(target, _TF("Enter the current password", "Placeholder text for an input box where the user should enter their current password"), null, "", async input => await setStatus(input.value, pwd.value));
 
         AuthLabel(target, _TF("New password", "Label text for an input box where the user should enter a new password")).title = policyText;
+        /**
+         * Validates both inputs and updates the error marks, the info line and the "Set password" button.
+         * The current password is checked with ValidatePassword against the create policy; if invalid, `uname`
+         * is marked, `pwd` unmarked, the button disabled and false returned. Otherwise the new password is
+         * validated (ValidatePassword with the current password as "user" argument); when valid a leak check
+         * CheckPassword(info, pwText) is started without awaiting.
+         * @param {string} uText Current password text (trimmed with AuthTrim)
+         * @param {string} pwText New password text (trimmed with AuthTrim)
+         * @returns {Promise<boolean>} false if the current password is invalid; otherwise true, even when the
+         * new password is invalid (the button state reflects that case)
+         */
         async function setStatus(uText, pwText) {
             uText = AuthTrim(uText);
             pwText = AuthTrim(pwText);
@@ -89,6 +158,21 @@ async function setPasswordMain() {
 
 ////// Choose password ///////////////////////////////
 
+/**
+ * Entry point of ChoosePassword.html (complete a new account from a sign-up / invite link or short code),
+ * page icon IconChoosePassword.
+ * Requires a token (query string longer than 3 chars incl. "?"), else Fail("Token not found or invalid").
+ * POST ../Api/auth/GetNewUserData(token) -> {Salt, NickName, UserName} (null -> Fail); shows "Welcome {user}".
+ * If PassKey (Passkey.js) is defined and supported, creates PassKey.NewAccount(token) and awaits its Fetch()
+ * before rendering, so the later click opens the browser prompt directly; passkey support is dropped if that
+ * throws or returns `error`. The label text depends on passkey availability.
+ * "Set password" (IconAuthPassword) calls addUserRequest(token, salt, pw) then AuthStartPage().
+ * Optional "Create a passkey" (IconAddPasskey) runs newPassKey.Run(); on Error == 0 calls AuthStartPage(),
+ * otherwise Fail(PassKey.ErrorText(res)) unless PassKey.Errors.Cancelled, then pre-fetches a fresh challenge
+ * (Fetch(), errors ignored).
+ * Note: invite links use `ChoosePassword.html?user=..&salt=..&token=..`; the whole string is passed as token.
+ * @returns {Promise<void>}
+ */
 async function choosePasswordMain() {
 
     await AuthPage("IconChoosePassword", async target => {
@@ -126,6 +210,13 @@ async function choosePasswordMain() {
                 _TF("Choose password", "A message letting a user know that they should provide a new password")
         ).title = policyText;
 
+        /**
+         * Validates the new password with ValidatePassword (no user name) against the create policy, shows the
+         * error or starts the CheckPassword(info, text) leak check (not awaited), enables "Set password" when
+         * valid and marks `pwd`.
+         * @param {string} text New password text (trimmed with AuthTrim)
+         * @returns {Promise<boolean>} true if the password is valid
+         */
         async function setStatus(text) {
             text = AuthTrim(text);
             const p = await ValidatePassword(null, text, null, null, null, policy);
@@ -230,6 +321,17 @@ async function choosePasswordMain() {
 ////// Delete user account ///////////////////////////////
 
 
+/**
+ * Entry point of DeleteAccount.html.
+ * Token mode (query string present, page icon IconAuthDeleteAccount): a confirm button "Click to delete account"
+ * (IconAuthDeleteAccount, warning tooltip) hides the button row, calls deleteUserRequest(token) and shows
+ * "Account deleted" (no navigation); on failure Fail(...) and the row is shown again.
+ * Request mode (no query string, page icon IconAuthDeleteMail): calls target.OnLoaded(), sendDeleteUserRequest(),
+ * then AuthPageValidation(target, "Code sent to {targets}", "DeleteAccount.html?"); on failure shows and Fails.
+ * Note: the server's SendDeleteUserRequest link uses `DeleteAccount.html?token=<t>`, so "token=..." is passed as
+ * token. The computed `ps` (getUrlParams()) is unused.
+ * @returns {Promise<void>}
+ */
 async function deleteAccountMain() {
     const ps = getUrlParams();
     let token = decodeURIComponent(window.location.search ?? "");
@@ -281,6 +383,19 @@ async function deleteAccountMain() {
 
 ////// Sign up ///////////////////////////////
 
+/**
+ * Entry point of SignUp.html, page icon IconAuthSignUp.
+ * GET ../Api/auth/SignUpMethods (array of "Email" / "Phone"; empty -> Fail "No sign up methods found!").
+ * Creates an AuthTab and, per supported method, a SysWeaver-AuthTabContent element `g` appended to the box, with a
+ * tab header (tab.Add, icons IconAuthEmail / IconAuthPhone) and an AuthInput (type "email") or AuthInputPhone.
+ * Each content element gets the expandos g.SetStatus / g.GetValue. The tab change callback shows only the
+ * selected content, re-validates it and focuses its input. No content created -> Fail "No supported sign up
+ * methods found!".
+ * "Sign up" (IconAuthPost) adds class Disabled to the tab and all contents, calls signUpRequest(value) and on
+ * success AuthPageValidation(..., "ChoosePassword.html?"); on failure removes Disabled again.
+ * Ends with the hard-coded tab.SetIndex(1), then validates and focuses elements[tab.Selected].
+ * @returns {Promise<void>}
+ */
 async function signUpMain() {
     await AuthPage("IconAuthSignUp", async target => {
 
@@ -309,6 +424,12 @@ async function signUpMain() {
         });
 
 
+        /**
+         * Validates the e-mail input with AuthGetEmailError ("Enter a valid email address" when empty),
+         * marks the input, updates `info` and enables / disables the "Sign up" button.
+         * @param {HTMLInputElement} el The e-mail input element
+         * @returns {Promise<boolean>} true if the e-mail address is valid
+         */
         async function setEmailStatus(el) {
             let uText = el.value;
             uText = AuthTrim(uText);
@@ -322,6 +443,12 @@ async function signUpMain() {
             return !p;
         }
 
+        /**
+         * Validates the phone input with AuthGetPhoneError ("Enter a valid phone number" when empty),
+         * marks the input, updates `info` and enables / disables the "Sign up" button.
+         * @param {HTMLInputElement} el The phone input element (from AuthInputPhone)
+         * @returns {Promise<boolean>} true if the phone number is valid
+         */
         async function setPhoneStatus(el) {
             let uText = el.value;
             uText = AuthTrim(uText);
@@ -349,7 +476,16 @@ async function signUpMain() {
                         el.click();
                 });
                 uname.type = "email";
+                /**
+                 * Expando on the tab content element: re-validates its e-mail input (setEmailStatus).
+                 * Called by the tab change callback, after a failed sign-up and at start-up.
+                 * @returns {Promise<boolean>} true if valid
+                 */
                 g.SetStatus = () => setEmailStatus(uname);
+                /**
+                 * Expando on the tab content element: returns the raw value of its e-mail input (not read by the page code).
+                 * @returns {string} The input value
+                 */
                 g.GetValue = () => uname.value;
             }
             if (methods[i] === "Phone") {
@@ -363,7 +499,15 @@ async function signUpMain() {
                     if (await setPhoneStatus(uname))
                         el.click();
                 });
+                /**
+                 * Expando on the tab content element: re-validates its phone input (setPhoneStatus).
+                 * @returns {Promise<boolean>} true if valid
+                 */
                 g.SetStatus = () => setPhoneStatus(uname);
+                /**
+                 * Expando on the tab content element: returns the raw value of its phone input (not read by the page code).
+                 * @returns {string} The input value
+                 */
                 g.GetValue = () => uname.value;
             }
             if (!g.SetStatus)
@@ -434,6 +578,12 @@ async function signUpMain() {
 
 ////// Forgot password ///////////////////////////////
 
+/**
+ * Entry point of ForgotPassword.html, page icon IconAuthForgotPassword.
+ * Standard form with one "User ID" AuthInput (autocomplete "userid"). Button (IconAuthPost) calls
+ * forgotPasswordRequest(user); on success AuthPageValidation(..., "ResetPassword.html?").
+ * @returns {Promise<void>}
+ */
 async function forgotPasswordMain() {
     await AuthPage("IconAuthForgotPassword", async target => {
 
@@ -446,6 +596,12 @@ async function forgotPasswordMain() {
                 if (setStatus(uname.value))
                     el.click();
             });
+        /**
+         * Synchronous validation: the user id only has to be non-empty after AuthTrim. Updates the error mark,
+         * the info line and the button state.
+         * @param {string} uText The user id text
+         * @returns {boolean} true if non-empty
+         */
         function setStatus(uText) {
             uText = AuthTrim(uText);
             const p = uText.length > 0;
@@ -499,6 +655,13 @@ async function forgotPasswordMain() {
 
 ////// Reset password ///////////////////////////////
 
+/**
+ * Entry point of ResetPassword.html (reset the password from a link or short code), page icon IconAuthResetPassword.
+ * Same structure as choosePasswordMain, but uses POST ../Api/auth/GetNewPasswordData(token) -> {Salt, NickName,
+ * UserName}, PassKey.AttachUsingToken(token) for the optional "Create a passkey" button, and
+ * resetPasswordRequest(token, pw, salt), which must return Error == 0 before AuthStartPage(). No welcome text.
+ * @returns {Promise<void>}
+ */
 async function resetPasswordMain() {
     await AuthPage("IconAuthResetPassword", async target => {
 
@@ -535,6 +698,13 @@ async function resetPasswordMain() {
                 _TF("Choose a new password", "A message letting a user know that they should provide a new password")
         ).title = policyText;
 
+        /**
+         * Validates the new password with ValidatePassword (no user name) against the create policy, shows the
+         * error or starts the CheckPassword(info, text) leak check (not awaited), enables "Set password" when
+         * valid and marks `pwd`.
+         * @param {string} text New password text (trimmed with AuthTrim)
+         * @returns {Promise<boolean>} true if the password is valid
+         */
         async function setStatus(text) {
             text = AuthTrim(text);
             const p = await ValidatePassword(null, text, null, null, null, policy);
@@ -640,6 +810,16 @@ async function resetPasswordMain() {
 
 
 ////// Add password ///////////////////////////////
+/**
+ * Entry point of AddPassword.html (add a password to an account without one, e.g. passkey-only),
+ * page icon IconAuthAddPassword.
+ * Token mode: POST ../Api/auth/GetNewPasswordData(token) -> {Salt, NickName, UserName}, then a new-password
+ * standard form; "Add password" (IconAuthPassword) calls resetPasswordRequest(token, pw, salt) and on
+ * Error == 0 AuthStartPage().
+ * Request mode: target.OnLoaded(), sendAddPasswordRequest(), then AuthPageValidation(..., "AddPassword.html?").
+ * The computed `ps` (getUrlParams()) is unused.
+ * @returns {Promise<void>}
+ */
 async function addPasswordMain() {
     await AuthPage("IconAuthAddPassword", async target => {
 
@@ -658,6 +838,13 @@ async function addPasswordMain() {
             const policy = await getCreatePasswordPolicy();
             const policyText = AuthPolicyText(policy);
             AuthLabel(target, _TF("Choose password", "A message letting a user know that they should provide a new password")).title = policyText;
+            /**
+             * Validates the new password with ValidatePassword(user, ...) (the nick / user name from the token
+             * data is passed, unlike in choose / reset password), shows the error or starts the CheckPassword
+             * leak check (not awaited), enables "Add password" when valid and marks `pwd`.
+             * @param {string} text New password text (trimmed with AuthTrim)
+             * @returns {Promise<boolean>} true if the password is valid
+             */
             async function setStatus(text) {
                 text = AuthTrim(text);
                 const p = await ValidatePassword(user, text, null, null, null, policy);
@@ -736,6 +923,13 @@ async function addPasswordMain() {
 
 ////// Delete password ///////////////////////////////
 
+/**
+ * Entry point of DeletePassword.html, page icon IconAuthDeletePassword.
+ * Token mode: confirm button "Delete password" (IconAuthDeletePassword) hides the row, calls deletePassword(token)
+ * and shows "Password deleted" (row shown again on failure).
+ * Request mode: target.OnLoaded(), sendDeletePasswordRequest(), then AuthPageValidation(..., "DeletePassword.html?").
+ * @returns {Promise<void>}
+ */
 async function deletePasswordMain() {
     await AuthPage("IconAuthDeletePassword", async target => {
 
@@ -787,6 +981,15 @@ async function deletePasswordMain() {
 
 ////// Invite user ///////////////////////////////
 
+/**
+ * Entry point of InviteUser.html (privileged), page icon IconAuthInviteUser.
+ * Requires POST ../Api/auth/GetUser -> Succeeded (throws "No user signed in!" otherwise, caught by AuthPage).
+ * Inputs: e-mail (validated client-side with isValidEmail from common.js), an optional user name, and only when
+ * the inviter has Tokens a comma-separated "Security tokens" input whose tooltip lists the inviter's tokens.
+ * "Send invitation" (IconAuthPost) calls inviteUserRequest(email, name, tokens.split(',')) (no domain) and shows
+ * "Invitation sent to {email}." with the button disabled.
+ * @returns {Promise<void>}
+ */
 async function inviteUserMain() {
     await AuthPage("IconAuthInviteUser", async target => {
 
@@ -818,6 +1021,12 @@ async function inviteUserMain() {
                 title, "securitytokens");
         }
 
+        /**
+         * Synchronous validation of the e-mail input with isValidEmail (common.js); updates the error mark,
+         * the info line and the "Send invitation" button.
+         * @param {string} uText The e-mail text (trimmed with AuthTrim)
+         * @returns {boolean} true if the e-mail address is valid
+         */
         function setStatus(uText) {
             uText = AuthTrim(uText);
             const p = isValidEmail(uText);
@@ -881,6 +1090,15 @@ async function inviteUserMain() {
 
 ////// Change email ///////////////////////////////
 
+/**
+ * Entry point of ChangeEmail.html, page icon IconAuthChangeEmail.
+ * Token mode: confirm button "Change email address" (IconAuthChangeEmail) calls changeEmail(token) (AddEmail API)
+ * and shows "Email address changed".
+ * Request mode: standard form with current password (`uname`) and new e-mail (AuthInput, `pwd`, validated with
+ * AuthGetEmailError); "Verify email address" (IconAuthEmail): GET ../Api/auth/GetUser, then
+ * changeEmailRequest(username, password, email), then AuthPageValidation(..., "ChangeEmail.html?").
+ * @returns {Promise<void>}
+ */
 async function changeEmailMain() {
 
     await AuthPage("IconAuthChangeEmail", async target => {
@@ -917,6 +1135,14 @@ async function changeEmailMain() {
             const uname = AuthPassword(target, _TF("Enter the current password", "Placeholder text for an input box where the user should enter their current password"), null, "", async input => await setStatus(input.value, pwd.value));
 
             AuthLabel(target, _TF("New email address", "Label for an input field where the user should enter a new email address")).title = policyText;
+            /**
+             * Validates the current password (ValidatePassword, create policy) and the new e-mail address
+             * (AuthGetEmailError, or "Enter your new email address" when empty); updates marks, info line and button.
+             * @param {string} uText Current password text (trimmed with AuthTrim)
+             * @param {string} pwText New e-mail text (trimmed with AuthTrim)
+             * @returns {Promise<boolean>} false if the current password is invalid; otherwise true, even when the
+             * e-mail is invalid (the button state reflects that case)
+             */
             async function setStatus(uText, pwText) {
                 uText = AuthTrim(uText);
                 pwText = AuthTrim(pwText);
@@ -1001,6 +1227,12 @@ async function changeEmailMain() {
 
 ////// Delete email ///////////////////////////////
 
+/**
+ * Entry point of DeleteEmail.html, page icon IconAuthDeleteEmail. Single mode (no token).
+ * Standard form with only the current password; "Delete email address" (IconAuthDeleteEmail) calls
+ * GET ../Api/auth/GetUser, then deleteEmail(username, password) and shows "Sent restore instructions to {targets}."
+ * @returns {Promise<void>}
+ */
 async function deleteEmailMain() {
 
     await AuthPage("IconAuthDeleteEmail", async target => {
@@ -1011,6 +1243,11 @@ async function deleteEmailMain() {
         AuthLabel(target, _TF("Current password", "Label text for an input box where the user should enter their current password")).title = policyText;
         const uname = AuthPassword(target, _TF("Enter the current password", "Placeholder text for an input box where the user should enter their current password"), null, "", async input => await setStatus(input.value));
 
+        /**
+         * Validates the current password only (ValidatePassword, create policy); enables the button when valid.
+         * @param {string} uText Current password text (trimmed with AuthTrim)
+         * @returns {Promise<boolean>} true if valid
+         */
         async function setStatus(uText) {
             uText = AuthTrim(uText);
             const e = await ValidatePassword(null, uText, null, null, null, policy);
@@ -1070,6 +1307,11 @@ async function deleteEmailMain() {
 
 ////// Add email ///////////////////////////////
 
+/**
+ * Entry point of AddEmail.html, page icon IconAuthAddEmail. Same as changeEmailMain but with addEmail(token)
+ * (confirm button "Add email address", IconAuthAddEmail) / addEmailRequest and the link "AddEmail.html?".
+ * @returns {Promise<void>}
+ */
 async function addEmailMain() {
 
     await AuthPage("IconAuthAddEmail", async target => {
@@ -1107,6 +1349,14 @@ async function addEmailMain() {
             const uname = AuthPassword(target, _TF("Enter the current password", "Placeholder text for an input box where the user should enter their current password"), null, "", async input => await setStatus(input.value, pwd.value));
             
             AuthLabel(target, _TF("Email address", "Label text for an input box where the user should input a valid email address")).title = policyText;
+            /**
+             * Validates the current password (ValidatePassword, create policy) and the e-mail address to add
+             * (AuthGetEmailError, or "Enter your email address" when empty); updates marks, info line and button.
+             * @param {string} uText Current password text (trimmed with AuthTrim)
+             * @param {string} pwText E-mail text (trimmed with AuthTrim)
+             * @returns {Promise<boolean>} false if the current password is invalid; otherwise true, even when the
+             * e-mail is invalid (the button state reflects that case)
+             */
             async function setStatus(uText, pwText) {
                 uText = AuthTrim(uText);
                 pwText = AuthTrim(pwText);
@@ -1191,6 +1441,12 @@ async function addEmailMain() {
 
 ////// Change phone ///////////////////////////////
 
+/**
+ * Entry point of ChangePhone.html, page icon IconAuthChangePhone. Same as changeEmailMain, but the new value uses
+ * AuthInputPhone (with a "+country code" tooltip) validated by AuthGetPhoneError; button "Verify phone number"
+ * (IconAuthPhone); APIs changePhone(token) (AddPhone API) / changePhoneRequest; link "ChangePhone.html?".
+ * @returns {Promise<void>}
+ */
 async function changePhoneMain() {
 
     await AuthPage("IconAuthChangePhone", async target => {
@@ -1231,6 +1487,14 @@ async function changePhoneMain() {
             const tt = _TF("Enter a complete phone number including the country dialling code, prefixed by a + sign", "Tool tip description for an input field where the user should enter their phone number");
             AuthLabel(target, _TF("Phone number", "Label text for an input field where the user should enter their phone number")).title = tt;
             const epf = _TF("Enter your phone number", "Placeholder text for an input field where the user should enter their phone number");
+            /**
+             * Validates the current password (ValidatePassword, create policy) and the new phone number
+             * (AuthGetPhoneError, or the placeholder text `epf` when empty); updates marks, info line and button.
+             * @param {string} uText Current password text (trimmed with AuthTrim)
+             * @param {string} pwText New phone number text (trimmed with AuthTrim)
+             * @returns {Promise<boolean>} false if the current password is invalid; otherwise true, even when the
+             * phone number is invalid (the button state reflects that case)
+             */
             async function setStatus(uText, pwText) {
                 uText = AuthTrim(uText);
                 pwText = AuthTrim(pwText);
@@ -1309,6 +1573,11 @@ async function changePhoneMain() {
 
 ////// Delete phone ///////////////////////////////
 
+/**
+ * Entry point of DeletePhone.html, page icon IconAuthDeletePhone. Same as deleteEmailMain with
+ * "Delete phone number" (IconAuthDeletePhone) and deletePhone(username, password).
+ * @returns {Promise<void>}
+ */
 async function deletePhoneMain() {
 
     await AuthPage("IconAuthDeletePhone", async target => {
@@ -1319,6 +1588,11 @@ async function deletePhoneMain() {
         AuthLabel(target, _TF("Current password", "Label text for an input box where the user should enter their current password")).title = policyText;
         const uname = AuthPassword(target, _TF("Enter the current password", "Placeholder text for an input box where the user should enter their current password"), null, "", async input => await setStatus(input.value));
 
+        /**
+         * Validates the current password only (ValidatePassword, create policy); enables the button when valid.
+         * @param {string} uText Current password text (trimmed with AuthTrim)
+         * @returns {Promise<boolean>} true if valid
+         */
         async function setStatus(uText) {
             uText = AuthTrim(uText);
             const e = await ValidatePassword(null, uText, null, null, null, policy);
@@ -1378,6 +1652,11 @@ async function deletePhoneMain() {
 
 ////// Add phone ///////////////////////////////
 
+/**
+ * Entry point of AddPhone.html, page icon IconAuthAddPhone. Same as changePhoneMain with addPhone(token)
+ * (confirm button "Add phone number", IconAuthAddPhone) / addPhoneRequest and the link "AddPhone.html?".
+ * @returns {Promise<void>}
+ */
 async function addPhoneMain() {
 
     await AuthPage("IconAuthAddPhone", async target => {
@@ -1417,6 +1696,14 @@ async function addPhoneMain() {
             const tt = _TF("Enter a complete phone number including the country dialling code, prefixed by a + sign", "Tool tip description for an input field where the user should enter their phone number");
             AuthLabel(target, _TF("Phone number", "Label text for an input field where the user should enter their phone number")).title = tt;
             const epf = _TF("Enter your phone number", "Placeholder text for an input field where the user should enter their phone number");
+            /**
+             * Validates the current password (ValidatePassword, create policy) and the phone number to add
+             * (AuthGetPhoneError, or the placeholder text `epf` when empty); updates marks, info line and button.
+             * @param {string} uText Current password text (trimmed with AuthTrim)
+             * @param {string} pwText Phone number text (trimmed with AuthTrim)
+             * @returns {Promise<boolean>} false if the current password is invalid; otherwise true, even when the
+             * phone number is invalid (the button state reflects that case)
+             */
             async function setStatus(uText, pwText) {
                 uText = AuthTrim(uText);
                 pwText = AuthTrim(pwText);

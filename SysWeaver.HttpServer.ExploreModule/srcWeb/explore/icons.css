@@ -1,11 +1,25 @@
-﻿body {
+﻿/*
+ * icons.css - styles of explore/icons.html (icon gallery built by icons.js / iconsMain()).
+ * Loaded by icons.html after common/theme.css; uses the theme variables --ThemeMain50, --ThemeAcc1 and
+ * --ThemeRad. Not templated. Sizes adapt to the viewport through svw / svh units (no media queries).
+ * logo.css is a near copy of this file.
+ */
+
+/* ===== Page ===== */
+
+/* Whole page: disable text selection (tiles are click-to-copy). */
+body {
     user-select: none;
 }
 
+/* SysWeaver-CenterBlock: centered block element from common code (not created by icons.js); 1em bottom padding. */
 SysWeaver-CenterBlock {
     padding-bottom: 1em;
 }
 
+/* ===== Icon list ===== */
+
+/* SysWeaver-IconList: container of all tiles (appended to body by iconsMain); centered inline-block, bold 125% text. */
 SysWeaver-IconList {
     text-align: center;
     display: inline-block;
@@ -13,6 +27,14 @@ SysWeaver-IconList {
     font-size: 125%;
 }
 
+/*
+ * SysWeaver-IconItem: one square tile per icon (click copies the icon url).
+ * Custom properties defined here:
+ *   --s  tile / image width: half of the smaller of viewport width and (viewport height - 64px - 1em),
+ *        minus 3em, so roughly two tiles fit per row and column.
+ *   --h  tile height: --s plus 1.5em for the caption.
+ * Bordered with --ThemeMain50, rounded with --ThemeRad, box-shadow transition for the hover glow.
+ */
 SysWeaver-IconItem {
     --s: calc(min(100svw, 100svh - 64px - 1em) / 2 - 3em);
     --h: calc(var(--s) + 1.5em);
@@ -29,10 +51,18 @@ SysWeaver-IconItem {
 }
 
 
+    /* Hovered tile: 10px --ThemeAcc1 glow. */
     SysWeaver-IconItem:hover {
         box-shadow: var(--ThemeAcc1) 0 0 10px;
     }
 
+    /*
+     * Icon image (--s x --s) on a checkerboard background so transparent areas are visible.
+     * Custom properties defined here (checkerboard):
+     *   --D  dark square color (#666), --B  light square color (#aaa),
+     *   --C  offset of the second gradient layer (10px), --R  background tile size (20px).
+     * Technique: two 45deg linear-gradients, the second offset by --C, both sized --R.
+     */
     SysWeaver-IconItem img {
         position: relative;
         display: block;
@@ -48,6 +78,7 @@ SysWeaver-IconItem {
         background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%),linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
     }
 
+    /* SysWeaver-IconName: icon name caption below the image (1.25em high, centered, width --s). */
     SysWeaver-IconItem SysWeaver-IconName {
         position: relative;
         display: block;

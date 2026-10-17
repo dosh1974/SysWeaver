@@ -1,5 +1,43 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+﻿/*
+ * theme.css - the global stylesheet of the SysWeaver web framework.
+ * Loaded by ~54 pages with <link rel="stylesheet" href="../common/theme.css"> (or "common/theme.css" from the root
+ * index.html); the ExploreModule also passes it as STYLECSSFILE.
+ * Contents: the theme custom properties (:root defaults = the "light" theme), the theme variants selected with the
+ * data-theme attribute on <html> (dark, hacker, application, pro), base html/body/a/em styling, colour utility
+ * classes, and the styles of every SysWeaver-* element created by common/common.js (links, page, toasts, buttons,
+ * loading overlay, progress bar, server blocker, code/JSON/long text/markdown popups) plus the mask icon classes.
+ * TEMPLATE: served as a server template (HttpServerBase.cs: AddTemplateMatch("common/theme.css")); the dollar-brace template tokens
+ * in the "application" theme are replaced with HashColors.AppColors values (7-char #rrggbb) before sending.
+ * Theme switching (common.js): getTheme() / applyTheme() set or remove data-theme on <html> (removed for "light") and
+ * then write the derived colour properties (...R/G/B, ...RGB, ...25/50/75) as inline styles on <html>.
+ * External resources: Nunito font from Google Fonts (pro theme), background images graph-paper.svg,
+ * racing-stripes.svg, Hacker.png, moroccan.svg, glamorous.svg (this folder), ../icon.svg and
+ * ../auth/UserImages/Current/small. No @keyframes and no @media rules (motion comes from transitions, the animated
+ * SVG in .IconWorking and the JS-driven --ThemePos).
+ * Note: element selectors are case-insensitive, so Sysweaver-Button and SysWeaver-Button match the same elements.
+ */
 
+/* Nunito web font (variable weight 200..1000, normal + italic), used by the "pro" theme's --ThemeFont. */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+
+/* ===== Theme custom properties (defaults = light theme) ===== */
+
+/*
+ * Default values of all theme variables (the "light" theme, active when <html> has no data-theme):
+ * --ThemeBackground  page background colour (#ffffff); also text on accent fills and scrollbars.
+ * --ThemeMain        main text colour (#444).
+ * --ThemeAcc1        accent 1 (#234D9C): links, em, titles, progress fill, hover outlines, active tabs.
+ * --ThemeAcc2        accent 2 (#6A1834): buttons, focus outlines, markdown headings, JSON strings.
+ * --ThemeFont        body font stack; --ThemeFontMono monospace stack (code, JSON, LongText.Mono, tab.css CODE).
+ * --ThemeFontSize    body font size (100%).
+ * --ThemeIconSize    unitless multiplier (1.0) for button line height and the icon-WxH rules ColorIcon generates.
+ * --ThemeRad         large radius (containers, buttons, tabs); --ThemeRadInp inputs/links; --ThemeRadInp2 small
+ *                    inputs (not used in this file, available to page CSS).
+ * --ThemeFadeDuration transition duration (0.1s), e.g. SysWeaver-MdText li.
+ * --ThemeOk / --ThemeError / --ThemeWarning status colours for page CSS and scripts (not referenced here).
+ * The derived colour variables below are placeholders (0) that applyTheme() in common.js overwrites as inline styles
+ * on <html> after every theme change (they stay 0 for colours that are not 4- or 7-character hex).
+ */
 :root {
     --ThemeBackground: #ffffff;
     --ThemeMain: #444;
@@ -17,6 +55,11 @@
     --ThemeError: #c00;
     --ThemeWarning: #ba0;
     /* Individual R,G,B components, computed by js when switching */
+    /*
+     * --ThemeBackgroundR/G/B, --ThemeMainR/G/B, --ThemeAcc1R/G/B, --ThemeAcc2R/G/B: 0..255 channel values
+     * (--ThemeBackgroundR, --ThemeBackgroundG, --ThemeBackgroundB, --ThemeMainR, --ThemeMainG, --ThemeMainB,
+     * --ThemeAcc1R, --ThemeAcc1G, --ThemeAcc1B, --ThemeAcc2R, --ThemeAcc2G, --ThemeAcc2B), set by applyTheme (fix(name)).
+     */
     --ThemeBackgroundR: 0;
     --ThemeBackgroundG: 0;
     --ThemeBackgroundB: 0;
@@ -30,11 +73,21 @@
     --ThemeAcc2G: 0;
     --ThemeAcc2B: 0;
     /* R,G,B components, computed by js when switching */
+    /*
+     * --ThemeBackgroundRGB, --ThemeMainRGB, --ThemeAcc1RGB, --ThemeAcc2RGB: "r,g,b" strings for
+     * rgba(var(--...RGB), alpha) tints (page glow, gradients, progress track, server blocker, loading overlay, tab hover).
+     */
     --ThemeBackgroundRGB: 0;
     --ThemeMainRGB: 0;
     --ThemeAcc1RGB: 0;
     --ThemeAcc2RGB: 0;
     /* At opacity, computed by js when switching */
+    /*
+     * Pre-mixed translucent colours rgba(r,g,b,0.25 / 0.50 / 0.75) set by applyTheme:
+     * --ThemeBackground25, --ThemeBackground50, --ThemeBackground75 (loading overlay), --ThemeMain25, --ThemeMain50
+     * (global scrollbar thumb), --ThemeMain75, --ThemeAcc125, --ThemeAcc150, --ThemeAcc175, --ThemeAcc225,
+     * --ThemeAcc250, --ThemeAcc275.
+     */
     --ThemeBackground25: 0;
     --ThemeBackground50: 0;
     --ThemeBackground75: 0;
@@ -49,6 +102,7 @@
     --ThemeAcc275: 0;
 }
 
+/* Light theme (no data-theme attribute): light browser color-scheme for form controls and scrollbars. */
 :root {
     color-scheme: light;
 }
@@ -58,6 +112,9 @@
 
 /* Dark */
 
+/* ===== Theme variants, selected by the data-theme attribute on <html> (set by applyTheme in common.js) ===== */
+
+/* [data-theme="dark"]: dark palette (background #242226, main #aaaaaa, Acc1 #D0BF2F, Acc2 #5ecad6). */
 [data-theme="dark"] {
     --ThemeBackground: #242226;
     --ThemeMain: #aaaaaa;
@@ -66,6 +123,7 @@
 }
 
 
+/* Dark theme: dark browser color-scheme on the root and on textarea elements. */
 :root[data-theme="dark"] {
     color-scheme: dark;
 }
@@ -74,6 +132,7 @@ html[data-theme="dark"] textarea {
     color-scheme: dark;
 }
 
+/* Dark theme body: racing-stripes.svg pattern over a faint Acc1 radial glow (10% alpha) from the bottom centre. */
 html[data-theme="dark"] body {
     background-image: url('racing-stripes.svg'), radial-gradient(circle farthest-side at 50% 100% in srgb, rgba(var(--ThemeAcc1RGB), 0.1), transparent);
     background-size: auto, cover;
@@ -82,6 +141,12 @@ html[data-theme="dark"] body {
 
 /* Hacker */
 
+/*
+ * [data-theme="hacker"]: green-on-black palette, monospace --ThemeFont, all radii 1px.
+ * --ThemePos: vertical background offset (px) of the scrolling body::before pattern; declared 0px here and updated
+ * every animation frame by hackerThemeAnimate(time) in common.js (document.documentElement.style), registered with
+ * Animator by applyTheme as window["hackerThemeAnimate"].
+ */
 [data-theme="hacker"] {
     --ThemeBackground: #041004;
     --ThemeMain: #22cc22;
@@ -95,6 +160,7 @@ html[data-theme="dark"] body {
 }
 
 
+/* Hacker theme: dark browser color-scheme on the root and on textarea elements. */
 :root[data-theme="hacker"] {
     color-scheme: dark;
 }
@@ -104,6 +170,11 @@ html[data-theme="hacker"] textarea {
 }
 
 
+/*
+ * Hacker theme overlay: a fixed, non-interactive (pointer-events:none) pseudo element above everything
+ * (z-index 10000000), 100vw x 200vh, tiled with Hacker.png at 64px; its vertical position is var(--ThemePos), which
+ * the JS animation changes to scroll the pattern.
+ */
 html[data-theme="hacker"] body::before {
     pointer-events: none;
     content: "";
@@ -121,6 +192,11 @@ html[data-theme="hacker"] body::before {
 
 /* Application */
 
+/*
+ * [data-theme="application"]: per-application colours filled in by the server template (HttpServerBase.cs):
+ * Color.Background -> --ThemeBackground, Color.Color -> --ThemeMain, Color.Acc1 -> --ThemeAcc1,
+ * Color.Acc2 -> --ThemeAcc2 (HashColors.AppColors derived from EnvInfo.AppName/AppSeed, always #rrggbb).
+ */
 [data-theme="application"] {
     --ThemeBackground: ${Color.Background};
     --ThemeMain: ${Color.Color};
@@ -129,6 +205,7 @@ html[data-theme="hacker"] body::before {
 }
 
 
+/* Application theme: dark browser color-scheme on the root and on textarea elements. */
 :root[data-theme="application"] {
     color-scheme: dark;
 }
@@ -137,6 +214,10 @@ html[data-theme="application"] textarea {
     color-scheme: dark;
 }
 
+/*
+ * Application theme body: fixed moroccan.svg pattern plus three fixed radial gradients (Main 20% from the bottom
+ * centre, Acc2 10% from the left, Acc1 10% from the right), using the ...RGB variables set by applyTheme.
+ */
 html[data-theme="application"] body {
     background-color: var(--ThemeBackground);
     background-image: url('moroccan.svg'), radial-gradient(circle closest-corner at 50% 100% in srgb, rgba(var(--ThemeMainRGB), 0.2), transparent), radial-gradient(circle closest-corner at 0% 30% in srgb, rgba(var(--ThemeAcc2RGB), 0.1), transparent), radial-gradient(circle closest-corner at 100% 30% in srgb, rgba(var(--ThemeAcc1RGB), 0.1), transparent);
@@ -148,6 +229,10 @@ html[data-theme="application"] body {
 
 /* Pro */
 
+/*
+ * [data-theme="pro"]: navy palette, "Nunito" font at 14px, --ThemeIconSize 0.75 (smaller icons/buttons) and
+ * asymmetric corner radii for --ThemeRad / --ThemeRadInp / --ThemeRadInp2.
+ */
 [data-theme="pro"] {
     --ThemeBackground: #171c2e;
     --ThemeMain: #ffffff;
@@ -161,6 +246,7 @@ html[data-theme="application"] body {
     --ThemeRadInp2: 2px 1px 8px 1px;
 }
 
+/* Pro theme body: glamorous.svg pattern over an Acc1 radial glow from the bottom centre; optical font sizing. */
 html[data-theme="pro"] body {
     background-image: url('glamorous.svg'), radial-gradient(circle farthest-side at 50% 100% in srgb, rgba(var(--ThemeAcc1RGB), 0.10), transparent);
     background-size: auto, cover;
@@ -168,6 +254,7 @@ html[data-theme="pro"] body {
 }
 
 
+/* Pro theme: dark browser color-scheme on the root and on textarea elements. */
 :root[data-theme="pro"] {
     color-scheme: dark;
 }
@@ -179,10 +266,17 @@ html[data-theme="pro"] textarea {
 
 
 
+/* ===== Scrollbars for non-light themes ===== */
+
+/*
+ * Scrollbar colours (thumb = background, track = main). Note the descendant space in "html [data-theme] body": it only
+ * matches a body inside a descendant element with data-theme, so with data-theme on <html> itself it does not match.
+ */
 html [data-theme] body {
     scrollbar-color: var(--ThemeBackground) var(--ThemeMain);
 }
 
+    /* WebKit scrollbar thumb/track colours for any non-light theme (data-theme present on <html>). */
     html[data-theme] body::-webkit-scrollbar-thumb {
         background: var(--ThemeBackground);
     }
@@ -194,12 +288,18 @@ html [data-theme] body {
 
 
 
+/* ===== Base elements ===== */
+
+/* Hides the Edge/IE password reveal and clear buttons on input elements with the attribute type=password. */
 input[type=password]::-ms-reveal,
 input[type=password]::-ms-clear {
     display: none;
 }
 
 
+/* ===== Theme colour utility classes ===== */
+
+/* .ThemeBackgroundBg / .ThemeBackgroundFg: background-color / color = --ThemeBackground. */
 .ThemeBackgroundBg {
     background-color: var(--ThemeBackground);
 }
@@ -209,6 +309,7 @@ input[type=password]::-ms-clear {
 }
 
 
+/* .ThemeMainBg / .ThemeMainFg: background-color / color = --ThemeMain (ThemeMainBg is used by explore/explore.js). */
 .ThemeMainBg {
     background-color: var(--ThemeMain);
 }
@@ -218,6 +319,7 @@ input[type=password]::-ms-clear {
 }
 
 
+/* .ThemeAccBg / .ThemeAccFg: background-color / color = --ThemeAcc1 (ThemeAccFg is used by explore/explore.js). */
 .ThemeAccBg {
     background-color: var(--ThemeAcc1);
 }
@@ -227,6 +329,7 @@ input[type=password]::-ms-clear {
 }
 
 
+/* .ThemeAcc2Bg / .ThemeAcc2Fg: background-color / color = --ThemeAcc2. */
 .ThemeAcc2Bg {
     background-color: var(--ThemeAcc2);
 }
@@ -235,10 +338,15 @@ input[type=password]::-ms-clear {
     color: var(--ThemeAcc2);
 }
 
+/* Global scrollbar colours for every element: thumb --ThemeMain50, track --ThemeBackground. */
 * {
     scrollbar-color: var(--ThemeMain50) var(--ThemeBackground);
 }
 
+/*
+ * Root element: full size, no margin/padding, border-box.
+ * --Margin: page margin (24px) used for SysWeaver-Page top padding and html.Embedded padding/height.
+ */
 html {
     --Margin: 24px;
     margin: 0;
@@ -250,10 +358,18 @@ html {
     min-height: 100%;
 }
 
+    /*
+     * html.SwNarrow: empty rule (placeholder). SwNarrow/SwWide (and SwPortrait/SwLandscape, SwSelf*, SwMobile/SwDesktop)
+     * are set on <html> and <body> by the resize observer in SysWeaverInit (common.js).
+     */
     html.SwNarrow {
     }
 
 
+/*
+ * Page body: theme background colour with a fixed, repeated graph-paper.svg pattern (themes override the image),
+ * --ThemeMain text in --ThemeFont at --ThemeFontSize, and user-select:none (text selection is opted into per element).
+ */
 body {
     margin: 0;
     padding: 0;
@@ -270,12 +386,18 @@ body {
 }
 
 
+/* html.FillScreen: no margin, min 100% size. Added to <html>/<body> by SysWeaverInit on load when the URL has ?fillscreen. */
 html.FillScreen {
     margin: 0;
     min-width: 100%;
     min-height: 100%;
 }
 
+/*
+ * html.Embedded: page shown inside the app shell iframe (app/application.js adds Embedded to the iframe document's
+ * <html>). Padding --Margin (top only when also SwNarrow), height reduced by --Margin via calc(), and the body
+ * background is forced transparent so the shell background shows through.
+ */
 html.Embedded {
     padding: var(--Margin);
     height: calc(100% - var(--Margin));
@@ -291,6 +413,10 @@ html.Embedded {
         background: none transparent !important;
     }
 
+/*
+ * html.Transparent: transparent body background (!important). SysWeaverInit adds Transparent on load when
+ * ?transparent=true, or when the page is a child frame and transparent is not false.
+ */
 html.Transparent {
 }
 
@@ -299,6 +425,10 @@ html.Transparent {
         background: none transparent !important;
     }
 
+/*
+ * Anchors: bold --ThemeAcc1 links without underline, 6px radius, 0.1s transitions; focus shows a 2px --ThemeAcc2
+ * outline, hover inverts the colours (background-coloured text on an Acc1 fill); visited keeps the same colours.
+ */
 a {
     font-weight: bold;
     color: var(--ThemeAcc1);
@@ -326,6 +456,10 @@ a {
             color: var(--ThemeBackground);
         }
 
+    /*
+     * a.Image (class "Image" on an anchor wrapping an image): no padding, the img aligned to the bottom, and a 2px
+     * --ThemeAcc1 outline instead of a fill on hover.
+     */
     a.Image {
         padding: 0;
         margin: 0;
@@ -348,6 +482,12 @@ a {
 
 
 
+/*
+ * .ThemeImgClick: clickable image wrapper (pointer cursor, no focus outline). Its child img, icon-24x24 or icon-48x48
+ * (the element names ColorIcon in common.js creates for 24x24 / 48x48 icons) gets a 1px four-way drop-shadow
+ * "outline" via filter: --ThemeAcc2 on focus, --ThemeAcc1 on hover, with a 0.1s filter transition.
+ * No JS user was found in the srcWeb folders.
+ */
 .ThemeImgClick {
     cursor: pointer;
 }
@@ -392,6 +532,7 @@ a {
         filter: drop-shadow(-1px 0 1px var(--ThemeAcc1)) drop-shadow(0 -1px 1px var(--ThemeAcc1)) drop-shadow(0 1.5px 1px var(--ThemeAcc1)) drop-shadow(1.5px 0 1px var(--ThemeAcc1));
     }
 
+/* Emphasis: bold, non-italic, --ThemeAcc1 (SysWeaver-MdText em overrides the colour). */
 em {
     font-style: normal;
     font-weight: bold;
@@ -400,6 +541,12 @@ em {
 
 
 
+/* ===== Links, page and messages (elements created by common.js / pages) ===== */
+
+/*
+ * <SysWeaver-Link>: clickable link element created by ValueFormat in common.js (ValueFormat.LinkNode / link
+ * formatting). Looks like "a" but uses --ThemeRadInp and a pointer cursor; same focus/hover/visited behaviour.
+ */
 SysWeaver-Link {
     font-weight: bold;
     color: var(--ThemeAcc1);
@@ -428,6 +575,7 @@ SysWeaver-Link {
             color: var(--ThemeBackground);
         }
 
+    /* SysWeaver-Link.ThemeMain: link variant in the main colour that hovers to a --ThemeMain background. */
     SysWeaver-Link.ThemeMain {
         color: var(--ThemeMain);
     }
@@ -441,6 +589,10 @@ SysWeaver-Link {
             color: var(--ThemeMain);
         }
 
+    /*
+     * SysWeaver-Link.Image: inline-block image link with a transparent 1px border that turns --ThemeAcc1 on hover
+     * (--ThemeMain when combined with .ThemeMain).
+     */
     SysWeaver-Link.Image {
         box-sizing: border-box;
         display: inline-block;
@@ -459,6 +611,11 @@ SysWeaver-Link {
             border-color: var(--ThemeMain);
         }
 
+/*
+ * <SysWeaver-Page>: the centred page column declared in page HTML. Absolutely positioned and centred with left:50% +
+ * translate(-50%); max width 52em (78em with class Wide, which edit/type.js and translator/Translator.js add);
+ * top padding --Margin; soft Acc1 glow box-shadow.
+ */
 SysWeaver-Page {
     position: absolute;
     top: 0;
@@ -481,6 +638,11 @@ SysWeaver-Page {
     }
 
 
+/*
+ * <SysWeaver-Fail>: toast fixed at the bottom of the viewport (z-index 10000, 125% font, pointer cursor), created by
+ * Message() in common.js. Fail() passes class MsgError (red: #f00 border, #800 background), Info() passes MsgInfo
+ * (green: #4b4 border, #383 background).
+ */
 SysWeaver-Fail {
     z-index: 10000;
     display: block;
@@ -508,6 +670,10 @@ SysWeaver-Fail {
         color: #eee;
     }
 
+/*
+ * <SysWeaver-CenterBlock>: wrapping flex row with space-around (created by Button.CreateRow() in common.js and by
+ * several page scripts); a single child (first-child:last-child) is centred with auto margins.
+ */
 SysWeaver-CenterBlock {
     display: flex;
     max-width: 100%;
@@ -523,6 +689,13 @@ SysWeaver-CenterBlock {
 
 
 
+/* ===== Buttons ===== */
+
+/*
+ * <SysWeaver-Button>: element created by the Button class in common.js (ButtonStyle.ButtonElement = "Sysweaver-Button").
+ * Inline-flex pill: bold 80% text, min width 128px, --ThemeAcc2 background with background-coloured text, radius
+ * --ThemeRad, line height calc(--ThemeIconSize * 24px), drop shadow, opacity 0.8 (1 on hover).
+ */
 SysWeaver-Button {
     font-size: 80%;
     font-weight: bold;
@@ -543,6 +716,10 @@ SysWeaver-Button {
     justify-content: space-between;
 }
 
+    /*
+     * SysWeaver-Button.SysWeaverButtonCenter: inline-block button centred with auto horizontal margins; applied via
+     * ButtonStyle.ButtonStyle (the class name a style adds). No user was found by name.
+     */
     SysWeaver-Button.SysWeaverButtonCenter {
         margin-left: auto;
         margin-right: auto;
@@ -550,6 +727,7 @@ SysWeaver-Button {
         display: inline-block;
     }
 
+    /* Focus: 3px --ThemeAcc1 outline. Hover: full opacity. */
     SysWeaver-Button:focus {
         outline: 3px solid var(--ThemeAcc1);
     }
@@ -559,6 +737,10 @@ SysWeaver-Button {
     }
 
 
+    /*
+     * SysWeaver-Button.Pressed: shifted 1px/2px with a smaller shadow. The Button constructor adds Pressed while the
+     * button is held (with a minimum pressed time, ButtonStyle.MinPressed).
+     */
     SysWeaver-Button.Pressed {
         transform: translate(1px, 2px);
         box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
@@ -566,6 +748,10 @@ SysWeaver-Button {
         cursor: pointer;
     }
 
+    /*
+     * SysWeaver-Button.Disabled: pressed look at opacity 0.4 (also on hover) with the default cursor. Toggled by the
+     * Button class (also used by app/application.js, explore/table.js, auth/Passkey.js and ServerManager pages).
+     */
     SysWeaver-Button.Disabled {
         transform: translate(1px, 2px);
         box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
@@ -578,12 +764,17 @@ SysWeaver-Button {
         }
 
 
+    /* <Sysweaver-ButtonText>: the button's label element created by the Button constructor; floated left, centred. */
     SysWeaver-Button Sysweaver-ButtonText {
         vertical-align: middle;
         display: inline-block;
         float: left;
     }
 
+    /*
+     * <Icon-24x24> inside a button: the button's ColorIcon (24x24 by default from ButtonStyle.IconWidth/IconHeight),
+     * floated right with an 8px left margin.
+     */
     SysWeaver-Button Icon-24x24 {
         vertical-align: middle;
         display: inline-block;
@@ -592,6 +783,7 @@ SysWeaver-Button {
     }
 
 
+    /* SysWeaver-Button.ThemeMain / .ThemeAcc1: alternative button colours, applied via ButtonStyle.ButtonStyle. */
     SysWeaver-Button.ThemeMain {
         background-color: var(--ThemeMain);
     }
@@ -601,6 +793,13 @@ SysWeaver-Button {
     }
 
 
+/* ===== Loading overlay and progress bar ===== */
+
+/*
+ * <SysWeaver-Loading> (first rule): overlay created by AddLoading(page, text, opaque, useIcon) in common.js. Fixed,
+ * full size, z-index 1000, --ThemeBackground75 background, 4px backdrop blur, forced default cursor, overflow hidden.
+ * NOTE: a second SysWeaver-Loading rule later in this file overrides position (absolute) and background colour.
+ */
 SysWeaver-Loading {
     position: fixed;
     left: 0;
@@ -614,11 +813,16 @@ SysWeaver-Loading {
     backdrop-filter: blur(4px);
 }
 
+    /* SysWeaver-Loading.Opaque: solid --ThemeBackground without blur; AddLoading adds Opaque when opaque is set. */
     SysWeaver-Loading.Opaque {
         background-color: var(--ThemeBackground);
         backdrop-filter: none;
     }
 
+/*
+ * <SysWeaver-LoadingText>: large (200%) bold Acc1 loading text, fixed and centred horizontally (left:50vw +
+ * translateX(-50%)) 3em above the bottom; the negative right margin keeps it from forcing a scrollbar.
+ */
 SysWeaver-LoadingText {
     font-size: 200%;
     color: var(--ThemeAcc1);
@@ -632,12 +836,17 @@ SysWeaver-LoadingText {
     margin-right: -100vmax;
 }
 
+    /*
+     * SysWeaver-LoadingText.Center (added by AddLoading when no icon is shown): moves the text to top 50vh. Its
+     * transform "translate(-50% -50%)" lacks a comma and is invalid, so the base translateX(-50%) stays in effect.
+     */
     SysWeaver-LoadingText.Center {
         bottom: initial;
         top: 50vh;
         transform: translate(-50% -50%);
     }
 
+/* <Icon-64x64> directly in the overlay: the 64x64 ColorIcon (default IconWorking) AddLoading appends; fixed, centred at 30vh. */
 SysWeaver-Loading > Icon-64x64 {
     display: block;
     position: fixed;
@@ -646,6 +855,7 @@ SysWeaver-Loading > Icon-64x64 {
 }
 
 
+/* <SysWeaver-ProgressBar>: track created by the ProgressBar class in common.js; 2em high rounded bar, Main at 10% alpha. */
 SysWeaver-ProgressBar {
     display: block;
     width: 100%;
@@ -655,6 +865,10 @@ SysWeaver-ProgressBar {
     overflow: hidden;
 }
 
+/*
+ * <SysWeaver-ProgressBarFill>: the --ThemeAcc1 fill; ProgressBar.SetPercentage positions it by setting style.left to
+ * minus the remaining percentage (the track's overflow:hidden clips it).
+ */
 SysWeaver-ProgressBarFill {
     position: relative;
     display: block;
@@ -663,6 +877,11 @@ SysWeaver-ProgressBarFill {
     background-color: var(--ThemeAcc1);
 }
 
+/*
+ * <SysWeaver-ProgressBarTextInside>: percentage text drawn inside the fill (right-aligned); transparent unless class
+ * Active (background-coloured). SetPercentage toggles Active on whichever of Inside/Outside fits.
+ * font-family uses var(--ThemeMono), which is not defined anywhere (so the inherited font is used).
+ */
 SysWeaver-ProgressBarTextInside {
     z-index: 1;
     font-size: 50%;
@@ -685,6 +904,10 @@ SysWeaver-ProgressBarTextInside {
         color: var(--ThemeBackground);
     }
 
+/*
+ * <SysWeaver-ProgressBarTextOutside>: percentage text drawn after the fill (left-aligned); transparent unless class
+ * Active (Main-coloured). Same undefined --ThemeMono font reference as the Inside variant.
+ */
 SysWeaver-ProgressBarTextOutside {
     z-index: 1;
     font-size: 50%;
@@ -707,6 +930,13 @@ SysWeaver-ProgressBarTextOutside {
         color: var(--ThemeMain);
     }
 
+/* ===== Text container ===== */
+
+/*
+ * <SysWeaver-Text>: block text container with a 0.5em radius (used by edit/type.js and translator/Translator.js).
+ * Class KeyClick (added by keyboardClick(element) in common.js, removed in its undo path) makes it keyboard-clickable:
+ * pointer cursor and a --ThemeAcc2 focus outline.
+ */
 SysWeaver-Text {
     display: block;
     border-radius: 0.5em;
@@ -724,6 +954,14 @@ SysWeaver-Text {
         }
 
 
+/* ===== Server-unavailable blocker ===== */
+
+/*
+ * <SysWeaver-ServerBlock>: full-screen fixed blocking layer (z-index 1111111, background at 95% alpha, blur,
+ * not-allowed cursor). The calc(max(...)) side paddings centre a content column of at least 500px (or 50% width).
+ * Created by StartBlock inside SysWeaverInit (common.js) on server.pause / server.restart / server.shutdown /
+ * server.error messages; removed by RemoveBlock.
+ */
 SysWeaver-ServerBlock {
     z-index: 1111111;
     position: fixed;
@@ -741,6 +979,11 @@ SysWeaver-ServerBlock {
     cursor: not-allowed;
 }
 
+/*
+ * Blocker children: <SysWeaver-ServerImage> holds a 128x128 ColorIcon (IconPaused, IconReload, IconPower or IconWarning);
+ * <SysWeaver-ServerTitle> 200% bold Acc1 title; <SysWeaver-ServerText> 150% text; <SysWeaver-ServerWaiting> waiting
+ * area (5em top margin, holds a 48x48 IconWorking); <SysWeaver-ServerTime> bold Acc2 time text.
+ */
 SysWeaver-ServerImage {
     display: block;
 }
@@ -772,6 +1015,10 @@ SysWeaver-ServerTime {
 }
 
 
+/*
+ * Second SysWeaver-Loading rule: overrides the first one with position:absolute and a 50% alpha background
+ * (rgba(--ThemeBackgroundRGB, 0.5)); blur, cursor and overflow still come from the first rule.
+ */
 SysWeaver-Loading {
     position: absolute;
     left: 0;
@@ -783,6 +1030,7 @@ SysWeaver-Loading {
 }
 
 
+    /* Icon-64x64.LoadingIcon: variant absolutely centred at 50%/50% of the overlay. No JS adding LoadingIcon was found. */
     SysWeaver-Loading > Icon-64x64.LoadingIcon {
         display: inline-block;
         position: absolute;
@@ -791,32 +1039,47 @@ SysWeaver-Loading {
     }
 
 
+/* ===== Icon classes ===== */
+
+/*
+ * Mask icons (inline base64 SVG mask-image data URIs, coloured by the ColorIcon colour/background):
+ * .IconWorking - animated spinner of three rotating arcs (default icon of AddLoading, the server blocker, many pages).
+ */
 .IconWorking {
     mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJNMzEuNiAzLjVDNS45IDEzLjYtNi42IDQyLjcgMy41IDY4LjRjMTAuMSAyNS43IDM5LjIgMzguMyA2NC45IDI4LjFsLTMuMS03LjljLTIxLjMgOC 40LTQ1LjQtMi01My44LTIzLjNjLTguNC0yMS4zIDItNDUuNCAyMy4zLTUzLjhMMzEuNiAzLjV6Ij48YW5pbWF0ZVRyYW5zZm9ybSBhdHRyaWJ1dGVOYW1lPSJ0cmFuc2Zvcm0iIGF0dHJpYnV0ZVR5cGU9IlhNTCIgdHlwZT0icm90YXRlIiBkdXI9IjJzIiBmcm9tPSIwIDUwIDUwIiB0bz0iMzYwIDUwIDUwIiByZXBlYXRDb3VudD0iaW5kZWZ pbml0ZSI+PC9hbmltYXRlVHJhbnNmb3JtPjwvcGF0aD48cGF0aCBkPSJNNDIuMyAzOS42YzUuNy00LjMgMTMuOS0zLjEgMTguMSAyLjdjNC4zIDUuNyAzLjEgMTMuOS0yLjcgMTguMWw0LjEgNS41YzguOC02LjUgMTAuNi0xOSA0LjEtMjcuN2MtNi41LTguOC0xOS0xMC42LTI3LjctNC4xTDQyLjMgMzkuNnoiPjxhbmltYXRlVHJhbnNmb3Jt IGF0dHJpYnV0ZU5hbWU9InRyYW5zZm9ybSIgYXR0cmlidXRlVHlwZT0iWE1MIiB0eXBlPSJyb3RhdGUiIGR1cj0iMXMiIGZyb209IjAgNTAgNTAiIHRvPSItMzYwIDUwIDUwIiByZXBlYXRDb3VudD0iaW5kZWZpbml0ZSI+PC9hbmltYXRlVHJhbnNmb3JtPjwvcGF0aD48cGF0aCBkPSJNODIgMzUuN0M3NC4xIDE4IDUzLjQgMTAuMSAzNS43I DE4UzEwLjEgNDYuNiAxOCA2NC4zbDcuNi0zLjRjLTYtMTMuNSAwLTI5LjMgMTMuNS0zNS4zczI5LjMgMCAzNS4zIDEzLjVMODIgMzUuN3oiPjxhbmltYXRlVHJhbnNmb3JtIGF0dHJpYnV0ZU5hbWU9InRyYW5zZm9ybSIgYXR0cmlidXRlVHlwZT0iWE1MIiB0eXBlPSJyb3RhdGUiIGR1cj0iMnMiIGZyb209IjAgNTAgNTAiIHRvPSIzNjAgNT AgNTAiIHJlcGVhdENvdW50PSJpbmRlZmluaXRlIj48L2FuaW1hdGVUcmFuc2Zvcm0+PC9wYXRoPjwvc3ZnPg==");
 }
 
+/* .IconPaused - two bars; server blocker image for server.pause. */
 .IconPaused {
     mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTYgM0M0LjkgMyA0IDMuOSA0IDVWMTlDNCAyMC4xIDQuOSAyMSA2IDIxSDlDMTAuMSAyMSAxMSAyMC4xIDExIDE5VjVDMTEgMy45IDEwLjEgMyA5IDNINloiLz48cGF0aCBkPSJNMTUgM0 MxMy45IDMgMTMgMy45IDEzIDVWMTlDMTMgMjAuMSAxMy45IDIxIDE1IDIxSDE4QzE5LjEgMjEgMjAgMjAuMSAyMCAxOVY1QzIwIDMuOSAxOS4xIDMgMTggM0gxNVoiLz48L3N2Zz4=");
 }
 
+/* .IconPower - power symbol; server blocker image for server.shutdown. */
 .IconPower {
     mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNDAwIDU0LjFjNjMgNDUgMTA0IDExOC42IDEwNCAyMDEuOSAwIDEzNi44LTExMC44IDI0Ny43LTI0Ny41IDI0OEMxMjAgNTA0LjMgOC4yIDM5MyA4IDI1Ni40IDcuOSAxNzMuMSA0OC 45IDk5LjMgMTExLjggNTQuMmMxMS43LTguMyAyOC00LjggMzUgNy43TDE2Mi42IDkwYzUuOSAxMC41IDMuMSAyMy44LTYuNiAzMS00MS41IDMwLjgtNjggNzkuNi02OCAxMzQuOS0uMSA5Mi4zIDc0LjUgMTY4LjEgMTY4IDE2OC4xIDkxLjYgMCAxNjguNi03NC4yIDE2OC0xNjkuMS0uMy01MS44LTI0LjctMTAxLjgtNjguMS0xMzQtOS43LTc uMi0xMi40LTIwLjUtNi41LTMwLjlsMTUuOC0yOC4xYzctMTIuNCAyMy4yLTE2LjEgMzQuOC03Ljh6TTI5NiAyNjRWMjRjMC0xMy4zLTEwLjctMjQtMjQtMjRoLTMyYy0xMy4zIDAtMjQgMTAuNy0yNCAyNHYyNDBjMCAxMy4zIDEwLjcgMjQgMjQgMjRoMzJjMTMuMyAwIDI0LTEwLjcgMjQtMjR6Ii8+PC9zdmc+");
 }
 
+/* .IconWarning - triangle with exclamation mark; server blocker image for a lost connection (also auth/Passkey.js). */
 .IconWarning {
     mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTExIDEzQzExIDEzLjYgMTEuNCAxNCAxMiAxNEMxMi42IDE0IDEzIDEzLjYgMTMgMTNWMTBDMTMgOS40IDEyLjYgOSAxMiA5QzExLjQgOSAxMSA5LjQgMTEgMTBWMTNaTTEzIDE2QzEzID E1LjQgMTIuNiAxNSAxMiAxNUMxMS40IDE1IDExIDE1LjQgMTEgMTZWMTZDMTEgMTYuNiAxMS40IDE3IDEyIDE3QzEyLjYgMTcgMTMgMTYuNiAxMyAxNlYxNlpNOS40IDQuN0MxMC41IDIuNiAxMy41IDIuNiAxNC42IDQuN0wyMS4yIDE2LjVDMjIuMyAxOC41IDIwLjkgMjEgMTguNiAyMUg1LjRDMy4xIDIxIDEuNyAxOC41IDIuOCAxNi41TDk uNCA0LjdaIi8+PC9zdmc+");
 }
 
+/* .IconReload - circular arrow; server blocker image for server.restart. */
 .IconReload {
     mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSItMzIgLTMyIDE5ODQgMTk4NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNOTYwIDB2MjEzLjNjNDExLjYgMCA3NDYuNyAzMzQuOSA3NDYuNyA3NDYuN1MxMzcxLjYgMTcwNi43IDk2MCAxNzA2LjcgMjEzLjMgMTM3MS43IDIxMy4zIDk2MGMwLTE5NyA3OC40LTM4Mi41IDIxMy4zLTUyMC43djI1NC4xSDY0MFYxMDYuN0g1My4zVjMyMGgxOTFDODguNiA0OTQuMSAwIDcyMSAwIDk2MGMwIDUyOS4zIDQzMC42IDk2MCA5NjAgOTYwczk2MC00MzAuNyA5NjAtOTYwUzE0ODkuNCAwIDk2MCAwIi8+PC9zdmc+");
 }
 
 
+/* .IconLogo - background image ../icon.svg (the application favicon SVG served by the server), transparent background. */
 .IconLogo {
     background-color: transparent !important;
     background-image: url("../icon.svg");
 }
 
+/*
+ * .IconCurrentUser / .IconCurrentUserFill - the current user's avatar ../auth/UserImages/Current/small as background
+ * image (the Fill variant adds background-size:cover). Used by app/application.js for the header user button.
+ */
 .IconCurrentUser {
     background-color: transparent !important;
     background-image: url("../auth/UserImages/Current/small");
@@ -829,6 +1092,9 @@ SysWeaver-Loading {
 }
 
 
+/* ===== Code, JSON, long text and markdown (popup content created by ValueFormat in common.js) ===== */
+
+/* <SysWeaver-Code>: scrollable, full-size, selectable monospace (--ThemeFontMono) pre block, created by ValueFormat.updateJson. */
 SysWeaver-Code {
     text-align: left;
     display: block;
@@ -840,6 +1106,11 @@ SysWeaver-Code {
     user-select: text;
 }
 
+/*
+ * .SysWeaverCode: JSON syntax colouring (added by ValueFormat.updateJson to its SysWeaver-Code element, also used by
+ * explore/api.js). Base text Main at 40% alpha; spans with class key = Main, string = Acc2, number = Acc1,
+ * null = Acc2 at 40% opacity, boolean = Acc1 italic.
+ */
 .SysWeaverCode
 {
     font-family: var(--ThemeFontMono);
@@ -870,6 +1141,11 @@ SysWeaver-Code {
     }
 
 
+/*
+ * <SysWeaver-LongText>: scrollable, selectable white-space:pre text block (min height 4em) in --ThemeFont, created by
+ * ValueFormat.updateLongText in its click popup; class Mono (added when the value is formatted as monospace) switches
+ * to --ThemeFontMono.
+ */
 SysWeaver-LongText {
     text-align: left;
     display: block;
@@ -886,6 +1162,10 @@ SysWeaver-LongText {
         font-family: var(--ThemeFontMono);
     }
 
+/*
+ * <SysWeaver-MdText>: scrollable, selectable markdown container (min height 4em), created by ValueFormat.updateMarkDown
+ * (rendered with the vendored marked). All descendants get margin-block-start 0.25em.
+ */
 SysWeaver-MdText {
     text-align: left;
     display: block;
@@ -901,6 +1181,10 @@ SysWeaver-MdText {
         margin-block-start: 0.25em;
     }
 
+    /*
+     * Markdown headings in --ThemeAcc2. Only h1 is scoped to SysWeaver-MdText; the h2..h5 parts of this selector list
+     * are global and apply to all such headings on the page. Likewise in the next rule only ul is scoped, ol is global.
+     */
     SysWeaver-MdText h1, h2, h3, h4, h5 {
         color: var(--ThemeAcc2);
         margin-block-end: 0.25em;
@@ -910,6 +1194,7 @@ SysWeaver-MdText {
         padding-inline-start: 24px;
     }
 
+    /* Markdown list items fade to --ThemeAcc1 on hover (over --ThemeFadeDuration); markers are Acc1. */
     SysWeaver-MdText li {
         transition: color linear var(--ThemeFadeDuration);
     }
@@ -923,6 +1208,7 @@ SysWeaver-MdText {
     }
 
 
+    /* Markdown links: --ThemeAcc1 (also when visited) with smaller padding than the global "a" rule. */
     SysWeaver-MdText a
     {
         color: var(--ThemeAcc1);
@@ -934,6 +1220,7 @@ SysWeaver-MdText {
     }
 
 
+    /* Markdown emphasis: bold in --ThemeMain, overriding the global Acc1 "em" colour. */
     SysWeaver-MdText em {
         color: var(--ThemeMain);
         font-weight: bold;

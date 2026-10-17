@@ -1,9 +1,29 @@
-﻿:root {
+﻿/*
+ * EditDesktop.css - layout styles of the "Desktop" object editor style (EditDesktop.js), i.e. the root element
+ * SysWeaver-EditDesktop created by the Edit constructor (Edit.js) when style is "Desktop".
+ * Loaded with <link> together with Edit.css and EditMobile.css by edit/index.html, explore/api.html and
+ * ServerManager/services.html. Depends on theme variables from common/theme.css (--ThemeMain, --ThemeMain25,
+ * --ThemeMain50, --ThemeBackground, --ThemeAcc1, --ThemeAcc2, --ThemeAcc2RGB, --ThemeFont, --ThemeRad*), and on
+ * --SysWeaverEditFadeDuration (Edit.css).
+ * Layout: one table per editor with rows tr.TitleRow (type title + icons), tr.ValueRow (title cell | icon cell |
+ * value cell), tr.SeparatorRow and, for object / collection members, tr.DataRow holding a nested editor.
+ */
+
+/*
+ * Custom properties (corner radii, mapped to the theme):
+ * --SysWeaverEditDesktopRad: radius of the editor box and value rows (--ThemeRad).
+ * --SysWeaverEditDesktopRadInp: radius of inputs and selects (--ThemeRadInp).
+ * --SysWeaverEditDesktopRadInp2: radius of slider / toggle thumbs (--ThemeRadInp2).
+ */
+:root {
     --SysWeaverEditDesktopRad: var(--ThemeRad);
     --SysWeaverEditDesktopRadInp: var(--ThemeRadInp);
     --SysWeaverEditDesktopRadInp2: var(--ThemeRadInp2);
 }
 
+/* ===== Container ===== */
+
+/* An editor placed directly in a tab page (SysWeaver-TabContent, common/tab.js) has no own frame. */
 SysWeaver-TabContent > SysWeaver-EditDesktop {
     border: none;
     border-radius: 0;
@@ -11,10 +31,12 @@ SysWeaver-TabContent > SysWeaver-EditDesktop {
     background: none;
 }
 
+/* Nested child editors (inside SysWeaver-EditEntryValue of an object / collection data row) have no border. */
 SysWeaver-EditEntryValue > SysWeaver-EditDesktop {
     border: none;
 }
 
+/* SysWeaver-EditDesktop: the root element of a desktop style editor; framed box with theme background. */
 SysWeaver-EditDesktop {
     box-sizing: border-box;
     padding: 8px;
@@ -25,6 +47,7 @@ SysWeaver-EditDesktop {
     margin: 4px;
 }
 
+    /* NoBorder: set by the Edit constructor when the Border option is false; frameless inline-block. */
     SysWeaver-EditDesktop.NoBorder {
         border: none;
         margin: 0;
@@ -33,6 +56,7 @@ SysWeaver-EditDesktop {
         background: none;
     }
 
+    /* The editor table: full width, collapsed borders. */
     SysWeaver-EditDesktop > table {
         box-sizing: border-box;
         width: 100%;
@@ -41,6 +65,9 @@ SysWeaver-EditDesktop {
         border-spacing: 0;
     }
 
+/* ===== Rows and cells ===== */
+
+    /* TitleRow: the type title row (EditDesktop.AddTypeInfo); cells don't wrap. IconButton icons (common.js ColorIcon buttons) float left. */
     SysWeaver-EditDesktop tr.TitleRow > td {
         padding: 0 4px 0 4px;
         white-space: nowrap;
@@ -53,6 +80,7 @@ SysWeaver-EditDesktop {
     }
 
 
+    /* ValueRow: one row per member (EditDesktop.AddMember); tinted (--ThemeMain25) cells. */
     SysWeaver-EditDesktop tr.ValueRow > td {
         padding: 4px;
         white-space: nowrap;
@@ -61,6 +89,7 @@ SysWeaver-EditDesktop {
         vertical-align: top;
     }
 
+        /* EditButton: the icon (menu) cell of a member, set in Edit.js; EditContainer: value cell of a collection (EditTypeCollection.js); EditBoolean: value cell of a boolean toggle (EditTypeBoolean.js). */
         SysWeaver-EditDesktop tr.ValueRow > td.EditButton {
             padding: 9px 2px 2px 2px;
             line-height: 0.5em;
@@ -79,16 +108,19 @@ SysWeaver-EditDesktop {
 
 
 
+    /* SysWeaver-TypeTitle (see Edit.css) in accent colour and bold inside desktop editors. */
     SysWeaver-EditDesktop SysWeaver-TypeTitle {
         color: var(--ThemeAcc1);
         font-weight: bold;
     }
 
+    /* SeparatorRow: thin spacer row after each member. */
     SysWeaver-EditDesktop tr.SeparatorRow > td {
         padding: 2px;
     }
 
 
+    /* Rounded outer corners of a value row: left corners on the first cell, right corners on the last (which takes the remaining width). */
     SysWeaver-EditDesktop tr.ValueRow > td:first-child {
         border-radius: var(--SysWeaverEditDesktopRad);
         border-top-right-radius: 0;
@@ -103,6 +135,7 @@ SysWeaver-EditDesktop {
     }
 
 
+    /* EditorExpanded: set on the value row and data row while an object / collection member is expanded (EditTypeObject.js, EditTypeCollection.js); the value row loses its bottom corners so it joins the data row below. */
     SysWeaver-EditDesktop tr.ValueRow.EditorExpanded > td:first-child {
         border-radius: var(--SysWeaverEditDesktopRad);
         border-top-right-radius: 0;
@@ -117,6 +150,7 @@ SysWeaver-EditDesktop {
         border-bottom-left-radius: 0;
     }
 
+    /* DataRow: row holding a nested editor (EditTypeObject.js, EditTypeCollection.js); only shown while EditorExpanded and not Hide; bottom corners rounded. */
     SysWeaver-EditDesktop tr.DataRow {
         display: none;
     }
@@ -140,6 +174,9 @@ SysWeaver-EditDesktop {
 
 
 
+/* ===== Inputs ===== */
+
+    /* Text / number / date / time inputs: full width, theme background, 2px border that turns accent on focus and half-transparent accent on hover. */
     SysWeaver-EditDesktop tr.ValueRow > td input {
         box-sizing: border-box;
         font-size: 125%;
@@ -168,12 +205,14 @@ SysWeaver-EditDesktop {
         }
 
 
+        /* Placeholder (member summary) in small faded italics. */
         SysWeaver-EditDesktop tr.ValueRow > td input::placeholder {
             color: var(--ThemeMain25);
             font-style: italic;
             font-size: 80%;
         }
 
+        /* HalfWidth: date and time inputs side by side (EditTypeDateTime.js); calc leaves room for the 1em gap after the first. */
         SysWeaver-EditDesktop tr.ValueRow > td input.HalfWidth {
             width: calc(50% - 0.5em);
         }
@@ -183,6 +222,7 @@ SysWeaver-EditDesktop {
         }
 
 
+        /* Attribute selectors [type="date"] / [type="time"]: pointer cursor since clicking opens the native picker. */
         SysWeaver-EditDesktop tr.ValueRow > td input[type="date"]
         {
             cursor: pointer;
@@ -193,6 +233,7 @@ SysWeaver-EditDesktop {
         }
 
 
+    /* Multiline string textarea (EditTypeString.js): vertically resizable 4em..20em; same border behaviour as inputs. Uses --SysWeaverEditDesktopRadInp. EditReadOnly textareas are italic. */
     SysWeaver-EditDesktop tr.ValueRow > td textarea {
         resize: vertical;
         font: var(--ThemeFont);
@@ -204,7 +245,7 @@ SysWeaver-EditDesktop {
         border: none;
         background-color: var(--ThemeBackground);
         color: var(--ThemeMain);
-        border-radius: var(--SysWeaverEditMobileRadInp);
+        border-radius: var(--SysWeaverEditDesktopRadInp);
         padding: 1px 12px 1px 12px;
         border: 2px solid var(--ThemeBackground);
         outline: none !important;
@@ -236,6 +277,7 @@ SysWeaver-EditDesktop {
         }
 
 
+    /* EditSlider: numeric cell with text input (first, 28%) and range slider (last, 70%, floats right) - EditTypeInteger.js / EditTypeNumber.js. Custom thumbs via ::-webkit-slider-thumb / ::-moz-range-thumb; accent when focused. */
     SysWeaver-EditDesktop td.EditSlider input:first-child {
         width: 28%;
     }
@@ -289,6 +331,7 @@ SysWeaver-EditDesktop {
 
 
 
+    /* Boolean toggle: the two-step range input in an EditBoolean cell is drawn as a small switch (max 3.5em, 2em wide thumb); EditTrue (value true, toggled by EditTypeBoolean.js) colours the thumb with the accent. */
     SysWeaver-EditDesktop tr.ValueRow > td.EditBoolean input {
         -webkit-appearance: none;
         appearance: none;
@@ -336,6 +379,7 @@ SysWeaver-EditDesktop {
     }
 
 
+    /* Enum selects (EditTypeEnum.js): styled like inputs; [multiple] (flags enums) is a resizable list up to 75vh; disabled selects stay fully opaque but italic. */
     SysWeaver-EditDesktop tr.ValueRow > td select {
         box-sizing: border-box;
         font-size: 125%;
@@ -372,6 +416,7 @@ SysWeaver-EditDesktop {
         }
 
 
+        /* Options: selected (:checked) inverted, accent colours while the select has focus; disabled options (Allow.* filter) italic. */
         SysWeaver-EditDesktop tr.ValueRow > td select option {
             border-radius: var(--SysWeaverEditDesktopRadInp);
             padding: 0px 8px 0px 8px;
@@ -387,7 +432,7 @@ SysWeaver-EditDesktop {
 
             SysWeaver-EditDesktop tr.ValueRow > td select option:disabled {
                 background-color: var(--ThemeBackground);
-                color: rgba(--ThemeMainRGB, 0.1);
+                color: rgba(var(--ThemeMainRGB), 0.1);
                 font-style: italic;
             }
 
@@ -403,6 +448,7 @@ SysWeaver-EditDesktop {
 
 
 
+    /* Options of a disabled (read-only) select. */
     SysWeaver-EditDesktop tr.ValueRow > td select:disabled option {
         cursor: default;
         font-style: italic;
@@ -416,6 +462,9 @@ SysWeaver-EditDesktop {
 
 
 
+/* ===== Menu icon and collapsed state ===== */
+
+    /* SysWeaver-PopupMenuIcon: the 24x24 popup menu button created in Edit.js. */
     SysWeaver-EditDesktop SysWeaver-PopupMenuIcon {
         display: inline-block;
         float: left;
@@ -425,6 +474,7 @@ SysWeaver-EditDesktop {
 
 
 
+    /* EditorCollapsed: set on the editor table by the title row expand toggle (Edit.js); hides all member rows, leaving only the TitleRow. */
     SysWeaver-EditDesktop > table.EditorCollapsed tr.SeparatorRow
     {
         display: none;

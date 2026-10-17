@@ -1,4 +1,23 @@
-﻿
+﻿/**
+ * @file canvasTools.js - Pure 2D-canvas text rendering utilities used by the media player text support.
+ *
+ * Loading: included by MediaPlayer.Init() (media_player.js, via common's includeJs relative to
+ * media_player.js) and directly by TextDemo.html with a script tag. Must be loaded before
+ * media_player_text.js, because MediaPlayerParamsText extends TextStyle.
+ *
+ * Globals defined: TextGradientStop, TextLinearGradient, TextStyle (style descriptors that mirror the
+ * C# text style types) and CanvasTools (static helpers that measure and render styled text into
+ * canvases, text grids ("collages"), numeric glyph strips for counter effects, and convert canvases to
+ * Blob / object URLs).
+ *
+ * Dependencies: only browser APIs (CanvasRenderingContext2D, HTMLCanvasElement.toBlob, URL.createObjectURL).
+ * Conventions: no DOM attachment except the debug TextStyle.AttachTo; object URLs created here are never
+ * revoked by this file (the caller owns them); the default output mime type is "image/webp".
+ */
+
+/**
+ * One color stop of a TextLinearGradient. Plain data object (mirrors the C# gradient stop type).
+ */
 class TextGradientStop {
     /** {number} [0, 1] The position along the gradient */
     P = 0;
@@ -6,6 +25,11 @@ class TextGradientStop {
     Color = "#000";
 }
 
+/**
+ * Linear gradient definition used for text fill or stroke. Coordinates are relative [0, 1] to the
+ * rectangle passed to CanvasTools.BuildCanvasGradient (the text area inside the margins).
+ * Default is a top-to-bottom gradient with no stops. Create with `new` or CanvasTools.CreateLinearGradient.
+ */
 class TextLinearGradient {
     /** {number} [0, 1] Start horizontal position of the gradient */
     X1 = 0;
@@ -19,6 +43,12 @@ class TextLinearGradient {
     Stops = [];
 }
 
+/**
+ * Styling of rendered text (font, fill, stroke, gradients, shadows, margins). Mirrors the C# text style
+ * type; MediaPlayerParamsText (media_player_text.js) extends it. Instances are plain data: create with
+ * `new TextStyle()` and override fields. CanvasTools.ComputeMargins caches its result in an extra
+ * `ComputedMargins` field ([Top, Right, Bottom, Left]) on the style object.
+ */
 class TextStyle {
 
     /** {string} The css font to use */
@@ -86,6 +116,10 @@ class TextStyle {
 }
 
 
+/**
+ * Static-only helper class for measuring and rendering styled text (TextStyle) to 2D canvases and
+ * converting the canvases to image Blobs / object URLs. Never instantiated.
+ */
 class CanvasTools {
 
 
@@ -224,6 +258,14 @@ class CanvasTools {
     }
 
 
+    /**
+     * Measure a text with the given style: sets cc.font and cc.letterSpacing from the style, measures,
+     * and applies the (cached) style margins.
+     * @param {CanvasRenderingContext2D} cc Canvas context (its font/letterSpacing are modified)
+     * @param {string} text The text to measure
+     * @param {TextStyle} style The styling of the text
+     * @returns {Array<number>} See ApplyMargins: [width, height, drawAtX, drawAtY, marginTop, marginRight, marginBottom, marginLeft]
+     */
     static MeasureText(cc, text, style) {
         const margins = CanvasTools.ComputeMargins(style);
         //  Measure and resize
@@ -235,6 +277,23 @@ class CanvasTools {
 
 
 
+    /**
+     * Draw a text with the given style at a position. Renders a stroke pass and a fill pass (order given by
+     * style.StrokeFirst), each with its own shadow (ShadowStroke / ShadowFill, sharing ShadowX/Y/Blur).
+     * Gradients are built relative to the given gradient rectangle. Sets imageSmoothingQuality = "high"
+     * (errors ignored). Note: the fill pass is skipped only if both Fill and FillGradient are falsy
+     * (a Fill of 'none' is still passed to fillStyle, which the canvas ignores as invalid).
+     * @param {CanvasRenderingContext2D} cc Canvas context to draw on
+     * @param {string} text The text to draw
+     * @param {TextStyle} style The styling of the text
+     * @param {number} posX Text baseline-start x position (fillText/strokeText x)
+     * @param {number} posY Text baseline y position
+     * @param {number} gradX1 Left side of the gradient rectangle
+     * @param {number} gradY1 Top side of the gradient rectangle
+     * @param {number} gradX2 Right side of the gradient rectangle
+     * @param {number} gradY2 Bottom side of the gradient rectangle
+     * @returns {void}
+     */
     static RenderText(cc, text, style, posX, posY, gradX1, gradY1, gradX2, gradY2) {
         cc.font = style.Font;
         cc.letterSpacing = style.LetterSpacing + "px";
@@ -251,6 +310,10 @@ class CanvasTools {
         const sf = style.ShadowFill;
         const ss = style.ShadowStroke;
 
+        /**
+         * Fill pass: draws the text with Fill or FillGradient and the ShadowFill shadow (if set), inside save/restore.
+         * @returns {void}
+         */
         function fill() {
             if (!style.Fill)
                 if (!style.FillGradient)
@@ -269,6 +332,11 @@ class CanvasTools {
             cc.restore();
         }
 
+        /**
+         * Stroke pass (only if a stroke color/gradient exists and StrokeWidth > 0): draws the outline with
+         * StrokeWidth, StrokeCap, Stroke or StrokeGradient and the ShadowStroke shadow (if set), inside save/restore.
+         * @returns {void}
+         */
         function stroke() {
             if (!haveStroke)
                 return;
@@ -389,6 +457,12 @@ class CanvasTools {
         const textCount = texts.length;
         const rowCount = Math.ceil(textCount / columnCount) | 0;
 
+        /**
+         * Width of a measured text: the larger of the ink box width (right - left) and the advance width;
+         * if the ink width is <= 0 (e.g. a space) half the advance width is used.
+         * @param {TextMetrics} m Measured text
+         * @returns {number} Width in pixels
+         */
         function GetWidth(m) {
             const t = m.actualBoundingBoxRight - m.actualBoundingBoxLeft;
             return t <= 0 ? (m.width * 0.5) : Math.max(t, m.width);
@@ -499,13 +573,18 @@ class CanvasTools {
 
 
     /**
-     * Create a canvas element with a numeric font useable in counter effects
-     * @param {TextStyle} style The styling of the text
-     * @param {integer} extraSpacing Extra spacing between each glyph (in the height)
-     * @param {thousandSeparator} string A string to use as thousands separator
-     * @param {decimalSeparator} string A string to use as decimal separator
-     * @param {prefix} string A string to use as a numerical prefix
-     * @param {suffix} string A string to use as a numerical suffix
+     * Create a canvas element with a numeric font useable in counter effects.
+     * Layout: two columns, 11 rows of equal height. The left (digit) column holds the digits
+     * 1,2,...,9,0,1 (row i = (i + 1) % 10). The right ("other") column holds the thousands separator (row 1),
+     * prefix (row 2), suffix (row 3) and decimal separator (row 4).
+     * Extra fields are set on the returned canvas: NumberWidth, OtherWidth, TotalWidth, and the rounded widths
+     * (incl. margins, 0 when empty) ThousandsSeparatorWidth, DecimalSeparatorWidth, PrefixWidth, SuffixWidth.
+     * @param {TextStyle} [style=new TextStyle()] The styling of the text
+     * @param {integer} [extraSpacing=0] Extra spacing between each glyph (in the height); currently normalized but not used
+     * @param {string} [thousandSeparator=" "] A string to use as thousands separator (undefined gives " ", null gives "")
+     * @param {string} [decimalSeparator="."] A string to use as decimal separator
+     * @param {string} [prefix=""] A string to use as a numerical prefix
+     * @param {string} [suffix=""] A string to use as a numerical suffix
      * @returns {HTMLCanvasElement} The generated canvas element
      */
     static CreateNumberImage(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix) {
@@ -525,6 +604,12 @@ class CanvasTools {
         cc.font = style.Font;
         cc.letterSpacing = style.LetterSpacing + "px";
 
+        /**
+         * Width of a measured text: the larger of the ink box width (right - left) and the advance width;
+         * if the ink width is <= 0 (e.g. a space) half the advance width is used.
+         * @param {TextMetrics} m Measured text
+         * @returns {number} Width in pixels
+         */
         function GetWidth(m) {
             const t = m.actualBoundingBoxRight - m.actualBoundingBoxLeft;
             return t <= 0 ? (m.width * 0.5) : Math.max(t, m.width);
@@ -549,6 +634,11 @@ class CanvasTools {
             ms.push(m);
         }
         let maxOtherW = 0;
+        /**
+         * Measure a non-digit string (separator, prefix, suffix) and grow maxOtherW, maxAsc and maxDesc.
+         * @param {string} text The text to measure
+         * @returns {TextMetrics} The measurement
+         */
         function measureOther(text) {
             const m = cc.measureText(text);
             let t = GetWidth(m);
@@ -628,6 +718,14 @@ class CanvasTools {
                 mln, mt + oy, iw - mrn, ih - mb + oy);
         }
 
+        /**
+         * Render one non-digit string into the "other" column (right of the digit column) at row i.
+         * @param {number} www Unrounded ink width of the string (used for the gradient rectangle)
+         * @param {TextMetrics} m Measurement of the string
+         * @param {number} i Row index (1 = thousands separator, 2 = prefix, 3 = suffix, 4 = decimal separator)
+         * @param {string} text The string to render (shadows the outer function name inside)
+         * @returns {void}
+         */
         function text(www, m, i, text) {
             const x = mlo - m.actualBoundingBoxLeft;
             const oy = i * ih;
@@ -673,10 +771,10 @@ class CanvasTools {
      * Create an url to an image containing a numeric font useable in counter effects
      * @param {TextStyle} style The styling of the text
      * @param {integer} extraSpacing Extra spacing between each glyph (in the height)
-     * @param {thousandSeparator} string A string to use as thousands separator
-     * @param {decimalSeparator} string A string to use as decimal separator
-     * @param {prefix} string A string to use as a numerical prefix
-     * @param {suffix} string A string to use as a numerical suffix
+     * @param {string} thousandSeparator A string to use as thousands separator
+     * @param {string} decimalSeparator A string to use as decimal separator
+     * @param {string} prefix A string to use as a numerical prefix
+     * @param {string} suffix A string to use as a numerical suffix
      * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
      * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<[string,Blob,HTMLCanvasElement]>} A promise returning an array with: [url to the image, Blob containing the image, Canvas element]

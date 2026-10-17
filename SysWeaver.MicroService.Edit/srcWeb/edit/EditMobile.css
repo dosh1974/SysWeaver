@@ -1,9 +1,30 @@
-﻿:root {
+﻿/*
+ * EditMobile.css - layout styles of the "Mobile" object editor style (EditMobile.js), i.e. the root element
+ * SysWeaver-EditMobile created by the Edit constructor (Edit.js) when style is "Mobile" (chosen automatically on
+ * narrow / mobile screens).
+ * Loaded with <link> together with Edit.css and EditDesktop.css by edit/index.html, explore/api.html and
+ * ServerManager/services.html. Depends on theme variables from common/theme.css (--ThemeMain, --ThemeMain25,
+ * --ThemeMain50, --ThemeBackground, --ThemeAcc1, --ThemeAcc2, --ThemeAcc2RGB, --ThemeFont, --ThemeRad*) and on
+ * --SysWeaverEditFadeDuration (Edit.css).
+ * Layout: one two-column table per editor; each member is a tr.HeaderRow (member title | icon cell) above a
+ * tr.ValueRow (single cell with the editor), then a tr.SeparatorRow; object / collection members add a tr.DataRow.
+ */
+
+/*
+ * Custom properties (corner radii, mapped to the theme):
+ * --SysWeaverEditMobileRad: radius of the editor box and rows (--ThemeRad).
+ * --SysWeaverEditMobileRadInp: radius of inputs, textareas and selects (--ThemeRadInp).
+ * --SysWeaverEditMobileRadInp2: radius of slider / toggle thumbs (--ThemeRadInp2).
+ */
+:root {
     --SysWeaverEditMobileRad: var(--ThemeRad);
     --SysWeaverEditMobileRadInp: var(--ThemeRadInp);
     --SysWeaverEditMobileRadInp2: var(--ThemeRadInp2);
 }
 
+/* ===== Container ===== */
+
+/* An editor placed directly in a tab page (SysWeaver-TabContent, common/tab.js) has no own frame. */
 SysWeaver-TabContent > SysWeaver-EditMobile {
     border: none;
     border-radius: 0;
@@ -11,10 +32,12 @@ SysWeaver-TabContent > SysWeaver-EditMobile {
     background: none;
 }
 
+/* Nested child editors (inside SysWeaver-EditEntryValue of an object / collection data row) have no border. */
 SysWeaver-EditEntryValue > SysWeaver-EditMobile {
     border: none;
 }
 
+/* SysWeaver-EditMobile: the root element of a mobile style editor; framed box with theme background. */
 SysWeaver-EditMobile {
     box-sizing: border-box;
     padding: 8px;
@@ -25,22 +48,28 @@ SysWeaver-EditMobile {
     margin: 4px;
 }
 
+    /* SysWeaver-TypeTitle (see Edit.css) in accent colour and bold. */
     SysWeaver-EditMobile SysWeaver-TypeTitle {
         color: var(--ThemeAcc1);
         font-weight: bold;
     }
 
+    /* SeparatorRow: thin spacer row after each member. */
     SysWeaver-EditMobile tr.SeparatorRow > td {
         padding: 2px;
     }
 
 
+    /* SysWeaver-MemberTitle without the padding from Edit.css (the HeaderRow cell pads instead). */
     SysWeaver-EditMobile SysWeaver-MemberTitle {
         box-sizing: border-box;
         display: inline-block;
         padding: 0;
     }
 
+/* ===== Rows and cells ===== */
+
+    /* The editor table: full width, collapsed borders; cells don't wrap. */
     SysWeaver-EditMobile > table {
         box-sizing: border-box;
         width: 100%;
@@ -55,6 +84,7 @@ SysWeaver-EditMobile {
             overflow: hidden;
         }
 
+    /* TitleRow: the type title row (EditMobile.AddTypeInfo); IconButton icons (common.js buttons) are 24px and float left. */
     SysWeaver-EditMobile tr.TitleRow > td {
         padding: 0 4px 0 4px;
         white-space: nowrap;
@@ -69,6 +99,7 @@ SysWeaver-EditMobile {
             height: 24px;
         }
 
+    /* HeaderRow: member title row above the value (EditMobile.AddMember); small bold text on a tinted background with rounded top corners. EditButton: its icon (menu) cell, set in Edit.js. */
     SysWeaver-EditMobile tr.HeaderRow > td {
         color: var(--ThemeMain);
         font-weight: bold;
@@ -104,6 +135,7 @@ SysWeaver-EditMobile {
         }
 
 
+    /* ValueRow: single cell with the member editor; rounded bottom corners (square while EditorExpanded, so the DataRow joins it). */
     SysWeaver-EditMobile tr.ValueRow > td {
         background-color: var(--ThemeMain25);
         color: var(--ThemeMain);
@@ -116,6 +148,7 @@ SysWeaver-EditMobile {
         border-radius: 0;
     }
 
+    /* DataRow: nested editor row (EditTypeObject.js, EditTypeCollection.js); shown only while EditorExpanded and not Hide. */
     SysWeaver-EditMobile tr.DataRow {
         display: none;
     }
@@ -139,6 +172,9 @@ SysWeaver-EditMobile {
             }
 
 
+/* ===== Inputs ===== */
+
+    /* Text / number / date / time inputs: full width, 2px border turning accent on focus, half-transparent accent on hover; faded italic placeholder. */
     SysWeaver-EditMobile tr.ValueRow > td input {
         box-sizing: border-box;
         font-size: 125%;
@@ -173,6 +209,7 @@ SysWeaver-EditMobile {
             }
 
 
+        /* HalfWidth (date + time inputs, EditTypeDateTime.js): on mobile stacked as full-width blocks instead of side by side. */
         SysWeaver-EditMobile tr.ValueRow > td input.HalfWidth {
             width: 100%;
             display: block;
@@ -183,6 +220,7 @@ SysWeaver-EditMobile {
             }
 
 
+    /* Multiline string textarea (EditTypeString.js): vertically resizable 5.125em..24em; EditReadOnly textareas are italic. */
     SysWeaver-EditMobile tr.ValueRow > td textarea {
         resize: vertical;
         font: var(--ThemeFont);
@@ -227,6 +265,7 @@ SysWeaver-EditMobile {
         }
 
 
+        /* EditSlider: numeric cell with text input (28%) and custom-drawn range slider (70%, right) - EditTypeInteger.js / EditTypeNumber.js; thumb accent when focused. */
         SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:first-child {
             width: 28%;
         }
@@ -280,6 +319,7 @@ SysWeaver-EditMobile {
 
 
 
+        /* Boolean toggle: the two-step range input in an EditBoolean cell drawn as a switch; EditTrue (set by EditTypeBoolean.js when true) colours the thumb with the accent. */
         SysWeaver-EditMobile tr.ValueRow > td.EditBoolean input {
             -webkit-appearance: none;
             appearance: none;
@@ -329,6 +369,7 @@ SysWeaver-EditMobile {
         background-color: var(--ThemeAcc1);
     }
 
+    /* Enum selects (EditTypeEnum.js): styled like inputs; [multiple] (flags) is a resizable list; options inverted when :checked, accent while focused. Disabled options use rgba(var(--ThemeMainRGB), 0.1). */
     SysWeaver-EditMobile tr.ValueRow > td select {
         box-sizing: border-box;
         font-size: 125%;
@@ -381,7 +422,7 @@ SysWeaver-EditMobile {
 
             SysWeaver-EditMobile tr.ValueRow > td select option:disabled {
                 background-color: var(--ThemeBackground);
-                color: rgba(--ThemeMainRGB, 0.1);
+                color: rgba(var(--ThemeMainRGB), 0.1);
                 font-style: italic;
             }
 
@@ -407,17 +448,22 @@ SysWeaver-EditMobile {
                 color: var(--ThemeBackground);
             }
 
+/* ===== Menu and collapsed state ===== */
+
+    /* SysWeaver-PopupMenuBack: the popup menu panel (app/application.js PopupMenu) opened from an editor; shifted 30px to the right. */
     SysWeaver-EditMobile SysWeaver-PopupMenuBack {
         right: -30px;
     }
 
 
-    SysWeaver-EditMobile SysWeaver-PopupMenuIcon 
+    /* SysWeaver-PopupMenuIcon: the popup menu button created in Edit.js; floats right on mobile. */
+    SysWeaver-EditMobile SysWeaver-PopupMenuIcon
     {
         display: inline-block;
         float: right;
     }
 
+    /* EditorCollapsed: set on the editor table by the title row expand toggle (Edit.js); hides all member rows. */
     SysWeaver-EditMobile > table.EditorCollapsed tr.HeaderRow {
         display: none;
     }

@@ -1,5 +1,30 @@
-﻿
+﻿/**
+ * @file text.js - script of the text viewer / editor page edit/text.html (Ace editor with optional Prettier beautify,
+ * reload, download, save and delete).
+ *
+ * Loaded by text.html as a deferred script after common/common.js, app/application.js, external/ace.js,
+ * external/ext-language_tools.js and the Prettier standalone + plugin scripts (estree, typescript, babel, postcss,
+ * markdown, html); the page calls textMain() from body onload. Styled by text.css (page layout + "ace-sysweaver"
+ * Ace theme).
+ *
+ * URL parameters (read with getUrlParams, i.e. lower-cased keys):
+ * r = url to read the text from (required), t = Ace mode (else derived from the file extension),
+ * n = file name for title/download/save (default: last path segment of r), u = save url (enables editing + Save),
+ * d = delete url (enables Delete), download=false hides Download, scrolltoend=true scrolls to the last line,
+ * b=true beautifies automatically on load/reload.
+ *
+ * Globals defined: SanitizeHtml, textMain, and the implicit global beautifyButton (assigned without declaration).
+ * Dependencies: getUrlParams, Fail, Info, Confirm, getRequest, sendRequest, downloadText, _T, _TF, InterOp,
+ * PageLoaded (common/common.js), Button (application.js), ace, prettier, prettierPlugins.
+ * Messages posted: InterOp.Post("FileSaved", {Url, Name, Content}) and InterOp.Post("FileDeleted", {Url, Name}).
+ */
 
+/**
+ * Prepares HTML for Prettier: wraps unquoted attribute values that contain "/" or ":" in double quotes
+ * (Prettier's HTML parser rejects them); other unquoted values are left alone.
+ * @param {string} html - HTML source.
+ * @returns {string} The sanitized HTML.
+ */
 function SanitizeHtml(html) {
     html = html.replace(
         /(\s[a-zA-Z0-9:-]+)=([^"'\s>]+)/g,
@@ -15,12 +40,24 @@ function SanitizeHtml(html) {
 }
 
 
+/**
+ * Entry point of text.html (body onload). Reads the URL parameters (see file header), picks the Ace mode,
+ * builds the toolbar (Button.CreateRow) with Reload, Beautify (only when Prettier has a formatter for the mode),
+ * Download (unless download=false), Save (only with u=) and Delete (only with d=, after Confirm), fetches the
+ * text with getRequest, creates the Ace editor in a SysWeaver-AceEditor element (readOnly unless u= is given,
+ * worker only when editable, live autocompletion, no print margin) and tags Ace popups with "ace-sysweaver".
+ * Save sends {Url, Name, Content} to the u= url (sendRequest) and posts InterOp "FileSaved"; Delete sends
+ * {Url, Name} to the d= url, posts "FileDeleted" and removes the editor.
+ * On any error the body is cleared and Fail(...) is shown for 30 s; PageLoaded() is always called.
+ * Without an r= url it shows Fail("No read url supplied! (r=..)").
+ * @returns {Promise<void>}
+ */
 async function textMain() {
     try {
         const p = getUrlParams();
         const url = p.get("r");
         if (!url) {
-            Fail(TF("No read url supplied!", "Error message displayed when a required url parameter wasn't supplied") + " (r=..)");
+            Fail(_TF("No read url supplied!", "Error message displayed when a required url parameter wasn't supplied") + " (r=..)");
             return;
         }
         const del = p.get("d");
@@ -75,6 +112,8 @@ async function textMain() {
         }
         console.log("Type: " + type);
 
+        // Beautifiers per Ace mode (Prettier 3 API, format() returns a Promise). No "xml" beautifier: its parser
+        // needs the Prettier XML plugin, which is not vendored, so XML is not offered for beautifying.
         const bmap = new Map();
         /*
         bmap.set("json", x => vkbeautify.json(x, "\t"));
@@ -92,11 +131,16 @@ async function textMain() {
         bmap.set("html", x => prettier.format(SanitizeHtml(x), { parser: "html", plugins: prettierPlugins, useTabs: true }));
         bmap.set("markdown", x => prettier.format(x, { parser: "markdown", plugins: prettierPlugins, useTabs: true }));
         bmap.set("javascript", x => prettier.format(x, { parser: "typescript", plugins: prettierPlugins, useTabs: true }));
-        bmap.set("xml", x => prettier.format(x, { parser: "xml", plugins: prettierPlugins, useTabs: true }));
 
         const beautify = bmap.get(type);
 
 
+        /**
+         * Beautifies text on load / reload when automatic beautify is requested (b=true) and a beautifier exists
+         * for the mode; failures are logged as warnings and the original text is returned.
+         * @param {string} text - Source text.
+         * @returns {Promise<string>} Beautified or original text.
+         */
         async function DoBeautify(text) {
 
             if (!beautify)
@@ -285,6 +329,7 @@ async function textMain() {
         //var beautify = ace.require("ace/ext/beautify"); // get reference to extension
         //beautify.beautify(editor.session);
 
+        // Ace appends popups (autocomplete, tooltips) as DIVs to body; tag them with ace-sysweaver so text.css styles them.
         new MutationObserver(mut => {
             const c = target.children;
             const cl = c.length;

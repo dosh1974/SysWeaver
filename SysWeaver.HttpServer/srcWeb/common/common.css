@@ -1,4 +1,25 @@
-﻿
+﻿/*
+ * common.css - an older, non-templated subset of common/theme.css. No page or server registration references it
+ * (no <link> found); theme.css is the stylesheet actually used.
+ * It has no theme variants ([data-theme]), no @import/fonts, no html/body/a/em base rules, no colour utility classes,
+ * no Code/LongText/MdText/IconCurrentUser rules, no @keyframes and no @media rules.
+ * Differences from theme.css: :root defaults are the DARK palette; SysWeaver-Link radius is a fixed 6px;
+ * SysWeaver-Page top padding is 1em (no --Margin, no top:0); SysWeaver-Button uses line-height 24px (no --ThemeIconSize
+ * scaling) and border-radius 15px; only the first (fixed, blurred) SysWeaver-Loading rule exists.
+ * Styles the elements created by common/common.js; the derived colour variables are filled by applyTheme() in
+ * common.js only if a page loads both files.
+ */
+
+/* ===== Theme custom properties (dark defaults) ===== */
+
+/*
+ * Same variable set as theme.css, with dark colours:
+ * --ThemeBackground #242226, --ThemeMain #aaaaaa, --ThemeAcc1 #D0BF2F, --ThemeAcc2 #5ecad6 (base colours);
+ * --ThemeFont / --ThemeFontMono font stacks; --ThemeFontSize body size; --ThemeIconSize icon/line-height multiplier
+ * (not used by this file's button rule); --ThemeRad / --ThemeRadInp / --ThemeRadInp2 corner radii;
+ * --ThemeFadeDuration transition duration; --ThemeOk / --ThemeError / --ThemeWarning status colours.
+ * No color-scheme, --Margin or --ThemePos here. The placeholders below (0) are overwritten by applyTheme() in common.js.
+ */
 :root {
     --ThemeBackground: #242226;
     --ThemeMain: #aaaaaa;
@@ -16,6 +37,10 @@
     --ThemeError: #c00;
     --ThemeWarning: #ba0;
     /* Individual R,G,B compnents, computed by js when switching */
+    /*
+     * 0..255 channels: --ThemeBackgroundR, --ThemeBackgroundG, --ThemeBackgroundB, --ThemeMainR, --ThemeMainG,
+     * --ThemeMainB, --ThemeAcc1R, --ThemeAcc1G, --ThemeAcc1B, --ThemeAcc2R, --ThemeAcc2G, --ThemeAcc2B.
+     */
     --ThemeBackgroundR: 0;
     --ThemeBackgroundG: 0;
     --ThemeBackgroundB: 0;
@@ -29,11 +54,16 @@
     --ThemeAcc2G: 0;
     --ThemeAcc2B: 0;
     /* R,G,B compnents, computed by js when switching */
+    /* "r,g,b" strings for rgba(var(...), a): --ThemeBackgroundRGB, --ThemeMainRGB, --ThemeAcc1RGB, --ThemeAcc2RGB. */
     --ThemeBackgroundRGB: 0;
     --ThemeMainRGB: 0;
     --ThemeAcc1RGB: 0;
     --ThemeAcc2RGB: 0;
     /* At opacity, computed by js when switching */
+    /*
+     * rgba(r,g,b,0.25/0.50/0.75): --ThemeBackground25, --ThemeBackground50, --ThemeBackground75, --ThemeMain25,
+     * --ThemeMain50, --ThemeMain75, --ThemeAcc125, --ThemeAcc150, --ThemeAcc175, --ThemeAcc225, --ThemeAcc250, --ThemeAcc275.
+     */
     --ThemeBackground25: 0;
     --ThemeBackground50: 0;
     --ThemeBackground75: 0;
@@ -49,6 +79,12 @@
 }
 
 
+/* ===== Links, page and messages ===== */
+
+/*
+ * <SysWeaver-Link>: clickable link created by ValueFormat in common.js; bold Acc1, fixed 6px radius (theme.css uses
+ * --ThemeRadInp), pointer cursor; Acc2 focus outline, inverted colours on hover.
+ */
 SysWeaver-Link {
     font-weight: bold;
     color: var(--ThemeAcc1);
@@ -77,6 +113,7 @@ SysWeaver-Link {
             color: var(--ThemeBackground);
         }
 
+    /* SysWeaver-Link.ThemeMain: main-coloured variant that hovers to a --ThemeMain background. */
     SysWeaver-Link.ThemeMain {
         color: var(--ThemeMain);
     }
@@ -90,6 +127,7 @@ SysWeaver-Link {
             color: var(--ThemeMain);
         }
 
+    /* SysWeaver-Link.Image: inline-block image link; transparent 1px border turns Acc1 (Main with .ThemeMain) on hover. */
     SysWeaver-Link.Image {
         box-sizing: border-box;
         display: inline-block;
@@ -108,6 +146,10 @@ SysWeaver-Link {
             border-color: var(--ThemeMain);
         }
 
+/*
+ * <SysWeaver-Page>: centred page column (left:50% + translate(-50%)), max width 52em, or 78em with class Wide;
+ * 1em top padding; soft Acc1 glow box-shadow.
+ */
 SysWeaver-Page {
     position: absolute;
     left: 50%;
@@ -129,6 +171,10 @@ SysWeaver-Page {
     }
 
 
+/*
+ * <SysWeaver-Fail>: bottom toast created by Message() in common.js (z-index 10000); class MsgError (red, from Fail())
+ * or MsgInfo (green, from Info()).
+ */
 SysWeaver-Fail {
     z-index: 10000;
     display: block;
@@ -156,6 +202,7 @@ SysWeaver-Fail {
         color: #eee;
     }
 
+/* <SysWeaver-CenterBlock>: wrapping flex row (Button.CreateRow()); a single child is centred with auto margins. */
 SysWeaver-CenterBlock {
     display: flex;
     max-width: 100%;
@@ -171,6 +218,12 @@ SysWeaver-CenterBlock {
 
 
 
+/* ===== Buttons ===== */
+
+/*
+ * <SysWeaver-Button>: element created by the Button class in common.js. Inline-flex pill with Acc2 background,
+ * fixed line-height 24px and border-radius 15px (theme.css scales/uses theme variables), opacity 0.8 (1 on hover).
+ */
 SysWeaver-Button {
     font-size: 80%;
     font-weight: bold;
@@ -191,6 +244,7 @@ SysWeaver-Button {
     justify-content: space-between;
 }
 
+    /* SysWeaver-Button.SysWeaverButtonCenter: inline-block button centred with auto margins (via ButtonStyle.ButtonStyle). */
     SysWeaver-Button.SysWeaverButtonCenter {
         margin-left: auto;
         margin-right: auto;
@@ -198,6 +252,7 @@ SysWeaver-Button {
         display: inline-block;
     }
 
+    /* Focus: 3px Acc1 outline. Hover: full opacity. */
     SysWeaver-Button:focus {
         outline: 3px solid var(--ThemeAcc1);
     }
@@ -207,6 +262,7 @@ SysWeaver-Button {
     }
 
 
+    /* SysWeaver-Button.Pressed: added by the Button class while held; shifted 1px/2px with a smaller shadow. */
     SysWeaver-Button.Pressed {
         transform: translate(1px, 2px);
         box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
@@ -214,6 +270,7 @@ SysWeaver-Button {
         cursor: pointer;
     }
 
+    /* SysWeaver-Button.Disabled: toggled by the Button class; pressed look at opacity 0.4 (also on hover), default cursor. */
     SysWeaver-Button.Disabled {
         transform: translate(1px, 2px);
         box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
@@ -226,12 +283,14 @@ SysWeaver-Button {
         }
 
 
+    /* <Sysweaver-ButtonText>: the button label created by the Button constructor; floated left. */
     SysWeaver-Button Sysweaver-ButtonText {
         vertical-align: middle;
         display: inline-block;
         float: left;
     }
 
+    /* <Icon-24x24> in a button: the button's ColorIcon, floated right with an 8px left margin. */
     SysWeaver-Button Icon-24x24 {
         vertical-align: middle;
         display: inline-block;
@@ -240,6 +299,7 @@ SysWeaver-Button {
     }
 
 
+    /* SysWeaver-Button.ThemeMain / .ThemeAcc1: alternative background colours (via ButtonStyle.ButtonStyle). */
     SysWeaver-Button.ThemeMain {
         background-color: var(--ThemeMain);
     }
@@ -249,6 +309,12 @@ SysWeaver-Button {
     }
 
 
+/* ===== Loading overlay and progress bar ===== */
+
+/*
+ * <SysWeaver-Loading>: overlay created by AddLoading() in common.js; fixed, full size, z-index 1000,
+ * --ThemeBackground75 background with 4px backdrop blur. Class Opaque (opaque argument): solid background, no blur.
+ */
 SysWeaver-Loading {
     position: fixed;
     left: 0;
@@ -267,6 +333,10 @@ SysWeaver-Loading {
         backdrop-filter: none;
     }
 
+/*
+ * <SysWeaver-LoadingText>: 200% bold Acc1 text fixed 3em above the bottom, centred via translateX(-50%).
+ * Class Center (no icon) moves it to top 50vh; its "translate(-50% -50%)" lacks a comma and is invalid.
+ */
 SysWeaver-LoadingText {
     font-size: 200%;
     color: var(--ThemeAcc1);
@@ -286,6 +356,7 @@ SysWeaver-LoadingText {
         transform: translate(-50% -50%);
     }
 
+/* <Icon-64x64> in the overlay: the 64x64 ColorIcon (default IconWorking) appended by AddLoading; fixed at 30vh. */
 SysWeaver-Loading > Icon-64x64 {
     display: block;
     position: fixed;
@@ -294,6 +365,10 @@ SysWeaver-Loading > Icon-64x64 {
 }
 
 
+/*
+ * <SysWeaver-ProgressBar> (track, Main at 10% alpha) and <SysWeaver-ProgressBarFill> (Acc1 fill, positioned by
+ * ProgressBar.SetPercentage via style.left) created by the ProgressBar class in common.js.
+ */
 SysWeaver-ProgressBar {
     display: block;
     width: 100%;
@@ -311,6 +386,11 @@ SysWeaver-ProgressBarFill {
     background-color: var(--ThemeAcc1);
 }
 
+/*
+ * <SysWeaver-ProgressBarTextInside> / <SysWeaver-ProgressBarTextOutside>: percentage text inside (right-aligned) or after
+ * (left-aligned) the fill; transparent unless class Active, which SetPercentage toggles on whichever fits.
+ * font-family references var(--ThemeMono), which is not defined anywhere.
+ */
 SysWeaver-ProgressBarTextInside {
     z-index: 1;
     font-size: 50%;
@@ -333,6 +413,7 @@ SysWeaver-ProgressBarTextInside {
         color: var(--ThemeBackground);
     }
 
+/* Outside variant: left-aligned after the fill; Active makes it Main-coloured. */
 SysWeaver-ProgressBarTextOutside {
     z-index: 1;
     font-size: 50%;
@@ -355,6 +436,10 @@ SysWeaver-ProgressBarTextOutside {
         color: var(--ThemeMain);
     }
 
+/*
+ * <SysWeaver-Text>: block text container (0.5em radius). Class KeyClick (keyboardClick() in common.js): pointer cursor
+ * and an Acc2 focus outline.
+ */
 SysWeaver-Text {
     display: block;
     border-radius: 0.5em;
@@ -372,6 +457,13 @@ SysWeaver-Text {
         }
 
 
+/* ===== Server-unavailable blocker ===== */
+
+/*
+ * <SysWeaver-ServerBlock>: full-screen blocking layer created by StartBlock in SysWeaverInit (common.js) on server
+ * pause/restart/shutdown/error; z-index 1111111, 95% alpha background, blur, not-allowed cursor, centred column of at
+ * least 500px via calc(max(...)) paddings.
+ */
 SysWeaver-ServerBlock {
     z-index: 1111111;
     position: fixed;
@@ -389,6 +481,11 @@ SysWeaver-ServerBlock {
     cursor: not-allowed;
 }
 
+/*
+ * Blocker children: <SysWeaver-ServerImage> (128x128 ColorIcon), <SysWeaver-ServerTitle> (200% bold Acc1),
+ * <SysWeaver-ServerText> (150%), <SysWeaver-ServerWaiting> (5em top margin, holds IconWorking), <SysWeaver-ServerTime>
+ * (bold Acc2).
+ */
 SysWeaver-ServerImage {
     display: block;
 }
@@ -419,6 +516,13 @@ SysWeaver-ServerTime {
     color: var(--ThemeAcc2);
 }
 
+/* ===== Icon classes ===== */
+
+/*
+ * Mask icons (inline base64 SVG mask-image data URIs) used with ColorIcon in common.js, identical to theme.css:
+ * .IconWorking animated three-arc spinner; .IconPaused two bars; .IconPower power symbol; .IconWarning warning
+ * triangle; .IconReload circular arrow.
+ */
 .IconWorking {
     mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJNMzEuNiAzLjVDNS45IDEzLjYtNi42IDQyLjcgMy41IDY4LjRjMTAuMSAyNS43IDM5LjIgMzguMyA2NC45IDI4LjFsLTMuMS03LjljLTIxLjMgOC 40LTQ1LjQtMi01My44LTIzLjNjLTguNC0yMS4zIDItNDUuNCAyMy4zLTUzLjhMMzEuNiAzLjV6Ij48YW5pbWF0ZVRyYW5zZm9ybSBhdHRyaWJ1dGVOYW1lPSJ0cmFuc2Zvcm0iIGF0dHJpYnV0ZVR5cGU9IlhNTCIgdHlwZT0icm90YXRlIiBkdXI9IjJzIiBmcm9tPSIwIDUwIDUwIiB0bz0iMzYwIDUwIDUwIiByZXBlYXRDb3VudD0iaW5kZWZ pbml0ZSI+PC9hbmltYXRlVHJhbnNmb3JtPjwvcGF0aD48cGF0aCBkPSJNNDIuMyAzOS42YzUuNy00LjMgMTMuOS0zLjEgMTguMSAyLjdjNC4zIDUuNyAzLjEgMTMuOS0yLjcgMTguMWw0LjEgNS41YzguOC02LjUgMTAuNi0xOSA0LjEtMjcuN2MtNi41LTguOC0xOS0xMC42LTI3LjctNC4xTDQyLjMgMzkuNnoiPjxhbmltYXRlVHJhbnNmb3Jt IGF0dHJpYnV0ZU5hbWU9InRyYW5zZm9ybSIgYXR0cmlidXRlVHlwZT0iWE1MIiB0eXBlPSJyb3RhdGUiIGR1cj0iMXMiIGZyb209IjAgNTAgNTAiIHRvPSItMzYwIDUwIDUwIiByZXBlYXRDb3VudD0iaW5kZWZpbml0ZSI+PC9hbmltYXRlVHJhbnNmb3JtPjwvcGF0aD48cGF0aCBkPSJNODIgMzUuN0M3NC4xIDE4IDUzLjQgMTAuMSAzNS43I DE4UzEwLjEgNDYuNiAxOCA2NC4zbDcuNi0zLjRjLTYtMTMuNSAwLTI5LjMgMTMuNS0zNS4zczI5LjMgMCAzNS4zIDEzLjVMODIgMzUuN3oiPjxhbmltYXRlVHJhbnNmb3JtIGF0dHJpYnV0ZU5hbWU9InRyYW5zZm9ybSIgYXR0cmlidXRlVHlwZT0iWE1MIiB0eXBlPSJyb3RhdGUiIGR1cj0iMnMiIGZyb209IjAgNTAgNTAiIHRvPSIzNjAgNT AgNTAiIHJlcGVhdENvdW50PSJpbmRlZmluaXRlIj48L2FuaW1hdGVUcmFuc2Zvcm0+PC9wYXRoPjwvc3ZnPg==");
 }
@@ -440,6 +544,7 @@ SysWeaver-ServerTime {
 }
 
 
+/* .IconLogo: background image ../icon.svg (application favicon SVG) with a transparent background. */
 .IconLogo {
     background-color: transparent !important;
     background-image: url("../icon.svg");

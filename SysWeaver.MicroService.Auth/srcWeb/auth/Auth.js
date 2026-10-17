@@ -1,6 +1,38 @@
-﻿
+﻿/**
+ * @file Auth.js - request and validation helpers for authentication (SysWeaver.MicroService.Auth, served as auth/Auth.js).
+ *
+ * Purpose: hashed password login against LoginService (salt + one-time pad + double SHA-256), with a fallback to
+ * HTTP Basic auth; logout; password policy text and validation; password leak check (pwnedpasswords k-anonymity);
+ * e-mail and phone number validation through AuthManagerService.
+ *
+ * Loading: a `defer` <script> in auth/Login.html and auth/Logout.html (this folder), and in every page of the
+ * other auth/ contributions: SysWeaver.MicroService.PassKey (AddPassKey.html, UsePassKey.html, MyPassKeys.html, ...),
+ * SysWeaver.MicroService.UserManager (SignUp.html, AddEmail.html, ... via UserManagerUi.js) and SysWeaver.Auth.Core
+ * (index.html, KeyMan.html via SimpleAuth.js). Always loaded before AuthUi.js.
+ *
+ * Globals defined (functions only, no top-level state, no immediately executed code):
+ * logoutRequest, loginRequest, AuthTrim, AuthPolicyText, ValidatePassword, CheckPassword, AuthGetEmailError, AuthGetPhoneError.
+ *
+ * Dependencies (common.js): sendRequest, getRequest, hashString, hashData, hashStringSha1, bufferToBase64, bufferToHex,
+ * base64ToArray, concatArrays, Base64EncodeString, waitEvent2, _T, _TF.
+ *
+ * Cross-folder: UserManager.js (SysWeaver.MicroService.UserManager) and SimpleAuth.js (SysWeaver.Auth.Core) re-implement
+ * the login hashing instead of calling loginRequest; they do call AuthTrim / AuthPolicyText / ValidatePassword /
+ * CheckPassword; UserManagerUi.js calls AuthGetEmailError / AuthGetPhoneError.
+ *
+ * Storage: sessionStorage["SysWeaver.User"] (JSON of the last AuthInfo login result; written here, by Passkey.js and
+ * UserManager.js; no reader exists - informational write-only cache).
+ */
+
 ////// Logout ///////////////////////////////
 
+/**
+ * Signs out the current session by requesting the server's forced logout endpoint.
+ * Sends `GET <apiPrefix>logout` (with credentials) with the header `Authorization: Basic logout`, which overwrites any
+ * Basic credentials the browser has cached. Called by logoutMain (AuthUi.js).
+ * @param {string} [apiPrefix="../"] - URL prefix to the server root (falsy values use the default).
+ * @returns {Promise<boolean>} The JSON result of the server (true on success).
+ */
 async function logoutRequest(apiPrefix) {
     if (!apiPrefix)
         apiPrefix = "../";
@@ -11,6 +43,31 @@ async function logoutRequest(apiPrefix) {
 
 ////// Login ///////////////////////////////
 
+/**
+ * Signs in with user name and password using the LoginService hashed protocol, falling back to HTTP Basic auth.
+ *
+ * Normal path:
+ * 1. POST `GetUserSalt(user)` returns `[salt, oneTimePad]`.
+ * 2. If the salt starts with `|` the rest is base64 binary: hash = base64(SHA-256(saltBytes ++ utf8(password)));
+ *    otherwise hash = hashString(password + "|" + salt) (SHA-256, base64).
+ * 3. The hash is bound to the pad: hashString(hash + "|" + oneTimePad).
+ * 4. POST `Login {OneTimePad, Hash}`; a truthy result is stored as JSON in sessionStorage["SysWeaver.User"],
+ *    otherwise that key is removed.
+ *
+ * Fallback when GetUserSalt throws (no LoginService): `GET <apiPrefix>../../basic_auth` must be truthy (else throws
+ * "Nor login or basic auth is enabled!"), then a raw XMLHttpRequest `GET <apiPrefix>../../login` is sent with
+ * withCredentials and `Authorization: Basic base64(user:password)`. Completion is awaited with waitEvent2 on a detached
+ * `SysWeaver-Coms` element that receives `LoginOk` / `LoginErr` custom events from the XHR onload / onerror handlers;
+ * onreadystatechange records the response text when the status is 200. No sessionStorage write in this path.
+ *
+ * Called by loginMain (AuthUi.js).
+ * @param {string} user - User name / id (trimmed with AuthTrim).
+ * @param {string} password - Password (trimmed with AuthTrim).
+ * @param {string} [apiPrefix="../Api/auth/"] - Prefix of the auth API (falsy values use the default).
+ * @returns {Promise<object>} The server's AuthInfo ({Succeeded, Username, ...}) or a falsy value; in the Basic
+ *   fallback `{Succeeded:true, Username:user}`.
+ * @throws {Error} In the fallback path when Basic auth is disabled, the request fails or the status is not 200.
+ */
 async function loginRequest(user, password, apiPrefix) {
 
     if (!apiPrefix)
@@ -138,7 +195,16 @@ function AuthPolicyText(policy) {
  * @param {function(object)} onNewPolicy optional callback that is executed every time a new policy is loaded from the server
  * @param {string} apiPrefix Optional api prefix, default is "../Api/auth/"
  * @param {object} policy An optional policy, if this is set there will be no request for per user policy (and no need for a cache)
- * @returns {string} null if the password is ok, else a string with some text explaining why it fails.
+ * @returns {Promise<string>} null if the password is ok, else a string with some text explaining why it fails.
+ *
+ * Details: without `policy`, when `cache.PasswordPolicyUser !== u` it POSTs `GetPasswordPolicy(user)` (errors give a
+ * null policy) and stores it in the cache expandos PasswordPolicy, PasswordPolicyUser, PasswordPolicyStr (JSON).
+ * onNewPolicy is awaited when the fetched policy's JSON differs from PasswordPolicyStr, or when the fetch yields null
+ * and the cached policy was also null. Note: the user comparison uses the untrimmed `u` but stores the trimmed user.
+ * Checks in order: blank, length (default 8..64, clamped min >= 1, max >= min, max <= 128), letter needed (when
+ * MixedSpecial or MixedNumerical), MixedCase, MixedNumerical (digit via parseInt), MixedSpecial; first failure wins.
+ * Without a policy (null) only the blank and default length checks apply; the flag checks are skipped.
+ * Used by loginMain, SimpleAuth.js (Auth.Core) and UserManagerUi.js (UserManager).
  */
 async function ValidatePassword(u, p, cache, onNewPolicy, apiPrefix, policy) {
     const user = AuthTrim(u);
@@ -208,6 +274,8 @@ async function ValidatePassword(u, p, cache, onNewPolicy, apiPrefix, policy) {
         }
         special = true;
     }
+    if (!policy)
+        return null;
     const needLetter = policy.MixedSpecial | policy.MixedNumerical;
     if (needLetter && (!letter))
         return _TF("Password need to have at least one letter!", "Text explaining that a valid password need to have at least one letter");
@@ -230,13 +298,29 @@ async function ValidatePassword(u, p, cache, onNewPolicy, apiPrefix, policy) {
 
 
 /**
- * Check a password against haveibeenpwned.com
+ * Check a password against haveibeenpwned.com (k-anonymity range API).
+ * If `p === el.LastCheck` the memoized state (el.PwdState / el.PwdError) is re-applied without a request.
+ * Otherwise clears el.className, shows "Checking password ..", computes the upper-case hex SHA-1 (hashStringSha1 ->
+ * base64ToArray -> bufferToHex), fetches `https://api.pwnedpasswords.com/range/<first 5 hex>` (CORS) and searches the
+ * response for the remaining 35 hex chars, parsing the digit run after the ':' as the leak count.
+ * Side effects on el: innerText, title, class Good / Error / Warning, expandos LastCheck, PwdState, PwdError.
+ * Called (not awaited) by loginMain; also used by SimpleAuth.js (Auth.Core) and UserManagerUi.js (UserManager).
  * @param {HTMLElement} el An element where the result will be shown, innerText, title and classes will be changed
  * @param {string} p The password to check
+ * @returns {Promise<void>}
  */
 async function CheckPassword(el, p) {
+    /** Site name shown in texts/tooltips. @type {string} */
     const db = "https://haveibeenpwned.com";
+    /** Class list of the result element. @type {DOMTokenList} */
     const cl = el.classList;
+    /**
+     * Applies a check result to `el` and memoizes it in el.PwdState / el.PwdError.
+     * @param {number} state - 1 = safe (class Good), 2 = leaked `e` times (class Error), 3 = non-200 response
+     *   (class Warning), 4 = exception `e` (class Warning, error appended to the tooltip); 0/other = no text change.
+     * @param {number|Error} [e] - Leak count (state 2) or the caught exception (state 4).
+     * @returns {void}
+     */
     function setState(state, e) {
         switch (state) {
             case 1:
