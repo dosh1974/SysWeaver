@@ -207,7 +207,7 @@ There are three independent layers:
 - **Theme resolution order:**
   1. `?usetheme` (`window.UseTheme`)
   2. `localStorage["SysWeaver.Theme"]`, set by `?settheme` or by `setTheme()` from the server's Theme menu (`[WebMenuJs]`)
-  3. The OS `prefers-color-scheme`
+  3. The OS `prefers-color-scheme`, followed live: every window re-applies its theme when it changes and the top window posts `Theme.Changed`
   4. `"dark"`
 - **Applying a theme.** `light` removes `data-theme` from `<html>`. Any other theme sets `data-theme=<name>`; `theme.css` defines `dark`, `hacker`, `application` and `pro`. `application` takes its colours from the server template variables `${Color.Background|Color|Acc1|Acc2}`.
 - **Derived variables.** JS derives `--Theme{Background,Main,Acc1,Acc2}{R,G,B,RGB,25,50,75}` and sets `IsDarkMode`. `--ThemeIconSize` scales icons. Icons are CSS mask images from `icons/*.svg`. Many icon classes are defined in consumer CSS rather than centrally.
@@ -246,7 +246,7 @@ There are three independent layers:
 
   If `GetUserSalt` fails, the client falls back to Basic auth through `../basic_auth` and `../login`. Logout is `GET ../logout` with `Authorization: Basic logout`.
 - **Passkeys.** The client fetches a challenge in advance, calls `navigator.credentials.get` or `create`, then submits the result (`Auth`, `Create` or `New`). The login page also uses conditional-mediation autofill.
-- **After a sign-in**, `AuthStartPage` waits 3 s, replaces the URL with the app root and reloads. The other open windows reload through the `user.login` push message.
+- **After a sign-in**, `AuthStartPage` waits 3 s, then reloads the app: the top window when the page is embedded in the shell (never the iframe, which would nest the shell), otherwise its own window at the app root. The other open windows reload through the `user.login` push message.
 - **Short codes.** E-mail and SMS steps store a short code in the server session. The page then continues at `<Page>.html?<code>`, and the code is valid only in that same session.
 - **Token parameters differ between pages.** Some pages treat the whole query string as the token, some read `?token=`, and some server-built links use `?user=&salt=&token=`.
 

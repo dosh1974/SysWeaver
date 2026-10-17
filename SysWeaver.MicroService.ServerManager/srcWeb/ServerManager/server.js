@@ -151,6 +151,12 @@ async function serverMain() {
      * @type {{Machine:string, Os:string, OsBase:string, ProcessorCount:number, Memory:number, Time:string, TzName:string, TzDayName:string, ProcessCount:number, DriveCount:number}}
      */
     const info = await getRequest("../ServerManager/GetServerInfo");
+    if (!info) {
+        //  No data: the request was redirected (ex: the session expired, getRequest is already navigating to the
+        //  login page) or the server returned nothing, so there is nothing to show.
+        PageLoaded();
+        return;
+    }
     /** Local time when the last server time was received (updated by `updateStats`). @type {Date} */
     let atTime = new Date();
     /** Half the measured round trip in ms, added to the reported server time. @type {number} */

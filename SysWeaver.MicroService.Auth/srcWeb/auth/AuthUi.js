@@ -1319,9 +1319,28 @@ function AuthBr(target) {
  * Post-login navigation used by all flows that end signed in (loginMain, Passkey.js, UserManagerUi.js).
  * Removes the query and the last two path segments (assumes the URL is exactly <root>/auth/<page>.html), ensures a
  * trailing '/', waits 3 s (delay(3000)), then history.replaceState to that root URL and location.reload(true).
+ * When the page is embedded in a same-origin window (ex: the app shell's content iframe), the top window is
+ * reloaded instead (its hash cleared), so the shell never ends up nested inside its own iframe; this does not
+ * depend on the "user.login" server message reaching the top window in time.
  * @returns {Promise<void>}
  */
 async function AuthStartPage() {
+    if (window.top !== window.self) {
+        let top = null;
+        try {
+            if (typeof window.top.ReloadAll === "function")
+                top = window.top;
+        }
+        catch
+        {
+            //  Cross-origin parent: navigate this window as usual
+        }
+        if (top) {
+            await delay(3000);
+            top.ReloadAll(true, true);
+            return;
+        }
+    }
     const loc = window.location;
     const url = new URL(loc.href);
     url.search = "";

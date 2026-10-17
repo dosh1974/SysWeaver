@@ -8423,6 +8423,31 @@ async function SysWeaverInit() {
         window.UseTheme = useTheme;
     applyTheme();  // Start async without waiting
 
+    //  Automatic theme: follow OS / browser color scheme changes while the page is open.
+    //  Without this, pages loaded after a change (ex: a new iframe in the app shell) picked up the new scheme
+    //  while already open windows kept the old one, until a refresh.
+    //  Every window re-applies its own theme (a stored or forced theme still wins, see getTheme), and the top
+    //  window also broadcasts "Theme.Changed" when its theme actually changed, so listeners (ex: charts) refresh.
+    if (!!window.matchMedia) {
+        const schemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        /**
+         * Handler for OS / browser color scheme changes: re-applies the theme and, in the top window, posts
+         * "Theme.Changed" when the applied theme changed.
+         * @returns {Promise<void>}
+         */
+        const onSchemeChange = async () => {
+            const de = document.documentElement;
+            const before = de["Theme"];
+            await applyTheme();
+            if ((window.top === window.self) && (de["Theme"] !== before))
+                InterOp.Post("Theme.Changed");
+        };
+        if (schemeQuery.addEventListener)
+            schemeQuery.addEventListener("change", onSchemeChange);
+        else if (schemeQuery.addListener)
+            schemeQuery.addListener(onSchemeChange);
+    }
+
 
     //  Setup smooth img / iframe loading changing
     /**

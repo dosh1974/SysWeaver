@@ -29,7 +29,7 @@ Served as `upload/Example.html`, the same URL folder as the upload API (`upload/
 ### Loading and initialization
 
 - `Example.html` loads `../common/common.js`, `../common/md5.js`, `../common/UZIP.js` and `../common/fileUploader.js` (all `defer`), plus `../common/theme.css`. All page styles are in an inline `<style>` block.
-- The entry point is the inline function `exampleMain()`. It is meant to run on load, but the `onload="exampleMain()"` attribute is written on the closing `</body>` tag rather than the opening `<body>` tag, so wiring it to a regular `<body onload>` is part of any refactor.
+- The entry point is the inline function `exampleMain()`, run on load through `<body onload="exampleMain()">`.
 - Static markup: a "Repository" label `<span>`, `<input id="repo">`, the drop zone `<div id="drop">`, a result link `<a id="link" target="_blank">` and `<img id="userimage" src="../auth/UserImages/Current/large">`. `data-translation_context` attributes give the translation layer context.
 - The `<a>`, `<input>`, `<span>` and `<div>` elements are styled through element selectors, so the page assumes it contains only one of each relevant element.
 
@@ -68,7 +68,7 @@ Conventions used in this reference: "inner" marks functions local to an enclosin
 
 ### `Example.html` (inline script)
 
-A single inline `<script>` at the end of `<body>` that defines one global function. It depends on the deferred scripts `common/common.js` and `common/fileUploader.js`. It is intended to run on load through `onload="exampleMain()"`, which is placed on the closing `</body>` tag.
+A single inline `<script>` at the end of `<body>` that defines one global function. It depends on the deferred scripts `common/common.js` and `common/fileUploader.js`. It runs on load through `<body onload="exampleMain()">`.
 
 #### Functions
 

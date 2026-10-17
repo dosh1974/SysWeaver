@@ -95,7 +95,9 @@ class MediaPlayerYoutube {
             Object.assign(cp, params);
         params = cp;
         t.Params = params;
-        const e = createIFrame();
+        //  No load fade (fadeIn = 0): visibility is controlled by the "MediaHidden" class (Show / Hide) and, for audio
+        //  only, an inline opacity of 0; the generic load fade would override both while loading and then clear them.
+        const e = createIFrame(0);
         const audioOnly = params.Stream == 2;
         t.HaveVisual = !audioOnly;
         t.HaveAudio = params.Stream != 1;

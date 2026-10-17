@@ -312,7 +312,9 @@ class MainMenu {
         } else {
             content.innerText = "";
         }
-        const e = createIFrame();
+        //  No load fade (fadeIn = 0): the shell controls visibility itself with the "Hidden" class. The generic load
+        //  fade animates an inline opacity that overrides "Hidden", which made pages flash visible, hide, then fade in.
+        const e = createIFrame(0);
         e.classList.add("Hidden");
         e.setAttribute("frameborder", "0");
         e.setAttribute("allowtransparency", "true");
@@ -2301,6 +2303,23 @@ class App {
  * @returns {Promise<void>}
  */
 async function appMain(settingMenus) {
+
+    //  Never build a shell inside another shell: if this window is embedded in a same-origin SysWeaver shell
+    //  (ex: a login page in the content iframe navigated itself to the app root after signing in), reload the
+    //  top window instead (hash cleared, like the "user.login" handler does).
+    if (window.top !== window.self) {
+        try {
+            const top = window.top;
+            if (top.SysWeaverApp && (typeof top.ReloadAll === "function")) {
+                top.ReloadAll(true, true);
+                return;
+            }
+        }
+        catch
+        {
+            //  Cross-origin parent: build the shell as usual
+        }
+    }
 
     const page = document.body;
     const removeLoader = AddLoading(page);

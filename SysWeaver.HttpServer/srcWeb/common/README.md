@@ -499,7 +499,7 @@ In-memory caches: `window.IncMap` (includes), `Cache.InternalCache`, `ColorIcon.
 
 1. `window.UseTheme` (URL `usetheme`, message `theme.use`).
 2. `localStorage["SysWeaver.Theme"]` (URL `settheme`, `setTheme()`, message `theme.set`).
-3. The OS `prefers-color-scheme`.
+3. The OS `prefers-color-scheme`. Every window listens for changes of this setting (`SysWeaverInit`) and re-applies its theme; the top window then also posts `Theme.Changed`, so all windows of the origin stay in sync without a refresh.
 4. `"dark"`.
 
 Built-in names are `light`, `dark`, `hacker`, `application` and `pro`; the menu entries come from `[WebMenuJs]` attributes on `HttpServerBase`. A theme name of the form `name@path.css` loads an extra stylesheet (relative to `common/`) before applying `name`.

@@ -106,7 +106,7 @@ Processing (SVG optimisation, Brotli compression, embedding) is described in [`s
   - `AuthButtonRow` (`SysWeaver-CenterBlock`), `AuthButton` (common.js `Button`, receives the button in `onClick`), `AuthHr`, `AuthBr`.
   - `AuthSetText(el, text, isHtml)`: also clears the classes and `LastCheck`. `AuthSetError(el, bool)` toggles the `Error` class.
 - `AuthAddIcon(input, iconClass, fn, enabledFn, title, size, index)`: places a `ColorIcon` absolutely inside the right edge of an input (class `InsideInput`), computing its position from `getComputedStyle`. It wraps the input's `onchange` / `oninput` to re-evaluate `enabledFn` and exposes `input.OnChange`, `input.Icon` and `input.Icon<n>`.
-- `AuthStartPage()`: the **post-login navigation** used by all flows that end signed in.
+- `AuthStartPage()`: the **post-login navigation** used by all flows that end signed in. When the page is embedded in a same-origin window (the app shell's content iframe), it reloads the top window instead (hash cleared, via the top's `ReloadAll(true, true)`), so the shell is never nested in its own iframe and the result does not depend on the `user.login` push reaching the shell in time.
   1. Strips the query and the last two path segments (`auth/<page>.html`) from the current URL, which gives the app root.
   2. Waits 3 s (`delay(3000)`).
   3. Calls `history.replaceState` to that root URL and then `location.reload(true)`.
@@ -254,7 +254,7 @@ None besides the functions below.
 | `AuthButton` | `AuthButton(target, name, title, icon, onClick, disabled)` -> common.js `Button` | Creates a `Button` (enabled unless `disabled`) whose click awaits `onClick(button)`, appends `button.Element` and returns the `Button` (methods used: `SetEnabled`, `StartWorking`, `StopWorking`, `Element`). Used by Auth.Core, PassKey, UserManager. |
 | `AuthHr` | `AuthHr(target)` -> `<hr>` | Appends a horizontal rule. Used by PassKey. |
 | `AuthBr` | `AuthBr(target)` -> `<br>` | Appends a line break. Used by `AuthPageValidation`. |
-| `AuthStartPage` | async `AuthStartPage()` | Post-login navigation: removes the query and the last two path segments (`auth/<page>.html`) from `location.href`, ensures a trailing `/`, waits 3 s (`delay(3000)`), then `history.replaceState` to that URL and `location.reload(true)`. Used by `loginMain`, PassKey and UserManager. |
+| `AuthStartPage` | async `AuthStartPage()` | Post-login navigation. When embedded in a same-origin window that has `ReloadAll` (the app shell), waits 3 s and calls the top's `ReloadAll(true, true)` instead. Otherwise: removes the query and the last two path segments (`auth/<page>.html`) from `location.href`, ensures a trailing `/`, waits 3 s (`delay(3000)`), then `history.replaceState` to that URL and `location.reload(true)`. Used by `loginMain`, PassKey and UserManager. |
 | `IsAutoFilled` | `IsAutoFilled(inputElement)` -> boolean | True when the input matches `:autofill` or `:-webkit-autofill` (selector errors swallowed); false for null. Used only by `loginMain`. |
 
 #### Element expandos set by the toolkit
