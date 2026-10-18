@@ -323,10 +323,10 @@ class MainMenu {
          * frame's `location.href` in `RowMap` to select the matching menu row (title = item Name) or else
          * deselects (title = frame document.title, fallback location.pathname), clears the timer, removes
          * `Hidden` and calls `ExternalContentFn(newUrl, title)`. Called from the 1 s load timer or early by
-         * `LoaderRemoved`; sets itself to null afterwards.
+         * `LoaderRemoved`; sets `e.DoRemove` to null afterwards (re-armed when the frame navigates in place).
          * @returns {void}
          */
-        e.DoRemove = () => {
+        const reveal = () => {
             const cwin = e.contentWindow;
             let newUrl = null;
             let title;
@@ -368,7 +368,29 @@ class MainMenu {
             if (fn && newUrl)
                 fn(newUrl, title);
         };
+        e.DoRemove = reveal;
         e.onload = async ev => {
+            //  Hide the frame again when its document navigates away in place (raw open / location changes, links
+            //  or server redirects inside the frame, i.e. not through Open() / "IframeNavigating"), and reveal the
+            //  next document like a new page (on its "LoaderRemoved" or 1 s after its load). Otherwise the next
+            //  page is visible while it loads, before its theme is applied (a white frame in dark themes).
+            try {
+                e.contentWindow.addEventListener("pagehide", () => {
+                    if (!e.isConnected)
+                        return;
+                    //  Hide instantly (no opacity transition), else the next document shows during the fade out
+                    const s = e.style;
+                    s.transition = "none";
+                    e.classList.add("Hidden");
+                    void e.offsetWidth;
+                    s.transition = "";
+                    e.DoRemove = reveal;
+                });
+            }
+            catch
+            {
+                //  Cross-origin document: cannot observe it
+            }
             e.RemoveTimer = setTimeout(() => {
                 if (e.DoRemove)
                     e.DoRemove();

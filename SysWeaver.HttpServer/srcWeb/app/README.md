@@ -80,7 +80,7 @@
   4. Creates a hidden iframe (`createIFrame`, `frameborder=0`, `allowtransparency`) whose `src = appendTheme(url)` (adds `?useTheme=` when a theme is forced) and appends it to `style.Content`.
   5. Pushes a history entry, unless `noNewState` is set or this is the very first embed (`window.SysWeaverDoneFirst`).
 
-  The frame is revealed by `DoRemove`, either 1 s after the iframe `load` event or earlier when the page posts `LoaderRemoved`. `DoRemove` does the following:
+  The frame is revealed by `DoRemove`, either 1 s after the iframe `load` event or earlier when the page posts `LoaderRemoved`. When a revealed frame navigates in place (raw `open` / `location` changes, links or server redirects inside the frame, not `Open()`), its `pagehide` hides it again instantly and re-arms `DoRemove`, so the next document is revealed like a new page instead of showing unthemed while it loads. `DoRemove` does the following:
   - adds the class `Embedded` to the frame's `<html>` element (same origin only);
   - matches the frame's `location.href` against `RowMap` to select the menu row. The title is the menu item name, or else the frame's `document.title`;
   - shows the iframe and calls `ExternalContentFn(newUrl, title)`.
