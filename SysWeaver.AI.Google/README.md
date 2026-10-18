@@ -22,6 +22,7 @@ The Google provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 - Chat sessions (streaming) and query sessions
 - Model, thinking (reasoning) effort and service tier selectable per session (`GoogleSessionParams`)
 - Tool calling of annotated service methods, plus the default tools of [SysWeaver.AI](../SysWeaver.AI/README.md); thought signatures are preserved in the conversation history
+- Native stateless completion (`Complete`) with caller defined tools and image / file parts: system instruction, user / model contents, function calls and function responses (matched by id or name), tool config (auto / none / any), streaming (`onText`), max tokens, temperature and thinking; tool result images are multimodal function responses on Gemini 3+ (parts after the function responses on older models); thought signatures are returned in `AiCompletionToolCall.Signature`
 - Image generation and editing tools using Gemini image models, and image generation using Imagen models (available to users with the `Debug` or `Content` role)
 - Model tables (`Debug/AI/Models` menu) and debug APIs (chat, token counting, image generation and editing)
 - Gemini Developer API or Vertex AI (`VertexAI`, `Project`, `Location`), configurable endpoint, API version, network timeout and concurrency limits for chats and image generation
@@ -47,7 +48,7 @@ var chat = ai.CreateChatSession(true, new GoogleSessionParams { Model = "gemini-
 
 - Requires an API key (`ApiKey` or `CredFile`) or Vertex AI credentials and incurs usage costs; tool calls can multiply requests
 - Exposing methods as tools lets the model call them on behalf of the user — only expose methods that are safe for the requesting user
-- Stateless completions (`IAiService.Complete`) use the base class fallback: the conversation is sent as a transcript and caller defined tools are not supported
+- Stateless completions: tool call ids are generated when the API doesn't return any (prefix `sw_call_`, not sent back); calls without a `Signature` get a dummy thought signature on Gemini 3+ models
 - Gemini has no participant names, the user name is added as a text part
 - Image editing is only supported by Gemini image models (not Imagen)
 

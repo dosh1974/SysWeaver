@@ -22,6 +22,7 @@ The OpenAI provider for [SysWeaver.AI](../SysWeaver.AI/README.md), built on the 
 - Chat sessions using the Responses API (default) or the Chat Completions API (`DefaultChatApi`, selectable per session), and query sessions
 - Model, reasoning effort and service tier selectable per session (`OpenAiSessionParams`)
 - Tool calling of annotated service methods, plus the default tools of [SysWeaver.AI](../SysWeaver.AI/README.md)
+- Native stateless completion (`Complete`) with caller defined tools and image / file parts, using the API selected by `DefaultChatApi` (Responses: `instructions` + input items, function call / output items, nothing stored; Chat Completions: system, user, assistant tool calls and tool messages), with streaming (`onText`), tool choice, max tokens, temperature and reasoning (when the model supports them)
 - Image generation and editing tools (available to users with the `Debug` or `Content` role)
 - Token encoding/decoding with TiktokenSharp (token files are cached on disc)
 - Model tables (`Debug/AI/Models` menu) and debug APIs (chat, image generation and editing, token encode/decode)
@@ -50,7 +51,7 @@ Set `EndPoint` (e.g. `"http://localhost:1234/v1"`) to use another OpenAI compati
 
 - Requires an API key (`ApiKey` or `CredFile`) and incurs usage costs; tool calls can multiply requests
 - Exposing methods as tools lets the model call them on behalf of the user — only expose methods that are safe for the requesting user
-- Stateless completions (`IAiService.Complete`) use the base class fallback: the conversation is sent as a transcript and caller defined tools are not supported
+- Stateless completions send tool result attachments (images) as a user message right after the tool results (both APIs only accept text tool results); reasoning items are not round tripped (function calls are sent without their reasoning), and the Chat Completions API disables reasoning when tools are used (on models that can)
 - Compatible endpoints of other vendors often implement only parts of the API (e.g. no Responses API, images or service tiers)
 
 ## Folder layout

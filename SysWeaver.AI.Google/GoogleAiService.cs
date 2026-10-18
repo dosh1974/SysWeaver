@@ -43,7 +43,8 @@ namespace SysWeaver.AI
             var apiKey = p.GetApiKey(false);
             var httpOptions = new HttpOptions
             {
-                BaseUrl = String.IsNullOrEmpty(p.EndPoint) ? null : p.EndPoint,
+                //  The SDK appends "/" + api version, so remove any trailing slashes
+                BaseUrl = String.IsNullOrEmpty(p.EndPoint) ? null : p.EndPoint.TrimEnd('/'),
                 ApiVersion = String.IsNullOrEmpty(p.ApiVersion) ? null : p.ApiVersion,
                 Timeout = Math.Max(5, p.NetworkTimeoutSeconds) * 1000,
             };

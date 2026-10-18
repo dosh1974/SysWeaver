@@ -82,6 +82,12 @@ namespace SysWeaver.AI
         /// The arguments as a json object
         /// </summary>
         public String Arguments;
+
+        /// <summary>
+        /// Optional opaque provider specific data of the call (ex: a Gemini thought signature, base64 encoded), can be null.
+        /// Send it back unchanged with the call (in the assistant message) in the next request, some models require it to continue after a tool call.
+        /// </summary>
+        public String Signature;
     }
 
     /// <summary>
@@ -115,6 +121,14 @@ namespace SysWeaver.AI
         /// The id of the tool call this is the result of (tool messages only)
         /// </summary>
         public String ToolCallId;
+
+        /// <summary>
+        /// Optional attachments (images, files) of user messages and tool messages (ex: a screenshot returned by a tool), can be null.
+        /// Text parts are added after the Text.
+        /// Providers that can't put images (or files) into a tool result add them as a user message right after the tool results
+        /// (or use whatever the API supports best, ex: multimodal function responses).
+        /// </summary>
+        public List<AiContentPart> Parts;
     }
 
     /// <summary>
@@ -200,6 +214,11 @@ namespace SysWeaver.AI
         /// Number of input (prompt) tokens used
         /// </summary>
         public long InputTokens;
+
+        /// <summary>
+        /// Number of the input tokens that were read from the provider's prompt cache (included in InputTokens, 0 if unknown)
+        /// </summary>
+        public long CachedTokens;
 
         /// <summary>
         /// Number of output tokens used

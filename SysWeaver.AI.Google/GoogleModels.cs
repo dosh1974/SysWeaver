@@ -256,7 +256,15 @@ namespace SysWeaver.AI
 
         #region Request loop
 
-        static String GetFinishError(Candidate c)
+        /// <summary>
+        /// The start of the error returned by GetFinishError when the content was filtered
+        /// </summary>
+        internal const String ContentFilterError = "Error: Omitted content due to a content filter flag";
+
+        /// <summary>
+        /// Get an error message (starting with "Error: ") if the model didn't stop normally, else null
+        /// </summary>
+        internal static String GetFinishError(Candidate c)
         {
             var fr = c?.FinishReason;
             if (fr == null)
@@ -273,7 +281,7 @@ namespace SysWeaver.AI
                 || (v == FinishReason.Recitation.Value)
                 || (v == FinishReason.ImageSafety.Value)
                 || (v == FinishReason.ImageProhibitedContent.Value))
-                return "Error: Omitted content due to a content filter flag (" + v + ").";
+                return ContentFilterError + " (" + v + ").";
             var m = c.FinishMessage;
             return String.IsNullOrEmpty(m) ? "Error: " + v : String.Concat("Error: ", v, " - ", m);
         }
