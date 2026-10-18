@@ -1,11 +1,25 @@
-﻿body {
+﻿/*
+ * logo.css - styles of explore/logo.html (logo seed tiles built by logo.js / logoMain()).
+ * Loaded by logo.html after common/theme.css; uses the theme variables --ThemeMain50, --ThemeAcc1,
+ * --ThemeAcc2 and --ThemeRad. Not templated. Near copy of icons.css (plus first-tile highlight and
+ * the .IconDice mask icon). Sizes adapt to the viewport through svw / svh units (no media queries).
+ */
+
+/* ===== Page ===== */
+
+/* Whole page: disable text selection (tiles are click-to-copy). */
+body {
     user-select: none;
 }
 
+/* SysWeaver-CenterBlock: centered block element from common code (e.g. the Button.CreateRow row); 1em bottom padding. */
 SysWeaver-CenterBlock {
     padding-bottom: 1em;
 }
 
+/* ===== Seed tiles ===== */
+
+/* SysWeaver-IconList: container of the 10 seed tiles; centered inline-block, bold 125% text. */
 SysWeaver-IconList {
     text-align: center;
     display: inline-block;
@@ -13,10 +27,21 @@ SysWeaver-IconList {
     font-size: 125%;
 }
 
+/*
+ * First tile = the selected seed: 2px --ThemeAcc2 border. Declared before the generic
+ * SysWeaver-IconItem rule but wins by specificity (pseudo-class).
+ */
 SysWeaver-IconItem:first-child {
     border: 2px solid var(--ThemeAcc2);
 }
 
+/*
+ * SysWeaver-IconItem: one square seed tile (click copies the seed and makes it the first tile).
+ * Custom properties defined here:
+ *   --s  tile / image width: half of the smaller of viewport width and (viewport height - 64px - 1em),
+ *        minus 3em, so roughly two tiles fit per row and column.
+ *   --h  tile height: --s plus 1.5em for the caption.
+ */
 SysWeaver-IconItem {
     --s: calc(min(100svw, 100svh - 64px - 1em) / 2 - 3em);
     --h: calc(var(--s) + 1.5em);
@@ -33,10 +58,18 @@ SysWeaver-IconItem {
 }
 
 
+    /* Hovered tile: 10px --ThemeAcc1 glow. */
     SysWeaver-IconItem:hover{
         box-shadow: var(--ThemeAcc1) 0 0 10px;
     }
 
+    /*
+     * Logo preview image (--s x --s, from ../logo_debug.svg?<seed>) on a checkerboard background.
+     * Custom properties defined here (checkerboard):
+     *   --D  dark square color (#666), --B  light square color (#aaa),
+     *   --C  offset of the second gradient layer (10px), --R  background tile size (20px).
+     * Technique: two 45deg linear-gradients, the second offset by --C, both sized --R.
+     */
     SysWeaver-IconItem img {
         position: relative;
         display: block;
@@ -52,6 +85,7 @@ SysWeaver-IconItem {
         background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%),linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
     }
 
+    /* SysWeaver-IconSeed: seed number caption below the image (1.25em high, centered, width --s). */
     SysWeaver-IconItem SysWeaver-IconSeed {
         position: relative;
         display: block;
@@ -60,6 +94,9 @@ SysWeaver-IconItem {
         text-align: center;
     }
 
+/* ===== Icons ===== */
+
+/* IconDice: mask icon (../icons/reload.svg) of the "Randomize" Button created by logoMain. */
 .IconDice {
     mask-image: url('../icons/reload.svg');
 }

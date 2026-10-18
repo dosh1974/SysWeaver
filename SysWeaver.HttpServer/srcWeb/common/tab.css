@@ -1,5 +1,20 @@
 ﻿
 
+/*
+ * tab.css - styles for the tab bar control implemented by common/tab.js (class Tab).
+ * Loaded with <link rel="stylesheet" href="../common/tab.css"> together with tab.js by explore/api.html
+ * (SysWeaver.HttpServer.ExploreModule) and edit/type.html (SysWeaver.MicroService.Edit).
+ * Not templated. Depends on theme variables from common/theme.css: --ThemeBackground, --ThemeMain, --ThemeAcc1,
+ * --ThemeAcc1RGB, --ThemeRad, --ThemeFontMono. Defines no custom properties, no @keyframes and no @media rules.
+ * Selection state: Tab.Select (tab.js) adds/removes the class "tabactive" on the tab header and its content element.
+ */
+
+/* ===== Tab bar ===== */
+
+/*
+ * <SysWeaver-TabBar>: the bar element created by the Tab constructor (Tab.Element).
+ * Full-width block; overflow hidden + nowrap so the tab headers stay on one line and never wrap.
+ */
 SysWeaver-TabBar {
     display: block;
     width: 100%;
@@ -10,6 +25,9 @@ SysWeaver-TabBar {
 }
 
 
+/* ===== Tab headers ===== */
+
+/* First and last <SysWeaver-Tab> get a 16px outer margin so the row of tabs is inset from the bar edges. */
 SysWeaver-Tab:first-child {
     margin-left: 16px;
 }
@@ -19,6 +37,11 @@ SysWeaver-Tab:last-child {
 }
 
 
+/*
+ * <SysWeaver-Tab>: a tab header created by Tab.AddTab. Inline-block, pointer cursor, bold uppercase 80% text,
+ * 1px --ThemeAcc1 border on left/top/right only; top corners use --ThemeRad, bottom corners are square so the
+ * tab visually sits on the content panel. Colours fade over 0.1s.
+ */
 SysWeaver-Tab {
     box-sizing: border-box;
     display: inline-block;
@@ -39,10 +62,15 @@ SysWeaver-Tab {
     text-transform: uppercase;
 }
 
+    /* Hover on an unselected tab: tints the background with --ThemeAcc1 at 10% alpha (via --ThemeAcc1RGB). */
     SysWeaver-Tab:hover {
         background-color: rgba(var(--ThemeAcc1RGB), 0.1);
     }
 
+    /*
+     * Selected tab (class "tabactive", toggled by Tab.Select): solid --ThemeAcc1 fill with background-coloured
+     * text and the default cursor; the :hover variant keeps the same fill so hover has no effect.
+     */
     SysWeaver-Tab.tabactive {
         cursor: default;
         background-color: var(--ThemeAcc1);
@@ -54,6 +82,12 @@ SysWeaver-Tab {
         }
 
 
+/* ===== Tab content panels ===== */
+
+/*
+ * <SysWeaver-TabContent>: a tab panel created by page scripts (e.g. explore/api.js) and passed to Tab.AddTab as
+ * onActivate or element. 1px --ThemeAcc1 border, --ThemeRad radius, 4px padding; hidden (display:none) by default.
+ */
 SysWeaver-TabContent {
     box-sizing: border-box;
     width: 100%;
@@ -63,6 +97,10 @@ SysWeaver-TabContent {
     border-radius: var(--ThemeRad);
 }
 
+    /*
+     * Class "CODE" (added by explore/api.js to its JSON / result panels): monospace (--ThemeFontMono) 80% text,
+     * 16px padding, white-space:pre and selectable text (overrides the body's user-select:none).
+     */
     SysWeaver-TabContent.CODE {
         font-family: var(--ThemeFontMono);
         padding: 16px;
@@ -72,6 +110,7 @@ SysWeaver-TabContent {
         white-space: pre;
     }
 
+    /* The panel of the selected tab (class "tabactive", toggled by Tab.Select) is shown as a block. */
     SysWeaver-TabContent.tabactive {
         display: block;
     }

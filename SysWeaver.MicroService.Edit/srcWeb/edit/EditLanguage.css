@@ -1,4 +1,14 @@
-﻿
+﻿/*
+ * EditLanguage.css - styles of the language editor plugin (EditTypeLanguage.js) and of its language picker rows.
+ * Loaded by EditTypeLanguage.Init() via includeCss(current, "EditLanguage.css") when EditTypeLanguage.js is included.
+ * Depends on theme variables (common/theme.css: --ThemeBackground, --ThemeMain, --ThemeMainRGB, --ThemeAcc1,
+ * --ThemeAcc1RGB, --ThemeAcc2, --ThemeAcc2RGB), --SysWeaverEditDesktopRadInp (EditDesktop.css) and
+ * --SysWeaverEditFadeDuration (Edit.css).
+ */
+
+/* ===== Editor value ===== */
+
+/* SysWeaver-EditLanguage: the value element (flag + name) in the member cell; italic when read only, looks like an input with accent focus / hover border. */
 SysWeaver-EditLanguage {
     display: block;
     width: auto;
@@ -18,6 +28,7 @@ SysWeaver-EditLanguage {
     align-items: center;
 }
 
+    /* Enabled: added by EditTypeLanguage.AddEditor when editable (click opens the picker). */
     SysWeaver-EditLanguage.Enabled {
         font-style: normal;
         cursor: pointer;
@@ -38,6 +49,7 @@ SysWeaver-EditLanguage {
 
 
 
+    /* Flag image and SysWeaver-EditLangText (language name, selectable) inside the value element. */
     SysWeaver-EditLanguage img {
         display: inline;
         max-height: 23px;
@@ -53,6 +65,9 @@ SysWeaver-EditLanguage {
 
 
 
+/* ===== Picker rows ===== */
+
+/* SysWeaver-EditLangSel: one language row in the EditTypeLanguage.LanguageSel popup (SearchablePoupSelection); accent border on hover / focus. */
 SysWeaver-EditLangSel {
     display: block;
     display: block;
@@ -74,6 +89,7 @@ SysWeaver-EditLangSel {
     margin-top: 0.25em;
     margin-right: 0.5em;
 }
+    /* Recent: rows of recently used languages get a half-transparent accent border. */
     SysWeaver-EditLangSel.Recent {
         border: 2px solid rgba(var(--ThemeAcc1RGB), 0.5);
     }
@@ -89,6 +105,7 @@ SysWeaver-EditLangSel {
     }
 
 
+    /* Fixed 48px wide flag and larger name text in picker rows. */
     SysWeaver-EditLangSel img {
         display: inline;
         max-height: 23px;

@@ -1,4 +1,29 @@
-﻿const TypeMemberFlags = Object.freeze({
+﻿/**
+ * @file type.js - shared type metadata module of the object editor and script of the type information page
+ * edit/type.html (?q=<type name>).
+ *
+ * Loaded by:
+ * - Edit.Init() (Edit.js) via includeJs(current, "type.js"), so every page using the object editor gets it
+ *   (e.g. explore/api.html, which also uses AddTypeName / AddTextElement from explore/api.js);
+ * - type.html as a deferred script after common/common.js and common/tab.js; the page calls typeMain() on load.
+ *
+ * Globals defined: TypeMemberFlags, TypeInfoCache, AddTextElement, BuildLink, BuildTypeNameRec, AddTypeName,
+ * typeAddSection, typeAdd, typeMain.
+ * Dependencies (common/common.js): sendRequest, ValueFormat (createLink, AddNonNullLine), _T, _TF, makeHtmlSafe,
+ * ColorIcon, Open, AddLoading, getUrlParams, Fail.
+ * Server endpoints (relative to this script): GetTypeInfo and GetDefaultInstance (TypeService).
+ * Styled by type.css (SysWeaver-TypeSection, SysWeaver-TypeTitle, TypeMembers / TypeEnumValues tables, ...).
+ */
+
+/**
+ * Bit flags of a type or member description; mirrors the C# TypeMemberFlags enum (TypeMemberFlags.cs).
+ * Note: IsFlags and DateUnspecified share the value 2048 (as on the server; IsFlags applies to enums,
+ * DateUnspecified to date members). Some files still use the literal values 16 / 2 instead of the names.
+ * @type {Readonly<{Multiline:number, Password:number, AcceptNull:number, Slider:number, ReadOnly:number,
+ *   Collection:number, Indexed:number, IsEnum:number, IsPrimitive:number, IsObject:number, Hide:number,
+ *   IsFlags:number, DateUnspecified:number}>}
+ */
+const TypeMemberFlags = Object.freeze({
     Multiline: 1,
     Password: 2,
     AcceptNull: 4,
@@ -15,16 +40,32 @@
 });
 
 
+/**
+ * Static cache of type descriptions and default instances fetched from the server (TypeService).
+ * Never instantiated; all members are static. URLs are resolved relative to this script when it is evaluated.
+ */
 class TypeInfoCache {
 
+    /** @type {Map<string, ?object>} Type descriptions (TypeDesc) by type name (null for failed lookups, but those are re-requested). */
     static Types = new Map();
+    /** @type {Map<string, Array>} Default instances by type name as [found:boolean, json:?string]. */
     static InstanceTypes = new Map();
 
+    /** @type {string} Absolute url of the type information page (edit/type.html). */
     static TypeLink = new URL(document.currentScript.src + "/../type.html").href;
+    /** @type {string} Absolute url of the GetTypeInfo endpoint (edit/GetTypeInfo). */
     static Req = new URL(document.currentScript.src + "/../GetTypeInfo").href;
+    /** @type {string} Absolute url of the GetDefaultInstance endpoint (edit/GetDefaultInstance). */
     static ReqNew = new URL(document.currentScript.src + "/../GetDefaultInstance").href;
-    
 
+
+    /**
+     * Gets the type description of a type, using the cache. Sends sendRequest(Req, typeName, false) on a miss.
+     * A falsy response is stored as null, but since cached values are tested for truthiness, null results are
+     * requested again next time.
+     * @param {string} typeName - .NET type name.
+     * @returns {Promise<?object>} The type description (TypeDesc: TypeName, Flags, Members, Summary, ...) or null.
+     */
     static async GetType(typeName) {
         const m = TypeInfoCache.Types;
         const t = m.get(typeName);
@@ -39,6 +80,13 @@ class TypeInfoCache {
         return r;
     }
 
+    /**
+     * Gets a server-created default instance of a type, using the cache. Sends
+     * sendRequest(ReqNew, typeName, false) on a miss and caches the JSON string (or "not found" for null),
+     * so callers get a fresh copy (JSON.parse) on cached calls; the first call returns the response object itself.
+     * @param {string} typeName - .NET type name.
+     * @returns {Promise<?object>} A default instance, or null when the server returned null.
+     */
     static async GetInstance(typeName) {
 
         const m = TypeInfoCache.InstanceTypes;
@@ -56,6 +104,14 @@ class TypeInfoCache {
 
 }
 
+/**
+ * Appends a SysWeaver-Text element with the given text.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} text - Text (innerText).
+ * @param {string} [title=""] - Tooltip.
+ * @param {string} [className] - Optional class to add.
+ * @returns {void}
+ */
 function AddTextElement(target, text, title, className) {
     const tt = document.createElement("SysWeaver-Text");
     tt.innerText = text;
@@ -65,6 +121,12 @@ function AddTextElement(target, text, title, className) {
     target.appendChild(tt);
 }
 
+/**
+ * Creates a link (ValueFormat.createLink, target "_self") to the type information page for a type.
+ * @param {string} name - Display text.
+ * @param {string} [link=name] - Type name used in the "?q=" query.
+ * @returns {HTMLElement} The link element.
+ */
 function BuildLink(name, link) {
     link = link ? link : name;
     //const a = document.createElement("a");
@@ -78,6 +140,18 @@ function BuildLink(name, link) {
     return a;
 }
 
+/**
+ * Recursively splits a .NET reflection type name into display parts, rendering generics as "Base<Arg,...>".
+ * - Names not ending in "]" are returned as is (or as a link).
+ * - Names ending in an array suffix like "[]" return the parts of the element type followed by the suffix.
+ *   (The rank check indexes the suffix with absolute name positions, so in practice only "[]" is detected.)
+ * - Names containing "`" are generics "Base`n[[Arg1],[Arg2]]": the base name (linked to the full generic name)
+ *   is followed by "<", the recursively built argument parts (always linked) separated by "," and a closing ">".
+ * - Anything else ending in "]" is returned whole.
+ * @param {string} name - Type name.
+ * @param {boolean} link - When true type names become links (BuildLink), otherwise plain strings.
+ * @returns {Array<string|HTMLElement>} Parts in display order (strings and link elements).
+ */
 function BuildTypeNameRec(name, link) {
     //  Non array or generic
     const nl = name.length;
@@ -142,6 +216,16 @@ function BuildTypeNameRec(name, link) {
     return parts;
 }
 
+/**
+ * Renders a type name into target using BuildTypeNameRec: string parts become SysWeaver-Text elements, links are
+ * appended as is. When link is false and ext is given, the first part becomes an external link (target "_blank").
+ * Also used by explore/api.js.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} name - .NET type name.
+ * @param {boolean} link - Link type names to type.html.
+ * @param {string} [ext] - External documentation url (used only when link is false).
+ * @returns {void}
+ */
 function AddTypeName(target, name, link, ext) {
     const parts = BuildTypeNameRec(name, link);
     if (!link) {
@@ -164,6 +248,14 @@ function AddTypeName(target, name, link, ext) {
     }
 }
 
+/**
+ * Appends a SysWeaver-TypeSection with a SysWeaver-TypeTitle heading and optional text.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} title - Section title.
+ * @param {?string} [text] - Optional text node content appended after the title.
+ * @param {string} [className] - Optional class for the section (TypeCode, TypeCol, TypeItalic).
+ * @returns {HTMLElement} The section element.
+ */
 function typeAddSection(target, title, text, className) {
     const section = document.createElement("SysWeaver-TypeSection");
     const t = document.createElement("SysWeaver-TypeTitle");
@@ -179,6 +271,17 @@ function typeAddSection(target, title, text, className) {
 }
 
 
+/**
+ * Renders the documentation of a type into target:
+ * a "Type name" section (class TypeCol for collections, TypeCode otherwise; with a SysWeaverTypeIconExternal
+ * ColorIcon that Open()s data.Ext when present), then Summary / Remarks (TypeItalic) and Assembly sections.
+ * Collections stop there. Enums get an "Enum values" / "Enum flags" table (table.TypeEnumValues; hex values for
+ * flags) decoded from data.Default (same encoding as EditTypeEnum). Non-primitive types with members get a
+ * "Members" table (table.TypeMembers) whose type cells link to type.html.
+ * @param {HTMLElement} target - Parent element.
+ * @param {object|string} data - Type description (TypeDesc) or a type name to fetch via TypeInfoCache.GetType.
+ * @returns {Promise<void>}
+ */
 async function typeAdd(target, data) {
 
     if (typeof data === "string")
@@ -306,6 +409,13 @@ async function typeAdd(target, data) {
     }
 }
 
+/**
+ * Entry point of type.html (body onload). Shows AddLoading(), reads the "q" URL parameter (type name), sets
+ * document.title to "TYPE: <name>", fetches the description with TypeInfoCache.GetType and renders it with
+ * typeAdd into a new SysWeaver-Page.Wide element. Missing parameter, fetch failures and null results are reported
+ * with Fail(...); the loading indicator is always removed.
+ * @returns {Promise<void>}
+ */
 async function typeMain() {
 
     const removeLoading = AddLoading();

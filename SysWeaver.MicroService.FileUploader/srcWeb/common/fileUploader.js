@@ -1,6 +1,40 @@
 ﻿
-/** Contains status codes (named) */
-const UploadStatus = 
+/**
+ * @file fileUploader.js - browser client of the file upload protocol of FileUploaderService
+ * (SysWeaver.MicroService.FileUploader), served as common/fileUploader.js next to the shared scripts of
+ * SysWeaver.HttpServer (it only exists when that service is hosted).
+ *
+ * Loading: classic script, no side effects at load (only declares globals). Included statically with
+ * `<script defer src="../common/fileUploader.js">` (upload/Example.html, ServerManager keys.html and
+ * serviceInfo.html) or lazily with includeJs (app/home.js; chat/chat.js tolerates a missing file and checks
+ * `typeof fileUploader`). Must be loaded after common/common.js, common/md5.js and (optionally) common/UZIP.js.
+ *
+ * Globals defined: UploadStatus, fileUploaderStatusText, fileUploader, fileUploaderElement, fileUploaderDrop,
+ * fileUploaderDrag, fileUploaderDragEnter, fileUploaderDragLeave, selectFiles, fileUploaderClick,
+ * fileUploaderSetup, fileUploaderInit.
+ *
+ * Dependencies: common.js (sendRequest, _T, _TF, GetFunction, badClick, waitEvent2, getFileExtension,
+ * isCompressibleExt), md5.js (YaMD5, required), UZIP.js (UZIP; treated as optional with `!!UZIP`, but the bare
+ * global must be declared or a ReferenceError is caught as {Error}).
+ *
+ * Protocol: every file is read fully into memory and MD5-hashed; one JSON POST to <apiBase>CheckStatus with
+ * {Repo, Files: FileUploadInfo[]} returns FileUploadResult[] {Result, Url}; only files with status 2 (Upload)
+ * are then POSTed in parallel to <apiBase>Upload?repo=&name=&length=&hash=&time= (query values not
+ * URL-encoded), deflate compressed when UZIP is available and it helps. Server chunking (Chunks) is not used.
+ * Returned Url values are relative to the server root (consumers prefix "../").
+ *
+ * CSS contract: the script creates no DOM except temporary file inputs; it toggles the classes Dragging,
+ * Selecting and Uploading on upload elements, which consumers style. Per-element state: expandos IsUploading,
+ * OnUploadStart, OnUploadResults.
+ */
+
+/**
+ * Contains status codes (named); mirrors the C# FileUploadStatus enum (kept in sync by hand, also with the
+ * switch in fileUploaderStatusText). None (0) = uploaded OK, AlreadyUploaded (1) = deduplicated by hash,
+ * Upload (2) = may be uploaded (CheckStatus only); negative values are errors / refusals.
+ * @type {Object<string, number>}
+ */
+const UploadStatus =
 {
     MultipleFilesNotAllowed: -12,
     UnknownRepo: -11,
@@ -21,6 +55,7 @@ const UploadStatus =
 
 /**
  * Get a status text from an statuc code
+ * Returns a translated (_TF) text for the codes -12..2, otherwise _T("Unknown upload status [{0}]", code).
  * @param {number} code The statuc code (as returned by the server).
  * @returns {string} A human readable status message.
  */
@@ -63,10 +98,16 @@ function fileUploaderStatusText(code) {
 
 /**
  * Uploads file(s) to a repo
+ * Reads every file into an ArrayBuffer, MD5-hashes it (YaMD5.hashByteArray, lower-case hex) and builds
+ * FileUploadInfo objects {Name, Length, Hash, LastModified}. Posts them once with
+ * sendRequest(apiBase + "CheckStatus", {Repo, Files}, true); a falsy reply returns
+ * {Error: Error("Couldn't check status!")}. Seeds Status / Urls from the reply (Result, Url), then uploads in
+ * parallel (Promise.all, inner doOne) only the files whose status is 2 (Upload); buffers are released
+ * (data[i] = null) once queued. Logs every check / upload with console.log. Any exception yields {Error: e}.
  * @param {string} repo Name of the repo (must exist on server)
- * @param {File[]} files Array of files.
- * @param {string} apiBase Base url to the upload Api's, defaults to "../upload/"
- * @returns {object} With an array of status codes found in the "Status" property. "Error" is set on an exception. "Urls" is an array of url's to the files (or null if not applicable)
+ * @param {File[]|FileList} files Array of files.
+ * @param {string} [apiBase="../upload/"] Base url to the upload Api's, defaults to "../upload/"
+ * @returns {Promise<{Status:number[], Urls:(string|null)[], Redirected:(string|null)}|{Error:Error}>} With an array of status codes found in the "Status" property. "Error" is set on an exception. "Urls" is an array of url's to the files (or null if not applicable). "Redirected" is the URL an upload was redirected to (e.g. a login page), or null. Arrays are indexed like `files`.
  */
 async function fileUploader(repo, files, apiBase) {
     const l = files.length;
@@ -109,7 +150,20 @@ async function fileUploader(repo, files, apiBase) {
         }
         const haveZip = !!UZIP;
 
+        /** @type {?string} URL of the last upload that was redirected (reported as Redirected). */
         let redirect = null;
+        /**
+         * Upload one file: builds a fetch Request POST (mode "cors", "application/octet-stream") to
+         * apiBase + "Upload?repo=&name=&length=&hash=&time=" (values not URL-encoded). If UZIP exists and
+         * isCompressibleExt(getFileExtension(Name)), the body is UZIP.deflateRaw (level 8) with
+         * "Content-Encoding: deflate" when that is smaller than the original. Writes stats[index] / urls[index]
+         * from the JSON reply {Result, Url}; a non-200 status, a redirect (also sets the closure `redirect`) or an
+         * exception sets status -1. Logs the outcome to the console.
+         * @param {{Name:string, Length:number, Hash:string, LastModified:number}} info - FileUploadInfo of the file.
+         * @param {ArrayBuffer} buffer - File content.
+         * @param {number} index - Index of the file in the result arrays.
+         * @returns {Promise<void>}
+         */
         async function doOne(info, buffer, index) {
 
             let r = null;
@@ -204,8 +258,14 @@ async function fileUploader(repo, files, apiBase) {
 
 /**
  * Called internally when some files are dropped or selected to perform the actual upload
+ * Sets element.IsUploading = true, adds class "Uploading" and a temporary translated title. Reads "data-repo";
+ * calls the global function named by "data-onstart" (GetFunction) and awaits element.OnUploadStart(element,
+ * files, repo) if set; runs fileUploader(repo, files, "data-apibase"); then calls the "data-onresults" function
+ * and awaits element.OnUploadResults(element, res, files, repo). Title, class and IsUploading are restored in
+ * `finally`.
  * @param {HTMLElement} element The element (that have the attributes etc).
- * @param {File[]} files The files to upload
+ * @param {File[]|FileList} files The files to upload
+ * @returns {Promise<void>}
  */
 async function fileUploaderElement(element, files) {
 
@@ -240,7 +300,11 @@ async function fileUploaderElement(element, files) {
 
 /**
 * Used to handle dropping file(s) and file upload onto an element by hooking this to the "drop" even of an element
- * @param {Event} ev The event object
+ * Calls preventDefault, removes "Dragging" (fileUploaderDragLeave), ignores the drop while the element
+ * IsUploading. Collects files from dataTransfer.items (kind "file") or dataTransfer.files, keeps only the first
+ * file unless "data-multiple" is "true" or "1", then calls fileUploaderElement(currentTarget, files).
+ * @param {DragEvent} ev The event object
+ * @returns {Promise<void>}
  */
 async function fileUploaderDrop(ev) {
     ev.preventDefault();
@@ -249,6 +313,11 @@ async function fileUploaderDrop(ev) {
     if (e.IsUploading)
         return;
     const files = [];
+    /**
+     * Collect one dropped file into the local `files` array.
+     * @param {File} file - The dropped file.
+     * @param {number} index - Index in the drop list (unused).
+     */
     function onFile(file, index) {
         files.push(file);
     }
@@ -270,23 +339,28 @@ async function fileUploaderDrop(ev) {
 
 /**
  * Used to allow dropping a file onto an element by hooking this to the "dragover" even of an element
- * @param {Event} ev The event object
+ * (only calls preventDefault so the element accepts drops).
+ * @param {DragEvent} ev The event object
+ * @returns {Promise<void>}
  */
 async function fileUploaderDrag(ev) {
     ev.preventDefault();
 }
 
 /**
- * Used to add the "Dragging"" css class of an element with a drag target
- * @param {Event} ev The event object
+ * Used to add the "Dragging"" css class of an element with a drag target ("dragenter" handler, uses ev.currentTarget)
+ * @param {DragEvent} ev The event object
+ * @returns {Promise<void>}
  */
 async function fileUploaderDragEnter(ev) {
     ev.currentTarget.classList.add("Dragging");
 }
 
 /**
- * Used to remove the "Dragging" css class of an element with a drag target
- * @param {Event} ev The event object
+ * Used to remove the "Dragging" css class of an element with a drag target ("dragleave" handler, also called
+ * by fileUploaderDrop; uses ev.currentTarget)
+ * @param {DragEvent} ev The event object
+ * @returns {Promise<void>}
  */
 async function fileUploaderDragLeave(ev) {
     ev.currentTarget.classList.remove("Dragging");
@@ -294,8 +368,10 @@ async function fileUploaderDragLeave(ev) {
 
 /**
  * Pop-up a file selector box (must be initiated by a user interaction like click)
- * @param {bool} allowMultiple If true, multiple files can be selected
- * @returns {File[]} An array of selected file objects or null if closed without selections.
+ * Creates a detached <input type=file> (with "multiple" when requested), clicks it and awaits "change" or
+ * "cancel" (waitEvent2). Used directly by chat.js.
+ * @param {boolean} allowMultiple If true, multiple files can be selected
+ * @returns {Promise<FileList|null>} An array of selected file objects or null if closed without selections.
  */
 async function selectFiles(allowMultiple)
 {
@@ -320,7 +396,11 @@ async function selectFiles(allowMultiple)
  * - "data-onresults" optionally specifies the name of a javascript function that is invoked when file(s) was uploaded (or not).
  * - "data-multiple" optionally set to "true" or "1" to allow multiple files to be uploaded at once (server repo must suport that).
  * - "data-apibase" optionally specifies the base path of the api calls, defaults to "../upload/".
- * @param {Event} ev The event (target is used as the element)
+ * Returns early if badClick(ev) or the element IsUploading. Creates a detached <input type=file> (multiple per
+ * "data-multiple"), adds class "Selecting" while the dialog is open (removed on change / cancel) and on change
+ * with at least one file calls fileUploaderElement(element, files).
+ * @param {MouseEvent} ev The event (currentTarget is used as the element)
+ * @returns {Promise<void>}
  */
 async function fileUploaderClick(ev) {
     if (badClick(ev))
@@ -357,10 +437,13 @@ async function fileUploaderClick(ev) {
  * "Dragging" - When a file is dragged over the element.
  * "Selecting" - When a file selection dialog is open.
  * "Uploading" - When a file is being uploaded (and possible processed server side).
+ * Adds the click, drop, dragover, dragenter and dragleave listeners and stores the configuration as
+ * "data-apibase", "data-repo", "data-multiple"="true" and the expandos el.OnUploadStart / el.OnUploadResults.
+ * Falsy arguments leave existing attributes untouched.
  * @param {HTMLElement} el The element to hook up (adding events)
  * @param {string} repo Optional repositiory name (if not set the "data-repo"" attribute of the element is used and should be set).
  * @param {function(HTMLElement, File[], string)} onstart Optional function to invoke when an upload is starting (any function found in the "data-onstart" attribute is also invoked).
- * @param {function(HTMLElement, object, File[], string)} onresults Optional function to invoke when an upload is starting (any function found in the "data-onresults" attribute is also invoked).
+ * @param {function(HTMLElement, object, File[], string)} onresults Optional function to invoke when an upload is starting (any function found in the "data-onresults" attribute is also invoked). Actually invoked when the upload has finished, with (element, result of fileUploader, files, repo).
  * @param {string} apiBase Base url to the upload Api's, defaults to "../upload/" (if not set the "data-apibase" attribute of the element is used if it exist).
  * @param {boolean} allowMultiple If true, multiple files may be uploaded at once.
  */
@@ -396,7 +479,9 @@ function fileUploaderSetup(el, repo, onstart, onresults, apiBase, allowMultiple)
  * "Dragging" - When a file is dragged over the element.
  * "Selecting" - When a file selection dialog is open.
  * "Uploading" - When a file is being uploaded (and possible processed server side).
- * @param {string} tagName Name of the tags to setup for file upload (defaults to "sysweaver-drop").
+ * Calls fileUploaderSetup(element) without arguments for every element from
+ * document.getElementsByTagName(tagName) (iterating backwards). No in-repo page calls it.
+ * @param {string} [tagName="sysweaver-drop"] Name of the tags to setup for file upload (defaults to "sysweaver-drop").
  */
 function fileUploaderInit(tagName) {
     if (!tagName)

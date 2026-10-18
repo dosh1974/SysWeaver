@@ -1,8 +1,20 @@
 ﻿
+/*
+ * explore.css - styles of the generated end point listing page (`<folder>/explore`).
+ * Linked as $(CSSFILE) by the template srcData/index.html (served by ExploreHttpServerModule), together
+ * with $(STYLECSSFILE) (the theme, common/theme.css). All classes are set by explore.js (BuildNavigator,
+ * BuildTable, AddSortHeader, SetByteSize, SetCacheDuration). Uses theme variables --ThemeBackground,
+ * --ThemeAcc2, --ThemeRad, --ThemeRadInp2 and --ThemeIconSize. No keyframes, media queries or theme variants.
+ */
+
+/* ===== Page and navigator ===== */
+
+/* Dimmed: 40% opacity; set by explore.js on non-primary sort icons, placeholder sizes, the public-resource warning icon and uncached durations. */
 .Dimmed{
     opacity: 0.4;
 }
 
+/* Links (and visited links) inherit the text color. */
 a {
     color: inherit;
 }
@@ -11,12 +23,14 @@ a {
         color: inherit;
     }
 
+/* Page body without margin. */
 body {
     margin: 0;
 }
 
 
 
+/* ExploreNavigator: the path bar created by BuildNavigator; centered (display: table, auto margins), bold 125%. */
 .ExploreNavigator {
     display: table;
     margin: 2px auto 8px auto;
@@ -24,6 +38,10 @@ body {
     font-weight: bold;
 }
 
+/*
+ * Path segment pills: SysWeaver-Link elements (from ValueFormat.createLink) with class Path added by
+ * BuildNavigator; --ThemeAcc2 background, --ThemeBackground text, --ThemeRad corners. ::after appends a faded "/".
+ */
 SysWeaver-Link.Path {
     color: var(--ThemeBackground);
     background-color: var(--ThemeAcc2);
@@ -40,6 +58,9 @@ SysWeaver-Link.Path::after {
 
 
 
+/* ===== Listing table ===== */
+
+/* Explore: the listing table (table.Explore built by BuildTable); collapsed borders, horizontally centered. */
 .Explore {
     border: 1px solid rgba(0,0,0,0.3);
     border-collapse: collapse;
@@ -47,6 +68,10 @@ SysWeaver-Link.Path::after {
     margin: 8px auto 4px auto;
 }
 
+    /*
+     * Item icons (type / extension images). Defines custom property --s = icon width/height
+     * (--ThemeIconSize x 32px).
+     */
     .Explore img {
         --s: calc(var(--ThemeIconSize) * 32px);
         display: inline-block;
@@ -54,6 +79,7 @@ SysWeaver-Link.Path::after {
         height: var(--s);
     }
 
+    /* Data cells: no wrap, no padding, left separator line (none on the first cell). */
     .Explore td {
         text-overflow: ellipsis;
         /*overflow: hidden;*/
@@ -67,6 +93,7 @@ SysWeaver-Link.Path::after {
         }
 
 
+        /* Header cells: no wrap, uppercase, normal weight, --ThemeBackground text on the accent header row; outer top corners rounded (first / last child). */
         .Explore th {
             text-overflow: ellipsis;
             /*overflow: hidden;*/
@@ -93,6 +120,7 @@ SysWeaver-Link.Path::after {
             }
 
 
+        /* Sort control from AddSortHeader: inline-flex div with a clickable 16px sort icon and a clickable title span. */
         .Explore th div {
             display: inline-flex;
             align-items: center;
@@ -109,10 +137,16 @@ SysWeaver-Link.Path::after {
             margin-left: 4px;
         }
 
+    /* Every even row slightly darkened (zebra striping). */
     .Explore tr:nth-child(2n) {
         background-color: rgba(0, 0, 0, 0.1);
     }
 
+/*
+ * Per-column header cells (classes set by BuildTable): ExploreIconH (type, centered), ExploreNameH,
+ * ExploreSizeH (right-aligned), ExploreExtH, ExploreAuthH, ExploreTimeH, ExploreClientCacheH,
+ * ExploreRequestCacheH, ExploreCompPreferenceH, ExplorePreCompressedH - all with 4px side padding.
+ */
 th.ExploreSizeH {
     padding: 0px 4px 0px 4px;
     text-align: right;
@@ -157,6 +191,11 @@ th.ExplorePreCompressedH {
 }
 
 
+/*
+ * Data cells (classes set by BuildTable): ExploreSize (right-aligned), ExploreName (max 512px, clipped),
+ * ExploreExt (max 64px), ExploreTime, ExploreClientCache / ExploreRequestCache (right-aligned) - 4px side padding.
+ * td.ExploreIcon and td.ExplorePreCompressed are set by JS but have no active rule.
+ */
 td.ExploreSize {
     padding: 0px 4px 0px 4px;
     text-align: right;
@@ -189,6 +228,10 @@ td.ExploreExt {
     max-width: 64px;
 }
 
+/*
+ * ExploreAuth: auth cell = flex row (div) of the g_protected / g_warning icon and one small uppercase bold
+ * pill (span, ThemeAccBg or ThemeMainBg) per auth token.
+ */
 td.ExploreAuth {
 }
 
@@ -226,6 +269,7 @@ td.ExploreRequestCache {
 }
 
 
+/* ExploreCompPreference: compression cell = flex row (div) of small uppercase bold pills (span, --ThemeRadInp2), one per compression method. */
 td.ExploreCompPreference {
 }
 

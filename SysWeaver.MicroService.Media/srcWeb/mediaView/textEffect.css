@@ -1,9 +1,23 @@
-﻿
+﻿/*
+ * textEffect.css - page styles of the counter effect demo (`counterEffects/index.html`, booted by
+ * `textEffectMain()` in textEffect.js).
+ * Loaded with <link rel="stylesheet"> as `../textEffect.css` after `../../common/theme.css`
+ * (theme variables are not used directly). Not templated; no custom properties, animations or media queries.
+ */
+
+/* ===== Page ===== */
+
+/* Page body: compact line height, content vertically middle aligned. */
 body {
     line-height: 100%;
     vertical-align: middle;
 }
 
+    /*
+     * Every direct body child (the counter effect player element and the CanvasTools.CreateTextGrid output
+     * appended by textEffectMain) is a full-width block; !important overrides the inline width/height the
+     * player sets, so the content scales to the page width with its aspect kept (object-fit: contain).
+     */
     body > * {
         object-fit: contain;
         display: block;

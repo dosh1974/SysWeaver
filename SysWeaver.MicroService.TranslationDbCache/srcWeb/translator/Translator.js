@@ -1,5 +1,38 @@
 ﻿
 
+/**
+ * @file Page script for translator/Edit.html, the editor for one cached translation of the Translations DB.
+ * Edit.html is opened from the "Edit" row action of the Translations DB explorer table (defined in DbInput.cs as
+ * "&../translator/Edit.html?id={0}", {0} = row key). It is a standalone page without the app shell.
+ * Loaded with a static `<script defer>` after ../common/common.js; the page calls translatorEditMain() from
+ * `<body onload>`.
+ * Defines one global: translatorEditMain. Nothing else runs at load time.
+ * Dependencies (common.js): AddLoading, getUrlParams, sendRequest, Button, Info, Fail, _T / _TF (every user-visible
+ * string goes through these with a translator context string, so the page itself is translated).
+ * Server API (both Roles.Debug, under Api/translator/): GetTranslation, SetTranslation.
+ * Conventions: the DOM is built from custom SysWeaver-* elements (SysWeaver-Page, SysWeaver-Section, SysWeaver-Text,
+ * SysWeaver-CenterBlock) styled by Translator.css / theme.css. PageLoaded() is not called.
+ */
+
+/**
+ * Page entry point (called by `<body onload="translatorEditMain()">`).
+ * Shows a loader (AddLoading), reads the URL param `id` (throws "No id supplied!" if missing) and appends a
+ * `<SysWeaver-Page class="Wide">` to document.body. Adds a "Translation Key" section with the id, then calls
+ * `sendRequest("../Api/translator/GetTranslation", id)` (response: {ServiceName, UserName, IsManual, From, FromName,
+ * To, ToName, Text, Context, Translated}; a falsy result throws "No data for the supplied id").
+ * Renders, in order: Application (ServiceName, if set); Translator (UserName, when IsManual) or Auth (UserName,
+ * when automatic) if UserName is set; Source language (flag ../iso_data/language/<From>, FromName ?? From);
+ * Text (bold); Context (if set); Target language (flag for To, ToName ?? To); Translation as an editable
+ * `<textarea class="Translation">` holding data.Translated.
+ * Below that a `SysWeaver-CenterBlock.Space` holds the "Save translation" Button (icon ../icons/disc.svg, initially
+ * disabled). Its click handler makes the textarea read-only, calls StartWorking and sends
+ * `sendRequest("../Api/translator/SetTranslation", {Key, OriginalTranslation, NewTranslation})` (OriginalTranslation
+ * lets the server detect concurrent changes). A falsy result throws "Couldn't set translation (key no longer exist?)";
+ * on success Info("Translation saved!") and data.Translated becomes the new baseline. Finally it re-validates, makes
+ * the textarea editable and calls StopWorking. Errors thrown by the click handler are not caught there.
+ * ta.oninput is set to the inner Validate. Errors in the main body are shown with Fail(e); the loader is always removed.
+ * @returns {Promise<void>} Resolves when the page is built (or an error was shown).
+ */
 async function translatorEditMain() {
     const removeLoader = AddLoading();
     try {
@@ -11,6 +44,12 @@ async function translatorEditMain() {
         page.classList.add("Wide");
         document.body.appendChild(page);
 
+        /**
+         * Inner helper: appends a section heading (`<SysWeaver-Section>`) to the page.
+         * @param {string} name - Heading text (set as innerText).
+         * @param {string} [title] - Optional tooltip (element title).
+         * @returns {HTMLElement} The created SysWeaver-Section element.
+         */
         function AddSection(name, title) {
             const s = document.createElement("SysWeaver-Section");
             s.innerText = name;
@@ -20,6 +59,12 @@ async function translatorEditMain() {
             return s;
         }
 
+        /**
+         * Inner helper: appends a selectable value block (`<SysWeaver-Text>`) to the page.
+         * @param {string} name - Text content (set as innerText).
+         * @param {string} [title] - Optional tooltip (element title).
+         * @returns {HTMLElement} The created SysWeaver-Text element (the caller adds class "Bold" to the source text).
+         */
         function AddText(name, title) {
             const s = document.createElement("SysWeaver-Text");
             s.innerText = name;
@@ -29,6 +74,14 @@ async function translatorEditMain() {
             return s;
         }
 
+        /**
+         * Inner helper: appends a `<SysWeaver-Text class="Icon">` block with an image (a language flag) as inline
+         * background-image (positioned by the SysWeaver-Text.Icon rule in Translator.css).
+         * @param {string} icon - Image URL (e.g. ../iso_data/language/<iso>, without .svg extension).
+         * @param {string} name - Text content (set as innerText).
+         * @param {string} [title] - Optional tooltip (element title).
+         * @returns {void} Nothing (unlike AddSection/AddText).
+         */
         function AddImgText(icon, name, title) {
             const s = document.createElement("SysWeaver-Text");
             s.style.backgroundImage = "url('" + icon + "')";
@@ -149,6 +202,11 @@ async function translatorEditMain() {
             });
         br.appendChild(changeButton.Element);
 
+        /**
+         * Inner helper: enables the save button (changeButton.SetEnabled) only when the textarea is non-empty and
+         * differs from the last saved value (data.Translated). Used as ta.oninput and after each save attempt.
+         * @returns {void}
+         */
         function Validate() {
             const v = ta.value;
             const ok = (v.length > 0) && (v !== data.Translated);

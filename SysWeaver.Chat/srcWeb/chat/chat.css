@@ -1,16 +1,44 @@
-﻿
+﻿/**
+ * chat.css - styles of the SysWeaver chat UI built by chat.js (Chat.addChat / chatMain).
+ *
+ * Loaded by Chat.html (after ../common/theme.css and ../app/application.css); any other page that
+ * calls Chat.addChat must include it too. Not templated.
+ *
+ * Dependencies:
+ * - Theme variables from common/theme.css: --ThemeMain, --ThemeMainRGB, --ThemeMain25, --ThemeAcc1(RGB),
+ *   --ThemeAcc2(RGB), --ThemeBackground(RGB), --ThemeRad, --ThemeRadInp, --ThemeRadInp2, --ThemeIconSize,
+ *   --ThemeFadeDuration, --ThemeFont, --ThemeFontMono. No [data-theme] variants or media queries here;
+ *   theming comes entirely from these variables.
+ * - ColorIcon elements from common.js (custom elements named icon-WxH, e.g. icon-64x64, with classes
+ *   IconButton, IconDisabled, IconWorking plus a mask-image class from the .Icon* rules below).
+ * - PopUpMenu from application.js (SysWeaver-PopupMenu / SysWeaver-PopupMenuBack).
+ *
+ * Layout uses custom elements only (SysWeaver-Chat, -ChatMain, -ChatInput, -ChatRow, -ChatMsg, -ChatHeader,
+ * -ChatLanguage, -ChatName, -ChatTime, -ChatIcon, -ChatContent, -ChatData, -ChatHolder, -ChatExpand,
+ * -ChatLabel, -ChatLangItem). State classes are toggled by chat.js (see the individual rules).
+ * Mask icon urls are relative to chat/: ../icons/ is the shared HttpServer icon set, icons/ the chat-local set.
+ */
+
+/* ===== Page and container ===== */
+
+/*
+ * Chat.html body (class ChatMain) when the page runs inside the app shell (application.js adds class
+ * Embedded to <html>): 8px shorter than the viewport. Written with CSS nesting.
+ */
 html.Embedded {
     body.ChatMain {
         height: calc(100svh - 8px);
     }
 }
 
+/* --Margin: overrides the shared theme page margin (common/theme.css) with 0 for the chat page. */
 html
 {
     --Margin: 0;
 }
 
 
+/* body.ChatMain: the Chat.html body (class ChatMain in the markup); full viewport (100svh), no margins, no text selection, no vertical scroll. */
 body.ChatMain{
     display: block;
     width: 100%;
@@ -22,18 +50,26 @@ body.ChatMain{
 }
 
 
+    /* The SysWeaver-Chat root on Chat.html: width limited to min(125vh, 100vw) (min 320px), soft accent glow. */
     body.ChatMain SysWeaver-Chat {
         max-width: calc(min(125vh, 100vw));
         min-width: 320px;
         box-shadow: 0 0 64px rgba(var(--ThemeAcc1RGB), 0.15);
     }
 
+        /* NoBackground: added by chatMain when the ?nobackground URL flag is present; transparent, no shadow, no max width. */
         body.ChatMain SysWeaver-Chat.NoBackground {
             background: none transparent;
             box-shadow: unset;
             max-width: unset;
         }
 
+/*
+ * SysWeaver-Chat: root container (created by chatMain, passed to Chat.addChat as chatBackground).
+ * Flex column holding SysWeaver-ChatMain and SysWeaver-ChatInput; semi-transparent background.
+ * Defines --ics: size of the input icons (send / mic), in px; reserves space in the list height
+ * and the textarea width. Constant here (not set by JS).
+ */
 SysWeaver-Chat {
     --ics: 48px;
     font-size: 125%;
@@ -50,6 +86,13 @@ SysWeaver-Chat {
 
 
 
+/* ===== Message list ===== */
+
+/*
+ * SysWeaver-ChatMain: the scrolling message list created by addChat. resize: vertical makes it the
+ * splitter against the input area; a ResizeObserver in chat.js saves the height fraction
+ * (SysWeaver.Chat.Size<s>) and restores it on load. Height leaves room for the input (max(4.5em, --ics)).
+ */
 SysWeaver-ChatMain {
     font-size: 125%;
     display: block;
@@ -64,6 +107,7 @@ SysWeaver-ChatMain {
     max-height: calc(100% - max(max(104px, 2.5em), var(--ics)));
 }
 
+    /* Non-interactive overlay (pointer-events: none) drawing an inset shadow at the top of the list. */
     SysWeaver-ChatMain::after {
         content: '';
         position: absolute;
@@ -75,12 +119,14 @@ SysWeaver-ChatMain {
         box-shadow: inset 0 1em 1em -1em rgba(0, 0, 0, 0.5);
     }
 
+    /* NoPost: added by addChat when the Join response has CanPost false (no input area); full height, not resizable. */
     SysWeaver-ChatMain.NoPost {
         height: 100%;
         max-height: 100%;
         resize: none;
     }
 
+    /* icon-64x64: the 64x64 IconWorking ColorIcon spinner shown while older messages load (StickToBottom onTop); fades in via LoadingFade. */
     SysWeaver-ChatMain icon-64x64 {
         opacity: 0.5;
         margin: auto;
@@ -89,10 +135,17 @@ SysWeaver-ChatMain {
     }
 
 
+    /* Stick: added/removed by the StickToBottom callbacks in addChat when the list (un)sticks to the bottom; flashes SysWeaver_ChatStick. */
     SysWeaver-ChatMain.Stick {
         animation: 0.5s linear SysWeaver_ChatStick;
     }
 
+/* ===== Input area ===== */
+
+/*
+ * SysWeaver-ChatInput: input container (only when CanPost). JS sets its background-image to the current
+ * input language flag (../iso_data/language/<lang>.svg), drawn bottom-right left of the icons.
+ */
 SysWeaver-ChatInput {
     box-sizing: border-box;
     display: block;
@@ -111,12 +164,14 @@ SysWeaver-ChatInput {
 
 
 
+    /* Input ColorIcon buttons (IconButton; send = IconSend, mic = IconChatMicOn): absolute top-right. */
     SysWeaver-ChatInput > *.IconButton {
         position: absolute;
         top: 0.25em;
         right: 0.25em;
     }
 
+        /* The mic button, identified positionally as the 3rd child (after textarea and send): bottom-right, --ThemeAcc2 background. */
         SysWeaver-ChatInput > *.IconButton:nth-child(3) {
             top: auto;
             bottom: 0.25em;
@@ -124,6 +179,7 @@ SysWeaver-ChatInput {
             background-color: var(--ThemeAcc2) !important;
         }
 
+            /* Mic IconDisabled (open mic listening, ColorIcon SetEnabled(false)): mask swapped to icons/ChatInput.svg, dimmed. */
             SysWeaver-ChatInput > *.IconButton:nth-child(3).IconDisabled {
                 mask-image: url(icons/ChatInput.svg);
                 opacity: 0.6;
@@ -131,12 +187,14 @@ SysWeaver-ChatInput {
 
 
 
+            /* Mic IconWorking (ColorIcon StartWorking() while speech is active): mask swapped to icons/ChatRecording.svg. */
             SysWeaver-ChatInput > *.IconButton:nth-child(3).IconWorking {
                 mask-image: url(icons/ChatRecording.svg);
                 opacity: 1.0;
             }
 
 
+    /* The message textarea; width leaves room for the icon column (--ics). Placeholder (set by markDownChanged / Send) is faint italic. */
     SysWeaver-ChatInput textarea {
         box-sizing: border-box;
         width: calc(100% - var(--ics) - 0.25em);
@@ -160,6 +218,7 @@ SysWeaver-ChatInput {
             font-style: italic;
         }
 
+        /* Listening: set by startListening's onActivate while speech recognition is active; Dragging: set on dragenter, removed on dragleave/drop. */
         SysWeaver-ChatInput textarea.Listening {
             border: 2px solid var(--ThemeAcc2);
         }
@@ -172,6 +231,14 @@ SysWeaver-ChatInput {
 
 
 
+/* ===== Message rows and header ===== */
+
+/*
+ * SysWeaver-ChatRow: one row per message (addMessage). Defines:
+ * --si: sender icon size (px, scaled by --ThemeIconSize); header grid column and image size.
+ * --fi: language flag width (px, scaled by --ThemeIconSize); header grid column.
+ * Dashed divider below each row.
+ */
 SysWeaver-ChatRow {
     --si: calc(var(--ThemeIconSize) * 40px);
     --fi: calc(var(--ThemeIconSize) * 32px);
@@ -184,6 +251,7 @@ SysWeaver-ChatRow {
     border-bottom: 1px dashed rgba(var(--ThemeMainRGB), 0.1);
 }
 
+/* First row: 48px top margin leaves room for the top-right menu icon; last row (the preview row when posting): no divider. */
 SysWeaver-ChatRow:first-child {
     margin-top: 48px;
 }
@@ -193,10 +261,12 @@ SysWeaver-ChatRow:first-child {
         border-bottom: none;
     }
 
+    /* Hide: toggled by previewChanged on the preview row when it has nothing to show. */
     SysWeaver-ChatRow.Hide {
         display: none;
     }
 
+    /* Preview: the draft preview row (class added in addChat); dashed accent top border, a centered "Preview" label via :before, header not clickable. */
     SysWeaver-ChatRow.Preview {
         border-top: 2px dashed var(--ThemeAcc1);
         padding-top: 0;
@@ -217,6 +287,7 @@ SysWeaver-ChatRow:first-child {
         cursor: default;
     }
 
+    /* SysWeaver-ChatMsg: the message bubble; square top-left corner; border color is overridden per sender by JS (Chat.chatColor) when UserColor. */
     SysWeaver-ChatMsg {
         background-color: var(--ThemeBackground);
         display: inline-block;
@@ -227,6 +298,10 @@ SysWeaver-ChatRow:first-child {
         max-width: 95%;
     }
 
+/*
+ * Mine: added by addMessage for the current user's own messages. Right aligned, square corner moves to
+ * the top-right and the header grid is mirrored (flag left, icon right). The ChatName / ChatTime rules are empty.
+ */
 SysWeaver-ChatRow.Mine {
     text-align: right;
 }
@@ -256,6 +331,10 @@ SysWeaver-ChatRow.Mine SysWeaver-ChatHeader {
     padding: 2px 2px 2px 0.5em;
 }
 
+/*
+ * SysWeaver-ChatHeader: 3x2 grid (icon --si | name/time | flag --fi). Background is overridden per sender
+ * by JS when UserColor. Click toggles hide/show of the sender's messages, contextmenu opens the message menu.
+ */
 SysWeaver-ChatHeader {
     display: block;
     background-color: rgba(var(--ThemeAcc2RGB), 0.1);
@@ -266,6 +345,7 @@ SysWeaver-ChatHeader {
     grid-template-rows: auto auto;
 }
 
+/* SysWeaver-ChatLanguage: language flag cell (only when CanTranslate), spans both header rows; its mask/background show the loading icon while translating. */
 SysWeaver-ChatLanguage {
     grid-column: 3 / 3;
     grid-row: 1 / span 2;
@@ -277,6 +357,7 @@ SysWeaver-ChatLanguage {
 }
 
 
+    /* The flag image (../iso_data/language/<iso>.svg); click translates (or opens selectLanguage on the preview row). */
     SysWeaver-ChatLanguage img {
         width: var(--fi);
         height: var(--si);
@@ -287,6 +368,7 @@ SysWeaver-ChatLanguage {
         transition: opacity linear var(--ThemeFadeDuration), filter linear var(--ThemeFadeDuration);
     }
 
+    /* Translating: set by row.UpdateLang during the Translate request; mask technique shows ../icons/Loading.svg in --ThemeMain and hides the flag. */
     SysWeaver-ChatLanguage.Translating {
         background-color: var(--ThemeMain);
         mask-image: url("../icons/Loading.svg");
@@ -296,10 +378,12 @@ SysWeaver-ChatLanguage {
         opacity: 0;
     }
 
+    /* Translated: set by row.UpdateLang while the translation is shown; accent glow on the flag. */
     SysWeaver-ChatLanguage.Translated img {
         filter: drop-shadow(0 0 5px var(--ThemeAcc1));
     }
 
+/* SysWeaver-ChatName: sender name, bold, header row 1 column 2. */
 SysWeaver-ChatName {
     font-size: calc(max(12px, 75%));
     font-weight: bold;
@@ -310,6 +394,7 @@ SysWeaver-ChatName {
     overflow: hidden;
 }
 
+/* SysWeaver-ChatTime: time stamp or live "x ago" (row.UpdateFormat), small and faded, header row 2 column 2. */
 SysWeaver-ChatTime {
     font-size: calc(max(11px, 60%));
     opacity: 0.75;
@@ -319,11 +404,13 @@ SysWeaver-ChatTime {
     white-space: nowrap;
 }
 
+/* SysWeaver-ChatIcon: sender image cell (or IconMenu ColorIcon fallback) spanning both header rows; click opens the message menu. */
 SysWeaver-ChatIcon {
     grid-column: 1 / 1;
     grid-row: 1 / span 2;
 }
 
+    /* Sender image (--si square); zooms 2x on hover, from the left (or from the right for .Mine rows). */
     SysWeaver-ChatIcon img {
         width: var(--si);
         height: var(--si);
@@ -346,6 +433,9 @@ SysWeaver-ChatIcon {
 
     }
 
+    /* ===== Message content (text / markdown / HTML output of row.UpdateBody) ===== */
+
+    /* SysWeaver-ChatContent: message body; selectable, max 60vh; scrollable only while focused (JS sets tabIndex 0). */
     SysWeaver-ChatContent {
         display: block;
         padding: 0.5em;
@@ -363,11 +453,13 @@ SysWeaver-ChatIcon {
     }
 
 
+    /* Hidden: set by row.Hide (hidden sender / hide content) on content and data. */
     SysWeaver-ChatContent.Hidden {
         display: none;
     }
 
 
+    /* Markdown headings h1-h6 and strong: accent-1 colored, headings with tight margins. */
     SysWeaver-ChatContent h1 {
         margin-top: 0.25em;
         margin-bottom: 0.5em;
@@ -410,6 +502,7 @@ SysWeaver-ChatIcon {
     }
 
 
+    /* Paragraph margins, inline-block links, accent-2 emphasis, highlighted mark, dashed hr. */
     SysWeaver-ChatContent p {
         margin-top: 0.25em;
         margin-bottom: 0.75em;
@@ -440,6 +533,10 @@ SysWeaver-ChatIcon {
     }
 
 
+    /*
+     * Lists: note the selector list "SysWeaver-ChatContent ol,ul" - the ul part is unscoped and matches every
+     * ul on the page. li items get a hover background and accent markers.
+     */
     SysWeaver-ChatContent ol,ul {
         margin: 0.5em 0 0 0;
         color: var(--ThemeMain);
@@ -460,6 +557,7 @@ SysWeaver-ChatIcon {
             font-size: 75%;
         }
 
+    /* Images (incl. inside links and paragraphs, below), blockquote with a left bar, wrapped pre, monospace accent-2 code. */
     SysWeaver-ChatContent img {
         max-height: 35vw;
         background-color: rgba(var(--ThemeMainRGB), 0.05);
@@ -495,6 +593,7 @@ SysWeaver-ChatIcon {
         white-space: pre-wrap;
     }
 
+    /* Tables (with th/tr/td below): collapsed borders, accent headers, zebra rows with hover highlight, accent-2 even columns. */
     SysWeaver-ChatContent table {
         border-collapse: collapse;
         border-color: rgba(var(--ThemeMainRGB), 0.15);
@@ -546,6 +645,12 @@ SysWeaver-ChatIcon {
     }
 
 
+/* ===== Attachments ===== */
+
+/*
+ * Working: set on the row by row.UpdateBody while the message has Chat.FlagIsWorking (still streaming);
+ * attachments shrink (max 32px, images 64px, no background) and the attachment menus (ChatExpand) are hidden.
+ */
 SysWeaver-ChatRow.Working SysWeaver-ChatData > * {
     max-height: 32px;
     background: none;
@@ -564,6 +669,7 @@ SysWeaver-ChatRow.Working SysWeaver-ChatExpand
 
 
 
+/* SysWeaver-ChatData: attachment list built by row.UpdateData; centered; Hidden like ChatContent; children resizable (resize: both). */
 SysWeaver-ChatData
 {
     display: block;
@@ -588,6 +694,10 @@ SysWeaver-ChatData
 
 
 
+    /*
+     * SysWeaver-ChatHolder: one attachment box. Defines --size: max holder height (80vh here; 6em for .Extension,
+     * 4em for its img); the holder is half of it high and images are limited to --size - 4px.
+     */
     SysWeaver-ChatData SysWeaver-ChatHolder {
         --size: 80vh;
         border: 2px solid rgba(var(--ThemeMainRGB), 0.05);
@@ -605,6 +715,7 @@ SysWeaver-ChatData
     }
 
 
+        /* Clickable: set by row.UpdateData on holders whose image / extension icon opens or downloads; pointer and accent border on hover/focus. */
         SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child{
             cursor: pointer;
             border: 1px solid transparent;
@@ -622,6 +733,7 @@ SysWeaver-ChatData
             }
 
 
+        /* Sandboxed iframe for .html/.htm attachments: fills the holder, no border. */
         SysWeaver-ChatData SysWeaver-ChatHolder iframe {
             outline: none;
             border: none;
@@ -631,7 +743,8 @@ SysWeaver-ChatData
             height: 100%;
         }
 
-        SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatExpand 
+        /* SysWeaver-ChatExpand: 32x32 attachment menu button (IconMenu ColorIcon) at the top-right of the holder; faded until hovered. */
+        SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatExpand
         {
             position: absolute;
             top: 4px;
@@ -648,6 +761,7 @@ SysWeaver-ChatData
                 opacity: 1.0;
             }
 
+        /* Extension: set by row.UpdateData for files that are neither images nor HTML; small 6em box with the ../icons/ext/<ext>.svg icon. */
         SysWeaver-ChatData SysWeaver-ChatHolder.Extension {
             --size: 6em;
             height: 6em;
@@ -659,6 +773,7 @@ SysWeaver-ChatData
                 width: auto;
             }
 
+        /* SysWeaver-ChatLabel: file name label under the extension icon (click copies the URL); selectable. */
         SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatLabel {
             display: block;
             font-size: 70%;
@@ -666,6 +781,7 @@ SysWeaver-ChatData
         }
 
 
+    /* Attachment images: contained, limited to the holder's --size minus 4px. */
     SysWeaver-ChatData img {
         background-color: rgba(var(--ThemeMainRGB), 0.05);
         border-radius: 3px;
@@ -686,6 +802,9 @@ SysWeaver-ChatData
 
 
 
+/* ===== Top-right menu and popups ===== */
+
+/* The top-right menu ColorIcon (IconMenu) added by addChat directly under SysWeaver-Chat: 0.25 opacity, 0.6 focused, 1 hovered. */
 SysWeaver-Chat > *.IconButton {
     display: block;
     position: absolute;
@@ -706,17 +825,20 @@ SysWeaver-Chat > *.IconButton {
             opacity: 1 !important;
         }
 
+/* SysWeaver-PopupMenu / SysWeaver-PopupMenuBack (application.js PopUpMenu): class Chat is added by JS for the main and message menus (JS sets left). */
 SysWeaver-PopupMenu.Chat SysWeaver-PopupMenuBack{
     position: absolute;
     font-size: 100%;
 }
 
+/* Class ChatData is added by row.UpdateData for attachment menus: shifted right by 32px. */
 SysWeaver-PopupMenu.ChatData SysWeaver-PopupMenuBack {
     position: absolute;
     right: -32px;
     font-size: 100%;
 }
 
+/* SysWeaver-ChatLangItem: entries of the selectLanguage PopUpSelection; JS sets the flag as left background image; rounded pill, accent on hover. */
 SysWeaver-ChatLangItem {
     background-repeat: no-repeat;
     background-position: 0.75em center;
@@ -737,6 +859,9 @@ SysWeaver-ChatLangItem {
     }
 
 
+/* ===== Icon classes (mask-image, used with ColorIcon / WebMenuItem icon classes) ===== */
+
+/* IconSend: send button and auto-send; IconMenu: top-right menu, message icon fallback, attachment menu. */
 .IconSend {
     mask-image: url('../icons/send.svg');
 }
@@ -746,6 +871,10 @@ SysWeaver-ChatLangItem {
 }
 
 
+/*
+ * Attachment menu: IconChatSave (Download), IconChatStore (Store file), IconChatLink (Create link) and the
+ * scope items IconChatLink0 (Private), IconChatLink1 (Protected), IconChatLink2 (Public).
+ */
 .IconChatSave {
     mask-image: url('../icons/disc.svg');
 }
@@ -773,6 +902,10 @@ SysWeaver-ChatLangItem {
 }
 
 
+/*
+ * IconChatClear (Remove ALL messages), IconChatRemove (Remove message), IconChatKeep (keep button of the
+ * confirm dialogs), IconChatTop / IconChatBottom (scroll), IconChatAge / IconChatTime (age vs time toggle).
+ */
 .IconChatClear {
     mask-image: url('../icons/trash.svg');
 }
@@ -801,6 +934,10 @@ SysWeaver-ChatLangItem {
     mask-image: url('../icons/clock.svg');
 }
 
+/*
+ * IconDebug (declared twice, identical), IconDebugNone, IconDebugStats, IconDebugOverview, IconDebugParameters,
+ * IconDebugDetails: not referenced in chat.js; used by server-defined menu items (ChatMenuItem.Icon, e.g. AI debug options).
+ */
 .IconDebug {
     mask-image: url('../icons/table_api.svg');
 }
@@ -830,6 +967,10 @@ SysWeaver-ChatLangItem {
     mask-image: url('../icons/rating_on.svg');
 }
 
+/*
+ * IconChatMicOn (mic button, enable open mic) / IconChatMicOff (disable open mic); IconCopy (copy items);
+ * IconChatShow / IconChatHide (show/hide content, show all); IconChatExpand (open in new tab).
+ */
 .IconChatMicOn {
     mask-image: url('../icons/mic_on.svg');
 }
@@ -854,6 +995,10 @@ SysWeaver-ChatLangItem {
     mask-image: url('../icons/newtab.svg');
 }
 
+/*
+ * Speech synthesis: IconChatSpeechGenEnable / IconChatSpeechGenDisable toggle, IconChatSpeechVolume submenu,
+ * IconChatSpeechVolume25 / IconChatSpeechVolume50 / IconChatSpeechVolume75 / IconChatSpeechVolume100 volume items.
+ */
 .IconChatSpeechGenEnable {
     mask-image: url('../icons/preview_vol_loud.svg');
 }
@@ -882,6 +1027,10 @@ SysWeaver-ChatLangItem {
     mask-image: url('../icons/preview_vol_loud.svg');
 }
 
+/*
+ * IconChatHelp (markdown help link), IconProfile (View profile); chat-local icons: IconChatText / IconChatMD
+ * (text vs markdown toggle), IconChatHidePreview / IconChatShowPreview (preview toggle).
+ */
 .IconChatHelp {
     mask-image: url('../icons/help.svg');
 }
@@ -907,6 +1056,11 @@ SysWeaver-ChatLangItem {
 }
 
 
+/*
+ * Preview attachment menu: IconChatCopyImage (Copy image Mark Down), IconChatCopy (Copy url), IconChatDeleteFile,
+ * IconChatHideFile, IconChatAttachFile (attach file). Main menu: IconChatLanguage (set input language),
+ * IconChatClearCurrent (clear draft), IconChatAutoSendOn / IconChatAutoSendOff (auto-send toggle).
+ */
 .IconChatCopyImage {
     mask-image: url('../icons/image.svg');
 }
@@ -945,6 +1099,9 @@ SysWeaver-ChatLangItem {
 
 
 
+/* ===== Animations ===== */
+
+/* @keyframes SysWeaver_ChatStick: inset bottom accent shadow fading out; 0.5s on SysWeaver-ChatMain.Stick. */
 @keyframes SysWeaver_ChatStick {
     from {
         box-shadow: inset 0 -32px 20px -20px rgba(var(--ThemeAcc1RGB), 0.5);
@@ -955,6 +1112,7 @@ SysWeaver-ChatLangItem {
     }
 }
 
+/* @keyframes LoadingFade: opacity 0 to 0.5, for the history loading spinner (SysWeaver-ChatMain icon-64x64). */
 @keyframes LoadingFade {
     from {
         opacity: 0;

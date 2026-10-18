@@ -1,5 +1,30 @@
 ﻿
 
+/**
+ * @file icons.js - page script of explore/icons.html (icon gallery).
+ *
+ * Loaded with `defer` by icons.html after common/common.js; the page calls `iconsMain()` from
+ * `<body onload="iconsMain()">`. Defines only the global `iconsMain`; nothing runs at load time.
+ *
+ * Dependencies (from common/common.js): AddLoading, Fail, getUrlParams, getRequest, sendRequest,
+ * createImg, PendingImages, ValueFormat.copyOnClick, _T.
+ * Server: `../Api/debug/explore/GetIcons` (ExploreModule, Roles.Dev) returning IconInfo[]
+ * (`{Url:string, Name:string, Size:number, Location:string}`).
+ * Styled by icons.css (SysWeaver-IconList / SysWeaver-IconItem / SysWeaver-IconName).
+ */
+
+/**
+ * Entry point of icons.html: fetches the icon list and renders one tile per icon.
+ *
+ * Reads the optional URL parameter `path`; when set, POSTs `{Param: path}` (a TableDataRequest) to
+ * `../Api/debug/explore/GetIcons`, otherwise GETs it (server default folder `icons/`).
+ * Appends a `SysWeaver-IconList` to `document.body` with one `SysWeaver-IconItem` per icon, holding a
+ * non-draggable `img` loaded via `PendingImages.Start(img, "../" + Url)` and a `SysWeaver-IconName`
+ * caption. Clicking a tile copies the relative `Url` to the clipboard (`ValueFormat.copyOnClick`);
+ * the tooltip shows the Url, the size in bytes and the server `Location`.
+ * Shows a loading indicator (AddLoading) until all images are loaded; errors are shown with `Fail(e, true)`.
+ * @returns {Promise<void>} Resolves when all icon images have loaded (or failed).
+ */
 async function iconsMain() {
 
     const removeLoading = AddLoading();

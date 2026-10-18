@@ -1,8 +1,55 @@
-﻿////// Logout ///////////////////////////////
+﻿/**
+ * @file AuthUi.js - page entry points loginMain / logoutMain and the shared `Auth*` UI toolkit for all auth/ pages
+ * (SysWeaver.MicroService.Auth, served as auth/AuthUi.js).
+ *
+ * Loading: a `defer` <script> after Auth.js (and after Passkey.js on Login.html). auth/Login.html calls loginMain()
+ * and auth/Logout.html calls logoutMain() from <body onload>. Every page of the other auth/ contributions
+ * (SysWeaver.MicroService.PassKey Passkey.js pages, SysWeaver.MicroService.UserManager UserManagerUi.js pages,
+ * SysWeaver.Auth.Core SimpleAuth.js pages) also loads this file and builds its UI with AuthPage and the Auth* factories.
+ *
+ * Globals defined (functions only, no top-level state, no immediately executed code):
+ * logoutMain, loginMain, GenPassword, CreateAuthWrapper, AuthPage, AuthPageValidation, AuthUserHtml, AuthText,
+ * AuthLabel, AuthTab, AuthError, AuthNewPassword, AuthSetText, AuthSetError, AuthAddIcon, AuthPassword, AuthInput,
+ * AuthInputPhone, AuthButtonRow, AuthButton, AuthHr, AuthBr, AuthStartPage, IsAutoFilled.
+ *
+ * Conventions: factories append the new element to `target` and return it; widgets keep their state and API in DOM
+ * expandos (OnChange, Icon, Icon<n>, Selected, Add, SetIndex, OnLoaded, LastCheck) that consumers rely on.
+ * Load order (defer) is the only contract; there is no module system or namespace.
+ *
+ * Dependencies:
+ * - common.js: ColorIcon, Button, ValueFormat, Fail, SetTemporaryInnerText, tabToNextOnEnter, keyboardClick, badClick,
+ *   createImg, Open, PageLoaded, SysWeaverIgnoreUserChanges, delay, CryptRandomInt32, makeHtmlSafe, sendRequest, _T, _TF.
+ * - Auth.js (this folder): logoutRequest, loginRequest, AuthTrim, AuthPolicyText, ValidatePassword, CheckPassword.
+ * - Soft (cross-folder): the `PassKey` class from Passkey.js (SysWeaver.MicroService.PassKey), guarded by
+ *   `typeof PassKey !== "undefined"` in loginMain; its icon classes IconUsePasskey / IconPasskeyKey / PasskeyIconButton
+ *   are styled by Passkey.css.
+ * - Hidden, unguarded (cross-folder): cleanUpShortCode and validateShortCode from UserManager.js
+ *   (SysWeaver.MicroService.UserManager), called by AuthPageValidation (only used by UserManagerUi.js pages).
+ * - Auth.css (this folder) styles all SysWeaver-Auth* elements created here.
+ *
+ * Server APIs used directly: Api/auth/GetUser (logoutMain), Api/auth/GetPhonePrefixInfo (AuthInputPhone);
+ * static ../iso_data/country/<ISO>.svg flags.
+ */
 
+////// Logout ///////////////////////////////
+
+/**
+ * Entry point of auth/Logout.html (called from <body onload>).
+ * Builds an AuthPage with the IconAuthLogout icon, a status AuthText, a button row with a hidden *Retry* button
+ * (IconRetry, runs tryOnce), calls target.OnLoaded() early and then awaits tryOnce() to sign out immediately.
+ * @returns {Promise<void>}
+ */
 async function logoutMain() {
     await AuthPage("IconAuthLogout", async target => {
+        /** Status text element (classes Info / Fail toggled). @type {HTMLElement} */
         const text = AuthText(target, "");
+        /**
+         * One sign-out attempt: shows "Signing out .." (class Info) and hides *Retry*; POSTs ../Api/auth/GetUser and,
+         * when `Succeeded` is false, shows and Fail()s "No user is signed in!" (GetUser exceptions are ignored).
+         * Otherwise awaits logoutRequest(): success shows "Signed out successfully!" and returns; failure / exception
+         * Fail()s "Failed to sign out!". On any failure the text gets class Fail and *Retry* is shown again.
+         * @returns {Promise<void>}
+         */
         async function tryOnce() {
             text.classList.remove("Fail");
             text.classList.add("Info");
@@ -55,6 +102,28 @@ async function logoutMain() {
 
 ////// Login ///////////////////////////////
 
+/**
+ * Entry point of auth/Login.html (called from <body onload>).
+ * Builds an AuthPage (icon IconAuthLogin) with: *User ID* label + AuthInput (autocomplete "username", or
+ * "username webauthn" with passkeys), *Password* label + AuthPassword ("current-password", Enter clicks *Sign in* when
+ * the input is valid), an info AuthError line and a button row with the *Sign in* AuthButton (IconAuthPassword,
+ * initially disabled).
+ *
+ * Sign in: if a field is empty it re-validates (autofill may expose values only after the click) and focuses the
+ * empty input; otherwise inputs become read-only, loginRequest (Auth.js) is awaited; on Succeeded shows
+ * "User signed in." and awaits AuthStartPage(); on failure Fail()s, re-validates and shows a 5 s temporary
+ * "Failed to login, try again!?".
+ *
+ * Passkeys (only if the PassKey class from Passkey.js, SysWeaver.MicroService.PassKey, is loaded and
+ * PassKey.IsSupported()): starts PassKey.Autofill (conditional mediation) when PassKey.IsAutofillSupported() resolves
+ * true, pre-fetches an any-passkey challenge (PassKey.SignIn().Fetch(); hides the passkey button on
+ * PassKey.Errors.NotSupported), and adds either a *Use passkey* button (IconUsePasskey, when PassKey.HaveHint()) or
+ * a small 32x32 ColorIcon IconPasskeyKey with class PasskeyIconButton.
+ *
+ * Finally validates once, focuses the user input and re-validates at 100..5000 ms when the autofill/length state
+ * changed (late browser autofill without events).
+ * @returns {Promise<void>}
+ */
 async function loginMain() {
     await AuthPage("IconAuthLogin", async target => {
 
@@ -74,8 +143,16 @@ async function loginMain() {
         const br = AuthButtonRow(target);
 
         //  setStatus is async (the password policy may be fetched) and is called by several events (input, change, autofill), only the latest call may update the status
+        /** Sequence number of the latest setStatus call. @type {number} */
         let statusSeq = 0;
+        /** Promise of the latest updateStatus call. @type {Promise<boolean>} */
         let statusPromise = null;
+        /**
+         * Starts a (sequenced) validation of the inputs; only the newest call updates the UI.
+         * @param {string} uText - Current user id text.
+         * @param {string} pwText - Current password text.
+         * @returns {Promise<boolean>} True when sign in is possible (resolves to the newest validation's result).
+         */
         function setStatus(uText, pwText) {
             const seq = ++statusSeq;
             const p = updateStatus(uText, pwText, seq);
@@ -83,6 +160,18 @@ async function loginMain() {
             return p;
         }
 
+        /**
+         * Validates the inputs and updates the UI. Awaits ValidatePassword with the form element as policy cache;
+         * on a new policy the AuthPolicyText becomes the tooltip of the password label and info line.
+         * If superseded (seq !== statusSeq) returns the newest result instead. An empty but autofilled password
+         * (IsAutoFilled) counts as valid. An empty user id marks the user input Error and disables *Sign in*.
+         * Otherwise marks the password input by the result, shows the error or starts CheckPassword (not awaited)
+         * and enables *Sign in* when valid.
+         * @param {string} uText - User id text (trimmed here).
+         * @param {string} pwText - Password text (trimmed here).
+         * @param {number} seq - Sequence number assigned by setStatus.
+         * @returns {Promise<boolean>} True when sign in is possible.
+         */
         async function updateStatus(uText, pwText, seq) {
             uText = AuthTrim(uText);
             pwText = AuthTrim(pwText);
@@ -119,7 +208,9 @@ async function loginMain() {
         }
 
 
+        /** The passkey Button or ColorIcon (null without passkey support). @type {Button|ColorIcon} */
         let passKeyButton = null;
+        /** The *Sign in* button (common.js Button). @type {Button} */
         const setButton = AuthButton(br,
             _TF("Sign in", "Text of a button that when pressed will attempt to sign in a user using their entered credentials"),
             _TF("Click to sign in using the entered credentials", "Tool tip description on a button that when pressed will attempt to sign in a user using their entered credentials"),
@@ -166,6 +257,7 @@ async function loginMain() {
         }, true);
         if (havePasskey) {
             //  Passkey autofill: passkeys of this site are listed in the user id autofill drop down (if there are any)
+            /** Running PassKey.Autofill request (has Start / Stop), null until supported. @type {object} */
             let autofill = null;
             uname.autocomplete = "username webauthn";
             PassKey.IsAutofillSupported().then(ok => {
@@ -184,12 +276,23 @@ async function loginMain() {
             });
 
             //  Get a challenge for any passkey before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
+            /** Sign-in request for any passkey (no user), challenge pre-fetched. @type {object} */
             const anyPassKey = PassKey.SignIn();
             anyPassKey.Fetch().then(c => {
                 if (c.error == PassKey.Errors.NotSupported)
                     passKeyButton.Element.classList.add("Hide");
             }).catch(() => { });
 
+            /**
+             * Passkey sign-in click handler (button or icon). Stops the autofill (only one WebAuthn request may be
+             * active), disables the inputs and *Sign in*, shows "Select your passkey ..", then runs
+             * PassKey.SignIn(user).Run() when a user id is entered, else the pre-fetched anyPassKey.Run().
+             * res.Error == 0: "User signed in." and AuthStartPage(). Other errors except PassKey.Errors.Cancelled
+             * are Fail()ed. Afterwards re-fetches the any-passkey challenge, restarts the autofill, re-validates and
+             * (unless cancelled) shows a 5 s retry text.
+             * @param {Button|ColorIcon} button - The clicked control (StartWorking / StopWorking are called on it).
+             * @returns {Promise<void>}
+             */
             async function usePassKey(button) {
                 //  Only one passkey request can be active
                 autofill?.Stop();
@@ -261,6 +364,19 @@ async function loginMain() {
 
 // Common UI
 
+/**
+ * Generates a random password from look-alike-free alphabets.
+ * Alphabets: lower "abcdefghjkmnpqrstuvwxyz", upper "ACDEFGHJKLMNOPQRSTUVWXY", digits "2345679", specials "!.?_"
+ * (specials join the "any" pool only when minSpecials > 0). Draws the minimum counts per class, fills the rest from
+ * the pool, then does 4 * length random swaps. Randomness from common.js CryptRandomInt32 via power-of-two masks.
+ * Note: minSpecials is not part of the minimum-total length adjustment. Called by AuthNewPassword.
+ * @param {number} [length=16] - Password length (falsy or < 8 gives 16; max 256; at least minUpper+minLower+minDigits).
+ * @param {number} [minUpper=4] - Minimum upper-case letters (falsy/negative gives 4).
+ * @param {number} [minLower=4] - Minimum lower-case letters (falsy/negative gives 4).
+ * @param {number} [minDigits=4] - Minimum digits (falsy/negative gives 4).
+ * @param {number} [minSpecials=0] - Minimum special characters.
+ * @returns {string} The generated password.
+ */
 function GenPassword(length, minUpper, minLower, minDigits, minSpecials) {
     if ((!length) || (length < 8))
         length = 16;
@@ -277,6 +393,7 @@ function GenPassword(length, minUpper, minLower, minDigits, minSpecials) {
     const minTotal = minUpper + minLower + minDigits;
     if (length < minTotal)
         length = minTotal;
+    /** Alphabets (look-alike characters removed). Index order in lengths/masks: lower, upper, digits, specials, all, length. */
     const lower = "abcdefghjkmnpqrstuvwxyz";
     const upper = "ACDEFGHJKLMNOPQRSTUVWXY";
     const digits = "2345679";
@@ -291,6 +408,13 @@ function GenPassword(length, minUpper, minLower, minDigits, minSpecials) {
             m += m;
         masks[i] = m - 1;
     }
+    /**
+     * Uniform-ish random integer in [0, cl): takes one CryptRandomInt32 value and tries `ri & mask`, then the bits
+     * shifted by 8 and 16, accepting the first value < cl; falls back to (ri & 0xffffff) % cl.
+     * @param {number} cl - Exclusive upper bound.
+     * @param {number} mask - Smallest (power of two - 1) >= cl - 1.
+     * @returns {number}
+     */
     function getRandom(cl, mask) {
         const ri = CryptRandomInt32();
         let t = ri & mask;
@@ -306,11 +430,26 @@ function GenPassword(length, minUpper, minLower, minDigits, minSpecials) {
         return t;
     }
 
+    /**
+     * Random character from an alphabet.
+     * @param {string} chrs - Alphabet.
+     * @param {number} cl - Alphabet length.
+     * @param {number} mask - Bit mask for cl (see getRandom).
+     * @returns {string} One character.
+     */
     function getRandomChar(chrs, cl, mask) {
         return chrs.charAt(getRandom(cl, mask));
     }
 
+    /** Generated characters (shuffled at the end). @type {string[]} */
     const pwd = [];
+    /**
+     * Pushes `count` random characters from `chrs` onto pwd.
+     * @param {string} chrs - Alphabet.
+     * @param {number} count - Number of characters.
+     * @param {number} index - Slot in the precomputed lengths / masks tables for this alphabet.
+     * @returns {void}
+     */
     function Add(chrs, count, index) {
         const mask = masks[index];
         const cl = lengths[index];
@@ -334,6 +473,11 @@ function GenPassword(length, minUpper, minLower, minDigits, minSpecials) {
     return pwd.join("");
 }
 
+/**
+ * Creates (does not attach) the auth box: a <form class="SysWeaver-AuthBox"> whose onsubmit returns false.
+ * Used by AuthPage; also by SimpleAuth.js (Auth.Core) and Passkey.js (PassKey).
+ * @returns {HTMLFormElement} The new form.
+ */
 function CreateAuthWrapper() {
     const box = document.createElement("form");
     box.onsubmit = () => false;
@@ -343,13 +487,33 @@ function CreateAuthWrapper() {
 }
 
 
+/**
+ * Common page bootstrap used by every page of all four auth/ contributions.
+ * 1. SysWeaverIgnoreUserChanges() (window.IgnoreUserChanged, so common.js does not reload this window on
+ *    user.login / user.logout / reload server events).
+ * 2. Creates the box (CreateAuthWrapper), defines box.OnLoaded and appends the box to document.body.
+ * 3. Adds the icon: a 128x128 ColorIcon (IconColorThemeMain) for an icon class, or a non-draggable <img>
+ *    (common.js createImg) when the string contains '.' or '/' after position 0 or iconIsFile is truthy.
+ * 4. Awaits build(box, img), then calls box.OnLoaded(); on exception calls box.OnLoaded() and Fail(e).
+ * Used by loginMain / logoutMain, SimpleAuth.js (Auth.Core), Passkey.js (PassKey), UserManagerUi.js (UserManager).
+ * @param {string} icon - Icon class name (e.g. "IconAuthLogin") or image URL; falsy for no icon.
+ * @param {function(HTMLFormElement, (ColorIcon|HTMLImageElement)):Promise<void>} build - Builds the page content.
+ * @param {boolean} [iconIsFile] - Force treating `icon` as an image URL.
+ * @returns {Promise<void>}
+ */
 async function AuthPage(icon, build, iconIsFile) {
     SysWeaverIgnoreUserChanges();
     const box = CreateAuthWrapper();
     try {
         const target = document.body;
+        /**
+         * Expando on the box: calls PageLoaded() once, then replaces itself with a no-op.
+         * Build callbacks may call it early (e.g. logoutMain).
+         * @returns {void}
+         */
         box.OnLoaded = () => {
             PageLoaded();
+            /** Replaced by a no-op after the first call. */
             box.OnLoaded = () => { };
         };
 
@@ -377,6 +541,26 @@ async function AuthPage(icon, build, iconIsFile) {
 }
 
 
+/**
+ * Short-code entry step shared by the UserManager pages (only called by UserManagerUi.js,
+ * SysWeaver.MicroService.UserManager). Replaces all children of an AuthPage box except the first (the icon); the
+ * first non-"IconColor*" class of the icon element becomes the button icon. Adds the HTML message (AuthText + AuthBr),
+ * a label, a code AuthInput (min 3 / max 16 chars) whose change handler normalizes the value with
+ * cleanUpShortCode(value, true) and enables the button when cleanUpShortCode(value) is non-null, a *Continue* button
+ * and an error line (class Error).
+ * The button calls validateShortCode(code): < 0 disables the input ("Code expired or too many tries"), 0 shows
+ * "Invalid code, try again", otherwise navigates with common.js Open(linkOnSuccess + code, "_self").
+ * Cross-folder dependency (unguarded): cleanUpShortCode / validateShortCode are defined in UserManager.js
+ * (SysWeaver.MicroService.UserManager), not in this project.
+ * @param {HTMLFormElement} authPageElement - The box created by AuthPage.
+ * @param {string} messageHtml - HTML message shown above the input (optional).
+ * @param {string} linkOnSuccess - URL prefix; the validated code is appended and opened in the same window.
+ * @param {number} [timeout=900] - Seconds; defaulted but not used.
+ * @param {string} [instructions="Code"] - Label text.
+ * @param {string} [placeHolder="Enter the sent code"] - Input placeholder / tooltip.
+ * @param {string} [buttonText="Continue"] - Button text / tooltip.
+ * @returns {Promise<void>}
+ */
 async function AuthPageValidation(authPageElement, messageHtml, linkOnSuccess, timeout, instructions, placeHolder, buttonText) {
     if ((!timeout) || (timeout <= 0))
         timeout = 15 * 60;
@@ -452,6 +636,12 @@ async function AuthPageValidation(authPageElement, messageHtml, linkOnSuccess, t
     code.focus();
 }
 
+/**
+ * Formats user names / e-mail addresses as emphasized, HTML-escaped text. Used by UserManagerUi.js (UserManager).
+ * @param {string|string[]} emailOrUsernameArray - One value (trimmed, wrapped in <em>) or an array (each wrapped in
+ *   <em>, joined by ", ").
+ * @returns {string} HTML string.
+ */
 function AuthUserHtml(emailOrUsernameArray) {
     if (typeof emailOrUsernameArray === "string")
         return "<em>" + makeHtmlSafe(emailOrUsernameArray.trim()) + "</em>";
@@ -460,6 +650,15 @@ function AuthUserHtml(emailOrUsernameArray) {
     return "<em>" + t.join("</em>, <em>") + "</em>";
 }
 
+/**
+ * Appends a SysWeaver-AuthText element (centered block text), copy-on-click (ValueFormat.copyOnClick).
+ * Used by Auth.Core, PassKey and UserManager pages.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} text - Text (or HTML when isHtml); falsy leaves it empty.
+ * @param {string} [title] - Tooltip.
+ * @param {boolean} [isHtml] - Set innerHTML instead of innerText.
+ * @returns {HTMLElement} The created element.
+ */
 function AuthText(target, text, title, isHtml) {
     const e = document.createElement("SysWeaver-AuthText");
     target.appendChild(e);
@@ -474,6 +673,15 @@ function AuthText(target, text, title, isHtml) {
     return e;
 }
 
+/**
+ * Appends a SysWeaver-AuthLabel element (bold accent label above inputs), copy-on-click.
+ * Used by Auth.Core, PassKey and UserManager pages.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} text - Text (or HTML when isHtml).
+ * @param {string} [title] - Tooltip.
+ * @param {boolean} [isHtml] - Set innerHTML instead of innerText.
+ * @returns {HTMLElement} The created element.
+ */
 function AuthLabel(target, text, title, isHtml) {
     const e = document.createElement("SysWeaver-AuthLabel");
     target.appendChild(e);
@@ -494,6 +702,9 @@ function AuthLabel(target, text, title, isHtml) {
  * @param {string} title the tool tip to show on hover (if any)
  * @param {function(number)} onChangeFn the function that gets called whenever a tab is changed
  * @returns {HtmlElement} the created element
+ *
+ * Expandos on the returned SysWeaver-AuthTab element: Selected (index, -1 until the first header is added),
+ * Add(text, title, isHtml, icon) and SetIndex(i, noFn) (= inner activateIndex). Used by UserManagerUi.js (UserManager).
  */
 function AuthTab(target, title, onChangeFn) {
     const e = document.createElement("SysWeaver-AuthTab");
@@ -501,7 +712,15 @@ function AuthTab(target, title, onChangeFn) {
     if (title)
         e.title = title;
     e.Selected = -1;
+    /** Header elements in index order. @type {HTMLElement[]} */
     const headers = [];
+    /**
+     * Selects a tab: sets e.Selected, marks the chosen header Selected (icon color IconColorThemeBackground,
+     * tabIndex -1) and the others unselected (IconColorThemeAcc2, tabIndex 0); calls onChangeFn(newIndex) unless noFn.
+     * @param {number} newIndex - Index of the header to select.
+     * @param {boolean} [noFn] - Do not call onChangeFn.
+     * @returns {void}
+     */
     function activateIndex(newIndex, noFn) {
         e.Selected = newIndex;
         const hl = headers.length;
@@ -524,6 +743,16 @@ function AuthTab(target, title, onChangeFn) {
     }
 
 
+    /**
+     * Adds a keyboard-clickable SysWeaver-AuthTabHeader. The first header added becomes selected (class Selected,
+     * tabIndex -1). An optional 24x24 ColorIcon is appended and stored as header expando `Icon`.
+     * Header clicks (ignoring badClick) call activateIndex(index).
+     * @param {string} text - Header text (or HTML when isHtml).
+     * @param {string} [title] - Tooltip.
+     * @param {boolean} [isHtml] - Set innerHTML instead of innerText.
+     * @param {string} [icon] - Icon class name.
+     * @returns {void}
+     */
     e.Add = (text, title, isHtml, icon) => {
         const t = document.createElement("SysWeaver-AuthTabHeader");
         keyboardClick(t);
@@ -560,6 +789,14 @@ function AuthTab(target, title, onChangeFn) {
     return e;
 }
 
+/**
+ * Appends a SysWeaver-AuthError status / error line (plain text, copy-on-click). Classes Error / Warning / Good are
+ * set later by CheckPassword / AuthSetError. Used by loginMain, Auth.Core and UserManager pages.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} text - Initial text.
+ * @param {string} [title] - Tooltip.
+ * @returns {HTMLElement} The created element.
+ */
 function AuthError(target, text, title) {
     const e = document.createElement("SysWeaver-AuthError");
     target.appendChild(e);
@@ -571,6 +808,21 @@ function AuthError(target, text, title) {
     return e;
 }
 
+/**
+ * New-password input: an AuthPassword (with show/hide icon) plus a second inside icon (IconAuthRandom, slot 1) that
+ * generates GenPassword(len, 1, 1, 1, minSpecials), writes it to the input, copies it to the clipboard
+ * (ValueFormat.copyToClipboardInfo) and awaits input.OnChange(). `len` is 16 clamped into the policy's
+ * MinLength..MaxLength (max 128); minSpecials is 1 when the policy has MixedSpecial.
+ * Used by SimpleAuth.js (Auth.Core) and UserManagerUi.js (UserManager).
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} placeholder - Input placeholder.
+ * @param {string} [title] - Tooltip.
+ * @param {string} autocomplete - autocomplete attribute (e.g. "new-password").
+ * @param {function(HTMLInputElement):Promise<void>} [onChange] - Change callback.
+ * @param {function} [onNextItemFn] - Passed to tabToNextOnEnter.
+ * @param {object} [passwordPolicy] - Password policy ({MinLength, MaxLength, MixedSpecial, ...}).
+ * @returns {HTMLInputElement} The input.
+ */
 function AuthNewPassword(target, placeholder, title, autocomplete, onChange, onNextItemFn, passwordPolicy) {
 
     const e = AuthPassword(target, placeholder, title, autocomplete, onChange, onNextItemFn);
@@ -606,6 +858,14 @@ function AuthNewPassword(target, placeholder, title, autocomplete, onChange, onN
 }
 
 
+/**
+ * Sets the text of a status element and resets its state: clears className and LastCheck (the CheckPassword memo).
+ * Empty text becomes "&nbsp;" (keeps the line height). Used by this file, Auth.Core and UserManager.
+ * @param {HTMLElement} target - Element to update.
+ * @param {string} text - Text (or HTML when isHtml).
+ * @param {boolean} [isHtml] - Set innerHTML instead of innerText.
+ * @returns {void}
+ */
 function AuthSetText(target, text, isHtml) {
     target.className = "";
     target.LastCheck = null;
@@ -620,6 +880,12 @@ function AuthSetText(target, text, isHtml) {
     target.innerText = text;
 }
 
+/**
+ * Adds or removes the class Error (red glow on inputs / red text on SysWeaver-AuthError, see Auth.css).
+ * @param {HTMLElement} target - Element to update.
+ * @param {*} haveError - Truthy adds the class.
+ * @returns {void}
+ */
 function AuthSetError(target, haveError) {
     if (haveError)
         target.classList.add("Error");
@@ -627,6 +893,22 @@ function AuthSetError(target, haveError) {
         target.classList.remove("Error");
 }
 
+/**
+ * Adds a clickable ColorIcon (IconColorThemeMain, not a tab stop, class InsideInput) inside the right edge of an input.
+ * Position: `top` is computed from the input's computed height and bottom margin (the icon is appended to the input's
+ * parent, after the input), `left` from the slot index; the input's paddingRight is widened to make room.
+ * Wraps the existing onchange / oninput so each change re-evaluates iconEnabledFn(e) (SetEnabled) before calling the
+ * original handler. Expandos on the input: OnChange (the wrapping onChange), "Icon" + index and, for index 0, Icon.
+ * Used by AuthPassword, AuthInput, AuthInputPhone, AuthNewPassword and SimpleAuth.js (Auth.Core).
+ * @param {HTMLInputElement} e - The input (must already be attached).
+ * @param {string} iconClass - Icon class name.
+ * @param {function(HTMLInputElement):(void|Promise<void>)} iconFn - Click handler (awaited).
+ * @param {function(HTMLInputElement):boolean} [iconEnabledFn] - Enabled state (default always true).
+ * @param {string} [iconTitle] - Tooltip of the icon.
+ * @param {number} [size=32] - Icon size in px.
+ * @param {number} [index=0] - Icon slot from the right (0 = right-most).
+ * @returns {void}
+ */
 function AuthAddIcon(e, iconClass, iconFn, iconEnabledFn, iconTitle, size, index) {
 
     if ((!size) || (size <= 0))
@@ -638,7 +920,13 @@ function AuthAddIcon(e, iconClass, iconFn, iconEnabledFn, iconTitle, size, index
     ++index;
     if (!iconEnabledFn)
         iconEnabledFn = e => true;
+    /** The previous onchange handler (wrapped). */
     const oc = e.onchange;
+    /**
+     * Change handler: updates the icon's enabled state and awaits the previous onchange handler.
+     * @param {Event} [ev] - The change event (undefined when called as input.OnChange()).
+     * @returns {Promise<void>}
+     */
     async function onChange(ev) {
         b.SetEnabled(iconEnabledFn(e));
         if (oc)
@@ -647,7 +935,9 @@ function AuthAddIcon(e, iconClass, iconFn, iconEnabledFn, iconTitle, size, index
     e.OnChange = onChange;
     let b = null;
     e.onchange = onChange;
+    /** The previous oninput handler (wrapped). */
     const oi = e.oninput;
+    //  Input handler: re-evaluates the icon state, keeps the icon out of the tab order and calls the previous handler
     e.oninput = async ev => {
         b.SetEnabled(iconEnabledFn(e));
         b.Element.tabIndex = "-1";
@@ -675,6 +965,24 @@ function AuthAddIcon(e, iconClass, iconFn, iconEnabledFn, iconTitle, size, index
     //e.appendChild(be);
 }
 
+/**
+ * Appends a required <input type="password"> (length 8..128). onChange(input) is wired to onchange, oninput and the
+ * expando OnChange (local wrapper oc). Enter moves on via tabToNextOnEnter(e, onNextItemFn).
+ * Without iconClass a show/hide toggle icon is added (IconAuthView <-> IconAuthViewOff, switching type between
+ * "password" and "text" and updating the tooltip); iconClass "-" means no icon.
+ * Used by loginMain, AuthNewPassword and UserManagerUi.js (UserManager).
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} placeholder - Placeholder text.
+ * @param {string} [title] - Tooltip.
+ * @param {string} autocomplete - autocomplete attribute ("current-password" / "new-password").
+ * @param {function(HTMLInputElement):Promise<void>} [onChange] - Change callback.
+ * @param {function} [onNextItemFn] - Passed to tabToNextOnEnter (called on Enter instead of focusing the next item).
+ * @param {string} [iconClass] - Inside icon class; falsy = show/hide toggle, "-" = none.
+ * @param {function(HTMLInputElement):void} [iconFn] - Icon click handler.
+ * @param {function(HTMLInputElement):boolean} [iconEnabledFn] - Icon enabled state.
+ * @param {string} [iconTitle] - Icon tooltip.
+ * @returns {HTMLInputElement} The input.
+ */
 function AuthPassword(target, placeholder, title, autocomplete, onChange, onNextItemFn, iconClass, iconFn, iconEnabledFn, iconTitle) {
     const e = document.createElement("input");
     e.type = "password";
@@ -687,6 +995,10 @@ function AuthPassword(target, placeholder, title, autocomplete, onChange, onNext
     if (title)
         e.title = title;
     if (onChange) {
+        /**
+         * Change wrapper wired to onchange / oninput / OnChange; awaits onChange(input).
+         * @returns {Promise<void>}
+         */
         const oc = async () => {
             await onChange(e);
         };
@@ -718,6 +1030,22 @@ function AuthPassword(target, placeholder, title, autocomplete, onChange, onNext
     return e;
 }
 
+/**
+ * Appends a required <input type="text"> (length 1..128), wiring onChange like AuthPassword (local oc, expando OnChange).
+ * Without iconFn the inside icon (default IconAuthCopy) copies the value to the clipboard and is enabled only when the
+ * input has a value; iconClass "-" means no icon. Used by loginMain, AuthPageValidation, Auth.Core, PassKey, UserManager.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} placeholder - Placeholder text.
+ * @param {string} [title] - Tooltip.
+ * @param {string} [autocomplete] - autocomplete attribute.
+ * @param {function(HTMLInputElement):Promise<void>} [onChange] - Change callback.
+ * @param {function} [onNextItemFn] - Passed to tabToNextOnEnter.
+ * @param {string} [iconClass="IconAuthCopy"] - Inside icon class; "-" = none.
+ * @param {function(HTMLInputElement):void} [iconFn] - Icon click handler (default: copy to clipboard).
+ * @param {function(HTMLInputElement):boolean} [iconEnabledFn] - Icon enabled state (overridden when iconFn is falsy).
+ * @param {string} [iconTitle] - Icon tooltip (overridden when iconFn is falsy).
+ * @returns {HTMLInputElement} The input.
+ */
 function AuthInput(target, placeholder, title, autocomplete, onChange, onNextItemFn, iconClass, iconFn, iconEnabledFn, iconTitle) {
     const e = document.createElement("input");
     e.type = "text";
@@ -731,6 +1059,10 @@ function AuthInput(target, placeholder, title, autocomplete, onChange, onNextIte
     if (title)
         e.title = title;
     if (onChange) {
+        /**
+         * Change wrapper wired to onchange / oninput / OnChange; awaits onChange(input).
+         * @returns {Promise<void>}
+         */
         const oc = async () => {
             await onChange(e);
         };
@@ -759,12 +1091,41 @@ function AuthInput(target, placeholder, title, autocomplete, onChange, onNextIte
     return e;
 }
 
+/**
+ * Appends a SysWeaver-AuthPhone group holding a required <input type="tel" class="Phone"> (length 1..128) and a
+ * keyboard-clickable SysWeaver-AuthPhoneCc flag button. The change handler (local oc, also onchange / oninput /
+ * OnChange) ignores unchanged values, POSTs ../Api/auth/GetPhonePrefixInfo(value), builds a tooltip of the matching
+ * "+CountryCode RegionPrefixes Name" lines, calls setCountry with the first IsoCountry (or resets it), then awaits
+ * onChange(input). onkeydown allows only digits, '.', space, named/control keys, Ctrl combinations and a single '+'.
+ * The flag onclick only filters badClick (empty stub). Copy icon defaults as in AuthInput.
+ * Used by UserManagerUi.js (UserManager).
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} placeholder - Placeholder text.
+ * @param {string} [title] - Tooltip.
+ * @param {string} autocomplete - autocomplete attribute (e.g. "tel").
+ * @param {function(HTMLInputElement):Promise<void>} [onChange] - Change callback.
+ * @param {function} [onNextItemFn] - Passed to tabToNextOnEnter.
+ * @param {string} [iconClass="IconAuthCopy"] - Inside icon class; "-" = none.
+ * @param {function(HTMLInputElement):void} [iconFn] - Icon click handler (default: copy to clipboard).
+ * @param {function(HTMLInputElement):boolean} [iconEnabledFn] - Icon enabled state.
+ * @param {string} [iconTitle] - Icon tooltip.
+ * @returns {HTMLInputElement} The tel input (not the group).
+ */
 function AuthInputPhone(target, placeholder, title, autocomplete, onChange, onNextItemFn, iconClass, iconFn, iconEnabledFn, iconTitle) {
     const e = document.createElement("input");
     const group = document.createElement("SysWeaver-AuthPhone");
     group.appendChild(e);
+    /** The flag button. @type {HTMLElement} */
     const cc = document.createElement("SysWeaver-AuthPhoneCc");
 
+    /**
+     * Updates the flag: background image ../iso_data/country/<ISO>.svg, tooltip = title + "Click to select country
+     * code prefix", toggles class AllSame (no CSS rule uses it).
+     * @param {string} [iso="_"] - ISO country code ("_" = unknown flag).
+     * @param {string} [title] - Matching prefixes text.
+     * @param {boolean} [allSame] - True when all matching prefixes share one country calling code.
+     * @returns {void}
+     */
     function setCountry(iso, title, allSame) {
         if (!iso)
             iso = "_";
@@ -796,6 +1157,11 @@ function AuthInputPhone(target, placeholder, title, autocomplete, onChange, onNe
     let isInternal = false;
     let old = null;
     let prefixes = null;
+    /**
+     * Change wrapper (onchange / oninput / OnChange): looks up the phone prefix and updates the flag, then awaits
+     * onChange(input). Skips when the trimmed value is unchanged (isInternal is never set to true).
+     * @returns {Promise<void>}
+     */
     const oc = async () => {
         if (isInternal)
             return;
@@ -897,12 +1263,28 @@ function AuthInputPhone(target, placeholder, title, autocomplete, onChange, onNe
 
 
 
+/**
+ * Appends a SysWeaver-CenterBlock container for buttons. Used by this file, Auth.Core, PassKey and UserManager.
+ * @param {HTMLElement} target - Parent element.
+ * @returns {HTMLElement} The created element.
+ */
 function AuthButtonRow(target) {
     const e = document.createElement("SysWeaver-CenterBlock");
     target.appendChild(e);
     return e;
 }
 
+/**
+ * Creates a common.js Button (enabled unless `disabled`) whose click awaits onClick(button) and appends its Element.
+ * Members used by callers: SetEnabled, StartWorking, StopWorking, Element. Used by this file, Auth.Core, PassKey, UserManager.
+ * @param {HTMLElement} target - Parent element.
+ * @param {string} name - Button text.
+ * @param {string} title - Tooltip.
+ * @param {string} icon - Icon class name.
+ * @param {function(Button):Promise<void>} onClick - Click handler, receives the Button.
+ * @param {boolean} [disabled] - Create disabled.
+ * @returns {Button} The Button instance.
+ */
 function AuthButton(target, name, title, icon, onClick, disabled) {
     const button = new Button(null, name, title, icon, !disabled, async fn => {
         await onClick(button);
@@ -911,19 +1293,54 @@ function AuthButton(target, name, title, icon, onClick, disabled) {
     return button;
 }
 
+/**
+ * Appends a horizontal rule (<hr>). Used by Passkey.js (PassKey).
+ * @param {HTMLElement} target - Parent element.
+ * @returns {HTMLHRElement} The created element.
+ */
 function AuthHr(target) {
     const e = document.createElement("hr");
     target.appendChild(e);
     return e;
 }
 
+/**
+ * Appends a line break (<br>). Used by AuthPageValidation.
+ * @param {HTMLElement} target - Parent element.
+ * @returns {HTMLBRElement} The created element.
+ */
 function AuthBr(target) {
     const e = document.createElement("br");
     target.appendChild(e);
     return e;
 }
 
+/**
+ * Post-login navigation used by all flows that end signed in (loginMain, Passkey.js, UserManagerUi.js).
+ * Removes the query and the last two path segments (assumes the URL is exactly <root>/auth/<page>.html), ensures a
+ * trailing '/', waits 3 s (delay(3000)), then history.replaceState to that root URL and location.reload(true).
+ * When the page is embedded in a same-origin window (ex: the app shell's content iframe), the top window is
+ * reloaded instead (its hash cleared), so the shell never ends up nested inside its own iframe; this does not
+ * depend on the "user.login" server message reaching the top window in time.
+ * @returns {Promise<void>}
+ */
 async function AuthStartPage() {
+    if (window.top !== window.self) {
+        let top = null;
+        try {
+            if (typeof window.top.ReloadAll === "function")
+                top = window.top;
+        }
+        catch
+        {
+            //  Cross-origin parent: navigate this window as usual
+        }
+        if (top) {
+            await delay(3000);
+            top.ReloadAll(true, true);
+            return;
+        }
+    }
     const loc = window.location;
     const url = new URL(loc.href);
     url.search = "";

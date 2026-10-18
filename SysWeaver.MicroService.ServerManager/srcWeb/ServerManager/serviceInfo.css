@@ -1,13 +1,35 @@
-﻿
+﻿/*
+ * Styles of the ServerManager "service info" page (serviceInfo.html), loaded by a <link> after ../common/theme.css
+ * and ../app/application.css. Plain static CSS (not templated).
+ * Layout: a centred content column (--MaxW) over a fixed shadow panel (si-bg), the title bar (si-name), the state
+ * pills (si-stats / si-state), the control and debug button rows (si-servicebuttons / si-debugbuttons), the two
+ * chart tiles (si-graphs / si-graph), the upload drop targets (si-uploads), the config file grids (si-configs)
+ * and the versions grid (si-versions), plus the si-icon-* mask icons used by the common.js Button elements.
+ * Static placeholders come from serviceInfo.html; grid cells are created by serviceInfo.js.
+ * Classes set by script: ViewOnly / TopWindow on body, Ok / Warning / Error / Hide on si-state, Show on
+ * si-uploads / si-configs / si-file-state, Active on si-version-active (serviceInfo.js); KeyClick (common.js
+ * keyboardClick); Dragging / Selecting / Uploading (common/fileUploader.js). sysweaver-button is the element
+ * created by common.js Button.
+ * Theme variables used (from common/theme.css): --ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc2,
+ * --ThemeAcc250, --ThemeBackground, --ThemeOk, --ThemeWarning, --ThemeError, --ThemeRad, --ThemeRadInp,
+ * --ThemeFadeDuration, --ThemeFontMono. No @keyframes or [data-theme] variants; @media breakpoints for phones
+ * (max-width 600px) and portrait (max-aspect-ratio 2/3).
+ */
+
+/* ===== Page base ===== */
+
+/* --MaxW: width of the content column (100ch); used by si-bg and all content rows / grids. */
 :root {
     --MaxW: 100ch;
 }
 
+/* Border-box sizing for all elements. */
 *
 {
     box-sizing: border-box;
 }
 
+/* Full-width body without margin; 20em bottom padding leaves room below the last grid. */
 body {
     padding: 0;
     margin: 0;
@@ -15,11 +37,16 @@ body {
     padding-bottom: 20em;
 }
 
+    /* body.ViewOnly (URL param v, set by serviceInfoMain): disables all pointer interaction, no bottom padding. */
     body.ViewOnly {
         pointer-events: none;
         padding-bottom: 0;
     }
 
+/*
+ * si-bg: static placeholder; a fixed, horizontally centred panel (--MaxW + 2em wide, full height) with a
+ * --ThemeMain25 shadow, behind the content (z-index -1).
+ */
 si-bg {
     position: fixed;
     display: block;
@@ -32,6 +59,9 @@ si-bg {
     z-index: -1;
 }
 
+/* ===== Title bar (si-name) ===== */
+
+/* si-name: bold centred title bar in --ThemeAcc2 showing the service name; hidden by default. */
 si-name
 {
     width: 100%;
@@ -45,16 +75,21 @@ si-name
     display: none;
 }
 
+/* body.TopWindow (added by serviceInfoMain when window.IsTop, i.e. not embedded in the app shell) shows the title bar. */
 body.TopWindow si-name {
     display: block;
 }
 
+/* Phones (max-width 600px): square corners for the title bar. */
 @media screen and (max-width: 600px) {
     si-name {
         border-radius: 0;
     }
 }
 
+/* ===== State pills (si-stats / si-state) ===== */
+
+/* si-stats: centred wrapping flex row (max --MaxW) holding the five si-state pills. */
 si-stats {
     max-width: var(--MaxW);
     margin: 0.5em auto;
@@ -63,6 +98,7 @@ si-stats {
     justify-content: space-evenly;
 }
 
+/* si-state: bold rounded pill, --ThemeBackground text on --ThemeMain (status, PID, CPU, memory, total CPU time). */
 si-state {
     display: inline-flex;
     font-weight: bold;
@@ -74,6 +110,7 @@ si-state {
 }
 
 
+    /* Status colours Ok / Warning / Error, set on si-state[0] from stateMap in update() (serviceInfo.js). */
     si-state.Ok {
         background-color: var(--ThemeOk);
     }
@@ -86,10 +123,15 @@ si-state {
         background-color: var(--ThemeError);
     }
 
+    /* si-state.Hide: hides si-state[1..4] when the service has no process (ProcId 0). */
     si-state.Hide {
         display: none;
     }
 
+    /*
+     * si-state.KeyClick: clickable CPU / memory pills (KeyClick added by common.js keyboardClick, not in view-only
+     * mode): pointer; --ThemeBackground border on hover, --ThemeAcc1 outline on focus.
+     */
     si-state.KeyClick {
         cursor: pointer;
         border: 2px solid transparent;
@@ -106,6 +148,9 @@ si-state {
         }
 
 
+/* ===== Button rows ===== */
+
+/* si-servicebuttons: centred wrapping flex row (max --MaxW) of the service control buttons (Restart ... Kill). */
 si-servicebuttons {
     max-width: var(--MaxW);
     margin: 0.5em auto;
@@ -115,11 +160,15 @@ si-servicebuttons {
 }
 
 
+    /* sysweaver-button (element created by common.js Button): 8px spacing between the control buttons. */
     si-servicebuttons sysweaver-button{
         margin: 8px 8px 8px 0;
 
     }
 
+/* ===== Graphs (si-graphs / si-graph) ===== */
+
+/* si-graphs: block container (max --MaxW) of the two chart tiles. */
 si-graphs {
     display: block;
     padding: 0.5em 0.25em;
@@ -127,6 +176,7 @@ si-graphs {
     margin: 0.5em auto;
 }
 
+/* Phones (max-width 600px): no side padding for si-graphs. */
 @media screen and (max-width: 600px) {
     si-graphs {
         padding-left: 0;
@@ -134,6 +184,10 @@ si-graphs {
     }
 }
 
+/*
+ * si-graph: half-width chart tile (two side by side: 50% minus margins, aspect 38/40), rounded, pointer
+ * (click handler from serviceInfoMain opens server_metrics.html). Focus: --ThemeAcc1 outline; hover: --ThemeAcc250 border.
+ */
 si-graph {
     width: calc(50% - 1.5em);
     aspect-ratio: 38 / 40;
@@ -159,6 +213,7 @@ si-graph:hover
 }
 
 /* Portrait */
+/* Portrait screens (max-aspect-ratio 2/3): si-graph full width, no side margins or radius (stacked). */
 @media (max-aspect-ratio: 2/3) {
     si-graph {
         width: 100%;
@@ -169,6 +224,7 @@ si-graph:hover
 }
 
 
+/* si-text: 24px centred text block; not created by the ServerManager HTML or JS (unused). */
 si-text
 {
     display: block;
@@ -177,6 +233,7 @@ si-text
 }
 
 
+/* The chart iframe fills the tile; pointer-events none so clicks reach the si-graph element. */
 si-graph iframe {
     display: block;
     border: none;
@@ -185,6 +242,7 @@ si-graph iframe {
     pointer-events: none;
 }
 
+/* si-debugbuttons: centred wrapping flex row (max --MaxW) of the debug buttons (Explore, View log, Deleted). */
 si-debugbuttons {
     max-width: var(--MaxW);
     margin: 0.5em auto;
@@ -196,6 +254,9 @@ si-debugbuttons {
 
 
 
+/* ===== Upload drop targets (si-uploads) ===== */
+
+/* si-uploads: 64x64px upload drop target (fileUploaderSetup in update()); hidden until it gets Show. */
 si-uploads {
     display: none;
     width: 64px;
@@ -209,14 +270,17 @@ si-uploads {
     cursor: pointer;
 }
 
+    /* si-uploads.Show: added by update() on the first poll when the config list exists (not in view-only mode). */
     si-uploads.Show {
         display: block;
     }
 
+    /* Keyboard focus outline. */
     si-uploads:focus {
         outline: 2px solid var(--ThemeAcc1);
     }
 
+    /* The icon: a ::after overlay filled with --ThemeMain and masked with upload.svg; 0.8 opacity, 1 on hover. */
     si-uploads:after {
         transition: opacity linear var(--ThemeFadeDuration);
         content: '';
@@ -237,21 +301,30 @@ si-uploads {
     }
 
 
+    /* si-uploads.Dragging (fileUploader.js): dashed --ThemeAcc1 border while files are dragged over the target. */
     si-uploads.Dragging {
         border: 2px dashed var(--ThemeAcc1);
     }
 
+    /* si-uploads.Selecting (fileUploader.js): disc icon at half opacity while the file picker is open. */
     si-uploads.Selecting:after {
         opacity: 0.5;
         mask-image: url("../icons/disc.svg");
     }
 
+    /* si-uploads.Uploading (fileUploader.js): loading icon at half opacity while files are uploaded. */
     si-uploads.Uploading:after {
         opacity: 0.5;
         mask-image: url("../icons/Loading.svg");
     }
 
 
+/* ===== Config file grids (si-configs) ===== */
+
+/*
+ * si-configs: 5-column grid (state star, icon, name, size, time), bordered, horizontally scrollable, max --MaxW;
+ * hidden until it gets Show (added by update() when data.Configs / data.MasterConfigs exist).
+ */
 si-configs {
     display: none;
     grid-template-columns: 28px 28px auto min-content min-content;
@@ -269,6 +342,7 @@ si-configs {
         display: grid;
     }
 
+/* Phones (max-width 600px): si-configs full-bleed (no side margins, radius or side borders). */
 @media screen and (max-width: 600px) {
     si-configs {
         margin-left: 0;
@@ -281,6 +355,7 @@ si-configs {
 
 
 
+/* si-file-header: header row spanning all 5 columns, uppercase, --ThemeMain background (created by updateFileList). */
 si-file-header {
     grid-column-start: 1;
     grid-column-end: 6;
@@ -292,6 +367,10 @@ si-file-header {
 }
 
 
+/*
+ * si-file-icon: column 2, 28x24 file type icon (background image ../icons/ext/<ext>.svg set inline by updateFileList);
+ * pointer, opens the file options menu; lifts 2px on hover, --ThemeAcc1 outline on focus.
+ */
 si-file-icon {
     grid-column: 2;
     width: 28px;
@@ -313,6 +392,10 @@ si-file-icon {
         outline: 2px solid var(--ThemeAcc1);
     }
 
+/*
+ * si-file-state: column 1, a fav_on.svg star (mask icon filled with --ThemeAcc1); shown only with Show, which
+ * updateFileList adds when the file is not a backup (isBackup).
+ */
 si-file-state {
     grid-column: 1;
     width: 28px;
@@ -328,6 +411,7 @@ si-file-state {
         display: inline-block;
     }
 
+    /* si-file-name: column 3, link-like file name in --ThemeAcc2 (click opens the text editor); inverted on hover, outline on focus. */
     si-file-name {
         grid-column: 3;
         line-height: 24px;
@@ -349,6 +433,7 @@ si-file-state {
         }
 
 
+    /* si-file-size: column 4, right-aligned monospace byte size in --ThemeAcc1 (copy-on-click). */
     si-file-size {
         grid-column: 4;
         text-align: right;
@@ -357,6 +442,7 @@ si-file-state {
         color: var(--ThemeAcc1);
     }
 
+    /* si-file-time: column 5, right-aligned monospace last-modified time (copy-on-click). */
     si-file-time {
         grid-column: 5;
         font: var(--ThemeFontMono);
@@ -366,6 +452,9 @@ si-file-state {
     }
 
 
+/* ===== Versions grid (si-versions) ===== */
+
+/* si-versions: 6-column grid (active, uploaded, user, machine, comment, last used), bordered, horizontally scrollable. */
 si-versions {
     display: grid;
     grid-template-columns: 28px auto auto auto max-content auto;
@@ -379,6 +468,7 @@ si-versions {
     overflow-x: auto;
 }
 
+/* Phones (max-width 600px): si-versions full-bleed (no side margins, radius or side borders). */
 @media screen and (max-width: 600px) {
     si-versions {
         margin-left: 0;
@@ -389,6 +479,7 @@ si-versions {
     }
 }
 
+/* si-version-header: header row spanning all 6 columns, uppercase, --ThemeMain background. */
 si-version-header {
     grid-column-start: 1;
     grid-column-end: 7;
@@ -399,6 +490,7 @@ si-version-header {
     font-weight: bold;
 }
 
+/* si-version-active: column 1; with class Active (version IsActive, set by update()) shows a fav_on.svg star mask in --ThemeAcc1. */
 si-version-active {
     grid-column: 1;
     width: 28px;
@@ -412,6 +504,7 @@ si-version-active {
         mask-image: url("../icons/fav_on.svg");
     }
 
+/* si-version-uploaded: column 2, clickable monospace upload time in --ThemeAcc2 (opens versionInfo.html); inverted on hover, outline on focus. */
 si-version-uploaded {
     grid-column: 2;
     font: var(--ThemeFontMono);
@@ -436,6 +529,10 @@ si-version-uploaded {
 
 
 
+/*
+ * Columns 3-6 (all copy-on-click): si-version-user (--ThemeAcc1), si-version-machine, si-version-comment
+ * (--ThemeAcc1) and si-version-last (right-aligned monospace last-used time).
+ */
 si-version-user {
     color: var(--ThemeAcc1);
     grid-column: 3;
@@ -464,6 +561,13 @@ si-version-last {
 
 
 
+/* ===== Button icons (si-icon-*) ===== */
+
+/*
+ * Mask images for the icon classes passed to common.js Button (which fills the masked element with the theme
+ * colour): si-icon-restart (reload), si-icon-pause, si-icon-resume and si-icon-start (play), si-icon-stop,
+ * si-icon-disable (close), si-icon-explore, si-icon-log (notes) and si-icon-kill (skull).
+ */
 .si-icon-restart {
     mask-image: url("../icons/reload.svg");
 }

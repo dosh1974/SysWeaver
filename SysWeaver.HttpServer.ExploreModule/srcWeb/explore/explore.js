@@ -1,5 +1,36 @@
 ﻿
 
+/**
+ * @file explore.js - script of the generated end point listing page (`<folder>/explore`).
+ *
+ * Not loaded by a static page: ExploreHttpServerModule serves srcData/index.html as a TextTemplate
+ * (placeholders `$(NAME)`) which loads `$(COMMONJSFILE)` (common/common.js) and `$(JSFILE)` (this file);
+ * the template's inline `exploreMain()` calls `Build($(DATA))` with the JSON-serialized `ExploreData`
+ * object inlined into the script. app/application.js is not loaded.
+ *
+ * Defines only global functions (no classes, no top-level state, nothing runs at load time):
+ * IntToString, GetDate, SetByteSize, SetDateString, SetCacheDuration, GetSettings, UpdateSettings,
+ * GetFileExtension, InsertTableCell, DoSort, AddSortHeader, BuildNavigator, BuildTable, Build.
+ * The generic names only work because the page loads nothing else besides common.js.
+ *
+ * Dependencies (common/common.js): AddLoading, createImg, ValueFormat (createLink, updateDateTime), _T, _TF.
+ * Data contract: `ExploreData` = `{FolderSuffix, FolderIcon, VirtualFolderIcon, ApiIcon, IconBase, ExtIconBase,
+ * MimeIconBase, BaseUrl, LocalUrl, Items: ExploreItem[]}`; `ExploreItem` = `{Name, Method, Type, ClientCacheDuration,
+ * RequestCacheDuration, PerSession, CompPreference, PreCompressed, Auth, Location, Size, LastModified, Mime}`;
+ * `Type` is HttpServerEndpointTypes (0 Unknown, 1 Folder, 2 File, 3 Api, 4 FileUpload).
+ *
+ * Conventions: column ids (values of `settings.Cols`): 0 icon/type, 1 name, 2 size, 3 extension, 4 auth,
+ * 5 time, 6 client cache, 7 server (request) cache, 8 compression preference, 9 pre-compressed.
+ * Sort keys (values of `settings.Order`) are column id + 1 (1-based so a negative value means descending).
+ * Storage: `localStorage["ExploreSettings"]` = `{Order:number[], Cols:number[]}`.
+ * Styled by explore.css.
+ */
+
+/**
+ * Formats an integer with a space as thousands separator (inserted every 3 digits from the right).
+ * @param {number|string} value - Value to format (converted with `"" + value`).
+ * @returns {string} The formatted text, e.g. "1 234 567".
+ */
 function IntToString(value) {
     var v = "" + value;
     var l = v.length - 3;
@@ -10,10 +41,25 @@ function IntToString(value) {
     return v;
 }
 
+/**
+ * Converts a serialized date (ExploreItem.LastModified) to a Date; used for sorting and the time column.
+ * @param {string|number} dd - Date value accepted by `new Date()`.
+ * @returns {Date} The parsed date.
+ */
 function GetDate(dd) {
     return new Date(dd);
 }
 
+/**
+ * Writes a size into a size cell.
+ * - string (e.g. "<DIR>", "[API]", "[???]", "[UP]"): written as is;
+ * - null: writes "-" with an "unknown size" tooltip (dynamically generated resource);
+ * - number: written with IntToString; when it rounds to >= 1 kb (size >= 512 bytes) the tooltip lists a
+ *   copy hint plus rounded kb / Mb / Gb values (each only when > 0).
+ * @param {HTMLElement} el - The target cell.
+ * @param {number|string|null} size - Size in bytes or a placeholder text.
+ * @returns {boolean} True when the value should be shown dimmed (string or null), false for a numeric size.
+ */
 function SetByteSize(el, size)
 {
     if (typeof size === "string") {
@@ -43,10 +89,24 @@ function SetByteSize(el, size)
 }
 
 
+/**
+ * Writes a date/time into a cell by delegating to `ValueFormat.updateDateTime(el, dd)` (common.js).
+ * @param {HTMLElement} el - The target cell.
+ * @param {Date} dd - The date to show.
+ * @returns {void}
+ */
 function SetDateString(el, dd) {
     ValueFormat.updateDateTime(el, dd);
 }
 
+/**
+ * Writes a cache duration into a cell: `<= 0` -> "-" with class `Dimmed` and a "Not cached" tooltip;
+ * `> 1500000000` -> "∞" (cached until the server is restarted); otherwise "{n} s" (n via IntToString)
+ * with a "Cached for n seconds" tooltip.
+ * @param {HTMLElement} el - The target cell.
+ * @param {number} dd - Duration in seconds (ExploreItem.ClientCacheDuration / RequestCacheDuration).
+ * @returns {void}
+ */
 function SetCacheDuration(el, dd) {
 
     if (dd <= 0) {
@@ -65,6 +125,12 @@ function SetCacheDuration(el, dd) {
 }
 
 
+/**
+ * Loads the listing settings from `localStorage["ExploreSettings"]` (JSON; missing or invalid -> `{}`)
+ * and applies defaults: `Order` = [1, 2] (type, then name, ascending) when missing; `Cols` =
+ * [0,1,2,5,3,6,7,4,8,9] when missing or not exactly 10 entries long. No UI changes `Cols`.
+ * @returns {{Order:number[], Cols:number[]}} The settings object (sort keys and column ids).
+ */
 function GetSettings() {
     var s = localStorage.getItem("ExploreSettings");
     try {
@@ -84,11 +150,23 @@ function GetSettings() {
     return s;
 }
 
+/**
+ * Persists the listing settings as JSON to `localStorage["ExploreSettings"]`.
+ * @param {{Order:number[], Cols:number[]}} s - The settings to store.
+ * @returns {void}
+ */
 function UpdateSettings(s) {
     localStorage.setItem("ExploreSettings", JSON.stringify(s));
 }
 
 
+/**
+ * Returns the lower-case extension of a name (text after the last "."; "" when there is none).
+ * When a truthy type `t` is given and it is not 2 (File) or 3 (Api), returns "" (folders, uploads).
+ * @param {string} n - The item name.
+ * @param {number} [t] - Optional ExploreItem.Type (HttpServerEndpointTypes); 0 / undefined skips the check.
+ * @returns {string} The extension without the dot, lower case.
+ */
 function GetFileExtension(n, t) {
 
     if (t)
@@ -99,12 +177,25 @@ function GetFileExtension(n, t) {
     return n.slice((n.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
 }
 
+/**
+ * Appends a header cell to a row: inserts a `td` and replaces it with a new `th` element.
+ * @param {HTMLTableRowElement} row - The header row.
+ * @returns {HTMLTableCellElement} The new `th` element.
+ */
 function InsertTableCell(row) {
     const c = document.createElement("th");
     row.replaceChild(c, row.insertCell());
     return c;
 }
 
+/**
+ * Makes a sort key the primary sort: removes `index` and `-index` from `set.Order`, inserts `index` first,
+ * then rebuilds the table (`BuildTable`) and persists the settings (`UpdateSettings`).
+ * @param {number} index - Sort key (column id + 1); negative = descending.
+ * @param {{Order:number[], Cols:number[]}} set - The settings (modified in place).
+ * @param {object} data - The ExploreData to render.
+ * @returns {void}
+ */
 function DoSort(index, set, data) {
     let order = set.Order;
     let i = order.indexOf(index);
@@ -118,6 +209,23 @@ function DoSort(index, set, data) {
     UpdateSettings(set);
 }
 
+/**
+ * Fills a header cell with a sort control: a `div` holding a sort icon `img`
+ * (`data.IconBase + "m_sort_desc.svg"` when the column is in `set.Order` as descending, else
+ * `"m_sort_asc.svg"`; class `Dimmed` unless it is the primary sort) and, when `title` is given, a `span`
+ * with the title. Tooltip: "Click to sort by {name} in ascending/descending order [as priority #1]" plus
+ * "Currently at priority #n." when the column is in the order, prefixed by `extra`.
+ * Clicking icon or span calls `DoSort` with the flipped direction when the column is the current ascending
+ * sort or a non-current descending one (`flip = current ^ desc`).
+ * @param {object} data - The ExploreData (for `IconBase` and the rebuild).
+ * @param {{Order:number[], Cols:number[]}} set - The settings.
+ * @param {HTMLTableCellElement} el - The header cell to fill.
+ * @param {number} index - Column id (0-based; +1 internally to form the sort key).
+ * @param {string} name - Column name used in tooltips.
+ * @param {string|null} title - Visible column title (null = icon only).
+ * @param {string} [extra] - Column description prefixed to the tooltip.
+ * @returns {void}
+ */
 function AddSortHeader(data, set, el, index, name, title, extra)
 {
     ++index;
@@ -167,6 +275,11 @@ function AddSortHeader(data, set, el, index, name, title, extra)
         tit += "\n" + _T("Currently at priority #{0}.", prio, "A tool tip description to a table column header, that indicates the sorting priority of that column.{0} is replaced with the priority number, 1, 2, 3 and so on");
     if (extra)
         tit = extra + "\n\n" + tit;
+    /**
+     * Click handler of the sort icon and title span: `DoSort(flip ? -index : index, set, data)`.
+     * @param {MouseEvent} ev - The click event (unused).
+     * @returns {void}
+     */
     var click = function (ev) {
         DoSort(flip ? -index : index, set, data);
     };
@@ -192,6 +305,16 @@ function AddSortHeader(data, set, el, index, name, title, extra)
     div.appendChild(s);
 }
 
+/**
+ * Appends the path navigator `div.ExploreNavigator.ThemeBaseFg` to `document.body`: one
+ * `ValueFormat.createLink` (class `Path`) per segment of `data.LocalUrl`, the first labeled "ROOT".
+ * Parent segments link to `"../".repeat(depth) + <FolderSuffix without leading "/"> + <query>` (`_self`,
+ * explores that folder); the last segment links to `"./" + <query>` in `_blank`. The current query string
+ * is kept on all links. Tooltips show the absolute folder url derived from `data.BaseUrl`.
+ * @param {object} data - The ExploreData.
+ * @param {object} set - The settings (unused).
+ * @returns {void}
+ */
 function BuildNavigator(data, set) {
     const nav = document.createElement("div");
     nav.classList.add("ExploreNavigator");
@@ -229,6 +352,30 @@ function BuildNavigator(data, set) {
 
 }
 
+/**
+ * Builds (or rebuilds) the listing table `table.Explore`.
+ *
+ * 1. Sorts `data.Items` in place by the keys in `set.Order` (1 type, 2 name case-insensitive, 3 size,
+ *    4 extension, 5 auth, 6 last modified, 7 client cache, 8 request cache, 9 comp preference,
+ *    10 pre-compressed; negative = descending; empty auth/comp/precompressed values sort first).
+ * 2. Header row (`ThemeAccBg ThemeBaseFg`) with one `th` per column id in `set.Cols` (via InsertTableCell),
+ *    classes `ExploreIconH` ... `ExplorePreCompressedH`, filled by `AddSortHeader`.
+ * 3. One row per item with cells `td.ExploreIcon`, `ExploreName`, `ExploreSize`, `ExploreExt`, `ExploreAuth`,
+ *    `ExploreTime`, `ExploreClientCache`, `ExploreRequestCache`, `ExploreCompPreference`, `ExplorePreCompressed`.
+ *    Per type: Folder -> `FolderIcon` (`VirtualFolderIcon` when Location does not start with "[Folder]"),
+ *    link `name + FolderSuffix + query`, "<DIR>"; File -> `ExtIconBase + ext + ".svg"` ("bin" without
+ *    extension), view-mode link, byte size; Api -> `ApiIcon`, link `IconBase + "../explore/api.html?q=" +
+ *    LocalUrl + name`, "[API]"; Unknown -> `ApiIcon`, "[???]"; FileUpload -> `ApiIcon`, "[UP]".
+ *    New windows (`_blank`) are only used for files/uploads and only when embedded in a frame
+ *    (`window.location !== window.parent.location`).
+ *    Auth cells: `g_protected.svg` plus one span per token, or a dimmed `g_warning.svg` for public items.
+ *    Compression cells: one span per `method:quality` entry.
+ *    A local `accent` flag alternates `ThemeMain` / `ThemeAccFg` / `ThemeAccBg`-`ThemeMainBg` per column.
+ * 4. Replaces the first `<table>` in `document.body`, or appends the new table.
+ * @param {object} data - The ExploreData (Items is sorted in place).
+ * @param {{Order:number[], Cols:number[]}} set - The settings.
+ * @returns {void}
+ */
 function BuildTable(data, set)
 {
     const table = document.createElement("table");
@@ -755,6 +902,13 @@ function BuildTable(data, set)
 }
 
 
+/**
+ * Entry point (called by the template's inline `exploreMain()` with the inlined ExploreData): shows a
+ * loading indicator, loads the settings (`GetSettings`), clears `document.body`, builds the navigator and
+ * the table, then removes the loader.
+ * @param {object} data - The ExploreData of the current folder.
+ * @returns {void}
+ */
 function Build(data) {
     const closeLoader = AddLoading();
     const set = GetSettings();

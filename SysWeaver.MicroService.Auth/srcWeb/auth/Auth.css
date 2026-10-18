@@ -1,8 +1,32 @@
-﻿html {
+﻿/*
+ * Auth.css - styles of the auth pages (SysWeaver.MicroService.Auth, served as auth/Auth.css).
+ *
+ * Styles: the centered page body, the floating box form.SysWeaver-AuthBox (built by AuthPage / CreateAuthWrapper in
+ * AuthUi.js), the SysWeaver-Auth* custom elements created by the Auth* factories in AuthUi.js, inputs and the icons
+ * placed inside them, the phone input, the tab bar and the auth icon mask classes.
+ *
+ * Loaded by: auth/Login.html and auth/Logout.html (this folder) and by every page of the other auth/ contributions:
+ * SysWeaver.MicroService.PassKey (together with Passkey.css), SysWeaver.MicroService.UserManager (together with
+ * UserManager.css) and SysWeaver.Auth.Core (together with SimpleAuth.css). Always after ../common/theme.css.
+ *
+ * Dependencies: all colors, radii and durations are --Theme* custom properties from common/theme.css (--ThemeBackgroundRGB,
+ * --ThemeMainRGB, --ThemeBackground, --ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc2, --ThemeAcc225, --ThemeAcc250,
+ * --ThemeError, --ThemeWarning, --ThemeOk, --ThemeRad, --ThemeRadInp, --ThemeFadeDuration). Icon classes are combined with
+ * common.js ColorIcon elements (icon-<w>x<h> custom elements) which supply size, color and mask setup; this file only
+ * sets mask-image (icons from the global ../icons/ folder).
+ * Not templated. No @keyframes, no @media queries and no [data-theme] rules (theming comes from the variables).
+ * Icon classes IconUsePasskey, IconPasskeyKey and PasskeyIconButton used by loginMain are defined in Passkey.css.
+ */
+
+/* ===== Page and box ===== */
+
+/* Document root: no padding. */
+html {
     padding: 0;
     display: block;
 }
 
+/* Page body: full-size, centered wrapping flex container holding the auth box; text selection disabled. */
 body {
     user-select: none;
     margin: 0;
@@ -14,11 +38,19 @@ body {
     justify-content: center;
     align-items: center;
 }
+    /* body.Top: aligns the box to the top instead of the center; set statically by Auth.Core KeyMan.html (<body class="Top">). */
     body.Top {
         align-items: start;
     }
 
 
+/*
+ * The floating auth box (<form class="SysWeaver-AuthBox">, created by CreateAuthWrapper / AuthPage in AuthUi.js):
+ * absolute, at most 600 px wide and 80vh high, semi-transparent theme background, thin main-color border, large shadow.
+ * Defines the custom properties:
+ *   --TM        vertical spacing unit (2em); top margins of texts, labels, tabs, lists, hr, button rows (quarter above inputs).
+ *   --boxWidth  box width: min(100vw - 2em, 600px); also used for the page icon size.
+ */
 form.SysWeaver-AuthBox {
     --TM: calc(2em);
     --boxWidth: calc(min(100vw - 2em, 600px));
@@ -39,6 +71,10 @@ form.SysWeaver-AuthBox {
     box-shadow: rgba(0,0,0,0.5) 0 0 2em;
 }
 
+    /*
+     * The page icon added by AuthPage (128x128 ColorIcon, custom element Icon-128x128), rescaled and centered.
+     * --size: rendered icon size = min(20vh, 15vw, 70% of --boxWidth); used for width, height and mask-size.
+     */
     form.SysWeaver-AuthBox > Icon-128x128 {
         --size: calc(min(20vh, min(15vw, var(--boxWidth) * 0.7)));
         box-sizing: border-box;
@@ -49,6 +85,9 @@ form.SysWeaver-AuthBox {
         display: block;
     }
 
+/* ===== Text elements ===== */
+
+/* SysWeaver-AuthText (AuthText in AuthUi.js): centered block text with top margin --TM. */
 SysWeaver-AuthText {
     margin-top: var(--TM);
     display: block;
@@ -57,15 +96,18 @@ SysWeaver-AuthText {
     overflow: hidden;
 }
 
+/* .Highlight: accent color --ThemeAcc1; added by Passkey.js (SysWeaver.MicroService.PassKey) to passkey names in lists. */
 .Highlight
 {
     color: var(--ThemeAcc1);
 }
 
+/* .NoMargin: resets margin-top; added by Passkey.js (PassKey) to list rows and AuthHr separators. */
 .NoMargin{
     margin-top: initial;
 }
 
+/* SysWeaver-AuthError (AuthError in AuthUi.js): italic centered status line, min height 2.5em, scrolls vertically. */
 SysWeaver-AuthError {
     margin-top: var(--TM);
     font-style: italic;
@@ -77,6 +119,10 @@ SysWeaver-AuthError {
     overflow-y: auto;
 }
 
+    /*
+     * Status colors of SysWeaver-AuthError: .Error (--ThemeError), .Warning (--ThemeWarning), .Good (--ThemeOk).
+     * Classes set by CheckPassword (Auth.js) and AuthSetError (AuthUi.js); cleared by AuthSetText.
+     */
     SysWeaver-AuthError.Error {
 
         color: var(--ThemeError);
@@ -91,6 +137,7 @@ SysWeaver-AuthError {
     }
 
 
+/* SysWeaver-AuthLabel (AuthLabel in AuthUi.js): bold --ThemeAcc2 block label above inputs. */
 SysWeaver-AuthLabel {
     margin-top: var(--TM);
     color: var(--ThemeAcc2);
@@ -101,6 +148,7 @@ SysWeaver-AuthLabel {
 }
 
 
+/* State classes inside the box: .Fail (--ThemeAcc1) and .Info (--ThemeAcc2) status text, toggled by logoutMain. */
 form.SysWeaver-AuthBox *.Fail {
     color: var(--ThemeAcc1);
 }
@@ -109,14 +157,22 @@ form.SysWeaver-AuthBox *.Info {
     color: var(--ThemeAcc2);
 }
 
+/* .Hide: display none; used by logoutMain (*Retry* button) and loginMain (passkey button when unsupported). */
 form.SysWeaver-AuthBox *.Hide {
     display: none;
 }
 
+/* ===== Inputs and buttons ===== */
+
+/* Button rows (SysWeaver-CenterBlock created by AuthButtonRow): top padding --TM. */
 form.SysWeaver-AuthBox SysWeaver-CenterBlock {
     padding-top: var(--TM);
 }
 
+/*
+ * All inputs in the box: full width, large bold text, theme colors, rounded; a 2 px outline (25% main color,
+ * !important to beat browser focus styles) animated on :hover (75%) and :focus (--ThemeAcc1).
+ */
 form.SysWeaver-AuthBox input {
     margin-top: calc(var(--TM) * 0.25);
     width: 100%;
@@ -141,15 +197,18 @@ form.SysWeaver-AuthBox input {
         outline: 2px solid var(--ThemeAcc1) !important;
     }
 
+    /* Invalid input: red glow (--ThemeError box shadow); class Error set by AuthSetError. */
     form.SysWeaver-AuthBox input.Error {
         box-shadow: var(--ThemeError) 0 0 0.75em;
     }
 
+/* Same red glow for any input inside an element with class Error (e.g. the SysWeaver-AuthPhone group). */
 form.SysWeaver-AuthBox *.Error input {
     box-shadow: var(--ThemeError) 0 0 0.75em;
 }
 
 
+    /* Input placeholder: faint, italic, smaller. */
     form.SysWeaver-AuthBox input::placeholder {
         color: var(--ThemeMain);
         opacity: 0.3;
@@ -159,6 +218,9 @@ form.SysWeaver-AuthBox *.Error input {
     }
 
 
+/* ===== Tabs ===== */
+
+/* SysWeaver-AuthTab (AuthTab in AuthUi.js): bold block tab bar with an opacity transition. */
 SysWeaver-AuthTab {
     margin-top: var(--TM);
     font-weight: bold;
@@ -168,12 +230,14 @@ SysWeaver-AuthTab {
     transition: opacity linear var(--ThemeFadeDuration);
 }
 
+    /* .Disabled tab bar: 50% opacity, no pointer events; toggled by UserManagerUi.js (UserManager) while a request runs. */
     SysWeaver-AuthTab.Disabled
     {
         opacity: 0.5;
         pointer-events: none;
     }
 
+/* SysWeaver-AuthTabHeader (created by AuthTab .Add): inline-flex rounded pill with --ThemeAcc250 border and --ThemeAcc2 text. */
 SysWeaver-AuthTabHeader {
     display: inline-flex;
     align-items: center;
@@ -189,12 +253,14 @@ SysWeaver-AuthTabHeader {
 
 
 
+    /* The optional 24x24 header ColorIcon (icon-24x24 element) gets a left margin. */
     SysWeaver-AuthTabHeader > icon-24x24
     {
         margin-left: 0.5em;
     }
 
 
+    /* Header :hover (--ThemeAcc225 background) and :focus (--ThemeAcc1 outline); no outline on the selected header. */
     SysWeaver-AuthTabHeader:hover {
         background-color: var(--ThemeAcc225);
     }
@@ -208,6 +274,7 @@ SysWeaver-AuthTabHeader {
     }
 
 
+    /* Selected header (class Selected set by AuthTab activateIndex): filled --ThemeAcc2, background-colored text, not clickable. */
     SysWeaver-AuthTabHeader.Selected {
         cursor: default;
         pointer-events: none;
@@ -215,6 +282,7 @@ SysWeaver-AuthTabHeader {
         color: var(--ThemeBackground);
     }
 
+/* SysWeaver-AuthTabContent: 64 px high relative block for the active tab's content; created by UserManagerUi.js (UserManager). */
 SysWeaver-AuthTabContent {
     display: block;
     width: 100%;
@@ -223,27 +291,37 @@ SysWeaver-AuthTabContent {
     height: 64px;
     transition: opacity linear var(--ThemeFadeDuration);
 }
+    /* .Disabled tab content: 50% opacity, no pointer events (set by UserManagerUi.js). */
     SysWeaver-AuthTabContent.Disabled {
         pointer-events: none;
         opacity: 0.5;
     }
 
 
+/* Inside-input 32x32 icons (Icon-32x32, from AuthAddIcon) in tab content: forced absolute at top 10px (overrides the inline top). */
 SysWeaver-AuthTabContent Icon-32x32
 {
     position: absolute !important;
     top: 10px;
 }
 
+/* ===== Phone input and lists ===== */
+
+/* Phone input (class Phone added by AuthInputPhone): 64 px left padding to make room for the flag. */
 form.SysWeaver-AuthBox input.Phone {
     padding-left: 64px;
 }
 
+/* SysWeaver-AuthPhone: relative wrapper of the phone input and its flag (AuthInputPhone). */
 SysWeaver-AuthPhone {
     display: block;
     position: relative;
 }
 
+/*
+ * SysWeaver-AuthPhoneCc: 48x40 flag button at the input's left edge; the background-image
+ * (../iso_data/country/<ISO>.svg) is set inline by setCountry in AuthInputPhone.
+ */
 SysWeaver-AuthPhoneCc {
     position: absolute !important;
     left: 6px;
@@ -263,6 +341,7 @@ SysWeaver-AuthPhoneCc {
     outline: 2px solid transparent;
 }
 
+    /* Flag :hover (--ThemeAcc1 background) and :focus (--ThemeAcc2 outline). */
     SysWeaver-AuthPhoneCc:hover {
         background-color: var(--ThemeAcc1);
         
@@ -273,6 +352,7 @@ SysWeaver-AuthPhoneCc {
     }
 
 
+/* SysWeaver-AuthList: scrollable (max 50vh) bordered list box; created by Passkey.js (PassKey) for the passkey list. */
 SysWeaver-AuthList {
     position: relative;
     margin-top: var(--TM);
@@ -285,15 +365,20 @@ SysWeaver-AuthList {
     background-color: rgba(var(--ThemeMainRGB), 0.05);
 }
 
+    /* Button rows inside a list: 1em top margin, no top padding. */
     SysWeaver-AuthList SysWeaver-CenterBlock {
         margin-top: 1em;
         padding-top: 0 !important;
     }
 
+    /* ===== Inside-input icons ===== */
+
+    /* .InsideInput: icons placed inside inputs by AuthAddIcon; relative positioning, offsets set inline. */
     .InsideInput {
         position: relative;
     }
 
+    /* Disabled inside-input icon (IconDisabled is applied by common.js ColorIcon.SetEnabled(false)): 10% opacity, also on :hover. */
     .InsideInput.IconDisabled {
         opacity: 0.1;
     }
@@ -302,26 +387,34 @@ SysWeaver-AuthList {
             opacity: 0.1;
         }
 
+/* Horizontal rules (AuthHr): top margin --TM. */
 hr {
     margin-top: var(--TM);
 }
 
+/* ===== Icon mask classes (used with common.js ColorIcon; images from ../icons/) ===== */
+
+/* IconRetry: reload.svg, *Retry* button of logoutMain. */
 .IconRetry {
     mask-image: url("../icons/reload.svg");
 }
 
+/* IconWarning: warning.svg, used by Passkey.js (PassKey) error pages and common.js. */
 .IconWarning {
     mask-image: url("../icons/warning.svg");
 }
 
+/* IconAuthPassword: lock.svg, *Sign in* button of loginMain. */
 .IconAuthPassword {
     mask-image: url("../icons/lock.svg");
 }
 
+/* IconAuthPost: send.svg, UserManager submit buttons. */
 .IconAuthPost {
     mask-image: url("../icons/send.svg");
 }
 
+/* IconAuthLogin / IconAuthLogout: user.svg / user_logout.svg, page icons of loginMain / logoutMain. */
 .IconAuthLogin {
     mask-image: url("../icons/user.svg");
 }
@@ -330,14 +423,17 @@ hr {
     mask-image: url("../icons/user_logout.svg");
 }
 
+/* IconAuthCopy: copy.svg, default copy icon of AuthInput / AuthInputPhone. */
 .IconAuthCopy {
     mask-image: url("../icons/copy.svg");
 }
 
+/* IconAuthRandom: dice.svg, password generator icon of AuthNewPassword. */
 .IconAuthRandom {
     mask-image: url("../icons/dice.svg");
 }
 
+/* IconAuthView / IconAuthViewOff: eye.svg / eye_off.svg, show/hide toggle of AuthPassword. */
 .IconAuthView {
     mask-image: url("../icons/eye.svg");
 }
@@ -346,6 +442,7 @@ hr {
     mask-image: url("../icons/eye_off.svg");
 }
 
+/* IconAuthEmail / IconAuthPhone: email.svg / phone.svg, UserManager e-mail / phone buttons and tabs. */
 .IconAuthEmail {
     mask-image: url("../icons/email.svg");
 }

@@ -1,8 +1,25 @@
 ﻿
+/*
+ * Styles of the SysWeaver application shell and the reusable menu / pop-up library (application.js).
+ * Linked by the root index.html (the shell) and by every page that uses the pop-up functions or menu icons
+ * (explore, chart, edit, chat, server manager, ...): pages using PopUp/Confirm/PopUpMenu etc. must link it.
+ * Depends on common/theme.css for variables (--ThemeIconSize, --ThemeFont, --ThemeMain*, --ThemeAcc*,
+ * --ThemeBackground*, --ThemeRad*, --ThemeFadeDuration, ...RGB variants) and html.Embedded.
+ * Uses native CSS nesting for the body state classes. Not a template.
+ * Sections: APP (shell layout), Default menu (.DefaultMenu tables), Pop-ups (SysWeaver-*), Icons (.Icon* masks).
+ */
+
+/* Empty html rule (placeholder). */
 html {
 
 }
 
+/*
+ * Body layout variables (custom properties, inherited by the shell):
+ * --h   header button size = 44px scaled by --ThemeIconSize;
+ * --imh inner margin of the header (5px, top/bottom padding of buttons);
+ * --mh  total header height = --h + 2 * --imh (also the top offset of app-menu / app-content).
+ */
 body {
     width: 100%;
     height: 100%;
@@ -13,6 +30,11 @@ body {
 
 /****** APP ******/
 
+/*
+ * <app-header> (created by App.Init): fixed top bar, z-index 2 (above app-menu and app-content).
+ * Button slot positions (custom properties): --mw outer margin (4px), --me spacing between buttons (8px),
+ * --s0 first slot offset, --s1 second slot (--s0 + --h + --me), --s2 third slot (title inset from both sides).
+ */
 app-header {
     --mw: 4px;
     --me: 8px;
@@ -33,6 +55,7 @@ app-header {
     z-index: 2;
 }
 
+    /* <app-MenuButton>, <app-BackButton>, <app-PinButton>: left side header buttons in slots --s0 / --s1 (back and pin share --s1). */
     app-header app-MenuButton {
         position: absolute;
         width: var(--h);
@@ -59,6 +82,11 @@ app-header {
         transition: opacity linear var(--ThemeFadeDuration);
     }
 
+/*
+ * Pin button visibility per menu state (body classes): .SwNarrow (narrow layout, set by common.js) and
+ * .SwCollapsed (menu collapsed, App.Init) hide it; .SwPinned (menu pinned, App.Init) dims it to 25%;
+ * .SwMobile (mobile device, common.js) removes it.
+ */
 body.SwNarrow {
 
     app-header app-PinButton {
@@ -91,6 +119,7 @@ body.SwMobile {
 }
 
 
+/* <app-ContentTitle>: centred, upper-case title of the current content between the button slots. */
 app-header app-ContentTitle {
     position: absolute;
     top: var(--imh);
@@ -109,10 +138,12 @@ app-header app-ContentTitle {
     user-select: text;
 }
 
+        /* .Hidden: added by the menus' ExternalContentFn while there is no title (fades out). */
         app-header app-ContentTitle.Hidden {
             opacity: 0;
         }
 
+/* <app-SettingsButton> (right slot --s0) and <app-UserButton> (right slot --s1). */
 app-header app-SettingsButton {
     position: absolute;
     width: var(--h);
@@ -129,6 +160,7 @@ app-header app-UserButton {
     top: var(--imh);
 }
 
+    /* .WithUser: added by App.Init to the user icon when logged in (shows the user image with an outline; hover/focus variants). */
     app-header app-UserButton .WithUser {
         border-radius: 15%;
         transition: linear outline var(--ThemeFadeDuration);
@@ -146,6 +178,10 @@ app-header app-UserButton {
             outline: 3px solid var(--ThemeAcc275) !important;
         }
 
+/*
+ * <app-menu>: the main menu panel (400px wide, z-index 1, below the header). `direction: rtl` puts the
+ * scrollbar on the left; children are reset to ltr below. Slides via transform (see .SwCollapsed).
+ */
 app-menu {
     background-image: linear-gradient(to right, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
     color: var(--ThemeAcc1);
@@ -171,6 +207,7 @@ app-menu {
     scrollbar-gutter: stable;
 }
 
+    /* Faint logo watermark (../logo.svg, 5% opacity) at the bottom of the menu, not interactive. */
     app-menu:before {
         content: '';
         position: fixed;
@@ -190,10 +227,15 @@ app-menu {
 
 
 
+    /* Reset the rtl scrollbar trick for the menu content. */
     app-menu > * {
         direction: ltr;
     }
 
+/*
+ * .SwCollapsed (body, set by App.Init setPinned/menuHide): the menu is translated left so only a 52px
+ * (scaled) icon strip stays visible; only the icon cells keep their border/background (hover, MenuSel).
+ */
 body.SwCollapsed {
     app-menu {
         transform: translateX(calc(-400px + 52px * var(--ThemeIconSize)));
@@ -233,6 +275,7 @@ body.SwCollapsed {
         }
 }
 
+/* Narrow layout: the menu is full width; when collapsed it slides up out of view instead of left. */
 body.SwNarrow app-menu {
     width: 100%;
     box-shadow: 0px 8px 8px rgba(0, 0, 0, 0.4);
@@ -246,6 +289,7 @@ body.SwNarrow.SwCollapsed {
 
 }
 
+/* <app-capture>: nearly transparent full-screen overlay appended by App.Init menuShow while a collapsed menu is shown. */
 app-capture {
     /*background-color: transparent;*/
     background-color: rgba(0,0,0,0.05);
@@ -259,6 +303,10 @@ app-capture {
 
 
 
+/*
+ * <app-content>: iframe host below the header (z-index 0), left padding leaves room for the collapsed menu
+ * strip; 400px when .SwPinned, 0 on .SwNarrow.
+ */
 app-content {
     position: absolute;
     z-index: 0;
@@ -277,6 +325,7 @@ body.SwPinned app-content {
     padding-left: 400px;
 }
 
+    /* Content iframe (MainMenu.EmbeddContent); iframe.Hidden fades/slides it while loading or being replaced. */
     app-content iframe {
         overflow: auto;
         width: 100%;
@@ -297,6 +346,10 @@ body.SwNarrow app-content {
 
 /****** Default menu ******/
 
+/*
+ * .DefaultMenu (MainMenuStyle.MenuStyle, added by MainMenu to its host element: app-menu or
+ * SysWeaver-PopupMenuBack): menu tables built by MainMenu.Add. Row cells: 1 indent, 2 expander, 3 name, 4 icon.
+ */
     .DefaultMenu table {
         border: none;
         border-collapse: separate;
@@ -315,6 +368,7 @@ body.SwNarrow app-content {
         margin: 0.25em 0;
     }
 
+        /* table.MenuNoExpand (MainMenu constructor, no item has children): collapse indent and expander columns. */
         .DefaultMenu table.MenuNoExpand td:first-child {
             padding: 0;
             width: 10px;
@@ -332,6 +386,10 @@ body.SwNarrow app-content {
 
 
 
+/*
+ * Pop-up menu overrides (<SysWeaver-PopupMenuBack> has an accent background, so lines/hover use background
+ * colours): sub menu rows (.SubMenu), collapsed marker (.SubMenuHide), nested tree lines (.MenuNested) and hover.
+ */
 SysWeaver-PopupMenuBack.DefaultMenu tr.SubMenu {
     color: inherit;
 }
@@ -361,6 +419,7 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
 
 
 
+/* Rows; tr.SubMenuHide (collapsed sub menu, MainMenu.Add) gets an inset right edge marker on the icon cell. */
 .DefaultMenu tr {
     transition: opacity linear 0.15s, box-shadow linear 0.15s;
 }
@@ -369,6 +428,7 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
         box-shadow: inset -2px 0 0 var(--ThemeMain25);
     }
 
+/* Cells: transparent top/bottom borders that light up on hover/selection. */
 .DefaultMenu td {
     transition: border linear 0.15s, background-color linear 0.15s;
     border: solid 1px transparent;
@@ -377,12 +437,14 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
     overflow: hidden;
 }
 
+/* <Icon-32x32> (ColorIcon element) with .IconDisabled (the selected row's icon is disabled by MainMenu.Select): keep it fully opaque. */
 .DefaultMenu td Icon-32x32.IconDisabled{
     opacity: 1;
 }
 
 
 
+    /* Column layout: 1 indent (width set inline per depth), 2 expander, 3 name (rounded left), last icon (rounded right). */
     .DefaultMenu td:first-child {
         width: 0px;
         min-width: 6px;
@@ -418,11 +480,17 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
     }
 
 
+/* Nudge the icon down to centre it. */
 .DefaultMenu td:last-child > * {
     position: relative;
     top: 3px;
 }
 
+/*
+ * tr.MenuNested (MainMenu.Add, row holding a child table): no padding/border; the nested table draws the tree
+ * lines with 2px linear-gradient background images (vertical on the table, horizontal on tbody); the
+ * horizontal offset is set inline per depth (backgroundPositionX).
+ */
 .DefaultMenu tr.MenuNested > td {
     padding: 0;
     border: none !important;
@@ -458,6 +526,7 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
         }
 
 
+/* tr.MenuHide (MainMenu.Add expandFn / stored collapsed state): hides the child rows. */
 .DefaultMenu tr.MenuHide {
        display: none;
 }
@@ -471,6 +540,11 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
         margin-bottom: 0.5em;
     }*/
 
+/*
+ * Row states set by MainMenu: .SubMenu (has children, main colour), .MenuData (item row; hover highlight),
+ * .MenuSel (selected, MainMenu.Select), .MenuClick (has a click handler: pointer, 80% opacity until hover),
+ * .MenuDisabled (Flags bit 1: 40% opacity, no hover), .MenuChecked (Flags bit 2: check mark after the expander).
+ */
 .DefaultMenu tr.SubMenu {
     color: var(--ThemeMain);
 }
@@ -519,6 +593,7 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
     overflow: visible;
 }
 
+/* tr.MenuSeparator (item Id "-"): a centred 1px line drawn with a gradient background, optional label span on top. */
 .DefaultMenu tr.MenuSeparator td:nth-child(3) {
     opacity: 0.5;
     color: var(--ThemeBackground);
@@ -560,7 +635,8 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
         opacity: 1;
     }
 
-    
+
+/* Menu cell text never wraps; nested-row expander cells have no padding. */
  .DefaultMenu td {
     white-space: nowrap;
 }
@@ -572,6 +648,12 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
     }
 
 
+/****** Pop-ups ******/
+
+/*
+ * <SysWeaver-PopupMenu>: the anchored pop-up container (CreatePopUpAtElement), fixed at coordinates computed in JS.
+ * .Bottom variant pins the menu back to the bottom (no setter found in application.js).
+ */
 SysWeaver-PopupMenu {
     position: fixed;
     display: block;
@@ -582,6 +664,11 @@ SysWeaver-PopupMenu {
         bottom: 0;
     }
 
+/*
+ * <SysWeaver-PopupMenuBack> (PopUpElementMenu): accent coloured, scrollable panel of a pop-up menu.
+ * Uses a scroll-driven animation (animation-timeline: scroll(y self)) with the keyframes below so the right
+ * corners become square only when the panel actually scrolls (scrollbar present).
+ */
 SysWeaver-PopupMenuBack {
     position: fixed;
     display: block;
@@ -604,6 +691,7 @@ SysWeaver-PopupMenuBack {
     animation-timeline: scroll(y self);
 }
 
+/* @keyframes SysWeaver-PopupMenuBack-Scroll: squares the right corners (applied only while scrollable, see above). */
 @keyframes SysWeaver-PopupMenuBack-Scroll {
     0%,to {
         border-top-right-radius: 0;
@@ -611,11 +699,13 @@ SysWeaver-PopupMenuBack {
     }
 }
 
+    /* .Rel: relative positioning variant (added by ServerManager serviceInfo.js). */
     SysWeaver-PopupMenuBack.Rel {
         position: relative;
     }
 
 
+    /* <SysWeaver-Blocker> (CreatePopUpBlocker): full-screen dimmed, blurred backdrop (z-index 100) that holds a pop-up. */
     SysWeaver-Blocker {
         position: fixed;
         display: block;
@@ -634,6 +724,7 @@ SysWeaver-PopupMenuBack {
             outline: none;
         }
 
+        /* <SysWeaver-BlockerClose>: centred container for a close button (only created by commented-out code in PopUp). */
         SysWeaver-Blocker SysWeaver-BlockerClose {
             z-index: 100000;
             position: fixed;
@@ -649,6 +740,7 @@ SysWeaver-PopupMenuBack {
             pointer-events: none;
         }
 
+        /* <SysWeaver-BlockerCloseButton> (PopUp with haveCloseButton): top-right holder of the IconClosePopUp icon. */
         SysWeaver-Blocker SysWeaver-BlockerCloseButton {
             display: block;
             position: absolute;
@@ -663,7 +755,12 @@ SysWeaver-PopupMenuBack {
                 margin-left: 6px;
             }
 
-    SysWeaver-Blocker .FullWidth SysWeaver-PopupBackground {
+    /*
+     * Blocker size variants set by PopUp's page.MakeFullWidth() (.FullWidth) / page.MakeMaxHeight() (.MaxHeight).
+     * SysWeaver-PopupBackground matches <SysWeaver-PopUpBackground> (tag names are case-insensitive).
+     * Both selectors match the class on the blocker itself (SysWeaver-Blocker.FullWidth / .MaxHeight).
+     */
+    SysWeaver-Blocker.FullWidth SysWeaver-PopupBackground {
         max-width: calc(100% - 2em);
         width: calc(100% - 2em);
     }
@@ -679,6 +776,7 @@ SysWeaver-Blocker.FullWidth SysWeaver-BlockerClose {
     max-width: calc(100% - 2em);
 }
 
+    /* .Scroll: toggled on the blocker by a ResizeObserver in PopUp/PopUpElement when the content overflows (scrollbar shown). */
     SysWeaver-Blocker.Scroll SysWeaver-PopupBackground {
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
@@ -688,6 +786,10 @@ SysWeaver-Blocker.FullWidth SysWeaver-BlockerClose {
         left: calc(100% - 34px - 20px);
     }
 
+/*
+ * <SysWeaver-PopUpBackground> (PopUp): the centred dialog panel, 40em wide, scrollable, top padding leaves room
+ * for the close button. --maxWidth: local custom property, the viewport width minus 16px, caps all width variants.
+ */
 SysWeaver-PopUpBackground {
     --maxWidth: calc(100vw - 16px);
     display: block;
@@ -714,6 +816,7 @@ SysWeaver-PopUpBackground {
     }
 
 
+    /* .Wide (75em, added by callers e.g. edit/type.js, Translator.js) and .Resize (user resizable, added by common.js). */
     SysWeaver-PopUpBackground.Wide {
         max-width: calc(min(75em, var(--maxWidth)));
         width: 75em;
@@ -726,6 +829,7 @@ SysWeaver-PopUpBackground {
         resize: both;
     }
 
+    /* <SysWeaver-PopUpText>: small upper-case heading (PopUpSelection, SearchablePoupSelection). */
     SysWeaver-PopUpBackground SysWeaver-PopUpText {
         display: block;
         text-transform: uppercase;
@@ -735,7 +839,8 @@ SysWeaver-PopUpBackground {
         font-weight: bold;
     }
 
-    SysWeaver-PopUpBackground SysWeaver-PopUpFilter 
+    /* <SysWeaver-PopUpFilter>: flex row with the filter input and the clear button. */
+    SysWeaver-PopUpBackground SysWeaver-PopUpFilter
     {
         box-sizing: border-box;
         width: 100%;
@@ -743,6 +848,7 @@ SysWeaver-PopUpBackground {
         align-items: center;
     }
 
+    /* Text inputs and textareas inside pop-ups (leave 50px for the clear button). */
     SysWeaver-PopUpBackground input {
         box-sizing: border-box;
         font-size: 125%;
@@ -788,6 +894,7 @@ SysWeaver-PopUpBackground {
         }
 
 
+    /* <SysWeaver-SelectList> (PopUpSelection results) and <SysWeaver-PopSelData> (SearchablePoupSelection results): scrollable lists. */
     SysWeaver-PopUpBackground SysWeaver-SelectList {
         display: block;
         overflow-y: auto;
@@ -805,6 +912,7 @@ SysWeaver-PopUpBackground {
         overflow-y: auto;
     }
 
+    /* <SysWeaver-PopSelEnd>: end-of-list marker / "more" button holder; 50vh bottom margin lets the last item scroll up. */
     SysWeaver-PopUpBackground SysWeaver-PopSelEnd {
         display: block;
         width: 100%;
@@ -816,6 +924,7 @@ SysWeaver-PopUpBackground {
 
 
 
+/* Auto sized menu tables in pop-ups; .Right (PopUpElementMenu with rightAlign) anchors the panel to the right. */
 SysWeaver-PopupMenu.DefaultMenu table {
     table-layout: initial;
     width: auto;
@@ -828,6 +937,10 @@ SysWeaver-PopupMenuBack.Right {
 
 
 
+/*
+ * Confirm / PopUpEdit parts: <SysWeaver-ConfTitle>, <SysWeaver-ConfText> (.MouseClick = copy on click, added by
+ * common.js ValueFormat.copyOnClick) and the <SysWeaver-ConfButtons> button row.
+ */
 SysWeaver-ConfTitle
 {
     display: block;
@@ -861,6 +974,7 @@ SysWeaver-ConfButtons {
 }
 
 
+/* Layout helpers for pop-up content (used by other pages): <SysWeaver-CenterBlockSpace> (space-around) and <SysWeaver-CenterBlock> (space-between, a single child is centred). */
 SysWeaver-CenterBlockSpace {
     display: flex;
     flex-wrap: wrap;
@@ -885,6 +999,7 @@ SysWeaver-CenterBlock {
     }
 
 
+/* PopUpWorking parts: <SysWeaver-PopUpWorkingTitle>, <SysWeaver-PopUpWorkingIcon>, <SysWeaver-PopUpWorkingText> (centred). */
 SysWeaver-PopUpWorkingTitle {
     margin-top: 1em;
     margin-bottom: 1em;
@@ -908,6 +1023,7 @@ SysWeaver-PopUpWorkingText {
 }
 
 
+/* Global thin horizontal rule. */
 hr {
     display: block;
     height: 1px;
@@ -920,6 +1036,10 @@ hr {
 
 /*** Main menu icon ***/
 
+/*
+ * .IconMainMenu (header menu button): arrow direction follows the menu state - down when collapsed on narrow
+ * screens, right when collapsed, up on narrow (shown), left otherwise.
+ */
 body.SwCollapsed.SwNarrow {
     
     .IconMainMenu {
@@ -952,6 +1072,16 @@ body.SwNarrow {
 
 
 /****** ICONS ******/
+/*
+ * Icon classes used as ColorIcon image classes and as server menu IconClass values. Technique: each class only
+ * sets `mask-image` to an SVG from ../icons/ (served by the icon module); the ColorIcon element's background
+ * colour (IconColor* class) shows through the mask, so icons follow the theme colours.
+ */
+
+/*
+ * Menu structure icons: .IconMenu (more), .IconExpand / .IconCollapse (nested expander pair, MainMenuStyle.IconExpander),
+ * .IconExpandMain / .IconCollapseMain (plus/minus, MainMenuStyle.IconExpanderMain), .IconClearInput (filter clear button).
+ */
 .IconMenu {
     mask-image: url("../icons/more.svg");
 }
@@ -980,6 +1110,12 @@ body.SwNarrow {
 }
 
 
+/*
+ * Home and user / auth menu icons (auth services' "User" menu): .IconHome, .IconSignUp, .IconLogin, .IconUser,
+ * .IconUsers, .IconInvite, .IconLogout, .IconPassword, .IconChangePassword, .IconDeletePassword, .IconAddPassword,
+ * .IconAddEmail, .IconDeleteEmail, .IconChangeEmail, .IconAddPhone, .IconDeletePhone, .IconChangePhone,
+ * .IconDelete (delete user), .IconRecover.
+ */
 .IconHome {
     mask-image: url("../icons/home.svg");
 }
@@ -1060,6 +1196,10 @@ body.SwNarrow {
     mask-image: url("../icons/user_check.svg");
 }
 
+/*
+ * Shell header / settings icons: .IconSettings, .IconNavBack (back button), .IconLock / .IconUnlock (pin),
+ * theme menu icons .IconTheme, .IconThemeAuto, .IconThemeLight, .IconThemeDark, .IconThemeHacker.
+ */
 .IconSettings {
     mask-image: url("../icons/settings.svg");
 }
@@ -1097,6 +1237,14 @@ body.SwNarrow {
     mask-image: url("../icons/theme_hacker.svg");
 }
 
+/*
+ * Data / debug menu icons: .IconExplore, .IconTable, .IconDbTable, .IconChart, settings items .IconFullScreenEnter,
+ * .IconFullScreenExit, .IconNewTab, and table icons .IconTableSerializer, .IconTableLanguage, .IconTableCurrency,
+ * .IconTableCountry, .IconTablePhone, .IconTableCompression, .IconTableStats, .IconTableServices,
+ * .IconTablePerfSystem, .IconTablePerformance, .IconTableLog, .IconTableTables, .IconTableApi,
+ * .IconTableTranslateTo, .IconTableTranslateFrom, .IconTableCache, .IconTableTemplates, .IconTableSession,
+ * .IconTableUsers, .IconTableMemory.
+ */
 .IconExplore {
     mask-image: url("../icons/explore.svg");
 }
@@ -1211,6 +1359,10 @@ body.SwNarrow {
     mask-image: url("../icons/lock.svg");
 }
 
+/*
+ * Note: .IconLock above is a duplicate definition (same lock.svg). Dialog icons: .IconKey, .IconOk (Confirm OK),
+ * .IconCancel (Confirm Cancel), .IconClosePopUp (PopUp close button).
+ */
 .IconKey {
     mask-image: url("../icons/key.svg");
 }
@@ -1227,6 +1379,11 @@ body.SwNarrow {
 .IconClosePopUp {
     mask-image: url("../icons/close.svg");
 }
+/*
+ * Database, passkey, payment and misc icons: .IconDb, .IconDbRemove, .IconDbAdd, .IconDbMinus, .IconAddPasskey,
+ * .IconUsePasskey, .IconAddPasskeyOther, .IconCashBill, .IconCashBills, .IconCoin, .IconRefund, .IconImage,
+ * .IconChat, .IconNotes, .IconDisc, .IconSync, .IconUpload, .IconDownload.
+ */
 .IconDb {
     mask-image: url("../icons/db.svg");
 }
@@ -1296,5 +1453,5 @@ body.SwNarrow {
 }
 
 .IconDownload {
-    mask-image: url("icons/download.svg");
+    mask-image: url("../icons/download.svg");
 }

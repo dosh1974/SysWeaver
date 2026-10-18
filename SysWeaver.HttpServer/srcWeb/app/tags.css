@@ -1,4 +1,13 @@
-﻿SysWeaver-TagsGallery {
+﻿/*
+ * Styles of the tag gallery control built by tags.js (CreateTagsGallery). Optional library: pages that
+ * use the control link this file together with ../app/application.css (pop-ups) and common/theme.css
+ * (no first-party page references it). Uses theme variables --ThemeMain50, --ThemeBackground,
+ * --ThemeAcc1, --ThemeAcc2 and --SysWeaverEditDesktopRad (from the edit styles; undefined otherwise).
+ */
+
+/* ===== Gallery container ===== */
+/* <SysWeaver-TagsGallery>: bordered, wrapping flex box holding one SysWeaver-TagEdit per tag plus the Add button. */
+SysWeaver-TagsGallery {
     box-sizing: border-box;
     padding: 4px;
     display: flex;
@@ -11,6 +20,7 @@
     overflow: hidden;
 }
 
+/* .Embedded: added by CreateTagsGallery when TagGalleryParams.Embedded is true; removes frame, padding and margins. */
 SysWeaver-TagsGallery.Embedded {
     padding: 0;
     border: none;
@@ -19,6 +29,10 @@ SysWeaver-TagsGallery.Embedded {
 }
 
 
+    /*
+     * Colour variants .Keep (green tags) and .Ignore (blue tags), applied through TagGalleryParams.Class
+     * by the caller; both reserve a minimum height of 66px so an empty gallery keeps its size.
+     */
     SysWeaver-TagsGallery.Keep {
         min-height: 66px;
     }
@@ -36,6 +50,8 @@ SysWeaver-TagsGallery.Embedded {
         }
 
 
+/* ===== Tag chips ===== */
+/* <SysWeaver-TagEdit>: one rounded tag chip (accent background), in the gallery and in the add pop-up list. */
 SysWeaver-TagEdit {
     background-color: var(--ThemeAcc1);
     color: var(--ThemeBackground);
@@ -49,16 +65,19 @@ SysWeaver-TagEdit {
     transition: outline linear 0.1s;
 }
 
+    /* Keyboard focus ring (pop-up chips get tabIndex 0). */
     SysWeaver-TagEdit:focus {
         outline: 3px solid var(--ThemeAcc2);
     }
 
+    /* <SysWeaver-TagText>: the bold tag name, floated left inside the chip. */
     SysWeaver-TagEdit SysWeaver-TagText {
         float: left;
         display: inline-block;
         font-weight: bold;
     }
 
+    /* <icon-24x24>: the remove ColorIcon element (common.js ColorIcon tag for a 24x24 icon), floated right. */
     SysWeaver-TagEdit icon-24x24 {
         float: right;
         vertical-align: middle;
@@ -69,10 +88,13 @@ SysWeaver-TagEdit {
 
 
 
+/* The "Add" <SysWeaver-Button> (common.js Button) inside the gallery, vertically centred with the chips. */
 SysWeaver-TagsGallery SysWeaver-Button {
     vertical-align: middle;
 }
 
+/* ===== Add pop-up ===== */
+/* Selectable chips inside the PopUpSelection dialog (<SysWeaver-PopUpBackground>, application.js): dimmed until hovered. */
 SysWeaver-PopUpBackground SysWeaver-TagEdit {
     opacity: 0.8;
     cursor: pointer;
@@ -85,6 +107,8 @@ SysWeaver-PopUpBackground SysWeaver-TagEdit {
 
 
 
+/* ===== Icons ===== */
+/* .IconTagRemove / .IconTagAdd: mask-image icons (TagGalleryParams.RemoveIcon / AddIcon), coloured by the element background. */
 .IconTagRemove {
     mask-image: url("../icons/minus.svg");
 }

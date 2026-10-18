@@ -1,5 +1,22 @@
 ﻿
 
+/*
+ * table.css - styles of the live data table built by table.js (Table.addTable) and of the cell output of
+ * ValueFormat.update / ValueFormat.updateFormat in common/common.js (which adds "ValueFormat" + format name
+ * classes plus Right, Left, Null, False, Text, Toggle, Monospaced, Capped, KeyClick, MouseClick).
+ * Loaded by explore/table.html and by other pages that embed Table.addTable or render ValueFormat tables
+ * (e.g. ServerManager keys.html / services.html). The a / body / html rules assume the table fills the page.
+ * Uses theme variables from common/theme.css (--ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc1RGB,
+ * --ThemeAcc150, --ThemeAcc2, --ThemeAcc2RGB, --ThemeAcc225, --ThemeBackground, --ThemeRad, --ThemeRadInp,
+ * --ThemeFont, --ThemeFontMono, --ThemeIconSize, --ThemeFadeDuration) and --Margin (set by the host / app shell).
+ * Mask icon classes (mask-image) are colored by the ColorIcon / IconColor* rules of common.css; icon-16x16,
+ * icon-26x26 and icon-main are the wrapper elements created by ColorIcon. Not templated; no media queries or
+ * [data-theme] variants; one @keyframes (DataTableFlash). Uses CSS nesting in the SwSelfWide / SwSelfNarrow rules.
+ */
+
+/* ===== Page ===== */
+
+/* Links (and visited links): no decoration or padding, inherit the text color. */
 a {
     text-decoration: none;
     color: inherit;
@@ -11,11 +28,13 @@ a {
         color: inherit;
     }
 
+/* Page body: centered content (the inline-block table), height forced to 100% - 200px. */
 body {
     text-align: center;
     height: calc(100% - 200px) !important;
 }
 
+/* Page root: no vertical scroll (rows are paged / auto-counted), always-on horizontal scroll, stable gutter, themed scrollbar. */
 html {
     overflow-y: hidden;
     overflow-x: scroll;
@@ -23,6 +42,15 @@ html {
     scrollbar-color: var(--ThemeAcc150) var(--ThemeBackground);
 }
 
+/* ===== Data table ===== */
+
+/*
+ * DataTable: the table.DataTable created by Table.addTable; inline-block, collapsed borders, shadow, --ThemeBackground.
+ * Custom properties defined here:
+ *   --HeaderCol       background of the header row and filter rows (--ThemeAcc1RGB at 10%).
+ *   --HeaderColHover  hover background of those rows (--ThemeAcc1RGB at 25%).
+ *   --RowPadding      --ThemeIconSize x 4px rounded to 1px; defined but not used in this file.
+ */
 .DataTable {
     --HeaderCol: rgba(var(--ThemeAcc1RGB), 0.1);
     --HeaderColHover: rgba(var(--ThemeAcc1RGB), 0.25);
@@ -37,6 +65,7 @@ html {
     background-color: var(--ThemeBackground);
 }
 
+    /* Rows: background transition and --ThemeAcc2RGB hover tint. */
     .DataTable tr {
         transition: background-color 0.2s;
     }
@@ -45,6 +74,10 @@ html {
             background-color: rgba(var(--ThemeAcc2RGB), 0.15);
         }
 
+        /*
+         * Remove the outer borders of the table (top, left, bottom, right). Note: the bare "th" parts of the
+         * "td,th" / "td, th" selector lists apply to every th on the page. The first data column (row number) is centered.
+         */
         .DataTable tr:first-child td,th {
             border-top-style: none !important;
         }
@@ -73,6 +106,7 @@ html {
 
 
 
+        /* Header row background --HeaderCol, --HeaderColHover on hover. */
         .DataTable tr:first-child {
             background-color: var(--HeaderCol);
         }
@@ -82,6 +116,11 @@ html {
             }
 
 
+/*
+ * Layout variants: classes SwSelfWide / SwSelfNarrow on html are set by the app shell code in common.js
+ * (when the page is embedded). Uses CSS nesting.
+ * SwSelfWide: the table gets --ThemeRad corners, clipped overflow and margin-right: var(--Margin).
+ */
 html.SwSelfWide {
 
 
@@ -94,6 +133,10 @@ html.SwSelfWide {
 }/* html.SwWide*/
 
 
+/*
+ * SwSelfNarrow: html gets margin-left / margin-right / margin-bottom 0, min-width 100% and
+ * min-height calc(100% - var(--Margin)); the nested .DataTable rule gives the table min-width 100%.
+ */
 html.SwSelfNarrow {
     
     margin-left: 0;
@@ -109,6 +152,7 @@ html.SwSelfNarrow {
 /* html.SwNarrow*/
 
 
+    /* Header cells (built by tableRedraw): no wrap, not selectable, --ThemeAcc150 borders. */
     .DataTable th {
         text-align: left;
         overflow: hidden;
@@ -118,6 +162,7 @@ html.SwSelfNarrow {
         border: 1px solid var(--ThemeAcc150);
     }
 
+        /* First header cell = filter mode toggle icon (cycles state.Expanded): centered, pointer; its child displayed as block. */
         .DataTable th:first-child {
             cursor: pointer;
             padding: 0 0.5em 0 0.5em;
@@ -131,17 +176,22 @@ html.SwSelfNarrow {
         }
 
 
+        /* Column header content div (sort icon + title span) as an inline-flex row. */
         .DataTable th div {
             display: inline-flex;
             align-items: center;
         }
 
 
+/* ===== Filter rows ===== */
+
+    /* HideRow: hidden filter rows (class toggled by Table.tableUpdateFilterIcon and Table.addFilterRow per state.Expanded). */
     .DataTable tr.HideRow {
         display: none;
     }
 
 
+    /* FilterRow: the 3 rows per filter set from Table.addFilterRow; tinted --HeaderCol, --HeaderColHover on hover. */
     .DataTable tr.FilterRow {
         background-color: var(--HeaderCol);
     }
@@ -156,6 +206,7 @@ html.SwSelfNarrow {
         }
 
 
+        /* First filter cell = action icon (Reset / Close / Clear / Plus): centered, pointer, child as block. */
         .DataTable tr.FilterRow td:first-child {
             color: var(--ThemeMain);
             opacity: 1;
@@ -172,6 +223,7 @@ html.SwSelfNarrow {
             display: block;
         }
 
+        /* Filter cells: bordered, no wrap, small padding. */
         .DataTable tr.FilterRow td {
             vertical-align: middle;
             border: 1px solid var(--ThemeAcc150);
@@ -179,6 +231,7 @@ html.SwSelfNarrow {
             white-space: nowrap;
         }
 
+            /* Op selects (row 1 of a set): fill the cell, themed, --ThemeAcc2 focus outline; options highlighted in --ThemeAcc1 on hover. */
             .DataTable tr.FilterRow td select {
                 font-family: var(--ThemeFont);
                 box-sizing: border-box;
@@ -209,6 +262,7 @@ html.SwSelfNarrow {
 
 
 
+            /* Value inputs (row 2 of a set): fill the cell; italic faded placeholder (the op name); focus outline; read-only at 70%. */
             .DataTable tr.FilterRow td input {
                 font-family: var(--ThemeFont);
                 box-sizing: border-box;
@@ -238,6 +292,12 @@ html.SwSelfNarrow {
                 }
 
 
+            /*
+             * table-check: the "!" (Invert) and "A ≠ a" (CaseSensitive) toggles from addFilterRow (row 3 of a set):
+             * small pills with hover lift, press shift and focus outline. Class Disabled (column does not allow the
+             * option) stays at 70% without effects; class Checked inverts to a --ThemeMain background; the second
+             * toggle gets a 4px left margin.
+             */
             .DataTable tr.FilterRow td table-check {
                 border-radius: var(--ThemeRadInp);
                 padding: 0px 5px 0px 5px;
@@ -300,6 +360,13 @@ html.SwSelfNarrow {
                     margin-left: 4px;
                 }
 
+/* ===== Header sort states ===== */
+
+    /*
+     * Sort state classes set by Table.tableUpdateHeader: Sort = sortable but not the primary sort (50% opacity,
+     * 90% on hover); CurrentSort = primary sort column; NoSort = not sortable (its icon-16x16 collapsed to 0 width).
+     * icon-main (the ColorIcon element) gets a 4px right margin.
+     */
     .DataTable th.Sort {
         cursor: pointer;
         opacity: 0.5;
@@ -326,6 +393,7 @@ html.SwSelfNarrow {
             margin-right: 4px;
         }
 
+/* Column titles (cell.Text span): bold uppercase 75% in --ThemeAcc1. */
 .DataTable th span {
     color: var(--ThemeAcc1);
     font-weight: bold;
@@ -335,6 +403,9 @@ html.SwSelfNarrow {
     padding: 0 0.5em 0 0.5em;
 }
 
+/* ===== Data cells ===== */
+
+    /* Data cells: ellipsis, no wrap, --ThemeAcc225 borders, --ThemeAcc1 text, box-shadow transition (focus ring). */
     .DataTable td {
         text-overflow: ellipsis;
         overflow: hidden;
@@ -346,12 +417,14 @@ html.SwSelfNarrow {
         transition: box-shadow linear var(--ThemeFadeDuration);
     }
 
+        /* KeyClick (set by keyboardClick in common.js on keyboard-clickable cells): inset --ThemeAcc2 focus ring via box-shadow. */
         .DataTable td.KeyClick:focus {
             box-shadow: inset 1px 0 0 var(--ThemeAcc2), inset -1px 0 0 var(--ThemeAcc2), inset 0 1px 0 var(--ThemeAcc2), inset 0 -1px 0 var(--ThemeAcc2);
             outline: none;
         }
 
 
+        /* Spans in cells as --ThemeAcc1 pills; links in --ThemeAcc2 with a filled hover. */
         .DataTable td span {
             margin: 0px 4px 0px 4px;
             background-color: var(--ThemeAcc1);
@@ -373,12 +446,19 @@ html.SwSelfNarrow {
                 background-color: var(--ThemeAcc2);
             }
 
+        /* Row number column (cell 0): small and faded. */
         .DataTable td:nth-child(1) {
             color: rgba(var(--ThemeAcc2RGB), 0.6);
             font-size: 75%;
             padding-top: 8px;
         }
 
+        /*
+         * ValueFormat modifier classes (common.js): Right = right-aligned (numbers); Monospaced = --ThemeFontMono;
+         * Flash = runs @keyframes DataTableFlash for 1s (class passed as "flash" by Table.tableRedraw for changed
+         * cells during periodic refreshes); False = false booleans in --ThemeAcc2; Null = null values at 50%;
+         * Text = selectable --ThemeMain text; Toggle = centered toggle cells without padding.
+         */
         .DataTable td.Right {
             text-align: right;
         }
@@ -412,6 +492,9 @@ html.SwSelfNarrow {
             vertical-align: middle;
         }
 
+/* ===== ValueFormat cells ===== */
+
+        /* ValueFormatImg: image cells, centered without vertical padding; Left / Right alignment; ImgLink = linked image (pointer). */
         .DataTable td.ValueFormatImg {
             padding-top: 0;
             padding-bottom: 0;
@@ -432,6 +515,7 @@ html.SwSelfNarrow {
             }
 
 
+        /* ValueFormatDefault with MouseClick: clickable default cells with a --ThemeAcc1 hover color. */
         .DataTable td.ValueFormatDefault.MouseClick {
             cursor: pointer;
             transition: color linear 0.1s;
@@ -441,6 +525,7 @@ html.SwSelfNarrow {
                 color: var(--ThemeAcc1);
             }
 
+        /* ValueFormatWebColor: color swatch cells, bold monospace centered black text; white text with False (dark background). */
         .DataTable td.ValueFormatWebColor {
             font-family: var(--ThemeFontMono);
             font-weight: bold;
@@ -457,6 +542,10 @@ html.SwSelfNarrow {
             }
 
 
+        /*
+         * ValueFormatJson, ValueFormatText, ValueFormatMD: JSON, text and markdown cells - selectable --ThemeMain text,
+         * pointer, --ThemeAcc1 on hover; Capped (value truncated by ValueFormat) appends " ..." in --ThemeAcc2.
+         */
         .DataTable td.ValueFormatJson {
             user-select: text;
             padding-top: 0;
@@ -516,6 +605,11 @@ html.SwSelfNarrow {
             }
 
 
+        /*
+         * ValueFormatDt: date/time cells with a 24px left indent for a mask glyph in ::after (custom property
+         * --s = 20px x --ThemeIconSize, glyph size). Hidden by default; ValueFormatDtutc shows
+         * ../icons/table_country.svg at 50% (UTC), ValueFormatDtlocal shows ../icons/home.svg at 50% (local time).
+         */
         .DataTable td.ValueFormatDt {
             padding-left: 24px;
             position: relative;
@@ -545,6 +639,10 @@ html.SwSelfNarrow {
             }
 
 
+    /*
+     * SysWeaver-toggle: toggle pills created by ValueFormat (TempToggle) in common.js: --ThemeAcc2 background,
+     * 50% opacity, lift on hover / focus, press shift on active; class Null = 20% with default cursor.
+     */
     SysWeaver-toggle {
         user-select: none;
         display: inline-block;
@@ -580,6 +678,11 @@ html.SwSelfNarrow {
         }
 
 
+    /*
+     * SysWeaver-action: action buttons created by ValueFormat (TempAction / TempSpan): 22px high inline-flex
+     * --ThemeAcc2 pills, image max 22px, lift effects; classes Null / Disabled = 20% with default cursor.
+     * SysWeaver-actionText: the button text span (6px left margin).
+     */
     SysWeaver-action {
         user-select: none;
         display: inline-flex;
@@ -639,6 +742,7 @@ html.SwSelfNarrow {
 
 
 
+    /* DataTableFlash: fades a changed cell background from --ThemeAcc225 to transparent (used by td.Flash). */
     @keyframes DataTableFlash {
         from {
             background-color: var(--ThemeAcc225);
@@ -650,10 +754,19 @@ html.SwSelfNarrow {
     }
 
 
+    /* Export popup (SysWeaver-PopupMenu from application.js, class Table added by addTable): its SysWeaver-PopupMenuBack element is anchored at bottom 0. */
     SysWeaver-PopupMenu.Table SysWeaver-PopupMenuBack {
         bottom: 0;
     }
     /* Icon images */
+    /*
+     * Mask icons (mask-image, colored by ColorIcon) resolving against explore/ (../icons/...):
+     * IconAscending / IconDescending - header sort icons and sort menu items (m_sort_asc / m_sort_desc);
+     * IconPlus (filter toggle / add set), IconMinus (not used by table.js), IconClose (remove set; declared twice),
+     * IconMore / IconExpand / IconCollapse (filter mode icon), IconClear (clear values / search), IconReset (reset
+     * filters), IconClearSort ("Clear sort" menu item, m_menu.svg); IconPrev / IconNext / IconHome (footer
+     * navigation), IconReload (used elsewhere, e.g. PerfMonitor.cs / common.js), IconExport (newtab.svg, export menu).
+     */
 
 
     .IconAscending {
@@ -724,6 +837,10 @@ html.SwSelfNarrow {
         mask-image: url("../icons/newtab.svg");
     }
 
+    /*
+     * Exporter menu icons (IconClass from the C# exporters): full-color background images ../icons/ext/*.svg with a
+     * forced transparent background - IconFileCsv, IconFileHtml, IconFileMD, IconFileJson, IconFileXlsx, IconFilePdf.
+     */
     .IconFileCsv {
         background-color: transparent !important;
         background-image: url("../icons/ext/csv.svg");
@@ -754,6 +871,11 @@ html.SwSelfNarrow {
         background-image: url("../icons/ext/pdf.svg");
     }
 
+    /*
+     * IconCopy: copy menu items of the column menu. IconShareLink0 / IconShareLink1 / IconShareLink2: share-link
+     * exporters ("IconShareLink" + scope index, from UserDataTableDataExporter / UserStorageChartExporter).
+     * IconClock: "Show local / UTC times" column menu item.
+     */
     .IconCopy {
         mask-image: url("../icons/copy.svg");
     }
@@ -774,6 +896,13 @@ html.SwSelfNarrow {
         mask-image: url("../icons/clock.svg");
     }
 
+/* ===== Footer ===== */
+
+/*
+ * datatable-footer: fixed 36px bottom bar created by addTable (gradient, top shadow, centered flex row) with the
+ * icon-26x26 navigation / export icons (1em side margins; the last one, the clear-search icon, 0.25em left margin),
+ * the search input (20ch wide, italic --ThemeMain25 placeholder); items with class Disabled at 50%.
+ */
 datatable-footer {
     position: fixed;
     left: 0;

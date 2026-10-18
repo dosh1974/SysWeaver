@@ -1,7 +1,39 @@
-﻿
-// A compiled and linked program representation
+﻿/**
+ * @file media_effect_program.js
+ * GLSL effect source parsing and WebGL program compilation for MediaPlayerEffect.
+ *
+ * Loading: included by MediaPlayer.Init (only when window.MediaLoadAll is set) or lazily by
+ * MediaPlayer.Create (together with media_player_effect.js) through common.js includeJs; also loaded with
+ * static <script defer> tags by the mediaView/*Effects/index.html and *EffectsLib.html pages.
+ *
+ * Globals defined: EffectProgram, EffectProgramData; window.ShaderDebug is set by the first
+ * EffectProgramData constructor (from the ?ShaderDebug=true query parameter) unless already defined.
+ *
+ * Dependencies: MediaPlayerTools.delay and MediaPlayerTools.SetError (media_player_tools.js).
+ *
+ * Conventions:
+ * - Effects are GLSL ES 1.0 fragment shaders in GlslSandbox style (uniform time/resolution) or ShaderToy
+ *   style (mainImage; a main() wrapper and the iXxx uniforms are injected automatically).
+ * - Editable effect parameters are compile-time constants written as
+ *   "const <type> <name> = <value>; // var:{name:..., desc:..., min:..., max:..., step:..., type:...}".
+ *   Changing a parameter rewrites that source line and recompiles the program (no uniforms).
+ * - The parameter schema is produced in the SysWeaver type-info JSON format used by the generic editor
+ *   (Flags 256 = scalar, 512 = object, |8 = has min and max; TypeName such as System.Single or glsl.vec3_col).
+ */
+
+/**
+ * A compiled and linked WebGL program together with its vertex and fragment shaders.
+ * Created by EffectProgramData.Compile; owned by MediaPlayerEffect (its Program field) which disposes the
+ * previous instance whenever a new program is compiled, and in ReleaseGL.
+ */
 class EffectProgram
 {
+    /**
+     * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Context that owns the objects.
+     * @param {WebGLShader} vs - Vertex shader.
+     * @param {WebGLShader} fs - Fragment shader.
+     * @param {WebGLProgram} program - Program with both shaders attached.
+     */
     constructor(gl, vs, fs, program)
     {
         const t = this;
@@ -11,6 +43,10 @@ class EffectProgram
         t.GL = gl;
     }
 
+    /**
+     * Deletes the program and both shaders from the GL context.
+     * @returns {void}
+     */
     Dispose()
     {
         const t = this;
@@ -19,16 +55,39 @@ class EffectProgram
         gl.deleteShader(t.FS);
         gl.deleteShader(t.VS);
     }
+    /** @type {WebGLRenderingContext|WebGL2RenderingContext} Owning context. */
     GL;
+    /** @type {WebGLShader} Vertex shader. */
     VS;
+    /** @type {WebGLShader} Fragment shader. */
     FS;
+    /** @type {WebGLProgram} The linked program. */
     Program;
+    /** @type {number} Milliseconds from Compile start until the program was linked (set by EffectProgramData.Compile). */
     CompilationTime;
 }
 
+/**
+ * Parsed effect source: the trimmed source lines, the editable parameter schema extracted from
+ * "// var:{...}" annotated const lines, the injected prefix/suffix, and a compiler that produces
+ * EffectProgram instances for a given set of parameter values.
+ * Created once per loaded effect by MediaPlayerEffect.Create; Compile may be called repeatedly
+ * (e.g. on every live parameter edit through MediaPlayerEffect.LazyCompile).
+ */
 class EffectProgramData {
-	
-    // Parses some shader source and extract variables
+
+    /**
+     * Parses some shader source and extracts the annotated variables.
+     * Side effects: caches the KHR_parallel_shader_compile extension as expando gl.PCompile (undefined/null if
+     * missing), initializes window.ShaderDebug from the ?ShaderDebug=true query parameter when not yet defined,
+     * trims every source line in place, logs parse warnings (unknown type / bad annotation) to the console,
+     * and logs the detected features plus prefix/suffix when ShaderDebug is on.
+     * Sets: Url, Lines, GL, Prefix, Suffix, HaveLod, waitCompilation, waitLinking, ScriptPropsApply,
+     * ScriptDefText, ScriptTypeInfo, ScriptMember.
+     * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Context used for compilation.
+     * @param {string} src - GLSL source text of the effect.
+     * @param {string} [fileName] - Source name/URL used in log messages and the editor summary ("[String]" if missing).
+     */
     constructor(gl, src, fileName) {
         const t = this;
         t.Url = fileName;
@@ -37,6 +96,13 @@ class EffectProgramData {
             gl.PCompile = gl.getExtension("KHR_parallel_shader_compile");
         const pcompile = gl.PCompile;
         if (pcompile) {
+            /**
+             * Waits for a shader compilation using the parallel-compile extension: polls every 5 ms until
+             * COMPLETION_STATUS_KHR is reported.
+             * @param {WebGLShader} shader - Shader being compiled.
+             * @param {function():boolean} abortCheckFn - Returns true to abort waiting.
+             * @returns {Promise<boolean>} The COMPILE_STATUS, or true if aborted (the caller checks abortCheckFn again).
+             */
             t.waitCompilation = async function (shader, abortCheckFn) {
                 for (; ;) {
                     await MediaPlayerTools.delay(5);
@@ -48,6 +114,13 @@ class EffectProgramData {
                 return gl.getShaderParameter(shader, gl.COMPILE_STATUS);
             };
 
+            /**
+             * Waits for program linking using the parallel-compile extension: polls every 5 ms until
+             * COMPLETION_STATUS_KHR is reported.
+             * @param {WebGLProgram} prog - Program being linked.
+             * @param {function():boolean} abortCheckFn - Returns true to abort waiting.
+             * @returns {Promise<boolean>} The LINK_STATUS, or true if aborted.
+             */
             t.waitLinking = async function (prog, abortCheckFn) {
                 for (; ;) {
                     await MediaPlayerTools.delay(5);
@@ -60,7 +133,17 @@ class EffectProgramData {
             };
         }
         else {
+            /**
+             * Synchronous fallback (no parallel-compile extension).
+             * @param {WebGLShader} shader - Compiled shader.
+             * @returns {boolean} The COMPILE_STATUS.
+             */
             t.waitCompilation = shader => gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+            /**
+             * Synchronous fallback (no parallel-compile extension).
+             * @param {WebGLProgram} prog - Linked program.
+             * @returns {boolean} The LINK_STATUS.
+             */
             t.waitLinking = prog => gl.getProgramParameter(prog, gl.LINK_STATUS);
         }
 
@@ -68,6 +151,11 @@ class EffectProgramData {
         if (typeof debug === "undefined") {
             const p = new URL(window.location.href).searchParams;
             debug = p.has("ShaderDebug") ? (p.get("ShaderDebug") === "true") : false;
+            /**
+             * Global shader debug switch (from the ?ShaderDebug=true query parameter): enables logging of the
+             * injected prefix/suffix, final and translated shader sources, and periodic draw-time logs.
+             * @type {boolean}
+             */
             window.ShaderDebug = debug;
         }
         //  Parse and find variables
@@ -89,12 +177,25 @@ class EffectProgramData {
         let haveLod = false;
 
 
+        /**
+         * Tests if the character at pos is whitespace.
+         * @param {string} line - Text line.
+         * @param {number} pos - Character index.
+         * @param {boolean} [falseOutSize] - When truthy an out-of-range pos returns false, otherwise true.
+         * @returns {boolean} True for whitespace (or out of range, see falseOutSize).
+         */
         function isSpace(line, pos, falseOutSize) {
             if ((pos < 0) || (pos >= line.length))
                 return !falseOutSize;
             return line.charAt(pos).trim() === "";
         }
 
+        /**
+         * Tests if the character at pos can be part of an identifier (letter, digit, '_' or '@').
+         * @param {string} line - Text line.
+         * @param {number} pos - Character index.
+         * @returns {boolean} False when out of range or not an identifier character.
+         */
         function isIdentifier(line, pos) {
             if ((pos < 0) || (pos >= line.length))
                 return false;
@@ -108,6 +209,12 @@ class EffectProgramData {
             return false;
         }
 
+        /**
+         * Tests if a character is a letter: characters with distinct upper/lower case, or non-ASCII characters
+         * that are accepted as a JavaScript function name (tested by eval of "function c(){}").
+         * @param {string} c - Single character.
+         * @returns {boolean} True for a letter.
+         */
         function isLetter(c) {
             if (c.toUpperCase() != c.toLowerCase())
                 return true;
@@ -121,7 +228,13 @@ class EffectProgramData {
             }
         }
 
-        /** Check in an identifier exists */
+        /**
+         * Check if an identifier exists: name occurs as a whole identifier (not part of a longer one)
+         * before any "//" comment on the line.
+         * @param {string} line - Trimmed source line.
+         * @param {string} name - Identifier to look for.
+         * @returns {boolean} True if found.
+         */
         function haveIdentifier(line, name) {
             const sl = name.length;
             if (sl <= 0)
@@ -145,7 +258,13 @@ class EffectProgramData {
             }
         }
 
-        /** Check in an identifier exists (starting with a space such as function names) */
+        /**
+         * Check if an identifier exists (preceded by whitespace or the line start, such as keywords and function
+         * names), not followed by an identifier character, before any "//" comment.
+         * @param {string} line - Trimmed source line.
+         * @param {string} name - Identifier to look for.
+         * @returns {boolean} True if found.
+         */
         function haveSpaceIdentifier(line, name) {
             const sl = name.length;
             if (sl <= 0)
@@ -170,6 +289,10 @@ class EffectProgramData {
         }
 
 
+        //  Scan every line: detect features (precision, main, mainImage, derivatives, texture2DLod and their
+        //  extensions) on non-comment lines, and parse "const <type> <name> = <value>; // var:{...}" lines
+        //  into defaults, editor members and rewrite closures. Lines starting with "//" skip feature detection
+        //  but still reach the annotation parser if char 5 is whitespace (normally they are then rejected).
         const lc = lines.length;
         for (let i = 0; i < lc; ++i) {
             const line = lines[i].trim();
@@ -275,6 +398,11 @@ class EffectProgramData {
             //scriptProps = Object.assign({ $type: tnn }, scriptProps);
             const scriptDefText = JSON.stringify(scriptProps);
             t.ScriptDefText = scriptDefText;
+            /**
+             * Rewrites each annotated source line to "const <type> <name>=<literal>;" for every key present in values.
+             * @param {object} v - Parameter values keyed by GLSL variable name.
+             * @returns {void}
+             */
             t.ScriptPropsApply = v => apply.forEach(x => x(v));
             t.ScriptTypeInfo = {
                 Asm: "EffectProps",
@@ -314,11 +442,17 @@ class EffectProgramData {
             };
         }
         else {
+            /**
+             * No annotated parameters: no-op.
+             * @returns {void}
+             */
             t.ScriptPropsApply = () => { };
             t.ScriptDefText = null;
             t.ScriptTypeInfo = null;
             t.ScriptMember = null;
         }
+        //  Build the injected header (Prefix) and footer (Suffix): missing #extension lines, the texture2DLod
+        //  define, a default precision, and the ShaderToy uniforms + main() wrapper when only mainImage exists.
         t.GL = gl;
         t.Prefix = "";
         t.Suffix = "";
@@ -389,6 +523,19 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
 
     // Compiles the program using some vars
 
+    /**
+     * Compiles and links a program for the given parameter values.
+     * Applies vars through ScriptPropsApply, builds Prefix + Lines + Suffix. If the source contains both
+     * "#ifdef VERTEX" and "#ifdef FRAGMENT" the same source is compiled as vertex and fragment shader with
+     * "#define VERTEX" / "#define FRAGMENT" prepended; otherwise defaultVS is used as vertex shader.
+     * Logs final sources (and WEBGL_debug_shaders translated sources) when window.ShaderDebug is set.
+     * Compile errors are logged and reported via MediaPlayerTools.SetError; link errors are only logged.
+     * @param {object} vars - Parameter values keyed by GLSL variable name (may be undefined/partial).
+     * @param {string} defaultVS - Vertex shader source used for fragment-only effects.
+     * @param {function():boolean} [abortCheckFn=() => false] - Polled while waiting; true aborts.
+     * @returns {Promise<EffectProgram|null|string>} The program (with CompilationTime set), null on a compile or
+     * link error, or the string "Aborted".
+     */
     async Compile(vars, defaultVS, abortCheckFn) {
         const start = performance.now();
         const t = this;
@@ -484,6 +631,11 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
     }
 
     //  Validate some vars (serialized json string), returns a new string with validated params
+    /**
+     * Merges the supplied parameter values over the defaults and drops keys that the effect does not define.
+     * @param {string} [propString] - JSON object of parameter values.
+     * @returns {string|null} Validated JSON; the defaults when propString is empty; null when the effect has no parameters.
+     */
     ValidateVars(propString) {
         const dt = this.ScriptDefText;
         if (!dt)
@@ -501,12 +653,34 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         return JSON.stringify(scriptProps);
     }
 
+    /**
+     * Synthetic type-info for the generic editor (Asm "EffectProps", TypeName "EffectProps.<type_name_...>",
+     * one member per annotation, Flags 512, Default = ScriptDefText), or null without annotations.
+     * @type {object|null}
+     */
     ScriptTypeInfo;
+    /**
+     * Member descriptor named "EffectProps" of the ScriptTypeInfo type (used by the parameter editor), or null.
+     * @type {object|null}
+     */
     ScriptMember;
 
-    //  Special type handling 
+    //  Special type handling
+    /**
+     * Supported GLSL const types (float, bool, int, vec2, vec3, vec4), each as
+     * {parseDef(text, editType), member, toString(value, editType)}:
+     * parseDef parses the default literal (vec3/vec4 return {Red,Green,Blue[,Alpha]} for edit types "col"/"colhdr",
+     * else {x,y,z[,w]}; missing components repeat the last one), member is the editor member template, and
+     * toString produces the GLSL literal (missing vector components default to 1.0).
+     * @type {Map<string, {parseDef:function(string,string):*, member:object, toString:function(*,string):string}>}
+     */
     static TypeMap = (() => {
         const typeMap = new Map();
+        /**
+         * Formats a number as a GLSL float literal.
+         * @param {number} v - Value.
+         * @returns {string} Number text with ".0" appended when it has no decimal point.
+         */
         function toFloat(v) {
             const t = "" + v;
             if (t.indexOf('.') < 0)

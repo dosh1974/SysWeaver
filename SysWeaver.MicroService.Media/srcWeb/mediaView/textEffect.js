@@ -1,34 +1,98 @@
-﻿includeJs(document.currentScript.src, "../mediaPlayer/media_player.js");
+﻿/**
+ * @file textEffect.js - text and animated number counter effects rendered through GLSL image effects.
+ *
+ * Loaded with a classic `<script defer>` (no module) as `../textEffect.js` by `counterEffects/index.html`
+ * (after `../../common/common.js`, `../../common/anim.js`, `../canvasTools.js`), which boots `textEffectMain()`
+ * from `<body onload>`.
+ *
+ * Globals defined: `CounterEffectParams` (class), `TextEffect` (static factory class), `textEffectMain` (function).
+ *
+ * Dependencies: common.js (`includeJs`, `getUrlParams`, `PageLoaded`), mediaPlayer/canvasTools.js
+ * (`TextStyle`, `CanvasTools`), mediaPlayer/media_player.js (`MediaPlayer`, `MediaTypes`) and the parameter
+ * classes `MediaPlayerParamsEffect` / `MediaPlayerParamsImage` (from the mediaPlayer folder), plus the
+ * `imageEffects/*.glsl` and `counterEffects/*.glsl` shaders.
+ *
+ * Conventions: the factories return a media player; the caller appends `player.Element` and then calls
+ * `Show()` and `Play()`. Both factories await the async `MediaPlayer.Create` and `player.Cache()`.
+ */
+
+/**
+ * Top-level call executed at parse time: loads the media player framework (`MediaPlayer`, `MediaTypes`, ...)
+ * relative to this script's URL. The load is asynchronous; the code expects it to be done when `onload` fires.
+ */
+includeJs(document.currentScript.src, "../mediaPlayer/media_player.js");
 
 
+/**
+ * Plain options object for `TextEffect.CreateCounterEffect`; created with `new` and modified by the caller.
+ */
 class CounterEffectParams {
+    /** @type {number} Fade height in pixels at the top/bottom of the digits (clamped to a minimum of 1); also sent to the shader as `Fade`. */
     Fade = 16.0;
+    /** @type {number} Extra vertical spacing (pixels, clamped to >= 0) between the glyph rows of the digit atlas image. */
     ExtraSpacing = 10.0;
+    /** @type {number} Number of integer digit positions (clamped to 1..32, truncated to an integer). */
     MaxDigits = 10;
+    /** @type {number} Speed factor of the digit flip animation (clamped to >= 0; multiplied by FlipFraction). Can be overridden per frame by GetValue returning [value, flipSpeed]. */
     FlipSpeed = 1;
+    /** @type {number} Fraction (clamped 0..1) of each unit step of a digit that is spent rolling to the next digit. */
     FlipFraction = 0.1;
+    /** @type {number} Number of decimal digits (0 = no decimal separator). */
     DecimalDigits = 2;
+    /** @type {string} String drawn as thousands separator (every 3 integer digits); empty/zero width = none. */
     ThousandsSeparator = " ";
+    /** @type {string} String drawn as decimal separator. */
     DecimalSeparator = ".";
+    /** @type {string} Text drawn after the number (empty = none). */
     Suffix = "";
+    /** @type {string} Text drawn before the number (empty = none); scrolls with the leading digit. */
     Prefix = "";
+    /** @type {number} Extra horizontal pixels between digits (can be negative to tighten them). */
     DigitSpacing = 0;
 
 }
 
 
+/**
+ * Factory class with static methods only (never instantiated); returns media players that render text or an
+ * animated number counter through a GLSL image effect.
+ */
 class TextEffect {
 
 
     /**
+     * Loads the player scripts the factories need before they create `MediaPlayerParamsImage` /
+     * `MediaPlayerParamsEffect` objects (`MediaPlayer.Create` loads player classes lazily, which is too late
+     * for that, and does not load media_player_image.js for an image with an effect). Loading is de-duplicated
+     * by `includeJs`, so repeated calls are cheap.
+     * @returns {Promise<void>}
+     */
+    static async LoadPlayers() {
+        const current = MediaPlayer.CurrentUrl;
+        await Promise.all([
+            includeJs(current, "media_player_image.js"),
+            includeJs(current, "media_player_effect.js"),
+            includeJs(current, "media_effect_program.js"),
+        ]);
+    }
+
+
+    /**
      * Create a text effect
-     * @param {string} effectName Name of the effect (one of the predefined image effects, or the url to a .hlsl image effect file), default = "Rain"
+     * Steps: if `textStyle.FontUrl` is set, loads it as a `FontFace` named `textStyle.FontUrlName` and adds it to
+     * `document.fonts`; forces `effectParams.Transparent = true`; renders `text` to an image (blob) URL with
+     * `CanvasTools.CreateTextImageUrl`; maps a name not ending in ".glsl" to `imageEffects/<name>.glsl`
+     * (relative to the page); creates an Image player with `MediaPlayerParamsImage{Effect, EffectParams}`
+     * and calls `player.Cache()`.
+     * Only a commented-out call in textEffectMain uses this method.
+     * @param {string} effectName Name of the effect (one of the predefined image effects, or the url to a .glsl image effect file), default = "Rain"
      * @param {string} text The text to display
-     * @param {TextStyle} textStyle The styling of the text
-     * @param {MediaPlayerParamsEffect} effectParams Additional effect params
-     * @returns {MediaPlayerEffect} The effect, use .Element to get and attach the elemnt, then .Show() and .Play()
+     * @param {TextStyle} textStyle The styling of the text, default = new TextStyle()
+     * @param {MediaPlayerParamsEffect} effectParams Additional effect params, default = new MediaPlayerParamsEffect() (modified: Transparent = true)
+     * @returns {Promise<MediaPlayerEffect>} The effect, use .Element to get and attach the elemnt, then .Show() and .Play()
      */
     static async CreateTextEffect(effectName, text, textStyle, effectParams) {
+        await TextEffect.LoadPlayers();
         effectName = effectName ?? "Rain";
         textStyle = textStyle ?? new TextStyle();
         if (textStyle.FontUrl) {
@@ -44,7 +108,7 @@ class TextEffect {
         const ip = new MediaPlayerParamsImage();
         ip.Effect = effectName;
         ip.EffectParams = effectParams;
-        const player = MediaPlayer.Create(MediaTypes.Image, url, ip);
+        const player = await MediaPlayer.Create(MediaTypes.Image, url, ip);
         await player.Cache();
         return player;
     }
@@ -52,14 +116,30 @@ class TextEffect {
 
     /**
      * Create a counter effect
-     * @param {string} effectName Name of the effect (one of the predefined counter effects, or the url to a .hlsl counter effect file), default = "Rain"
-     * @param {TextStyle} textStyle The styling of the text
-     * @param {CounterEffectParams} counterParams Additional counter effect params
-     * @param {MediaPlayerParamsEffect} effectParams Additional effect params
-     * @returns {MediaPlayerEffect} The effect, use .Element to get and attach the elemnt, then .Show() and .Play()
+     * Steps:
+     * 1. Loads `textStyle.FontUrl` as a FontFace when set; ensures `effectParams.FxProps` exists; clamps Fade (>= 1),
+     *    ExtraSpacing (>= 0, then minus fade) and MaxDigits (1..32); sets `textStyle.MarginTop = 4` and
+     *    `MarginBottom = 4 + waste` (the textStyle object is modified); forces `effectParams.Transparent = true`.
+     * 2. Renders a digit atlas with `CanvasTools.CreateNumberImageUrl` (11 vertically stacked rows: digits,
+     *    blank, separators, prefix, suffix); the returned canvas carries NumberWidth, TotalWidth,
+     *    ThousandsSeparatorWidth, DecimalSeparatorWidth, PrefixWidth, SuffixWidth.
+     * 3. Builds the part list from right to left with `DefPart`: suffix, decimal digits + decimal separator,
+     *    integer digits with a thousands separator after every 3rd (not after the last), prefix, end marker (-1).
+     * 4. Maps a name not ending in ".glsl" to `../counterEffects/<name>.glsl`; uses a fixed size
+     *    (`EffectSizeFromImage = false`, `effectParams.Width = width`, `Height = atlasHeight/11 + fade - waste`,
+     *    `AdaptiveSize = false`) and sets the shader vars `FxProps.MaxParts`, `UvScale`, `UvAdd`, `Fade`.
+     * 5. Creates and caches the image player, looks up the uniforms `digits` (vec4 array) and `digitWidths`
+     *    (float array) and installs `player.OnNewSize`, `player.GetValue` and `player.OnRender`.
+     * @param {string} effectName Name of the effect (one of the predefined counter effects, or the url to a .glsl counter effect file), default = "ScrollUp"
+     * @param {TextStyle} textStyle The styling of the text, default = new TextStyle() (modified: MarginTop/MarginBottom)
+     * @param {CounterEffectParams} counterParams Additional counter effect params, default = new CounterEffectParams()
+     * @param {MediaPlayerParamsEffect} effectParams Additional effect params, default = new MediaPlayerParamsEffect() (modified)
+     * @returns {Promise<MediaPlayerEffect>} The effect, use .Element to get and attach the elemnt, then .Show() and .Play().
+     * Set `player.GetValue` to drive the displayed value and optionally `player.OnNewSize` to react to width changes.
      */
     static async CreateCounterEffect(effectName, textStyle, counterParams, effectParams) {
 
+        await TextEffect.LoadPlayers();
         effectName = effectName ?? "ScrollUp";
         counterParams = counterParams ?? new CounterEffectParams();
         textStyle = textStyle ?? new TextStyle();
@@ -90,6 +170,14 @@ class TextEffect {
         const partWidths = [];
         const partType = [];
         let width = 0;
+        /**
+         * Appends one part to the layout (parts are defined from right to left).
+         * Pushes `partWidth` to `partWidths` and `type` to `partType`, and adds the width (plus `digitSpacing`
+         * for digits) to the running total `width` (rounded).
+         * @param {number} type - Part type: 0 digit, 17 thousands separator, 18 prefix, 19 suffix, 20 decimal separator, -1 end.
+         * @param {number} partWidth - Width of the part in pixels.
+         * @returns {void}
+         */
         function DefPart(type, partWidth) {
             width = Math.round(partWidth + width + (type === 0 ? digitSpacing : 0));
             partWidths.push(partWidth);
@@ -132,7 +220,7 @@ class TextEffect {
         p.UvAdd = fade / canvas.height;
         p.Fade = fade;
 
-        const player = MediaPlayer.Create(MediaTypes.Image, url, ip);
+        const player = await MediaPlayer.Create(MediaTypes.Image, url, ip);
         await player.Cache();
 
         const program = player.Program.Program;
@@ -155,10 +243,24 @@ class TextEffect {
 
         const flipFraction = Math.max(0, Math.min(1, counterParams.FlipFraction));
         let flipSpeed = Math.max(0, counterParams.FlipSpeed) * flipFraction;
+        /**
+         * Called from OnRender when the visible counter width (in pixels, from the right edge to the leftmost
+         * visible part) changes. Default is a no-op; callers may replace it (e.g. to resize/position the element).
+         * @param {number} nw - New visible width.
+         * @param {number} ow - Previous visible width (equal to nw on the first call).
+         * @returns {void}
+         */
         player.OnNewSize = (nw, ow) =>
         {
             //console.log(ow + " => " + nw);
         };
+        /**
+         * Returns the value to display for a playback position. Default: the position itself.
+         * Callers replace it; returning an array `[value, flipSpeed]` also overrides the flip speed
+         * (multiplied by the clamped FlipFraction) from then on.
+         * @param {number} time - Playback position (`p.GetPos()` of the effect).
+         * @returns {(number|Array<number>)} The value, or `[value, flipSpeed]`.
+         */
         player.GetValue = time => time;
 
 
@@ -168,6 +270,20 @@ class TextEffect {
 
         let oldparts = "";
 
+        /**
+         * Per-frame render hook called by the effect player before drawing.
+         * Reads the value with `player.GetValue(p.GetPos())`, then walks the parts right to left: each digit
+         * shows `floor(t) % 10` and rolls (cosine eased) to the next digit during the last `FlipFraction` of a
+         * unit step (the step interval shrinks by 10 per digit, so higher digits roll only when lower ones wrap);
+         * `t` is divided by 10 per digit. Once `t < 1` and the minimum digits (1 + DecimalDigits) are drawn,
+         * leading parts are dropped (or scrolled in while rolling) and the prefix is shifted by `scrollPrefix`.
+         * Fills `digits` (per part: x position, atlas row / 11, UV scale, UV offset) and `digitWidths`, terminates
+         * with zeroed entries at the end marker, logs the part list to the console when it changes, calls
+         * `player.OnNewSize` when the visible width changes and uploads the uniforms `digitWidths` and `digits`.
+         * @param {WebGLRenderingContext} gl - The GL context of the effect.
+         * @param {object} p - The effect player (provides `GetPos()`).
+         * @returns {void}
+         */
         player.OnRender = (gl, p) => {
         //  Read value
             let t = player.GetValue(p.GetPos());
@@ -317,6 +433,17 @@ class TextEffect {
 
 
 
+/**
+ * Demo boot function of `counterEffects/index.html` (called from `<body onload>`).
+ * Builds a hard-coded gold `TextStyle` (bold 160px tahoma, fill/stroke gradients, drop shadow) and a
+ * `CounterEffectParams` (prefix "SEK ", suffix ":-", "," thousands separator, DigitSpacing -25, FlipFraction 0.25,
+ * Fade 40, 8 digits), creates `TextEffect.CreateCounterEffect("ScrollUp", ...)`, appends its element to the body,
+ * sets `fx.GetValue = x => [(990 + x^1.6) * 100, 500]`, shows and plays it, then appends a
+ * `CanvasTools.CreateTextGrid` of 16 greetings (3 columns) with the same style.
+ * URL params are read (`getUrlParams()`) but not used.
+ * On any error the body text is replaced with "Generic failure.\n" + error; otherwise `PageLoaded()` is called.
+ * @returns {Promise<void>}
+ */
 async function textEffectMain() {
     const target = document.body;
     try {
@@ -503,6 +630,11 @@ async function textEffectMain() {
         document.body.append(fx.Element);
 
         let value = 0;
+        /**
+         * Stores the mouse x offset in the local `value`; only the commented-out GetValue variants use it.
+         * @param {MouseEvent} me - The mousemove event.
+         * @returns {void}
+         */
         document.body.onmousemove = me => {
             value = me.offsetX;
         };

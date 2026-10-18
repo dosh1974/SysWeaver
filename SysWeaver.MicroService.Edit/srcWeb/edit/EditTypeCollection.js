@@ -1,6 +1,32 @@
-﻿class EditTypeCollection {
+﻿/**
+ * @file Type handler for collections (arrays and dictionaries) in the object editor.
+ *
+ * Loaded on demand by `Edit.Init()` (Edit.js) via `includeJs`. Defines the global class `EditTypeCollection`; on
+ * evaluation runs `EditTypeCollection.Init()` (last statement, not awaited), which loads the container strategies
+ * EditCollectionArray.js and EditCollectionMap.js relative to this script.
+ * The shared instance is `Edit.CollectionTypeHandler`, created by `Edit.GetTypeHandler` for members with
+ * `TypeMemberFlags.Collection`. Implements the duck-typed type-handler contract documented on class `Edit`.
+ *
+ * Dependencies (globals from other files): `Edit`, `EditOptions`, `EditCollectionArray`, `EditCollectionMap`,
+ * `TypeMemberFlags`, `ValueFormat`, `ColorIcon`, `WebMenuItem`, `isPureClick`, `includeJs`, `_T` / `_TF` (common.js).
+ *
+ * Each element is edited by its own child `Edit` (with `Key` / `KeyName` / `ArrayEntry` set) inside a
+ * `SysWeaver-EditEntry` (`SysWeaver-EditEntryHeader` + `SysWeaver-EditEntryValue`) in the data row created with
+ * `editContext.CreateData()`. Element changes are written back into the collection with `container.setVal`.
+ * All structural changes (add, clear, remove, insert, move) are undoable via `Edit.Invoke`.
+ */
+
+/**
+ * Type handler for collections. Stateless apart from the per-editor closures created in `AddEditor`.
+ */
+class EditTypeCollection {
 
 
+    /**
+     * Loads the two container strategy scripts in parallel with `includeJs(document.currentScript.src, ...)`.
+     * Called once while this script is being evaluated (so `document.currentScript` is this script).
+     * @returns {Promise<void>}
+     */
     static async Init() {
         const current = document.currentScript.src;
         await Promise.all([
@@ -10,10 +36,25 @@
         );
     }
 
+    /**
+     * Value written into a new parent object for this member. Returns element 0 of `GetDefault(...)`, i.e.
+     * `undefined` for an empty array or `Map`, and throws a TypeError when `GetDefault` returns null (`AcceptNull`).
+     * @param {object} member - The `TypeMemberDesc`.
+     * @param {EditOptions} options - The editor options.
+     * @returns {*} `GetDefault(member, options)[0]`.
+     */
     CreateDefault(member, options) {
         return this.GetDefault(member, options)[0];
     }
 
+    /**
+     * Whether a pasted / dropped value is acceptable: must be an array (so `Map` dictionaries never match) and, when
+     * `member` is given, its count must not exceed `member.Max` (default 1000000000). The `Min` check has no effect
+     * (both branches return true).
+     * @param {*} obj - Candidate value.
+     * @param {object} [member] - The `TypeMemberDesc`.
+     * @returns {boolean} True if acceptable.
+     */
     IsOfType(obj, member) {
         if (typeof (obj) !== "object")
             return false;
@@ -44,10 +85,28 @@
         return true;
     }
 
+    /**
+     * Conditions an accepted pasted / dropped value; returns it unchanged.
+     * @param {*} obj - The accepted value.
+     * @returns {*} `obj`.
+     */
     Condition(obj) {
         return obj;
     }
 
+    /**
+     * Validates a collection value. Null: OK with `AcceptNull`, else "Value may not be null!". Then checks the count
+     * against `Max` ("To many items! ...") and `Min` ("To few items! ...") using `Edit.GetIntParam` and
+     * `ValueFormat.countSuffix`. Then validates the elements with `Edit.ValidateType(elementType, value, options,
+     * name + keyName)` via `container.íterate`, temporarily setting the element type's `DisplayName` to the key name.
+     * Iteration stops at the first failing element, whose error is reported.
+     * @param {?(Array|Map)} obj - The value to validate.
+     * @param {object} member - The `TypeMemberDesc`.
+     * @param {EditOptions} options - The editor options.
+     * @param {string} name - Path of the value (error path prefix).
+     * @returns {Promise<?Array<string>>} Null when valid, else `[path, message]`; element errors have the message
+     *   prefixed with `member.DisplayName` (no separator).
+     */
     async Validate(obj, member, options, name) {
         if (obj == null) {
             if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
@@ -81,7 +140,7 @@
             const ied = name + keyName;
             elementType.DisplayName = keyName;
             err = await Edit.ValidateType(elementType, value, options, ied);
-            return !!err;
+            return !err;
         });
         elementType.DisplayName = temp;
         if (!err)
@@ -90,10 +149,24 @@
     }
 
 
+    /**
+     * Display text of a collection value.
+     * @param {*} obj - The value.
+     * @param {object} [member] - Unused.
+     * @param {EditOptions} [options] - Unused.
+     * @returns {string} `"" + obj`.
+     */
     ToString(obj, member, options) {
         return "" + obj;
     }
 
+    /**
+     * Default described by the metadata: a new empty container for a `"\t"` default; otherwise `null` when the member
+     * has `AcceptNull`, else a new empty container (`GetContainer(member).createVal()`).
+     * @param {object} member - The `TypeMemberDesc`.
+     * @param {EditOptions} [options] - Unused.
+     * @returns {?(Array|Map)} The default collection.
+     */
     GetDefault(member, options) {
         let def = member.Default;
         if (Edit.IsValid(def)) {
@@ -105,6 +178,13 @@
         return this.GetContainer(member).createVal();
     }
 
+    /**
+     * Picks the container strategy for a collection member.
+     * @param {object} member - The `TypeMemberDesc`.
+     * @returns {?(EditCollectionArray|EditCollectionMap)} `EditCollectionMap.Inst` when `member.Key` and
+     *   `member.Element` are set, `null` when only `member.Key` is set (sets are not implemented), else
+     *   `EditCollectionArray.Inst`.
+     */
     GetContainer(member) {
         if (member.Key) {
             if (member.Element)
@@ -117,6 +197,27 @@
         }
     }
 
+    /**
+     * Builds the editor of a collection member (handler contract `AddEditor`).
+     * Reads `Min` / `Max` (tooltip lines "Minimum/Maximum allowed count"; defaults 0 / 1000000000), writes
+     * `GetDefault(...)` into `obj[member.Name]` when undefined and computes `isReadOnly` (`editContext.ReadOnly`, never
+     * set by the layouts, options or member flag), `isFixed` (`Min >= Max` or read only) and `isIndexed`
+     * (`TypeMemberFlags.Indexed`: enables insert/move operations).
+     * DOM: adds class `EditContainer` to the editor cell, a data row (`editContext.CreateData()`, class `DataRow`),
+     * a 36 px expand `ColorIcon` and a `SysWeaver-EditInfo` count (`Edit.SetCollectionCount`).
+     * Resolves the element type (`Edit.GetType(member.ElementTypeName, member.ElementInst)`) and its handler; elements
+     * are primitive when the type is primitive or the handler has `IgnoreMembers`. Item editors are created lazily on
+     * expand (immediately when `options.ExpandAllCollections`). `keyMap` maps `"" + key` to the item `Edit`.
+     * @param {object} obj - The parent object; the value is `obj[member.Name]`.
+     * @param {Edit} editor - The parent editor.
+     * @param {{PrevRow:HTMLTableRowElement, Element:HTMLTableCellElement, CreateData:function():HTMLTableCellElement}} editContext
+     *   - Layout context (see `EditDesktop.AddMember`).
+     * @param {object} member - The `TypeMemberDesc` (with `ElementTypeName`, `ElementInst`, `Min`, `Max`, `Key`, `Element`).
+     * @param {string} title - Member tooltip (unused here).
+     * @param {EditOptions} options - The editor options.
+     * @returns {Promise<object>} The item: `{ Title, DefValue, DefValueText, DataRow, Focus, UpdateValue, FindItem,
+     *   GetValue, SetValue, AddMenuItems }`.
+     */
     async AddEditor(obj, editor, editContext, member, title, options) {
         let typeTitle = null;
         const mn = member.Name;
@@ -140,6 +241,9 @@
         } else {
             max = 1000000000;
         }
+        // The server sends Max = null for "no limit", which parses to NaN: treat it as no limit too.
+        if (isNaN(max))
+            max = 1000000000;
         const container = this.GetContainer(member);
         const def = this.GetDefault(member, options);
         if (typeof obj[mn] === "undefined")
@@ -168,6 +272,17 @@
         const keyMap = new Map();
 
 
+        /**
+         * Expands or collapses the item list (click handler of the expand icon; also called without event by the
+         * undo/redo steps, `FindItem`, `SetValue` and `ExpandAllCollections`). Ignores clicks with modifier keys and
+         * stops propagation. Re-reads `vals = obj[mn]`.
+         * Expanding: clears the data cell, calls `addItemEditor` for every key, switches the icon to collapse and adds
+         * `EditorExpanded` to the data row and the previous (value) row when the collection is non-empty.
+         * Collapsing: clears `keyMap` and the data cell, switches the icon and removes `EditorExpanded`.
+         * @param {MouseEvent} [ev] - The click event (optional).
+         * @param {function(*, Edit):void} [onEditor] - Optional callback receiving each created item editor.
+         * @returns {Promise<void>}
+         */
         async function toggleExpand(ev, onEditor) {
             if (!isPureClick(ev))
                 return;
@@ -218,10 +333,19 @@
         const th = Edit.GetTypeHandler(member.ElementTypeName, member.ElementInst);
         const isPrimitive = Edit.IsPrimitive(elementType) || th.IgnoreMembers;
 
+        //  Note: this options clone is not used; addItemEditor creates its own `newOpt` (a fresh EditOptions).
         const newOpt = options.Clone();
         newOpt.Title = !Edit.IsPrimitive(elementType);
         newOpt.ReadOnly |= isReadOnly;
 
+        /**
+         * Renumbers the item editors after keys changed (removal, insertion, move): walks the `SysWeaver-EditEntry`
+         * children of the data cell in key order and, where an entry's editor has a different key, updates `keyMap`,
+         * the editor's `Key`, `ArrayEntry`, `KeyName` and title (`Edit.ChangeTitle`). Stale `keyMap` entries for
+         * keys no longer present are not removed.
+         * @param {Array|Map} values - The collection value.
+         * @returns {Promise<void>}
+         */
         async function reOrder(values) {
             //  Need to change keys
             const cs = data.childNodes;
@@ -243,6 +367,11 @@
 
 
 
+        /**
+         * Creates the value for a new element: `null` when the element type has `AcceptNull` and the element handler's
+         * `GetDefault(member, options)` (called with the collection member) is falsy, else `Edit.CreateDefault(elementType, options)`.
+         * @returns {Promise<*>} The new element value.
+         */
         async function CreateNewDefault() {
             if ((elementType.Flags & TypeMemberFlags.AcceptNull) != 0) {
                 if (!th.GetDefault(member, options))
@@ -251,18 +380,51 @@
             return await Edit.CreateDefault(elementType, options);
         }
 
+        /**
+         * Focuses the root element of the item editor for `key` (throws if the key is not in `keyMap`).
+         * @param {*} key - Item key.
+         * @returns {void}
+         */
         function focus(key) {
             keyMap.get("" + key).Element.focus();
         }
 
+        /**
+         * Removes the item's `SysWeaver-EditEntry` from the DOM (the `keyMap` entry is kept).
+         * @param {*} key - Item key.
+         * @returns {void}
+         */
         function remove(key) {
             keyMap.get("" + key).ArrayEntry.remove();
         }
 
+        /**
+         * Dispatches an `EditChange` for the whole collection (`member`, `obj[mn]`, no key) on the parent editor element.
+         * @returns {void}
+         */
         function colChanged() {
             editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, obj[mn]));
         }
 
+        /**
+         * Creates the editor for one element: a `SysWeaver-EditEntry` (header + value) holding a child
+         * `Edit(elementType, editor.Style, newOpt, editor, member.ElementInst, evListener)` set to `values[key]`.
+         * `newOpt` is a fresh `EditOptions` (defaults, so not inheriting ReadOnly etc.) with `KeyName = "[key]"`,
+         * `Name = mn` and an `AddToHeader` hook adding remove / insert-after icons.
+         * For primitive elements it copies `Min/Max/Default/Flags/Summary/Remark` of the element type onto its first
+         * member and sets that member's `DisplayName` to the key name.
+         * The `evListener` writes the child's top-level value back with `container.setVal(obj[mn], key, value)`
+         * (for objects only when the event has no member, i.e. whole-object replacements).
+         * Registers the editor in `keyMap`, sets `Key`, `KeyName`, `ArrayEntry` and `AddMenuItems`, then inserts the
+         * entry with `relativeTo.insertAdjacentElement(relation, entry)` or appends it to the data cell.
+         * Note: the child is filled with `values[key]`, which only works for arrays (for a `Map` it is undefined, so
+         * a default is created).
+         * @param {Array|Map} values - The collection value.
+         * @param {*} key - Element key / index.
+         * @param {Element} [relativeTo] - Existing entry to insert relative to.
+         * @param {InsertPosition} [relation] - `"beforebegin"` / `"afterend"` etc.
+         * @returns {Promise<Edit>} The item editor.
+         */
         async function addItemEditor(values, key, relativeTo, relation) {
             const arrayEntry = document.createElement("SysWeaver-EditEntry");
             const arrayEntryHeader = document.createElement("SysWeaver-EditEntryHeader");
@@ -284,6 +446,13 @@
                 //pm.Name = newOpt.KeyName;
                 pm.DisplayName = newOpt.KeyName;
             }
+            /**
+             * `EditChange` listener of the item editor (registered by the `Edit` constructor): writes the item's new
+             * top-level value back into the collection with `container.setVal(obj[mn], evKey, value)` when the event
+             * is not a nested one (`detail.Next` null); for object elements additionally only when `detail.Member` is
+             * null (whole-object replacement). `evKey` is the key at creation time (not updated by `reOrder`).
+             * @type {function(CustomEvent):void}
+             */
             let evListener;
             const evKey = key;
             if (isPrimitive) {
@@ -302,6 +471,15 @@
             }
 
 
+            /**
+             * Undoable removal of this item (click handler of the remove icon and the "Remove item" menu entry).
+             * Do: `container.removeVal(values, key)`, removes the DOM entry and renumbers (`reOrder`) when needed, or
+             * expands when collapsed; then `colChanged()` and count update.
+             * Undo: re-inserts the old value with `container.insertAt` (arrays only) and a new item editor at the
+             * original DOM position (or expands), renumbers, focuses it, `colChanged()` and count update.
+             * Registered on the parent editor (`editor.Invoke`, path name `mn`).
+             * @returns {Promise<void>}
+             */
             async function Remove() {
                 const currentKey = itemEdit.Key;
                 const currentKeyName = itemEdit.KeyName;
@@ -336,6 +514,14 @@
                     , mn);
             }
 
+            /**
+             * Undoable insertion of a new element (`CreateNewDefault()`) after this item (click handler of the plus
+             * icon and the "Insert after" menu entry; indexed collections). Do: `container.insertAfter`, adds the item
+             * editor after this entry (or expands), `reOrder`, focuses the new item, `colChanged()`, count update.
+             * Undo: `container.removeVal`, removes the entry, renumbers, focuses this item.
+             * Registered through the item editor (`itemEdit.Invoke`), so the undo path includes the item key.
+             * @returns {Promise<void>}
+             */
             async function InsertAfter() {
                 const currentKey = itemEdit.Key;
                 const currentKeyName = itemEdit.KeyName;
@@ -370,6 +556,14 @@
                     mn);
             }
 
+            /**
+             * Title-row hook of the item editor (called by `Edit.SetTypeInfo`; only when the item editor has a title
+             * row, i.e. `Title` option true which is the `EditOptions` default). Unless fixed / read only, adds a remove
+             * icon (`ColorIcon("../icons/clear.svg")`, class `EditFloatRight`, runs `Remove`) and, for indexed
+             * collections, an insert-after icon (`ColorIcon("../icons/plus.svg")`, runs `InsertAfter`).
+             * @param {HTMLElement} toElement - The title cell.
+             * @returns {void}
+             */
             newOpt.AddToHeader = toElement => {
                 if (!(isFixed || isReadOnly)) {
                     let ri;
@@ -405,6 +599,17 @@
             itemEdit.ArrayEntry = arrayEntry;
             arrayEntry.Edit = itemEdit;
 
+            /**
+             * Adds the item operations to the item editor's object menu (and member menu of primitive item editors):
+             * "Remove item" (`Id: "Remove"`, disabled when fixed) and, for indexed collections, "Insert before",
+             * "Insert after" (disabled when fixed or at `Max`), "Move to top", "Move up", "Move down", "Move to bottom"
+             * (`Id`s `InsertBefore`, `InsertAfter`, `MoveTop`, `MoveUp`, `MoveDown`, `MoveBottom`; disabled when fixed or
+             * already at that end). Icons use the `SysWeaverEditIcon*` classes. "Insert before" is undoable through
+             * `itemEdit.Invoke` (`container.insertAt`, mirror of `InsertAfter`).
+             * @param {WebMenuItem[]} menuItems - The menu item array to append to.
+             * @param {function():void} close - Closes the menu.
+             * @returns {void}
+             */
             itemEdit.AddMenuItems = (menuItems, close) => {
                 const currentKey = itemEdit.Key;
                 const currentKeyName = itemEdit.KeyName;
@@ -433,6 +638,14 @@
                     const isTop = currentKey <= 0;
                     const isBottom = (currentKey + 1) >= valCount;
 
+                    /**
+                     * Undoable move of an element (indexed collections): `container.move(values, from, to)`, moves the
+                     * DOM entry accordingly (or expands when collapsed), `reOrder`, `colChanged()`, count update; undo
+                     * moves it back. Registered on the parent editor (`editor.Invoke`, path name `mn`).
+                     * @param {number} from - Current index.
+                     * @param {number} to - Target index.
+                     * @returns {Promise<void>}
+                     */
                     async function Move(from, to) {
                     // TODO Undos!
                         await editor.Invoke(async () => {
@@ -638,12 +851,23 @@
 
         if (options.ExpandAllCollections && (!isExpanded))
             await toggleExpand();
+        //  The item returned to the engine (see the type-handler contract on class Edit).
         return {
+            /** @type {?string} Constraint text ("Minimum/Maximum allowed count") prepended to the member tooltip. */
             Title: typeTitle,
+            /** @type {?(Array|Map)} Default collection used by "Set default" (shared instance, not cloned). */
             DefValue: def,
+            /** @type {?string} Localized "empty", or null when the default is null. */
             DefValueText: def == null ? null : _TF("empty", "Text used to indicate that a list of items is empty"),
+            /** @type {HTMLTableRowElement} The data row holding the item editors. */
             DataRow: dataRow,
+            /** @type {HTMLElement} Element focused when validation fails here (the expand icon). */
             Focus: expandIcon.Element,
+            /**
+             * Refreshes the UI from `obj[mn]` after undo/redo: only updates the count text (re-rendering expanded
+             * items is commented out).
+             * @returns {Promise<void>}
+             */
             UpdateValue: async () => {
                 Edit.SetCollectionCount(countText, obj[mn], container);
 //                if (isExpanded) {
@@ -651,6 +875,13 @@
 //                    await toggleExpand();
 //                }
             },
+            /**
+             * Resolves an undo path into an item: takes the text between the first `[` and the last character of the
+             * first path segment (e.g. `"Items[3]"` -> `"3"`), expands if needed and delegates the full `name` to that
+             * item editor's `FindItem`.
+             * @param {string} name - Remaining dotted path, first segment `"<member>[<key>]"`.
+             * @returns {Promise<object|Edit|null>} The target, or null when the key has no item editor.
+             */
             FindItem: async name => {
                 const ps = name.split('.');
                 let findKey = ps[0];
@@ -665,7 +896,17 @@
 //                    return ie;
                 return await ie.FindItem(name);
             },
+            /**
+             * Current collection value.
+             * @returns {?(Array|Map)} `obj[mn]`.
+             */
             GetValue: () => obj[mn],
+            /**
+             * Replaces the collection value: stores into `obj[mn]`, re-renders the items when expanded (collapse +
+             * expand) and dispatches `EditChange` via `colChanged()`.
+             * @param {?(Array|Map)} newVal - New collection.
+             * @returns {Promise<void>}
+             */
             SetValue: async newVal => {
                 obj[mn] = newVal;
                 if (isExpanded) {
@@ -676,13 +917,26 @@
                 //editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, newVal, null, editor.Key, editor.KeyName));
 
             },
+            /**
+             * Adds collection operations to the member menu (nothing when read only):
+             * "Make empty" (when null) / "Clear collection" (`Id: "Clear"`, replaces the value with a new empty
+             * container via `SetValue`; undo restores the old value and expands) and "Add item" (`Id: "Add"`: creates
+             * `CreateNewDefault()`, adds it with `container.addVal` (creating the container when null), adds an item
+             * editor / renumbers when expanded, expands afterwards; undo removes it or restores null). Both are undoable
+             * via `editor.Invoke` with path name `mn`.
+             * "Add item" is enabled while the item count is below `max` (the parsed `member.Max`, default
+             * 1000000000 when it is missing, null or not a number) or when `max <= 0`.
+             * @param {WebMenu} menu - The menu being built (items are pushed to `menu.Items`).
+             * @param {function():void} close - Closes the menu.
+             * @returns {void}
+             */
             AddMenuItems: (menu, close) => {
 
                 if (isReadOnly)
                     return;
                 const currentValue = obj[mn];
                 const isNull = currentValue === null;
-                const valLen = isNull ? 0 : container.countVal(currentValue) > 0;
+                const valLen = isNull ? 0 : container.countVal(currentValue);
                 const canClear = isNull || (valLen > 0);
                 menu.Items.push(WebMenuItem.From({
                     Id: "Clear",
@@ -722,7 +976,7 @@
                     Flags: canClear ? 0 : 1,
                 }));
 
-                const canAdd = member.Max <= 0 || (valLen < member.Max);
+                const canAdd = max <= 0 || (valLen < max);
                 menu.Items.push(WebMenuItem.From({
                     Id: "Add",
                     Name:
@@ -792,4 +1046,5 @@
     }
 }
 
+//  Start loading the container strategies (EditCollectionArray.js, EditCollectionMap.js); not awaited.
 EditTypeCollection.Init();

@@ -1,3 +1,29 @@
+/*
+ * email.css - the only stylesheet of the standalone "Fake Mail" page (fakeEmail/index.html, static <link>),
+ * the web inbox of FakeEmailService. Behavior lives in email.js.
+ * Self-contained: it does NOT use SysWeaver common/theme.css (--Theme* variables); it defines its own palette as
+ * custom properties on :root (light) with a dark variant on :root[data-theme="dark"] (data-theme set on <html> by
+ * applyTheme / initTheme in email.js). Not templated.
+ * Layout: body is a flex column (header .top + .layout grid of .side / .list-pane / .reader); breakpoints at
+ * 1100px (icon-rail sidebar) and 720px (single-column mobile, body.reading swaps list for reader).
+ * Most classes are static markup in index.html; classes created or toggled by email.js are noted per rule.
+ */
+
+/* ===== Theme palette ===== */
+
+/*
+ * Light palette (default). Custom properties (colors unless noted):
+ * --bg: page and search background. --panel: panels, buttons, inputs, dialog, toast text.
+ * --panel-2: kbd background. --line: borders, empty-state icon. --text: text color, toast background.
+ * --muted: secondary text, default dot / status color. --accent: primary buttons, focus outlines, selection border,
+ * unread markers, links, mark tint. --accent-soft: active segment background, start color of the fresh animation.
+ * --accent-text: text on primary buttons. --hover: hover backgrounds, tag background. --sel: selected row and
+ * active folder background. --in: incoming direction, status on. --out: outgoing direction.
+ * --failed: failures, danger link, status off, error toast. --failed-soft: failed tag and error box background.
+ * --shadow: box-shadow value for dialog, toast and floating compose button. --radius: corner radius (px) of
+ * .mail-body (not overridden in dark). color-scheme follows the theme.
+ * All are static; nothing in JS sets them.
+ */
 :root {
     --bg: #f4f5f8;
     --panel: #ffffff;
@@ -19,6 +45,10 @@
     color-scheme: light;
 }
 
+/*
+ * Dark theme variant: active when <html data-theme="dark"> (applyTheme / initTheme in email.js, from the stored
+ * fakeEmail.theme or prefers-color-scheme). Overrides every palette property except --radius.
+ */
 :root[data-theme="dark"] {
     --bg: #12151b;
     --panel: #1a1e26;
@@ -39,10 +69,15 @@
     color-scheme: dark;
 }
 
+/* ===== Base and utilities ===== */
+
+/* border-box sizing everywhere. */
 * { box-sizing: border-box; }
 
+/* html, body fill the viewport. */
 html, body { height: 100%; }
 
+/* Page body: column flex container (header + layout), no page scroll, palette colors, 14px system-ui font. */
 body {
     margin: 0;
     background: var(--bg);
@@ -53,11 +88,17 @@ body {
     overflow: hidden;
 }
 
+/*
+ * Utilities: inline svg icons are 18x18 and do not flex; .muted = secondary text color; .grow = flex: 1 spacer;
+ * [hidden] attribute forced to display:none !important (email.js hides #systemsBox, #empty, #mail, #readerEmpty,
+ * #mailError, #viewMode, #cPreviewBtn, #cPreview, #cBody via the hidden property, which must win over display rules).
+ */
 svg { width: 18px; height: 18px; flex: none; }
 .muted { color: var(--muted); }
 .grow { flex: 1; }
 [hidden] { display: none !important; }
 
+/* kbd: small monospace key caps (reader help text, Send button). */
 kbd {
     font: 11px ui-monospace, Consolas, monospace;
     padding: 1px 5px;
@@ -68,6 +109,7 @@ kbd {
     color: var(--muted);
 }
 
+/* Base button: panel background, line border, 8px radius, inline-flex with gap; hover background; accent focus outline (also inputs, textareas and the .list). */
 button {
     font: inherit;
     color: inherit;
@@ -84,6 +126,7 @@ button {
 button:hover { background: var(--hover); }
 button:focus-visible, input:focus-visible, textarea:focus-visible, .list:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* button.primary: accent-filled primary buttons (Compose, Send); brightens on hover; a kbd inside becomes transparent with a currentColor border. */
 button.primary {
     background: var(--accent);
     border-color: var(--accent);
@@ -93,11 +136,16 @@ button.primary {
 button.primary:hover { filter: brightness(1.08); }
 button.primary kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .7; }
 
+/*
+ * .icon-btn: borderless transparent icon-only button (theme, back, open tab, delete, close).
+ * .link-btn: text-link-style button (Mark all as read, Preview); .link-btn.danger (Delete all) uses --failed.
+ */
 .icon-btn { padding: 6px; border-color: transparent; background: transparent; }
 .link-btn { border: 0; background: transparent; padding: 4px 0; color: var(--accent); }
 .link-btn:hover { background: transparent; text-decoration: underline; }
 .link-btn.danger { color: var(--failed); }
 
+/* input, textarea: full-width fields with panel background, line border and 8px radius. */
 input, textarea {
     font: inherit;
     color: inherit;
@@ -108,8 +156,9 @@ input, textarea {
     width: 100%;
 }
 
-/* Header */
+/* ===== Header ===== */
 
+/* .top: the header bar (flex row, panel background, bottom border). */
 .top {
     display: flex;
     align-items: center;
@@ -119,11 +168,13 @@ input, textarea {
     border-bottom: 1px solid var(--line);
 }
 
+/* .brand: logo (svg, accent colored), h1 title and span #fromAddress (system sender address, set by pollLoop). */
 .brand { display: flex; align-items: center; gap: 10px; min-width: 210px; }
 .brand > svg { width: 30px; height: 30px; color: var(--accent); }
 .brand h1 { font-size: 16px; margin: 0; line-height: 1.1; }
 .brand span { font-size: 12px; }
 
+/* .search: pill-shaped search box around #search (icon + input); the input itself is borderless and transparent. */
 .search {
     flex: 1;
     max-width: 560px;
@@ -138,8 +189,13 @@ input, textarea {
 }
 .search input { border: 0; background: transparent; padding: 8px 0; outline: none; color: var(--text); }
 
+/* .actions: right-aligned header group (status dot and theme button). */
 .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
+/*
+ * .status: the connection dot #status. setStatus (email.js) sets class "status on" (green --in with a 3px glow ring
+ * made with color-mix) or "status off" (--failed); plain .status (before the first poll) is --muted.
+ */
 .status {
     width: 10px;
     height: 10px;
@@ -149,8 +205,9 @@ input, textarea {
 .status.on { background: var(--in); box-shadow: 0 0 0 3px color-mix(in srgb, var(--in) 25%, transparent); }
 .status.off { background: var(--failed); }
 
-/* Layout */
+/* ===== Layout and sidebar ===== */
 
+/* .layout: three-column grid below the header: 220px sidebar, 300-400px list, flexible reader. */
 .layout {
     flex: 1;
     min-height: 0;
@@ -158,6 +215,7 @@ input, textarea {
     grid-template-columns: 220px minmax(300px, 400px) 1fr;
 }
 
+/* .side: the sidebar column (nav.side): scrollable flex column with a right border. */
 .side {
     padding: 14px 10px;
     display: flex;
@@ -167,8 +225,14 @@ input, textarea {
     overflow: auto;
 }
 
+/* .compose-btn: the Compose button (#compose). */
 .compose-btn { padding: 10px 16px; justify-content: center; border-radius: 12px; }
 
+/*
+ * .folders: folder list #folders (li[data-folder]) and the systems list #systems (same class). li.on (toggled by
+ * renderSide, created by its inner add for systems) marks the active folder / system filter.
+ * .folders .count: per-folder counters (span[data-count]); .count.unread (toggled by renderSide) uses the accent color.
+ */
 .folders { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .folders li {
     display: flex;
@@ -187,17 +251,24 @@ input, textarea {
 .folders .count { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; }
 .folders .count.unread { color: var(--accent); }
 
+/*
+ * .dot: small colored circles in folder items (.dot.in, .dot.out, .dot.failed in the markup; "dot all" has no own
+ * rule) and plain span.dot elements created by renderSide's add for systems.
+ */
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
 .dot.in { background: var(--in); }
 .dot.out { background: var(--out); }
 .dot.failed { background: var(--failed); }
 
+/* .systems: the "Systems" box #systemsBox (hidden by renderSide unless useful); its h3 is a small uppercase heading. */
 .systems h3 { margin: 0 10px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 
+/* .side-foot: bottom sidebar links (#markAllRead, #clearAll), pushed down with margin-top: auto. */
 .side-foot { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; padding: 0 10px; }
 
-/* List */
+/* ===== Email list ===== */
 
+/* .list-pane: the list column; .list-head: its header with h2 #folderTitle and span #listInfo (set by renderList). */
 .list-pane {
     display: flex;
     flex-direction: column;
@@ -216,8 +287,16 @@ input, textarea {
 .list-head h2 { margin: 0; font-size: 16px; }
 .list-head span { font-size: 12px; }
 
+/* .list: the scrollable ul#list (rebuilt by renderList). */
 .list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; outline: none; }
 
+/*
+ * .item: list rows (li.item) created by renderList: grid of 36px avatar, content and time, with a transparent 3px
+ * left border slot. State classes set by email.js:
+ * .item.sel - selected row (renderList, select): selection background and accent left border.
+ * .item.unread - not read (renderList; removed by select): bold .who / .subj and an accent dot (::before) before the name.
+ * .item.fresh - id not in State.known at the last render (renderList): plays the fresh animation.
+ */
 .item {
     display: grid;
     grid-template-columns: 36px 1fr auto;
@@ -241,8 +320,14 @@ input, textarea {
     vertical-align: middle;
 }
 .item.fresh { animation: fresh 1.6s ease-out; }
+/* @keyframes fresh: background fades from --accent-soft to normal (1.6s on .item.fresh). */
 @keyframes fresh { from { background: var(--accent-soft); } }
 
+/*
+ * Row parts built by renderList: .avatar spans 3 rows; .who (direction label, name spans, optional tag), .subj
+ * (subject) and .prev (preview) are ellipsized; time is small and muted; .subj and .prev span the content and time
+ * columns; .prev is muted at 13px.
+ */
 .item .avatar { grid-row: span 3; }
 .item .who, .item .subj, .item .prev { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
 .item .who { display: flex; align-items: center; gap: 6px; }
@@ -251,10 +336,12 @@ input, textarea {
 .item .subj { grid-column: 2 / 4; }
 .item .prev { grid-column: 2 / 4; color: var(--muted); font-size: 13px; }
 
+/* .dir: the "FROM" / "TO" direction label in .who (renderList), .dir.in colored --in, .dir.out colored --out. */
 .dir { font-size: 11px; font-weight: 700; color: var(--muted); }
 .dir.in { color: var(--in); }
 .dir.out { color: var(--out); }
 
+/* .avatar: round letter avatars from avatar() (background color set inline from hue()); .avatar.big for #mailAvatar in the reader. */
 .avatar {
     width: 36px;
     height: 36px;
@@ -268,6 +355,10 @@ input, textarea {
 }
 .avatar.big { width: 44px; height: 44px; font-size: 17px; }
 
+/*
+ * .tag: pill tags - the "Failed" tag in list rows (span.tag.failed, renderList) and the reader tags in #mailTags
+ * (showMail: direction .tag.in / .tag.out, format, system, reply-to, id).
+ */
 .tag {
     display: inline-block;
     font-size: 11px;
@@ -283,8 +374,10 @@ input, textarea {
 .tag.in { color: var(--in); }
 .tag.out { color: var(--out); }
 
+/* mark: search-hit highlight from appendHighlighted, a 30% accent tint via color-mix. */
 mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
 
+/* .empty: centered empty states (#empty in the list, #readerEmpty in the reader) with a large line-colored svg. */
 .empty {
     flex: 1;
     display: flex;
@@ -298,27 +391,37 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
 .empty svg { width: 56px; height: 56px; color: var(--line); margin-bottom: 8px; }
 .empty p { margin: 0; }
 
-/* Reader */
+/* ===== Reader ===== */
 
+/* .reader: the reader column (section#reader). */
 .reader { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
+/* .mail: the article#mail container (hidden while nothing is selected). */
 .mail { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0 24px 20px; }
 
+/* .mail-toolbar: reader toolbar (back, view mode, reply, open, delete). .back: the Back button (#back -> select(null)), hidden on wide screens, shown at <= 720px. */
 .mail-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
 .back { display: none; }
 
+/*
+ * .seg: segmented toggles - #viewMode (renderBody toggles "on"), #composeMode (setComposeMode) and #composeFormat
+ * (setComposeFormat). Adjacent buttons get a separator; button.on is the active segment (accent-soft background).
+ */
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; padding: 5px 12px; font-size: 13px; background: var(--panel); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
+/* .mail-subject: the #mailSubject heading. */
 .mail-subject { margin: 6px 0 14px; font-size: 21px; line-height: 1.25; word-break: break-word; }
 
+/* .mail-head: sender block (avatar, .mail-meta with names/addresses and .tags = #mailTags, and time = #mailTime). */
 .mail-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
 .mail-meta { flex: 1; min-width: 0; word-break: break-all; }
 .mail-meta .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .mail-head time { font-size: 12px; white-space: nowrap; }
 
+/* .error-box: #mailError, the delivery error text (shown by showMail when the email has Error). */
 .error-box {
     background: var(--failed-soft);
     color: var(--failed);
@@ -328,6 +431,11 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
     font-weight: 600;
 }
 
+/*
+ * .mail-body: the body host #mailBody (renderBody), rounded with --radius. The sandboxed iframe gets a white
+ * background (frameHtml uses a fixed light style); source and plain-text views are a <pre> (monospace);
+ * pre.text (plain-text mail) switches back to the proportional font; links from appendLinkified use the accent.
+ */
 .mail-body {
     flex: 1;
     min-height: 200px;
@@ -351,8 +459,9 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
 .mail-body .text { font: 14px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .mail-body a { color: var(--accent); }
 
-/* Composer */
+/* ===== Composer dialog ===== */
 
+/* .composer: the <dialog id="composer"> (up to 720px wide, rounded, shadow) and its dimmed ::backdrop. */
 .composer {
     width: min(720px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);
@@ -364,20 +473,31 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
     box-shadow: var(--shadow);
 }
 .composer::backdrop { background: rgba(10, 14, 25, .45); }
+/*
+ * Composer form column; .composer-head (mode toggle + close), .body-tools (format toggle + preview) and
+ * .composer-foot (hint, cancel, send) are flex rows. .composer.out .in-only: when setComposeMode("out") adds "out"
+ * to the dialog, the user-side fields (From, Name, System) are hidden.
+ */
 .composer form { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; }
 .composer-head, .body-tools, .composer-foot { display: flex; align-items: center; gap: 8px; }
 .composer.out .in-only { display: none; }
 
+/* .fields: two-column field grid with stacked labels; the label containing #cSubject (:has) spans the full width. */
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
 .fields label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .fields label:has(#cSubject) { grid-column: 1 / -1; }
 
+/*
+ * Body textarea #cBody; .composer.html (added by setComposeFormat("html")) switches it to a monospace font.
+ * .preview: the #cPreview iframe for the HTML preview (showPreview), white background.
+ */
 .composer textarea { resize: vertical; min-height: 180px; font-family: inherit; }
 .composer.html textarea { font: 13px/1.5 ui-monospace, Consolas, monospace; }
 .preview { width: 100%; height: 300px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 
-/* Toasts */
+/* ===== Toasts ===== */
 
+/* .toasts: fixed bottom-right stack #toasts (z-index 10, above the floating compose button). */
 .toasts {
     position: fixed;
     right: 16px;
@@ -387,6 +507,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
     gap: 8px;
     z-index: 10;
 }
+/* .toast: messages created by toast(): inverted colors, toast-in animation; .toast.err (errors) uses a red background. */
 .toast {
     background: var(--text);
     color: var(--panel);
@@ -399,10 +520,16 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
     word-break: break-word;
 }
 .toast.err { background: var(--failed); color: #fff; }
+/* @keyframes toast-in: a toast slides up 10px and fades in (0.2s). */
 @keyframes toast-in { from { transform: translateY(10px); opacity: 0; } }
 
 /* Responsive */
 
+/*
+ * @media (max-width: 1100px): the sidebar collapses to a 64px icon rail. Compose label, counts of inactive folders,
+ * .systems and .side-foot are hidden; folder text is hidden with font-size: 0 (larger dots remain) and the count of
+ * the active folder becomes a corner badge; the brand text (.brand div) is hidden.
+ */
 @media (max-width: 1100px) {
     .layout { grid-template-columns: 64px minmax(280px, 360px) 1fr; }
     .side { align-items: center; padding: 14px 6px; }
@@ -415,6 +542,12 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
     .brand div { display: none; }
 }
 
+/*
+ * @media (max-width: 720px): single-column mobile layout. The sidebar becomes a horizontally scrolling folder strip;
+ * Compose becomes a floating round button. The reader is hidden until body.reading (added/removed by select in
+ * email.js), which hides .list-pane and the compose button and shows .reader. .back becomes visible; .fields
+ * becomes one column.
+ */
 @media (max-width: 720px) {
     .top { gap: 10px; padding: 8px 12px; }
     .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }

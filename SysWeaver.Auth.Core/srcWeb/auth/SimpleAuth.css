@@ -1,5 +1,26 @@
-﻿
+﻿/*
+ * SimpleAuth.css - styles for the SimpleAuthorizer pages of SysWeaver.Auth.Core served under auth/:
+ * index.html ("Generate password hash", pwdGenMain) and KeyMan.html ("API-key management", keyManMain),
+ * both driven by SimpleAuth.js.
+ *
+ * Load order: ../common/theme.css, (KeyMan.html only: ../app/application.css), Auth.css, SimpleAuth.css,
+ * so these rules override Auth.css. Auth.css (and the SysWeaver-Auth* elements it styles, e.g.
+ * SysWeaver-AuthBox, SysWeaver-AuthText, and the IconAuthCopy icon) is NOT in this project: it belongs to
+ * SysWeaver.MicroService.Auth (srcWeb/auth) and is merged into the same auth/ url folder at runtime.
+ * SysWeaver-CenterBlock is a common element from common.js / common.css.
+ *
+ * Uses theme variables from common/theme.css (--ThemeFontMono, --ThemeBackground, --ThemeBackgroundRGB,
+ * --ThemeMainRGB, --ThemeAcc1, --ThemeAcc2, --ThemeRad, --ThemeRadInp). Not templated; defines no custom
+ * properties, keyframes or media queries.
+ */
 
+/* ===== Auth box overrides ===== */
+
+/*
+ * SysWeaver-AuthText: read-only text element created by AuthText (AuthUi.js, MicroService.Auth); used by
+ * pwdGenMain for the generated "user : hash" output. Mono bold accent text on the page background; the 40px
+ * transparent right border leaves room for the IconAuthCopy icon added by AuthAddIcon.
+ */
 SysWeaver-AuthText {
     font-family: var(--ThemeFontMono);
     font-weight: bold;
@@ -16,6 +37,11 @@ SysWeaver-AuthText {
 
 
 
+/*
+ * form.SysWeaver-AuthBox.SysWeaver-SimpleAuth: the auth box created inside the "create API key" PopUp by
+ * createApiKey (CreateAuthWrapper() adds SysWeaver-AuthBox, SimpleAuth.js adds SysWeaver-SimpleAuth).
+ * Resets every box property of Auth.css to initial so the floating, centered box renders as plain pop-up content.
+ */
 form.SysWeaver-AuthBox.SysWeaver-SimpleAuth {
     background: initial;
     width: initial;
@@ -34,6 +60,15 @@ form.SysWeaver-AuthBox.SysWeaver-SimpleAuth {
 }
 
 
+/* ===== Icons ===== */
+
+/*
+ * Mask-image icon classes (the icon color comes from the element background, the svg is the mask), used via
+ * AuthPage / ColorIcon / Button / AuthButton in SimpleAuth.js:
+ * IconLock = page icon of pwdGenMain, IconCopy = copy key, IconRemove = remove key,
+ * IconAdd = create key buttons, IconDownload = download credentials file.
+ * IconLock and IconDownload also exist in app/application.css; the generic names may collide with other modules.
+ */
 .IconLock {
     mask-image: url("../icons/lock.svg");
 }
@@ -54,6 +89,12 @@ form.SysWeaver-AuthBox.SysWeaver-SimpleAuth {
     mask-image: url("../icons/download.svg");
 }
 
+/* ===== API key table (KeyMan.html, built by rebuild() in keyManMain) ===== */
+
+/*
+ * table: global (unscoped) rule for the key table; applies to any table on a page loading this file.
+ * Centered, collapsed borders, translucent main color background, 125% font.
+ */
 table {
     margin: 1em auto 1em auto;
     border-collapse: collapse;
@@ -64,18 +105,24 @@ table {
     min-width: 16em;
 }
 
+/* td: table cells (name and icon cells), bordered and centered. */
 td {
     border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.9);
     padding: 0.25em 1em;
     text-align: center;
 }
 
+/* tr:first-child th: the "API keys" caption cell (th.header); rounds only its top corners. */
 tr:first-child th {
     border-radius: var(--ThemeRad);
     border-bottom-right-radius: 0;
     border-bottom-left-radius: 0;
 }
 
+/*
+ * Row-position padding: row 3 is the first key row (after caption and title rows) and gets extra top padding;
+ * the second-to-last row is the last key row (before the "action" row) and gets extra bottom padding.
+ */
 tr:nth-child(3) td {
     padding-top: 1em;
 }
@@ -85,21 +132,25 @@ tr:nth-last-child(2) td {
 }
 
 
+/* SysWeaver-CenterBlock in the last ("action") row: holds the "Create new key" Button; adds vertical margin. */
 tr:last-child SysWeaver-CenterBlock {
     margin: 0.5em 0;
 }
 
 
+    /* td:first-child: the key name column is left aligned. */
     td:first-child {
         text-align: left;
     }
 
+    /* th: header cells (caption and column titles) on the accent 2 background. */
     th {
         border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.2);
         padding: 0.1em 0.5em;
         background-color: var(--ThemeAcc2);
     }
 
+    /* th.title: column title cells "Name" / "Key" (class "title" set by rebuild): small, bold, uppercase, half transparent. */
     th.title {
         color: rgba(var(--ThemeBackgroundRGB), 0.5);
         font-weight: bold;
@@ -108,6 +159,7 @@ tr:last-child SysWeaver-CenterBlock {
         text-align: left;
     }
 
+    /* th.header: the "API keys" caption cell (class "header" set by rebuild), larger near-opaque text. */
     th.header {
         color: rgba(var(--ThemeBackgroundRGB), 0.9);
         font-size: 125%;

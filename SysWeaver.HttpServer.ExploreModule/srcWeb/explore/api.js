@@ -6,6 +6,49 @@
 
 
 
+/**
+ * @file api.js - page script of explore/api.html (API inspector and tester).
+ *
+ * Loaded with `defer` by api.html after common/common.js, common/tab.js, app/application.js,
+ * edit/Edit.js and iso_data/languages.js; the page calls `apiMain()` from `<body onload="apiMain()">`.
+ * Defines only the global `apiMain` (plus the accidental implicit global `didAdd`, assigned `true` in the
+ * compression-tag loop and never read). Nothing runs at load time.
+ *
+ * Dependencies: common/common.js (AddLoading, Fail, getUrlParams, getRequest, sendRequest, ColorIcon,
+ * Button, ValueFormat, createImg, createIFrame, isPureClick, Open, _T, _TF), common/tab.js (Tab),
+ * edit/Edit.js (Edit, EditOptions) and edit/type.js (AddTypeName, AddTextElement).
+ * Server: POST `../Api/debug/GetApiInfo` (TypeService.GetApiInfo in SysWeaver.MicroService.Edit) with the
+ * API url string, returning an ApiInfo (`Uri`, `Auth`, `Mime`, `Desc`, `ClientCacheDuration`,
+ * `RequestCacheDuration`, `CompPreference`, `Arg`, `Return`, `ArgName`, `ArgSummary`), then the tested API.
+ * URL parameter: `q` = API url relative to the site root (e.g. `Api/debug/explore/GetIcons`).
+ * Storage: `localStorage["SysWeaver.Api." + q]` = last argument object sent (without `$type`).
+ * Styled by api.css.
+ */
+
+/**
+ * Entry point of api.html: describes one API and lets the user call it.
+ *
+ * Reads URL param `q` (fails with "No query parameter specified!" when missing), sets
+ * `document.title = "API: " + q` and POSTs `q` to `../Api/debug/GetApiInfo`. Builds a
+ * `SysWeaver-Page.PadBottom` in `document.body` containing:
+ * 1. a header `SysWeaver-ApiSection`: `SysWeaver-ApiTag` "GET" or "POST" (POST when the API has an
+ *    argument), `SysWeaver-ApiUrl` with `data.Uri` (tooltip and copy-on-click with the absolute url, computed
+ *    by stripping the last two path segments - `explore/api.html` - from `location.href`), and when
+ *    `data.Auth != null` a lock `ColorIcon("IconSecured")` plus one tag per comma-separated auth token;
+ * 2. an optional description section (`SysWeaver-ApiDesc`);
+ * 3. an optional cache/compression section: `CLIENT {n}s`, `SERVER {n}s` and one tag (class "right") per
+ *    `CompPreference` entry (`method:quality`). The SERVER tag text and tooltip use the server
+ *    duration `rd` (the tag is only shown when `rd > 0`);
+ * 4. a `.ApiSignature` section: return type via `AddTypeName` (or a google search link `[mime]` for raw
+ *    mime APIs, or `void`), method name (last url segment without extension), `(`, argument type + `ArgName`, `);`;
+ * 5. when the API has an argument: `Tab("Api.Args")` with a "Parameters" `Edit` form (initial object from
+ *    `Edit.CreateDefault`, overlaid with the stored localStorage value, then `Edit.CleanUp`) and a "JSON" tab
+ *    (rendered on select with `ValueFormat.jsonToHtml`, click copies). An `EditChange` listener calls
+ *    `RemoveResults` (it also walks `detail.Next` to build a member path that is not used);
+ * 6. a `SysWeaver-ApiSendButton` with a "Send API call" `Button` (`IconSendIt`) - see the handler below.
+ * Errors are shown with `Fail(e, true)`; the loading indicator is removed in `finally`.
+ * @returns {Promise<void>} Resolves when the page has been built.
+ */
 async function apiMain() {
 
     const removeLoading = AddLoading();
@@ -101,13 +144,13 @@ async function apiMain() {
             }
             if (rd > 0) {
                 tag = document.createElement("SysWeaver-ApiTag");
-                tag.innerText = _T("SERVER {0}s", cd, "The text on a tag that explains that the API response will be cached for the specified duration.{0} is replaced with the number of seconds that the result should be cached");
-                tag.title = (cd === 1
+                tag.innerText = _T("SERVER {0}s", rd, "The text on a tag that explains that the API response will be cached for the specified duration.{0} is replaced with the number of seconds that the result should be cached");
+                tag.title = (rd === 1
                     ?
                     _TF("The server will cache the response of the API call for one second.", "A tool tip description on a tag that explains that the API response will be cached on the server one second")
                     :
-                    _T("The server will cache the response of the API call for {0} seconds.", cd, "A tool tip description on a tag that explains that the API response will cached on the server for the specified duration.{0} is replaced with the number of seconds that the result should be cached and will never be 1")
-                ) + "\n\n" + ValueFormat.copyOnClick(tag, cd);
+                    _T("The server will cache the response of the API call for {0} seconds.", rd, "A tool tip description on a tag that explains that the API response will cached on the server for the specified duration.{0} is replaced with the number of seconds that the result should be cached and will never be 1")
+                ) + "\n\n" + ValueFormat.copyOnClick(tag, rd);
                 section.appendChild(tag);
             }
             if (cp.length > 0) {
@@ -170,7 +213,14 @@ async function apiMain() {
 
         const button = document.createElement("SysWeaver-ApiSendButton");
         //  Input
+        /** @type {Tab|null} The "Api.Results" tab of the last call, or null when no results are shown. */
         let results = null;
+        /**
+         * Removes the results of the previous API call: when a results `Tab` exists, removes every element
+         * after the send button (the result tab contents) and the tab element itself, and clears `results`.
+         * Called before each send and on every `EditChange` of the argument form.
+         * @returns {void}
+         */
         function RemoveResults() {
             if (!results)
                 return;
@@ -276,6 +326,14 @@ async function apiMain() {
         }
 
 
+        /*
+         * Send button. Click handler: removes old results; with an argument, stores it (without $type) in
+         * localStorage[key] and POSTs it with sendRequest(fullUri, obj, true, null, isRaw), otherwise
+         * getRequest(fullUri, true, isRaw). Then builds Tab("Api.Results"): on error an "ERROR" tab (class Error);
+         * for raw mime a "PREVIEW" tab with an img (image/*) or iframe of a blob object url (click opens it in a
+         * new tab); without return value "VOID" (class NoResult); otherwise a "RESULT" tab (read-only Edit of
+         * data.Return) plus a "JSON" tab (highlighted JSON, click copies). Failures -> Fail(e).
+         */
         const abutton = new Button(null,
             _TF("Send API call", "The text of a button that when clicked will make a request to and API"),
             _TF("Click to call this API and display any results below.", "The tool tip text of a button that when clicked will make a request to and API"),

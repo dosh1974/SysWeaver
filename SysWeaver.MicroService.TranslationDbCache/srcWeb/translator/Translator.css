@@ -1,10 +1,25 @@
-﻿body, html{
+﻿/*
+ * Translator.css - styles for translator/Edit.html, the standalone translation editor (no app shell).
+ * Loaded by a static <link> after ../common/theme.css, which provides the theme variables used here
+ * (--ThemeAcc1, --ThemeAcc2, --ThemeMain, --ThemeMainRGB, --ThemeFont, --ThemeFontSize, --ThemeRadInp,
+ * --ThemeFadeDuration) and the base SysWeaver-Page / SysWeaver-Page.Wide and SysWeaver-CenterBlock layout,
+ * which this file does not restyle. Not templated. All elements are created by translatorEditMain in Translator.js.
+ * No animations, media queries or theme variants; the only motion is the outline transition on textarea.Translation.
+ */
+
+/* ===== Page ===== */
+
+/* body, html: no padding or margin. */
+body, html{
     padding: 0;
     margin: 0;
 }
 
 
 
+/* ===== Sections and text blocks ===== */
+
+/* SysWeaver-Section: section headings created by AddSection - uppercase, 80%, bold caption in the --ThemeAcc1 accent color. */
 SysWeaver-Section
 {
     margin-top: 2em;
@@ -18,6 +33,10 @@ SysWeaver-Section
 }
 
 
+/*
+ * SysWeaver-Text: value blocks created by AddText / AddImgText - selectable, pre-wrap, horizontally scrollable,
+ * on a faint tint of the main theme color (rgba(var(--ThemeMainRGB), 0.05)).
+ */
 SysWeaver-Text {
     user-select: text;
     overflow-x: auto;
@@ -27,6 +46,10 @@ SysWeaver-Text {
     padding: 0.25em;
 }
 
+    /*
+     * SysWeaver-Text.Icon: language rows created by AddImgText (class Icon). The flag is the inline background-image
+     * set by JS; it is placed 8px from the left, vertically centered, 32px wide, not repeated, with 48px left padding.
+     */
     SysWeaver-Text.Icon {
         padding-left: 48px;
         background-repeat: no-repeat;
@@ -36,10 +59,19 @@ SysWeaver-Text {
 
     }
 
+    /* SysWeaver-Text.Bold: bold text; translatorEditMain adds class Bold to the source-text block. */
     SysWeaver-Text.Bold {
         font-weight: bold;
     }
 
+/* ===== Editor ===== */
+
+/*
+ * textarea.Translation: the editable translation field (class Translation set in translatorEditMain).
+ * Full width (border-box), vertical resize only, min 6em high, no border, bold theme font in --ThemeMain on a faint
+ * tint. Input radius --ThemeRadInp with a square bottom-right corner for the resize grip. No outline by default;
+ * outline changes are animated over --ThemeFadeDuration.
+ */
 textarea.Translation {
     box-sizing: border-box;
     width: 100%;
@@ -58,10 +90,12 @@ textarea.Translation {
     transition: outline linear var(--ThemeFadeDuration);
 }
 
+    /* Focused translation field: 2px solid --ThemeAcc2 outline. */
     textarea.Translation:focus {
         outline: 2px solid var(--ThemeAcc2);
     }
 
+/* SysWeaver-CenterBlock.Space: the button row below the textarea (class Space added in translatorEditMain); 2em top, 4em bottom margin. */
 SysWeaver-CenterBlock.Space
 {
     margin-top: 2em;

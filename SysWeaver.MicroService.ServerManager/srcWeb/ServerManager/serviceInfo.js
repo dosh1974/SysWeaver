@@ -1,8 +1,54 @@
-﻿
+﻿/**
+ * @file Script of the ServerManager "service info" page (serviceInfo.html): details of one managed service
+ * (state, CPU/memory graphs, control buttons, debug buttons, active and master config files with uploads, and the
+ * list of uploaded versions). Opened from the services table (`SmServiceBrief` link `serviceInfo.html?p=<svc>`).
+ * Loaded with a static `<script defer>` tag (after common.js, md5.js, UZIP.js, fileUploader.js and
+ * app/application.js) and started from `<body onload="serviceInfoMain()">`.
+ * Relies on the static placeholders of serviceInfo.html, found by tag name and index: `<si-name>`, five
+ * `<si-state>`, `<si-servicebuttons>`, two `<si-graph>` (each with an iframe), `<si-debugbuttons>`, two
+ * `<si-configs>`, two `<si-uploads>` and `<si-versions>`.
+ *
+ * URL params: `p` = service name (required), `v` = view-only flag (any non-empty value; adds `body.ViewOnly`).
+ *
+ * Globals defined: `BeginElementChildUpdate` (identical copy of the one in versionInfo.js) and `serviceInfoMain`.
+ * No immediately executed code; `serviceInfoMain` ends in an endless polling loop (`GetDetail` every 5 s).
+ *
+ * Dependencies (globals from other files):
+ * - common/common.js: `getUrlParams`, `sendRequest`, `Open`, `badClick`, `keyboardClick`, `rightClick`, `Button`,
+ *   `ValueFormat`, `AbortHandler`, `delayWithAbort`, `downloadFile`, `Fail`, `Info`, `_T`, `_TF`, `PageLoaded`,
+ *   `window.IsTop`.
+ * - app/application.js: `Confirm`, `PopUpMenu`, `WebMenu`, `WebMenuItem`.
+ * - common/fileUploader.js: `fileUploaderSetup`, `UploadStatus`, `fileUploaderStatusText`
+ *   (repos `Current_<svc>` and `Master_<svc>`).
+ *
+ * Server API (page-relative, i.e. `ServerManager/<name>`): `GetDetail` and the verbs `Restart`, `Pause`,
+ * `Continue`, `Stop`, `Start`, `Uninstall`, `Kill` (take the service name, return `SmServiceDetail`);
+ * `ActivateConfig`, `UseMasterConfig`, `DeleteConfig` (take `SmConfigRequest` `{ServiceName, Config, IsMaster}`).
+ */
+
+/**
+ * Starts an in-place reconciliation of the children of `targetElement`, so that polled lists only touch nodes
+ * that actually changed (no flicker, focus is kept).
+ * Usage: call `Add(e)` for every wanted child in order (use the returned node to attach expandos), then
+ * `Complete()` to remove leftover children. Note: when an existing equal child is kept, the handlers of the
+ * new element `e` are discarded and the old node keeps its old handlers.
+ * @param {HTMLElement} targetElement - The element whose children are reconciled.
+ * @returns {{Target:HTMLElement, Add:function(HTMLElement):HTMLElement, Complete:function():void}} The updater.
+ */
 function BeginElementChildUpdate(targetElement) {
+    /** The target element. @type {HTMLElement} */
     const el = targetElement;
+    /** Number of children the target had when the update began (decremented by `complete`). @type {number} */
     let ccl = el.children?.length ?? 0;
+    /** Index of the next child position to fill. @type {number} */
     let cindex = 0;
+    /**
+     * Places `e` at the next child position. Past the original children it appends `e`. Otherwise it compares
+     * the existing child at that index with `e` by `outerHTML`: if equal the existing child is kept and returned,
+     * else it is replaced by `e`. Advances the index.
+     * @param {HTMLElement} e - The wanted child element.
+     * @returns {HTMLElement} The node now in place (the existing child or `e`); set expandos on this.
+     */
     function add(e) {
         if (cindex >= ccl) {
             ++cindex;
@@ -16,6 +62,10 @@ function BeginElementChildUpdate(targetElement) {
         el.replaceChild(e, cc);
         return e;
     }
+    /**
+     * Removes all original children at or after the current index (from the end backwards).
+     * @returns {void}
+     */
     function complete() {
         while (ccl > cindex) {
             --ccl;
@@ -29,13 +79,30 @@ function BeginElementChildUpdate(targetElement) {
     };
 }
 
+/**
+ * Entry point of serviceInfo.html.
+ * Reads URL params `p` (service name; shows `Fail` and returns if missing) and `v` (view-only, adds
+ * `body.ViewOnly`); adds `body.TopWindow` when `window.IsTop`. Sets `document.title = "Service - <svc>"` and the
+ * `<si-name>` text. Unless view-only, makes `si-state[2]` / `si-state[3]` (CPU / memory) and both `si-graph`
+ * tiles clickable (`keyboardClick`) to open `server_metrics.html` with the `GetServiceCpu*` / `GetServiceMem*`
+ * charts. Points the two graph iframes (`tabIndex -1`) at `../chart/chart.html?...&q=../ServerManager/GetServiceCpuChart?"<svc>"`
+ * and `...GetServiceMemChart?"<svc>"` (the API argument is a JSON string literal in the query).
+ * Unless view-only, builds the service control buttons (Restart, Pause, Resume -> `Continue`, Stop, Start,
+ * Disable -> `Uninstall`, Kill after `Confirm`; each calls `DoVerb`) and the debug buttons (Explore, View log,
+ * Deleted), and installs the real `updateButtons`. Then polls forever: `data = await sendRequest("GetDetail", svc)`,
+ * `update(first)`, `await delayWithAbort(5000, abortWait)`; errors are shown with `Fail(e)`.
+ * @returns {Promise<void>} Never resolves (unless `p` is missing).
+ */
 async function serviceInfoMain() {
+    /** URL parameters. @type {URLSearchParams} */
     const p = getUrlParams();
+    /** Name of the managed service (URL param `p`). @type {string} */
     const service = p.get("p");
     if (!service) {
         Fail("No serivce paramater supplied!");
         return;
     }
+    /** True when URL param `v` is set: no controls, no click handlers, `body.ViewOnly`. @type {boolean} */
     const viewOnly = !!p.get("v");
     if (viewOnly)
         document.body.classList.add("ViewOnly");
@@ -44,9 +111,14 @@ async function serviceInfoMain() {
 
     document.title = "Service - " + service;
     document.body.getElementsByTagName("si-name")[0].innerText = service;
+    /**
+     * The five `<si-state>` pills: [0] status, [1] process id, [2] CPU, [3] memory, [4] total CPU time.
+     * @type {HTMLCollectionOf<HTMLElement>}
+     */
     const states = document.body.getElementsByTagName("si-state");
 
     if (!viewOnly) {
+        // CPU / memory pills open the service CPU / memory metrics page (serviceArg is declared below; only read on click).
         states[2].onclick = ev => {
             if (badClick(ev))
                 return;
@@ -61,8 +133,11 @@ async function serviceInfoMain() {
         keyboardClick(states[3]);
     }
 
+    /** The two `<si-graph>` tiles: [0] CPU chart, [1] memory chart. @type {HTMLCollectionOf<HTMLElement>} */
     const graphs = document.body.getElementsByTagName("si-graph");
+    /** The iframe currently being configured. @type {HTMLIFrameElement} */
     let ifr = graphs[0].getElementsByTagName("iframe")[0];
+    /** Query suffix for the per-service chart APIs: `?"<svc>"` (JSON string argument). @type {string} */
     const serviceArg = "?\"" + service + "\"";
     ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&noLabels=true&center=true&q=../ServerManager/GetServiceCpuChart" + serviceArg;
     ifr.tabIndex = "-1";
@@ -70,6 +145,7 @@ async function serviceInfoMain() {
     ifr.tabIndex = "-1";
     ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&noLabels=true&center=true&q=../ServerManager/GetServiceMemChart" + serviceArg;
     if (!viewOnly) {
+        // Graph tiles open the same metrics pages as the CPU / memory pills.
         graphs[0].onclick = ev => {
             if (badClick(ev))
                 return;
@@ -83,21 +159,48 @@ async function serviceInfoMain() {
         keyboardClick(graphs[0]);
         keyboardClick(graphs[1]);
     }
+    /** Aborts the 5 s polling delay so the next `GetDetail` runs immediately (see `updateNow`). @type {AbortHandler} */
     const abortWait = new AbortHandler();
+    /**
+     * Enables / disables the control buttons for a service status. A no-op in view-only mode; otherwise replaced
+     * below by a closure (see the comment there).
+     * @type {function(string):void}
+     */
     let updateButtons = () => { };
 
+    /**
+     * Ends the current polling delay (`abortWait.raise()`) so the next `GetDetail` poll runs immediately.
+     * @returns {void}
+     */
     function updateNow() {
         abortWait.raise();
     }
 
+    /** "Explore" debug button (null in view-only mode). @type {?Button} */
     let exploreButton = null;
+    /** "View log" debug button (null in view-only mode). @type {?Button} */
     let logButton = null;
+    /** "Deleted" debug button (null in view-only mode). @type {?Button} */
     let deletedButton = null;
     if (!viewOnly) {
 
+        /** The `<si-servicebuttons>` row holding the control buttons. @type {HTMLElement} */
         const serviceButtons = document.body.getElementsByTagName("si-servicebuttons")[0];
 
+        /** True while a verb runs; suppresses the control-button part of `updateButtons`. @type {boolean} */
         let blockButtonStates = false;
+        /**
+         * Runs a service verb: sets `blockButtonStates`, calls `button.StartWorking()`, disables every control
+         * button (through the `.Button` expando of the children of `<si-servicebuttons>`) and awaits
+         * `sendRequest(v, service)`. On a falsy result shows `Fail("Failed to <v>")`, clears the block and raises
+         * `abortWait`. On success stores the returned `SmServiceDetail` in `data`, clears the block, calls `updateNow()`
+         * and shows `Info(ValueFormat.stringFormat(okText, service))`. On exception shows `Fail`, clears the block
+         * and raises `abortWait`. Always calls `button.StopWorking()`.
+         * @param {Button} button - The button that was clicked.
+         * @param {string} v - Verb / API name: "Restart", "Pause", "Continue", "Stop", "Start", "Uninstall" or "Kill".
+         * @param {string} okText - Success message; `{0}` is replaced with the service name.
+         * @returns {Promise<void>}
+         */
         async function DoVerb(button, v, okText) {
             try {
                 blockButtonStates = true;
@@ -106,6 +209,7 @@ async function serviceInfoMain() {
                 const newData = await sendRequest(v, service);
                 if (!newData) {
                     Fail("Failed to " + v.toLowerCase());
+                    blockButtonStates = false;
                     abortWait.raise();
                     return;
                 }
@@ -123,30 +227,37 @@ async function serviceInfoMain() {
                 button.StopWorking();
             }
         }
+        /** Control buttons (common.js `Button`; icon class `si-icon-*` from serviceInfo.css). @type {Button} */
         const restartButton = new Button(null, "Restart", "Click to restart the service", "si-icon-restart", false, async () => {
             await DoVerb(restartButton, "Restart", "Restarted {0}");
         });
 
+        /** @type {Button} */
         const pauseButton = new Button(null, "Pause", "Click to pause the service", "si-icon-pause", false, async () => {
             await DoVerb(pauseButton, "Pause", "Paused {0}");
         });
 
+        /** "Resume" sends the verb `Continue`. @type {Button} */
         const resumeButton = new Button(null, "Resume", "Click to resume the service", "si-icon-resume", false, async () => {
             await DoVerb(resumeButton, "Continue", "Resumed {0}");
         });
 
+        /** @type {Button} */
         const stopButton = new Button(null, "Stop", "Click to stop the service", "si-icon-stop", false, async () => {
             await DoVerb(stopButton, "Stop", "Stopped {0}");
         });
 
+        /** @type {Button} */
         const startButton = new Button(null, "Start", "Click to start the service", "si-icon-start", false, async () => {
             await DoVerb(startButton, "Start", "Started {0}");
         });
 
+        /** "Disable" sends the verb `Uninstall`. @type {Button} */
         const disableButton = new Button(null, "Disable", "Click to disable the service", "si-icon-disable", false, async () => {
             await DoVerb(disableButton, "Uninstall", "Disabled {0}");
         });
 
+        /** "Kill" asks for confirmation before sending the verb `Kill`. @type {Button} */
         const killButton = new Button(null, "Kill", "Click to kill the service process.\nWARNING! This can cause problems!\nTry to stop the service first.", "si-icon-kill", false, async () => {
             if (await Confirm("Kill",
                 "Forcefully kill the service process?\n\n" +
@@ -171,6 +282,12 @@ async function serviceInfoMain() {
         serviceButtons.appendChild(killButton.Element);
 
 
+        /**
+         * The `<si-debugbuttons>` row: Explore (`../FolderSync/ManagedFolders/<svc>/explore`), View log
+         * (`../edit/text.html?scrollToEnd=true&r=../FolderSync/ManagedFolders/<svc>/<data.Log.Name>&d=../ServerManager/DeleteLogFile`)
+         * and Deleted (`../ServerManager/ServiceBak/<svc>/explore`); all open in place.
+         * @type {HTMLElement}
+         */
         const debugButtons = document.body.getElementsByTagName("si-debugbuttons")[0];
         exploreButton = new Button(null, "Explore", "Explore the active files", "si-icon-explore", true, async () => {
             Open("../FolderSync/ManagedFolders/" + service + "/explore", "_self");
@@ -192,6 +309,15 @@ async function serviceInfoMain() {
         debugButtons.appendChild(logButton.Element);
         debugButtons.appendChild(deletedButton.Element);
 
+        /**
+         * Real `updateButtons(status)`: unless `blockButtonStates` is set, enables Restart if "Running"; and, only
+         * when the service is not the server manager itself (`!data.IsSm`): Pause if Running; Resume if "Paused";
+         * Stop if Running/Paused; Start if "Stopped"/"NotInstalled"/"Unknown"; Disable if Stopped/Running/Paused;
+         * Kill if `data.ProcId > 0` (combined with bitwise `&`, so `SetEnabled` receives 0/1). Always enables
+         * View log iff `data.Log` is set.
+         * @param {string} status - Service status string from `data.Status`.
+         * @returns {void}
+         */
         updateButtons = status => {
             if (!blockButtonStates) {
                 const isNotSm = !data.IsSm;
@@ -211,6 +337,11 @@ async function serviceInfoMain() {
         };
     }
 
+    /**
+     * Service status -> CSS class of `si-state[0]`: Running -> Ok; StartPending, ContinuePending -> Warning;
+     * Unknown, NotInstalled, Stopped, StopPending, Paused, PausePending -> Error.
+     * @type {Map<string,string>}
+     */
     const stateMap = new Map();
     stateMap.set("Unknown", "Error");
     stateMap.set("NotInstalled", "Error");
@@ -238,12 +369,21 @@ async function serviceInfoMain() {
 
 
 
+    /** Grid of the active (current version) config files. @type {HTMLElement} */
     const configs = document.body.getElementsByTagName("si-configs")[0];
+    /** Upload target for the active config files (repo `Current_<svc>`). @type {HTMLElement} */
     const uploads = document.body.getElementsByTagName("si-uploads")[0];
+    /** Grid of the master config files. @type {HTMLElement} */
     const masterConfigs = document.body.getElementsByTagName("si-configs")[1];
+    /** Upload target for the master config files (repo `Master_<svc>`). @type {HTMLElement} */
     const masterUploads = document.body.getElementsByTagName("si-uploads")[1];
+    /** Grid of the uploaded versions. @type {HTMLElement} */
     const versions = document.body.getElementsByTagName("si-versions")[0];
 
+    /**
+     * Character index -> expected separator for the old backup timestamp `yyyy-MM-dd_HH_mm_ss` (used by `isBackup`).
+     * @type {Map<number,string>}
+     */
     const bakMap = new Map();
     bakMap.set(4, '-');
     bakMap.set(7, '-');
@@ -252,6 +392,11 @@ async function serviceInfoMain() {
     bakMap.set(16, '_');
 
 
+    /**
+     * Character index -> expected separator for the new backup prefix
+     * `Bak_yyyy-MM-dd_HH_mm_ss_yyyy-MM-dd_HH_mm_ss` (used by `isBackupNew`).
+     * @type {Map<number,string>}
+     */
     const bakMapNew = new Map();
     bakMapNew.set(8, '-');
     bakMapNew.set(11, '-');
@@ -267,6 +412,14 @@ async function serviceInfoMain() {
 
 
     // "Bak_2012-12-01_09_40_20_2012-12-01_09_40_20.File.json" or "Bak_2012-12-01_09_40_20_2012-12-01_09_40_20_12.File.json" (same as ServiceHost.NewIsConfigBackupName)
+    /**
+     * Tests for the new backup file name format `Bak_yyyy-MM-dd_HH_mm_ss_yyyy-MM-dd_HH_mm_ss[_<digits>].<rest>`:
+     * must start with "Bak_", the part before the first "." must be at least 43 chars, positions 4-42 must be
+     * digits except the separators in `bakMapNew`, and anything after position 43 must be "_" followed by digits.
+     * Must stay in sync with C# `ServiceHost.NewIsConfigBackupName`.
+     * @param {string} fn - File name.
+     * @returns {boolean} True if `fn` is a backup in the new format.
+     */
     function isBackupNew(fn) {
         if (fn.substring(0, 4) !== "Bak_")
             return false;
@@ -304,6 +457,13 @@ async function serviceInfoMain() {
         return true;
     }
 
+    /**
+     * Tests whether a config file name is a backup: true if `isBackupNew(fn)`, or if the second-to-last dot
+     * segment (`name.<seg>.ext`) is "LastGood" or matches `yyyy-MM-dd_HH_mm_ss[_<digits>]` (first 19 chars checked
+     * against `bakMap`, the rest must be "_" plus digits).
+     * @param {string} fn - File name.
+     * @returns {boolean} True if `fn` is a backup (old or new format).
+     */
     function isBackup(fn) {
         if (isBackupNew(fn))
             return true;
@@ -348,6 +508,25 @@ async function serviceInfoMain() {
         return true;
     }
 
+    /**
+     * Reconciles a config file grid (`<si-configs>`) via `BeginElementChildUpdate`: a `<si-file-header>`, then five
+     * cells per file: `<si-file-state>` (class `Show` = not a backup per `isBackup`, shown as a star),
+     * `<si-file-icon>` (background `../icons/ext/<ext>.svg`; expando `.Config` = the file record, set on the node
+     * returned by `Add`), `<si-file-name>` (click opens `../edit/text.html?r=<folderSuffix><svc>/<name>&u=../ServerManager/UpdateConfig&d=../ServerManager/DeleteConfigFile`),
+     * `<si-file-size>` (byte size, copy-on-click) and `<si-file-time>` (last modified, copy-on-click).
+     * Unless view-only, the icon gets click / keyboard / right-click handlers opening a `PopUpMenu` (popup element
+     * gets class `Rel`) with a `WebMenu` named "SmConfigFiles": View (`../logFile/logfile.html?api=...`), Activate
+     * (backups only; `ActivateConfig`), Use as current (master only; `UseMasterConfig`), Copy file name, Copy local
+     * path (`<data.Folder or data.CurrentFolder>\<name>`), Copy local folder, Download (`downloadFile`) and Delete
+     * (`Confirm`, then `DeleteConfig`). Successful server actions call `updateNow()`.
+     * @param {HTMLElement} el - The `<si-configs>` grid.
+     * @param {?Array<{Name:string, Size:number, LastModified:string}>} files - The config files.
+     * @param {string} headerText - Header text.
+     * @param {?string} headerTitle - Header tooltip.
+     * @param {string} [folderSuffix="../FolderSync/ManagedFolders/"] - URL prefix of the folder that serves the files (`<prefix><svc>/<file>`).
+     * @param {boolean} [isMaster=false] - True for the master config list (uses `data.Folder`, adds "Use as current").
+     * @returns {void}
+     */
     function updateFileList(el, files, headerText, headerTitle, folderSuffix, isMaster) {
 
         isMaster = !!isMaster;
@@ -369,6 +548,7 @@ async function serviceInfoMain() {
                     const ext = fn.substring(fn.lastIndexOf('.') + 1);
                     icon.style.backgroundImage = "url('../icons/ext/" + ext + ".svg')";
                     if (!viewOnly) {
+                        // Icon click: pop up the file options menu for the file in the `.Config` expando of the clicked node.
                         icon.title = "Click to show options";
                         icon.onclick = async ev => {
                             if (badClick(ev))
@@ -477,11 +657,12 @@ async function serviceInfoMain() {
                                     },
                                 }));
 
+                                // The Download tooltip is formatted with the file name.
                                 menu.Items.push(WebMenuItem.From({
                                     Name: _TF("Download", "The text of a menu option that when clicked will exit from full screen mode"),
                                     Flags: 0,
                                     IconClass: "../icons/disc.svg",
-                                    Title: _T("Click to download the \"{0}\" config", folder, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Title: _T("Click to download the \"{0}\" config", fn, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
                                     Data: async () => {
 
                                         downloadFile(fn, folderSuffix + service + "/" + fn);
@@ -581,7 +762,25 @@ async function serviceInfoMain() {
 
 
 
+    /**
+     * Last `SmServiceDetail` from `GetDetail` or a verb (Status, ProcId, CpuUsage, MemUsage, TotalProcessorTime,
+     * IsSm, Log, Folder, CurrentFolder, Configs, MasterConfigs, Versions).
+     * @type {?object}
+     */
     let data = null;
+    /**
+     * Renders the latest `data`.
+     * On `first`: calls `PageLoaded()` and sets the tooltips of Explore / View log and both upload targets with
+     * the folder paths. Writes `data.Status` into `si-state[0]` and replaces its classes with `stateMap.get(status)`.
+     * Adds / removes `Hide` on `si-state[1..4]` when `ProcId === 0`, and writes "Id:", "Cpu: <n> %", "Mem: <bytes>",
+     * "Tot: <timespan>". If `data.Configs` exists: `updateFileList(configs, ...)`, `configs.Show`, and on first
+     * (not view-only) `fileUploaderSetup(uploads, "Current_<svc>", null, UploadCompleted, null, true)` +
+     * `keyboardClick` + `Show`; else removes `Show` from `configs` only. Same for `data.MasterConfigs` (folder
+     * `../ServerManager/Data/`, `isMaster = true`, repo `Master_<svc>`; else removes `Show` from both master
+     * elements). Reconciles `<si-versions>` (header plus six cells per version) and finally calls `updateButtons(status)`.
+     * @param {boolean} [first] - True on the first successful poll.
+     * @returns {void}
+     */
     function update(first) {
 
         if (first)
@@ -615,6 +814,16 @@ async function serviceInfoMain() {
         states[3].innerText = "Mem: " + ValueFormat.formatByteSize(data.MemUsage);
         states[4].innerText = "Tot: " + ValueFormat.formatTimeSpan(data.TotalProcessorTime);
 
+        /**
+         * Upload-finished callback passed to both `fileUploaderSetup` calls (copy of the one in keys.js).
+         * If `res.Error` is set shows `Fail(err)`. Otherwise reports only one message: the first status that is
+         * neither `UploadStatus.AlreadyUploaded` nor `UploadStatus.None` -> `Fail`; else the first
+         * `AlreadyUploaded` -> `Info`; else the first `None` (success) -> `Info` and `updateNow()`.
+         * @param {HTMLElement} e - The upload element (`<si-uploads>`).
+         * @param {{Error:?string, Status:Array<number>}} res - Upload result; `Status` holds one `UploadStatus` value per file.
+         * @param {File[]|FileList} files - The uploaded files (same order as `res.Status`).
+         * @returns {void}
+         */
         function UploadCompleted(e, res, files) {
             const err = res.Error;
             if (err) {
@@ -680,6 +889,8 @@ async function serviceInfoMain() {
             masterConfigs.classList.remove("Show");
         }
 
+        // Versions grid: <si-version-header>, then per version active star, uploaded time (click opens
+        // versionInfo.html?p=<svc>,<Uploaded>,<Name>), user, machine, comment (copy-on-click) and last used time.
         const updater = BeginElementChildUpdate(versions);
         const vs = data.Versions;
         if (vs) {
@@ -745,6 +956,7 @@ async function serviceInfoMain() {
 
         updateButtons(status);
     }
+    // Endless polling loop: fetch the service detail, render it, wait 5 s (or until updateNow()).
     for (; ;) {
         try {
             const noOld = !data;

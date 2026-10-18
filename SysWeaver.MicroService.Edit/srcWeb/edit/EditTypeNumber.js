@@ -1,11 +1,42 @@
-﻿class EditTypeNumber {
+﻿/**
+ * @file EditTypeNumber.js - type handler for floating point types (Single, Double, Decimal and their Nullable variants) of the object editor.
+ *
+ * Loaded by Edit.Init() (Edit.js) via includeJs(current, "EditTypeNumber.js").
+ * Defines the global class EditTypeNumber. Instances are created in Edit.GetTypeMap(), e.g.
+ * `new EditTypeNumber(-3.40282347e+38, 3.40282347e+38, 11)` for System.Single; the Nullable variants pass a 4th
+ * argument (true) that the constructor ignores.
+ *
+ * Dependencies: Edit (IsValid, CreateTextInput, CreateSliderInput, CreateChangeEvent), ValueFormat.AddNonNullLine
+ * (common), TypeMemberFlags (type.js).
+ * Conventions: implements the duck-typed type handler contract, but GetDefault takes the array returned by
+ * GetMinMaxDefault. Metadata values (Min/Max/Default) may use "," as decimal separator (the first "," is replaced by ".").
+ */
 
+/**
+ * Type handler for floating point values: a numeric text input (digits, one ".", leading "-" when min < 0) plus an
+ * optional range slider (Slider flag with both Min and Max; cell class EditSlider).
+ */
+class EditTypeNumber {
+
+    /**
+     * @param {number} typeMin - Smallest value of the .NET type.
+     * @param {number} typeMax - Largest value of the .NET type.
+     * @param {number} maxLen - Maximum number of characters in the text input (reduced by one for unsigned ranges).
+     */
     constructor(typeMin, typeMax, maxLen) {
+        /** @type {number} Type minimum. */
         this.TypeMin = typeMin;
+        /** @type {number} Type maximum. */
         this.TypeMax = typeMax;
+        /** @type {number} Max text length. */
         this.MaxLen = maxLen;
     }
 
+    /**
+     * Checks whether a pasted / dropped value is a number (or a string parseFloat accepts) within TypeMin..TypeMax.
+     * @param {*} obj - Candidate value.
+     * @returns {boolean} true when numeric and within the type range.
+     */
     IsOfType(obj) {
         const t = typeof (obj);
         if (t !== "number") {
@@ -27,6 +58,13 @@
         return true;
     }
 
+    /**
+     * Converts a pasted / dropped value (parseFloat for strings) and clamps it to the member's min/max.
+     * @param {number|string} obj - Value to convert.
+     * @param {object} member - Member description (Min, Max, Default).
+     * @param {EditOptions} options - Editor options.
+     * @returns {number} The conditioned number.
+     */
     Condition(obj, member, options) {
         if (typeof (obj) == "string")
             obj = parseFloat(obj);
@@ -40,6 +78,14 @@
         return obj;
     }
 
+    /**
+     * Validates that a value is within the effective min/max of the member (no type or null check).
+     * @param {number} obj - Value to validate.
+     * @param {object} member - Member description (Min, Max, Default, DisplayName).
+     * @param {EditOptions} options - Editor options.
+     * @param {string} name - Member path/name returned with the error.
+     * @returns {Promise<?Array<string>>} null when valid, otherwise [name, message].
+     */
     async Validate(obj, member, options, name) {
         const mmd = this.GetMinMaxDefault(member, options);
         const min = mmd[0];
@@ -51,6 +97,11 @@
         return null;
     }
 
+    /**
+     * Picks the default value from a GetMinMaxDefault result.
+     * @param {Array} mmd - Result of GetMinMaxDefault: [min, max, def, ...].
+     * @returns {number} mmd[2] when truthy, otherwise 0 clamped to [min, max].
+     */
     GetDefault(mmd) {
         const def = mmd[2];
         if (def)
@@ -66,15 +117,37 @@
 
     }
 
+    /**
+     * Creates the default value for a new member.
+     * @param {object} member - Member description.
+     * @param {EditOptions} options - Editor options.
+     * @returns {number} GetDefault(GetMinMaxDefault(member, options)).
+     */
     CreateDefault(member, options) {
         return this.GetDefault(this.GetMinMaxDefault(member, options));
     }
 
+    /**
+     * Formats a value for display.
+     * @param {*} obj - Value.
+     * @param {object} member - Member description (unused).
+     * @param {EditOptions} options - Editor options (unused).
+     * @returns {string} "" + obj.
+     */
     ToString(obj, member, options) {
         return "" + obj;
     }
 
 
+    /**
+     * Merges member.Min / Max / Default (parseFloat after replacing the first "," with ".") with the type range and
+     * builds the tooltip text. Min/Max are clamped to the type range (max raised to at least min); the default is
+     * clamped to [min, max] (falsy becomes 0). Tooltip lines are added when the parsed member value survived
+     * clamping unchanged, or always when options.Dev is set.
+     * @param {object} member - Member description (Min, Max, Default).
+     * @param {EditOptions} options - Editor options (Dev).
+     * @returns {Array} [min, max, def, typeTitle, haveMin, haveMax, parsedDef].
+     */
     GetMinMaxDefault(member, options) {
         let typeTitle = null;
         const typeMin = this.TypeMin;
@@ -128,6 +201,26 @@
     }
 
 
+    /**
+     * Builds the number editor in editContext.Element.
+     * - obj[member.Name] is set to the default when undefined or an object (incl. null).
+     * - A text input (Edit.CreateTextInput) accepting digits, one "." and a leading "-" when min < 0; maxlength and
+     *   CSS max-width come from MaxLen (minus one for non-negative ranges).
+     * - With TypeMemberFlags.Slider and both haveMin and haveMax, a range slider is added (cell class EditSlider).
+     *   Step: parseFloat(member.EditParams) when > 0 (warning logged otherwise), else a power of ten (up or down)
+     *   giving 10..100 steps. A number of decimals is then derived so that step, min and max are whole at that
+     *   scale (max 5); the text input then formats with toFixed(decimals) and slider values are rounded to it.
+     * Text changes go through editor.Invoke without tracking; slider changes use the slider as tracking object.
+     * Read only when options.ReadOnly or the member has TypeMemberFlags.ReadOnly.
+     * @param {object} obj - The object being edited.
+     * @param {Edit} editor - Owning editor (Invoke, Element, Key, KeyName).
+     * @param {{Element:HTMLElement}} editContext - Layout context; Element is the value cell.
+     * @param {object} member - Member description (Name, Min, Max, Default, Flags, EditParams, Summary).
+     * @param {string} title - Member title (unused).
+     * @param {EditOptions} options - Editor options (ReadOnly, Dev).
+     * @returns {Promise<object>} Item {Focus, Title, DefValue, DefValueText, SetValue(v), UpdateValue(isFirst)};
+     *   DefValue/DefValueText are the parsed member default; UpdateValue does not steal focus from an active slider.
+     */
     async AddEditor(obj, editor, editContext, member, title, options) {
         const mn = member.Name;
         const cell = editContext.Element;
@@ -146,6 +239,11 @@
         let text = null;
         let slider = null;
 
+        /**
+         * Parses the text input value: parseFloat(v), 0 when falsy/NaN, clamped to [min, max].
+         * @param {string} v - Text input value.
+         * @returns {number} Parsed number.
+         */
         const fromText = v => {
             let val = parseFloat(v);
             if (!val)

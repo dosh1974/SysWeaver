@@ -1,36 +1,73 @@
 ﻿
 
+/**
+ * @file Tag gallery control: renders a list of tags as removable chips plus an "Add" button that opens a
+ * searchable selection pop-up. Optional library; no first-party page references it by name. A page using it
+ * loads it with a script tag or `includeJs` after common/common.js and app/application.js, and links tags.css
+ * and app/application.css.
+ *
+ * Globals defined: `TagGalleryParams`, `Tag`, `FilterTags`, `SetTagClassName`, `CreateTagsGallery`.
+ * Dependencies: common.js (`_TF`, `ColorIcon`, `Button`, `ValueFormat`, `badClick`, `Fail`) and
+ * application.js (`PopUpSelection`).
+ * Conventions: tags are identified by their numeric `Code` (names may be localized); tag sources return
+ * objects shaped `{Tags: Tag[]}`.
+ */
+
+/**
+ * Options for `CreateTagsGallery`: texts (translated with `_TF` when the instance is created), icon classes,
+ * extra CSS classes and layout flags. Create with `new TagGalleryParams()` and override fields as needed.
+ */
 class TagGalleryParams {
+    /**
+     * When true the add pop-up lists all tags and the input acts as a filter (Filter* texts, `getAll` mode of
+     * PopUpSelection); when false the input is a search (Search* texts).
+     * @type {boolean}
+     */
     ShowAllTags = false;
 
+    /** If true the Add button is inserted as the first child of the gallery, else appended last. @type {boolean} */
     AddAtFront = true;
 
+    /** Optional extra CSS class added to the `<SysWeaver-TagsGallery>` element (e.g. "Keep" / "Ignore"). @type {?string} */
     Class = null;
 
+    /** Add button text, tool tip, error message prefix, icon class and optional extra CSS class. @type {string} */
     AddText = _TF("Add", "The text of a button that when pressed will add a tag to a list of tags");
     AddTitle = _TF("Click to add a tag", "The tool tip description of a button that when pressed will add a tag to a list of tags");
     AddError = _TF("Failed to add tag", "An error message displayed when a tag couldn't be added to the list of tags");
     AddIcon = "IconTagAdd";
     AddClass = null;
 
+    /**
+     * Remove icon tool tip (format string, {0} = tag name, filled with ValueFormat.stringFormat), error message
+     * prefix, icon class, optional extra CSS class and icon size in pixels (width = height).
+     * @type {string}
+     */
     RemoveTitle = _TF('Remove the tag "{0}"', "The tool tip description of a button that when pressed will remove a tag from a list of tags. {0} is replaced with the name of the tag");
     RemoveError = _TF("Failed to remove tag", "An error message displayed when a tag couldn't be removed from the list of tags");
     RemoveIcon = "IconTagRemove";
     RemoveClass = null;
     RemoveIconSize = 24;
 
+    /** Pop-up input label, tool tip and error prefix used when ShowAllTags is false (search mode). @type {string} */
     SearchText = _TF("Search for a tag", "The text of a label for a text input field that is used for searching");
     SearchTitle = _TF("Enter some text to search for a tag", "The tool tip of a text input field that is used for searching");
     SearchError = _TF("Failed to find tags", "An error message that is displayed when a search for tags yielded no results");
 
+    /** Pop-up input label, tool tip and error prefix used when ShowAllTags is true (filter mode). @type {string} */
     FilterText = _TF("Filter tags", "The text of a label for a text input field that is used for filtering");
     FilterTitle = _TF("Enter some text to filter the tags", "The tool tip of a text input field that is used for filtering");
     FilterError = _TF("Failed to filter tags", "An error message that is displayed when filtering tags yields no results");
 
+    /** If true the gallery gets class `Embedded` (no border, padding or margin; see tags.css). @type {boolean} */
     Embedded = false;
 }
 
 
+/**
+ * Shape of a tag as used by the gallery (documentation / default-value class; the gallery accepts any object
+ * with these members). `FilterTags` additionally writes a `Rank` number onto matched tags.
+ */
 class Tag {
     Code = 0; // Unique code (since names may be localized)
     Name = null; // Name (shown)
@@ -38,6 +75,19 @@ class Tag {
     Class = null; // Optional class (styling)
 }
 
+/**
+ * Client-side tag search helper (e.g. for implementing a `findTags` callback). Case-insensitive.
+ * A tag matches if its Name contains the text or its Desc contains it; note the Desc "hit count" is
+ * `Desc.length - Desc.replace(text, "").length`, i.e. the text length if found (only the first occurrence is
+ * removed). Rank = 0.25/len(text) * descHit + (100 - namePos), where namePos is replaced by 100 when the name
+ * does not match (so earlier name matches rank higher). Writes `Rank` onto each
+ * matched tag and returns them sorted by descending Rank. Requires every tag to have a non-null Desc.
+ * When more than `maxCount` tags match, the sorted result is truncated to the first `maxCount` tags.
+ * @param {Tag[]} tags - Tags to search.
+ * @param {string} searchFor - Search text; falsy returns `tags` unchanged (same array).
+ * @param {number} maxCount - Maximum result count (no limit when undefined).
+ * @returns {Tag[]} The original array (empty search) or a new array of matching tags.
+ */
 function FilterTags(tags, searchFor, maxCount) {
     if (!searchFor)
         return tags;
@@ -52,7 +102,7 @@ function FilterTags(tags, searchFor, maxCount) {
         const tempDesc = dl.length - dl.replace(sl, "").length;
         if ((tempName < 0) && (tempDesc <= 0))
             continue;
-        if (tempName <= 0)
+        if (tempName < 0)
             tempName = 100;
         s.Rank = isl * tempDesc + (100 - tempName);
         dest.push(s);
@@ -69,11 +119,17 @@ function FilterTags(tags, searchFor, maxCount) {
         return 0;
     });
     if (ol > maxCount)
-        dest.slice(maxCount, ol - maxCount);
+        dest.length = maxCount;
     return dest;
 }
 
 
+/**
+ * Sets `Class` on every tag of a tag result (mutates in place), so all chips get the same CSS class.
+ * @param {{Tags: Tag[]}} tagRet - Tag result object (as returned by getTags / findTags).
+ * @param {?string} className - CSS class to assign to each tag.
+ * @returns {{Tags: Tag[]}} The same `tagRet` object.
+ */
 function SetTagClassName(tagRet, className) {
     const tags = tagRet.Tags;
     const l = tags.length;
@@ -89,6 +145,24 @@ function SetTagClassName(tagRet, className) {
 // addTag(tag) optionsl, used to remove tags, should return true if tag was removed.
 // maxTagCount maximum allowed tags to use.
 
+/**
+ * Creates a tag gallery element (`<SysWeaver-TagsGallery>`, plus class `Embedded` / `options.Class` as
+ * configured) and renders it via the inner `update` function, which is also re-run after every add/remove.
+ * Each current tag becomes a `<SysWeaver-TagEdit>` (class tag.Class, title tag.Desc) holding a
+ * `<SysWeaver-TagText>` and, if `removeTag` is given, a remove `ColorIcon`. While the tag count is below
+ * `maxTagCount` and `addTag` is given, an Add `Button` opens `PopUpSelection` whose item callback calls
+ * `findTags(searchText)` and returns chip elements (class `TagSel`, tabIndex 0) for tags whose Code is not
+ * already present; clicking or pressing Enter on one calls `addTag(tag)`, re-renders and closes the pop-up.
+ * Failures (false result or exception) are reported with `Fail(<error text> + ...)`.
+ * @param {function(string):Promise<{Tags: Tag[]}>} findTags - Returns candidate tags for a search text.
+ * @param {function():Promise<{Tags: Tag[]}>} getTags - Returns the current tags.
+ * @param {?function(Tag):Promise<boolean>} removeTag - Removes a tag, truthy on success; null = no remove icons.
+ * @param {?function(Tag):Promise<boolean>} addTag - Adds a tag, truthy on success; null = no Add button.
+ * @param {number} maxTagCount - Add button is shown only while there are fewer tags than this.
+ * @param {TagGalleryParams} [options] - Options; a default `TagGalleryParams` when falsy.
+ * @returns {Promise<{Element: HTMLElement, Update: function():Promise<void>, GetTags: function():Tag[]}>}
+ *   The gallery element, the re-render function and a getter for the last fetched tag list (`g.AllTags`).
+ */
 async function CreateTagsGallery(findTags, getTags, removeTag, addTag, maxTagCount, options) {
     if (!options)
         options = new TagGalleryParams();
@@ -99,6 +173,12 @@ async function CreateTagsGallery(findTags, getTags, removeTag, addTag, maxTagCou
     if (options.Class)
         g.classList.add(options.Class);
 
+    /**
+     * Re-renders the gallery: awaits `getTags()`, clears the element, stores the list in `g.AllTags`, builds
+     * one chip per tag (with remove icon) and the Add button (see CreateTagsGallery). The remove icon handler
+     * disables the icon, shows `IconWorking`, calls `removeTag(tag)` and re-renders.
+     * @returns {Promise<void>}
+     */
     let update = null;
     update = async function () {
         const tagRes = await getTags();
@@ -179,6 +259,13 @@ async function CreateTagsGallery(findTags, getTags, removeTag, addTag, maxTagCou
                             tagE.appendChild(tagT);
                             tagT.innerText = tag.Name;
                             tagE.tabIndex = "0";
+                            /**
+                             * Selects this pop-up chip: ignores bad clicks, shows the working icon on the Add
+                             * button, detaches the chip handlers, calls `addTag(tag)` (Fail on false/exception),
+                             * re-renders the gallery and closes the pop-up.
+                             * @param {Event} ev - Click or Enter keyup event.
+                             * @returns {Promise<void>}
+                             */
                             const fn = async ev => {
                                 if (badClick(ev))
                                     return;

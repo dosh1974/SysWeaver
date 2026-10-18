@@ -1,19 +1,37 @@
-﻿
+﻿/*
+ * Styles of the ServerManager "version info" page (versionInfo.html), loaded by a <link> after
+ * ../common/theme.css and ../app/application.css. Plain static CSS (not templated).
+ * Contains the same page base, si-bg shadow panel and si-name / TopWindow header as serviceInfo.css (copied),
+ * plus the key/value grids <si-values> (cells si-value-name / si-value-value created by versionInfo.js) and the
+ * action button row <si-actions> (holding sysweaver-button elements created by common.js Button).
+ * Theme variables used (from common/theme.css): --ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc2,
+ * --ThemeBackground. No @keyframes or [data-theme] variants; one @media breakpoint (600px) for phones.
+ */
+
+/* ===== Page base ===== */
+
+/* --MaxW: width of the content column (100ch); used by si-bg, si-values and si-actions. */
 :root {
     --MaxW: 100ch;
 }
 
+/* Border-box sizing for all elements. */
 *
 {
     box-sizing: border-box;
 }
 
+/* Full-width body without padding or margin. */
 body {
     padding: 0;
     margin: 0;
     width: 100%;
 }
 
+/*
+ * si-bg: static placeholder; a fixed, horizontally centred panel (--MaxW + 2em wide, full height) with a
+ * --ThemeMain25 shadow, behind the content (z-index -1).
+ */
 si-bg {
     position: fixed;
     display: block;
@@ -26,6 +44,9 @@ si-bg {
     z-index: -1;
 }
 
+/* ===== Title bar (si-name) ===== */
+
+/* si-name: bold centred title bar in --ThemeAcc2 (text set by setTitle in versionInfo.js); hidden by default. */
 si-name
 {
     width: 100%;
@@ -39,16 +60,24 @@ si-name
     display: none;
 }
 
+/* body.TopWindow (added by versionInfoMain when window.IsTop, i.e. not embedded in the app shell) shows the title bar. */
 body.TopWindow si-name {
     display: block;
 }
 
+/* Phones (max-width 600px): square corners for the title bar. */
 @media screen and (max-width: 600px) {
     si-name {
         border-radius: 0;
     }
 }
 
+/* ===== Key/value grids (si-values) ===== */
+
+/*
+ * si-values: centred grid (max --MaxW) of key/value rows; the third 100% column pushes the two content columns
+ * to the left. Two instances: [0] version values, [1] output of Touch / Verify (chunk statistics).
+ */
 si-values {
     display: grid;
     grid-template-columns: auto auto 100%;
@@ -59,6 +88,7 @@ si-values {
     overflow: hidden;
 }
 
+/* Phones (max-width 600px): si-values full-bleed (no side margins, radius or side borders). */
 @media screen and (max-width: 600px) {
     si-values {
         margin-left: 0;
@@ -69,6 +99,7 @@ si-values {
     }
 }
 
+/* si-value-name: column 1, the key in --ThemeMain (created by AddString / AddTime in versionInfo.js). */
 si-value-name {
     grid-column: 1;
     color: var(--ThemeMain);
@@ -76,6 +107,7 @@ si-value-name {
 }
 
 
+/* si-value-value: column 2, the value in --ThemeAcc1 (copy-on-click, set by versionInfo.js). */
 si-value-value {
     grid-column: 2;
     color: var(--ThemeAcc1);
@@ -83,6 +115,9 @@ si-value-value {
 }
 
 
+/* ===== Action buttons (si-actions) ===== */
+
+/* si-actions: centred wrapping flex row (max --MaxW) holding the action buttons created on the first update. */
 si-actions {
     max-width: var(--MaxW);
     margin: 0.5em auto;
@@ -92,6 +127,7 @@ si-actions {
 }
 
 
+    /* sysweaver-button (element created by common.js Button): 8px spacing between the action buttons. */
     si-actions sysweaver-button {
         margin: 8px 8px 8px 0;
     }

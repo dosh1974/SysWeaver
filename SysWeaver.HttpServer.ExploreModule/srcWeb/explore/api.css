@@ -1,5 +1,23 @@
 ﻿
 
+/*
+ * api.css - styles of explore/api.html (API inspector and tester built by api.js / apiMain()).
+ * Loaded by api.html next to common/theme.css, common/tab.css and the edit/ style sheets.
+ * Styles the custom elements created by api.js (SysWeaver-ApiSection, SysWeaver-ApiTag, SysWeaver-ApiUrl,
+ * SysWeaver-ApiDesc, SysWeaver-ApiSendButton), the SysWeaver-Text elements created by AddTextElement
+ * (edit/type.js), the tab panels of common/tab.js (SysWeaver-TabContent) and two mask icons.
+ * Uses theme variables from common/theme.css (--ThemeBackground, --ThemeMain, --ThemeMainRGB, --ThemeAcc1,
+ * --ThemeAcc1RGB, --ThemeAcc2, --ThemeRad, --ThemeRadInp, --ThemeFontMono). Not templated; no custom
+ * properties, keyframes, media queries or theme variants.
+ */
+
+/* ===== API page sections ===== */
+
+/*
+ * SysWeaver-ApiSection: one boxed section of the page (header, description, cache/compression,
+ * signature); full width, --ThemeBackground, faint --ThemeMainRGB border, --ThemeRad corners,
+ * horizontal scroll for long content.
+ */
 SysWeaver-ApiSection {
     box-sizing: border-box;
     display: block;
@@ -13,23 +31,28 @@ SysWeaver-ApiSection {
     overflow-x: auto;
 }
 
+/* SysWeaver-Page with class PadBottom (the page container created by apiMain): half-viewport bottom padding so results can scroll up. */
 SysWeaver-Page.PadBottom {
     padding-bottom: 50svh;
 }
 
+/* SysWeaver-TabContent: tab panels (common/tab.js) get the --ThemeBackground background. */
 SysWeaver-TabContent {
     background-color: var(--ThemeBackground);
 }
 
+/* Header section (first SysWeaver-ApiSection: method tag, url, lock icon, auth tokens) laid out as a centered flex row. */
 SysWeaver-ApiSection:first-child {
     display: flex;
     align-items: center;
 }
 
+    /* icon-24x24: the lock ColorIcon (IconSecured, 24x24 wrapper from common.js) in the header gets a 1em left margin. */
     SysWeaver-ApiSection:first-child icon-24x24{
         margin-left: 1em;
     }
 
+    /* SysWeaver-Text elements (from AddTextElement in edit/type.js) and links inside sections are inline-blocks. */
     SysWeaver-ApiSection SysWeaver-Text {
         display: inline-block;
     }
@@ -39,6 +62,12 @@ SysWeaver-ApiSection:first-child {
     }
 
 
+    /*
+     * ApiSignature: the C# signature section (class added by apiMain): monospace (--ThemeFontMono), 80%.
+     * Links (type names / mime search link) normal weight; SysWeaver-Text in --ThemeAcc1 at 80% alpha;
+     * class Signature (method and argument names) in --ThemeAcc2 with a 4px left margin;
+     * class Control ("(" and ");") in --ThemeMain. Signature / Control are passed to AddTextElement by api.js.
+     */
     SysWeaver-ApiSection.ApiSignature {
         font-family: var(--ThemeFontMono);
         font-size: 80%;
@@ -63,21 +92,29 @@ SysWeaver-ApiSection:first-child {
                 color: var(--ThemeMain);
             }
 
+/* SysWeaver-ApiDesc: API description text (data.Desc) in --ThemeAcc2, selectable; click copies (set by api.js). */
 SysWeaver-ApiDesc {
     color: var(--ThemeAcc2);
     display: inline-block;
     user-select: text;
 }
 
+/* Empty rule for icon-24x24 inside any section (placeholder, no effect). */
 SysWeaver-ApiSection icon-24x24 {
 }
 
+/* SysWeaver-ApiUrl: the API url (data.Uri) in --ThemeAcc1, selectable; click copies the absolute url. */
 SysWeaver-ApiUrl {
     display: inline-block;
     color: var(--ThemeAcc1);
     user-select: text;
 }
 
+/*
+ * SysWeaver-ApiTag: pill tag (GET/POST method, auth tokens, CLIENT/SERVER cache durations, compression
+ * methods): --ThemeMain background, --ThemeBackground text, bold 80%, --ThemeRadInp corners.
+ * (Compression tags also get class "right", which has no rule here.)
+ */
 SysWeaver-ApiTag {
     display: inline-block;
     background-color: var(--ThemeMain);
@@ -90,12 +127,20 @@ SysWeaver-ApiTag {
 }
 
 
+/* SysWeaver-ApiSendButton: centered block wrapper of the "Send API call" Button; results tabs are appended after it. */
 SysWeaver-ApiSendButton {
     margin: 1em auto 1em auto;
     display: block;
     text-align: center;
 }
 
+/* ===== Tab content ===== */
+
+/*
+ * CODE: tab panels with code / preview content (JSON, ERROR, VOID, PREVIEW; class added by api.js) scroll
+ * horizontally. The PREVIEW iframe (non-image mime: min 50vh, vertically resizable) and img (image mime:
+ * scale-down, top-centered) fill the width with a pointer cursor (click opens the blob url in a new tab).
+ */
 SysWeaver-TabContent.CODE
 {
     overflow-x: auto;
@@ -126,6 +171,13 @@ SysWeaver-TabContent.CODE
     }
 
 
+/* ===== Icons ===== */
+
+/*
+ * Mask icons (mask-image, colored by the ColorIcon / IconColor* rules of common.css):
+ * IconSecured = ../icons/lock.svg (auth lock in the header section), IconSendIt = ../icons/table_api.svg
+ * (the send Button).
+ */
 .IconSecured {
     mask-image: url("../icons/lock.svg");
 }

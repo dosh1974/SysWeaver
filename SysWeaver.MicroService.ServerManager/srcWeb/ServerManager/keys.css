@@ -1,19 +1,36 @@
-﻿
+﻿/*
+ * Styles of the ServerManager "Key files" page (keys.html), loaded by a <link> after ../common/theme.css,
+ * ../app/application.css and ../explore/table.css. Plain static CSS (not templated).
+ * Styles the page base and the 64px upload drop target <kf-upload> (wired by fileUploaderSetup in keys.js).
+ * The key table container <kf-table> is styled by explore/table.css.
+ * Theme variables used (from common/theme.css): --ThemeMain, --ThemeAcc1, --ThemeFadeDuration.
+ * The state classes Dragging, Selecting and Uploading are toggled by common/fileUploader.js.
+ * No @keyframes, @media or [data-theme] variants (theming comes from the theme variables).
+ */
+
+/* ===== Page base ===== */
+
+/* --MaxW: maximum content width (100ch); declared for consistency with the other pages, not used in this file. */
 :root {
     --MaxW: 100ch;
 }
 
+/* Border-box sizing for all elements. */
 *
 {
     box-sizing: border-box;
 }
 
+/* Full-width body without padding or margin. */
 body {
     padding: 0;
     margin: 0;
     width: 100%;
 }
 
+/* ===== Upload button (kf-upload) ===== */
+
+/* The 64x64px centred upload drop target; transparent border/outline that fade in for the drag and focus states. */
 kf-upload {
     display: block;
     width: 64px;
@@ -27,14 +44,17 @@ kf-upload {
     cursor: pointer;
 }
 
+    /* kf-upload.Show: display block (same as the default here; keys.js does not add Show). */
     kf-upload.Show {
         display: block;
     }
 
+    /* Keyboard focus outline. */
     kf-upload:focus {
         outline: 2px solid var(--ThemeAcc1);
     }
 
+    /* The icon: a ::after overlay filled with --ThemeMain and masked with upload.svg (mask icon technique); 0.8 opacity, 1 on hover. */
     kf-upload:after {
         transition: opacity linear var(--ThemeFadeDuration);
         content: '';
@@ -55,15 +75,18 @@ kf-upload {
     }
 
 
+    /* kf-upload.Dragging (fileUploader.js): dashed --ThemeAcc1 border while files are dragged over the target. */
     kf-upload.Dragging {
         border: 2px dashed var(--ThemeAcc1);
     }
 
+    /* kf-upload.Selecting (fileUploader.js): disc icon at half opacity while the file picker is open. */
     kf-upload.Selecting:after {
         opacity: 0.5;
         mask-image: url("../icons/disc.svg");
     }
 
+    /* kf-upload.Uploading (fileUploader.js): loading icon at half opacity while files are uploaded. */
     kf-upload.Uploading:after {
         opacity: 0.5;
         mask-image: url("../icons/Loading.svg");

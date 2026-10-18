@@ -1,4 +1,25 @@
-﻿
+﻿/*
+ * media.css - styles of the media player pages and the custom elements built by media.js
+ * (mediaCreatePlayer, mediaPlayWithPopup, mediaEditProps, mediaEditMain, mediaViewMain, mediaPreviewMain).
+ *
+ * Loaded with <link rel="stylesheet"> by MediaView.html (after ../common/theme.css and ../app/application.css)
+ * and MediaPreview.html (after ../common/theme.css), and by any external host page of mediaEditMain.
+ * Not templated. Icon masks reference ../icons/*.svg relative to this file.
+ *
+ * Depends on theme variables from common/theme.css: --ThemeBackground, --ThemeBackground75, --ThemeMain,
+ * --ThemeMain50, --ThemeAcc1, --ThemeRad, --ThemeFontMono.
+ * Defines custom properties: --maxWidth (on Media-Preview) and --c0, --c1, --hs, --s (checkerboard on
+ * body.MediaPreview.NoFade); see the rules below.
+ * No @keyframes, @media queries or [data-theme] variants; only transitions on Media-Stat, Media-Button and
+ * body.MediaPreview > *.
+ *
+ * Note: element (tag) selectors are case-insensitive in HTML, so "Media-PreView" matches <Media-Preview>
+ * (common.js Button creates the text element literally as <Sysweaver-ButtonText>).
+ */
+
+/* ===== Page and layout ===== */
+
+/* Page body: no margin/padding, no text selection, centered text, vertical scroll only. */
 body {
     margin: 0;
     padding: 0;
@@ -10,17 +31,23 @@ body {
 }
 
 
+/* <SysWeaver-Page class="Media"> appended by mediaEditMain: fixed background page behind the editor. */
 SysWeaver-Page.Media {
     position: fixed;
     top: 0;
 }
 
+/* <Media-Full>: editor container created by mediaEditMain, layered above the fixed SysWeaver-Page (z-index 1). */
 Media-Full {
     position: relative;
     z-index: 1;
 }
 
 
+/*
+ * Collapsed editor: class Hide on <Media-Full> is toggled by toggleCollape (mediaEditMain) and hides the
+ * player (Media-Preview), its Media-Stats and Media-Controls; the property editor stays visible.
+ */
 Media-Full.Hide Media-Preview
 {
     display: none;
@@ -35,6 +62,7 @@ Media-Full.Hide Media-Preview
     }
 
 
+    /* Editor children are limited to 52em and centered; the player box (Media-Preview) is exempt and uses its own --maxWidth. */
     Media-Full > * {
         max-width: 52em;
         margin-left: auto;
@@ -46,6 +74,11 @@ Media-Full.Hide Media-Preview
     }
 
 
+/*
+ * <Media-NoAudio>: full-screen blurred "Must click once to get audio!" overlay appended by mediaPlayWithPopup
+ * when un-muting needs a user gesture; z-index 1000 puts it above everything; the text is vertically centered
+ * with line-height: 100vh.
+ */
 Media-NoAudio {
     position: fixed;
     left: 0;
@@ -64,7 +97,14 @@ Media-NoAudio {
 }
 
 
+/* ===== Preview and aspect container ===== */
+
 /* Preview */
+/*
+ * <Media-Preview>: the player box created by mediaCreatePlayer (player.TopElement).
+ * Custom property --maxWidth: box width = the smaller of (viewport width - 5em) and the width that gives a 16:9
+ * box fitting in (80vh - 72px - 5em) of height; the height is --maxWidth * 9 / 16 (16:9).
+ */
 Media-Preview {
     --maxWidth: calc(min(100vw - 5em, ((80vh - 72px - 5em) * 16 / 9)));
     display: block;
@@ -73,26 +113,31 @@ Media-Preview {
     margin: 1em auto;
 }
 
+    /* Class Replacing (set by mediaCreatePlayer when given a "before" element, removed by reload): the new player is built off-screen (top: -10000px). */
     Media-Preview.Replacing {
         position: fixed;
         top: -10000px;
     }
 
+    /* Class NoVisual (set by mediaCreatePlayer when the player has no visual, e.g. audio): collapse the box to zero size. */
     Media-Preview.NoVisual {
         width: 0;
         height: 0;
         margin: 0;
     }
 
+/* Fit mode (class MediaPreviewFit on <Media-AspectContainer>, set by mediaCreatePlayer when fit): children get the theme background. */
 Media-AspectContainer.MediaPreviewFit > * {
     background-color: var(--ThemeBackground);
 }
 
 
+/* Same selector again; only holds a commented-out drop shadow, so the rule is empty. */
 Media-AspectContainer.MediaPreviewFit > *{
     /*filter: drop-shadow(0 0 16px rgba(var(--ThemeAcc1RGB), 0.5));*/
 }
 
+/* Fill mode (class MediaPreviewFill, set by mediaCreatePlayer when not fit): clip the overflowing media. */
 Media-AspectContainer.MediaPreviewFill {
     overflow: hidden;
 }
@@ -100,11 +145,16 @@ Media-AspectContainer.MediaPreviewFill {
 
 /* Aspect ratio control */
 
+/* <Media-AspectContainer>: the clip box inside Media-Preview; its size/position is set inline by UpdateSize (mediaCreatePlayer). */
 Media-AspectContainer {
     position: relative;
     display: block;
 }
 
+    /*
+     * Children (player element, Media-Overlay): non-interactive, transform-origin top left so the inline
+     * scale(..) translate(..) transform set by UpdateSize maps the clip rectangle onto the box.
+     */
     Media-AspectContainer > * {
         position: relative;
         display: block;
@@ -115,11 +165,18 @@ Media-AspectContainer {
         transform-origin: top left;
     }
 
+        /* Class MediaHidden (set by the mediaPlayer scripts until the player is shown): invisible and taken out of the flow. */
         Media-AspectContainer > *.MediaHidden {
             opacity: 0;
             position: fixed;
         }
 
+    /*
+     * <Media-Overlay>: crop visualization layer appended by mediaCreatePlayer on top of the player; it gets the
+     * same transform/size as the player. Invisible by default; class Show (set by UpdateSize when player.UseClip is
+     * false) makes it visible with a red outline (the semi-transparent red borders marking the cropped margins are
+     * set inline). The MediaPreviewFit variant removes the fit-mode background/filter.
+     */
     Media-AspectContainer.MediaPreviewFit > Media-Overlay {
         filter: none;
         background-color: transparent;
@@ -139,8 +196,11 @@ Media-AspectContainer {
             outline: 2px solid red;
         }
 
+/* ===== Stats ===== */
+
 /* Stats */
 
+/* <Media-Stats>: wrapping flex row of stat chips created by mediaCreatePlayer (unless noStats); a single chip is centered. */
 Media-Stats {
     display: flex;
     flex-wrap: wrap;
@@ -156,6 +216,7 @@ Media-Stats {
         margin: 0 auto;
     }
 
+/* <Media-Stat>: one clickable stat chip (click copies it to the clipboard); mono font, theme border, animated border/outline. */
 Media-Stat {
     margin: 0.5em;
     display: inline-block;
@@ -170,6 +231,12 @@ Media-Stat {
     font-family: var(--ThemeFontMono);
 }
 
+    /*
+     * Stat category colors (class passed to createStats in mediaCreatePlayer); the :hover variants make the border opaque.
+     * Adjust = green, trimmed time/duration (props.StartAt);
+     * Clip = blue, cropped width/height/left/top (props.Crop);
+     * Actual = magenta, render width/height (props.AdaptiveSize).
+     */
     Media-Stat.Adjust {
         color: rgb(20, 192, 20);
         border: 2px solid rgba(20, 192, 20, 0.5);
@@ -199,6 +266,7 @@ Media-Stat {
             border: 2px solid rgb(192, 20, 192);
         }
 
+    /* Default chip hover border and keyboard focus outline (--ThemeAcc1); colored :hover rules above win by specificity. */
     Media-Stat:hover {
         border: 2px solid var(--ThemeMain);
     }
@@ -208,11 +276,13 @@ Media-Stat {
     }
 
 
+/* Class Hide on a stat chip: set by setText (createStats) when called without text. */
 Media-Stat.Hide
 {
     display: none;
 }
 
+/* <Media-StatName> (label) and <Media-StatValue> (right-aligned value, min 5em to limit jitter) inside a stat chip. */
 Media-StatName {
     display: inline-block;
     margin-right: 0.75em;
@@ -226,7 +296,10 @@ Media-StatValue {
 
 
 
+/* ===== Controls ===== */
+
 /* Controls */
+/* <Media-Controls>: wrapping flex row of player buttons created by mediaCreatePlayer (unless noControls); a single button is centered. */
 Media-Controls {
     display: flex;
     flex-wrap: wrap;
@@ -242,6 +315,10 @@ Media-Controls {
         margin: 0 auto;
     }
 
+/*
+ * <Media-Button>: button element used by common.js Button via ButtonStyle.ButtonElement = "Media-Button"
+ * (player controls, editor buttons): accent background, rounded, drop shadow; lifts slightly on hover.
+ */
 Media-Button {
     font-size: 80%;
     font-weight: bold;
@@ -265,6 +342,7 @@ Media-Button {
     }
 
 
+    /* States set by common.js Button: Pressed while clicked (pushed down, small shadow); Disabled when not enabled (dimmed, no hover effect). */
     Media-Button.Pressed {
         transform: translate(1px, 2px);
         box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
@@ -284,6 +362,7 @@ Media-Button {
     }
 
 
+    /* Button content created by common.js Button: <Sysweaver-ButtonText> floats left, the 24x24 mask icon <Icon-24x24> floats right. */
     Media-Button Sysweaver-ButtonText {
         vertical-align: middle;
         display: inline-block;
@@ -298,6 +377,9 @@ Media-Button {
     }
 
 
+/* ===== Property editor ===== */
+
+/* <Media-Edit>: container of the Edit-service property editor appended by mediaEditProps; full width, left aligned. */
 Media-Edit {
     position: relative;
     box-sizing: border-box;
@@ -309,6 +391,9 @@ Media-Edit {
 }
 
 
+/* ===== MediaView.html layout ===== */
+
+/* <Media-View>: created by mediaViewMain; absolute box (1em inset) with a 3-row grid: preview (min 25%), stats, controls. */
 Media-View {
     position: absolute;
     left: 1em;
@@ -322,6 +407,10 @@ Media-View {
 }
 
 
+    /*
+     * Grid placement: Media-PreView (matches <Media-Preview>, tag selectors are case-insensitive) fills row 1
+     * and overrides the --maxWidth sizing; Media-Stats row 2; Media-Controls row 3.
+     */
     Media-View Media-PreView {
         grid-row: 1;
         grid-column: 1;
@@ -347,6 +436,9 @@ Media-View {
 
 
 
+/* ===== Preview page (MediaPreview.html) ===== */
+
+/* Class MediaPreview on <body>, added by mediaPreviewMain: the body is a full-window box without scrolling. */
 body.MediaPreview
 {
     position: absolute;
@@ -357,6 +449,7 @@ body.MediaPreview
     overflow: hidden;
 }
 
+    /* The player element appended directly to the body: non-interactive, fades in/out via opacity. */
     body.MediaPreview > * {
         position: relative;
         display: block;
@@ -371,6 +464,13 @@ body.MediaPreview
 
 
 
+    /*
+     * Class NoFade (added by mediaPreviewMain when a screenshot host is present): checkerboard background so
+     * transparency is visible, and no fade transitions on the player.
+     * Custom properties: --c0 / --c1 = the two checker colors; --hs = half checker cell size (1/32 of the smaller
+     * viewport side, rounded up to whole px with CSS round()); --s = cell size (2 * --hs) used as background-size.
+     * Technique: four 45deg linear-gradient triangles offset by --hs form the checker squares.
+     */
     body.MediaPreview.NoFade {
         --c0: #bbb;
         --c1: #eee;
@@ -386,12 +486,24 @@ body.MediaPreview
         transition: none;
     }
 
+    /* Player element hidden (class MediaHidden set by the mediaPlayer scripts) until Show(). */
     body.MediaPreview > *.MediaHidden {
         opacity: 0;
     }
 
 
+    /* ===== Icons ===== */
+
     /* Control icons */
+    /*
+     * Mask icons (mask-image; the icon element's background color shows through) used as Button icon classes:
+     * player controls in mediaCreatePlayer: MediaIconPlay, MediaIconPause, MediaIconStop, MediaIconMute,
+     * MediaIconUnMute, MediaIconVolLoud, MediaIconVolLow, MediaIconExpand, MediaIconLoop, MediaIconOnce
+     * (../icons/preview_*.svg);
+     * mediaEditProps buttons: IconSave ("Save changes", disc.svg), IconApply ("Apply changes", reload.svg);
+     * mediaEditMain buttons: IconMediaNewWindow (newtab.svg), IconMediaCollapse (collapse.svg) and
+     * IconMediaExpand (expand.svg).
+     */
     .MediaIconPlay {
         mask-image: url("../icons/preview_play.svg");
     }
@@ -449,9 +561,9 @@ body.MediaPreview
 }
 
 .IconMediaCollapse {
-    mask-image: url("../icons/expand.svg");
+    mask-image: url("../icons/collapse.svg");
 }
 
 .IconMediaExpand{
-    mask-image: url("../icons/collapse.svg");
+    mask-image: url("../icons/expand.svg");
 }

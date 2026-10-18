@@ -1,6 +1,42 @@
 ﻿
+/**
+ * @file Script of the Home page (app/Home.html), the first main-menu item for logged in users.
+ * Loaded with a static `<script defer>` tag by Home.html after ../common/common.js; started by
+ * `<body onload="homeMain()">`. Home.html is a server template (session nick name, app description,
+ * the current user image `../auth/UserImages/Current/small` and the logo) embedded in the shell's iframe.
+ *
+ * Globals defined: `CS`, `homeMain`.
+ * Dependencies (common.js): `AddLoading`, `sendRequest`, `includeJs`, `_T`/`_TF`, `Info`, `Fail`,
+ * `SetImageSource`, `InterOp`. Dynamically loaded (fileUploader.js from SysWeaver.MicroService.FileUploader):
+ * `fileUploaderSetup`, `fileUploaderStatusText`, `UploadStatus`.
+ * Convention: the user image only becomes an upload target when the server has the
+ * `SysWeaver.MicroService.CustomUserImageService`; a successful upload is broadcast as the InterOp message
+ * `UserImageChanged`, which the shell's user button (application.js `App.Init`) listens for.
+ */
+
+/**
+ * URL of this script (captured while the script executes, since `document.currentScript` is null later).
+ * Used as the base URL for the `includeJs` calls in `homeMain`.
+ * @type {string}
+ */
 const CS = document.currentScript.src;
 
+/**
+ * Page entry point (body onload). Shows the loading overlay, asks the server whether the custom user image
+ * service exists (`../Api/HaveService` with "SysWeaver.MicroService.CustomUserImageService") and, if so,
+ * loads ../common/md5.js, ../common/UZIP.js and ../common/fileUploader.js in parallel and turns
+ * `img.UserImage` into an upload target: adds class `CanUpload`, sets a tool tip and calls
+ * `fileUploaderSetup(el, "UserImage", onSelect, onDone)`.
+ * - onSelect shows an Info toast with the first file name.
+ * - onDone: on `res.Error` calls Fail; otherwise inspects only `res.Status[0]`:
+ *   `UploadStatus.AlreadyUploaded` -> Info + `InterOp.Post("UserImageChanged")`;
+ *   `UploadStatus.None` (success) -> Info, switches the image src from ".../small" to ".../large"
+ *   (or reloads it with `SetImageSource(el, src, null, true)` when it does not end in "/small"), then posts
+ *   `UserImageChanged`; any other status -> Fail with `fileUploaderStatusText(status)`.
+ * Errors are reported with Fail(e.message); the loading overlay is always removed (which also posts
+ * `LoaderRemoved` to the shell via common.js).
+ * @returns {Promise<void>}
+ */
 async function homeMain() {
 
     const onLoaded = AddLoading();

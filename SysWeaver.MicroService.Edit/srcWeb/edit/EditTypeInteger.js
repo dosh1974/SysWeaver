@@ -1,9 +1,38 @@
-﻿class EditTypeInteger {
+﻿/**
+ * @file EditTypeInteger.js - type handler for the integer types (SByte..UInt64 and their Nullable variants) of the object editor.
+ *
+ * Loaded by Edit.Init() (Edit.js) via includeJs(current, "EditTypeInteger.js").
+ * Defines the global class EditTypeInteger. Instances are created in Edit.GetTypeMap(), one per .NET integer type,
+ * e.g. `new EditTypeInteger(true, 4)` for System.Int32 and
+ * `new EditTypeInteger(true, 8, false, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)` for System.Int64.
+ *
+ * Dependencies: Edit (IsValid, CreateTextInput, CreateSliderInput, CreateChangeEvent), ValueFormat.AddNonNullLine
+ * (common), TypeMemberFlags (type.js).
+ * Conventions: implements the duck-typed type handler contract, but note that GetDefault takes the array returned
+ * by GetMinMaxDefault instead of (member, options).
+ */
 
+/**
+ * Type handler for integer values: a digit-only text input plus an optional range slider (Slider flag with both
+ * Min and Max given; the cell then gets the class EditSlider).
+ */
+class EditTypeInteger {
+
+    /**
+     * @param {boolean} signed - Whether the type is signed.
+     * @param {number} byteSize - Size of the type in bytes (1, 2, 4 or 8); used to compute the type range.
+     * @param {boolean} [nullable] - Whether this is a Nullable<T> type (stored only, not used).
+     * @param {number} [literalMin] - Explicit type minimum, used together with literalMax.
+     * @param {number} [literalMax] - Explicit type maximum; when truthy, literalMin/literalMax replace the computed range
+     *   (used for Int64/UInt64 to stay within JavaScript safe integers).
+     */
     constructor(signed, byteSize, nullable, literalMin, literalMax) {
+        /** @type {boolean} Whether negative values are allowed by the type. */
         this.Signed = signed;
+        /** @type {number} Type size in bytes. */
         this.ByteSize = byteSize;
 
+        /** @type {boolean|undefined} Nullable flag (informational only). */
         this.Nullable = nullable;
         if (literalMax) {
             this.TypeMin = literalMin;
@@ -22,6 +51,12 @@
         }
     }
 
+    /**
+     * Checks whether a pasted / dropped value is an integer within the type range (TypeMin..TypeMax).
+     * Strings are parsed with parseInt, falling back to parseFloat rounded (and truncated to 32 bits with | 0).
+     * @param {*} obj - Candidate value (number or string).
+     * @returns {boolean} true when numeric and within the type range.
+     */
     IsOfType(obj) {
         const t = typeof (obj);
         if (t !== "number") {
@@ -49,6 +84,15 @@
         return true;
     }
 
+    /**
+     * Converts a pasted / dropped value into an integer clamped to the member's min/max (GetMinMaxDefault).
+     * Strings are parsed with parseInt (parseFloat fallback); the value is rounded and truncated to a 32-bit int
+     * (`| 0`), so values outside the int32 range wrap before clamping.
+     * @param {number|string} obj - Value to convert.
+     * @param {object} member - Member description (Min, Max, Default).
+     * @param {EditOptions} options - Editor options.
+     * @returns {number} The conditioned integer.
+     */
     Condition(obj, member, options) {
         if (typeof (obj) == "string") {
             let res = parseInt(obj);
@@ -66,6 +110,14 @@
     }
 
 
+    /**
+     * Validates that a value is within the effective min/max of the member (no type or null check).
+     * @param {number} obj - Value to validate.
+     * @param {object} member - Member description (Min, Max, Default, DisplayName).
+     * @param {EditOptions} options - Editor options.
+     * @param {string} name - Member path/name returned with the error.
+     * @returns {Promise<?Array<string>>} null when valid, otherwise [name, message].
+     */
     async Validate(obj, member, options, name) {
         const mmd = this.GetMinMaxDefault(member, options);
         const min = mmd[0];
@@ -78,6 +130,11 @@
     }
 
 
+    /**
+     * Picks the default value from a GetMinMaxDefault result.
+     * @param {Array} mmd - Result of GetMinMaxDefault: [min, max, def, ...].
+     * @returns {number} mmd[2] when truthy, otherwise 0 clamped to [min, max].
+     */
     GetDefault(mmd) {
         const def = mmd[2];
         if (def)
@@ -93,14 +150,38 @@
 
     }
 
+    /**
+     * Creates the default value for a new member.
+     * @param {object} member - Member description.
+     * @param {EditOptions} options - Editor options.
+     * @returns {number} GetDefault(GetMinMaxDefault(member, options)).
+     */
     CreateDefault(member, options) {
         return this.GetDefault(this.GetMinMaxDefault(member, options));
     }
 
+    /**
+     * Formats a value for display.
+     * @param {*} obj - Value.
+     * @param {object} member - Member description (unused).
+     * @param {EditOptions} options - Editor options (unused).
+     * @returns {string} "" + obj.
+     */
     ToString(obj, member, options) {
         return "" + obj;
     }
 
+    /**
+     * Merges member.Min / Max / Default with the type range and builds the tooltip text.
+     * Min and Max are parsed with parseInt and clamped to the type range (max is also raised to at least min);
+     * Default is parsed with parseFloat, truncated, and clamped to [min, max] (falsy defaults become 0).
+     * Tooltip lines ("Minimum value", "Maximum value", "Default value") are added when the parsed member value
+     * survived clamping unchanged, or always when options.Dev is set.
+     * @param {object} member - Member description (Min, Max, Default).
+     * @param {EditOptions} options - Editor options (Dev).
+     * @returns {Array} [min, max, def, typeTitle, haveMin, haveMax, parsedDef]: haveMin/haveMax tell whether the
+     *   member specified an in-range limit, parsedDef is the parsed (unclamped) member default or the raw invalid value.
+     */
     GetMinMaxDefault(member, options) {
         const typeMin = this.TypeMin;
         const typeMax = this.TypeMax;
@@ -153,6 +234,25 @@
     }
 
 
+    /**
+     * Builds the integer editor in editContext.Element.
+     * - obj[member.Name] is set to the default when undefined or an object (incl. null).
+     * - A text input (Edit.CreateTextInput) that only accepts digits, plus a leading "-" when the type is signed and
+     *   min < 0; maxlength and CSS max-width come from the longest of the min/max digit counts.
+     * - With TypeMemberFlags.Slider and both haveMin and haveMax, a range slider is added (cell class EditSlider).
+     *   Its step is parseInt(member.EditParams) when valid (warning logged otherwise), else the smallest power of
+     *   ten giving at most 100 steps.
+     * Text changes go through editor.Invoke without tracking; slider changes use the slider as tracking object.
+     * Read only when options.ReadOnly or the member has TypeMemberFlags.ReadOnly.
+     * @param {object} obj - The object being edited.
+     * @param {Edit} editor - Owning editor (Invoke, Element, Key, KeyName).
+     * @param {{Element:HTMLElement}} editContext - Layout context; Element is the value cell.
+     * @param {object} member - Member description (Name, Min, Max, Default, Flags, EditParams, Summary).
+     * @param {string} title - Member title (unused).
+     * @param {EditOptions} options - Editor options (ReadOnly, Dev).
+     * @returns {Promise<object>} Item {Focus, Title, DefValue, DefValueText, SetValue(v), UpdateValue(isFirst)};
+     *   DefValue/DefValueText are the parsed member default; UpdateValue does not steal focus from an active slider.
+     */
     async AddEditor(obj, editor, editContext, member, title, options) {
 
         let signed = this.Signed;
@@ -175,6 +275,11 @@
         let slider = null;
 
         //  String length
+        /**
+         * Parses the text input value: floor(parseFloat(v)), 0 when falsy/NaN, clamped to [min, max].
+         * @param {string} v - Text input value.
+         * @returns {number} Parsed integer.
+         */
         const fromText = v => {
             let val = Math.floor(parseFloat(v));
             if (!val)

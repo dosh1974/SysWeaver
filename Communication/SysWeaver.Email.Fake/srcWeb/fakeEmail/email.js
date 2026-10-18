@@ -1,10 +1,54 @@
+/**
+ * @file The complete behavior of the standalone "Fake Mail" page (fakeEmail/index.html), the web inbox of
+ * FakeEmailService (menu link "Debug/FakeEmail").
+ * Loading: a static `<script src="email.js" defer>` in index.html; the last line calls init() immediately (relies on
+ * `defer`, so the static DOM of index.html exists). It does NOT use common.js, the app shell, theme.css or
+ * translations (_T): it has its own fetch wrapper (call), toasts, theme handling, <dialog> composer and English text.
+ * Globals (strict-mode classic script): Api, $, State, Folders, Today, Composer and all functions below
+ * (load, save, call, el, toast, errText, hue, party, displayName, avatar, shortTime, longTime, appendHighlighted,
+ * appendLinkified, frameHtml, matches, visible, renderSide, renderList, renderAll, select, showMail, renderBody,
+ * openInTab, deleteSelected, removeLocal, move, saveRead, setStatus, pollLoop, applyList, setComposeMode,
+ * setComposeFormat, showPreview, openComposer, quote, reply, sendComposed, applyTheme, initTheme, init).
+ * Dependencies: only the FakeEmailService web API (JSON POST to Api + method: GetEmails (long poll), GetEmail,
+ * DeleteEmail, Clear, SendEmail, FakeIncoming) and the element ids of index.html.
+ * Conventions: element ids are looked up with $(id); the list is fully rebuilt on every change; live updates come
+ * only from long-polling GetEmails; per-browser state lives in localStorage under the "fakeEmail." prefix
+ * (read, theme, lastFrom, lastName); the URL hash holds the selected email id; `?api=` overrides the API base.
+ * Server DTO field names relied on: Id, Time, From, To, SenderName, Subject, Preview, Incoming, Error, System,
+ * Body, IsHtml, InReplyTo (FakeEmailSummary / full email), Version, From, Unchanged, Emails (GetEmails response).
+ */
 "use strict";
 
 //  The api base url, can be overridden using ?api=<url>
+/**
+ * API base URL: the `?api=` query parameter or "../Api/fakeEmail/", normalized to always end with "/".
+ * @type {string}
+ */
 const Api = (new URLSearchParams(location.search).get("api") || "../Api/fakeEmail/").replace(/\/?$/, "/");
 
+/**
+ * Shorthand for document.getElementById.
+ * @param {string} id - Element id (from index.html).
+ * @returns {HTMLElement|null} The element, or null.
+ */
 const $ = id => document.getElementById(id);
 
+/**
+ * The single mutable page state.
+ * - version {number}: last GetEmails Version (sent back to long-poll for changes).
+ * - from {string}: the system's sender address (shown in #fromAddress).
+ * - emails {Array<object>}: current list of FakeEmailSummary objects (server order).
+ * - byId {Map<string,object>}: id -> summary.
+ * - folder {string}: current folder key of Folders ("all" | "out" | "in" | "failed").
+ * - system {string|null}: system filter; null = all systems, "" = "(no system)".
+ * - query {string}: lower-cased, trimmed search text.
+ * - selected {string|null}: selected email id.
+ * - view {string}: HTML body view mode, "render" or "source".
+ * - current {object|null}: the loaded full email shown in the reader.
+ * - known {Set<string>|null}: ids seen at the last list render (marks new rows "fresh"); null before the first list.
+ * - read {Set<string>}: ids of read emails (persisted as fakeEmail.read).
+ * @type {object}
+ */
 const State = {
     version: 0,
     from: "",
@@ -20,6 +64,12 @@ const State = {
     read: new Set(),
 };
 
+/**
+ * Folder definitions keyed by folder key (matches li[data-folder] and span[data-count] in index.html).
+ * Each entry: title (list header text), test(e) predicate on a summary (all: true; out: !Incoming; in: Incoming;
+ * failed: !!Error), empty (empty-list message).
+ * @type {Object<string, {title:string, test:function(object):boolean, empty:string}>}
+ */
 const Folders = {
     all: { title: "All mail", test: () => true, empty: "No emails yet" },
     out: { title: "Sent by system", test: e => !e.Incoming, empty: "The system hasn't sent any emails yet" },
@@ -30,6 +80,12 @@ const Folders = {
 
 //  Storage (best effort)
 
+/**
+ * Reads a JSON value from localStorage key "fakeEmail." + key.
+ * @param {string} key - Key suffix (read, theme, lastFrom, lastName).
+ * @param {*} def - Value returned when the key is missing or on any error (storage blocked, bad JSON).
+ * @returns {*} The parsed value or def.
+ */
 function load(key, def) {
     try {
         const v = localStorage.getItem("fakeEmail." + key);
@@ -39,6 +95,12 @@ function load(key, def) {
     }
 }
 
+/**
+ * Writes JSON.stringify(value) to localStorage key "fakeEmail." + key; errors are silently ignored.
+ * @param {string} key - Key suffix.
+ * @param {*} value - Value to store.
+ * @returns {void}
+ */
 function save(key, value) {
     try {
         localStorage.setItem("fakeEmail." + key, JSON.stringify(value));
@@ -49,6 +111,14 @@ function save(key, value) {
 
 //  Api
 
+/**
+ * Calls a FakeEmailService API method: fetch(Api + method) as POST with a JSON body (data ?? null),
+ * Content-Type application/json and cache "no-store". (Own wrapper, not common.js sendRequest.)
+ * @param {string} method - API method name (GetEmails, GetEmail, DeleteEmail, Clear, SendEmail, FakeIncoming).
+ * @param {*} [data] - Request object; null/undefined is sent as JSON null.
+ * @returns {Promise<*>} Parsed JSON response, or null for an empty body.
+ * @throws {Error} On a non-OK status, with the response text (or "status statusText") as message.
+ */
 async function call(method, data) {
     const res = await fetch(Api + method, {
         method: "POST",
@@ -65,6 +135,13 @@ async function call(method, data) {
 
 //  Helpers
 
+/**
+ * Creates an element.
+ * @param {string} tag - Tag name.
+ * @param {string} [cls] - className to set (skipped when falsy).
+ * @param {*} [text] - textContent to set (skipped when null/undefined).
+ * @returns {HTMLElement} The new (detached) element.
+ */
 function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls)
@@ -74,16 +151,32 @@ function el(tag, cls, text) {
     return e;
 }
 
+/**
+ * Shows a transient message: appends a div.toast (plus "err" for errors) to #toasts, removed after 3 s (7 s for errors).
+ * @param {string} text - Message text.
+ * @param {boolean} [isError] - True for an error toast.
+ * @returns {void}
+ */
 function toast(text, isError) {
     const t = el("div", "toast" + (isError ? " err" : ""), text);
     $("toasts").append(t);
     setTimeout(() => t.remove(), isError ? 7000 : 3000);
 }
 
+/**
+ * Gets a displayable error text.
+ * @param {*} e - Error or any thrown value.
+ * @returns {string} e.message if present, else String(e).
+ */
 function errText(e) {
     return (e && e.message) ? e.message : String(e);
 }
 
+/**
+ * Deterministic string hash (h = h * 31 + charCode, 32-bit) mapped to a hue; used for avatar colors.
+ * @param {string} s - Input string.
+ * @returns {number} Hue in degrees, 0..359.
+ */
 function hue(s) {
     let h = 0;
     for (let i = 0; i < s.length; ++i)
@@ -92,16 +185,33 @@ function hue(s) {
 }
 
 //  The "other party" of an email (the user)
+/**
+ * The user side of an email: From for incoming mail, To for outgoing mail.
+ * @param {object} e - Email summary or full email.
+ * @returns {string} The address, or "".
+ */
 function party(e) {
     return e.Incoming ? (e.From || "") : (e.To || "");
 }
 
+/**
+ * Display name of the other party: SenderName for incoming mail that has one, else party(e).
+ * @param {object} e - Email summary or full email.
+ * @returns {string} The name or address.
+ */
 function displayName(e) {
     if (e.Incoming && e.SenderName)
         return e.SenderName;
     return party(e);
 }
 
+/**
+ * Creates a round letter avatar: div.avatar (+ "big") holding the first character of displayName(e) (or "?"),
+ * with an inline background hsl(hue(lower-cased party) 55% 50%).
+ * @param {object} e - Email summary or full email.
+ * @param {boolean} [big] - True for the large reader avatar.
+ * @returns {HTMLElement} The avatar element.
+ */
 function avatar(e, big) {
     const p = party(e);
     const a = el("div", "avatar" + (big ? " big" : ""), (displayName(e) || "?").trim().charAt(0) || "?");
@@ -109,8 +219,17 @@ function avatar(e, big) {
     return a;
 }
 
+/**
+ * Today's date string, used by shortTime to detect "today".
+ * @returns {string} new Date().toDateString().
+ */
 const Today = () => new Date().toDateString();
 
+/**
+ * List timestamp (locale formatted): HH:MM for today, "Mon D" within the current year, else "Mon D, YYYY".
+ * @param {Date} d - Date.
+ * @returns {string} Formatted text.
+ */
 function shortTime(d) {
     if (d.toDateString() === Today())
         return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -118,10 +237,22 @@ function shortTime(d) {
     return d.toLocaleDateString([], sameYear ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
 }
 
+/**
+ * Long timestamp: toLocaleString with dateStyle and timeStyle "medium".
+ * @param {Date} d - Date.
+ * @returns {string} Formatted text.
+ */
 function longTime(d) {
     return d.toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
 }
 
+/**
+ * Appends text to parent, wrapping every case-insensitive occurrence of query in a <mark> (search hit highlight).
+ * @param {HTMLElement} parent - Target element.
+ * @param {string} text - Text (null/undefined treated as "").
+ * @param {string} query - Lower-case search text; falsy appends the text unchanged.
+ * @returns {void}
+ */
 function appendHighlighted(parent, text, query) {
     text = text || "";
     if (!query) {
@@ -141,6 +272,13 @@ function appendHighlighted(parent, text, query) {
 }
 
 //  Append plain text with any urls turned into links
+/**
+ * Appends plain text, turning http(s):// URLs (trailing punctuation excluded) into
+ * <a target="_blank" rel="noopener noreferrer"> links.
+ * @param {HTMLElement} parent - Target element.
+ * @param {string} text - Plain text.
+ * @returns {void}
+ */
 function appendLinkified(parent, text) {
     const re = /\bhttps?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/gi;
     let p = 0;
@@ -157,6 +295,12 @@ function appendLinkified(parent, text) {
 }
 
 //  Html for an iframe: links opens in a new tab, no scripts (the iframe is sandboxed)
+/**
+ * Wraps an HTML body into a document for an iframe srcdoc or Blob: <base target="_blank">, UTF-8 meta and a fixed
+ * light inline style (system-ui font, 16px margin, images max 100% wide). Used by renderBody, showPreview, openInTab.
+ * @param {string} body - HTML body (null/undefined treated as "").
+ * @returns {string} The HTML document text.
+ */
 function frameHtml(body) {
     return "<!DOCTYPE html><base target=\"_blank\"><meta charset=\"utf-8\"><style>body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;margin:16px;color:#1d2330;word-break:break-word}img{max-width:100%}</style>" + (body || "");
 }
@@ -164,6 +308,12 @@ function frameHtml(body) {
 
 //  List
 
+/**
+ * List filter: the current folder's test, the system filter (State.system, "" for no system) and the search query
+ * (substring of From, To, SenderName, Subject, Preview or System, lower-cased).
+ * @param {object} e - Email summary.
+ * @returns {boolean} True when the email is shown.
+ */
 function matches(e) {
     if (!Folders[State.folder].test(e))
         return false;
@@ -175,11 +325,27 @@ function matches(e) {
     return [e.From, e.To, e.SenderName, e.Subject, e.Preview, e.System].some(x => x && x.toLowerCase().includes(q));
 }
 
+/**
+ * The emails currently shown in the list.
+ * @returns {Array<object>} State.emails filtered by matches.
+ */
 function visible() {
     return State.emails.filter(matches);
 }
 
+/**
+ * Updates the sidebar: each folder counter [data-count=key] shows the unread count when > 0 (class "unread"),
+ * otherwise the total (or empty), with a "u unread of n" tooltip; toggles "on" on the #folders item of State.folder.
+ * Rebuilds #systems from the distinct System values (sorted) and hides #systemsBox unless there are at least two
+ * systems or a single non-empty one.
+ * @returns {void}
+ */
 function renderSide() {
+    /**
+     * Inner predicate: email is not in State.read.
+     * @param {object} e - Email summary.
+     * @returns {boolean} True when unread.
+     */
     const unread = e => !State.read.has(e.Id);
     for (const [key, f] of Object.entries(Folders)) {
         const all = State.emails.filter(f.test);
@@ -198,6 +364,13 @@ function renderSide() {
     const ul = $("systems");
     ul.replaceChildren();
     if (!box.hidden) {
+        /**
+         * Inner helper: appends an li (class "on" when it is the active filter) with a span.dot and the label to
+         * #systems. Clicking it toggles State.system between value and null and calls renderAll().
+         * @param {string} value - System value ("" = no system).
+         * @param {string} label - Display text.
+         * @returns {void}
+         */
         const add = (value, label) => {
             const li = el("li", value === State.system ? "on" : "");
             li.append(el("span", "dot"), label);
@@ -212,6 +385,14 @@ function renderSide() {
     }
 }
 
+/**
+ * Rebuilds #list from visible(). Each email becomes li.item[data-id] with classes sel (selected), unread (not in
+ * State.read) and fresh (not in State.known), containing an avatar, a .who line (span.dir.in/out "FROM"/"TO",
+ * highlighted name, optional span.tag.failed), a <time> (shortTime, longTime tooltip), highlighted .subj and .prev.
+ * Clicking a row calls select(id). Afterwards resets State.known to all current ids and updates #folderTitle
+ * (folder title + system filter), #listInfo ("n emails" or "n of m"), #empty visibility and #emptyText.
+ * @returns {void}
+ */
 function renderList() {
     const list = $("list");
     const items = visible();
@@ -254,6 +435,10 @@ function renderList() {
     $("emptyText").textContent = State.query ? "Nothing matches “" + State.query + "”" : f.empty;
 }
 
+/**
+ * Re-renders sidebar and list (renderSide then renderList).
+ * @returns {void}
+ */
 function renderAll() {
     renderSide();
     renderList();
@@ -262,6 +447,17 @@ function renderAll() {
 
 //  Reader
 
+/**
+ * Selects an email (or clears the selection) and loads it into the reader.
+ * Toggles "sel" on the list rows. A falsy id clears State.current, hides #mail, shows #readerEmpty, removes
+ * body.reading and strips the URL hash. Otherwise sets the URL hash to the encoded id (history.replaceState), adds
+ * body.reading (mobile layout), scrolls the selected row into view unless noScroll, marks an unread email read
+ * (saveRead, renderSide, removes "unread" from the row), then fetches GetEmail {Id} and calls showMail if the
+ * selection has not changed meanwhile; errors become an error toast (also only if still selected).
+ * @param {string|null} id - Email id, or null/"" to deselect.
+ * @param {boolean} [noScroll] - True to skip scrolling the row into view.
+ * @returns {Promise<void>} Resolves after the email was loaded (or failed).
+ */
 async function select(id, noScroll) {
     State.selected = id;
     for (const li of $("list").children)
@@ -295,6 +491,15 @@ async function select(id, noScroll) {
     }
 }
 
+/**
+ * Fills the reader with a full email: sets State.current, #mailSubject, replaces #mailAvatar with a big avatar,
+ * #mailFromName (sender name/address for incoming, "System" for outgoing), #mailFrom ("<address>"), #mailTo,
+ * #mailTime (text + dateTime). Builds #mailTags: direction (tag in/out), HTML/Plain text, "System: x",
+ * "Reply to <id>" (clickable -> select(InReplyTo) when that email is in State.byId) and the id.
+ * Shows #mailError with e.Error, shows #viewMode only for HTML mail, then calls renderBody().
+ * @param {object} e - Full email from GetEmail (summary fields plus Body, IsHtml, InReplyTo).
+ * @returns {void}
+ */
 function showMail(e) {
     State.current = e;
     $("readerEmpty").hidden = true;
@@ -331,6 +536,13 @@ function showMail(e) {
     renderBody();
 }
 
+/**
+ * Renders State.current.Body into #mailBody (cleared first; nothing when no current email) and toggles "on" on the
+ * #viewMode buttons matching State.view. HTML in "render" view -> <iframe sandbox="allow-popups
+ * allow-popups-to-escape-sandbox"> (no scripts) with srcdoc = frameHtml(body). HTML in "source" view -> <pre> with
+ * the raw text. Plain text -> pre.text with linkified URLs.
+ * @returns {void}
+ */
 function renderBody() {
     const e = State.current;
     const host = $("mailBody");
@@ -356,6 +568,11 @@ function renderBody() {
     host.append(pre);
 }
 
+/**
+ * Opens the current email body in a new tab from a Blob URL (text/html via frameHtml, or text/plain;charset=utf-8);
+ * the URL is revoked after 60 s. Does nothing without a current email.
+ * @returns {void}
+ */
 function openInTab() {
     const e = State.current;
     if (!e)
@@ -368,6 +585,11 @@ function openInTab() {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+/**
+ * Deletes the selected email: DeleteEmail {Id}, then removes it from State.read (saveRead) and the local list
+ * (removeLocal), and selects the next visible email, else the previous one, else none. Errors become an error toast.
+ * @returns {Promise<void>}
+ */
 async function deleteSelected() {
     const id = State.selected;
     if (!id)
@@ -386,12 +608,23 @@ async function deleteSelected() {
     }
 }
 
+/**
+ * Removes an email from State.emails and State.byId and re-renders (renderAll). No server call.
+ * @param {string} id - Email id.
+ * @returns {void}
+ */
 function removeLocal(id) {
     State.emails = State.emails.filter(e => e.Id !== id);
     State.byId.delete(id);
     renderAll();
 }
 
+/**
+ * Keyboard navigation: selects the visible email delta steps from the selected one, clamped to the list;
+ * with no (visible) selection it selects the first. Does nothing for an empty list.
+ * @param {number} delta - Step (+1 next, -1 previous).
+ * @returns {void}
+ */
 function move(delta) {
     const items = visible();
     if (items.length <= 0)
@@ -401,6 +634,11 @@ function move(delta) {
     select(items[i].Id);
 }
 
+/**
+ * Persists the read set: prunes State.read to ids still in State.byId (only when byId is non-empty), then saves it
+ * as localStorage "fakeEmail.read" (array).
+ * @returns {void}
+ */
 function saveRead() {
     //  Only keep ids that still exists
     if (State.byId.size > 0)
@@ -413,12 +651,26 @@ function saveRead() {
 
 //  Live updates (long polling)
 
+/**
+ * Sets the connection indicator #status to class "status on" or "status off" with text as tooltip.
+ * @param {boolean} on - Connected.
+ * @param {string} text - Tooltip text.
+ * @returns {void}
+ */
 function setStatus(on, text) {
     const s = $("status");
     s.className = "status " + (on ? "on" : "off");
     s.title = text;
 }
 
+/**
+ * Endless long-poll loop: GetEmails {Version: State.version}. The server holds the request until the version changes
+ * or its timeout passes and returns {Version, From, Unchanged} or {Version, From, Emails[]}. On success: status
+ * connected, delay reset to 1 s, State.version updated, State.from / #fromAddress updated when From changed, and
+ * applyList(Emails) unless Unchanged. On error: status disconnected, then waits with exponential back-off
+ * (1 s doubling, max 15 s).
+ * @returns {Promise<void>} Never resolves.
+ */
 async function pollLoop() {
     let delay = 1000;
     for (; ;) {
@@ -442,6 +694,16 @@ async function pollLoop() {
     }
 }
 
+/**
+ * Replaces the whole email list (State.emails, State.byId) with a GetEmails result and re-renders.
+ * First call (State.known === null): if no "fakeEmail.read" was ever stored, all existing emails count as read;
+ * saves the read set; after rendering selects the email named in the URL hash, if it exists.
+ * Later calls: detects new ids and, if any, sets document.title to "(n) Fake Mail" for 4 s and shows a toast
+ * ("Received: subject" / "Sent: subject" for one, "n new emails" for more).
+ * Clears the selection when the selected email no longer exists.
+ * @param {Array<object>} emails - FakeEmailSummary list.
+ * @returns {void}
+ */
 function applyList(emails) {
     const first = State.known === null;
     const newOnes = first ? [] : emails.filter(e => !State.byId.has(e.Id));
@@ -476,11 +738,23 @@ function applyList(emails) {
 
 //  Composer
 
+/**
+ * Composer dialog state: mode "in" (fake an email from a user to the system, FakeIncoming) or "out" (the system
+ * sends an email, SendEmail); format "text" or "html".
+ * @type {{mode:string, format:string}}
+ */
 const Composer = {
     mode: "in",
     format: "text",
 };
 
+/**
+ * Sets Composer.mode: toggles class "out" on #composer (CSS hides the .in-only fields), marks the matching
+ * #composeMode button "on", sets the #cTo placeholder (system address for "in", user@example.com for "out") and
+ * the #composeHint text.
+ * @param {string} mode - "in" or "out".
+ * @returns {void}
+ */
 function setComposeMode(mode) {
     Composer.mode = mode;
     const d = $("composer");
@@ -493,6 +767,12 @@ function setComposeMode(mode) {
         : "Sends an email using this service, as if the system sent it";
 }
 
+/**
+ * Sets Composer.format: toggles class "html" on #composer (monospace textarea), marks the matching #composeFormat
+ * button "on", shows #cPreviewBtn only for HTML and closes the preview when leaving HTML.
+ * @param {string} format - "text" or "html".
+ * @returns {void}
+ */
 function setComposeFormat(format) {
     Composer.format = format;
     $("composer").classList.toggle("html", format === "html");
@@ -503,6 +783,12 @@ function setComposeFormat(format) {
         showPreview(false);
 }
 
+/**
+ * Switches the composer body between the #cBody textarea and the sandboxed #cPreview iframe
+ * (srcdoc = frameHtml(#cBody value) when turned on), and sets #cPreviewBtn text to "Edit" / "Preview".
+ * @param {boolean} on - True to show the preview.
+ * @returns {void}
+ */
 function showPreview(on) {
     const p = $("cPreview");
     p.hidden = !on;
@@ -512,6 +798,14 @@ function showPreview(on) {
         p.srcdoc = frameHtml($("cBody").value);
 }
 
+/**
+ * Resets and opens the composer dialog (#composer.showModal()). Mode defaults to "in", format to "text"; the preview
+ * is closed. From / Name default to the stored fakeEmail.lastFrom ("user@example.com") / fakeEmail.lastName ("").
+ * Focuses opts.focus, else #cFrom (in mode with empty From), else #cSubject.
+ * @param {{mode?:string, format?:string, from?:string, name?:string, to?:string, subject?:string, system?:string,
+ *   body?:string, replyTo?:string, focus?:string}} [opts] - Initial values; focus is an element id.
+ * @returns {void}
+ */
 function openComposer(opts) {
     opts = opts || {};
     setComposeMode(opts.mode || "in");
@@ -528,6 +822,12 @@ function openComposer(opts) {
     (opts.focus ? $(opts.focus) : (Composer.mode === "in" && !$("cFrom").value ? $("cFrom") : $("cSubject"))).focus();
 }
 
+/**
+ * Builds a reply quote "On <longTime>, <who> wrote:" plus the original body: a styled <blockquote> for HTML mail,
+ * "> "-prefixed lines (after two blank lines) for plain text. who = SenderName || From for incoming, else From.
+ * @param {object} e - Full email.
+ * @returns {string} Quote text / HTML.
+ */
 function quote(e) {
     const when = longTime(new Date(e.Time));
     const who = e.Incoming ? (e.SenderName || e.From) : e.From;
@@ -536,6 +836,13 @@ function quote(e) {
     return "\n\nOn " + when + ", " + who + " wrote:\n" + (e.Body || "").split("\n").map(l => "> " + l).join("\n");
 }
 
+/**
+ * Opens the composer as a reply to State.current (no-op without one), with "Re: " prefixed unless present, the same
+ * format and a quote(e) body, focus in the body with the caret at the start.
+ * Incoming email -> "out" mode (system replies) to e.From. Outgoing email -> "in" mode (user replies) from e.To to
+ * e.From with replyTo = e.Id.
+ * @returns {void}
+ */
 function reply() {
     const e = State.current;
     if (!e)
@@ -553,6 +860,13 @@ function reply() {
     b.scrollTop = 0;
 }
 
+/**
+ * Sends the composer content as FakeEmailRequest {From, SenderName, To, Subject, Body, IsHtml, System, InReplyTo}
+ * (From, SenderName, System, InReplyTo only in "in" mode, else null) to FakeIncoming ("in") or SendEmail ("out"),
+ * with #composeSend disabled during the call. On success: saves lastFrom/lastName ("in" mode), closes the dialog
+ * and marks the returned id read. Errors become an error toast. The list itself updates via pollLoop.
+ * @returns {Promise<void>}
+ */
 async function sendComposed() {
     const isIn = Composer.mode === "in";
     const req = {
@@ -589,10 +903,20 @@ async function sendComposed() {
 
 //  Theme
 
+/**
+ * Applies a theme by setting <html data-theme> (selects the :root[data-theme="dark"] palette in email.css).
+ * @param {string} t - "light" or "dark".
+ * @returns {void}
+ */
 function applyTheme(t) {
     document.documentElement.dataset.theme = t;
 }
 
+/**
+ * Applies the stored fakeEmail.theme, else the OS prefers-color-scheme, and follows OS changes while nothing is
+ * stored. Wires the #theme button to toggle light/dark and store the choice.
+ * @returns {void}
+ */
 function initTheme() {
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const stored = load("theme", null);
@@ -611,6 +935,16 @@ function initTheme() {
 
 //  Init
 
+/**
+ * Page initialization (called at the end of this script): initTheme, restores State.read from fakeEmail.read,
+ * wires folder items (set State.folder), the 120 ms debounced #search input (State.query, renderList), the #viewMode
+ * buttons (State.view, renderBody), #compose, #reply, #delete, #openTab, #back, #markAllRead (all read), #clearAll
+ * (confirm, then Clear and deselect), composer mode/format buttons, #cPreviewBtn, close/cancel, form submit and
+ * Ctrl/Cmd+Enter (sendComposed). Global shortcuts (only when the composer is closed, no modifier, focus not in an
+ * input/textarea - where Escape blurs): j/ArrowDown, k/ArrowUp (move), r (reply), c (compose), / (focus search),
+ * Delete (deleteSelected), Escape (deselect). Finally starts pollLoop().
+ * @returns {void}
+ */
 function init() {
     initTheme();
     State.read = new Set(load("read", []));

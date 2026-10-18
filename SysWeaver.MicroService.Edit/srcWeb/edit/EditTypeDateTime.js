@@ -1,9 +1,39 @@
-﻿class EditTypeDateTime {
+﻿/**
+ * @file EditTypeDateTime.js - type handler for System.DateTime, System.DateOnly and System.TimeOnly (and their Nullable variants) in the object editor.
+ *
+ * Loaded by Edit.Init() (Edit.js) via includeJs(current, "EditTypeDateTime.js").
+ * Defines the global class EditTypeDateTime. Instances are created in Edit.GetTypeMap():
+ * `new EditTypeDateTime(false)` (DateTime), `(false, true)` (DateOnly), `(false, false, true)` (TimeOnly); the
+ * Nullable variants pass a 4th argument (true) that the constructor ignores.
+ *
+ * Value representations: values are either Date objects or strings (ISO strings for DateTime, "yyyy-mm-dd" for
+ * DateOnly, "hh:mm:ss" for TimeOnly). Conversions keep the representation of the original value (a Date stays a
+ * Date, a string becomes an ISO string via toISOString()). With TypeMemberFlags.DateUnspecified a date edit
+ * produces "yyyy-mm-ddThh:mm:ss" without timezone conversion.
+ *
+ * Dependencies: Edit (IsValid, CreateGenericInput, CreateChangeEvent), ValueFormat.AddNonNullLine (common),
+ * TypeMemberFlags (type.js).
+ * Conventions: implements the duck-typed type handler contract; GetMinMax plays the role of GetMinMaxDefault.
+ */
+
+/**
+ * Type handler for date/time values using native <input type=date> and/or <input type=time step=1>.
+ */
+class EditTypeDateTime {
 
 
+    /** @type {Date} Smallest supported date (Unix epoch, 1970-01-01T00:00:00Z). */
     static MinDate = new Date(0);
+    /** @type {Date} Largest date representable by JavaScript (8.64e15 ms after the epoch). */
     static MaxDate = new Date(8640000000000000);
 
+    /**
+     * Converts a value to a Date.
+     * @param {*} obj - Date (returned as is), "\t" or "" (returns onDefault), or anything Date.parse accepts.
+     * @param {*} onInvalid - Returned when Date.parse fails (or yields 0, i.e. the epoch itself).
+     * @param {*} onDefault - Returned for "\t" (server marker for default) and "".
+     * @returns {Date|*} The parsed Date or one of the fallbacks.
+     */
     static ToDateTime(obj, onInvalid, onDefault) {
         if (obj instanceof Date)
             return obj;
@@ -18,20 +48,48 @@
     }
 
 
+    /**
+     * @param {boolean} [forceReadOnly=false] - Always create read-only editors.
+     * @param {boolean} [onlyDate=false] - Date only (System.DateOnly): only a date input is shown.
+     * @param {boolean} [onlyTime=false] - Time only (System.TimeOnly): only a time input is shown.
+     */
     constructor(forceReadOnly, onlyDate, onlyTime) {
+        /** @type {boolean} Forces read-only editors. */
         this.ForceReadOnly = !!forceReadOnly;
+        /** @type {boolean} Handles date-only values. */
         this.OnlyDate = !!onlyDate;
+        /** @type {boolean} Handles time-only values. */
         this.OnlyTime = !!onlyTime;
     }
 
+    /**
+     * Formats a time as "hh:mm:ss" (zero padded).
+     * @param {number} h - Hours.
+     * @param {number} m - Minutes.
+     * @param {number} s - Seconds.
+     * @returns {string} The time string.
+     */
     static GetTimeString(h, m, s) {
         return ("" + h).padStart(2, '0') + ":" + ("" + m).padStart(2, '0') + ":" + ("" + s).padStart(2, '0');
     }
+    /**
+     * Formats a date as "yyyy-mm-dd" (zero padded).
+     * @param {number} y - Year.
+     * @param {number} m - Month (1-12).
+     * @param {number} d - Day of month.
+     * @returns {string} The date string.
+     */
     static GetDateString(y, m, d) {
         return ("" + y).padStart(4, '0') + "-" + ("" + m).padStart(2, '0') + "-" + ("" + d).padStart(2, '0');
     }
 
 
+    /**
+     * Returns the local time part of a value as shown by <input type=time>.
+     * @param {Date|string} v - Value (strings are parsed with Date.parse unless OnlyTime).
+     * @param {boolean} unspecifiedDate - DateUnspecified flag (unused here).
+     * @returns {?string} null for OnlyDate, v unchanged for OnlyTime, else local "hh:mm:ss".
+     */
     GetLocalTimeString(v, unspecifiedDate) {
         if (this.OnlyDate)
             return null;
@@ -42,6 +100,12 @@
         return EditTypeDateTime.GetTimeString(v.getHours(), v.getMinutes(), v.getSeconds());
     }
 
+    /**
+     * Returns the local date part of a value as shown by <input type=date>.
+     * @param {Date|string} v - Value.
+     * @param {boolean} unspecifiedDate - DateUnspecified flag (unused here).
+     * @returns {?string} null for OnlyTime, v unchanged for an OnlyDate string, else local "yyyy-mm-dd".
+     */
     GetLocalDateString(v, unspecifiedDate) {
         if (this.OnlyTime)
             return null;
@@ -53,6 +117,13 @@
         return EditTypeDateTime.GetDateString(v.getFullYear(), v.getMonth() + 1, v.getDate());
     }
 
+    /**
+     * Combines the date of the original value with a new local time from a time input.
+     * @param {Date|string} org - Current value.
+     * @param {string} v - New time "hh[:mm[:ss]]".
+     * @param {boolean} unspecifiedDate - DateUnspecified flag (unused here).
+     * @returns {Date|string|null} null for OnlyDate, v for OnlyTime, a Date when org was a Date, else an ISO string.
+     */
     SetLocalTimeString(org, v, unspecifiedDate) {
         if (this.OnlyDate)
             return null;
@@ -79,6 +150,14 @@
     }
 
 
+    /**
+     * Combines a new local date from a date input with the time of the original value.
+     * @param {Date|string} org - Current value.
+     * @param {string} v - New date "yyyy-mm-dd".
+     * @param {boolean} unspecifiedDate - When true returns "yyyy-mm-ddThh:mm:ss" (no timezone conversion).
+     * @returns {Date|string|null} null for OnlyTime, v for an OnlyDate string value, the unspecified string,
+     *   a Date when org was a Date, else an ISO string.
+     */
     SetLocalDateString(org, v, unspecifiedDate) {
         if (this.OnlyTime)
             return null;
@@ -107,6 +186,11 @@
         return n.toISOString();
     }
 
+    /**
+     * Checks a "yyyy-mm-dd" string loosely (3 parts, numeric year, month 1-12, day 1-31). Not used in this file.
+     * @param {Date|string} v - Value; a Date is always valid.
+     * @returns {boolean} Whether the value looks like a valid date.
+     */
     static IsValidDate(v) {
         if (v instanceof Date)
             return true;
@@ -131,6 +215,11 @@
     }
 
 
+    /**
+     * Checks a "hh[:mm[:ss]]" string loosely (hour 0-23, minutes and seconds 0-60). Not used in this file.
+     * @param {Date|string} v - Value; a Date is always valid.
+     * @returns {boolean} Whether the value looks like a valid time.
+     */
     static IsValidTime(v) {
         if (v instanceof Date)
             return true;
@@ -161,10 +250,21 @@
     }
 
 
+    /**
+     * Creates the default value for a new member.
+     * @param {object} member - Member description.
+     * @param {EditOptions} options - Editor options.
+     * @returns {Date|string} GetMinMax(...)[2].
+     */
     CreateDefault(member, options) {
         return this.GetMinMax(member, options)[2];
     }
 
+    /**
+     * Checks whether a pasted / dropped value is a Date or a string Date.parse accepts.
+     * @param {*} obj - Candidate value.
+     * @returns {boolean} true when usable as a date/time.
+     */
     IsOfType(obj) {
         if (obj instanceof Date)
             return true;
@@ -173,6 +273,15 @@
         return !!Date.parse(obj);
     }
 
+    /**
+     * Converts a pasted / dropped value and clamps it to the member's min/max.
+     * Date objects are clamped and returned as Dates; OnlyTime values are returned unchanged; strings are parsed
+     * (MinDate when invalid), clamped and returned as local "yyyy-mm-dd" for OnlyDate, otherwise as an ISO string.
+     * @param {Date|string} obj - Value to convert.
+     * @param {object} member - Member description (Min, Max, Default, Flags).
+     * @param {EditOptions} options - Editor options.
+     * @returns {Date|string} The conditioned value.
+     */
     Condition(obj, member, options) {
         const mmd = this.GetMinMax(member, options);
         const min = mmd[0];
@@ -205,19 +314,46 @@
         return obj.toISOString();
     }
 
+    /**
+     * Returns the local date of d at a whole hour.
+     * @param {Date} d - Source date.
+     * @param {number} [hour=12] - Hour to use (12 when missing).
+     * @returns {Date} New Date at hour:00:00 local time.
+     */
     static GetDate(d, hour) {
         return new Date(d.getFullYear(), d.getMonth(), d.getDate(), (!hour) && (hour !== 0) ? 12 : hour, 0, 0);
     }
 
+    /**
+     * Returns the start (00:00:00 local) of the day of d.
+     * @param {Date} d - Source date.
+     * @returns {Date} Start of the day.
+     */
     static GetMinDate(d) {
         return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
     }
 
+    /**
+     * Returns the end (23:59:59.999 local) of the day of d.
+     * @param {Date} d - Source date.
+     * @returns {Date} End of the day.
+     */
     static GetMaxDate(d) {
         return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
     }
 
 
+    /**
+     * Merges member.Min / Max / Default with the supported range and builds the tooltip text.
+     * Min is expanded to the start of its day, Max to the end of its day, both clamped to MinDate..MaxDate.
+     * The default is member.Default (ToDateTime, "\t" = now) or now rounded down to the current hour, clamped to
+     * [min, max]; when member.Default is a string the returned default is converted to an ISO string.
+     * Tooltip lines are added when the parsed member value survived clamping unchanged (identity compare, so
+     * effectively only for unclamped values) or always when options.Dev is set.
+     * @param {object} member - Member description (Min, Max, Default, Flags).
+     * @param {EditOptions} options - Editor options (Dev).
+     * @returns {Array} [min, max, def, typeTitle, haveMin, haveMax, parsedDef, defText].
+     */
     GetMinMax(member, options) {
         const typeMin = EditTypeDateTime.MinDate;
         const typeMax = EditTypeDateTime.MaxDate;
@@ -276,6 +412,16 @@
     }
 
 
+    /**
+     * Validates a value: must be a Date or a string (OnlyTime strings are always accepted), strings must parse
+     * with Date.parse, and the value must be within [min, max] (values below min are accepted with AcceptNull).
+     * For OnlyDate out-of-range values the message shows the limit as a local date (`GetLocalDateString`).
+     * @param {Date|string} obj - Value to validate.
+     * @param {object} member - Member description (Flags, DisplayName, Min, Max).
+     * @param {EditOptions} options - Editor options.
+     * @param {string} name - Member path/name returned with the error.
+     * @returns {Promise<?Array<string>>} null when valid, otherwise [name, message].
+     */
     async Validate(obj, member, options, name) {
         const isDate = obj instanceof Date;
         if (!isDate) {
@@ -291,6 +437,7 @@
         const mmd = this.GetMinMax(member, options);
         const min = mmd[0];
         const max = mmd[1];
+        const unspecifiedDate = (member.Flags & TypeMemberFlags.DateUnspecified) !== 0;
         if (obj < min) {
             if ((member.Flags & TypeMemberFlags.AcceptNull) === 0)
                 return this.OnlyDate
@@ -309,6 +456,13 @@
     }
 
 
+    /**
+     * Formats a value for display: local "yyyy-mm-dd hh:mm:ss", or only the date / time part for OnlyDate / OnlyTime.
+     * @param {Date|string} obj - Value.
+     * @param {object} member - Member description (Flags).
+     * @param {EditOptions} [options] - Editor options (unused).
+     * @returns {string} Display text.
+     */
     ToString(obj, member, options) {
         const haveBoth = !(this.OnlyDate || this.OnlyTime);
         const unspecifiedDate = (member.Flags & TypeMemberFlags.DateUnspecified) !== 0;
@@ -319,6 +473,21 @@
     }
 
 
+    /**
+     * Builds the date/time editor in editContext.Element: an <input type=date> (unless OnlyTime, with min/max when
+     * the member specifies them) and/or an <input type=time step=1> (unless OnlyDate), created with
+     * Edit.CreateGenericInput. The date input gets HalfWidth when both are shown; the time input always gets
+     * HalfWidth. obj[member.Name] is set to the default when undefined.
+     * Read only when options.ReadOnly, the member has TypeMemberFlags.ReadOnly, or ForceReadOnly.
+     * @param {object} obj - The object being edited.
+     * @param {Edit} editor - Owning editor (Invoke, Element, Key, KeyName).
+     * @param {{Element:HTMLElement}} editContext - Layout context; Element is the value cell.
+     * @param {object} member - Member description (Name, Min, Max, Default, Flags).
+     * @param {string} title - Member title (unused).
+     * @param {EditOptions} options - Editor options (ReadOnly, Dev).
+     * @returns {Promise<object>} Item {Focus (date or time input), Title, DefValue, DefValueText, SetValue(v),
+     *   UpdateValue(isFirst)}; SetValue writes obj[mn] and dispatches EditChange on editor.Element.
+     */
     async AddEditor(obj, editor, editContext, member, title, options) {
         const th = this;
         const mn = member.Name;
@@ -348,6 +517,11 @@
         let timeInp = null;
 
 
+        /**
+         * Applies a new value from either input through editor.Invoke (undoable, title shows the formatted and raw value).
+         * @param {Date|string} v - New value (already converted by SetLocalDateString / SetLocalTimeString).
+         * @returns {Promise<boolean>} false when unchanged (===), true after invoking the change.
+         */
         async function setValue(v) {
             const old = obj[mn];
             if (old === v)
