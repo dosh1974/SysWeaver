@@ -185,7 +185,8 @@ namespace SysWeaver.Net
         /// <remarks>Thread safe. Cached handler lookups are cleared.</remarks>
         public bool AddFolder(FileHttpServerModuleFolder folder)
         {
-            var df = folder.DiscFolder ?? "web";
+            //  Path variables are resolved (ex: "$(ExecutableDir)/../web")
+            var df = PathTemplate.Resolve(folder.DiscFolder ?? "web");
             var di = new DirectoryInfo(df);
             if (!di.Exists)
                 return false;
@@ -220,7 +221,8 @@ namespace SysWeaver.Net
         {
             if (folder == null)
                 return false;
-            var df = folder.DiscFolder ?? "web";
+            //  Path variables are resolved (ex: "$(ExecutableDir)/../web")
+            var df = PathTemplate.Resolve(folder.DiscFolder ?? "web");
             var di = new DirectoryInfo(df);
             df = di.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var webFolder = (folder.WebFolder ?? "").Trim('/');

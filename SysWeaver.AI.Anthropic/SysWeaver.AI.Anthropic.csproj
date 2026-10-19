@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SysWeaver.AI</RootNamespace>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.58.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.AI\SysWeaver.AI.csproj" />
+  </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="rmdir /S /Q .\srcWeb\ai\icons\.opt" ContinueOnError="true" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\ai\icons\*.svg .\srcWeb\ai\icons\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ai\icons\.opt\* .\web\ai\icons" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+</Project>

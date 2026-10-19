@@ -30,4 +30,4 @@ The generated `.opt/` and `web/` folders are not in the repository. The url root
 
 - **Part of:** [SysWeaver.AI](../README.md)
 - **Uses:** [SvgOpt](../../_tools/svg_opt/README.md) and [Compress](../../_tools/compress/README.md) at build time
-- **Related:** the agent icons in [SysWeaver.AI.OpenAI/srcWeb](../../SysWeaver.AI.OpenAI/srcWeb/README.md), [SysWeaver.AI.Google/srcWeb](../../SysWeaver.AI.Google/srcWeb/README.md) and [SysWeaver.AI.LlamaSharp/srcWeb](../../SysWeaver.AI.LlamaSharp/srcWeb/README.md)
+- **Related:** the agent icons in [SysWeaver.AI.OpenAI/srcWeb](../../SysWeaver.AI.OpenAI/srcWeb/README.md), [SysWeaver.AI.Google/srcWeb](../../SysWeaver.AI.Google/srcWeb/README.md), [SysWeaver.AI.Anthropic/srcWeb](../../SysWeaver.AI.Anthropic/srcWeb/README.md) and [SysWeaver.AI.LlamaSharp/srcWeb](../../SysWeaver.AI.LlamaSharp/srcWeb/README.md)

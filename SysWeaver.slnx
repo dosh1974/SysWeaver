@@ -47,6 +47,7 @@
     <Project Path="_external/simplestack.orm/src/SimpleStack.Orm.MySQLConnector/SimpleStack.Orm.MySQLConnector.csproj" />
     <Project Path="_external/simplestack.orm/src/SimpleStack.Orm/SimpleStack.Orm.csproj" />
   </Folder>
+  <Project Path="SysWeaver.AI.Anthropic/SysWeaver.AI.Anthropic.csproj" />
   <Project Path="SysWeaver.AI.ComfyUi/SysWeaver.AI.ComfyUi.csproj" />
   <Project Path="SysWeaver.AI.Google/SysWeaver.AI.Google.csproj" />
   <Project Path="SysWeaver.AI.HostService/SysWeaver.AI.HostService.csproj" />

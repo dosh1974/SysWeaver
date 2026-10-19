@@ -12,7 +12,7 @@ namespace SysWeaver.Net
             nameof(DiscFolder), ": ", DiscFolder.ToQuoted(), ", ", base.ToString());
 
         /// <summary>
-        /// The folder on disc (absolute or relative to the current directory), null means "web".
+        /// The folder on disc (absolute or relative to the current directory, path variables like $(ExecutableDir) are resolved, see PathTemplate), null means "web".
         /// </summary>
         public String DiscFolder;
 

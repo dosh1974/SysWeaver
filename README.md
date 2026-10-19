@@ -465,6 +465,7 @@ flowchart LR
 | Project | Purpose |
 |---|---|
 | [SysWeaver.AI](SysWeaver.AI/README.md) | API agnostic AI (LLM) functionality for SysWeaver: the chat provider, tool calling of service methods, AI memory, default tools and the service/session base classes that the AI provider projects build on. |
+| [SysWeaver.AI.Anthropic](SysWeaver.AI.Anthropic/README.md) | LLM integration for SysWeaver using the Anthropic Claude API: an AI service and chat provider that can call methods of your services as tools and keep an AI memory. |
 | [SysWeaver.AI.ComfyUi](SysWeaver.AI.ComfyUi/README.md) | Run ComfyUI workflows with typed inputs and outputs through the ComfyUI-Connect REST API, workflows loaded from disc with compiled and cached mappings. |
 | [SysWeaver.AI.Google](SysWeaver.AI.Google/README.md) | LLM integration for SysWeaver using the Google Gemini API (or Vertex AI): an AI service and chat provider that can call methods of your services as tools, generate and edit images and keep an AI memory. |
 | [SysWeaver.AI.HostService](SysWeaver.AI.HostService/README.md) | OpenAI compatible (Chat Completions and Responses) and Google compatible (Gemini API and Vertex AI) APIs, with streaming and tool calls, in front of one or more SysWeaver AI services. |

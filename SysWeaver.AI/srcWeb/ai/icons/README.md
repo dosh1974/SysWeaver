@@ -28,4 +28,4 @@ The SVG files directly in this folder are optimised by SvgOpt before being compr
 
 - **Part of:** [SysWeaver.AI](../../../README.md)
 - **Used by:** [`AiChatSessionBase.cs`](../../../AiChatSessionBase.cs)
-- **Related:** the agent icons in [SysWeaver.AI.OpenAI](../../../../SysWeaver.AI.OpenAI/srcWeb/ai/icons/README.md), [SysWeaver.AI.Google](../../../../SysWeaver.AI.Google/srcWeb/ai/icons/README.md) and [SysWeaver.AI.LlamaSharp](../../../../SysWeaver.AI.LlamaSharp/srcWeb/ai/icons/README.md)
+- **Related:** the agent icons in [SysWeaver.AI.OpenAI](../../../../SysWeaver.AI.OpenAI/srcWeb/ai/icons/README.md), [SysWeaver.AI.Google](../../../../SysWeaver.AI.Google/srcWeb/ai/icons/README.md), [SysWeaver.AI.Anthropic](../../../../SysWeaver.AI.Anthropic/srcWeb/ai/icons/README.md) and [SysWeaver.AI.LlamaSharp](../../../../SysWeaver.AI.LlamaSharp/srcWeb/ai/icons/README.md)

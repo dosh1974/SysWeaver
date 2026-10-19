@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Hold everything that is common to all AI providers, so that a provider project ([OpenAI](../SysWeaver.AI.OpenAI/README.md), [Google](../SysWeaver.AI.Google/README.md), [LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md)) only implements the actual API calls. Code that consumes AI (the host and MCP services, LLM based translation and language identification) works against `IAiService` and so with any provider.
+Hold everything that is common to all AI providers, so that a provider project ([OpenAI](../SysWeaver.AI.OpenAI/README.md), [Google](../SysWeaver.AI.Google/README.md), [Anthropic](../SysWeaver.AI.Anthropic/README.md), [LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md)) only implements the actual API calls. Code that consumes AI (the host and MCP services, LLM based translation and language identification) works against `IAiService` and so with any provider.
 
 ## How it fits into SysWeaver
 
@@ -20,6 +20,7 @@ flowchart LR
   Tools["services implementing IHaveAiTools<br/>methods with AiTool / AiUse"] --> B["AiServiceBase"]
   B --> O["OpenAiService"]
   B --> G["GoogleAiService"]
+  B --> A["AnthropicAiService"]
   B --> L["LlamaSharpAiService"]
   B -- "IChatProvider" --> Chat["SysWeaver.Chat"]
 ```
@@ -82,5 +83,5 @@ ai.AddChat(chat, "Weather");
 
 - **Project:** [`SysWeaver.AI.csproj`](SysWeaver.AI.csproj)
 - **Builds on:** [SysWeaver.Chat](../SysWeaver.Chat/README.md), [SysWeaver.HttpServer](../SysWeaver.HttpServer/README.md), [SysWeaver.IsoData](../SysWeaver.IsoData/README.md), [SysWeaver.Media.Png](../SysWeaver.Media.Png/README.md), [SysWeaver.MicroServices.ServiceManager](../SysWeaver.MicroServices.ServiceManager/README.md)
-- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md), [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md), [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md), [SysWeaver.AI.McpService](../SysWeaver.AI.McpService/README.md)
+- **Used by:** [SysWeaver.AI.OpenAI](../SysWeaver.AI.OpenAI/README.md), [SysWeaver.AI.Google](../SysWeaver.AI.Google/README.md), [SysWeaver.AI.Anthropic](../SysWeaver.AI.Anthropic/README.md), [SysWeaver.AI.LlamaSharp](../SysWeaver.AI.LlamaSharp/README.md), [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md), [SysWeaver.AI.McpService](../SysWeaver.AI.McpService/README.md)
 - **Third-party:** Newtonsoft.Json
