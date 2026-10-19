@@ -57,7 +57,14 @@ namespace SysWeaver.MicroService
             var bakName = FolderSyncer.GetBakName(target);
             var ex = await PathExt.TryFolderSwapAsync(target, bakName, from).ConfigureAwait(false);
             if (ex == null)
+            {
                 new DirectoryInfo(target).LastAccessTimeUtc = DateTime.UtcNow;
+                Manager.AddMessage(MessageLevels.Info, $"{LogPrefix}Backed up \"{target}\" to \"{bakName}\" and replaced it with \"{from}\"");
+            }
+            else
+            {
+                Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}Failed to backup \"{target}\" to \"{bakName}\" and didn't replace it with \"{from}\"", ex);
+            }
             cmd = folder.OnActivate;
             if (cmd != null)
                 await RunCommands(cmd).ConfigureAwait(false);
