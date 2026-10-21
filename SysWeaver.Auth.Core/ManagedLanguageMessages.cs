@@ -35,7 +35,14 @@ namespace SysWeaver
         /// <summary>
         /// Notification messages (markdown for web)
         /// </summary>
-        readonly IReadOnlyDictionary<String, ManagedMarkDownMessage> Notifications;
+        readonly IReadOnlyDictionary<String, ManagedNotificationMessage> Notifications;
+
+
+        /// <summary>
+        /// Notification messages (markdown for web)
+        /// </summary>
+        readonly IReadOnlyDictionary<String, ManagedWhatsAppMessage> WhatsAppMessages;
+
 
 
         /// <summary>
@@ -51,7 +58,14 @@ namespace SysWeaver
         /// <summary>
         /// All notification (markdown for web) messages, key is the lower cased message name.
         /// </summary>
-        public IEnumerable<KeyValuePair<String, ManagedMarkDownMessage>> AllNotifications => Notifications;
+        public IEnumerable<KeyValuePair<String, ManagedNotificationMessage>> AllNotifications => Notifications;
+
+
+        /// <summary>
+        /// All notification (markdown for web) messages, key is the lower cased message name.
+        /// </summary>
+        public IEnumerable<KeyValuePair<String, ManagedWhatsAppMessage>> AllWhatsAppMessages => WhatsAppMessages;
+
 
         /// <summary>
         /// Get the mail message for a given key.
@@ -74,8 +88,18 @@ namespace SysWeaver
         /// </summary>
         /// <param name="key">The key (one of the names supplied to <see cref="ManagedMessages"/>, including any leading '*', case insensitive)</param>
         /// <returns>null if not found, else the text message template</returns>
-        public ManagedMarkDownMessage GetNotification(String key)
+        public ManagedNotificationMessage GetNotification(String key)
             => Notifications.TryGetValue(key.FastToLower(), out var v) ? v : null;
+
+
+        /// <summary>
+        /// Get the WhatsApp (markdown) message for a given key.
+        /// </summary>
+        /// <param name="key">The key (one of the names supplied to <see cref="ManagedMessages"/>, including any leading '*', case insensitive)</param>
+        /// <returns>null if not found, else the WhatsApp message template</returns>
+        public ManagedWhatsAppMessage GetWhatsApp(String key)
+            => WhatsAppMessages.TryGetValue(key.FastToLower(), out var v) ? v : null;
+
 
         /// <summary>
         /// Create the messages of a language.
@@ -84,7 +108,7 @@ namespace SysWeaver
         /// <param name="texts">The text messages, keys must be lower case</param>
         /// <param name="mails">The mail messages, keys must be lower case</param>
         /// <param name="notifications">The web notifications messages, keys must be lower case</param>
-        public ManagedLanguageMessages(String language, IReadOnlyDictionary<string, ManagedTextMessage> texts, IReadOnlyDictionary<string, ManagedMailMessage> mails, IReadOnlyDictionary<string, ManagedMarkDownMessage> notifications)
+        public ManagedLanguageMessages(String language, IReadOnlyDictionary<string, ManagedTextMessage> texts, IReadOnlyDictionary<string, ManagedMailMessage> mails, IReadOnlyDictionary<string, ManagedNotificationMessage> notifications, IReadOnlyDictionary<string, ManagedWhatsAppMessage> whatsApps)
         {
             Language = language;
             Texts = texts;
@@ -106,6 +130,7 @@ namespace SysWeaver
             Texts = copy.Texts;
             Mails = copy.Mails;
             Notifications = copy.Notifications;
+            WhatsAppMessages = copy.WhatsAppMessages;
         }
 
 

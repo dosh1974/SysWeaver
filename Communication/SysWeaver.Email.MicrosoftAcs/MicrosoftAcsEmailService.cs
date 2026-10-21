@@ -60,15 +60,16 @@ namespace SysWeaver.Email
             return true;
         }
 
-        public async Task Send(String to, String subject, String message, bool isHtml = false)
+        public async Task SendEmail(OutgoingEmailMessage msg)
         {
-            using var _ = PerfMon.Track(nameof(Send));
-            var content = new EmailContent(subject?.Trim() ?? "");
-            if (isHtml)
-                content.Html = message ?? "";
+            using var _ = PerfMon.Track(nameof(SendEmail));
+
+            var content = new EmailContent(msg.Subject?.Trim() ?? "");
+            if (msg.IsHtml)
+                content.Html = msg.Body ?? "";
             else
-                content.PlainText = message ?? "";
-            var m = new EmailMessage(Sender, new MailAddress(to).Address, content);
+                content.PlainText = msg.Body ?? "";
+            var m = new EmailMessage(Sender, new MailAddress(msg.Email).Address, content);
             var ret = RetryCount;
             var c = Client;
             for (int i = 0; ; ++i)

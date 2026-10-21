@@ -34,17 +34,17 @@ namespace SysWeaver.MicroService
 
         readonly int RetryCount;
 
-        public async Task Send(String to, String subject, String message, bool isHtml = false)
+        public async Task SendEmail(OutgoingEmailMessage msg)
         {
-            using var _ = PerfMon.Track(nameof(Send));
+            using var _ = PerfMon.Track(nameof(SendEmail));
             using var m = new MailMessage
             {
                 From = new MailAddress(Sender),
-                Subject = subject?.Trim(),
-                Body = message,
-                IsBodyHtml = isHtml,
+                Subject = msg.Subject?.Trim(),
+                Body = msg.Body,
+                IsBodyHtml = msg.IsHtml,
             };
-            m.To.Add(new MailAddress(to));
+            m.To.Add(new MailAddress(msg.Email));
             var ret = RetryCount;
             var c = Client;
             for (int i = 0; ; ++i)

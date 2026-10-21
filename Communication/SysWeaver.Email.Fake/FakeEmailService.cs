@@ -83,18 +83,12 @@ namespace SysWeaver.Email
             return m;
         }
 
-        /// <summary>
-        /// Send a message
-        /// </summary>
-        /// <param name="to">The receiver email address</param>
-        /// <param name="subject">The subject</param>
-        /// <param name="message">The body</param>
-        /// <param name="isHtml">True if the body is html</param>
-        public Task Send(String to, String subject, String message, bool isHtml = false)
+        [WebApi]
+        public Task SendEmail(OutgoingEmailMessage msg)
         {
             try
             {
-                SendInternal(to, subject, message, isHtml);
+                SendInternal(msg.Email, msg.Subject, msg.Body, msg.IsHtml);
                 return Task.CompletedTask;
             }
             catch (Exception ex)
@@ -104,14 +98,6 @@ namespace SysWeaver.Email
             }
         }
 
-        /// <summary>
-        /// Send an email (as if the system sent it)
-        /// </summary>
-        /// <param name="email">The email details (From is ignored)</param>
-        /// <returns>The id of the email</returns>
-        [WebApi]
-        public String SendEmail(FakeEmailRequest email)
-            => SendInternal(email.To, email.Subject, email.Body, email.IsHtml).Id;
 
         /// <summary>
         /// Fake an incoming email

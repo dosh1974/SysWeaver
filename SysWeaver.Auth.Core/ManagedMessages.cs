@@ -36,6 +36,13 @@ namespace SysWeaver
         /// </summary>
         NotificationBody = 16,
 
+
+        /// <summary>
+        /// Markdown message body, intended to be sent through WhatsApp
+        /// </summary>
+        WhatsApp = 32,
+
+
         /// <summary>
         /// Email message, subject as plain text and body as (html or plain text.
         /// </summary>
@@ -50,7 +57,7 @@ namespace SysWeaver
         /// <summary>
         /// All message types
         /// </summary>
-        All = Text | Email | Notification
+        All = Text | Email | Notification | WhatsApp
 
 
     }
@@ -128,13 +135,16 @@ namespace SysWeaver
                 var f = PathExt.GetFullDirectoryName(sourceFolder.Replace("*", lang));
                 var text = new Dictionary<String, ManagedTextMessage>(StringComparer.Ordinal);
                 var mail = new Dictionary<String, ManagedMailMessage>(StringComparer.Ordinal);
-                var notification = new Dictionary<String, ManagedMarkDownMessage>(StringComparer.Ordinal);
+                var notification = new Dictionary<String, ManagedNotificationMessage>(StringComparer.Ordinal);
+                var whatsUp = new Dictionary<String, ManagedWhatsAppMessage>(StringComparer.Ordinal);
+
+
                 var comb = optional | required;
                 foreach (var name in names)
                 {
                     var isOptional = name.FastStartsWith("*");
                     var n = isOptional ? name.Substring(1) : name;
-                    var key = name.FastToLower();
+                    var key = n.FastToLower();
                     if ((comb & ManagedMessageTypes.Email) != 0)
                     {
                         var mm = new ManagedMailMessage(vars)
@@ -168,9 +178,23 @@ namespace SysWeaver
                                 tm.Body = "";
                         text.Add(key, tm);
                     }
+
+                    if ((comb & ManagedMessageTypes.WhatsApp) != 0)
+                    {
+                        var tm = new ManagedWhatsAppMessage(vars)
+                        {
+                            Body = Path.Combine(f, (string)(n + "WhatsApp.md")),
+                        };
+                        if (!File.Exists(tm.Body))
+                            if (((required & ManagedMessageTypes.WhatsApp) != 0) && (!isOptional))
+                                throw new FileNotFoundException("Localized WhatsApp message file " + tm.Body.ToFilename() + " does NOT exist!", tm.Body);
+                            else
+                                tm.Body = "";
+                        whatsUp.Add(key, tm);
+                    }
                     if ((comb & ManagedMessageTypes.Notification) != 0)
                     {
-                        var nm = new ManagedMarkDownMessage(vars)
+                        var nm = new ManagedNotificationMessage(vars)
                         {
                             Body = Path.Combine(f, (string)(n + "Notification.md")),
                             Headline = Path.Combine(f, (string)(n + "Notification.txt")),
@@ -188,7 +212,7 @@ namespace SysWeaver
                         notification.Add(key, nm);
                     }
                 }
-                languages.TryAdd(lang.FastToLower(), new ManagedLanguageMessages(lang, text.Freeze(), mail.Freeze(), notification.Freeze()));
+                languages.TryAdd(lang.FastToLower(), new ManagedLanguageMessages(lang, text.Freeze(), mail.Freeze(), notification.Freeze(), whatsUp.Freeze()));
             }
             ManagedLanguageMessages def = null;
             if (languages.Count > 0)

@@ -79,12 +79,12 @@ namespace SysWeaver.Email
             return true;
         }
 
-        public async Task Send(String to, String subject, String message, bool isHtml = false)
+        public async Task SendEmail(OutgoingEmailMessage msg)
         {
-            using var _ = PerfMon.Track(nameof(Send));
+            using var _ = PerfMon.Track(nameof(SendEmail));
             var body = new Content
             {
-                Data = message ?? "",
+                Data = msg.Body ?? "",
                 Charset = "UTF-8",
             };
             var req = new SendEmailRequest
@@ -92,7 +92,7 @@ namespace SysWeaver.Email
                 FromEmailAddress = FromAddress,
                 Destination = new Destination
                 {
-                    ToAddresses = [new MailAddress(to).Address],
+                    ToAddresses = [new MailAddress(msg.Email).Address],
                 },
                 Content = new EmailContent
                 {
@@ -100,10 +100,10 @@ namespace SysWeaver.Email
                     {
                         Subject = new Content
                         {
-                            Data = subject?.Trim() ?? "",
+                            Data = msg.Subject?.Trim() ?? "",
                             Charset = "UTF-8",
                         },
-                        Body = isHtml ? new Body { Html = body } : new Body { Text = body },
+                        Body = msg.IsHtml ? new Body { Html = body } : new Body { Text = body },
                     },
                 },
                 ConfigurationSetName = ConfigurationSet,

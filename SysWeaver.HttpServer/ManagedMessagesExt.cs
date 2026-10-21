@@ -124,19 +124,19 @@ namespace SysWeaver
             var x = new ManagedMailMessage(text.Vars)
             {
                 IsHtml = h,
-                Subject = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is an email subject line. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".").ConfigureAwait(false),
-                Body = await(h ? tr.TranslateSafeHtml(body, to, defLang, "This is an email body. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".") : tr.TranslateSafe(body, to, defLang, "This is the email body. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".")).ConfigureAwait(false),
+                Subject = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is an email subject line. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".", TranslationEffort.High, TranslationCacheRetention.Long, TranslationContentTypes.Text).ConfigureAwait(false),
+                Body = await tr.TranslateSafe(body, to, defLang, "This is an email body. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".", TranslationEffort.High, TranslationCacheRetention.Long, h ? TranslationContentTypes.Html : TranslationContentTypes.Text).ConfigureAwait(false),
             };
             dest[key] = x;
         }
 
-        static async Task DoMarkDown(ConcurrentDictionary<string, ManagedMarkDownMessage> dest, String key, ITranslator tr, String defLang, String to, ManagedMarkDownMessage text)
+        static async Task DoNotification(ConcurrentDictionary<string, ManagedNotificationMessage> dest, String key, ITranslator tr, String defLang, String to, ManagedNotificationMessage text)
         {
             var body = text.GetBody().Template;
-            var x = new ManagedMarkDownMessage(text.Vars)
+            var x = new ManagedNotificationMessage(text.Vars)
             {
-                Headline = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is a wen notification header line (a one liner). Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".").ConfigureAwait(false),
-                Body = await (tr.TranslateSafeMD(body, to, defLang, "This is a web notification body. Text between [ and ] that are not part of the regular .md flow are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".")).ConfigureAwait(false),
+                Headline = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is a web notification header line (a one-liner). Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".", TranslationEffort.High, TranslationCacheRetention.Long, TranslationContentTypes.Text).ConfigureAwait(false),
+                Body = await (tr.TranslateSafe(body, to, defLang, "This is a web notification body. Text between [ and ] that are not part of the regular .md flow are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".", TranslationEffort.High, TranslationCacheRetention.Long, TranslationContentTypes.MarkDown)).ConfigureAwait(false),
             };
             dest[key] = x;
         }
@@ -145,7 +145,16 @@ namespace SysWeaver
         {
             var x = new ManagedTextMessage(text.Vars)
             {
-                Body = await tr.TranslateSafe(text.GetBody().Template, to, defLang, "This is the text of a SMS, keep short. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".").ConfigureAwait(false),
+                Body = await tr.TranslateSafe(text.GetBody().Template, to, defLang, "This is the text of a SMS, keep short. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".", TranslationEffort.High, TranslationCacheRetention.Long, TranslationContentTypes.Text).ConfigureAwait(false),
+            };
+            dest[key] = x;
+        }
+
+        static async Task DoWhatsApp(ConcurrentDictionary<string, ManagedWhatsAppMessage> dest, String key, ITranslator tr, String defLang, String to, ManagedWhatsAppMessage text)
+        {
+            var x = new ManagedWhatsAppMessage(text.Vars)
+            {
+                Body = await tr.TranslateSafe(text.GetBody().Template, to, defLang, "This is the text of a WhatsApp message, keep short. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".", TranslationEffort.High, TranslationCacheRetention.Long, TranslationContentTypes.MarkDown).ConfigureAwait(false),
             };
             dest[key] = x;
         }
@@ -188,16 +197,22 @@ namespace SysWeaver
             var defLang = lang.Language;
             var texts = new ConcurrentDictionary<string, ManagedTextMessage>(StringComparer.Ordinal);
             var mails = new ConcurrentDictionary<string, ManagedMailMessage>(StringComparer.Ordinal);
-            var notifications = new ConcurrentDictionary<string, ManagedMarkDownMessage>(StringComparer.Ordinal);
+            var notifications = new ConcurrentDictionary<string, ManagedNotificationMessage>(StringComparer.Ordinal);
+            var whatsapps = new ConcurrentDictionary<string, ManagedWhatsAppMessage>(StringComparer.Ordinal);
+
             List<Task> tasks = new List<Task>();
             foreach (var m in lang.AllMail)
                 tasks.Add(DoEmail(mails, m.Key, tr, defLang, l, m.Value));
             foreach (var m in lang.AllTexts)
                 tasks.Add(DoSMS(texts, m.Key, tr, defLang, l, m.Value));
             foreach (var m in lang.AllNotifications)
-                tasks.Add(DoMarkDown(notifications, m.Key, tr, defLang, l, m.Value));
+                tasks.Add(DoNotification(notifications, m.Key, tr, defLang, l, m.Value));
+            foreach (var m in lang.AllWhatsAppMessages)
+                tasks.Add(DoWhatsApp(whatsapps, m.Key, tr, defLang, l, m.Value));
+
             await Task.WhenAll(tasks).ConfigureAwait(false);
-            lang = new ManagedLanguageMessages(l, texts.Freeze(), mails.Freeze(), notifications.Freeze());
+
+            lang = new ManagedLanguageMessages(l, texts.Freeze(), mails.Freeze(), notifications.Freeze(), whatsapps.Freeze());
             if (!msg.TryAddTranslatedLanguage(l, lang))
                 lang = msg.GetLang(l);
             return lang;
