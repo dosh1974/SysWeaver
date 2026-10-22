@@ -1,4 +1,1 @@
-﻿You are invited!
-Click to join [Site]: 
-[Link]
-[Footer]
+﻿[Site]: You have been invited to join. Join here: [Link][Footer]

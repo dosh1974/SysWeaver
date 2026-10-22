@@ -99,8 +99,8 @@ namespace SysWeaver.MicroService
                     throw new Exception("Email address is not part of the whitelist!");
             }
             var isHtml = m.IsHtml;
-            var mHeader = (haveLang ? messages.GetMail("*Header") : Header);
-            var mFooter = (haveLang ? messages.GetMail("*Footer") : Footer);
+            var mHeader = (haveLang ? messages.GetMail("Header") : Header);
+            var mFooter = (haveLang ? messages.GetMail("Footer") : Footer);
             String header = "";
             if ((mHeader != null) && (isHtml == mHeader.IsHtml))
                 mHeader.GetMessage(out var _, out header, vars);
@@ -150,8 +150,8 @@ namespace SysWeaver.MicroService
                     throw new Exception("Email address is not part of the whitelist!");
             }
             var isHtml = m.IsHtml;
-            var mHeader = get("*Header") ?? Header;
-            var mFooter = get("*Footer") ?? Footer;
+            var mHeader = get("Header") ?? Header;
+            var mFooter = get("Footer") ?? Footer;
             String header = "";
             if ((mHeader != null) && (isHtml == mHeader.IsHtml))
                 mHeader.GetMessage(out var _, out header, vars);

@@ -83,9 +83,9 @@ namespace SysWeaver.Collections
         bool HavePartial;
         bool LastIsPartial;
 
-#if DEBUG
+//#if DEBUG
         String Old = "";
-#endif//DEBUG
+//#endif//DEBUG
 
 
         /// <summary>
@@ -227,7 +227,7 @@ namespace SysWeaver.Collections
         /// <exception cref="Exception">DEBUG builds only: The string is null, empty, contains invalid chars or isn't greater than the previously added string</exception>
         public void Add(String s)
         {
-#if DEBUG
+//#if DEBUG
             if (String.IsNullOrEmpty(s))
                 throw new Exception("Must be non-empty!");
             foreach (int c in s)
@@ -236,7 +236,7 @@ namespace SysWeaver.Collections
             if (AsciiCompare(Old, s) >= 0)
                 throw new Exception("Must insert strings in sorted order!");
             Old = s;
-#endif//DEBUG
+//#endif//DEBUG
         //  If the last block is partial, remove it
             var blocks = Blocks;
             if (LastIsPartial)

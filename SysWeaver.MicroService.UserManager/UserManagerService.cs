@@ -1032,8 +1032,9 @@ namespace SysWeaver.MicroService
                 if (user == null)
                     return Tuple.Create(false, (String)null, (String)null);
                 var current = user.NickName;
-                if (current.FastToLower().FastEquals(newName.FastToLower()))
-                    return Tuple.Create(false, current, current);
+                if (current != null)
+                    if (current.FastToLower().FastEquals(newName.FastToLower()))
+                        return Tuple.Create(false, current, current);
                 user.NickName = newName;
                 await c.UpdateAsync(user, x => new { x.NickName }).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
@@ -1279,9 +1280,10 @@ namespace SysWeaver.MicroService
 
         static String FormatShortCode(String shortCode)
         {
-            if (String.IsNullOrEmpty(shortCode))
+            return shortCode ?? "";
+/*            if (String.IsNullOrEmpty(shortCode))
                 return "";
-            return String.Join(' ', shortCode.ToCharArray());
+            return String.Join(' ', shortCode.ToCharArray());*/
         }
 
         static String CleanUpShortCode(String shortCode)

@@ -1,5 +1,3 @@
-﻿[Header]
-Enter code [ShortCode].
-Alternatively click to delete your account: 
-[Link]
-[Footer]
+﻿Your code to delete your account (cannot be undone):
+[ShortCode]
+Valid 15 min. Enter it only on the [Site] website. Not you? Change your password.[Footer]

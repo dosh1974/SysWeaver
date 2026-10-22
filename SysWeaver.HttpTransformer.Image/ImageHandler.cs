@@ -131,7 +131,10 @@ namespace SysWeaver.HttpTransformer
             if (decoder != null)
                 inputData = decoder.GetDecompressed(inputData.Span);
             var baseName = info.BaseName;
-            using (var image = new MagickImage(inputData.Span))
+            using (var image = new MagickImage(inputData.Span, new MagickReadSettings
+            {
+                BackgroundColor = MagickColors.Transparent,
+            }))
             {
                 for (int i = 0; i < fl; ++i)
                 {

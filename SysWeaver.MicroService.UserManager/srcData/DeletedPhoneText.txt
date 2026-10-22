@@ -1,5 +1,3 @@
-﻿[Header]
-Number removed.
-Click to re-associate this number to your account: 
-[Link]
-[Footer]
+﻿This phone was removed from your [Site] account.
+Not you? Change your password now.
+Mistake? Add it back (24 h): [Link][Footer]

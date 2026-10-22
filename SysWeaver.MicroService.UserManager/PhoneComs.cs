@@ -68,8 +68,8 @@ namespace SysWeaver.MicroService
                 throw new Exception("Undefined text message " + ops);
             PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);
             target = String.Join(' ', pre, num);
-            var header = (haveLang ? messages.GetText("*Header") : Header)?.GetMessage(vars) ?? "";
-            var footer = (haveLang ? messages.GetText("*Footer") : Footer)?.GetMessage(vars) ?? "";
+            var header = (haveLang ? messages.GetText("Header") : Header)?.GetMessage(vars) ?? "";
+            var footer = (haveLang ? messages.GetText("Footer") : Footer)?.GetMessage(vars) ?? "";
             vars["[Header]"] = header;
             vars["[Footer]"] = footer;
             var body = m.GetMessage(vars);
@@ -96,8 +96,8 @@ namespace SysWeaver.MicroService
                 throw new Exception("Undefined text message " + message);
             PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);
             target = String.Join(' ', pre, num);
-            var header = (get("*Header") ?? Header)?.GetMessage(vars) ?? "";
-            var footer = (get("*Footer") ?? Footer)?.GetMessage(vars) ?? "";
+            var header = (get("Header") ?? Header)?.GetMessage(vars) ?? "";
+            var footer = (get("Footer") ?? Footer)?.GetMessage(vars) ?? "";
             vars["[Header]"] = header;
             vars["[Footer]"] = footer;
             var body = m.GetMessage(vars);
