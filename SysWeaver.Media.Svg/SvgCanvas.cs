@@ -159,7 +159,7 @@ namespace SysWeaver.Media
         /// <summary>
         /// Replace all svg text elements with paths (glyph outlines), so that the document can be rendered without the fonts.
         /// The font is found using <see cref="SvgFont.GetOrCreate(string, string, string, string[])"/> (font-family, font-style and font-weight of the style attribute,
-        /// the folder of <see cref="Filename"/> is also searched), <see cref="SvgFont.MontserratBlack"/> is used if no font is found.
+        /// the folder of <see cref="Filename"/> is also searched), <see cref="BrandFonts.BarlowRegular"/> is used if no font is found.
         /// Supported attributes: x, y (numbers, px or % of the canvas size), text-anchor (start, middle, end), the font-size of the style attribute (default 12),
         /// and the non standard "textLength" (max width), "max-height", "max-scale-up" (default 1) and "vertical-align" (baseline (default), top, middle, bottom).
         /// The other attributes (and the style without the font) are copied to the path element.
@@ -193,7 +193,7 @@ namespace SysWeaver.Media
                 var fontWeight = style.FontWeight;
                 var fontStyle = style.FontStyle;
                 var fontSize = String.IsNullOrEmpty(style.FontSize) ? 12.0 : ToV(style.FontSize, 12.0);
-                var svgFont = SvgFont.GetOrCreate(font, fontStyle, fontWeight, extraFolders) ?? SvgFont.MontserratBlack;
+                var svgFont = SvgFont.GetOrCreate(font, fontStyle, fontWeight, extraFolders) ?? BrandFonts.BarlowRegular;
                 var paths = SvgPath.GetSvgTextPaths(value, svgFont, fontSize, 10);
                 var minMax = SvgPath.GetMinMaxForPaths(paths);
                 double scaleX = 1.0;

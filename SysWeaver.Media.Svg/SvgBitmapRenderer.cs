@@ -44,7 +44,7 @@ namespace SysWeaver.Media
         /// The last typeface provider used by Svg.Skia (after the system font manager and the default typeface), only used if the font family isn't installed.
         /// The SkiaSharp Linux native library (without dependencies) has no system font manager: without this text elements would not be drawn at all.
         /// Uses the font files found by <see cref="SvgFont.GetOrCreate(string, string, string, string[])"/> (font folders added with
-        /// <see cref="SvgFont.AddFontPath(string)"/> and the system font folder), else the embedded <see cref="SvgFont.MontserratBlack"/> font (like <see cref="SvgCanvas.RasterizeText"/>).
+        /// <see cref="SvgFont.AddFontPath(string)"/> and the system font folder), else the embedded <see cref="BrandFonts.BarlowRegular"/> font (like <see cref="SvgCanvas.RasterizeText"/>).
         /// </summary>
         sealed class FallbackTypefaceProvider : ITypefaceProvider
         {
@@ -74,7 +74,7 @@ namespace SysWeaver.Media
                 return SKTypeface.FromData(Fallback.Value);
             }
 
-            static readonly Lazy<SKData> Fallback = new Lazy<SKData>(() => SKData.CreateCopy(SvgFont.GetEmbeddedData(nameof(SvgFont.MontserratBlack))));
+            static readonly Lazy<SKData> Fallback = new Lazy<SKData>(() => SKData.CreateCopy(SvgFont.GetEmbeddedData(nameof(BrandFonts.BarlowRegular))));
         }
 
         static void Load(SKSvg s, Stream data)

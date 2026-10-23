@@ -534,7 +534,8 @@ This server supports the following sizes:
         {
             var svgS = new SvgScene(256, 256);
             var hash = (int)QuickHash.Hash(name + guid);
-            svgS.AddFavIcon(name, null, null, hash, OpaqueUserImage);
+            //svgS.AddFavIcon(name, null, null, hash, OpaqueUserImage);
+            svgS.AddUserIcon(name, null, hash, OpaqueUserImage);
             var svgText = svgS.ToSvg();
             var enc = Encoding.UTF8;
             var svgData = enc.GetBytes(svgText);

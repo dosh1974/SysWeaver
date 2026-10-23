@@ -74,46 +74,6 @@ namespace SysWeaver.Media
             }
             return v;
         }
-        static volatile SvgFont InternalAsianNinja;
-        static volatile SvgFont InternalAstroSpace;
-        static volatile SvgFont InternalAtariClassic;
-        static volatile SvgFont InternalMontserratBlack;
-        static volatile SvgFont InternalRedemtionRegular;
-        static volatile SvgFont InternalRoTwimchRegular;
-        static volatile SvgFont InternalVegapunkFree;
-
-
-        /// <summary>
-        /// The embedded "Asian Ninja" font (loaded on first use, the same instance is returned)
-        /// </summary>
-        public static SvgFont AsianNinja => InternalFont(() => InternalAsianNinja, nameof(AsianNinja), v => InternalAsianNinja = v);
-
-        /// <summary>
-        /// The embedded "Astro Space" font (loaded on first use, the same instance is returned)
-        /// </summary>
-        public static SvgFont AstroSpace => InternalFont(() => InternalAstroSpace, nameof(AstroSpace), v => InternalAstroSpace = v);
-        /// <summary>
-        /// The embedded "Atari Classic" font (loaded on first use, the same instance is returned)
-        /// </summary>
-        public static SvgFont AtariClassic => InternalFont(() => InternalAtariClassic, nameof(AtariClassic), v => InternalAtariClassic = v);
-        /// <summary>
-        /// The embedded "Montserrat Black" font (loaded on first use, the same instance is returned), the fallback font of <see cref="SvgCanvas.RasterizeText"/>
-        /// </summary>
-        public static SvgFont MontserratBlack => InternalFont(() => InternalMontserratBlack, nameof(MontserratBlack), v => InternalMontserratBlack = v);
-
-        /// <summary>
-        /// The embedded "Redemtion Regular" font (loaded on first use, the same instance is returned)
-        /// </summary>
-        public static SvgFont RedemtionRegular => InternalFont(() => InternalRedemtionRegular, nameof(RedemtionRegular), v => InternalRedemtionRegular = v);
-        /// <summary>
-        /// The embedded "RoTwimch Regular" font (loaded on first use, the same instance is returned)
-        /// </summary>
-        public static SvgFont RoTwimchRegular => InternalFont(() => InternalRoTwimchRegular, nameof(RoTwimchRegular), v => InternalRoTwimchRegular = v);
-        /// <summary>
-        /// The embedded "Vegapunk Free" font (loaded on first use, the same instance is returned)
-        /// </summary>
-        public static SvgFont VegapunkFree => InternalFont(() => InternalVegapunkFree, nameof(VegapunkFree), v => InternalVegapunkFree = v);
-
 
         /// <summary>
         /// Load a font from a stream (despite the name, nothing is cached, a new instance is returned on every call)
@@ -179,7 +139,7 @@ namespace SysWeaver.Media
         /// <param name="weight">The font weight, ex: "bold", may be null</param>
         /// <param name="extraFontFolders">Additional folders to search first (null entries are ignored)</param>
         /// <returns>The best matching font (the file with the highest rank among the files whose name contains a word of <paramref name="family"/>),
-        /// or null if no such font file was found (callers choose their own fallback, ex: <see cref="SvgCanvas.RasterizeText"/> uses <see cref="MontserratBlack"/>)</returns>
+        /// or null if no such font file was found (callers choose their own fallback, ex: <see cref="SvgCanvas.RasterizeText"/> uses <see cref="BrandFonts.BarlowRegular"/>)</returns>
         public static SvgFont GetOrCreate(String family, String style, String weight, params String[] extraFontFolders)
         {
             var key = String.Join('\n', family, weight, style);

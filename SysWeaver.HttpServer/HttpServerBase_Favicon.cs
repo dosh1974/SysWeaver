@@ -145,7 +145,8 @@ namespace SysWeaver.Net
                 if (svg != null)
                     return ValueTask.FromResult(svg);
                 var svgS = new SvgScene(256, 256);
-                svgS.AddFavIcon(EnvInfo.AppName, null, HashColors.AppColors);
+                //svgS.AddFavIcon(EnvInfo.AppName, null, HashColors.AppColors);
+                svgS.AddAppIcon(EnvInfo.AppDisplayName, HashColors.AppColors);
                 var svgText = svgS.ToSvg();
                 var enc = Encoding.UTF8;
                 var svgData = enc.GetBytes(svgText);
@@ -171,7 +172,8 @@ namespace SysWeaver.Net
             int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
             var svgS = new SvgScene(256, 256);
-            svgS.AddFavIcon(EnvInfo.AppName, null, new HashColors(EnvInfo.AppName, seed));
+            //svgS.AddFavIcon(EnvInfo.AppName, null, new HashColors(EnvInfo.AppName, seed));
+            svgS.AddAppIcon(EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
             var svgData = enc.GetBytes(svgText);
             var cmp = Comp;
@@ -285,7 +287,8 @@ namespace SysWeaver.Net
                     return ValueTask.FromResult(svg);
                 var enc = Encoding.UTF8;
                 var svgS = new SvgScene(512, 384);
-                svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, HashColors.AppColors);
+                //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, HashColors.AppColors);
+                svgS.AddAppLogo(EnvInfo.AppDisplayName, EnvInfo.AppDescription, HashColors.AppColors);
                 var svgText = svgS.ToSvg();
                 var svgData = enc.GetBytes(svgText);
                 var cmp = Comp;
@@ -310,7 +313,8 @@ namespace SysWeaver.Net
             int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
             var svgS = new SvgScene(512, 384);
-            svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
+            //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
+            svgS.AddAppLogo(EnvInfo.AppDisplayName, EnvInfo.AppDescription, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
             var svgData = enc.GetBytes(svgText);
             var cmp = Comp;

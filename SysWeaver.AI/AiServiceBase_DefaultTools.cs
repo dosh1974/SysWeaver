@@ -124,7 +124,11 @@ namespace SysWeaver.AI
             var svgS = logo.Icon ? new SvgScene(256, 256) : new SvgScene(512, 384);
             var name = logo.Name;
             var cols = new HashColors(name, logo.Seed);
-            svgS.AddFavIcon(String.IsNullOrEmpty(logo.Abbrevation) ? name : logo.Abbrevation, logo.Icon ? null : name, cols);
+            //svgS.AddFavIcon(String.IsNullOrEmpty(logo.Abbrevation) ? name : logo.Abbrevation, logo.Icon ? null : name, cols);
+            if (logo.Icon)
+                svgS.AddAppIcon(String.IsNullOrEmpty(logo.Abbrevation) ? name : logo.Abbrevation, cols);
+            else
+                svgS.AddAppLogo(String.IsNullOrEmpty(logo.Abbrevation) ? name : logo.Abbrevation, name, cols);
             var svgText = svgS.ToSvg();
             return c.AddMessageFile("image/svg+xml", svgText, logo.Title ?? (logo.Icon ? "Icon" : "Logo"));
         }

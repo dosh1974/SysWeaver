@@ -469,25 +469,16 @@ namespace SysWeaver.Media
             var gradP = FavIconGradients[rng.Next(FavIconGradients.Length)];
             SvgFont GetFont(bool onlyFull = false)
             {
-                switch (rng.Next(onlyFull ? 2 : 7))
+                switch (rng.Next(3))
                 {
                     case 0:
-                        return SvgFont.AtariClassic;
+                        return BrandFonts.BarlowRegular;
                     case 1:
-                        return SvgFont.MontserratBlack;
+                        return BrandFonts.BarlowMedium;
                     case 2:
-                        return SvgFont.AstroSpace;
-                    case 3:
-                        return SvgFont.AsianNinja;
-                    case 4:
-                        return SvgFont.RedemtionRegular;
-                    case 5:
-                        if (t.Length < 3)
-                            return SvgFont.RedemtionRegular;
-                        else
-                            return SvgFont.RoTwimchRegular;
+                        return BrandFonts.Saira;
                     default:
-                        return SvgFont.VegapunkFree;
+                        return BrandFonts.Saira;
                 }
             }
             SvgFont iconFont = GetFont();

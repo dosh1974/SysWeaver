@@ -136,13 +136,14 @@ namespace SimpleStack.Orm
             public OrmConnection Get(DbConnection connection, IDialectProvider dialectProvider, ILoggerFactory loggerFactory)
             {
                 var cache = Connections;
-                if (cache.TryPop(out var con))
+                while (cache.TryPop(out var con))
                 {
                     Interlocked.Decrement(ref CachedConnections);
-                    return con;
+                    if (con.State == ConnectionState.Open)
+                        return con;
+                    con.RealDispose();
                 }
-                con = new PooledConnection(this, connection, dialectProvider, loggerFactory);
-                return con;
+                return new PooledConnection(this, connection, dialectProvider, loggerFactory);
             }
 
             readonly ConcurrentStack<PooledConnection> Connections = new ConcurrentStack<PooledConnection>();
