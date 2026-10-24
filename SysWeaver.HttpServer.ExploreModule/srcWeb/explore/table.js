@@ -1887,18 +1887,19 @@ class Table {
 
         /** @type {number|null} Pending setTimeout id of the next Update, or null. */
         let timeout = null;
-        /** @type {boolean} True while Update runs; serializes updates (others poll with delay(10)). */
-        let isUpdating = false;
+        /**
+         * @type {number} Incremented by every Update; an update whose number isn't the latest has been superseded and
+         * ignores its result. Updates don't wait for each other, since a refresh may be blocked by the server until
+         * the data changes (long polling) and user changes (sorting, filtering etc) must be applied at once.
+         */
+        let generation = 0;
 
         /**
-         * Forces an immediate refresh: waits while an update is running (polling `delay(10)`), cancels the
-         * pending timer and starts `Update()` (not awaited). Returned to callers of addTable.
+         * Forces an immediate refresh: cancels the pending timer and starts `Update()` (not awaited), any running
+         * update is superseded (its result is ignored). Returned to callers of addTable.
          * @returns {Promise<void>}
          */
         async function UpdateNow() {
-            while (isUpdating) {
-                await delay(10);
-            }
             if (timeout)
                 clearTimeout(timeout);
             timeout = null;
@@ -1907,7 +1908,7 @@ class Table {
 
         /**
          * One refresh cycle of the update loop:
-         * 1. waits for a running update, sets `requestParams.Cc = cc` and `requestParams.Filters` (all filters
+         * 1. supersedes any running update (see `generation`), sets `requestParams.Cc = cc` and `requestParams.Filters` (all filters
          *    with a non-empty Value from all filter sets, or null), POSTs `sendRequest(url, requestParams, didChange)`;
          * 2. null data -> `Fail("No data found" / "No update found")` and retry in 3000 ms;
          * 3. on the first data: when no rows came back and Row > 0, resets Row to 0, saves and requests again;
@@ -1922,11 +1923,8 @@ class Table {
          */
         async function Update()
         {
-            while (isUpdating) {
-                await delay(10);
-            }
+            const gen = ++generation;
             timeout = null;
-            isUpdating = true;
             try {
                 //  Try to fetch new data
                 requestParams.Cc = cc;
@@ -1947,6 +1945,8 @@ class Table {
                     requestParams.Filters = null;
                 }
                 let data = await sendRequest(url, requestParams, didChange);
+                if (gen !== generation)
+                    return;
                 if (!data) {
                     if (first)
                         Fail(_TF("No data found", "An error message displayed when no initial data was returned from the server"));
@@ -1967,6 +1967,8 @@ class Table {
                         requestParams.Row = 0;
                         save();
                         data = await sendRequest(url, requestParams, didChange);
+                        if (gen !== generation)
+                            return;
                     }
                     if (useTitleAsName) {
                         const o = data.Title;
@@ -2014,6 +2016,8 @@ class Table {
 
             }
             catch (ex) {
+                if (gen !== generation)
+                    return;
                 //  If we failed to fetch the data, retry in a second
                 Fail(_TF("Failed to fetch data", "An error message displayed when there was an error to fetch table data from the server") + ": " + ex);
                 if (onFirstLoad) {
@@ -2021,9 +2025,6 @@ class Table {
                     onFirstLoad = null;
                 }
                 timeout = setTimeout(Update, 3000);
-            }
-            finally {
-                isUpdating = false;
             }
         }
         Update();

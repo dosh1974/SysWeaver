@@ -1232,6 +1232,13 @@ async function mediaViewMain() {
             Fail("No link parameter 'link' supplied!");
             return;
         }
+        //  Use the file name as title (like edit/text.js)
+        {
+            const path = data.split('?')[0];
+            const fname = path.substring(path.lastIndexOf('/') + 1);
+            if (fname)
+                document.title = fname;
+        }
 
         let type = ps.get('type') ?? ps.get('t');
         if (!type) {

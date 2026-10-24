@@ -85,7 +85,10 @@ namespace SysWeaver
         static readonly SearchValues<Char> InvalidFilenameChars = SearchValues.Create(GetInvalidFilenameChars().ToArray());
         static readonly SearchValues<Char> InvalidFolderPathChars = SearchValues.Create(GetInvalidFolderPathChars().ToArray());
 
-        static HashSet<Char> GetInvalidFilenameChars()
+        static readonly SearchValues<Char> InvalidFilenameCharsUnique = SearchValues.Create(GetInvalidFilenameChars("+").ToArray());
+
+
+        static HashSet<Char> GetInvalidFilenameChars(String extra = null)
         {
             var t = new HashSet<char>(Path.GetInvalidFileNameChars())
             {
@@ -96,6 +99,9 @@ namespace SysWeaver
             };
             foreach (var x in Path.GetInvalidPathChars())
                 t.Add(x);
+            if (extra != null)
+                foreach (var x in extra)
+                    t.Add(x);
             return t;
         }
 
@@ -122,6 +128,32 @@ namespace SysWeaver
                 t = t.Slice(i);
             }
         }
+
+
+        static void SetSafeUniqueFilename(Span<Char> d, String org)
+        {
+            // The first invalid char is known, replace it and search for the next one
+            var inv = InvalidFilenameCharsUnique;
+            var s = org.AsSpan();
+            var l = s.Length;
+            int di = 0;
+            for (int si = 0; si < l; ++ si)
+            {
+                var c = s[si];
+                if (inv.Contains(c))
+                {
+                    d[di] = '+';
+                    ++di;
+                    d.WriteHex((ushort)c, di);
+                    di += 4;
+                }else
+                {
+                    d[di] = c;
+                    ++di;
+                }
+            }
+        }
+        
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool InternalIsValidFilename(ReadOnlySpan<Char> filename)
@@ -226,6 +258,25 @@ namespace SysWeaver
             if (i < 0)
                 return s;
             return String.Create(s.Length, (s, i), SetSafeFilename);
+        }
+
+        /// <summary>
+        /// Replaces all bad filename chars with a sequence that makes it unique. 
+        /// "+" in the source is considered invalid.
+        /// All invalid chars are replaced with "+xxxx" where xxxx is the hexadecimal 
+        /// </summary>
+        /// <param name="s">The string to make into a safe filename, can be null or empty</param>
+        /// <returns>A string of the same length as the input where every char that is invalid in a file name (see <see cref="IsValidFilename(string)"/>) is replaced with a '_'.
+        /// If no chars needs to be replaced (or if the input is null or empty) the input instance is returned.
+        /// The rules of the OS that the process runs on are used: on Linux only '\0', '/' and ':' are replaced (ex: "a\b*c" is kept as is), so the result may not be a valid file name on Windows.</returns>
+        public static String SafeUniqueFilename(String s)
+        {
+            if (String.IsNullOrEmpty(s))
+                return s;
+            var i = s.AsSpan().CountAny(InvalidFilenameCharsUnique);
+            if (i <= 0)
+                return s;
+            return String.Create(s.Length + i * 5, s, SetSafeUniqueFilename);
         }
 
 
