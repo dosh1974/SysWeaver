@@ -291,6 +291,17 @@ namespace SysWeaver.Data
             => TableDataType<T>.GetAll(data);
 
         /// <summary>
+        /// Apply the column filters and free text search of a request to a sequence (no sorting or paging),
+        /// returning the same instances that survive, see <see cref="TableDataType{T}.FilterAndSearch"/>.
+        /// </summary>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="request">The request (only Filters and SearchText are used), may be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <returns>The filtered sequence (same instances).</returns>
+        public static IEnumerable<T> FilterAndSearch<T>(TableDataRequest request, IEnumerable<T> data)
+            => TableDataType<T>.FilterAndSearch(request, data);
+
+        /// <summary>
         /// Get table data from an enumerable sequence, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>

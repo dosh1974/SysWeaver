@@ -25,7 +25,9 @@
  * `../chart/chart.html` (SysWeaver.MicroService.ChartJs). All relative urls assume the host page lives one
  * folder below the site root.
  *
- * Storage: `localStorage["SysWeaver.Table." + hashString(url)]` = JSON TableDataState, saved on every change.
+ * Storage: `localStorage["SysWeaver.Table." + hashString(url)]` = JSON TableDataState, saved on every change
+ * (a caller that passes `keyParam`, i.e. the `?uniqueParam=` url param, instead keys by `hashString(url + "\0" + param)`
+ * so that param value keeps its own state; by default one endpoint shares a single state across all params).
  * Styled by table.css (which also styles ValueFormat cell output from common.js).
  */
 
@@ -234,7 +236,8 @@ class TableDataFilter {
 
 /**
  * Persisted per-table UI state (mirror of the C# `TableDataState`), stored as JSON in
- * `localStorage["SysWeaver.Table." + hashString(url)]` or passed in as `stateStr`.
+ * `localStorage["SysWeaver.Table." + hashString(url)]` (or `hashString(url + "\0" + keyParam)` when a caller opts
+ * into per-param state via `?uniqueParam=`) or passed in as `stateStr`.
  * Created by `Table.tableDefaultState()`; loaded objects are plain JSON objects repaired by `Table.addTable`.
  * Note: its `RequestParams` initializer calls `Table.tableDefaultRequest()`, which is fine because instances
  * are only created after the `Table` class has been defined.
@@ -1432,7 +1435,8 @@ class Table {
      * Creates a live, auto-refreshing data table for a table API - the main reusable entry point.
      *
      * Setup:
-     * - state key `"SysWeaver.Table." + await hashString(url)`; the state comes from `stateStr` (when given) or
+     * - state key `"SysWeaver.Table." + await hashString(url)` (or `hashString(url + "\0" + keyParam)` when the
+     *   caller opts into per-param state, see `keyParam`); the state comes from `stateStr` (when given) or
      *   localStorage, is JSON-parsed (invalid -> default) and repaired (missing RequestParams fields, FilterRows,
      *   Filters, AutoRowCount); `filter` replaces `state.Filters` with a single filter set; saved when repaired.
      *   `RequestParams.Param = tableParams`.
@@ -1454,16 +1458,30 @@ class Table {
      * @param {string} [stateStr] - JSON TableDataState used instead of the stored state.
      * @param {function(object):void} [onFirstData] - Called once with the first TableData received.
      * @param {string} [filter] - JSON of one TableDataFilter or an array of them; replaces the stored filters.
+     * @param {*} [keyParam] - When truthy, folded into the saved-state key so this value keeps its own filter/sort
+     *   state (key = `hashString(url + "\0" + keyParam)`); when absent the key is `hashString(url)` and all params
+     *   of the endpoint share one state. Supplied by `tableMain` from the `?uniqueParam=` url param.
      * @returns {Promise<{UpdateNow: function():Promise<void>}>} Resolves after setup; `UpdateNow` forces an
      *   immediate refresh (used e.g. by ServerManager keys.js after an upload).
      */
-    static async addTable(url, toElement, rowsPerPage, tableParams, onFirstLoad, tableName, stateStr, onFirstData, filter) {
+    static async addTable(url, toElement, rowsPerPage, tableParams, onFirstLoad, tableName, stateStr, onFirstData, filter, keyParam) {
         if (!toElement)
             toElement = document.body;
         if (!rowsPerPage)
             rowsPerPage = 25;
-        //  Get request params, define save function
-        const key = "SysWeaver.Table." + await hashString(url);
+        //  Get request params, define save function.
+        //  The persisted filter/sort state is keyed per table. By default a table is identified by its endpoint
+        //  (url) alone, so one endpoint serving many params shares a single saved state - which is usually what you
+        //  want (apply the same filter whatever the param is) and avoids unbounded growth when the param is
+        //  high-cardinality. A caller that genuinely needs independent state per value (e.g. Fenrir's /listen,
+        //  /process, /files and search-result tables all POST ../Fenrir/Table but must not share filters, or the
+        //  filters from one hide the data of another) passes `keyParam`: when present it is folded into the key, so
+        //  each distinct value keeps its own state. `tableMain` supplies it from the opt-in `?uniqueParam=` url
+        //  param. When absent the key is exactly `hashString(url)` as before - unchanged for every existing caller.
+        const keySeed = keyParam
+            ? (url + "\u0000" + (typeof keyParam === "string" ? keyParam : JSON.stringify(keyParam)))
+            : url;
+        const key = "SysWeaver.Table." + await hashString(keySeed);
         const useTitleAsName = !tableName;
 
         if (useTitleAsName) {
@@ -1944,6 +1962,16 @@ class Table {
                 } else {
                     requestParams.Filters = null;
                 }
+                // Tell a hosting window (ex: Fenrir) the current filters, so it can scope a background search to the shown rows
+                try {
+                    if (window.parent && (window.parent !== window))
+                        window.parent.postMessage({
+                            Type: "TableSearchParams",
+                            Param: requestParams.Param ?? null,
+                            Filters: requestParams.Filters,
+                            SearchText: requestParams.SearchText ?? null,
+                        }, "*");
+                } catch { }
                 let data = await sendRequest(url, requestParams, didChange);
                 if (gen !== generation)
                     return;
@@ -2085,13 +2113,21 @@ async function tableMain() {
         if (jp) {
             p = await Object.getPrototypeOf(async function () { }).constructor(jp)();
         }
+        //  `uniqueParam` opts this table into its own saved filter/sort state (it is folded into the storage key).
+        //  Used alone (`?uniqueParam=X`) it also supplies the request Param, so only one url param is needed. Used
+        //  together with `p`/`jp` it only seeds the key, while `p` stays the request Param - so a high-cardinality
+        //  Param (e.g. a per-folder value) can share one stable filter state keyed by a table-type label, without
+        //  growing a localStorage entry per value.
+        const uniqueParam = ps.get('uniqueParam');
+        if ((uniqueParam != null) && (p == null))
+            p = uniqueParam;
         await Table.addTable(url, null, ps.get('r'), p, removeLoader, tit, ps.get('s'), data => {
             if (tit)
                 return;
             const nt = data.Title;
             if (nt)
                 document.title = nt;
-        }, ps.get('f'));
+        }, ps.get('f'), uniqueParam);
     }
     finally {
         removeLoader();

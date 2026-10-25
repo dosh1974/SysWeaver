@@ -1004,6 +1004,35 @@ namespace SysWeaver.Data
         /// <param name="request">The request, may not be null.</param>
         /// <param name="data">The source data.</param>
         /// <returns>The resulting sequence, null if <paramref name="data"/> is null.</returns>
+        /// <summary>
+        /// Apply the column filters (<see cref="TableDataRequest.Filters"/>) and the free text search
+        /// (<see cref="TableDataRequest.SearchText"/>) of a request, without sorting or paging.
+        /// The surviving sequence contains the same instances as the source (useful to keep the original objects).
+        /// </summary>
+        /// <param name="request">The request (only Filters and SearchText are used), may be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <returns>The filtered sequence (same instances), null if <paramref name="data"/> is null.</returns>
+        public static IEnumerable<T> FilterAndSearch(TableDataRequest request, IEnumerable<T> data)
+        {
+            if (data == null)
+                return null;
+            if (request == null)
+                return data;
+            data = Filter(request.Filters, data);
+            var st = request.SearchText?.Trim();
+            if (!String.IsNullOrEmpty(st))
+            {
+                var gt = GetTexts;
+                if (gt != null)
+                {
+                    var ranker = TableDataTools.DefaultSearch.CreateRanker(st);
+                    var sw = SearchWeights;
+                    data = data.Where(x => ranker.Rank(sw, gt(x)) > 0.0);
+                }
+            }
+            return data;
+        }
+
         public static IEnumerable<T> SortAndFilter(TableDataOrderRequest request, IEnumerable<T> data)
         {
             if (data == null)
