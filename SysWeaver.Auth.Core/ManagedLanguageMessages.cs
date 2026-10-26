@@ -108,6 +108,7 @@ namespace SysWeaver
         /// <param name="texts">The text messages, keys must be lower case</param>
         /// <param name="mails">The mail messages, keys must be lower case</param>
         /// <param name="notifications">The web notifications messages, keys must be lower case</param>
+        /// <param name="whatsApps">The whatsApps messages, keys must be lower case</param>
         public ManagedLanguageMessages(String language, IReadOnlyDictionary<string, ManagedTextMessage> texts, IReadOnlyDictionary<string, ManagedMailMessage> mails, IReadOnlyDictionary<string, ManagedNotificationMessage> notifications, IReadOnlyDictionary<string, ManagedWhatsAppMessage> whatsApps)
         {
             Language = language;
