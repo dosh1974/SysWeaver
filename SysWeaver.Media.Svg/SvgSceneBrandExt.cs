@@ -156,6 +156,80 @@ public static class SvgSceneBrandExt
     }
 
     /// <summary>
+    /// Add a generated app banner (made for a 1200 x 400 scene, other sizes are scaled to fit and centered): the app icon (same as <see cref="AddAppIcon"/>) in the
+    /// left 400 x 400 square, with the tile background stretched to the full width, and the name as a wordmark with an optional sub title to the right.
+    /// </summary>
+    /// <param name="scene">The scene to add the banner to</param>
+    /// <param name="name">The name of the app</param>
+    /// <param name="subTitle">An optional sub title (ignored if null, empty or the same as the name)</param>
+    /// <param name="color">The colors to use (should be the app colors, <see cref="HashColors.AppColors"/>), null to derive them from the name and seed</param>
+    /// <param name="seed">A seed, used to derive the colors (if <paramref name="color"/> is null) and to vary the design</param>
+    /// <param name="opaque">If true the banner covers the scene, else the banner is a soft rectangle with transparent corners (the same corners as the icon)</param>
+    public static void AddAppBanner(this SvgScene scene, String name, String subTitle, HashColors color = null, int seed = 0, bool opaque = false)
+    {
+        const double BW = 1200;
+        const double BH = 400;
+        var d = MarkDesign.Create(name, color, seed, false);
+        name = d.Name.Trim();
+        var pal = d.Palette;
+        var w = scene.Width;
+        var h = scene.Height;
+        var s = Math.Min(w / BW, h / BH);
+        var g = new StringBuilder();
+        if (opaque)
+            g.Append($"<rect width='{F(w)}' height='{F(h)}' fill='{pal.Background}'/>");
+        g.Append($"<g transform='translate({F((w - BW * s) * 0.5)} {F((h - BH * s) * 0.5)}) scale({S(s)})'>");
+        //  The icon, with the tile stretched to the full width (small scenes get the same small variant as the icon would at that size)
+        var px = BH * s;
+        DrawMark(scene, g, d, pal, 0, 0, BH, true, opaque, px <= SmallSize ? px : 0, U * BW / BH);
+        //  Text, left aligned next to the icon (the mark has its own padding inside the tile) and centered vertically on the icon
+        const double m = 56;
+        const double gap = 8;
+        //  Minimum cap heights (in the 1200 x 400 layout): a name that would get smaller is wrapped to two lines, a smaller sub title is dropped
+        const double MinNameCap = 52;
+        const double MinSubCap = 12;
+        var sub = subTitle?.Trim();
+        if (String.IsNullOrEmpty(sub) || String.Equals(sub, name, StringComparison.OrdinalIgnoreCase))
+            sub = null;
+        var one = new BrandText(name, BrandFonts.Saira);
+        if (!one.IsEmpty)
+        {
+            var tx = BH + gap;
+            var textW = BW - tx - m;
+            var nameLines = NameLines(name, one, sub != null ? 100 : 116, MinNameCap, textW, out var capN);
+            var lineStep = capN * (1.3 + nameLines.Max(x => x.Text.DescentPerCap));
+            var subLines = SubTitleLines(sub, capN * 0.42, MinSubCap, textW, out var capS, out _);
+            var gapS = subLines.Count > 0 ? Math.Max(capN * 0.36, nameLines[^1].Text.DescentPerCap * capN + capS * 0.5) : 0;
+            var subStep = capS * 1.7;
+            var nameH = capN + (nameLines.Count - 1) * lineStep;
+            var blockH = nameH + (subLines.Count > 0 ? gapS + capS + (subLines.Count - 1) * subStep : 0);
+            //  Too tall (two name lines and two sub title lines): scale the whole text block down
+            var k = Math.Min(1, (BH - 2 * m) / blockH);
+            capN *= k;
+            lineStep *= k;
+            capS *= k;
+            gapS *= k;
+            subStep *= k;
+            nameH *= k;
+            blockH *= k;
+            var ty = (BH - blockH) * 0.5;
+            var sy = ty + nameH + gapS;
+            foreach (var (text, offset) in nameLines)
+            {
+                Wordmark(g, text, offset, capN, tx, ty, pal, d.LogoHighlightStart, d.LogoHighlightLength);
+                ty += lineStep;
+            }
+            foreach (var line in subLines)
+            {
+                Fill(g, line.Place(capS, tx, sy), pal.Secondary);
+                sy += subStep;
+            }
+        }
+        g.Append("</g>");
+        scene.AddGeometry(g.ToString());
+    }
+
+    /// <summary>
     /// Layout a name: one line if it fits at a cap height of at least minCap, else split into two lines at the word (or camel case) boundary closest to the middle
     /// </summary>
     /// <param name="name">The name</param>
@@ -494,19 +568,25 @@ public static class SvgSceneBrandExt
     /// <param name="tile">True to draw the tile (background)</param>
     /// <param name="square">True to draw a full bleed square tile</param>
     /// <param name="px">If greater than zero, draw the small variant made for this pixel size</param>
-    static void DrawMark(SvgScene scene, StringBuilder g, MarkDesign d, BrandPalette pal, double x, double y, double size, bool tile, bool square, double px)
+    /// <param name="tileWidth">The width of the tile (in the 256 x 256 mark coordinate system), a wider tile stretches the background to the right (the mark itself is unchanged)</param>
+    static void DrawMark(SvgScene scene, StringBuilder g, MarkDesign d, BrandPalette pal, double x, double y, double size, bool tile, bool square, double px, double tileWidth = U)
     {
         var bg = pal.Background;
         var small = px > 0;
         g.Append($"<g transform='translate({F(x)} {F(y)}) scale({S(size / U)})'>");
         var circle = d.IsCircle && !square;
         var radius = d.TileRadius * U;
+        var wide = tileWidth > U;
         if (tile)
         {
             var shape = square
                 ? "<rect width='256' height='256'/>"
                 : (circle ? "<circle cx='128' cy='128' r='128'/>" : $"<rect width='256' height='256' rx='{F(radius)}'/>");
-            g.Append(WithFill(shape, bg));
+            //  A wide tile only stretches the background, the contents are still clipped to the square tile shape (so the mark is identical)
+            var bgShape = !wide
+                ? shape
+                : (square ? $"<rect width='{F(tileWidth)}' height='256'/>" : $"<rect width='{F(tileWidth)}' height='256' rx='{F(radius)}'/>");
+            g.Append(WithFill(bgShape, bg));
             var mask = scene.AddMask(shape);
             g.Append($"<g mask='url(#{mask})'>");
         }
@@ -830,16 +910,20 @@ public static class SvgSceneBrandExt
             //  A thin edge, so the tile is visible on any background: one pixel for small sizes,
             //  a subtle tone on tone edge for large bright tiles (none for large dark tiles, no "outline" effect)
             var edge = small ? pal.Edge : pal.EdgeLarge;
+            //  The edge of a wide tile is outside of the (square) mask
+            if (wide)
+                g.Append("</g>");
             if (!square && (edge != null))
             {
                 var ew = small ? U / px : 0.012 * U;
                 var h = ew * 0.5;
-                if (circle)
+                if (circle && !wide)
                     g.Append($"<circle cx='128' cy='128' r='{F(128 - h)}' fill='none' stroke='{pal.Edge}' stroke-width='{F(ew)}'/>");
                 else
-                    g.Append($"<rect x='{F(h)}' y='{F(h)}' width='{F(U - ew)}' height='{F(U - ew)}' rx='{F(Math.Max(0, radius - h))}' fill='none' stroke='{pal.Edge}' stroke-width='{F(ew)}'/>");
+                    g.Append($"<rect x='{F(h)}' y='{F(h)}' width='{F(tileWidth - ew)}' height='{F(U - ew)}' rx='{F(Math.Max(0, radius - h))}' fill='none' stroke='{pal.Edge}' stroke-width='{F(ew)}'/>");
             }
-            g.Append("</g>");
+            if (!wide)
+                g.Append("</g>");
         }
         g.Append("</g>");
     }

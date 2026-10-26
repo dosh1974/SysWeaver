@@ -36,6 +36,11 @@
     <Folder Include="data\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The generated icon example checks the contrast of the internal mark designs -->
+    <InternalsVisibleTo Include="SvgIconExample" />
+  </ItemGroup>
+
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\*+ .\data" />
 		<ItemGroup>

@@ -380,9 +380,6 @@ namespace SysWeaver.Net
 
         #region Handlers
 
-        //https://atlasiko.com/blog/web-development/favicon-size/
-
-
         async ValueTask<IHttpRequestHandler> HandleLogoPng(HttpServerRequest data, HttpSession session, int sizeAndKey)
         {
             var bm = await GetLogoBitmapRenderer(data, session).ConfigureAwait(false);
@@ -395,8 +392,137 @@ namespace SysWeaver.Net
 
         #endregion//Handlers
 
-
         #endregion//Logo
+
+        #region Banner
+
+        readonly AsyncLock BannerLock = new AsyncLock();
+
+        #region Auto gen
+
+        /// <summary>
+        /// Optional end point "banner.svg", a generated Banner (from the app name, display name and colors) used when no module serves one.
+        /// </summary>
+        ValueTask<IHttpRequestHandler> HandleBannerSvg(HttpServerRequest data, HttpSession session)
+        {
+            var svg = CachedBannerSvg;
+            if (svg != null)
+                return ValueTask.FromResult(svg);
+            lock (BannerLock)
+            {
+                svg = CachedBannerSvg;
+                if (svg != null)
+                    return ValueTask.FromResult(svg);
+                var enc = Encoding.UTF8;
+                var svgS = new SvgScene(1200, 400);
+                //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, HashColors.AppColors);
+                svgS.AddAppBanner(EnvInfo.AppDisplayName, EnvInfo.AppDescription, HashColors.AppColors);
+                var svgText = svgS.ToSvg();
+                var svgData = enc.GetBytes(svgText);
+                var cmp = Comp;
+                var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
+                svg = new StaticMemoryHttpRequestHandler("banner.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
+                Interlocked.Exchange(ref CachedBannerSvg, svg);
+                return ValueTask.FromResult(svg);
+            }
+        }
+
+
+        /// <summary>
+        /// Optional end point "banner_debug.svg", a generated Banner using the color seed in the query string (requires the "debug" token).
+        /// </summary>
+        ValueTask<IHttpRequestHandler> HandleBannerDebugSvg(HttpServerRequest data, HttpSession session)
+        {
+            var auth = session?.Auth?.Tokens;
+            if (auth == null)
+                return HttpServerTools.NullHttpRequestHandlerValueTask;
+            if (!auth.Contains("debug"))
+                return HttpServerTools.NullHttpRequestHandlerValueTask;
+            int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
+            var enc = Encoding.UTF8;
+            var svgS = new SvgScene(1200, 400);
+            //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
+            svgS.AddAppBanner(EnvInfo.AppDisplayName, EnvInfo.AppDescription, new HashColors(EnvInfo.AppName, seed));
+            var svgText = svgS.ToSvg();
+            var svgData = enc.GetBytes(svgText);
+            var cmp = Comp;
+            var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
+            var svgHandler = new StaticMemoryHttpRequestHandler("banner_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
+            return ValueTask.FromResult((IHttpRequestHandler)svgHandler);
+        }
+
+        #endregion//Auto gen
+
+
+        #region Render
+
+        readonly AsyncLock BannerRendererLock = new AsyncLock();
+        volatile SvgBitmapRenderer SvgBannerBitmapRenderer;
+        volatile IHttpRequestHandler CachedBannerSvg;
+
+        DateTime LastBannerCheck;
+        volatile int BannerCheck;
+        volatile String BannerLastModified;
+
+        readonly ConcurrentDictionary<int, Tuple<IHttpRequestHandler, SvgBitmapRenderer>> CachedBannerSizes = new();
+
+
+        /// <summary>
+        /// Get the renderer for the current "banner.svg" (whatever module serves it), re-reading the svg at most every 15 seconds if it changed.
+        /// </summary>
+        /// <remarks>A replaced renderer is not disposed (other requests may still be rendering with it), it's released by the GC.</remarks>
+        async Task<SvgBitmapRenderer> GetBannerBitmapRenderer(HttpServerRequest data, HttpSession session)
+        {
+            var bm = SvgBannerBitmapRenderer;
+            var check = Interlocked.Exchange(ref BannerCheck, 0) != 0;
+            if ((bm != null) && check)
+            {
+                using var _ = await BannerRendererLock.Lock().ConfigureAwait(false);
+                var memLast = await InternalRead(data.Prefix + "banner.svg", session, BannerLastModified).ConfigureAwait(false);
+                if (memLast == null)
+                    return bm;
+                bm = new SvgBitmapRenderer(memLast.Item1);
+                Interlocked.Exchange(ref BannerLastModified, memLast.Item2);
+                //  Don't dispose the replaced renderer, other requests may still be rendering with it (it's released by the GC)
+                Interlocked.Exchange(ref SvgBannerBitmapRenderer, bm);
+                CachedBannerSizes.Clear();
+            }
+            else
+            {
+                if (bm != null)
+                    return bm;
+                using var _ = await BannerRendererLock.Lock().ConfigureAwait(false);
+                bm = SvgBannerBitmapRenderer;
+                if (bm != null)
+                    return bm;
+                var memLast = await InternalRead(data.Prefix + "banner.svg", session).ConfigureAwait(false);
+                bm = new SvgBitmapRenderer(memLast.Item1);
+                Interlocked.Exchange(ref BannerLastModified, memLast.Item2);
+                Interlocked.Exchange(ref SvgBannerBitmapRenderer, bm)?.Dispose();
+                return bm;
+            }
+            return bm;
+        }
+
+        #endregion//Render
+
+        #region Handlers
+
+        async ValueTask<IHttpRequestHandler> HandleBannerPng(HttpServerRequest data, HttpSession session, int sizeAndKey)
+        {
+            var bm = await GetBannerBitmapRenderer(data, session).ConfigureAwait(false);
+            return await HandleSvgToPng(data, session, sizeAndKey, bm, CachedBannerSizes, BannerLock, sizeAndKey / 3).ConfigureAwait(false);
+        }
+
+        ValueTask<IHttpRequestHandler> HandleBannerPng1200(HttpServerRequest data, HttpSession session)
+            => HandleBannerPng(data, session, 1200);
+
+
+        #endregion//Handlers
+
+
+        #endregion//Banner
+
 
     }
 }

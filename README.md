@@ -200,6 +200,16 @@ Public methods marked `[WebApi]` on any registered service are published under `
 
 The HTTP server embeds a single-page application shell. Services extend it declaratively: `[WebMenu*]` attributes add menu items; table-data APIs are shown in a generic, sortable, filterable grid ([SysWeaver.TableData](SysWeaver.TableData/README.md)); charts ([SysWeaver.MicroService.ChartJs](SysWeaver.MicroService.ChartJs/README.md)), an object editor ([SysWeaver.MicroService.Edit](SysWeaver.MicroService.Edit/README.md)), dashboards and exporters build on the same model. Files in a project's `web/` folder, embedded as resources, are served automatically.
 
+**App icon, logo and banner.** Every server serves three source images in the site root. If no module, and no folder on disc, serves them, the server generates them from the app's display name, description and colors:
+
+| File | Aspect | Example size |
+|---|---|---|
+| `icon.svg` | 1:1 | 256 x 256 |
+| `logo.svg` | 4:3 | 512 x 384 |
+| `banner.svg` | 3:1 | 1200 x 400 |
+
+The server renders all other icons and logos from these three files, whether they were provided or generated: `favicon.ico` (192 x 192, 48 x 48, 32 x 32 and 16 x 16 in one file), `apple-touch-icon.png` (180 x 180), `icon-180.png` (180 x 180), `icon-192.png` (192 x 192) and `icon-512.png` (512 x 512) from `icon.svg`, `logo.png` (1024 x 768) from `logo.svg`, and `banner.png` (1200 x 400) from `banner.svg`. To brand an application, provide the three svg files. Details: [SysWeaver.HttpServer](SysWeaver.HttpServer/README.md#app-icon-logo-and-banner).
+
 ### Security
 
 Authentication is delegated to an `AuthManager` that consults pluggable authorizers (static users, a MySQL user manager, passkeys). Roles are plain tokens — standard ones are Admin, Ops, Dev, Debug and Service. Certificates come from provider services (file, self-signed, own CA, LAN manager, ACME). Sensitive calls can be audited.

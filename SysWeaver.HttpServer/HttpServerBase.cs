@@ -208,6 +208,11 @@ namespace SysWeaver.Net
             oeps["logo_debug.svg"] = HandleLogoDebugSvg;
             oeps["logo.png"] = HandleLogoPng1024;
 
+            oeps["banner.svg"] = HandleBannerSvg;
+            oeps["banner_debug.svg"] = HandleBannerDebugSvg;
+            oeps["banner.png"] = HandleBannerPng1200;
+
+
             oeps["app/app.css"] = HandleEmpty;
             oeps["app/app.js"] = HandleEmpty;
 
@@ -559,6 +564,12 @@ namespace SysWeaver.Net
                 {
                     Interlocked.Exchange(ref LogoCheck, 1);
                     LastLogoCheck = now;
+                }
+                now = DateTime.UtcNow;
+                if ((now - LastBannerCheck) > TimeSpan.FromSeconds(15))
+                {
+                    Interlocked.Exchange(ref BannerCheck, 1);
+                    LastBannerCheck = now;
                 }
             }
             using (PerfMon.Track(nameof(Prune) + ".Cache"))

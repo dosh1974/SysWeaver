@@ -63,11 +63,39 @@ sequenceDiagram
 - **Transformers:** services implementing `IHttpTransformerService` register conversions by file extension or MIME type; `CachedTransformer` is the base for transformers whose results (smaller or better supported variants) are cached on disc. They run for non-dynamic responses with an ETag; a query string starting with `raw` bypasses them.
 - **Push messages:** a long-poll channel through which the server pushes messages to a session, a user, all logged in users or all sessions.
 - **Translation:** with a translator registered, responses and web assets are translated to the session language.
-- **Built-in end points:** `logout`, `auth/redirect`, `auth/logout_user` and `serverTime`, plus fall-backs used when no module serves them (`login`, `basic_auth`, generated favicons and logos from the app name and colors, empty `app/app.css` / `app/app.js`).
+- **Built-in end points:** `logout`, `auth/redirect`, `auth/logout_user` and `serverTime`, plus fall-backs used when no module serves them (`login`, `basic_auth`, the generated app icon, logo and banner and the bitmaps rendered from them, see [App icon, logo and banner](#app-icon-logo-and-banner), empty `app/app.css` / `app/app.js`).
 - **Web application shell:** an embedded single-page application (home and welcome pages, tabs, tags, themes, common scripts) that other projects extend with their own pages and menus.
 - **HTTPS and firewall:** certificate binding from certificate provider services (`CertificateBinder`) and optional firewall rules per listen prefix (`FirewallHandler.Instance` picks `WindowsFirewallHandler`, `LinuxFirewallHandler` or `NoFirewallHandler`).
 - **Diagnostics:** tables of APIs, sessions, users, caches, MIME types, template variables and transformer caches.
 - **In-process API invocation** (`IApiHttpServerEndPoint.InvokeAsync`) for AI tools and other services. It performs no auth, rate limit or cache checks, so callers must check `Auth` themselves.
+
+## App icon, logo and banner
+
+The server always has three source images, served in the site root:
+
+| File | Aspect | Example size | Generated when missing (`SvgScene`) |
+|---|---|---|---|
+| `icon.svg` | 1:1 | 256 x 256 | `AddAppIcon(AppDisplayName, colors)` |
+| `logo.svg` | 4:3 | 512 x 384 | `AddAppLogo(AppDisplayName, AppDescription, colors)` |
+| `banner.svg` | 3:1 | 1200 x 400 | `AddAppBanner(AppDisplayName, AppDescription, colors)` |
+
+These are optional end points: they are generated only if no module serves the file, e.g. an embedded `web/icon.svg` in any project or a file in a folder served from disc (`FileHttpServerModule`). The generated images use the app's display name, description and colors (`HashColors.AppColors`, derived from the app name).
+
+All other icons and logos are rendered from these three files, whether they are provided or generated. They are never needed as files:
+
+| File | Size | Rendered from |
+|---|---|---|
+| `favicon.ico` | 192 x 192, 48 x 48, 32 x 32 and 16 x 16 (four png images in one file) | `icon.svg` |
+| `apple-touch-icon.png` | 180 x 180 | `icon.svg` |
+| `icon-180.png` | 180 x 180 | `icon.svg` |
+| `icon-192.png` | 192 x 192 | `icon.svg` |
+| `icon-512.png` | 512 x 512 | `icon.svg` |
+| `logo.png` | 1024 x 768 | `logo.svg` |
+| `banner.png` | 1200 x 400 | `banner.svg` |
+
+A module can still serve any of these bitmaps itself, which overrides the rendered one. To brand an application, provide the three svg files and let the server render the rest. Keep the aspect ratios, because the bitmaps are rendered at the sizes above.
+
+The rendered bitmaps are cached in memory. The server checks the source svg for changes at most every 15 seconds and renders the bitmaps again when it has changed. With the `debug` token, `icon_debug.svg`, `logo_debug.svg` and `banner_debug.svg` generate the images with another color seed given in the query string (e.g. `icon_debug.svg?42`).
 
 ## Key components
 

@@ -38,7 +38,7 @@ Some of the files are served as templates with `${Variable}` substitution (by de
   - Mobile/PWA meta tags and a viewport with zoom disabled.
   - `defer` scripts in order: `common/common.js`, `app/application.js`, `app/app.js`.
   - Stylesheets in order: `common/theme.css` (also a template), `app/application.css`, `app/app.css`.
-  - Icons `favicon.ico`, `icon.svg`, `apple-touch-icon.png` and `app/manifest.json`, all served by `HttpServerBase` optional end points or templates.
+  - Icons `favicon.ico`, `icon.svg`, `apple-touch-icon.png` and `app/manifest.json`, all served by `HttpServerBase` optional end points or templates. `icon.svg` is generated if no module serves it, and the bitmaps are rendered from it (see [App icon, logo and banner](../README.md#app-icon-logo-and-banner)).
   - `<body onload="appMain()">`.
 - Because all scripts are `defer`, `common.js` has run its top-level setup (theme selection, `window.Mobile`/`window.Narrow`, the `SwMobile`/`SwNarrow` body classes, the `?useTheme=` parameter) before `onload` calls `appMain()`. The full sequence is described in [`app/README.md`](app/README.md#behavior-web-analysis):
   1. loading overlay;
