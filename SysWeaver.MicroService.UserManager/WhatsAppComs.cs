@@ -17,7 +17,7 @@ namespace SysWeaver.MicroService
             TextSender = manager.Get<ITextMessageSender>(p.Instance);
 
             var m = Messages;
-            m[(int)UserManagerComOps.Invite] = new(p.Invite ?? "data.InviteNotification.md");
+            m[(int)UserManagerComOps.Invite] = new (p.Invite ?? "data.InviteNotification.md");
             m[(int)UserManagerComOps.SignUp] = new(p.SignUp ?? "data.SignUpNotification.md");
             m[(int)UserManagerComOps.DeleteUser] = new(p.DeleteUser ?? "data.DeleteUserNotification.md");
             m[(int)UserManagerComOps.ResetPassword] = new(p.ResetPassword ?? "data.ResetPasswordNotification.md");
@@ -63,13 +63,13 @@ namespace SysWeaver.MicroService
         public Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system)
         {
             bool haveLang = messages != null;
-            var m = haveLang ? messages.GetText(ops) : Messages[(int)ops];
+            var m = haveLang ? messages.GetWhatsApp(ops.ToString()) : Messages[(int)ops];
             if (m == null)
                 throw new Exception("Undefined text message " + ops);
             PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);
             target = String.Join(' ', pre, num);
-            var header = (haveLang ? messages.GetText("Header") : Header)?.GetMessage(vars) ?? "";
-            var footer = (haveLang ? messages.GetText("Footer") : Footer)?.GetMessage(vars) ?? "";
+            var header = (haveLang ? messages.GetWhatsApp("Header") : Header)?.GetMessage(vars) ?? "";
+            var footer = (haveLang ? messages.GetWhatsApp("Footer") : Footer)?.GetMessage(vars) ?? "";
             vars["[Header]"] = header;
             vars["[Footer]"] = footer;
             var body = m.GetMessage(vars);
@@ -78,14 +78,14 @@ namespace SysWeaver.MicroService
 
         public Task Send(String message, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system, params ManagedLanguageMessages[] fallbacks)
         {
-            ManagedTextMessage get(String mm)
+            ManagedWhatsAppMessage get(String mm)
             {
-                var m = messages?.GetText(mm);
+                var m = messages?.GetWhatsApp(mm);
                 if (m != null)
                     return m;
                 foreach (var x in fallbacks)
                 {
-                    m = x.GetText(mm);
+                    m = x.GetWhatsApp(mm);
                     if (m != null)
                         return m;
                 }
@@ -103,9 +103,9 @@ namespace SysWeaver.MicroService
             var body = m.GetMessage(vars);
             return TextSender.Send(target, body, system);
         }
-        readonly UmManagedTextMessage[] Messages = new UmManagedTextMessage[(int)UserManagerComOps.Count];
-        readonly UmManagedTextMessage Header;
-        readonly UmManagedTextMessage Footer;
+        readonly ManagedWhatsAppMessage[] Messages = new ManagedWhatsAppMessage[(int)UserManagerComOps.Count];
+        readonly ManagedWhatsAppMessage Header;
+        readonly ManagedWhatsAppMessage Footer;
 
     }
 
