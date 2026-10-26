@@ -115,6 +115,7 @@ namespace SysWeaver
             Texts = texts;
             Mails = mails;
             Notifications = notifications;
+            WhatsAppMessages = whatsApps;
         }
 
 

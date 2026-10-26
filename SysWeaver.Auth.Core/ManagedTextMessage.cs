@@ -146,7 +146,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="body">A file name, embedded resource name or the template text</param>
         /// <param name="vars">Additional variables (in addition to <see cref="ManagedVars.TextVars"/>), may be null</param>
-        public ManagedWhatsAppMessage(String body, IReadOnlySet<String> vars)
+        public ManagedWhatsAppMessage(String body, IReadOnlySet<String> vars = null)
         {
             Body = body;
             Vars = vars.Freeze();

@@ -3,7 +3,7 @@
 
 namespace SysWeaver.MicroService
 {
-    public sealed class PhoneComsParams : ComsParams
+    public sealed class SmsComsParams : ComsParams
     {
 
         /// <summary>
@@ -98,5 +98,6 @@ namespace SysWeaver.MicroService
 
 
     }
+
 
 }
