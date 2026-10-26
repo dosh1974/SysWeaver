@@ -5,14 +5,15 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
-    public sealed class PhoneComs : IUserManagerComs
+    public sealed class SmsComs : IUserManagerComs
     {
-        public String Name => "Phone";
+        public String Name => "Sms";
+
         public bool AllowSignUp { get; init; }
 
-        public PhoneComs(ServiceManager manager, PhoneComsParams p)
+        public SmsComs(ServiceManager manager, SmsComsParams p)
         {
-            p = p ?? new PhoneComsParams();
+            p = p ?? new SmsComsParams();
             AllowSignUp = p.AllowSignUp;
             TextSender = manager.Get<ITextMessageSender>(p.Instance);
 
@@ -104,8 +105,6 @@ namespace SysWeaver.MicroService
             return TextSender.Send(target, body, system);
         }
 
-        static readonly Char[] TrimChars = "\n\t\r ".ToCharArray();
-
         readonly UmManagedTextMessage[] Messages = new UmManagedTextMessage[(int)UserManagerComOps.Count];
         readonly UmManagedTextMessage Header;
         readonly UmManagedTextMessage Footer;
@@ -121,5 +120,6 @@ namespace SysWeaver.MicroService
         {
         }
     }
+
 
 }

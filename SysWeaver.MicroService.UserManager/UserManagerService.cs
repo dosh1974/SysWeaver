@@ -102,7 +102,7 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            if (!ComsMethods.Contains("Email"))
+            if (!ComsMethods.ContainsKey("Email"))
                 return false;
             var uid = GetUid(s.Auth);
             if (uid == 0)
@@ -117,7 +117,7 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            if (!ComsMethods.Contains("Email"))
+            if (!ComsMethods.ContainsKey("Email"))
                 return false;
             var uid = GetUid(s.Auth);
             if (uid == 0)
@@ -130,7 +130,7 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            if (!ComsMethods.Contains("Email"))
+            if (!ComsMethods.ContainsKey("Email"))
                 return false;
             var uid = GetUid(s.Auth);
             if (uid == 0)
@@ -145,7 +145,7 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            if (!ComsMethods.Contains("Phone"))
+            if (!(ComsMethods.ContainsKey("Sms") || ComsMethods.ContainsKey("WhatsApp")))
                 return false;
             var uid = GetUid(s.Auth);
             if (uid == 0)
@@ -160,7 +160,7 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            if (!ComsMethods.Contains("Phone"))
+            if (!(ComsMethods.ContainsKey("Sms") || ComsMethods.ContainsKey("WhatsApp")))
                 return false;
             var uid = GetUid(s.Auth);
             if (uid == 0)
@@ -173,7 +173,7 @@ namespace SysWeaver.MicroService
             var s = context.Session;
             if (s == null)
                 return false;
-            if (!ComsMethods.Contains("Phone"))
+            if (!(ComsMethods.ContainsKey("Sms") || ComsMethods.ContainsKey("WhatsApp")))
                 return false;
             var uid = GetUid(s.Auth);
             if (uid == 0)
@@ -189,6 +189,8 @@ namespace SysWeaver.MicroService
             "Database: ", Params.ToString()
             );
 
+        readonly bool SendAllComs;
+
         public UserManagerService(ServiceManager manager, UserManagerParams p)
         {
             p = p ?? new();
@@ -196,12 +198,52 @@ namespace SysWeaver.MicroService
             InternalPasswordPolicy = p.PasswordPolicy ?? new PasswordPolicy();
             DisableLogin = p.DisableLogin;
             //  Add and setup communication methods
-            List<IUserManagerComs> coms = new List<IUserManagerComs>(manager.GetAll<IUserManagerComs>(ServiceInstanceTypes.LocalOnly, ServiceInstanceOrders.Oldest));
-            if ((coms.Count == 0) && (!p.DisableLogin))
-                coms.Add(new EmailComs(manager, null));
-            Coms = coms.ToArray();
-            ComsMethods = new HashSet<string>(coms.Select(x => x.Name), StringComparer.Ordinal).Freeze();
-            InternalSignUpMethods = coms.Where(x => x.AllowSignUp).Select(x => x.Name).ToArray();
+            var allComs = manager.GetAllInfo<IUserManagerComs>(ServiceInstanceTypes.LocalOnly, ServiceInstanceOrders.Oldest).ToList();
+            if ((allComs.Count == 0) && (!p.DisableLogin))
+                allComs.Add(new KeyValuePair<IUserManagerComs, ServiceInfo>(new EmailComs(manager, null), null));
+            Dictionary<String, IUserManagerComs> valid = new Dictionary<string, IUserManagerComs>(StringComparer.Ordinal);
+            foreach (var x in allComs)
+            {
+                var i = x.Key;
+                var name = i.Name;
+                var inst = x.Value?.Name;
+                if (!String.IsNullOrEmpty(inst))
+                    valid[$"{name}\n{inst}"] = i;
+                valid[name] = i;
+            }
+
+            List<IUserManagerComs> orderedComs = new(allComs.Count);
+            var comsOrder = p.ComsOrder?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            SendAllComs = (comsOrder?.Length ?? 0) <= 0;
+            if (SendAllComs)
+            {
+                if (valid.TryGetValue(String.IsNullOrEmpty(p.EmailInstance) ? "Email" : $"Email\n{p.EmailInstance}", out var com))
+                    orderedComs.Add(com);
+                if (valid.TryGetValue(String.IsNullOrEmpty(p.WhatsAppInstance) ? "WhatsApp" : $"WhatsApp\n{p.WhatsAppInstance}", out com))
+                    orderedComs.Add(com);
+                if (valid.TryGetValue(String.IsNullOrEmpty(p.SmsInstance) ? "Sms" : $"Sms\n{p.SmsInstance}", out com))
+                    orderedComs.Add(com);
+            }
+            else
+            {
+                foreach (var x in comsOrder)
+                {
+                    if (x.FastEquals("Email"))
+                        if (valid.TryGetValue(String.IsNullOrEmpty(p.EmailInstance) ? "Email" : $"Email\n{p.EmailInstance}", out var com))
+                            orderedComs.Add(com);
+                    if (x.FastEquals("WhatsApp"))
+                        if (valid.TryGetValue(String.IsNullOrEmpty(p.WhatsAppInstance) ? "WhatsApp" : $"WhatsApp\n{p.WhatsAppInstance}", out var com))
+                            orderedComs.Add(com);
+                    if (x.FastEquals("Sms"))
+                        if (valid.TryGetValue(String.IsNullOrEmpty(p.SmsInstance) ? "Sms" : $"Sms\n{p.SmsInstance}", out var com))
+                            orderedComs.Add(com);
+                }
+            }
+
+            Coms = orderedComs.ToArray();
+            ComsMethods = orderedComs.ToDictionary(x => x.Name, StringComparer.Ordinal).Freeze();
+
+            InternalSignUpMethods = orderedComs.Where(x => x.AllowSignUp).Select(x => x.Name).ToArray();
 
             var shortCodeDigits = p.ShortCodeDigits;
             if (shortCodeDigits < 3)
@@ -213,7 +255,7 @@ namespace SysWeaver.MicroService
 
             ManProps = new UserManagerProps
             {
-                Coms = ComsMethods.ToArray(),
+                Coms = ComsMethods.Keys.ToArray(),
                 SignUpMethods = InternalSignUpMethods,
                 CanSetNickName = p.CanSetNickName,
                 CanLogin = !p.DisableLogin,
@@ -294,7 +336,7 @@ namespace SysWeaver.MicroService
 
         readonly IUserManagerComs[] Coms;
 
-        readonly IReadOnlySet<String> ComsMethods;
+        readonly IReadOnlyDictionary<String, IUserManagerComs> ComsMethods;
 
 
         public override PasswordPolicy PasswordPolicy => InternalPasswordPolicy;
@@ -440,29 +482,55 @@ namespace SysWeaver.MicroService
             var commonVars = GetMessageParams(null, "[UserName]", userName);
             var lang = await GetLang(messages.Language).ConfigureAwait(false);
             var l = targets.Count;
-            List<String> sentTo = new List<string>(l);
-            List<Task> tasks = new List<Task>(l);
             var coms = Coms;
             var cl = coms.Length;
-            for (int i = 0; i < l; ++i)
+            if (SendAllComs)
             {
-                var target = targets[i];
+                List<String> sentTo = new List<string>(l);
+                List<Task> tasks = new List<Task>(l);
+                for (int i = 0; i < l; ++i)
+                {
+                    var target = targets[i];
+                    for (int j = 0; j < cl; ++j)
+                    {
+                        var com = coms[j];
+                        if (!com.CleanAndValidate(ref target))
+                            continue;
+                        var vars = getVars(target, com);
+                        if (vars == null)
+                            vars = new Dictionary<string, string>(StringComparer.Ordinal);
+                        foreach (var x in commonVars)
+                            vars.TryAdd(x.Key, x.Value);
+                        tasks.Add(SendOne(sentTo, message, messages, target, com, vars, lang));
+                        break;
+                    }
+                }
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+                return sentTo.ToArray();
+            }
+            else
+            {
+                List<String> sentTo = new List<string>(1);
                 for (int j = 0; j < cl; ++j)
                 {
                     var com = coms[j];
-                    if (!com.CleanAndValidate(ref target))
-                        continue;
-                    var vars = getVars(target, com);
-                    if (vars == null)
-                        vars = new Dictionary<string, string>(StringComparer.Ordinal);
-                    foreach (var x in commonVars)
-                        vars.TryAdd(x.Key, x.Value);
-                    tasks.Add(SendOne(sentTo, message, messages, target, com, vars, lang));
-                    break;
+                    for (int i = 0; i < l; ++ i)
+                    {
+                        var target = targets[i];
+                        if (!com.CleanAndValidate(ref target))
+                            continue;
+                        var vars = getVars(target, com);
+                        if (vars == null)
+                            vars = new Dictionary<string, string>(StringComparer.Ordinal);
+                        foreach (var x in commonVars)
+                            vars.TryAdd(x.Key, x.Value);
+                        await SendOne(sentTo, message, messages, target, com, vars, lang).ConfigureAwait(false);
+                        if (sentTo.Count > 0)
+                            return sentTo.ToArray();
+                    }
                 }
+                return Array.Empty<String>();
             }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-            return sentTo.ToArray();
         }
 
 
@@ -477,27 +545,52 @@ namespace SysWeaver.MicroService
         async Task<String[]> Send(UserManagerComOps message, ManagedLanguageMessages lang, IReadOnlyList<String> targets, Func<String, IUserManagerComs, Dictionary<String, String>> getVars)
         {
             var l = targets.Count;
-            List<String> sentTo = new List<string>(l);
-            List<Task> tasks = new List<Task>(l);
             var coms = Coms;
             var cl = coms.Length;
-            for (int i = 0; i < l; ++i)
+            if (SendAllComs)
             {
-                var target = targets[i];
+                List<Task> tasks = new List<Task>(l);
+                List<String> sentTo = new List<string>(l);
+                for (int i = 0; i < l; ++i)
+                {
+                    var target = targets[i];
+                    for (int j = 0; j < cl; ++j)
+                    {
+                        var com = coms[j];
+                        if (!com.CleanAndValidate(ref target))
+                            continue;
+                        var vars = getVars(target, com);
+                        if (vars == null)
+                            continue;
+                        tasks.Add(SendOne(sentTo, message, lang, target, com, vars));
+                        break;
+                    }
+                }
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+                return sentTo.ToArray();
+            }else
+            {
+                List<String> sentTo = new List<string>(1);
                 for (int j = 0; j < cl; ++j)
                 {
                     var com = coms[j];
-                    if (!com.CleanAndValidate(ref target))
-                        continue;
-                    var vars = getVars(target, com);
-                    if (vars == null)
-                        continue;
-                    tasks.Add(SendOne(sentTo, message, lang, target, com, vars));
-                    break;
+                    for (int i = 0; i < l; ++i)
+                    {
+                        var target = targets[i];
+                        if (!com.CleanAndValidate(ref target))
+                            continue;
+                        var vars = getVars(target, com);
+                        if (vars == null)
+                            continue;
+                        await SendOne(sentTo, message, lang, target, com, vars).ConfigureAwait(false);
+                        if (sentTo.Count > 0)
+                            return sentTo.ToArray();
+                    }
                 }
+                return Array.Empty<String>();
+
+
             }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-            return sentTo.ToArray();
         }
 
 
@@ -1440,7 +1533,7 @@ namespace SysWeaver.MicroService
                 throw new UserAlreadyLoggedInException();
             var cn = com.Name;
             var salt = AuthTools.GetRandomSalt();
-            var tokens = await GetNewUserToken(null, cn == "Email" ? target : null, cn == "Phone" ? target : null, salt, null, null, null, null, context).ConfigureAwait(false);
+            var tokens = await GetNewUserToken(null, cn == "Email" ? target : null, cn == "Sms" ? target : null, salt, null, null, null, null, context).ConfigureAwait(false);
             String link = String.Concat(context?.Prefix ?? "", "auth/ChoosePassword.html?", HttpUtility.UrlEncode(tokens.Item1));
             /*            String link = String.Concat(context?.Prefix ?? "", "auth/ChoosePassword.html?user=",
                             HttpUtility.UrlEncode(target),
