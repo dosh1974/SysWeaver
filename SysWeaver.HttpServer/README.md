@@ -77,7 +77,7 @@ The server always has three source images, served in the site root:
 |---|---|---|---|
 | `icon.svg` | 1:1 | 256 x 256 | `AddAppIcon(AppDisplayName, colors)` |
 | `logo.svg` | 4:3 | 512 x 384 | `AddAppLogo(AppDisplayName, AppDescription, colors)` |
-| `banner.svg` | 3:1 | 1200 x 400 | `AddAppBanner(AppDisplayName, AppDescription, colors)` |
+| `banner.svg` | 9:2 | 1260 x 280 | `AddAppBanner(AppDisplayName, AppDescription, colors)` |
 
 These are optional end points: they are generated only if no module serves the file, e.g. an embedded `web/icon.svg` in any project or a file in a folder served from disc (`FileHttpServerModule`). The generated images use the app's display name, description and colors (`HashColors.AppColors`, derived from the app name).
 
@@ -91,7 +91,7 @@ All other icons and logos are rendered from these three files, whether they are 
 | `icon-192.png` | 192 x 192 | `icon.svg` |
 | `icon-512.png` | 512 x 512 | `icon.svg` |
 | `logo.png` | 1024 x 768 | `logo.svg` |
-| `banner.png` | 1200 x 400 | `banner.svg` |
+| `banner.png` | 1260 x 280 | `banner.svg` |
 
 A module can still serve any of these bitmaps itself, which overrides the rendered one. To brand an application, provide the three svg files and let the server render the rest. Keep the aspect ratios, because the bitmaps are rendered at the sizes above.
 

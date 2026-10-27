@@ -206,9 +206,9 @@ The HTTP server embeds a single-page application shell. Services extend it decla
 |---|---|---|
 | `icon.svg` | 1:1 | 256 x 256 |
 | `logo.svg` | 4:3 | 512 x 384 |
-| `banner.svg` | 3:1 | 1200 x 400 |
+| `banner.svg` | 9:2 | 1260 x 280 |
 
-The server renders all other icons and logos from these three files, whether they were provided or generated: `favicon.ico` (192 x 192, 48 x 48, 32 x 32 and 16 x 16 in one file), `apple-touch-icon.png` (180 x 180), `icon-180.png` (180 x 180), `icon-192.png` (192 x 192) and `icon-512.png` (512 x 512) from `icon.svg`, `logo.png` (1024 x 768) from `logo.svg`, and `banner.png` (1200 x 400) from `banner.svg`. To brand an application, provide the three svg files. Details: [SysWeaver.HttpServer](SysWeaver.HttpServer/README.md#app-icon-logo-and-banner).
+The server renders all other icons and logos from these three files, whether they were provided or generated: `favicon.ico` (192 x 192, 48 x 48, 32 x 32 and 16 x 16 in one file), `apple-touch-icon.png` (180 x 180), `icon-180.png` (180 x 180), `icon-192.png` (192 x 192) and `icon-512.png` (512 x 512) from `icon.svg`, `logo.png` (1024 x 768) from `logo.svg`, and `banner.png` (1260 x 280) from `banner.svg`. To brand an application, provide the three svg files. Details: [SysWeaver.HttpServer](SysWeaver.HttpServer/README.md#app-icon-logo-and-banner).
 
 ### Security
 

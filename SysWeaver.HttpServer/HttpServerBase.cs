@@ -210,7 +210,7 @@ namespace SysWeaver.Net
 
             oeps["banner.svg"] = HandleBannerSvg;
             oeps["banner_debug.svg"] = HandleBannerDebugSvg;
-            oeps["banner.png"] = HandleBannerPng1200;
+            oeps["banner.png"] = HandleBannerPng1260;
 
 
             oeps["app/app.css"] = HandleEmpty;

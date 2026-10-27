@@ -46,7 +46,7 @@ namespace SysWeaver.IpLocation.Caches
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
             {
-                var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
+                using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
                 var res = await c.FirstOrDefaultAsync<DbIpLocation>(x => x.Ip == ip).ConfigureAwait(false);
                 if (res != null)
                 {

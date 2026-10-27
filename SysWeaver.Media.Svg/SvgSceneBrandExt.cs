@@ -156,8 +156,8 @@ public static class SvgSceneBrandExt
     }
 
     /// <summary>
-    /// Add a generated app banner (made for a 1200 x 400 scene, other sizes are scaled to fit and centered): the app icon (same as <see cref="AddAppIcon"/>) in the
-    /// left 400 x 400 square, with the tile background stretched to the full width, and the name as a wordmark with an optional sub title to the right.
+    /// Add a generated app banner (made for a 1260 x 280 scene, other sizes are scaled to fit and centered): the app icon (same as <see cref="AddAppIcon"/>) in the
+    /// left 280 x 280 square, with the tile background stretched to the full width, and the name as a wordmark with an optional sub title to the right.
     /// </summary>
     /// <param name="scene">The scene to add the banner to</param>
     /// <param name="name">The name of the app</param>
@@ -167,8 +167,8 @@ public static class SvgSceneBrandExt
     /// <param name="opaque">If true the banner covers the scene, else the banner is a soft rectangle with transparent corners (the same corners as the icon)</param>
     public static void AddAppBanner(this SvgScene scene, String name, String subTitle, HashColors color = null, int seed = 0, bool opaque = false)
     {
-        const double BW = 1200;
-        const double BH = 400;
+        const double BW = 1260;
+        const double BH = 280;
         var d = MarkDesign.Create(name, color, seed, false);
         name = d.Name.Trim();
         var pal = d.Palette;
@@ -183,11 +183,11 @@ public static class SvgSceneBrandExt
         var px = BH * s;
         DrawMark(scene, g, d, pal, 0, 0, BH, true, opaque, px <= SmallSize ? px : 0, U * BW / BH);
         //  Text, left aligned next to the icon (the mark has its own padding inside the tile) and centered vertically on the icon
-        const double m = 56;
-        const double gap = 8;
-        //  Minimum cap heights (in the 1200 x 400 layout): a name that would get smaller is wrapped to two lines, a smaller sub title is dropped
-        const double MinNameCap = 52;
-        const double MinSubCap = 12;
+        const double m = 30;
+        const double gap = 6;
+        //  Minimum cap heights (in the 1260 x 280 layout): a name that would get smaller is wrapped to two lines, a smaller sub title is dropped
+        const double MinNameCap = 46;
+        const double MinSubCap = 10;
         var sub = subTitle?.Trim();
         if (String.IsNullOrEmpty(sub) || String.Equals(sub, name, StringComparison.OrdinalIgnoreCase))
             sub = null;
@@ -196,9 +196,9 @@ public static class SvgSceneBrandExt
         {
             var tx = BH + gap;
             var textW = BW - tx - m;
-            var nameLines = NameLines(name, one, sub != null ? 100 : 116, MinNameCap, textW, out var capN);
+            var nameLines = NameLines(name, one, sub != null ? 92 : 110, MinNameCap, textW, out var capN);
             var lineStep = capN * (1.3 + nameLines.Max(x => x.Text.DescentPerCap));
-            var subLines = SubTitleLines(sub, capN * 0.42, MinSubCap, textW, out var capS, out _);
+            var subLines = SubTitleLines(sub, capN * 0.5, MinSubCap, textW, out var capS, out _);
             var gapS = subLines.Count > 0 ? Math.Max(capN * 0.36, nameLines[^1].Text.DescentPerCap * capN + capS * 0.5) : 0;
             var subStep = capS * 1.7;
             var nameH = capN + (nameLines.Count - 1) * lineStep;

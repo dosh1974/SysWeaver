@@ -39,15 +39,48 @@
             Add to a micro service class to show a required dependency
             </summary>
         </member>
-        <member name="M:SysWeaver.MicroService.IEmailSender.Send(System.String,System.String,System.String,System.Boolean)">
+        <member name="M:SysWeaver.MicroService.IEmailSender.SendEmail(SysWeaver.MicroService.OutgoingEmailMessage)">
             <summary>
-            Send a message
+            Send an email message
             </summary>
+            <param name="msg"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.EmailExtensions.Send(SysWeaver.MicroService.IEmailSender,System.String,System.String,System.String,System.Boolean)">
+            <summary>
+            Send an email
+            </summary>
+            <param name="sender"></param>
             <param name="to"></param>
             <param name="subject"></param>
-            <param name="message"></param>
+            <param name="body"></param>
             <param name="isHtml"></param>
             <returns></returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.OutgoingEmailMessage.Email">
+            <summary>
+            The email address to send the message to
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.OutgoingEmailMessage.Subject">
+            <summary>
+            The email subject
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.OutgoingEmailMessage.Body">
+            <summary>
+            The email body, could be html or plain text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.OutgoingEmailMessage.System">
+            <summary>
+            The system that this message belongs to
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.OutgoingEmailMessage.IsHtml">
+            <summary>
+            Set to true if the email body is html
+            </summary>
         </member>
         <member name="T:SysWeaver.MicroService.IHaveDefaultInstanceName">
             <summary>

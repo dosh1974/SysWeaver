@@ -14,6 +14,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -123,6 +124,8 @@ namespace SimpleStack.Orm
                     c.RealDispose();
                     return;
                 }
+                if (c.Transaction != null)
+                    throw new Exception("Transaction must be Disposed before the connection is Disposed!");
                 var max = Max;
                 if (Interlocked.Increment(ref CachedConnections) > max)
                 {

@@ -17973,6 +17973,17 @@
             If no chars needs to be replaced (or if the input is null or empty) the input instance is returned.
             The rules of the OS that the process runs on are used: on Linux only '\0', '/' and ':' are replaced (ex: "a\b*c" is kept as is), so the result may not be a valid file name on Windows.</returns>
         </member>
+        <member name="M:SysWeaver.PathExt.SafeUniqueFilename(System.String)">
+            <summary>
+            Replaces all bad filename chars with a sequence that makes it unique. 
+            "+" in the source is considered invalid.
+            All invalid chars are replaced with "+xxxx" where xxxx is the hexadecimal 
+            </summary>
+            <param name="s">The string to make into a safe filename, can be null or empty</param>
+            <returns>A string of the same length as the input where every char that is invalid in a file name (see <see cref="M:SysWeaver.PathExt.IsValidFilename(System.String)"/>) is replaced with a '_'.
+            If no chars needs to be replaced (or if the input is null or empty) the input instance is returned.
+            The rules of the OS that the process runs on are used: on Linux only '\0', '/' and ':' are replaced (ex: "a\b*c" is kept as is), so the result may not be a valid file name on Windows.</returns>
+        </member>
         <member name="M:SysWeaver.PathExt.IsValidSubPath(System.String)">
             <summary>
             Validate that the path doesn't contain ".", ".." or any invalid chars, including volume separator
@@ -21527,6 +21538,38 @@
             <summary>
             The lower case hexadecimal digits, indexed by the nibble value (0 - 15).
             </summary>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.Byte,System.Int32)">
+            <summary>
+            Write a Byte as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.UInt16,System.Int32)">
+            <summary>
+            Write a UInt16 as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.UInt32,System.Int32)">
+            <summary>
+            Write a UInt32 as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.UInt64,System.Int32)">
+            <summary>
+            Write a UInt64 as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
         </member>
         <member name="M:SysWeaver.SpanExt.ToHexString(System.Span{System.Byte})">
             <summary>

@@ -44,9 +44,39 @@
             If true, shader variables will be removed
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressParams.MinifyShaders">
+            <summary>
+            If true, shaders are also minified with shader_minifier (renaming, inlining) when that is smaller than stripping them (comments and white space removed).
+            Smaller, but its rewrites can break a shader (it compiles and renders black / hangs the GPU), so verify the results.
+            </summary>
+        </member>
         <member name="F:SysWeaver.CompressParams.Force">
             <summary>
             If true, compress the files (even if it by default wouldn't)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.CompressProgram">
+            <summary>
+            Shader optimization (.glsl / .frag).
+            <para>
+            A minimized shader must work exactly like the original in Effect Weaver (Effect Saver, Effect Vj, the shader editor), so everything
+            its shader parser (EffectWeaver.Common ShaderParser) reads from the source is kept (unless RemoveShaderVars is set):
+            </para>
+            <list type="bullet">
+            <item>The tunable variable candidates: "#define NAME literal" (top level or in an "#ifndef NAME" guard) and "const T NAME = literal;" with
+            a comment, each on its own line with its comment (comment continuation lines are joined, "var: {...}" annotations are compacted).
+            The candidates are found with the parser's rules (mirrored here), names defined more than once are no candidates.</item>
+            <item>The iMouse channel comments ("// iMouse.x = Name | Description | Default"), as compact lines at the top.</item>
+            <item>The entry points (main, mainImage and vertexMain, the optional vertex stage).</item>
+            </list>
+            <para>
+            The shader is stripped: comments and white space removed, short number literals, nothing renamed or evaluated (exactly the same code).
+            With MinifyShaders it's also preprocessed (comments removed, macros expanded, conditionals evaluated) and minified (shader_minifier), with
+            the candidates hidden from both and put back afterwards, and that is used if it's smaller. Not possible if a kept define is used by a
+            preprocessor conditional (directly or through another macro, evaluating it would remove the variable's effect), for a local candidate
+            const, short candidate names (the minifier's names could clash) or if a candidate is lost on the way. shader_minifier's rewrites can
+            break a shader (renders black / hangs the GPU), so MinifyShaders results must be verified.
+            </para>
             </summary>
         </member>
         <member name="F:SysWeaver.CompressProgram.Version">
@@ -57,6 +87,12 @@
         <member name="F:SysWeaver.CompressProgram.TypeVersion">
             <summary>
             Version for type specific transformation / compression
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderTypeVersion">
+            <summary>
+            Version of the shader optimization (added to the TypeVersion of shaders only, so other types keep their cached results).
+            8: shaders are stripped (shader_minifier only with MinifyShaders), Effect Weaver shaders keep working: the variable candidates, the iMouse channel comments, vertexMain, conditionals on compiler macros (__VERSION__), the snippet macros (EW_...) and the functions they use / named like snippets (Ew...), one top level declaration per line; no new overloads; the smallest of minimized (with / without aggressive inlining), stripped and the source.
             </summary>
         </member>
         <member name="F:SysWeaver.CompressProgram.ExitCompressFailed">
@@ -79,12 +115,148 @@
             https://github.com/laurentlb/shader-minifier
             </summary>
         </member>
-        <member name="M:SysWeaver.CompressProgram.OnAllGlobalConsts(System.String[],System.Func{System.String,System.String,System.String,System.String,System.String,System.String})">
+        <member name="F:SysWeaver.CompressProgram.MouseCommentRx">
             <summary>
-            
+            An iMouse channel comment line (comment markers included): "// iMouse.x = Name | Description | Default"
             </summary>
-            <param name="lines"></param>
-            <param name="onVar">Line content, type, name, value, comment</param>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.SplitComment(System.String)">
+            <summary>
+            The value and the comment ("//" or "/* */") of the text after a declaration
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.LiteralType(System.String)">
+            <summary>
+            The type of a literal value (number, bool or vecN(numbers)), null if it isn't a literal
+            </summary>
+        </member>
+        <member name="T:SysWeaver.CompressProgram.ShaderVar">
+            <summary>
+            A tunable variable candidate (as found by the parser)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderVar.Precision">
+            <summary>Const: precision qualifier (or null) and type</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderVar.LineComment">
+            <summary>The comment of the line itself</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderVar.Comment">
+            <summary>The comment with the continuation lines (as the parser sees it)</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderVar.GuardStart">
+            <summary>The "#ifndef NAME" and "#endif" lines of a guarded define, else -1</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderVar.Depth">
+            <summary>Const: the brace depth (0 = top level)</summary>
+        </member>
+        <member name="T:SysWeaver.CompressProgram.SnippetMacro">
+            <summary>
+            A macro the effect defines for the snippets (ex: "#define EW_SDF(p) map(p)", the raymarch snippets read the scene through it).
+            Snippets are inserted when the effect is built, so these are kept (with the names they use).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.SnippetMacro.Text">
+            <summary>The directive without comments</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.SnippetMacro.Ids">
+            <summary>The identifiers of the replacement (not the parameters or fields after a '.')</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.SnippetMacro.Simple">
+            <summary>Top level and on one line (else the shader is only stripped)</summary>
+        </member>
+        <member name="T:SysWeaver.CompressProgram.TargetBlock">
+            <summary>
+            A top level conditional using a macro of the compiler (ex: "#if __VERSION__ >= 300"): it differs between the builds (GLSL ES 3.00 / 1.00)
+            so it must not be evaluated when minimizing. Kept as is if it only contains directives (ex: "#define ZERO min(iFrame, 0)" / "#define ZERO 0").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.TargetBlock.Defined">
+            <summary>The macros defined in it and the identifiers of their replacements</summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.IsTargetMacro(System.String)">
+            <summary>
+            True for a macro defined by the compiler that depends on the build target (GL_ES is always defined in WebGL)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderScan.Conditionals">
+            <summary>Conditional directives (#if, #elif, #ifdef, #ifndef): the line and the identifiers of the condition</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderScan.Macros">
+            <summary>All macros: name => the identifiers of the replacement</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ShaderScan.Masked">
+            <summary>The lines with comments replaced by spaces</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.SnippetMacroRx">
+            <summary>A snippet macro: name, parameters (if function like), replacement</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.AnyMacroRx">
+            <summary>A macro: name, parameters (if function like), replacement</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.BodyIdRx">
+            <summary>An identifier in a macro replacement (not a field after a '.')</summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.EwFunctionRx">
+            <summary>A function named like a snippet ("Ew..."), definitions (calls followed by a block may match too, harmless)</summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.MaskComments(System.String)">
+            <summary>
+            The text with all comments replaced by spaces (new lines are kept)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.ScanShader(System.String[])">
+            <summary>
+            Find the variable candidates like the parser does
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.GetMouseComments(System.String[])">
+            <summary>
+            The iMouse channel comments of a shader as compact comment lines ("//iMouse.x=Name|Description|Default", x, y, z, w order),
+            the first comment of a channel is used (like the parser).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.CompactAnnotation(System.String)">
+            <summary>
+            A "var: {...}" annotation with the keys the parser reads (name, desc, type, min, max, step) in compact form, null if it can't be parsed
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.VarLines(SysWeaver.CompressProgram.ShaderVar)">
+            <summary>
+            The line(s) of a kept variable: the declaration with its comment (an annotation compacted, the parser reads it from the line's own comment,
+            else the comment with the continuation lines joined), a guarded define with its guard
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.TightRx">
+            <summary>
+            White space around these can be removed without joining tokens (not + and -: "a - -b")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.StripShader(System.String[],SysWeaver.CompressProgram.ShaderScan,System.Collections.Generic.Dictionary{System.String,SysWeaver.CompressProgram.ShaderVar})">
+            <summary>
+            Strip a shader: comments and white space removed, the kept variables written like when minimizing, nothing renamed or evaluated
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.NumberRx">
+            <summary>A float literal (not part of an identifier, a swizzle or an exponent / suffix form)</summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.ShortNumber(System.Text.RegularExpressions.Match)">
+            <summary>The shortest form of a float literal: "1.0" => "1.", "0.50" => ".5"</summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.NeedSpace(System.Char,System.Char)">
+            <summary>True if two tokens would join without a space between them ("a b", "a- -b", "a/ *b")</summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.MinimizeShader(System.String[],System.Collections.Generic.Dictionary{System.String,SysWeaver.CompressProgram.ShaderVar},System.Collections.Generic.List{SysWeaver.CompressProgram.SnippetMacro},System.Collections.Generic.HashSet{System.Int32},System.Collections.Generic.List{System.String},System.Collections.Generic.HashSet{System.String},System.String,System.String,System.Boolean)">
+            <summary>
+            Preprocess and minify a shader, the kept variables hidden from both and put back afterwards.
+            Returns null if a kept variable got lost (or the preprocessor failed), then the shader should be stripped instead.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.SplitDeclarations(System.Collections.Generic.List{System.String})">
+            <summary>
+            One top level declaration per line: snippets are inserted (at build time) right before the line of the first declaration using them,
+            a snippet calling one of the effect's functions through a macro (EW_SDF) must still come after that function
+            </summary>
         </member>
     </members>
 </doc>

@@ -124,6 +124,9 @@ namespace SysWeaver.Net
 
         #region Favicon
 
+        const int IconWidth = 256;
+        const int IconHeight = 256;
+
         readonly AsyncLock FaviconLock = new AsyncLock();
 
         #region Auto gen
@@ -144,7 +147,7 @@ namespace SysWeaver.Net
                 svg = CachedFaviconSvg;
                 if (svg != null)
                     return ValueTask.FromResult(svg);
-                var svgS = new SvgScene(256, 256);
+                var svgS = new SvgScene(IconWidth, IconHeight);
                 //svgS.AddFavIcon(EnvInfo.AppName, null, HashColors.AppColors);
                 svgS.AddAppIcon(EnvInfo.AppDisplayName, HashColors.AppColors);
                 var svgText = svgS.ToSvg();
@@ -171,7 +174,7 @@ namespace SysWeaver.Net
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
             int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
-            var svgS = new SvgScene(256, 256);
+            var svgS = new SvgScene(IconWidth, IconHeight);
             //svgS.AddFavIcon(EnvInfo.AppName, null, new HashColors(EnvInfo.AppName, seed));
             svgS.AddAppIcon(EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
@@ -268,6 +271,10 @@ namespace SysWeaver.Net
 
         #region Logo
 
+        const int LogoWidth = 512;
+        const int LogoHeight = 384;
+
+
         readonly AsyncLock LogoLock = new AsyncLock();
 
         #region Auto gen
@@ -286,7 +293,7 @@ namespace SysWeaver.Net
                 if (svg != null)
                     return ValueTask.FromResult(svg);
                 var enc = Encoding.UTF8;
-                var svgS = new SvgScene(512, 384);
+                var svgS = new SvgScene(LogoWidth, LogoHeight);
                 //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, HashColors.AppColors);
                 svgS.AddAppLogo(EnvInfo.AppDisplayName, EnvInfo.AppDescription, HashColors.AppColors);
                 var svgText = svgS.ToSvg();
@@ -312,7 +319,7 @@ namespace SysWeaver.Net
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
             int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
-            var svgS = new SvgScene(512, 384);
+            var svgS = new SvgScene(LogoWidth, LogoHeight);
             //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
             svgS.AddAppLogo(EnvInfo.AppDisplayName, EnvInfo.AppDescription, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
@@ -396,6 +403,9 @@ namespace SysWeaver.Net
 
         #region Banner
 
+        const int BannerWidth = 1260;
+        const int BannerHeight = 280;
+
         readonly AsyncLock BannerLock = new AsyncLock();
 
         #region Auto gen
@@ -414,7 +424,7 @@ namespace SysWeaver.Net
                 if (svg != null)
                     return ValueTask.FromResult(svg);
                 var enc = Encoding.UTF8;
-                var svgS = new SvgScene(1200, 400);
+                var svgS = new SvgScene(BannerWidth, BannerHeight);
                 //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, HashColors.AppColors);
                 svgS.AddAppBanner(EnvInfo.AppDisplayName, EnvInfo.AppDescription, HashColors.AppColors);
                 var svgText = svgS.ToSvg();
@@ -440,7 +450,7 @@ namespace SysWeaver.Net
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
             int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
-            var svgS = new SvgScene(1200, 400);
+            var svgS = new SvgScene(BannerWidth, BannerHeight);
             //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
             svgS.AddAppBanner(EnvInfo.AppDisplayName, EnvInfo.AppDescription, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
@@ -511,11 +521,11 @@ namespace SysWeaver.Net
         async ValueTask<IHttpRequestHandler> HandleBannerPng(HttpServerRequest data, HttpSession session, int sizeAndKey)
         {
             var bm = await GetBannerBitmapRenderer(data, session).ConfigureAwait(false);
-            return await HandleSvgToPng(data, session, sizeAndKey, bm, CachedBannerSizes, BannerLock, sizeAndKey / 3).ConfigureAwait(false);
+            return await HandleSvgToPng(data, session, sizeAndKey, bm, CachedBannerSizes, BannerLock, (sizeAndKey * BannerHeight) / BannerWidth).ConfigureAwait(false);
         }
 
-        ValueTask<IHttpRequestHandler> HandleBannerPng1200(HttpServerRequest data, HttpSession session)
-            => HandleBannerPng(data, session, 1200);
+        ValueTask<IHttpRequestHandler> HandleBannerPng1260(HttpServerRequest data, HttpSession session)
+            => HandleBannerPng(data, session, BannerWidth);
 
 
         #endregion//Handlers
