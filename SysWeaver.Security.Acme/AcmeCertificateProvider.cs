@@ -104,7 +104,7 @@ namespace SysWeaver.Security
         {
             Msg = msg;
             p = p ?? new AcmeCertificateParams();
-            var email = SignedCertificateCreator.ValidateString(EnvInfo.ResolveText(p.Email), nameof(p.Email));
+            var email = SignedCertificateCreator.ValidateString(EnvInfo.ResolveText(p.Email.Trim()), nameof(p.Email));
             if (String.IsNullOrEmpty(email))
                 throw new ArgumentException("Must provide a valid email to create an account!", nameof(p.Email));
             var domainName = SignedCertificateCreator.ValidateString(EnvInfo.ResolveText(p.DomainName), nameof(p.DomainName));

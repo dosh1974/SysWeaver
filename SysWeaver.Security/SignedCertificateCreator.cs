@@ -50,7 +50,7 @@ namespace SysWeaver.Security
             Initials = ValidateString(EnvInfo.ResolveText(p.Initials), nameof(p.Initials));
             Pseudonym = ValidateString(EnvInfo.ResolveText(p.Pseudonym), nameof(p.Pseudonym));
             GenerationQualifier = ValidateString(EnvInfo.ResolveText(p.GenerationQualifier), nameof(p.GenerationQualifier));
-            Email = ValidateString(EnvInfo.ResolveText(p.Email), nameof(p.Email));
+            Email = ValidateString(EnvInfo.ResolveText(p.Email.Trim()), nameof(p.Email));
 
             Names = p.Names ?? [];
             var b = p.RsaBits;
