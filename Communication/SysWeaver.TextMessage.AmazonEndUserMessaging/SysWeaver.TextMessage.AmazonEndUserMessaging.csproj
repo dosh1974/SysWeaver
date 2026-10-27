@@ -15,8 +15,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="AWSSDK.PinpointSMSVoiceV2" Version="4.0.104" />
-	  <PackageReference Include="AWSSDK.SQS" Version="4.0.100.17" />
+	  <PackageReference Include="AWSSDK.PinpointSMSVoiceV2" Version="4.0.104.4" />
+	  <PackageReference Include="AWSSDK.SQS" Version="4.0.100.21" />
 	</ItemGroup>
 
 </Project>

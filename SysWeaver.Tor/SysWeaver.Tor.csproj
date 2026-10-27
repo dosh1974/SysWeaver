@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Knapcode.TorSharp" Version="2.15.0" />
-    <PackageReference Include="SharpCompress" Version="0.50.5" />
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
   </ItemGroup>
 
   <ItemGroup>

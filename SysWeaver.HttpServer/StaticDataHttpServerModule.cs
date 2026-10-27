@@ -61,7 +61,7 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// A filter used by <see cref="AddEmbeddedResources"/>.
+        /// A filter used by <see cref="AddEmbeddedResources(Assembly, String, String, int?, HttpCompressionPriority, bool, DateTime?, String, String, AddCondition)"/>.
         /// </summary>
         /// <param name="name">The manifest resource name, may be modified to change the served name</param>
         /// <returns>True to include the resource, false to skip it</returns>

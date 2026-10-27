@@ -140,7 +140,7 @@ namespace SysWeaver.AI
         /// </summary>
         public float RopeFrequencyScale;
 
-        /// <summary>
+/*        /// <summary>
         /// Use memory mapping to load the model (faster load, less memory)
         /// </summary>
         public bool UseMemoryMap = true;
@@ -149,7 +149,7 @@ namespace SysWeaver.AI
         /// Force the system to keep the model in RAM
         /// </summary>
         public bool UseMemoryLock;
-
+*/
         /// <summary>
         /// An optional chat template to use instead of the template in the model file.
         /// Can be the name of a template known by llama.cpp (ex: "chatml", "llama3"), "gemma4" (built in, since llama.cpp doesn't support it) or a template string.

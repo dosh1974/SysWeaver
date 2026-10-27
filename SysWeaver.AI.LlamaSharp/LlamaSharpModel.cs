@@ -48,8 +48,8 @@ namespace SysWeaver.AI
                 },
                 TypeK = GetType(llm.TypeK),
                 TypeV = GetType(llm.TypeV),
-                UseMemorymap = llm.UseMemoryMap,
-                UseMemoryLock = llm.UseMemoryLock,
+//                UseMemorymap = llm.UseMemoryMap,
+//                UseMemoryLock = llm.UseMemoryLock,
             };
             if (llm.Threads > 0)
                 mp.Threads = llm.Threads;
