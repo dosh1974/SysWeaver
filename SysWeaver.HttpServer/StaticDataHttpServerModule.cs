@@ -211,8 +211,21 @@ namespace SysWeaver.Net
         /// <summary>
         /// Add an embedded resource (the same as <see cref="AddEmbeddedResourceSplit"/> with fewer allocations: no split parts and joins, one location string, the resource data is read once).
         /// </summary>
+        /// <param name="asm">The assembly that contains the embedded resource</param>
+        /// <param name="x">The manifest resource name (used to read the data and in the location)</param>
         /// <param name="name">A string that contains the served name</param>
         /// <param name="start">The index of the served name in <paramref name="name"/> (the served name is the rest of the string)</param>
+        /// <param name="sn">The end of the location string, "\" from assembly \"" + the assembly name + "\""</param>
+        /// <param name="urlRoot">An optional path prefix to the resource name</param>
+        /// <param name="dur">The client side cache duration (already resolved, the module default is not applied)</param>
+        /// <param name="runtimeComp">The runtime compression to apply (already resolved, null for no compression)</param>
+        /// <param name="disableCompession">True to disable any compression</param>
+        /// <param name="lwt">The last modified time</param>
+        /// <param name="etag">The etag to use</param>
+        /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
+        /// <param name="authTokens">The parsed <paramref name="auth"/> tokens, computed on first use if null (pass the same variable for all resources so that it's only parsed once)</param>
+        /// <param name="replace">If true, any existing resource with the same order will be replaced</param>
+        /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
         /// <returns>False if nothing was done because the name is unusual (no '.', a compressed name with a single '.' or a long extension), use <see cref="AddEmbeddedResourceSplit"/> for those</returns>
         [SkipLocalsInit]
         bool AddEmbeddedResource(Assembly asm, String x, String name, int start, String sn, String urlRoot, int dur, HttpCompressionPriority runtimeComp, bool disableCompession, DateTime lwt, String etag, String auth, ref IReadOnlyList<String> authTokens, bool replace, double order)

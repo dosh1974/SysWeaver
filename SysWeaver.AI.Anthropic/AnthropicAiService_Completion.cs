@@ -239,7 +239,7 @@ namespace SysWeaver.AI
             {
                 if (results == null)
                     return;
-                messages.Add(new MessageParam { Role = Role.User, Content = results });
+                messages.Add(new UserMessageParam { Content = results });
                 results = null;
             }
             foreach (var m in request.Messages)
@@ -261,13 +261,13 @@ namespace SysWeaver.AI
                                 ub.Add(AnthropicModels.ToBlock(x));
                         if (ub.Count <= 0)
                             ub.Add(new TextBlockParam { Text = "..." });
-                        messages.Add(new MessageParam { Role = Role.User, Content = ub });
+                        messages.Add(new UserMessageParam { Content = ub });
                         break;
                     case AiCompletionRoles.Assistant:
                         var ab = GetAssistantContent(m);
                         //  Empty assistant messages are not allowed
                         if (ab.Count > 0)
-                            messages.Add(new MessageParam { Role = Role.Assistant, Content = ab });
+                            messages.Add(new AssistantMessageParam { Content = ab });
                         break;
                     case AiCompletionRoles.Tool:
                         var tid = m.ToolCallId;

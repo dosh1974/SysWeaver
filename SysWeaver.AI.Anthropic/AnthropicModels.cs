@@ -241,10 +241,6 @@ namespace SysWeaver.AI
                 p = p with { OutputConfig = s.Output };
             if (!String.IsNullOrEmpty(system))
                 p = p with { System = system };
-#pragma warning disable CS0618 // Temperature is deprecated, but supported by older models (only sent if supported)
-            if (s.Temp && temperature.HasValue)
-                p = p with { Temperature = Math.Clamp(temperature.Value, 0.0f, 1.0f) };
-#pragma warning restore CS0618
             if (haveTools)
             {
                 p = p with { Tools = tools.Select(x => (ToolUnion)x).ToList() };
@@ -392,7 +388,7 @@ namespace SysWeaver.AI
                     blocks.Add(ToBlock(x.Item1));
             if (blocks.Count <= 0)
                 blocks.Add(new TextBlockParam { Text = "..." });
-            return new MessageParam { Role = Role.User, Content = blocks };
+            return new UserMessageParam { Content = blocks };
         }
 
         /// <summary>
@@ -409,7 +405,7 @@ namespace SysWeaver.AI
         }
 
         internal static bool IsAssistant(MessageParam m)
-            => m.Role == Role.Assistant;
+            => m.TryPickAssistant(out var _);
 
         internal static bool HaveToolUse(MessageParam m)
             => GetBlocks(m).Any(x => x.TryPickToolUse(out var _));
@@ -438,7 +434,7 @@ namespace SysWeaver.AI
                         var keep = blocks.Where(x => !IsThinking(x)).ToList();
                         if (keep.Count <= 0)
                             continue;
-                        m = new MessageParam { Role = Role.Assistant, Content = keep };
+                        m = new AssistantMessageParam { Content = keep };
                     }
                 }
                 history[output] = m;
@@ -606,7 +602,7 @@ namespace SysWeaver.AI
                         text.Append(GetText(m));
                     var content = ToParams(m);
                     if (content.Count > 0)
-                        history.Add(new MessageParam { Role = Role.Assistant, Content = content });
+                        history.Add(new AssistantMessageParam { Content = content });
                     var calls = m.Content.Select(x => x.TryPickToolUse(out var tu) ? tu : null).Where(x => x != null).ToList();
                     if ((calls.Count <= 0) || (m.StopReason?.Raw() != "tool_use"))
                         return GetStopError(m);
@@ -624,7 +620,7 @@ namespace SysWeaver.AI
                             tr = tr with { IsError = true };
                         results.Add(tr);
                     }
-                    history.Add(new MessageParam { Role = Role.User, Content = results });
+                    history.Add(new UserMessageParam { Content = results });
                     if (afterTools != null)
                         await afterTools().ConfigureAwait(false);
                 }

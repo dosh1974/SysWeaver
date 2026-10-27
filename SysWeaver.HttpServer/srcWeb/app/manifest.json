@@ -1,4 +1,4 @@
-﻿{
+{
   "start_url": "${$Request.Prefix}",
   "short_name": "${$EnvInfo.AppName}",
   "name": "${$EnvInfo.AppDisplayName}",
