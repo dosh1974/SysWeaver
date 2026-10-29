@@ -223,10 +223,17 @@ async function applyTheme() {
     fix("--ThemeAcc2");
 
     de["Theme"] = themeOrg;
-    const c = window.getComputedStyle(document.body);
-    const isd = c.getPropertyValue("color-scheme") === "dark";
-    de["IsDarkMode"] = isd;
-    window["IsDarkMode"] = isd;
+    //  From body's computed color-scheme: a page loading common.js in its head runs this before body exists (SysWeaverInit at script
+    //  evaluation), then it's set once the document is parsed
+    const setDark = function () {
+        const isd = window.getComputedStyle(document.body).getPropertyValue("color-scheme") === "dark";
+        de["IsDarkMode"] = isd;
+        window["IsDarkMode"] = isd;
+    };
+    if (document.body)
+        setDark();
+    else
+        document.addEventListener("DOMContentLoaded", setDark, { once: true });
 
     Animator.Remove(de["ThemeAnim"]);
     const f = window[theme + "ThemeAnimate"];
@@ -3478,8 +3485,9 @@ function PostParent(name, data, targetOrigin) {
 /**
  * Open an url (the forced theme is appended via appendTheme).
  * For target "_self" with a relative or same-origin url, first posts "IframeNavigating" {Url: absolute url}
- * to window.top (so a hosting app can navigate itself) and then, after 100 ms, opens the url in _self anyway
- * (logging "Parent didn't respond in time!"; the timer is never cancelled).
+ * to window.parent (so the hosting page, ex: an app shell or a pop-up window, can navigate itself) and then,
+ * after 100 ms, opens the url in _self anyway (logging "Parent didn't respond in time!"; the timer is never cancelled).
+ * The parent (not window.top) is used so that a page nested in several frames is handled by the page that hosts it.
  * @param {string} l The url to open
  * @param {string} target Optional target ("_self", "_blank"), default "_blank"
  */
@@ -3490,10 +3498,17 @@ function Open(l, target) {
             a.href = l;
             const abs = a.href;
             console.log('"' + l + '" => "' + abs + '"');
-            PostTop("IframeNavigating",
-                {
-                    Url: abs,
-                }, "*");
+            const p = window.parent;
+            if (p && (p !== window)) {
+                try {
+                    p.postMessage({
+                        Type: "IframeNavigating",
+                        Url: abs,
+                    }, "*");
+                }
+                catch {
+                }
+            }
             setTimeout(() => {
                 window.open(appendTheme(l), "_self");
                 console.warn("Parent didn't respond in time!");

@@ -2274,7 +2274,14 @@ class App {
                 }
             });
             window.addEventListener("message", ev => {
+                //  Only messages from the current content iframe (not from frames nested inside it, ex: a pop-up
+                //  window in the embedded page, that page handles their navigation itself)
+                const f = menuStyle.Content?.lastElementChild;
+                if ((!f) || (f.tagName !== "IFRAME") || (ev.source !== f.contentWindow))
+                    return;
                 const d = ev.data;
+                if (!d)
+                    return;
                 if (d.Type === "IframeNavigating") {
                     mainMenu.EmbeddContent(d.Url, menuStyle);
                 }
