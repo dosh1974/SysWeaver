@@ -44,6 +44,15 @@ sequenceDiagram
 - [`ServiceInstance`](ServiceInstance.cs) — the `ServiceBase` that hosts the `ServiceManager`
 - [`Win32ServiceManager`](ServiceManager/Win32ServiceManager.cs) — internal SCM interop
 - [`ElevatedProcessWin32NT`](ElevatedProcessWin32NT.cs) — `IsElevated` (Administrators role) and `RunElevated`
+- [`Win32SystemServices`](Win32SystemServices.cs) — internal `ISystemServices`: lists all Win32 services (`EnumServicesStatusEx`, configuration, failure actions etc) and controls them (`ServiceController`)
+- [`Win32Firewall`](Win32Firewall.cs) — internal `IFirewall` for Windows Defender Firewall (late bound `HNetCfg.FwPolicy2`), rule ids are a hash of the rule values since names aren't unique
+- [`Win32Storage`](Win32Storage.cs) — internal `IStorage` (Storage Management WMI `MSFT_Disk` / `MSFT_PhysicalDisk` / `MSFT_Partition` / `MSFT_Volume`, BitLocker from `Win32_EncryptableVolume` when running as admin)
+- [`Win32NetworkConfig`](Win32NetworkConfig.cs) — internal `INetworkConfig` (`MSFT_NetAdapter` enable / disable, `MSFT_NetRoute`, `DnsFlushResolverCache`)
+- [`Win32Environment`](Win32Environment.cs) — internal `IEnvironmentVariables`, writes the registry directly so `REG_EXPAND_SZ` values (ex: PATH) stay expandable, then broadcasts `WM_SETTINGCHANGE`
+- [`Win32Startup`](Win32Startup.cs) — internal `IStartupItems` (Run / RunOnce keys of HKCU, HKLM and WOW6432Node, the startup folders), enabled state stored in `Explorer\StartupApproved` like Task Manager
+- [`Win32Power`](Win32Power.cs) — internal `IPower` (shutdown.exe, `SetSuspendState`)
+- [`Win32FilePermissions`](Win32FilePermissions.cs) — internal `IFilePermissions` (NTFS ACL's, owner changes enable SeTakeOwnership / SeRestore)
+- [`Win32Wmi`](Win32Wmi.cs) / [`Win32Privileges`](Win32Privileges.cs) — WMI query helpers and token privilege enabling
 
 ## Using it
 
@@ -74,4 +83,4 @@ MyService status
 - **Project:** [`SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj`](SysWeaver.OsServices.ServiceHostFactoryWin32NT.csproj)
 - **Builds on:** [SysWeaver.MicroServices.ServiceManager](../../SysWeaver.MicroServices.ServiceManager/README.md), [SysWeaver.OsServices](../../SysWeaver.OsServices/README.md)
 - **Used by:** services [ExchangeRateService](https://github.com/dosh1974/SysWeaver.Services/blob/main/ExchangeRateService/README.md), [FakeEmailService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeEmailService/README.md), [FakeTextService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeTextService/README.md), [IpLocationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/IpLocationService/README.md), [ReverseProxyClient](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyClient/README.md), [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Services/blob/main/ReverseProxyServer/README.md), [SwLanCertManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwLanCertManager/README.md), [SwServerManager](https://github.com/dosh1974/SysWeaver.Services/blob/main/SwServerManager/README.md), [TranslationService](https://github.com/dosh1974/SysWeaver.Services/blob/main/TranslationService/README.md), [WebServerService](https://github.com/dosh1974/SysWeaver.Services/blob/main/WebServerService/README.md)
-- **Third-party:** `System.ServiceProcess.ServiceController`
+- **Third-party:** `System.ServiceProcess.ServiceController`, `System.Management`

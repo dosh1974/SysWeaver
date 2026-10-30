@@ -40,6 +40,15 @@ flowchart TB
 - [`ServiceHostFactoryUnix`](ServiceHostFactoryUnix.cs) — the `IServiceHostFactory`, detects the init system
 - [`ServiceHostSystemD`](ServiceHostSystemd.cs) / [`ServiceHostSysVinit`](ServiceHostSysVinit.cs) — internal `IServiceHost` implementations
 - [`UnixHelpers`](UnixHelpers.cs) — `IsElevated` (euid 0), `RunElevated` (sudo), `SendSignal` (libc `kill`)
+- [`SystemdSystemServices` / `SysVinitSystemServices`](UnixSystemServices.cs) — internal `ISystemServices` (systemctl, or the /etc/init.d scripts)
+- [`UfwFirewall` / `IptablesFirewall`](UnixFirewall.cs) — internal `IFirewall` (ufw if installed, else iptables / ip6tables; iptables changes are not persisted)
+- [`UnixStorage`](UnixStorage.cs) — internal `IStorage` (`lsblk -J -b` and the mounted file systems, LUKS / LVM detected from the device tree)
+- [`UnixNetworkConfig`](UnixNetworkConfig.cs) — internal `INetworkConfig` (`/sys/class/net`, `ip -j` for routes and DHCP addresses, `ip link set` to enable / disable, `resolvectl` or `nscd` to flush the DNS cache)
+- [`UnixEnvironment`](UnixEnvironment.cs) — internal `IEnvironmentVariables` (machine: `/etc/environment`, user: `~/.config/environment.d/*.conf`, new user variables go to `60-sysweaver.conf`)
+- [`UnixStartup`](UnixStartup.cs) — internal `IStartupItems` (XDG autostart, cron `@reboot` lines, `/etc/rc.local`; disabling a system autostart item creates a user override with `Hidden=true`, disabled cron lines are commented out)
+- [`UnixPower`](UnixPower.cs) — internal `IPower` (`shutdown` in whole minutes, `systemctl suspend / hibernate`, the schedule is read from `/run/systemd/shutdown/scheduled`)
+- [`UnixFilePermissions`](UnixFilePermissions.cs) — internal `IFilePermissions` (owner, group and mode with `stat` / chown / chgrp / chmod, POSIX ACL's shown with `getfacl` but not edited)
+- [`UnixCommand`](UnixCommand.cs) — runs programs with an argument list (no shell), uses `sudo -n` for changes when not root, writes root owned files through `sudo -n cp`
 
 ## Using it
 

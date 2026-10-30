@@ -296,6 +296,8 @@ function appendTheme(url) {
     const t = window.UseTheme;
     if (!t)
         return url;
+    if (IsAbsolutePath(url) && !IsSameOrigin(url))
+        return url;
     if (url.indexOf('?') < 0)
         return url + "?useTheme=" + t;
     return url + "&useTheme=" + t;

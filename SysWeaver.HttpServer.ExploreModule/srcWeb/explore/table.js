@@ -987,6 +987,9 @@ class Table {
                 const props = col.Props;
                 const cell = trow.insertCell();
                 const s = document.createElement("select");
+                //  No form state restoration / autofill: the browser may otherwise put the values of another table (with the
+                //  same layout) into these controls, ex: a new iframe created while the host goes back in its history (Fenrir windows).
+                s.autocomplete = "off";
                 cell.appendChild(s);
                 let anyEnabled = false;
                 for (let oi = 0; oi < TableDataFilterOps.Count; ++oi)
@@ -1084,6 +1087,7 @@ class Table {
                 const s = document.createElement("input");
                 cell.appendChild(s);
                 s.type = "text";
+                s.autocomplete = "off"; //  See the select above
                 if ((props & TableDataProps.AnyFilters) !== 0) {
 
                     s.value = filter.Value;
@@ -1853,6 +1857,7 @@ class Table {
         //  Search
         var searchEI = document.createElement("input");
         searchEI.type = "text";
+        searchEI.autocomplete = "off"; //  No form state restoration / autofill (see addFilterRow)
         searchEI.value = state.RequestParams.SearchText ?? "";
         searchEI.placeholder = _TF("Search for..", "A placehodler text for an input field that contains textual keyword used for searching a table of data");
         footer.appendChild(searchEI);

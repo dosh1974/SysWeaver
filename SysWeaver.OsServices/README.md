@@ -41,6 +41,25 @@ flowchart TB
 - [`ServiceParams`](ServiceParams.cs) — service name, display name, description, start mode, restart policy, logo, auto-recover
 - [`ServiceResponse`](ServiceResponse.cs) / [`ServiceStatus`](ServiceStatus.cs) — operation results and service states, with exit code mapping (`ServiceResponseHelper`, `ServiceStatusHelper`)
 - [`IServiceHost`](IServiceHost.cs) / [`IServiceHostFactory`](IServiceHostFactory.cs) — the OS specific install / control / run contract, implemented as `SysWeaver.OsServices.ServiceHostFactory[Platform]`
+- [`OsSystem`](OsSystem.cs) — finds the platform factory and exposes the OS wide functionality below (`Services`, `Firewall`, `Storage`, `NetworkConfig`, `Environment`, `Startup`, `Power`, `FilePermissions`, null if not supported; the `Require*` methods throw a descriptive exception instead)
+- [`ISystemServices`](ISystemServices.cs) / [`OsServiceInfo`](OsServiceInfo.cs) — list all services of the OS and start, stop, restart, pause, continue, reload, change the start mode or delete them
+- [`IFirewall`](IFirewall.cs) / [`FirewallRule`](FirewallRule.cs) — list, add, update, enable / disable and remove firewall rules, and read the profile states
+- [`IStorage`](OsStorage.cs) — the mounted volumes (size, free space, file system, encryption, health) and the physical disks with their partitions
+- [`INetworkConfig`](OsNetworkConfig.cs) — the network adapters (including disabled ones) and their ip configuration, enable / disable an adapter, the routing table, flush the DNS cache, the path of the hosts file
+- [`IEnvironmentVariables`](OsEnvironment.cs) — read, set and delete the environment variables of the process, the user and the machine
+- [`IStartupItems`](OsStartup.cs) — programs started at boot / log on (Windows Run keys and startup folders, Linux XDG autostart, cron @reboot and rc.local): list, add, enable / disable and remove
+- [`IPower`](OsPower.cs) — shut down or restart (with a delay and a message), abort, sleep and hibernate
+- [`IFilePermissions`](OsFilePermissions.cs) — the owner and permissions of files and folders: Windows ACL entries (add, remove, inheritance), Linux owner, group and mode
+
+```csharp
+foreach (var s in OsSystem.RequireServices().GetServices())
+    Console.WriteLine($"{s.Name}: {s.Status} ({s.StartMode})");
+var id = OsSystem.RequireFirewall().AddRule(new FirewallRule { Name = "Web", Protocol = "TCP", LocalPorts = "80,443" });
+foreach (var v in OsSystem.RequireStorage().GetVolumes())
+    Console.WriteLine($"{v.MountPoint}: {v.Free} of {v.Size} bytes free");
+OsSystem.RequireEnvironment().SetVariable(OsEnvironmentScopes.User, "MY_VAR", "value");
+OsSystem.RequirePower().Shutdown(restart: true, delaySeconds: 300, force: false, message: "Updating");
+```
 
 ## Using it
 
