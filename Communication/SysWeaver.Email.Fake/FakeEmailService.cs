@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using SysWeaver.Auth;
 using SysWeaver.Data;
 using SysWeaver.MicroService;
 
@@ -9,12 +10,33 @@ namespace SysWeaver.Email
 {
 
     [WebApiUrl("fakeEmail")]
-    [WebMenuLink(null, "Debug/FakeEmail", "Fake email", "fakeEmail/index.html", "Show the fake email inbox")]
-    public sealed class FakeEmailService : IEmailSender, IEmailReceiverService
+    [WebMenuEmbedded(null, "Debug/FakeEmail", "Fake email inbox", "fakeEmail/index.html", "Show the fake email inbox (emails sent by the system and faked incoming emails)", "IconEmail", 0, null, false, nameof(IsMenuAllowed))]
+    public sealed class FakeEmailService : IEmailSender, IEmailReceiverService, IRunTimeWebApiAuth
     {
+        /// <summary>
+        /// The menu item is only shown to users that may use the API's (see <see cref="FakeEmailParams.Auth"/>)
+        /// </summary>
+        Task<bool> IsMenuAllowed(Authorization auth, WebMenuItem item)
+            => auth.IsValid(Auth) ? TaskExt.TrueTask : TaskExt.FalseTask;
+
+        /// <summary>
+        /// The auth required to use the API's, from <see cref="FakeEmailParams.Auth"/>
+        /// </summary>
+        readonly String Auth;
+
+        /// <summary>
+        /// The auth of all API's (and the menu items of the API's), from <see cref="FakeEmailParams.Auth"/>
+        /// </summary>
+        public IReadOnlyDictionary<String, String> MethodAuths { get; }
+
         public FakeEmailService(FakeEmailParams p = null)
         {
             p = p ?? new FakeEmailParams();
+            Auth = p.Auth;
+            MethodAuths = new Dictionary<String, String>(StringComparer.Ordinal)
+            {
+                { "*", p.Auth },
+            }.Freeze();
             Size = Math.Max(p.Size, 10);
             TimeOut = Math.Max(p.TimeOut, 0) * 1000;
             var maxPoll = Math.Max(p.MaxPoll, 10);
@@ -71,10 +93,10 @@ namespace SysWeaver.Email
             Changed.Change();
         }
 
-        AnyEmail SendInternal(String to, String subject, String message, bool isHtml)
+        AnyEmail SendInternal(String to, String subject, String message, bool isHtml, String system)
         {
             to = Validate(to, "receiver");
-            var m = new AnyEmail(false, Sender, to, subject?.Trim() ?? "", message ?? "", isHtml, null);
+            var m = new AnyEmail(false, Sender, to, subject?.Trim() ?? "", message ?? "", isHtml, String.IsNullOrWhiteSpace(system) ? null : system.Trim());
             if (Fails(to))
                 m.Error = "Fake: delivery to " + to.ToQuoted() + " failed";
             Add(m);
@@ -88,7 +110,7 @@ namespace SysWeaver.Email
         {
             try
             {
-                SendInternal(msg.Email, msg.Subject, msg.Body, msg.IsHtml);
+                SendInternal(msg.Email, msg.Subject, msg.Body, msg.IsHtml, msg.System);
                 return Task.CompletedTask;
             }
             catch (Exception ex)
@@ -109,7 +131,7 @@ namespace SysWeaver.Email
         {
             var from = Validate(email.From, "sender");
             var to = String.IsNullOrWhiteSpace(email.To) ? Sender : Validate(email.To, "receiver");
-            var m = new AnyEmail(true, from, to, email.Subject?.Trim() ?? "", email.Body ?? "", email.IsHtml, email.System)
+            var m = new AnyEmail(true, from, to, email.Subject?.Trim() ?? "", email.Body ?? "", email.IsHtml, String.IsNullOrWhiteSpace(email.System) ? null : email.System.Trim())
             {
                 SenderName = String.IsNullOrWhiteSpace(email.SenderName) ? "Fake user" : email.SenderName.Trim(),
                 InReplyTo = email.InReplyTo,

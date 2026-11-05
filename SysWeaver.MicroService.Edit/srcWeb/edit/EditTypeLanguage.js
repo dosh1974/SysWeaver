@@ -1,344 +1,276 @@
 ﻿/**
- * @file EditTypeLanguage.js - special-type editor plugin for language members (EditTypes.Language = "Language" in
- * SysWeaver.Common/Edit/EditTypes.cs) of the object editor; the value is an ISO 639-1 code string.
+ * @file Plug-in handler for string members with the `Language` edit type (`[EditType(EditTypes.Language)]`), an ISO 639-1
+ * language picker (`Sw.Edit.Handlers.Language`, legacy globals `EditTypeLanguage`, `EditTypeLanguageFactory`).
  *
- * Loading: not included by Edit.Init(); a page must include this script itself (no in-repo includer was found).
- * When loaded it calls EditTypeLanguage.Init(), which includes ../iso_data/languages.js (IsoLanguage) and
- * EditLanguage.css relative to this script.
- * Plug-in mechanism: Edit.GetTypeHandler() looks up window["EditType" + spec + "Factory"] for members whose
- * member.Type is "Language[:...]" and calls it with (typeName, specParts); the result is cached in the type map.
- *
- * Globals defined: function EditTypeLanguageFactory, class EditTypeLanguage.
- * Dependencies: SearchablePoupSelection, badClick, keyboardClick, createImg (app/application.js, common),
- * IsoLanguage (iso_data/languages.js), Edit (IsValid, CreateChangeEvent), ValueFormat.AddNonNullLine,
- * TypeMemberFlags (type.js), includeJs/includeCss.
+ * Loaded on demand by Edit.js when a member uses the spec (or included by a page). Loads `../iso_data/languages.js`
+ * (IsoLanguage) and EditLanguage.css. The value shows the flag and the language name ("None" when empty, an unknown icon and
+ * "Invalid!" for unknown codes); click / Enter / Space opens a searchable, paged selection ranked by name / code match and
+ * recent use (recent picks are stored in localStorage "SysWeaver.PopUpRecent.Language").
+ * Without the IsoDataService (Api/HaveService probe, as ui/cells.js) nothing under iso_data/ is requested (no 404): the value is
+ * edited as a plain two letter code (text box, a-z only) and validated by its form. Read only: the flag and name as plain text.
  */
+(function () {
+    "use strict";
 
-/**
- * Factory used by Edit.GetTypeHandler() for member.Type "Language". Creates a new handler per call
- * (Edit caches it per "typeName|spec").
- * @param {string} typename - .NET type name of the member; must be "System.String".
- * @returns {EditTypeLanguage} New handler (throws for other types).
- */
-function EditTypeLanguageFactory(typename) {
-    return new EditTypeLanguage(typename);
-}
-
-
-
-/**
- * Type handler for language codes. Renders a clickable SysWeaver-EditLanguage element (flag image + language name)
- * that opens a searchable language popup.
- */
-class EditTypeLanguage {
-
+    const E = Sw.Edit;
+    const F = E.Flags;
+    const Has = E.Util.Has;
+    const Url = document.currentScript ? document.currentScript.src : E.ScriptUrl;
+    /** @type {string} Folder of the language flag icons. */
+    const IsoBase = new URL("../iso_data/", Url).href;
 
     /**
-     * Loads the dependencies of this plugin: ../iso_data/languages.js and EditLanguage.css (relative to this script).
-     * Called once at the end of this file.
-     * @returns {Promise<void>} Resolves when both are loaded.
+     * Find a language.
+     * @param {string} code - ISO code or name.
+     * @returns {?object} The IsoLanguage.
      */
-    static async Init() {
-        const current = document.currentScript.src;
-        await Promise.all([
-            includeJs(current, "../iso_data/languages.js"),
-            includeCss(current, "EditLanguage.css")
-        ]);
+    function iso(code) {
+        const L = lang();
+        return L && code ? L.Get(code) : null;
     }
 
     /**
-     * Shared language picker popup (SearchablePoupSelection with id "Language", recent ids = Iso639_1, up to 10 recent).
-     * Each row is a SysWeaver-EditLangSel element (class Recent for recently used languages) with a flag image from
-     * ../iso_data/language/<iso>.svg and a SysWeaver-EditLangText name. The find function filters
-     * IsoLanguage.Languages by the lower-cased search text, ranks matches (see rank) plus recent-use rank,
-     * stores the result in data.Rank, sorts, and applies offset / maxCount paging.
-     * @type {SearchablePoupSelection}
+     * The IsoLanguage class (iso_data/languages.js), null when not loaded (no IsoDataService).
+     * @returns {?object} The class.
      */
-    static LanguageSel = new SearchablePoupSelection(
-        "Language",
-        data => data.Iso639_1,
-        (data, onSelectFn, isRecent) => {
-            const ls = document.createElement("SysWeaver-EditLangSel");
-            ls.tabIndex = "0";
-            ls.onclick = async ev => {
-                if (badClick(ev))
-                    return;
-                await onSelectFn(data);
-            };
-            if (isRecent)
-                ls.classList.add("Recent");
-            ls.title = "Name: " + data.Name + ".\nISO 639-1 language code: " + data.Iso639_1 + ".";
-            keyboardClick(ls);
-            const img = createImg("img");
-            img.src = "../iso_data/language/" + data.Iso639_1 + ".svg";
-            ls.appendChild(img);
-
-            const text = document.createElement("SysWeaver-EditLangText");
-            ls.appendChild(text);
-            text.innerText = data.Name;
-            return ls;
-        },
-        (text, recent, maxCount, offset) => {
-            text = text.toLowerCase();
-            const res = [];
-            const src = IsoLanguage.Languages;
-            const sl = src.length;
-            /**
-             * Ranks a language against the search text (lower is better). Note: the variable names are swapped -
-             * isoIndex holds the position in the name and nameIndex the position in the ISO code.
-             * @param {{Name:string, Iso639_1:string}} val - Language entry.
-             * @returns {number} 0 without search text; 1000000 when neither name nor code matches; otherwise
-             *   namePos (4 if no name match) + codePos * 4 (codePos 1000 if no code match).
-             */
-            const rank = val => {
-                if (!text)
-                    return 0;
-                let isoIndex = val.Name.toLowerCase().indexOf(text);
-                let nameIndex = val.Iso639_1.toLowerCase().indexOf(text);
-                if (isoIndex < 0) {
-                    isoIndex = 4;
-                    if (nameIndex < 0)
-                        return 1000000;
-                }
-                if (nameIndex < 0)
-                    nameIndex = 1000;
-                return isoIndex + nameIndex * 4;
-            };
-            for (let i = 0; i < sl; ++i) {
-                const data = src[i];
-                let r = rank(data);
-                if (r >= 1000000)
-                    continue;
-                r += 1000000;
-                let rc = recent.get(data.Iso639_1);
-                if (!rc)
-                    rc = 9999999;
-                r += rc;
-                data.Rank = r;
-                res.push(data);
-            }
-            res.sort((a, b) => a.Rank - b.Rank);
-            if (offset > 0)
-                res.splice(0, offset);
-            const delLength = res.length - maxCount;
-            if (delLength > 0)
-                res.splice(maxCount, delLength);
-            return res;
-        }, 10);
-
-        
-
-
-    /**
-     * @param {string} typename - .NET type name; throws a string error unless it is "System.String".
-     */
-    constructor(typename) {
-        if (typename != "System.String")
-            throw "Invalid type \"" + typename + "\"! - Language is only supported for strings!";
+    function lang() {
+        return typeof IsoLanguage !== "undefined" ? IsoLanguage : (window.IsoLanguage || null);
     }
 
     /**
-     * Creates the default value for a new member.
-     * @param {object} member - Member description.
-     * @param {EditOptions} options - Editor options.
-     * @returns {?string} Same as GetDefault.
+     * Is the IsoDataService running (it serves iso_data/)? One Api/HaveService probe per page; a failing probe counts as present.
+     * @returns {Promise<boolean>} True when iso_data/ can be loaded.
      */
-    CreateDefault(member, options) {
-        return this.GetDefault(member, options);
-    }
-
-    /**
-     * Checks whether a pasted / dropped value could be a language code.
-     * @param {*} obj - Candidate value.
-     * @returns {boolean} true for anything that is neither undefined nor an object.
-     */
-    IsOfType(obj) {
-        const t = typeof (obj);
-        return (t !== "undefined") && (t !== "object");
-    }
-
-    /**
-     * Converts a value to an ISO 639-1 code via IsoLanguage.Get, falling back to "en" when unknown.
-     * @param {*} obj - Value ("" + obj is looked up).
-     * @param {object} member - Member description (unused).
-     * @param {EditOptions} options - Editor options (unused).
-     * @returns {string} The ISO 639-1 code.
-     */
-    Condition(obj, member, options) {
-        obj = "" + obj;
-        obj = IsoLanguage.Get(obj);
-        obj = obj ? obj.Iso639_1 : "en";
-        return obj;
-    }
-
-    /**
-     * Validates a value: null only with TypeMemberFlags.AcceptNull; otherwise IsoLanguage.Get must find it and its
-     * Iso639_1 must equal the value exactly.
-     * @param {*} obj - Value to validate.
-     * @param {object} member - Member description (Flags, DisplayName).
-     * @param {EditOptions} options - Editor options (unused).
-     * @param {string} name - Member path/name returned with the error.
-     * @returns {Promise<?Array<string>>} null when valid, otherwise [name, message].
-     */
-    async Validate(obj, member, options, name) {
-        if (obj == null) {
-            if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
-                return null;
-            return [name, member.DisplayName + ": Value may not be null"];
+    async function haveIsoData() {
+        if (lang())
+            return true;
+        try {
+            return !!(await Sw.Net.Send(Sw.Url.Root + "Api/HaveService", "SysWeaver.MicroService.IsoDataService", { NoNavigate: true }));
         }
-        obj = "" + obj;
-        const iso = IsoLanguage.Get(obj);
-        if (!iso)
-            return [name, member.DisplayName + ": Value must be a valid two letter ISO 639-1 language code"];
-        if (iso.Iso639_1 != obj)
-            return [name, member.DisplayName + ": Value must be a valid two letter ISO 639-1 language code"];
-        return null;
-    }
-
-
-    /**
-     * Formats a value for display.
-     * @param {*} obj - Value.
-     * @param {object} member - Member description (unused).
-     * @param {EditOptions} options - Editor options (unused).
-     * @returns {string} "" + obj.
-     */
-    ToString(obj, member, options) {
-        return "" + obj;
-    }
-
-    /**
-     * Computes the default value.
-     * @param {object} member - Member description (Default, Flags).
-     * @param {EditOptions} options - Editor options (unused).
-     * @returns {?string} member.Default when Edit.IsValid ("\t" maps to "en"), else null with AcceptNull, else "en".
-     */
-    GetDefault(member, options) {
-        //  Default
-        let def = member.Default;
-        if (Edit.IsValid(def))
-            return def === "\t" ? "en" : def;
-        if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
-            return null;
-        return "en";
-    }
-
-    /**
-     * Builds the language editor: a SysWeaver-EditLanguage element with a flag img and a SysWeaver-EditLangText.
-     * Unless read only (options.ReadOnly, TypeMemberFlags.ReadOnly or this.ForceReadOnly, which is never set and
-     * thus undefined), it gets tabIndex 0, the class Enabled and a click handler that opens
-     * EditTypeLanguage.LanguageSel ("Select language", 25 visible rows); a selection goes through editor.Invoke
-     * with the text element as tracking object. obj[member.Name] is set to the default when undefined.
-     * @param {object} obj - The object being edited.
-     * @param {Edit} editor - Owning editor (Invoke, Element, Key, KeyName).
-     * @param {{Element:HTMLElement}} editContext - Layout context; Element is the value cell.
-     * @param {object} member - Member description (Name, Default, Flags).
-     * @param {string} title - Member title (unused).
-     * @param {EditOptions} options - Editor options (ReadOnly).
-     * @returns {Promise<object>} Item {Focus, Title, DefValue, DefValueText, SetValue(v), UpdateValue(isFirst)};
-     *   SetValue writes obj[mn] and dispatches EditChange on editor.Element.
-     */
-    async AddEditor(obj, editor, editContext, member, title, options) {
-        let typeTitle = null;
-        const mn = member.Name;
-        const cell = editContext.Element;
-        const readOnly = options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0) || this.ForceReadOnly;
-
-        const def = this.GetDefault(member, options);
-        const defText = def == null ? null : ('"' + def + '"');
-        typeTitle = ValueFormat.AddNonNullLine(typeTitle, "Default value", defText);
-
-        if (typeof obj[mn] === "undefined")
-            obj[mn] = def;
-
-        const e = document.createElement("SysWeaver-EditLanguage");
-        if (!readOnly) {
-            e.tabIndex = "0";
-            e.classList.add("Enabled");
-            e.onclick = async ev => {
-                await EditTypeLanguage.LanguageSel.Show("Select language", async newLang => {
-                    const v = newLang.Iso639_1;
-                    const old = obj[mn];
-                    if (old === v)
-                        return false;
-                    const newValue = v;
-                    await editor.Invoke(
-                        edit => {
-                            edit.SetValue(newValue);
-                        },
-                        edit => {
-                            edit.SetValue(old);
-                        },
-                        "Set value: \"" + newValue + "\"",
-                        mn,
-                        text,
-                    );
-                    return true;
-                }, 25);
-            };
-            keyboardClick(e);
+        catch {
+            return true;
         }
+    }
 
-        const icon = createImg("img");
-        e.appendChild(icon);
+    /** A plain ISO 639-1 code ("en"): the check without the language list. */
+    const CodeRe = /^[a-z]{2}$/;
 
-        const text = document.createElement("SysWeaver-EditLangText");
-        e.appendChild(text);
+    /**
+     * Language handler (strings only).
+     */
+    class EditTypeLanguage extends E.Handler {
+        /**
+         * @param {string} typename - The member type (must be System.String).
+         */
+        constructor(typename) {
+            super();
+            if (typename && typename !== "System.String")
+                throw new Error("Invalid type \"" + typename + "\"! - Language is only supported for strings!");
+        }
 
         /**
-         * Refreshes the flag icon, the text and the tooltips from obj[mn]: "None" (no icon) for a falsy value,
-         * "Invalid!" with ../iso_data/icons/unknown.svg for an unknown code, otherwise the flag
-         * ../iso_data/language/<iso>.svg and the language name. Adds a "Click to select" hint when editable.
-         * @returns {void}
+         * Accept texts.
+         * @param {*} obj - Candidate.
+         * @returns {boolean} True for non objects.
          */
-        const updateValue = () => {
-            const val = obj[mn];
-            let title = "";
-            if (!val) {
-                icon.src = "";
-                text.innerText = "None";
-                title = "No language selected (null).";
-            } else {
-                const iso = IsoLanguage.Get(val);
-                if (!iso) {
-                    icon.src = "../iso_data/icons/unknown.svg";
-                    text.innerText = "Invalid!";
-                    title = '"' + val + '" is not a valid two letter ISO 639-1 language code!';
-                } else {
-                    icon.src = "../iso_data/language/" + iso.Iso639_1 + ".svg";
-                    text.innerText = iso.Name;
-                    title = "ISO 639-1 language code: " + iso.Iso639_1;
-                }
+        IsOfType(obj) {
+            const t = typeof obj;
+            return t !== "undefined" && t !== "object";
+        }
+
+        /**
+         * Convert a value to an ISO 639-1 code (unknown -> "en").
+         * @param {*} obj - The value.
+         * @returns {string} The code.
+         */
+        Condition(obj) {
+            if (!lang()) {
+                //  No language list: keep a code as it is (lower case), never replace it by "en"
+                const s = ("" + obj).trim().toLowerCase();
+                return CodeRe.test(s) ? s : "en";
             }
-            if (!readOnly)
-                title += "\n\nClick to select another language.";
-            icon.title = title;
-            text.title = title;
-        };
-        updateValue();
-        cell.appendChild(e);
+            const l = iso("" + obj);
+            return l ? l.Iso639_1 : "en";
+        }
 
+        /**
+         * Validate a two letter ISO 639-1 code (null only with AcceptNull).
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @param {object} options - Options.
+         * @param {string} name - Path.
+         * @returns {Promise<?Array<string>>} Null or [path, message].
+         */
+        async Validate(obj, member, options, name) {
+            if (obj === null || obj === undefined)
+                return E.Handler.NullCheck(obj, member, name);
+            const l = iso("" + obj);
+            if (!lang() ? !CodeRe.test("" + obj) : (!l || l.Iso639_1 !== "" + obj))
+                return [name, (member.DisplayName || member.Name) + ": " + _TF("Value must be a valid two letter ISO 639-1 language code", "Validation error of a language code")];
+            return null;
+        }
 
+        /**
+         * The default: metadata ("\t" = "en"), else null with AcceptNull, else "en".
+         * @param {object} member - The member.
+         * @returns {?string} The default.
+         */
+        GetDefault(member) {
+            if (Has(member.Default))
+                return member.Default === "\t" ? "en" : member.Default;
+            return (member.Flags & F.AcceptNull) !== 0 ? null : "en";
+        }
 
-        return {
-            Focus: e,
-            Title: typeTitle,
-            DefValue: def,
-            DefValueText: defText,
-            SetValue: newVal => {
-                obj[mn] = newVal;
-                editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, newVal, null, editor.Key, editor.KeyName));
-            },
-            UpdateValue: isFirst => {
-                updateValue();
-                if (!isFirst)
-                    e.focus();
-            },
-        };
+        /**
+         * Show the language selection.
+         * @returns {Promise<?object>} The picked IsoLanguage (null when dismissed).
+         */
+        static Pick() {
+            if (!EditTypeLanguage.Selection) {
+                EditTypeLanguage.Selection = new Sw.SearchSelection({
+                    Id: "Language",
+                    GetId: d => d.Iso639_1,
+                    MaxRecent: 10,
+                    Render: (d, select, isRecent) => {
+                        const b = Sw.el("button.sw-edit-langsel", {
+                            type: "button", title: _T("Name: {0}, ISO 639-1 language code: {1}", d.Name, d.Iso639_1, "Tool tip of a language in a language selection.{0} is replaced with the language name.{1} is replaced with the two letter code."),
+                            attrs: { role: "option" },
+                        }, Sw.el("img", { src: IsoBase + "language/" + d.Iso639_1 + ".svg", alt: "", loading: "lazy" }), Sw.el("span", { text: d.Name }), Sw.el("span.sw-edit-langcode", { text: d.Iso639_1 }));
+                        if (isRecent)
+                            b.classList.add("Recent");
+                        b.addEventListener("click", () => select(d));
+                        return b;
+                    },
+                    Find: async (text, recent, maxCount, offset) => {
+                        text = (text || "").trim().toLowerCase();
+                        const res = [];
+                        for (const d of (typeof IsoLanguage !== "undefined" ? IsoLanguage : window.IsoLanguage).Languages) {
+                            let r = 0;
+                            if (text) {
+                                const ni = d.Name.toLowerCase().indexOf(text);
+                                const ci = d.Iso639_1.toLowerCase().indexOf(text);
+                                if (ni < 0 && ci < 0)
+                                    continue;
+                                r = (ci === 0 ? 0 : (ni < 0 ? 1000 : ni)) + (ci < 0 ? 4000 : ci * 4);
+                            }
+                            r = r * 100 + (recent.get(d.Iso639_1) || 99);
+                            res.push({ D: d, R: r });
+                        }
+                        res.sort((a, b) => a.R - b.R);
+                        return res.slice(offset, offset + maxCount).map(x => x.D);
+                    },
+                });
+            }
+            return EditTypeLanguage.Selection.Show({ Title: _TF("Select language", "Title of a dialog where a language is selected"), PageSize: 25 });
+        }
+
+        /**
+         * Build the language button.
+         * @param {object} obj - The object.
+         * @param {Sw.Edit} editor - The editor.
+         * @param {object} editContext - Layout context.
+         * @param {object} member - The member.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         * @returns {Promise<object>} The item.
+         */
+        async AddEditor(obj, editor, editContext, member, title, options) {
+            const mn = member.Name;
+            const readOnly = this.IsReadOnly(member, options);
+            const def = this.GetDefault(member);
+            if (obj[mn] === undefined)
+                obj[mn] = def;
+            const defTitle = E.Util.AddLine(null, _TF("Default value", "Header of a tool tip row with the default value of a property"), def === null ? "null" : ('"' + def + '"'));
+            if (!lang()) {
+                //  No language list (no IsoDataService): a plain code, no flags (nothing under iso_data/ is requested)
+                const set = async (v, ev, token) => {
+                    const old = obj[mn];
+                    if (old === v)
+                        return;
+                    await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                };
+                const tb = E.CreateTextInput(() => obj[mn], set, s => (s = ("" + s).trim().toLowerCase()) ? s : null, v => v ?? "",
+                    _TF("Two letter ISO 639-1 code, ex: en", "Placeholder of a language code text box (shown when the language list is not available)"), null, "abcdefghijklmnopqrstuvwxyz", 2, def, readOnly);
+                tb.classList.add("sw-edit-langcode-input");
+                tb.setAttribute("aria-label", member.DisplayName || mn);
+                if (readOnly && !obj[mn])
+                    tb.placeholder = "null";
+                editContext.Element.append(tb);
+                return E.Handler.Item(obj, editor, member, { Focus: tb, Title: defTitle, DefValue: def, DefValueText: def === null ? "null" : def, Update: () => tb.UpdateValue() });
+            }
+            const img = Sw.el("img", { alt: "" });
+            const text = Sw.el("span.sw-edit-langtext");
+            //  Read only: the flag and the name as plain text (focusable, not a button)
+            const b = readOnly
+                ? Sw.el("span.sw-edit-language.sw-edit-language-ro.EditReadOnly", { tabIndex: 0, attrs: { role: "textbox", "aria-readonly": "true" } }, img, text)
+                : Sw.el("button.sw-edit-language.SysWeaver-EditLanguage", { type: "button" }, img, text);
+            if (readOnly)
+                b.setAttribute("aria-label", member.DisplayName || mn);
+            const update = () => {
+                const v = obj[mn];
+                let tip;
+                if (!v) {
+                    img.removeAttribute("src");
+                    img.hidden = true;
+                    text.textContent = _TF("None", "Shown when no language is selected");
+                    tip = _TF("No language selected (null).", "Tool tip when no language is selected");
+                }
+                else {
+                    const l = iso(v);
+                    img.hidden = false;
+                    if (!l) {
+                        img.src = IsoBase + "icons/unknown.svg";
+                        text.textContent = _TF("Invalid!", "Shown when a language code is unknown");
+                        tip = _T("\"{0}\" is not a valid two letter ISO 639-1 language code!", v, "Tool tip of an invalid language code.{0} is replaced with the code.");
+                    }
+                    else {
+                        img.src = IsoBase + "language/" + l.Iso639_1 + ".svg";
+                        text.textContent = l.Name;
+                        tip = _T("ISO 639-1 language code: {0}", l.Iso639_1, "Tool tip of a language.{0} is replaced with the two letter code.");
+                    }
+                }
+                if (!readOnly)
+                    tip += "\n\n" + _TF("Select another language.", "Tool tip of a button that opens a language selection");
+                b.title = tip;
+            };
+            update();
+            if (!readOnly) {
+                b.addEventListener("click", async () => {
+                    const l = await EditTypeLanguage.Pick();
+                    if (!l)
+                        return;
+                    const old = obj[mn];
+                    if (old === l.Iso639_1)
+                        return;
+                    await editor.SetMemberValue(member, l.Iso639_1, old, _T("Set value: \"{0}\"", l.Iso639_1, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
+                });
+            }
+            editContext.Element.append(b);
+            return E.Handler.Item(obj, editor, member, {
+                Focus: b, Title: defTitle,
+                DefValue: def, DefValueText: def === null ? "null" : def, Update: update,
+            });
+        }
     }
 
-}
+    /**
+     * The plug-in factory (old hook name).
+     * @param {string} typename - The member type.
+     * @returns {EditTypeLanguage} The handler.
+     */
+    function EditTypeLanguageFactory(typename) {
+        return new EditTypeLanguage(typename);
+    }
 
-// Load languages.js and EditLanguage.css as soon as this script is evaluated (document.currentScript is only valid now).
-EditTypeLanguage.Init();
-
+    E.Handlers.Language = EditTypeLanguage;
+    //  The language list only when the IsoDataService serves it (no 404 / console error without it; the handler then edits codes)
+    E.PluginReady.Language = Promise.all([
+        haveIsoData().then(have => have && !lang() ? Sw.Net.IncludeJs(Url, "../iso_data/languages.js", true) : null),
+        Sw.Net.IncludeCss(Url, "EditLanguage.css", true),
+    ]);
+    E.RegisterSpec("Language", EditTypeLanguageFactory);
+    if (!window.EditTypeLanguage)
+        window.EditTypeLanguage = EditTypeLanguage;
+    if (!window.EditTypeLanguageFactory)
+        window.EditTypeLanguageFactory = EditTypeLanguageFactory;
+})();

@@ -94,7 +94,7 @@ namespace SysWeaver.Db
         /// Derived classes should set the args for all properties that goes into connection string like: args[nameof(PropertyName)] = PropertyName;
         /// </summary>
         /// <param name="args">A dictionary of args</param>
-        /// <param name="isSecure">True to set sensitive parameters to their real value, if false set sensitive paramaters to ??? or simular bogus values</param>
+        /// <param name="isSecure">True to set sensitive parameters to their real value, if false set sensitive parameters to ??? or simular bogus values</param>
         protected virtual void SetArgs(Dictionary<String, String> args, bool isSecure)
         {
         }

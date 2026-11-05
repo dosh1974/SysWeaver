@@ -22,9 +22,8 @@ namespace SysWeaver.Auth
     /// The user guids are "SI:" followed by a hash of the user name.
     /// Thread safe, user changes are applied atomically and users whose password or tokens changed are asked to log out.
     /// </remarks>
-    [WebMenuPath(null, "Debug/SimpleAuth", "Authorizer", "Options and helpers for the basic authorizer", "icons/protect.svg")]
-    [WebMenuEmbedded(null, "Debug/SimpleAuth/GenPwd", "Generate password hash", "auth/index.html", "Generate password hashes to be used for the simple authorizer", "IconLock", 0, "debug,ops")]
-    [WebMenuEmbedded(null, "Debug/SimpleAuth/KeyMan", "API-key management", "auth/KeyMan.html", "Manage API-keys", "IconKey", 0, "", false, nameof(CanManageKeys))]
+    [WebMenuEmbedded(null, "Admin/GenPwd", "Generate password hash", "auth/index.html", "Generate password hashes to be used for the simple authorizer", "IconLock", 3, Roles.Ops)]
+    [WebMenuEmbedded(null, "Admin/KeyMan", "API-key management", "auth/KeyMan.html", "Manage API-keys", "IconKey", 2, "", false, nameof(CanManageKeys))]
     public sealed class SimpleAuthorizer : AuthorizerBase, IDisposable, IRunTimeWebApiAuth
     {
         /// <inheritdoc/>
@@ -395,16 +394,17 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// Get information about all users handled by the simple authorizer
+        /// The built-in users: the users of the server configuration (handled by the simple authorizer), they can't be changed here
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Parameters</param>
+        /// <returns>The users</returns>
+        /// <remarks>Shown as Administration > "Built-in users", so it never clashes with the user accounts of a user manager (Administration > Users).</remarks>
         [WebApi("debug/simpleAuth/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/SimpleAuth/{0}", "Users", null, "IconUsers")]
+        [WebMenuTable(null, "Admin/{0}", "Built-in users", "The users of the service configuration, they can't be changed here", "IconUsers", 1)]
         public TableData UsersTable(TableDataRequest r) => TableDataTools.Get(r, 5000, Auths.Values.Select(x => new Info(x.Item2)));
 
 
@@ -609,11 +609,12 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
         /// <returns>True if the key was removed, false if it doesn't exist</returns>
+        /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
         /// <exception cref="ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
-        public bool RemoveApiKey(String keyName)
+        public bool RemoveApiKey(String keyName, IAuthorizedRequest context = null)
         {
 #if DEBUG
             ArgumentNullException.ThrowIfNull(keyName);
@@ -652,13 +653,25 @@ namespace SysWeaver.Auth
                 }
                 if (del < 0)
                     return false;
+                var removedName = t[del].Split(':')[0];
                 t = t.RemoveAt(del);
                 KeyValueStore.AllApp.Set(ApiKeyKey, t);
+                //  Always logged (the WebApiAudit entry, with the user, is only stored when an audit service is running)
+                Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}API key {removedName.ToQuoted()} was removed by {CallerName(context)}");
                 UpdateUsers();
                 return true;
             }
         }
 
+
+        /// <summary>
+        /// The quoted user name of a web api caller for log lines, "an unknown caller" when unknown (ex: a call from code).
+        /// </summary>
+        static String CallerName(IAuthorizedRequest context)
+        {
+            var n = context?.CallerAuth?.Username;
+            return String.IsNullOrEmpty(n) ? "an unknown caller" : n.ToQuoted();
+        }
 
         static Object AuditOutputFilter_AddApiKey(long id, Object obj)
         {
@@ -678,12 +691,13 @@ namespace SysWeaver.Auth
         /// <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
         /// <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
         /// <exception cref="ArgumentNullException">The key name is null.</exception>
+        /// <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
         /// <exception cref="ArgumentException">The key name is empty (or only white spaces), contains a ':', starts with a '#' or "//" or is too long.</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
         [WebApiAuditFilterReturn(nameof(AuditOutputFilter_AddApiKey))]
-        public String AddApiKey(String keyName)
+        public String AddApiKey(String keyName, IAuthorizedRequest context = null)
         {
             if (keyName == null)
                 throw new ArgumentNullException(nameof(keyName), "Invalid key name (may not be null)");
@@ -717,6 +731,8 @@ namespace SysWeaver.Auth
                 var kv = String.Join(':', keyName, GenKey());
                 t = t.Push(kv);
                 KeyValueStore.AllApp.Set(ApiKeyKey, t);
+                //  Always logged (the WebApiAudit entry, with the user, is only stored when an audit service is running), never the key itself
+                Msg?.AddMessage(MessageLevels.Info, $"{LogPrefix}API key {keyName.ToQuoted()} was created by {CallerName(context)}");
                 UpdateUsers();
                 return kv;
             }

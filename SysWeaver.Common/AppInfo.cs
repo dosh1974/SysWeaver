@@ -75,8 +75,11 @@ namespace SysWeaver
                 }
             }
             EnvInfo.AppSeed = p.AppSeed;
+            //  Null or empty restores the executable version
+            EnvInfo.AppVersion = PathTemplate.Resolve(p.AppVersion);
             if (m != null)
             {
+                m.AddMessage(MessageLevels.Info, $"{LogPrefix}App version:     {EnvInfo.AppVersion}{(EnvInfo.AppVersion != EnvInfo.ExeAppVersion ? $" (executable: {EnvInfo.ExeAppVersion})" : "")}, built: {(String.IsNullOrEmpty(EnvInfo.AppBuildTime) ? "unknown" : EnvInfo.AppBuildTime + " UTC")}");
                 m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS name:         {EnvInfo.OsName}");
                 m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS platform:     {EnvInfo.OsPlatform}");
                 m.AddMessage(MessageLevels.Info, $"{LogPrefix}OS version:      {EnvInfo.OsVersion}");
@@ -148,12 +151,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Returns the current (global) application name, display name, seed and description.
+        /// Returns the current (global) application name, display name, version, seed and description.
         /// </summary>
         /// <returns>A display string.</returns>
         public override string ToString() => String.Concat(
             "Name: ", EnvInfo.AppName
             , ", Display name: ", EnvInfo.AppDisplayName
+            , ", Version: ", EnvInfo.AppVersion
             , ", Seed: ", EnvInfo.AppSeed
             , ", Description: ", EnvInfo.AppDescription
             );

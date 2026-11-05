@@ -51,7 +51,8 @@ namespace SysWeaver.ReverseProxy
                     long cc = 0;
                     for (; ; )
                     {
-                        if (responses.TryGetValue(rid, out var res))
+                        //  Removed when picked up (a kept response would stay in the dictionary for ever)
+                        if (responses.TryRemove(rid, out var res))
                             return res;
                         var wait = (int)(end - DateTime.UtcNow).TotalMilliseconds;
                         if (wait < 1)

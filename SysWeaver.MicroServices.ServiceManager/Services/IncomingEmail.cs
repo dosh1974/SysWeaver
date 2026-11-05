@@ -42,7 +42,7 @@ namespace SysWeaver.MicroService
         public bool IsHtml;
 
         /// <summary>
-        /// The UTC time stamp of when this email was recieved
+        /// The UTC time stamp of when this email was received
         /// </summary>
         public DateTime Time;
 

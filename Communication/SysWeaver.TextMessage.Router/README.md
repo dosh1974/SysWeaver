@@ -28,7 +28,7 @@ Routes to any text message provider registered in the same service manager, ex: 
 
 ## Key features
 
-- Routes are tried in order; a route matches a message by its `Channels` (vs `OutgoingTextMessage.Channels`), `Countries` / `ExcludeCountries` (of the recipient) and `Systems`. The message passed to a provider only allows the channels of the route, so one multi channel provider (ex: Twilio) can be used as several routes (ex: WhatsApp first, then SMS).
+- Routes are tried in order; a route matches a message by its `Channels` (vs `OutgoingTextMessage.Channels`), `Countries` / `ExcludeCountries` (of the recipient) and `Systems` (ignoring the letter case and white space around them, blank entries are ignored, a list of only blank entries matches nothing; a route with `Systems` never takes a message without a system). The message passed to a provider only allows the channels of the route, so one multi channel provider (ex: Twilio) can be used as several routes (ex: WhatsApp first, then SMS).
 - Falls back to the next matching route when the send result fails with a reason in `FallbackOn` (default `NotOnChannel`, `OutsideWindow`), or the provider throws (`FallbackOnError`).
 - Asynchronous fallback: when a provider later reports a failed status (WhatsApp reports non-WhatsApp numbers this way), the message is sent using the next route, and the new attempt is published as a status update (same `Reference`, new `MessageId` and `Provider`).
 - Remembers numbers that failed with `NotOnChannel` per route (`NotOnChannelHours`) and skips that route for them.

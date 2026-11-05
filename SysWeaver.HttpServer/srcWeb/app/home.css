@@ -1,66 +1,241 @@
-﻿
-/*
- * Styles of the Home page (app/Home.html, linked after ../common/theme.css; script home.js).
- * Centred layout of the welcome heading, the user image and the logo; upload states of the user image.
- * Depends on theme variables from common/theme.css (--ThemeFont, --ThemeBackground, --ThemeMain,
- * --ThemeAcc1, --ThemeAcc125, --ThemeFadeDuration). Home.html itself is a server template, this file is not.
+﻿/*
+ * Styles of the Home page (app/Home.html, script home.js): the Design v2 dashboard (Design v2, PORTING.md B11). Linked after ../common/theme.css and
+ * ../sw/ui.css (the page parts come from ui/page.css: .sw-page-dash, .sw-ph, .sw-grid, .sw-card, .sw-kpi, .sw-facts, .sw-tiles, .sw-rows,
+ * .sw-state). Here only the Home specifics:
+ *  - the header (.HomeHead): the user picture (img.UserImage, an upload target when the custom user image service exists) before the
+ *    application name and the greeting + description line, the status badge (.HomeStatus with a .HomeDot) right;
+ *  - the KPI row (.HomeKpis: auto fitting tiles, two per row on phones), the server facts strip (.HomeFacts), the shortcuts
+ *    (.QuickLinks), the cards (.HomeCards: recent pages, most used, problems) and the getting started hint (.HomeHint).
+ * Uses the Sw tokens (--sw-*), so every theme applies; flat (no shadows, no gradients). The body keeps the transparent background of embedded
+ * pages (theme.css html.Embedded) and the theme background when opened stand alone.
  */
 
-/* Page body: theme font/colours, full size, everything centred. */
-body {
-    margin: 0;
-    font-family: var(--ThemeFont);
-    background-color: var(--ThemeBackground);
-    color: var(--ThemeMain);
-    width: 100%;
-    height: 100%;
-    text-align: center;
+/* ===== Header ===== */
+
+.HomeHead {
+    align-items: center;
 }
 
-/*
- * All images (the logo): centred block, limited to --size.
- * --size: local custom property, the maximum edge length (60% of the smaller viewport dimension here;
- * overridden on img.UserImage).
- */
-img {
+    .HomeHead .sw-ph-desc .AppDescription:empty {
+        display: none;
+    }
+
+/* The user picture: a 3.5rem rounded square before the title (the user's own picture, not a brand mark). */
+img.UserImage {
+    --size: 3.5rem;
+    flex: none;
     display: block;
-    margin: auto;
-    --size: calc(min(60vw, 60vh));
-    max-width: var(--size);
-    max-height: var(--size);
+    width: var(--size);
+    height: var(--size);
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1px solid var(--sw-border);
+    background: var(--sw-surface-sunken);
 }
 
-    /* ===== User image ===== */
-    /* img.UserImage (class set in Home.html): small (--size = 10% of the smaller viewport edge), rounded, accent outline. */
-    img.UserImage {
-        position: relative;
-        display: block;
-        margin: auto;
-        --size: calc(min(10vw, 10vh));
-        max-width: var(--size);
-        max-height: var(--size);
-        border-radius: calc(var(--size) * 0.1);
-        outline: 2px solid var(--ThemeAcc125);
+    /* Inside the app shell the top bar already shows the user picture: here it only shows when it is an upload target (it changes the
+       picture), so the page header does not repeat the avatar */
+    html.Embedded img.UserImage:not(.CanUpload) {
+        display: none;
     }
 
-
-    /* .CanUpload: added by home.js homeMain when the custom user image service exists; image is a click/drop upload target. */
-    img.CanUpload {
+    /* CanUpload: set by home.js when the image is an upload target (Sw.Upload.Target: click, Enter / Space, drop). */
+    img.UserImage.CanUpload {
         cursor: pointer;
-        transition: outline linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration);
+        transition: border-color var(--sw-dur-1), opacity var(--sw-dur-1);
     }
 
-    /* .Dragging: set by fileUploader.js while a file is dragged over the image; dashed accent outline. */
-    img.CanUpload.Dragging {
-       outline: 4px dashed var(--ThemeAcc1); 
-    }
+@media (hover: hover) {
+        img.UserImage.CanUpload:hover {
+            border-color: var(--sw-accent1);
+        }
+}
 
+        img.UserImage.CanUpload:focus-visible {
+            outline: 2px solid var(--sw-focus);
+            outline-offset: 2px;
+        }
 
-        /* .Selecting / .Uploading: set by fileUploader.js while the file dialog is open / the upload runs; dimmed. */
-        img.CanUpload.Selecting {
+        /* Dragging: a file is dragged over the image (dashed accent outline). */
+        img.UserImage.CanUpload.Dragging {
+            outline: 2px dashed var(--sw-accent1);
+            outline-offset: 2px;
+        }
+
+        /* Selecting / Uploading: the file picker is open / the upload runs (dimmed). */
+        img.UserImage.CanUpload.Selecting,
+        img.UserImage.CanUpload.Uploading {
             opacity: 0.5;
         }
 
-        img.CanUpload.Uploading {
-            opacity: 0.5;
+        img.UserImage.CanUpload.Uploading {
+            cursor: progress;
         }
+
+/* The status badge: a dot in the status color and the text */
+.HomeStatus {
+    gap: 6px;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.HomeDot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* ===== KPI row and facts ===== */
+
+/* Two to four tiles (uptime, version; managed services and problems by access): they share the row; two per row on phones */
+.HomeKpis {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+    /* Four tiles: four in a row where four fit, else two rows of two, never 3 + 1 (Designer D28, 844x390). The column width is
+       a quarter of the row when four 15rem tiles fit (the threshold term is negative), else half of it (the term is huge) */
+    .HomeKpis:has(> :nth-child(4):last-child) {
+        grid-template-columns: repeat(auto-fill, minmax(max(calc((100% - 3 * var(--sw-space-4)) / 4), min(calc((100% - var(--sw-space-4)) / 2), calc((60rem + 3 * var(--sw-space-4) - 100%) * 999))), 1fr));
+    }
+
+    .HomeKpis:empty {
+        display: none;
+    }
+
+.HomeFacts {
+    margin-top: var(--sw-space-4);
+}
+
+/* ===== Reserved parts (home.js homePlan: the layout is final from the first paint, UX guide LAY-1) ===== */
+
+/* A value line keeps its height before its first value (the tiles never grow when the data arrives) */
+.HomeKpis .sw-kpi-value {
+    min-height: 1.1em;
+}
+
+/* Skeleton blocks: the size of the text they stand for (static: no motion while waiting) */
+.HomeSkel {
+    display: inline-block;
+    vertical-align: middle;
+    width: 5em;
+    max-width: 100%;
+    height: 0.8em;
+    border-radius: var(--sw-radius-sm);
+    background: var(--sw-surface-sunken);
+}
+
+.HomeLoading .HomeKpiValue:empty::before {
+    content: "";
+    display: inline-block;
+    vertical-align: baseline;
+    width: 2.5ch;
+    height: 0.75em;
+    border-radius: var(--sw-radius-sm);
+    background: var(--sw-surface-sunken);
+}
+
+.HomeSkelValue {
+    width: 3.5em;
+}
+
+.HomeSkelBadge {
+    flex: none;
+    width: 3.75rem;
+    height: 1.25rem;
+    border-radius: var(--sw-radius-pill);
+}
+
+.HomeSkelRows .sw-rows-text {
+    flex: 1;
+}
+
+    .HomeSkelRows .sw-rows-text .HomeSkel {
+        width: min(100%, 18em);
+    }
+
+/* ===== Shortcuts and cards ===== */
+
+.QuickLinks .sw-section-title {
+    margin-top: var(--sw-space-8);
+}
+
+.QuickIcon {
+    flex: none;
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.sw-tile-ico .QuickIcon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--sw-text-accent);
+}
+
+.sw-rows .QuickIcon {
+    color: var(--sw-text-3);
+}
+
+.QuickNoIcon {
+    display: inline-block;
+}
+
+.HomeCards {
+    margin-top: var(--sw-space-8);
+}
+
+    .HomeCards[hidden] {
+        display: none;
+    }
+
+/* ===== Hint ===== */
+
+.HomeHint {
+    margin: var(--sw-space-6) 0 0;
+    max-width: 75ch;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+    .HomeHint:empty {
+        display: none;
+    }
+
+/* ===== Phones ===== */
+
+@media (max-width: 599px) {
+    .HomeKpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+        /* An odd number of tiles: the first one (the most important) spans the row, so no row has an empty cell */
+        .HomeKpis > :first-child:nth-last-child(odd) {
+            grid-column: 1 / -1;
+        }
+
+    img.UserImage {
+        --size: 2.75rem;
+    }
+
+    .HomeHead .sw-ph-status {
+        flex-basis: 100%;
+    }
+
+    .QuickLinks .sw-section-title, .HomeCards {
+        margin-top: var(--sw-space-6);
+    }
+}
+
+/* Phones in landscape (low windows): no description, compact spacing, so the tiles start above the fold */
+@media (max-height: 500px) {
+    img.UserImage {
+        --size: 2.25rem;
+    }
+
+    .QuickLinks .sw-section-title, .HomeCards {
+        margin-top: var(--sw-space-4);
+    }
+}

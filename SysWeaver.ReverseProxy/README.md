@@ -38,7 +38,8 @@ sequenceDiagram
 - **Domain routing**: with `AllButDomains` set, requests to any other host name are routed by the first host label, `https://<ClientId>[-<EndPoint>].<domain>/<path>`; this keeps root-relative URLs (`/logo.png`) of proxied sites working, but needs DNS records, listeners and certificates for every name (or wildcards).
 - Client ids and end point names use only `a-z`, `A-Z` and `0-9`; the client id defaults to the machine name. Without an end point name the client's first end point is used.
 - Client end points (`"name:destination"`) can be the hosting SysWeaver server itself (handled in process, no HTTP call), or any URL the client can reach (localhost, LAN or internet).
-- Several parallel connections per client (`MaxConcurrentRequests`, default 8); server-side response caching per client using the HTTP cache headers.
+- Several parallel connections (long polls) per client (`MaxConcurrentRequests`, default 8). A request is handled on its own task while the connection polls again at once (`MaxRequestsInProgress`, default 32; the task sends the response with a poll of its own), so a slow request, such as the long poll `Api/application/GetMessages` of every SysWeaver page (held up to 90 s), never holds up the requests behind it. Server-side response caching per client using the HTTP cache headers.
+- Connection status of a client (`ReverseProxyClient.GetConnectionStatus`, the Operations menu table "Reverse proxy connection"): "Connected" (a long poll answered less than 2 minutes ago), "No answer", "Not connected" (the last attempt failed, with the error) or "Connecting".
 - Debug tables of connected clients (server) and end points (client).
 
 ## Key components
@@ -70,7 +71,7 @@ Ready-made hosts: [ReverseProxyServer](https://github.com/dosh1974/SysWeaver.Ser
 ## Limitations and considerations
 
 - With sub path routing, sites that use root-relative URLs (`/logo.png`) break, as these resolve outside the client's sub path; use domain routing for such sites.
-- `ReverseProxyServer` is a raw module: proxied requests bypass the server's pipeline, including auth, so every end point is public unless the end point itself requires authentication. Cookies and the `Authorization` header are forwarded.
+- `ReverseProxyServer` is a raw module: proxied requests bypass the server's pipeline, including auth, so every end point is public unless the end point itself requires authentication. The `Authorization` header is forwarded. Cookies are isolated per client: all clients and the proxy server share the proxy's origin in the browser, so a `Set-Cookie` of a client is renamed to `rp.<ClientId>.<name>`, its `Path` is scoped to the client's sub path (`/<BaseUrl><ClientId>[-EndPoint]/...`, sub path routing), any `Domain` is removed and `Secure` is added when the proxy is used over https; a request only forwards the cookies with the client's prefix (the prefix removed). The proxy server's own cookies (its session and device id) and other clients' cookies are never sent to a client.
 - Clients authenticate with a user having the `Service` role; any such user can register any client id.
 - The client IP seen by the end point is not forwarded (no `X-Forwarded-For`).
 - `BaseUrl` must not be `ReverseProxy` (used by the API) and everything under it is routed to clients.

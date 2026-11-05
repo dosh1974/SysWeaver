@@ -7,7 +7,7 @@
     public enum UserStorageScopes
     {
         /// <summary>
-        /// Private data, can not be seen by other users
+        /// Private data, cannot be seen by other users
         /// </summary>
         Private = 0,
         /// <summary>

@@ -25,8 +25,10 @@ namespace SysWeaver.ExchangeRate
             {
                 var old = y.Key.FastToUpper();
                 var nw = y.Value.FastToUpper();
+                //  A source (or a small cache) without the mapped currency simply doesn't get the alias
+                //  (this used to throw, which discarded all rates of the source and aborted the service start when read from the cache)
                 if (!t.TryGetValue(nw, out var e))
-                    throw new ArgumentException("The currency " + nw.ToQuoted() + " does not exist!", nameof(oldToNewMap));
+                    continue;
                 t[old] = e;
             }
             Count = t.Count;

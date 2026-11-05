@@ -55,6 +55,7 @@ The `ServiceManager` *is* a `MessageHost`, so every service logs through the sam
 ## Key features
 
 - **Environment** (`EnvInfo`): executable location and base name (which drives the names of the config, manifest and log files), OS platform, application identity and native library folder conventions
+- **Application identity** (`AppInfo`, `AppInfoParams` in the `SysWeaver.AppInfo` manifest entry): `AppName`, `AppDisplayName`, `AppDescription`, `AppSeed` (with the name, the only source of the generated Application theme colors, icon and logo, `HashColors.AppColors`) and `AppVersion` (shown to users, `PathTemplate` variables allowed; default the executable's informational version, `EnvInfo.AppVersion`); see [_docs/WebBranding.md](../_docs/WebBranding.md)
 - **Layered configuration** (`Config`): machine-wide defaults (`DefaultSystemConfig.json`), the application's `<ExecutableBase>.Config.json` and machine-wide enforced values (`ForcedSystemConfig.json`); `Config.ApplyConfig` maps a JSON file onto a parameter object
 - **Folders and path templates** (`Folders`, `PathTemplate`): standard data locations (all users / per user, shared / per application, key folder) and `$(Variable)` path expansion used by almost every configurable path in the framework
 - **Messaging** (`MessageHost`, `MessageHandler`): a hub distributing log/status messages to any number of handlers (debug output, size-limited log file, console, …), synchronously or asynchronously

@@ -3,7 +3,7 @@
  * WebGL GLSL effect player (MediaPlayerEffect) and the image texture provider (MediaPlayerImageTexture).
  *
  * Loading: included by MediaPlayer.Init (only when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
- * (together with media_effect_program.js) through common.js includeJs; also loaded with static <script defer>
+ * (together with media_effect_program.js) through MediaPlayer.Include; also loaded with static <script defer>
  * tags by the mediaView/backgroundEffects|imageEffects/index.html and *EffectsLib.html pages, which construct
  * MediaPlayerEffect directly.
  *
@@ -12,7 +12,7 @@
  *
  * Dependencies: EffectProgramData / EffectProgram (media_effect_program.js); MediaPlayerTools
  * (media_player_tools.js: InitBase, IsDarkMode, Add/RemoveDarkModeChangeEvent, IsAttached, delay, waitEvent2,
- * OnCacheComplete); common.js hashString and bufferToBase64 (GetImage only); optional common/anim.js
+ * OnCacheComplete); MediaPlayerTools.HashString and BlobToDataUrl (GetImage only); optional common/anim.js
  * (SmoothBool, SmoothValue, SpringAnimation, BounceAnimation, Smoothness) for dark-mode smoothing and the
  * CustomX/Y/Z animators.
  *
@@ -111,11 +111,24 @@ class MediaPlayerEffect {
      */
     static DpiScale = parseFloat(localStorage.getItem("SysWeaver.Media.EffectDpiScale") ?? "1");
 
+    /**
+     * Longest wait (ms) of GetImage for a GPU draw time sample; after it the image is taken anyway.
+     * @type {number}
+     */
+    static GetImageTimeoutMs = 1500;
+
+    /**
+     * Wait (ms) of GetImage for the first GPU timer result: without any result by then, the GPU does not deliver them
+     * (headless or software rendering) and the image is taken at once (draw time unknown).
+     * @type {number}
+     */
+    static GetImageFirstSampleMs = 400;
+
 
     /** Create a screenshot of an effect.
      * Cache the screen shot in local storage (recreates if etag changes)
      * Used by the *EffectsLib.html thumbnail galleries. Storage key:
-     * "SysWeaver.EffectInfo." + cacheName + "." + hashString(url), value {R: result, T: etag}.
+     * "SysWeaver.EffectInfo." + cacheName + "." + MediaPlayerTools.HashString(url), value {R: result, T: etag}.
      * If cached, re-fetches url and returns the cached result when the etag is unchanged. Otherwise creates an
      * off-screen effect (position absolute, top -10000px, appended to document.body), caches it, seeks to 5 s,
      * plays until a GPU timer sample exists (when a timer query is available), stops, encodes the canvas as
@@ -127,7 +140,7 @@ class MediaPlayerEffect {
      * @returns {Promise<Array>} [dataUri, compilationTimeMs, avgDrawTimeMs], or [null, errorMessage] on failure.
      */
     static async GetImage(cacheName, url, mp, ct) {
-        const key = "SysWeaver.EffectInfo." + cacheName + "." + await hashString(url);
+        const key = "SysWeaver.EffectInfo." + cacheName + "." + await MediaPlayerTools.HashString(url);
         try {
             try {
                 const cached = localStorage.getItem(key);
@@ -159,11 +172,24 @@ class MediaPlayerEffect {
             const etag = effect.Etag;
             effect.Seek(5);
             await effect.Play();
+            //  Wait for a GPU draw time sample, at most GetImageTimeoutMs: some GPUs / drivers never deliver timer query results
+            //  (the wait had no limit, so one effect kept every later gallery card on "Rendering..."). Without a full sample the
+            //  best partial measurement is used (0 = unknown); the image itself is the same.
+            //  When not a single timer result arrived within GetImageFirstSampleMs the GPU does not deliver them (headless /
+            //  software rendering): stop waiting then, so a gallery card takes about 0.4 s instead of 1.5 s more.
             if (effect.Query) {
-                while (effect.AvgDrawTimeMs <= 0)
+                const start = performance.now();
+                const until = start + MediaPlayerEffect.GetImageTimeoutMs;
+                const first = start + MediaPlayerEffect.GetImageFirstSampleMs;
+                while (effect.AvgDrawTimeMs <= 0 && performance.now() < until) {
+                    if (effect.MeasureCount <= 0 && performance.now() > first)
+                        break;
                     await MediaPlayerTools.delay(1);
+                }
             }
-            const avgDrawTimeMs = effect.AvgDrawTimeMs;
+            let avgDrawTimeMs = effect.AvgDrawTimeMs;
+            if (avgDrawTimeMs <= 0 && effect.MeasureCount > 0 && effect.TotalTime < 100000000000.0)
+                avgDrawTimeMs = effect.TotalTime;
             await effect.Stop();
             const image = await new Promise((resolve, reject) => {
                 effect.Element.toBlob(data => {
@@ -171,10 +197,10 @@ class MediaPlayerEffect {
                         resolve(data);
                     } else
                         reject();
-                }, "image/jpeg", 70);
+                }, "image/jpeg", 0.92);   // the quality of the original thumbnails (it passed 70, out of range: the browser default 0.92)
             });
             await effect.OnDispose();
-            url = await bufferToBase64(image, true);
+            url = await MediaPlayerTools.BlobToDataUrl(image);
             const ret = [url, compilationTime, avgDrawTimeMs];
 			try
 			{
@@ -202,7 +228,7 @@ class MediaPlayerEffect {
      * @returns {HTMLElement} The element, or top.document.body when id is empty, not found or access throws (cross-origin).
      */
     static GetElementFromId(id) {
-        const tw = top;
+        const tw = MediaPlayerTools.ThemeWindow(); // top, or this window when top is cross-origin (used to throw)
         if (!id)
             return tw.document.body;
         try {
@@ -363,16 +389,7 @@ class MediaPlayerEffect {
 	 */
 	SetCustomX(m)
 	{
-		const v = m.Value;
-		const a = m.Anim;
-		let n = this.CustomX;
-		if (a)
-		{
-			const sv = m.Start;
-			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
-			this.CustomX = n;
-		}
-		n.Set(v);
+		this.SetCustom("CustomX", m);
 	}
 
 	/**
@@ -382,16 +399,7 @@ class MediaPlayerEffect {
 	 */
 	SetCustomY(m)
 	{
-		const v = m.Value;
-		const a = m.Anim;
-		let n = this.CustomY;
-		if (a)
-		{
-			const sv = m.Start;
-			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
-			this.CustomY = n;
-		}
-		n.Set(v);
+		this.SetCustom("CustomY", m);
 	}
 
 	/**
@@ -401,14 +409,25 @@ class MediaPlayerEffect {
 	 */
 	SetCustomZ(m)
 	{
+		this.SetCustom("CustomZ", m);
+	}
+
+	/**
+	 * Shared implementation of SetCustomX/Y/Z: if m.Anim is given the channel animator is replaced by
+	 * GetAnimFn(m.Anim, m.Start ?? m.Value) (Start only when numeric) before Set(m.Value).
+	 * @param {string} name - "CustomX", "CustomY" or "CustomZ".
+	 * @param {{Value:number, Anim?:string, Start?:number}} m - Message payload.
+	 * @returns {void}
+	 */
+	SetCustom(name, m)
+	{
 		const v = m.Value;
-		const a = m.Anim;
-		let n = this.CustomZ;
-		if (a)
+		let n = this[name];
+		if (m.Anim)
 		{
 			const sv = m.Start;
-			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
-			this.CustomZ = n;
+			n = MediaPlayerEffect.GetAnimFn(m.Anim, typeof sv === "number" ? sv : v);
+			this[name] = n;
 		}
 		n.Set(v);
 	}
@@ -1047,7 +1066,7 @@ class MediaPlayerEffect {
         if (isRunning) {
             if (typeof t.RenderTime === "undefined")
                 t.RenderTime = animTime;
-            time = (animTime - t.RenderTime) * 0.001 + t.ResumeTime;
+            time = (animTime - t.RenderTime) * 0.001 * (t.Rate || 1) + t.ResumeTime;
         }
         t.CurrentPosition = time;
 
@@ -1296,8 +1315,35 @@ class MediaPlayerEffect {
     }
 
     /**
-     * Seeks to a time. Paused: sets the position, Validate and renders one frame. Playing: sets
-     * ResumeTime = time - CurrentPosition and CurrentPosition = time (the next frame recomputes the time).
+     * The playback speed of the clock (1 = normal; Params.Speed still scales the effect time on top of it).
+     * @type {number}
+     */
+    Rate = 1;
+
+    /**
+     * The fastest speed SetRate takes.
+     * @type {number}
+     */
+    MaxRate = 100;
+
+    /**
+     * Set the playback speed: the position goes on from where it is, at the new speed (ResumeTime / RenderTime are rebased).
+     * @param {number} rate The speed, 1 = normal (clamped to 0.01..MaxRate).
+     * @returns {Promise<void>}
+     */
+    async SetRate(rate) {
+        const t = this;
+        const r = Math.max(0.01, Math.min(t.MaxRate, rate || 1));
+        if (!t.Paused) {
+            t.ResumeTime = t.CurrentPosition;
+            delete t.RenderTime;
+        }
+        t.Rate = r;
+    }
+
+    /**
+     * Seeks to a time. Paused: sets the position, Validate and renders one frame. Playing: moves
+     * ResumeTime by time - CurrentPosition and sets CurrentPosition = time (the next frame recomputes the time).
      * @param {number} time - Target time in seconds.
      * @returns {Promise<null|undefined>} null for a negative time, otherwise undefined.
      */
@@ -1311,7 +1357,9 @@ class MediaPlayerEffect {
             await t.Validate();
             MediaPlayerEffect.render(t);
         } else {
-            t.ResumeTime = (time - t.CurrentPosition);
+            //  The time is (now - RenderTime) + ResumeTime: move the offset by the jump (it was set to the jump, which is
+            //  wrong once ResumeTime is not 0, ex: after a pause or an earlier seek)
+            t.ResumeTime += (time - t.CurrentPosition);
             t.CurrentPosition = time;
             t.Rendered = false;
         }
@@ -1459,3 +1507,13 @@ class MediaPlayerImageTexture {
         t.GL.deleteTexture(t.Texture);
     }
 }
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.MediaPlayerParamsEffect = MediaPlayerParamsEffect;
+    m.MediaPlayerEffect = MediaPlayerEffect;
+    m.MediaPlayerImageTexture = MediaPlayerImageTexture;
+})();

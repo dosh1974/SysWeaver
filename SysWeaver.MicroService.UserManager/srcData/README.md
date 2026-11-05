@@ -13,14 +13,14 @@
 
 The `EmbedLocal` target in [`SysWeaver.MicroService.UserManager.csproj`](../SysWeaver.MicroService.UserManager.csproj) runs `Compress.exe -OptimizeWebFiles false -Methods br .\srcData\*+ .\data` before each build. The HTML is not minified. The generated `data/**/*.br` files (not in git) are embedded as resources and referenced by name, e.g. `data.InviteMail.html`.
 
-[`EmailComs`](../EmailComs.cs) uses the `*Mail.txt` (subject) and `*Mail.html` (body) pairs. The defaults are set in [`EmailComsParams.cs`](../EmailComsParams.cs). [`PhoneComs`](../PhoneComs.cs) uses the `*Text.txt` files. Each default can be replaced through the service parameters. The templates contain placeholders such as `[Site]`, `[Link]`, `[Header]`, `[Footer]`, `[Background]` and `[Color]`. The header and footer templates are inserted where `[Header]` and `[Footer]` appear.
+[`EmailComs`](../EmailComs.cs) uses the `*Mail.txt` (subject) and `*Mail.html` (body) pairs. The defaults are set in [`EmailComsParams.cs`](../EmailComsParams.cs). [`SmsComs`](../SmsComs.cs) uses the `*Text.txt` files. Each default can be replaced through the service parameters. The templates contain placeholders such as `[Site]`, `[Link]`, `[Header]`, `[Footer]`, `[Background]` and `[Color]`. The header and footer templates are inserted where `[Header]` and `[Footer]` appear.
 
 ## Contents
 
 Each account action has three files: `<Action>Mail.txt` (e-mail subject), `<Action>Mail.html` (e-mail body) and `<Action>Text.txt` (text message).
 Actions sent to a phone also have `<Action>WhatsApp.md` (WhatsApp formatting only), and actions on an existing account have
 a web notification: `<Action>Notification.txt` (headline) and `<Action>Notification.md` (markdown body). E-mail only actions
-(`AddEmail*`, `ChangeEmail*`, `DeletedEmail*`) have an empty `Text.txt`, phone only actions (`AddPhone*`, `ChangePhone*`,
+(`AddEmail*`, `ChangeEmail*`, `DeletedEmail*`, `ChangedEmail*`) have an empty `Text.txt`, phone only actions (`AddPhone*`, `ChangePhone*`,
 `DeletedPhone*`) have an empty `Mail.*`.
 
 | Item | Description |
@@ -28,11 +28,13 @@ a web notification: `<Action>Notification.txt` (headline) and `<Action>Notificat
 | `Invite*` | Invitation to join the site |
 | `SignUp*` | Sign-up confirmation |
 | `DeleteUser*` | Confirm deletion of the account |
-| `ResetPassword*` | Forgotten / forced password reset |
+| `ResetPassword*` | Forgotten password (the user asked for a reset) |
+| `ForcedResetPassword*` | Forced password reset: an administrator requires a new password (localized message folders without it use `ResetPassword*`) |
 | `AddPassword*`, `DeletePassword*` | Add or remove a password |
 | `AddEmail*`, `ChangeEmail*` | Add or change an e-mail address (with a short code) |
 | `AddEmailNoCode*`, `ChangeEmailNoCode*` | Add or change an e-mail address (link only, no short code) |
 | `DeletedEmail*` | Notification that an e-mail address was removed |
+| `ChangedEmail*` | Notice to the old e-mail address after the e-mail address of the account was changed (no code: "Was this you? Then you do not need to do anything." first, then the "Undo this change" button (`[UndoLink]`, auth/UndoEmail.html, 7 days: gives the account back to this address, signs everyone out and sends a reset link here), then the "Reset your password" link (`[Link]`, the forgot password page, with how to sign in for the reset: the phone number) for when the undo link no longer works; no notification on purpose: the one who changed the address would see it; localized message folders without it use the built in template) |
 | `AddPhone*`, `ChangePhone*`, `DeletedPhone*` | Add, change or removal of a phone number |
 | [`HeaderMail.html`](HeaderMail.html), [`FooterMail.html`](FooterMail.html) | Header and footer inserted into HTML e-mails |
 | [`HeaderText.txt`](HeaderText.txt), [`FooterText.txt`](FooterText.txt) | Header and footer inserted into text messages (empty, kept as hooks) |
@@ -40,6 +42,8 @@ a web notification: `<Action>Notification.txt` (headline) and `<Action>Notificat
 | `*Notification.txt`, `*Notification.md` | Web notification headline and body (no code or link) |
 
 That is 14 actions × 3 files plus 4 header/footer files, 9 WhatsApp files and 12 notification pairs, 79 files in total.
+`ForcedResetPassword*` adds 3 files, 1 WhatsApp file and 1 notification pair (6 files, 85 in total).
+`ChangedEmail*` adds 3 files (`Mail.txt`, `Mail.html`, an empty `Text.txt`; 88 in total).
 Example: [`ResetPasswordMail.txt`](ResetPasswordMail.txt), [`ResetPasswordMail.html`](ResetPasswordMail.html),
 [`ResetPasswordText.txt`](ResetPasswordText.txt), [`ResetPasswordWhatsApp.md`](ResetPasswordWhatsApp.md),
 [`ResetPasswordNotification.md`](ResetPasswordNotification.md).
@@ -70,5 +74,5 @@ The templates are generic (no site, product or market specifics) and follow one 
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroService.UserManager](../README.md)
-- **Used by:** [`EmailComs`](../EmailComs.cs), [`PhoneComs`](../PhoneComs.cs)
+- **Used by:** [`EmailComs`](../EmailComs.cs), [`SmsComs`](../SmsComs.cs)
 - **Uses:** `ManagedMailMessage` / `ManagedMessages` from [SysWeaver.Auth.Core](../../SysWeaver.Auth.Core/README.md)

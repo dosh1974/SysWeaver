@@ -1,126 +1,26 @@
 ﻿<!doctype html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8" />
+    <!-- SwWeb:no-framework (a transparent render surface of the media player: no page chrome, themes or texts) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+        Background effect: ?Effect=<name in this folder | .glsl url> (default SmoothBands) + effect params (Width, Height, Speed, ...).
+        Shared logic and parameters: ../effectPage.js (url keys are case sensitive member names; other keys are shader variables).
+        A lean page on purpose (no SysWeaver core): a transparent, non-interactive full window host for backgrounds and embeds.
+    -->
     <script defer src="../parseTools.js"></script>
     <script defer src="../../common/anim.js"></script>
     <script defer src="../../mediaPlayer/media_player_tools.js"></script>
     <script defer src="../../mediaPlayer/media_effect_program.js"></script>
     <script defer src="../../mediaPlayer/media_player_effect.js"></script>
-    <script defer>
-        /*
-            Parameters (basic):
-                Effect = 	The effect to show
-
-            Effects:
-                    "Bubbles"
-                    "Fireworks"
-        */
-
-        async function main() {
-
-            const href = window.location.href;
-            const p = new URL(href).searchParams;
-
-            // MediaPlayerParamsEffect
-            const props =
-            {
-                Width: 1920,
-                Height: 1080,
-                Speed: 1,
-                LimitSize: false,
-                DpiAdjust: false,
-                DpiScale: 1,
-                Static: false,
-                Transparent: false,
-                AdaptiveSize: true,
-                WrapU: false,
-                WrapY: false,
-                WebGL2: false,
-                MipMap: false,
-                AntiAlias: false,
-                ScrollId: null,
-                MouseId: null,
-                MouseEnable: false,
-                ImageSize: false,
-                ShowVars: false,
-                ForceMode: null,
-                DarkModeSwitch: 200,
-                CustomX: 0,
-                CustomY: 0,
-                CustomZ: 0,
-                CustomAnimX: null,
-                CustomAnimY: null,
-                CustomAnimZ: null,
-
-            };
-
-
-            //  Effect paramaters
-            const fxParams =
-            {
-
-            };
-            let effect = p.get("Effect") ?? "SmoothBands";
-            if (!effect.endsWith(".glsl"))
-                effect += ".glsl";
-
-            //  Load parameters
-            const subP = effect.indexOf('://') < 0 ? "../" : "";
-            await ParseTools.FileToObject(subP + effect.substring(0, effect.lastIndexOf('.')) + ".json", props, (k, v) =>
-                fxParams[k] = ParseTools.DecodeObject(v));
-
-            //  Parse parameters
-            ParseTools.ParamsToObject(p, props, (k, v) =>
-                fxParams[k] = ParseTools.DecodeObject(v));
-
-            //  Fix parameters
-            props.FxProps = fxParams;
-
-
-
-            //  Media player
-            const player = new MediaPlayerEffect(effect, props);
-            document.body.appendChild(player.Element);
-
-            await player.Cache(true);
-            function updateSize() {
-                return MediaPlayerTools.UpdateSize(document.body, player);
-            }
-            new ResizeObserver(updateSize).observe(document.body);
-
-            await player.Play();
-            await player.Show();
-            MediaPlayerTools.SetupMediaMessages(player);
-            MediaPlayerTools.PostPageLoaded();
-
-
-/*
-
-
-
-
-
-
-            //  Build url
-            url = '../MediaPreview.html?transparent=true&link=' + effect + '&type=4&props=' + encodeURIComponent(JSON.stringify(props));
-            if (p.has("ShaderDebug") && (p.get("ShaderDebug") === "true"))
-                url += "&ShaderDebug=true";
-
-            console.log(url);
-            const c = document.createElement("iframe");
-            ParseTools.MessageProxy(c);
-            c.setAttribute("frameborder", "0");
-            c.setAttribute("allowtransparency", "true");
-            c.src = url;
-            document.body.appendChild(c);
-            */
-        }
-    </script>
+    <script defer src="../effectPage.js"></script>
     <style>
         :root {
             color-scheme: normal !important;
         }
 
+        /* SwWeb:allow-element-css (a full window effect renderer without Sw components: the canvas fills the window) */
         html, body {
             background: none transparent !important;
             margin: 0;
@@ -130,19 +30,19 @@
             overflow: hidden;
         }
 
-        body > * {
-            pointer-events: none;
-        }
+            body > * {
+                pointer-events: none;
+            }
 
-/*        iframe {
+        iframe {
+            display: block;
             border: none;
             width: 100%;
             height: 100%;
             pointer-events: none;
-            color-scheme: normal;
-        }*/
+        }
     </style>
 </head>
-<body onload="main()">
+<body data-effect-page="background">
 </body>
 </html>

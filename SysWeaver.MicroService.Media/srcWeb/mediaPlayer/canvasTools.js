@@ -1,7 +1,7 @@
 ﻿/**
  * @file canvasTools.js - Pure 2D-canvas text rendering utilities used by the media player text support.
  *
- * Loading: included by MediaPlayer.Init() (media_player.js, via common's includeJs relative to
+ * Loading: included by MediaPlayer.Init() (media_player.js, via MediaPlayer.Include relative to
  * media_player.js) and directly by TextDemo.html with a script tag. Must be loaded before
  * media_player_text.js, because MediaPlayerParamsText extends TextStyle.
  *
@@ -820,3 +820,14 @@ class CanvasTools {
 
 
 }
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.TextGradientStop = TextGradientStop;
+    m.TextLinearGradient = TextLinearGradient;
+    m.TextStyle = TextStyle;
+    m.CanvasTools = CanvasTools;
+})();

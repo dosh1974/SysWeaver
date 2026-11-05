@@ -22,6 +22,7 @@ namespace SysWeaver.Email
         /// <summary>
         /// The email address to send from, must be a verified identity (or belong to a verified domain) in SES.
         /// </summary>
+        [EditType(EditTypes.Email)]
         public String From { get; set; }
 
         /// <summary>

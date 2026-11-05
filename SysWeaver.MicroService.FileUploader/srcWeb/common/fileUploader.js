@@ -1,41 +1,47 @@
-﻿
-/**
+﻿/**
  * @file fileUploader.js - browser client of the file upload protocol of FileUploaderService
  * (SysWeaver.MicroService.FileUploader), served as common/fileUploader.js next to the shared scripts of
  * SysWeaver.HttpServer (it only exists when that service is hosted).
  *
- * Loading: classic script, no side effects at load (only declares globals). Included statically with
- * `<script defer src="../common/fileUploader.js">` (upload/Example.html, ServerManager keys.html and
- * serviceInfo.html) or lazily with includeJs (app/home.js; chat/chat.js tolerates a missing file and checks
- * `typeof fileUploader`). Must be loaded after common/common.js, common/md5.js and (optionally) common/UZIP.js.
+ * New API: `Sw.Upload` (needs the Sw core, `sw/core.js` or the legacy `common/common.js`; the visual helpers use the
+ * Sw ui library when it is loaded):
+ *  - `Sw.Upload.Status` (the C# FileUploadStatus codes), `Sw.Upload.StatusText(code)` (translated text).
+ *  - `await Sw.Upload.Ensure()`: loads `common/md5.js` (required, MD5 hashes) when the page did not load it.
+ *  - `await Sw.Upload.Files(repo, files, {ApiBase, OnProgress})` -> `{Status[], Urls[], Redirected}` or `{Error}`.
+ *  - `await Sw.Upload.Pick({Multiple, Accept})` -> FileList or null (must run in a user gesture).
+ *  - `Sw.Upload.Target(el, {Repo, Multiple, ApiBase, Accept, Title, OnStart, OnResults})` -> `{Remove()}`: makes an
+ *    element an upload target (click / Enter / Space opens the file picker, files can be dropped on it; classes
+ *    `Dragging`, `Selecting`, `Uploading`; `aria-busy` while uploading).
  *
- * Globals defined: UploadStatus, fileUploaderStatusText, fileUploader, fileUploaderElement, fileUploaderDrop,
- * fileUploaderDrag, fileUploaderDragEnter, fileUploaderDragLeave, selectFiles, fileUploaderClick,
- * fileUploaderSetup, fileUploaderInit.
+ * Legacy globals (kept for old pages and other projects: app/home.js before the rewrite, chat/chat.js,
+ * ServerManager keys.js / serviceInfo.js, upload/Example.html): `UploadStatus`, `fileUploaderStatusText`,
+ * `fileUploader`, `fileUploaderElement`, `fileUploaderDrop`, `fileUploaderDrag`, `fileUploaderDragEnter`,
+ * `fileUploaderDragLeave`, `selectFiles`, `fileUploaderClick`, `fileUploaderSetup`, `fileUploaderInit`. They are thin
+ * wrappers over Sw.Upload with the old signatures and results.
  *
- * Dependencies: common.js (sendRequest, _T, _TF, GetFunction, badClick, waitEvent2, getFileExtension,
- * isCompressibleExt), md5.js (YaMD5, required), UZIP.js (UZIP; treated as optional with `!!UZIP`, but the bare
- * global must be declared or a ReferenceError is caught as {Error}).
+ * Loading: classic script, no side effects at load (only declares globals and `Sw.Upload`). Statically with
+ * `<script defer src="../common/fileUploader.js">` after the core, or lazily with `Sw.Net.IncludeJs(null, "fileUploader.js")`.
+ * `common/md5.js` is loaded on demand (Ensure); `common/UZIP.js` is no longer needed (deflate uses the browser's
+ * CompressionStream through `Sw.Util.Deflate`; UZIP is still used when present and CompressionStream is not).
  *
  * Protocol: every file is read fully into memory and MD5-hashed; one JSON POST to <apiBase>CheckStatus with
- * {Repo, Files: FileUploadInfo[]} returns FileUploadResult[] {Result, Url}; only files with status 2 (Upload)
- * are then POSTed in parallel to <apiBase>Upload?repo=&name=&length=&hash=&time= (query values not
- * URL-encoded), deflate compressed when UZIP is available and it helps. Server chunking (Chunks) is not used.
+ * {Repo, Files: FileUploadInfo[]} returns FileUploadResult[] {Result, Url}; only files with status 2 (Upload) are then
+ * POSTed in parallel to <apiBase>Upload?repo=&name=&length=&hash=&time= (values URL-encoded), raw-deflate compressed
+ * (`Content-Encoding: deflate`) for compressible extensions when that is smaller. Server chunking is not used.
  * Returned Url values are relative to the server root (consumers prefix "../").
  *
- * CSS contract: the script creates no DOM except temporary file inputs; it toggles the classes Dragging,
- * Selecting and Uploading on upload elements, which consumers style. Per-element state: expandos IsUploading,
- * OnUploadStart, OnUploadResults.
+ * Element configuration (legacy and Target): `data-repo`, `data-multiple` ("true" / "1"), `data-apibase`,
+ * `data-onstart` / `data-onresults` (names of global functions), expandos `OnUploadStart` / `OnUploadResults`,
+ * `IsUploading`.
  */
 
 /**
- * Contains status codes (named); mirrors the C# FileUploadStatus enum (kept in sync by hand, also with the
- * switch in fileUploaderStatusText). None (0) = uploaded OK, AlreadyUploaded (1) = deduplicated by hash,
- * Upload (2) = may be uploaded (CheckStatus only); negative values are errors / refusals.
- * @type {Object<string, number>}
+ * Status codes of the upload protocol; mirrors the C# FileUploadStatus enum. None (0) = uploaded OK,
+ * AlreadyUploaded (1) = deduplicated by hash, Upload (2) = may be uploaded (CheckStatus only); negative values are
+ * errors / refusals. (Legacy global, also `Sw.Upload.Status`.)
+ * @type {Readonly<Object<string, number>>}
  */
-const UploadStatus =
-{
+const UploadStatus = Object.freeze({
     MultipleFilesNotAllowed: -12,
     UnknownRepo: -11,
     InvalidFileName: -10,
@@ -49,448 +55,593 @@ const UploadStatus =
     Refuse: -2,
     UploadFailed: -1,
     None: 0,
-    AlreadyUploaded:  1,
+    AlreadyUploaded: 1,
     Upload: 2,
-}
+});
+
+(function () {
+    "use strict";
+
+    const Sw = window.Sw = window.Sw || {};
+
+    /** Default api base (relative to the pages of a first level folder). */
+    const DefaultApiBase = "../upload/";
+
+    /**
+     * Get a translated status text for a status code.
+     * @param {number} code - The status code (as returned by the server).
+     * @returns {string} A human readable status message ("Unknown upload status [n]" for unknown codes).
+     */
+    function statusText(code) {
+        switch (code) {
+            case -12:
+                return _TF("The server only accepts a single file upload", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -11:
+                return _TF("The repo is unknown", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -10:
+                return _TF("The filename was invalid (too long, using invalid chars or similar)", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -9:
+                return _TF("Another upload is in progress and concurrent uploads are not allowed", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -8:
+                return _TF("The file data was invalid (some processing went wrong)", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -7:
+                return _TF("Disc quota exceeded", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -6:
+                return _TF("Not authorized", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -5:
+                return _TF("Invalid params", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -4:
+                return _TF("Invalid file extension", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -3:
+                return _TF("File too large", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -2:
+                return _TF("File refused", "This is the description of a status code for a service that upload file(s) to a repository");
+            case -1:
+                return _TF("Upload failed", "This is the description of a status code for a service that upload file(s) to a repository");
+            case 0:
+                return _TF("Ok", "This is the description of a status code for a service that upload file(s) to a repository");
+            case 1:
+                return _TF("Already uploaded", "This is the description of a status code for a service that upload file(s) to a repository");
+            case 2:
+                return _TF("May be uploaded", "This is the description of a status code for a service that upload file(s) to a repository");
+        }
+        return _T("Unknown upload status [{0}]", code, "This is the description of a status code for a service that upload file(s) to a repository.{0} is replaced with the status code");
+    }
+
+    /**
+     * Test if a "data-multiple" style value allows multiple files.
+     * @param {?string} v - Attribute value.
+     * @returns {boolean} True for "true" or "1".
+     */
+    function isMultiple(v) {
+        return (v === "true") || (v === "1");
+    }
+
+    /**
+     * Load md5.js (YaMD5, required for hashing) unless the page already has it.
+     * @returns {Promise<void>}
+     * @throws {Error} If md5.js can't be loaded.
+     */
+    async function ensure() {
+        if (typeof YaMD5 !== "undefined")
+            return;
+        await Sw.Net.IncludeJs(null, "md5.js");
+        if (typeof YaMD5 === "undefined")
+            throw new Error("md5.js (YaMD5) is not available");
+    }
+
+    /**
+     * Raw deflate compress (native CompressionStream via Sw.Util.Deflate, else UZIP when loaded).
+     * @param {ArrayBuffer} buffer - Data.
+     * @returns {Promise<Uint8Array|null>} The compressed data, or null if no compressor is available / it failed.
+     */
+    async function deflate(buffer) {
+        try {
+            if ((typeof CompressionStream !== "undefined") && Sw.Util && Sw.Util.Deflate)
+                return await Sw.Util.Deflate(new Uint8Array(buffer));
+            if (typeof UZIP !== "undefined")
+                return UZIP.deflateRaw(new Uint8Array(buffer), { level: 8 });
+        }
+        catch (e) {
+            console.warn("Upload: deflate failed: " + e);
+        }
+        return null;
+    }
+
+    /**
+     * Test if a file name has a compressible extension.
+     * @param {string} name - File name.
+     * @returns {boolean} True if compressing the content is worth trying.
+     */
+    function isCompressible(name) {
+        const f = Sw.Format;
+        if (!f)
+            return false;
+        const ext = (f.FileExtension(name) || "").toLowerCase();
+        return f.IsCompressibleExt(ext);
+    }
+
+    /**
+     * Upload one file (status Upload) and write its result.
+     * @param {string} apiBase - Api base url.
+     * @param {string} repo - Repo name.
+     * @param {{Name:string, Length:number, Hash:string, LastModified:number}} info - FileUploadInfo.
+     * @param {ArrayBuffer} buffer - File content.
+     * @returns {Promise<{Status:number, Url:(string|null), Redirected:(string|null)}>} The result of this file.
+     */
+    async function uploadOne(apiBase, repo, info, buffer) {
+        const e = encodeURIComponent;
+        const url = apiBase + "Upload?repo=" + e(repo) + "&name=" + e(info.Name) + "&length=" + info.Length + "&hash=" + e(info.Hash) + "&time=" + info.LastModified;
+        const headers = { "Content-Type": "application/octet-stream" };
+        let body = buffer;
+        if (isCompressible(info.Name)) {
+            const comp = await deflate(buffer);
+            if (comp && (comp.length < buffer.byteLength)) {
+                body = comp;
+                headers["Content-Encoding"] = "deflate";
+            }
+        }
+        try {
+            const res = await fetch(url, { method: "POST", mode: "cors", headers: headers, body: body });
+            if (res.status !== 200) {
+                console.warn('Upload failed: "' + info.Name + '", fetch status: ' + res.status);
+                return { Status: -1, Url: null, Redirected: null };
+            }
+            if (res.redirected) {
+                console.warn('Upload failed: "' + info.Name + '", fetch redirected to: ' + res.url);
+                return { Status: -1, Url: null, Redirected: res.url };
+            }
+            const s = await res.json();
+            if (s.Result !== 0)
+                console.warn('Upload failed: "' + info.Name + '", status: ' + s.Result);
+            return { Status: s.Result, Url: s.Url ?? null, Redirected: null };
+        }
+        catch (ex) {
+            console.warn('Upload failed: "' + info.Name + '", fetch exception: ' + ex);
+            return { Status: -1, Url: null, Redirected: null };
+        }
+    }
+
+    /**
+     * Upload file(s) to a repo (see the file header for the protocol).
+     * @param {string} repo - Name of the repo (must exist on the server).
+     * @param {File[]|FileList} files - The files.
+     * @param {{ApiBase:string, OnProgress:function({Phase:string, Done:number, Count:number}):void}} [opts] - ApiBase
+     * (default "../upload/"); OnProgress is called with Phase "hash", "check", "upload" and "done".
+     * @returns {Promise<{Status:number[], Urls:(string|null)[], Redirected:(string|null)}|{Error:Error}>} Results
+     * indexed like files, or {Error} on an exception.
+     */
+    async function upload(repo, files, opts) {
+        opts = opts || {};
+        const apiBase = opts.ApiBase || DefaultApiBase;
+        const progress = (phase, done, count) => {
+            if (opts.OnProgress) {
+                try {
+                    opts.OnProgress({ Phase: phase, Done: done, Count: count });
+                }
+                catch (e) {
+                    console.error(e);
+                }
+            }
+        };
+        try {
+            await ensure();
+            const l = files.length;
+            const infos = [];
+            const data = [];
+            for (let i = 0; i < l; ++i) {
+                progress("hash", i, l);
+                const f = files[i];
+                const b = await f.arrayBuffer();
+                data.push(b);
+                infos.push({ Name: f.name, Length: b.byteLength, Hash: YaMD5.hashByteArray(b), LastModified: f.lastModified });
+            }
+            progress("check", 0, l);
+            const csr = await Sw.Net.Send(apiBase + "CheckStatus", { Repo: repo, Files: infos }, { Reload: true, Post: true });
+            if (!csr)
+                return { Error: new Error("Couldn't check status!") };
+            const stats = csr.map(x => x.Result);
+            const urls = csr.map(x => x.Url ?? null);
+            let redirect = null;
+            const uploads = [];
+            let done = 0;
+            for (let i = 0; i < l; ++i) {
+                if (stats[i] !== UploadStatus.Upload) {
+                    data[i] = null;
+                    continue;
+                }
+                const buffer = data[i];
+                data[i] = null;
+                uploads.push(uploadOne(apiBase, repo, infos[i], buffer).then(r => {
+                    stats[i] = r.Status;
+                    urls[i] = r.Url;
+                    if (r.Redirected)
+                        redirect = r.Redirected;
+                    progress("upload", ++done, uploads.length);
+                }));
+            }
+            if (uploads.length > 0) {
+                progress("upload", 0, uploads.length);
+                await Promise.all(uploads);
+            }
+            progress("done", l, l);
+            return { Status: stats, Urls: urls, Redirected: redirect };
+        }
+        catch (e) {
+            return { Error: e };
+        }
+    }
+
+    /**
+     * Show a file picker (must be called from a user gesture).
+     * @param {{Multiple:boolean, Accept:string}} [opts] - Allow multiple files, accepted types (input accept attribute).
+     * @returns {Promise<FileList|null>} The selected files or null when cancelled.
+     */
+    async function pick(opts) {
+        opts = opts || {};
+        const fi = document.createElement("input");
+        fi.type = "file";
+        if (opts.Multiple)
+            fi.multiple = true;
+        if (opts.Accept)
+            fi.accept = opts.Accept;
+        const wait = new Promise(resolve => {
+            fi.addEventListener("change", () => resolve(true), { once: true });
+            fi.addEventListener("cancel", () => resolve(false), { once: true });
+        });
+        fi.click();
+        await wait;
+        const files = fi.files;
+        return (files && files.length > 0) ? files : null;
+    }
+
+    /**
+     * Run an upload for an upload target element: busy state, callbacks (data-onstart / OnUploadStart, then
+     * data-onresults / OnUploadResults, called as (element, files, repo) and (element, result, files, repo)).
+     * @param {HTMLElement} element - The target element.
+     * @param {File[]|FileList} files - Files.
+     * @returns {Promise<void>}
+     */
+    async function uploadFor(element, files) {
+        if (element.IsUploading)
+            return;
+        element.IsUploading = true;
+        element.classList.add("Uploading");
+        element.setAttribute("aria-busy", "true");
+        const oldTitle = element.title;
+        let denied = false;
+        element.title = _TF("Upload in progress, please wait", "Tool tip of an element that is used to upload files while an upload is running");
+        try {
+            const repo = element.getAttribute("data-repo");
+            const resolve = name => (name && Sw.Util) ? Sw.Util.Resolve(name) : null;
+            const startCb = resolve(element.getAttribute("data-onstart"));
+            if (typeof startCb === "function")
+                startCb(element, files, repo);
+            if (element.OnUploadStart)
+                await element.OnUploadStart(element, files, repo);
+            const res = await upload(repo, files, { ApiBase: element.getAttribute("data-apibase") });
+            //  Refused (403, or every file "not authorized"): the role doesn't allow uploads here, the target is disabled (below)
+            denied = !!res && ((!!res.Error && !!Sw.Access && Sw.Access.IsDenied(res.Error)) ||
+                (Array.isArray(res.Status) && res.Status.length > 0 && res.Status.every(s => s === UploadStatus.NotAuthorized)));
+            const resCb = resolve(element.getAttribute("data-onresults"));
+            if (typeof resCb === "function")
+                resCb(element, res, files, repo);
+            if (element.OnUploadResults)
+                await element.OnUploadResults(element, res, files, repo);
+        }
+        finally {
+            element.title = oldTitle;
+            element.classList.remove("Uploading");
+            element.removeAttribute("aria-busy");
+            element.IsUploading = false;
+        }
+        if (denied && Sw.Access) {
+            const info = await Sw.Access.ApiInfo((element.getAttribute("data-apibase") || DefaultApiBase) + "CheckStatus");
+            Sw.Access.Disable(element, Sw.Access.Requires(info ? info.Auth : null));
+        }
+    }
+
+    /**
+     * True if an upload target is disabled (disabled, or aria-disabled: ex: Sw.Access.Guard, a refused upload).
+     * @param {HTMLElement} e - The target element.
+     * @returns {boolean}
+     */
+    function isOff(e) {
+        return !!e.disabled || e.getAttribute("aria-disabled") === "true";
+    }
+
+    /**
+     * Collect the files of a drop event (only the first one unless the element allows multiple files).
+     * @param {DragEvent} ev - The drop event.
+     * @param {HTMLElement} element - The target element.
+     * @returns {File[]} Files.
+     */
+    function dropFiles(ev, element) {
+        const files = [];
+        const dt = ev.dataTransfer;
+        if (dt) {
+            if (dt.items && dt.items.length) {
+                for (const item of dt.items)
+                    if (item.kind === "file") {
+                        const f = item.getAsFile();
+                        if (f)
+                            files.push(f);
+                    }
+            }
+            else if (dt.files)
+                files.push(...dt.files);
+        }
+        if (!isMultiple(element.getAttribute("data-multiple")) && (files.length > 1))
+            files.length = 1;
+        return files;
+    }
+
+    /**
+     * True if a drag event carries files (other drags, like text, are not highlighted).
+     * @param {DragEvent} ev - Event.
+     * @returns {boolean} True for file drags.
+     */
+    function hasFiles(ev) {
+        const t = ev.dataTransfer && ev.dataTransfer.types;
+        return !t || Array.prototype.indexOf.call(t, "Files") >= 0;
+    }
+
+    /** "dragenter": count nested enters, add class Dragging. @param {DragEvent} ev - Event. */
+    function onDragEnter(ev) {
+        if (!hasFiles(ev))
+            return;
+        const e = ev.currentTarget;
+        e.SwDragDepth = (e.SwDragDepth || 0) + 1;
+        e.classList.add("Dragging");
+    }
+
+    /** "dragleave": remove class Dragging when the pointer left the element. @param {DragEvent} ev - Event. */
+    function onDragLeave(ev) {
+        const e = ev.currentTarget;
+        e.SwDragDepth = Math.max(0, (e.SwDragDepth || 0) - 1);
+        if (e.SwDragDepth === 0)
+            e.classList.remove("Dragging");
+    }
+
+    /** "dragover": accept the drop. @param {DragEvent} ev - Event. */
+    function onDragOver(ev) {
+        ev.preventDefault();
+        if (ev.dataTransfer)
+            ev.dataTransfer.dropEffect = (ev.currentTarget.IsUploading || isOff(ev.currentTarget)) ? "none" : "copy";
+    }
+
+    /**
+     * "drop": upload the dropped files.
+     * @param {DragEvent} ev - Event.
+     * @returns {Promise<void>}
+     */
+    async function onDrop(ev) {
+        ev.preventDefault();
+        const e = ev.currentTarget;
+        e.SwDragDepth = 0;
+        e.classList.remove("Dragging");
+        if (e.IsUploading || isOff(e))
+            return;
+        const files = dropFiles(ev, e);
+        if (files.length > 0)
+            await uploadFor(e, files);
+    }
+
+    /**
+     * "click" (also Enter / Space through Sw.KeyClick): pick files and upload them.
+     * @param {MouseEvent} ev - Event (plain clicks only).
+     * @returns {Promise<void>}
+     */
+    async function onClick(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.shiftKey || ev.altKey || ev.ctrlKey || ev.metaKey)
+            return;
+        const e = ev.currentTarget;
+        if (e.IsUploading || e.classList.contains("Selecting") || isOff(e))
+            return;
+        e.classList.add("Selecting");
+        let files;
+        try {
+            files = await pick({ Multiple: isMultiple(e.getAttribute("data-multiple")), Accept: e.getAttribute("data-accept") });
+        }
+        finally {
+            e.classList.remove("Selecting");
+        }
+        if (files)
+            await uploadFor(e, files);
+    }
+
+    /**
+     * Make an element an upload target.
+     * @param {HTMLElement} el - The element.
+     * @param {object} [o] - Options (falsy values leave existing data-* attributes untouched):
+     *  Repo {string} (data-repo), Multiple {boolean} (data-multiple), ApiBase {string} (data-apibase),
+     *  Accept {string} (data-accept, file picker filter), Title {string} (tool tip, also shown on long press / focus),
+     *  OnStart(element, files, repo), OnResults(element, result, files, repo), NoKeyboard {boolean},
+     *  Guard {{Url:string, Auth:*}|boolean}: disable the target for users without the role (Sw.Access.Guard: Url = a server method
+     *  of the page with the same auth, ex: its table; true = disable after the first refused request of the page).
+     * A target is disabled (with the role needed as tool tip) after an upload was refused (403 or "not authorized").
+     * @returns {{Remove:function():void}} Remove the listeners.
+     */
+    function target(el, o) {
+        o = o || {};
+        if (o.Guard && Sw.Access)
+            Sw.Access.Guard(el, o.Guard === true ? {} : o.Guard);
+        if (o.ApiBase)
+            el.setAttribute("data-apibase", o.ApiBase);
+        if (o.Repo)
+            el.setAttribute("data-repo", o.Repo);
+        if (o.Multiple)
+            el.setAttribute("data-multiple", "true");
+        if (o.Accept)
+            el.setAttribute("data-accept", o.Accept);
+        if (o.OnStart)
+            el.OnUploadStart = o.OnStart;
+        if (o.OnResults)
+            el.OnUploadResults = o.OnResults;
+        if (o.Title) {
+            el.title = o.Title;
+            if (Sw.Hint)
+                Sw.Hint.Attach(el);
+        }
+        if (el.SwUploadTarget)
+            return el.SwUploadTarget;
+        el.addEventListener("click", onClick);
+        el.addEventListener("drop", onDrop);
+        el.addEventListener("dragover", onDragOver);
+        el.addEventListener("dragenter", onDragEnter);
+        el.addEventListener("dragleave", onDragLeave);
+        let keyed = false;
+        if (!o.NoKeyboard && Sw.KeyClick && !el.matches("button, a[href], input, select, textarea")) {
+            Sw.KeyClick(el);
+            if (!el.hasAttribute("role"))
+                el.setAttribute("role", "button");
+            keyed = true;
+        }
+        const handle = {
+            /** Remove the listeners (the data-* attributes stay). */
+            Remove() {
+                el.removeEventListener("click", onClick);
+                el.removeEventListener("drop", onDrop);
+                el.removeEventListener("dragover", onDragOver);
+                el.removeEventListener("dragenter", onDragEnter);
+                el.removeEventListener("dragleave", onDragLeave);
+                if (keyed && Sw.RemoveKeyClick)
+                    Sw.RemoveKeyClick(el);
+                el.SwUploadTarget = null;
+            },
+        };
+        el.SwUploadTarget = handle;
+        return handle;
+    }
+
+    /**
+     * @namespace Sw.Upload - client of the FileUploaderService upload protocol (see the file header).
+     */
+    Sw.Upload = {
+        /** Status codes (C# FileUploadStatus). */
+        Status: UploadStatus,
+        /** Default api base ("../upload/"). */
+        DefaultApiBase: DefaultApiBase,
+        StatusText: statusText,
+        Ensure: ensure,
+        Files: upload,
+        Pick: pick,
+        Target: target,
+        /** Run an upload for a target element (busy state and callbacks), used by the drop / click handlers. */
+        ForElement: uploadFor,
+        /** Event handlers (used by the legacy globals). */
+        Handlers: Object.freeze({ Click: onClick, Drop: onDrop, DragOver: onDragOver, DragEnter: onDragEnter, DragLeave: onDragLeave }),
+    };
+})();
+
+// ------------------------------------------------------------------ legacy globals (old API, thin wrappers)
 
 /**
- * Get a status text from an statuc code
- * Returns a translated (_TF) text for the codes -12..2, otherwise _T("Unknown upload status [{0}]", code).
- * @param {number} code The statuc code (as returned by the server).
- * @returns {string} A human readable status message.
+ * LEGACY: get a translated status text (use Sw.Upload.StatusText).
+ * @param {number} code - The status code.
+ * @returns {string} Text.
  */
 function fileUploaderStatusText(code) {
-    switch (code) {
-        case -12:
-            return _TF("The server only accepts a single file upload", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -11:
-            return _TF("The repo is unknown", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -10:
-            return _TF("The filename was invalid (too long, using invalid chars or similar)", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -9:
-            return _TF("Another upload is in progress and concurrent uploads are not allowed", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -8:
-            return _TF("The file data was invalid (some processing went wrong)", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -7:
-            return _TF("Disc quota exceeded", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -6:
-            return _TF("Not authorized", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -5:
-            return _TF("Invalid params", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -4:
-            return _TF("Invalid file extension", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -3:
-            return _TF("File too large", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -2:
-            return _TF("File refused", "This is the description of a status code for a service that upload file(s) to a repository");
-        case -1:
-            return _TF("Upload failed", "This is the description of a status code for a service that upload file(s) to a repository");
-        case 0:
-            return _TF("Ok", "This is the description of a status code for a service that upload file(s) to a repository");
-        case 1:
-            return _TF("Already uploaded", "This is the description of a status code for a service that upload file(s) to a repository");
-        case 2:
-            return _TF("May be uploaded", "This is the description of a status code for a service that upload file(s) to a repository");
-    }
-    return _T("Unknown upload status [{0}]", code, "This is the description of a status code for a service that upload file(s) to a repository.{0} is replaced with the status code");
+    return Sw.Upload.StatusText(code);
 }
 
-
 /**
- * Uploads file(s) to a repo
- * Reads every file into an ArrayBuffer, MD5-hashes it (YaMD5.hashByteArray, lower-case hex) and builds
- * FileUploadInfo objects {Name, Length, Hash, LastModified}. Posts them once with
- * sendRequest(apiBase + "CheckStatus", {Repo, Files}, true); a falsy reply returns
- * {Error: Error("Couldn't check status!")}. Seeds Status / Urls from the reply (Result, Url), then uploads in
- * parallel (Promise.all, inner doOne) only the files whose status is 2 (Upload); buffers are released
- * (data[i] = null) once queued. Logs every check / upload with console.log. Any exception yields {Error: e}.
- * @param {string} repo Name of the repo (must exist on server)
- * @param {File[]|FileList} files Array of files.
- * @param {string} [apiBase="../upload/"] Base url to the upload Api's, defaults to "../upload/"
- * @returns {Promise<{Status:number[], Urls:(string|null)[], Redirected:(string|null)}|{Error:Error}>} With an array of status codes found in the "Status" property. "Error" is set on an exception. "Urls" is an array of url's to the files (or null if not applicable). "Redirected" is the URL an upload was redirected to (e.g. a login page), or null. Arrays are indexed like `files`.
+ * LEGACY: upload file(s) to a repo (use Sw.Upload.Files).
+ * @param {string} repo - Repo name.
+ * @param {File[]|FileList} files - Files.
+ * @param {string} [apiBase="../upload/"] - Api base url.
+ * @returns {Promise<{Status:number[], Urls:(string|null)[], Redirected:(string|null)}|{Error:Error}>} Results.
  */
-async function fileUploader(repo, files, apiBase) {
-    const l = files.length;
-    const hashes = [];
-    const data = [];
-    for (let i = 0; i < l; ++i) {
-        const f = files[i];
-        const b = await f.arrayBuffer();
-        //const hashBytes = await hashData(b);
-        //const hash = await bufferToBase64(hashBytes);
-        const hash = YaMD5.hashByteArray(b);
-        data.push(b);
-        hashes.push(
-            {
-                Name: f.name,
-                Length: b.byteLength,
-                Hash: hash,
-                LastModified: f.lastModified,
-            });
-    }
-    if (!apiBase)
-        apiBase = '../upload/';
-    try {
-
-        const csr = await sendRequest(apiBase + "CheckStatus",
-            {
-                Repo: repo,
-                Files: hashes,
-            }, true);
-        if (!csr)
-            return {
-                Error: new Error("Couldn't check status!")
-            };
-        const stats = [];
-        const urls = [];
-        const len = csr.length;
-        for (let i = 0; i < len; ++i) {
-            stats[i] = csr[i].Result;
-            urls[i] = csr[i].Url;
-        }
-        const haveZip = !!UZIP;
-
-        /** @type {?string} URL of the last upload that was redirected (reported as Redirected). */
-        let redirect = null;
-        /**
-         * Upload one file: builds a fetch Request POST (mode "cors", "application/octet-stream") to
-         * apiBase + "Upload?repo=&name=&length=&hash=&time=" (values not URL-encoded). If UZIP exists and
-         * isCompressibleExt(getFileExtension(Name)), the body is UZIP.deflateRaw (level 8) with
-         * "Content-Encoding: deflate" when that is smaller than the original. Writes stats[index] / urls[index]
-         * from the JSON reply {Result, Url}; a non-200 status, a redirect (also sets the closure `redirect`) or an
-         * exception sets status -1. Logs the outcome to the console.
-         * @param {{Name:string, Length:number, Hash:string, LastModified:number}} info - FileUploadInfo of the file.
-         * @param {ArrayBuffer} buffer - File content.
-         * @param {number} index - Index of the file in the result arrays.
-         * @returns {Promise<void>}
-         */
-        async function doOne(info, buffer, index) {
-
-            let r = null;
-            if (haveZip) {
-                //  Check if file should be zipped
-                const ext = getFileExtension(info.Name).toLowerCase();
-                if (isCompressibleExt(ext)) {
-                    const tb = UZIP.deflateRaw(new Uint8Array(buffer), { level: 8 });
-                    if (tb.length < buffer.byteLength) {
-                        r = new Request(apiBase + "Upload?repo=" + repo + "&name=" + info.Name + "&length=" + info.Length + "&hash=" + info.Hash + "&time=" + info.LastModified, {
-                            method: "POST",
-                            mode: "cors",
-                            headers: {
-                                "Content-Type": "application/octet-stream",
-                                "Content-Encoding": "deflate",
-                            },
-                            body: tb,
-                            //redirect: "error",
-                        });
-                    }
-                }
-            }
-            if (!r) {
-                r = new Request(apiBase + "Upload?repo=" + repo + "&name=" + info.Name + "&length=" + info.Length + "&hash=" + info.Hash + "&time=" + info.LastModified, {
-                    method: "POST",
-                    mode: "cors",
-                    headers: {
-                        "Content-Type": "application/octet-stream",
-                    },
-                    body: buffer,
-                    //redirect: "error",
-                });
-            }
-            const i = index;
-            try {
-                urls[i] = null;
-                const res = await fetch(r);
-                if (res.status != 200) {
-                    stats[i] = -1;
-                    console.log('Failed: "' + info.Name + '", fetch status: ' + res.status);
-                } else {
-                    if (res.redirected) {
-                        stats[i] = -1;
-                        redirect = res.url;
-                        console.log('Failed: "' + info.Name + '", fetch redirected to: ' + res.url);
-                    } else {
-                        const s = await res.json();
-                        const status = s.Result;
-                        stats[i] = status;
-                        urls[i] = s.Url;
-                        if (status != 0)
-                            console.log('Failed: "' + info.Name + '", status: ' + status);
-                        else
-                            console.log('Uploaded: "' + info.Name + '", status: ' + status);
-                    }
-                }
-            }
-            catch (e) {
-                stats[i] = -1;
-                console.log('Failed: "' + info.Name + '", fetch exception: ' + e);
-
-            }
-        }
-
-        const uploads = [];
-        for (let i = 0; i < l; ++i) {
-
-            const info = hashes[i];
-            const s = stats[i];
-            console.log('Checked: "' + info.Name + '", length: ' + info.Length + ', status: ' + s + ', hash: "' + info.Hash + '"');
-            if (s != 2) {
-                data[i] = null;
-                continue;
-            }
-            uploads.push(doOne(info, data[i], i));
-            data[i] = null;
-        }
-        if (uploads.length > 0)
-            await Promise.all(uploads);
-        return {
-            Status: stats,
-            Urls: urls,
-            Redirected: redirect,
-        };
-    }
-    catch (e) {
-        return {
-            Error: e,
-        }
-    }
+function fileUploader(repo, files, apiBase) {
+    return Sw.Upload.Files(repo, files, { ApiBase: apiBase });
 }
 
 /**
- * Called internally when some files are dropped or selected to perform the actual upload
- * Sets element.IsUploading = true, adds class "Uploading" and a temporary translated title. Reads "data-repo";
- * calls the global function named by "data-onstart" (GetFunction) and awaits element.OnUploadStart(element,
- * files, repo) if set; runs fileUploader(repo, files, "data-apibase"); then calls the "data-onresults" function
- * and awaits element.OnUploadResults(element, res, files, repo). Title, class and IsUploading are restored in
- * `finally`.
- * @param {HTMLElement} element The element (that have the attributes etc).
- * @param {File[]|FileList} files The files to upload
+ * LEGACY: upload files for a configured element (use Sw.Upload.ForElement).
+ * @param {HTMLElement} element - The element (data-* attributes, expandos).
+ * @param {File[]|FileList} files - Files.
  * @returns {Promise<void>}
  */
-async function fileUploaderElement(element, files) {
-
-    element.IsUploading = true;
-    element.classList.add("Uploading");
-    const oldTit = element.title;
-    element.title = _TF("Upload in progress, please wait");
-    try {
-
-        let repo = element.getAttribute("data-repo");
-        const startCb = element.getAttribute("data-onstart");
-        if (startCb)
-            GetFunction(startCb)(element, files, repo);
-        const ons = element.OnUploadStart;
-        if (ons)
-            await ons(element, files, repo);
-
-        const res = await fileUploader(repo, files, element.getAttribute("data-apibase"));
-        const resCb = element.getAttribute("data-onresults");
-        if (resCb)
-            GetFunction(resCb)(element, res, files, repo);
-        const onr = element.OnUploadResults;
-        if (onr)
-            await onr(element, res, files, repo);
-    }
-    finally {
-        element.title = oldTit;
-        element.classList.remove("Uploading");
-        element.IsUploading = false;
-    }
+function fileUploaderElement(element, files) {
+    return Sw.Upload.ForElement(element, files);
 }
 
 /**
-* Used to handle dropping file(s) and file upload onto an element by hooking this to the "drop" even of an element
- * Calls preventDefault, removes "Dragging" (fileUploaderDragLeave), ignores the drop while the element
- * IsUploading. Collects files from dataTransfer.items (kind "file") or dataTransfer.files, keeps only the first
- * file unless "data-multiple" is "true" or "1", then calls fileUploaderElement(currentTarget, files).
- * @param {DragEvent} ev The event object
+ * LEGACY: "drop" handler of an upload element.
+ * @param {DragEvent} ev - Event.
  * @returns {Promise<void>}
  */
-async function fileUploaderDrop(ev) {
-    ev.preventDefault();
-    await fileUploaderDragLeave(ev);
-    const e = ev.currentTarget;
-    if (e.IsUploading)
-        return;
-    const files = [];
-    /**
-     * Collect one dropped file into the local `files` array.
-     * @param {File} file - The dropped file.
-     * @param {number} index - Index in the drop list (unused).
-     */
-    function onFile(file, index) {
-        files.push(file);
-    }
-    if (ev.dataTransfer.items) {
-        [...ev.dataTransfer.items].forEach((item, i) => {
-            if (item.kind === "file")
-                onFile(item.getAsFile(), i);
-        });
-    } else {
-        [...ev.dataTransfer.files].forEach((file, i) => onFile(file, i));
-    }
-    const ma = e.getAttribute("data-multiple");
-    const mu = ma && ((ma == "true") || (ma == "1"));
-    if (!mu)
-        files.length = files.length > 1 ? 1 : files.length;
-    await fileUploaderElement(e, files);
+function fileUploaderDrop(ev) {
+    return Sw.Upload.Handlers.Drop(ev);
 }
 
-
 /**
- * Used to allow dropping a file onto an element by hooking this to the "dragover" even of an element
- * (only calls preventDefault so the element accepts drops).
- * @param {DragEvent} ev The event object
+ * LEGACY: "dragover" handler of an upload element (accepts the drop).
+ * @param {DragEvent} ev - Event.
  * @returns {Promise<void>}
  */
 async function fileUploaderDrag(ev) {
-    ev.preventDefault();
+    Sw.Upload.Handlers.DragOver(ev);
 }
 
 /**
- * Used to add the "Dragging"" css class of an element with a drag target ("dragenter" handler, uses ev.currentTarget)
- * @param {DragEvent} ev The event object
+ * LEGACY: "dragenter" handler of an upload element (adds class Dragging).
+ * @param {DragEvent} ev - Event.
  * @returns {Promise<void>}
  */
 async function fileUploaderDragEnter(ev) {
-    ev.currentTarget.classList.add("Dragging");
+    Sw.Upload.Handlers.DragEnter(ev);
 }
 
 /**
- * Used to remove the "Dragging" css class of an element with a drag target ("dragleave" handler, also called
- * by fileUploaderDrop; uses ev.currentTarget)
- * @param {DragEvent} ev The event object
+ * LEGACY: "dragleave" handler of an upload element (removes class Dragging).
+ * @param {DragEvent} ev - Event.
  * @returns {Promise<void>}
  */
 async function fileUploaderDragLeave(ev) {
-    ev.currentTarget.classList.remove("Dragging");
+    Sw.Upload.Handlers.DragLeave(ev);
 }
 
 /**
- * Pop-up a file selector box (must be initiated by a user interaction like click)
- * Creates a detached <input type=file> (with "multiple" when requested), clicks it and awaits "change" or
- * "cancel" (waitEvent2). Used directly by chat.js.
- * @param {boolean} allowMultiple If true, multiple files can be selected
- * @returns {Promise<FileList|null>} An array of selected file objects or null if closed without selections.
+ * LEGACY: show a file picker (use Sw.Upload.Pick); must be called from a user gesture.
+ * @param {boolean} allowMultiple - Allow multiple files.
+ * @returns {Promise<FileList|null>} Files or null when cancelled.
  */
-async function selectFiles(allowMultiple)
-{
-    const fi = document.createElement("input");
-    if (allowMultiple)
-        fi.setAttribute("multiple", 1);
-    fi.type = "file";
-    fi.click();
-    await waitEvent2(fi, "change", "cancel");
-    const files = fi.files;
-    if (files)
-        if (files.length > 0)
-            return files;
-    return null;
+function selectFiles(allowMultiple) {
+    return Sw.Upload.Pick({ Multiple: allowMultiple });
 }
 
 /**
- * Add this function to a click event listener (or other user interaction) to pop-up a file selection box (that will upload the selected files to the repo specified in the data-repo).
- * Target element can have the following attributes:
- * - "data-repo" specifies what repo to upload to.
- * - "data-onstart" optionally specifies the name of a javascript function that is invoked when file uploading starts, arguments are: (element, files[], repo)
- * - "data-onresults" optionally specifies the name of a javascript function that is invoked when file(s) was uploaded (or not).
- * - "data-multiple" optionally set to "true" or "1" to allow multiple files to be uploaded at once (server repo must suport that).
- * - "data-apibase" optionally specifies the base path of the api calls, defaults to "../upload/".
- * Returns early if badClick(ev) or the element IsUploading. Creates a detached <input type=file> (multiple per
- * "data-multiple"), adds class "Selecting" while the dialog is open (removed on change / cancel) and on change
- * with at least one file calls fileUploaderElement(element, files).
- * @param {MouseEvent} ev The event (currentTarget is used as the element)
+ * LEGACY: "click" handler of an upload element (picks files and uploads them).
+ * @param {MouseEvent} ev - Event.
  * @returns {Promise<void>}
  */
-async function fileUploaderClick(ev) {
-    if (badClick(ev))
-        return;
-    const e = ev.currentTarget;
-    if (e.IsUploading)
-        return;
-    const fi = document.createElement("input");
-    const ma = e.getAttribute("data-multiple");
-    const mu = ma && ((ma == "true") || (ma == "1"));
-    if (mu)
-        fi.setAttribute("multiple", 1);
-    fi.type = "file";
-    fi.addEventListener("change", async ce => {
-        ce.preventDefault();
-        ce.stopPropagation();
-        const files = fi.files;
-        e.classList.remove("Selecting");
-        if (files) {
-            if (files.length > 0) {
-                await fileUploaderElement(e, files);
-            }
-        }
-    });
-    fi.addEventListener("cancel", () => e.classList.remove("Selecting"));
-    e.classList.add("Selecting");
-    fi.click();
+function fileUploaderClick(ev) {
+    return Sw.Upload.Handlers.Click(ev);
 }
 
-
 /**
- * Make an element upload files (open dialog on click and accept dropping of files).
- * The following css classes are added to the element:
- * "Dragging" - When a file is dragged over the element.
- * "Selecting" - When a file selection dialog is open.
- * "Uploading" - When a file is being uploaded (and possible processed server side).
- * Adds the click, drop, dragover, dragenter and dragleave listeners and stores the configuration as
- * "data-apibase", "data-repo", "data-multiple"="true" and the expandos el.OnUploadStart / el.OnUploadResults.
- * Falsy arguments leave existing attributes untouched.
- * @param {HTMLElement} el The element to hook up (adding events)
- * @param {string} repo Optional repositiory name (if not set the "data-repo"" attribute of the element is used and should be set).
- * @param {function(HTMLElement, File[], string)} onstart Optional function to invoke when an upload is starting (any function found in the "data-onstart" attribute is also invoked).
- * @param {function(HTMLElement, object, File[], string)} onresults Optional function to invoke when an upload is starting (any function found in the "data-onresults" attribute is also invoked). Actually invoked when the upload has finished, with (element, result of fileUploader, files, repo).
- * @param {string} apiBase Base url to the upload Api's, defaults to "../upload/" (if not set the "data-apibase" attribute of the element is used if it exist).
- * @param {boolean} allowMultiple If true, multiple files may be uploaded at once.
+ * LEGACY: make an element upload files (use Sw.Upload.Target). Falsy arguments leave existing attributes untouched.
+ * The element is now also keyboard operable (Enter / Space open the picker).
+ * @param {HTMLElement} el - The element.
+ * @param {string} [repo] - Repo name (data-repo).
+ * @param {function(HTMLElement, File[], string)} [onstart] - Called when an upload starts.
+ * @param {function(HTMLElement, object, File[], string)} [onresults] - Called with the result when it finished.
+ * @param {string} [apiBase] - Api base url (data-apibase).
+ * @param {boolean} [allowMultiple] - Allow multiple files (data-multiple).
  */
 function fileUploaderSetup(el, repo, onstart, onresults, apiBase, allowMultiple) {
-
-    el.addEventListener("click", fileUploaderClick);
-    el.addEventListener("drop", fileUploaderDrop);
-    el.addEventListener("dragover", fileUploaderDrag);
-    el.addEventListener("dragenter", fileUploaderDragEnter);
-    el.addEventListener("dragleave", fileUploaderDragLeave);
-    if (apiBase)
-        el.setAttribute("data-apibase", apiBase);
-    if (repo)
-        el.setAttribute("data-repo", repo);
-    if (allowMultiple)
-        el.setAttribute("data-multiple", "true");
-    if (onstart)
-        el.OnUploadStart = onstart;
-    if (onresults)
-        el.OnUploadResults = onresults;
+    Sw.Upload.Target(el, { Repo: repo, OnStart: onstart, OnResults: onresults, ApiBase: apiBase, Multiple: allowMultiple });
 }
-
 
 /**
- * Set up all tags with a certain name (defaults to "sysweaver-drop") for file upload.
- * Elements can have the following attributes:
- * - "data-repo" specifies what repo to upload to.
- * - "data-onstart" optionally specifies the name of a javascript function that is invoked when file uploading starts, arguments are: (element, files[], repo)
- * - "data-onresults" optionally specifies the name of a javascript function that is invoked when file(s) was uploaded (or not).
- * - "data-multiple" optionally set to "true" or "1" to allow multiple files to be uploaded at once (server repo must suport that).
- * - "data-apibase" optionally specifies the base path of the api calls, defaults to "../upload/".
- * The following css classes are added to the elements:
- * "Dragging" - When a file is dragged over the element.
- * "Selecting" - When a file selection dialog is open.
- * "Uploading" - When a file is being uploaded (and possible processed server side).
- * Calls fileUploaderSetup(element) without arguments for every element from
- * document.getElementsByTagName(tagName) (iterating backwards). No in-repo page calls it.
- * @param {string} [tagName="sysweaver-drop"] Name of the tags to setup for file upload (defaults to "sysweaver-drop").
+ * LEGACY: set up all elements with a tag name (default "sysweaver-drop") as upload targets configured by their
+ * data-* attributes.
+ * @param {string} [tagName="sysweaver-drop"] - Tag name.
  */
 function fileUploaderInit(tagName) {
-    if (!tagName)
-        tagName = "sysweaver-drop";
-    const tags = document.getElementsByTagName(tagName);
-    let tl = tags.length;
-    while (tl > 0) {
-        --tl;
-        fileUploaderSetup(tags[tl]);
-    }
+    for (const e of Array.from(document.getElementsByTagName(tagName || "sysweaver-drop")))
+        Sw.Upload.Target(e);
 }
-

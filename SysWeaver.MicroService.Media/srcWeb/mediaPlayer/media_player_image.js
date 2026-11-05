@@ -8,7 +8,7 @@
  * (MediaTypes.Image without an Effect; with an Effect, MediaPlayerEffect + MediaPlayerImageTexture are used instead).
  * Globals defined: MediaPlayerParamsImage, MediaPlayerImage.
  * Dependencies: MediaPlayerTools (media_player_tools.js: InitBase, ApplyClip default, OnCacheComplete) and the
- * common.js global waitEvent2. The timeline code is duplicated in MediaPlayerText (media_player_text.js).
+ * MediaPlayerTools.waitEvent2. The timeline code is duplicated in MediaPlayerText (media_player_text.js).
  */
 
 /**
@@ -76,7 +76,7 @@ class MediaPlayerImage {
     /**
      * Creates the player and its <img> element (not loaded until Cache).
      * AdaptiveSize defaults to url.endsWith(".svg") before params are merged; when adaptive the element gets
-     * object-fit: contain. Sets HaveVisual, CanPlay, calls MediaPlayerTools.InitBase, Url = Source = url,
+     * object-fit: contain. Sets HaveVisual, CanPlay, IsStill, calls MediaPlayerTools.InitBase, Url = Source = url,
      * CurrentPosition = 0, Duration = Params.Duration.
      * @param {string} url - URL of the image.
      * @param {MediaPlayerParamsImage|object} [params] - Partial params, merged over the defaults.
@@ -96,6 +96,11 @@ class MediaPlayerImage {
 
         t.HaveVisual = true;
         t.CanPlay = true;
+        /**
+         * @type {boolean} A still picture: the timeline (Duration) only times slideshows / playlists, so viewers (mediaView
+         * media.js) show no play position, duration or transport buttons for it.
+         */
+        t.IsStill = true;
         MediaPlayerTools.InitBase(t, e, params);
         t.Url = url;
         t.Source = url;
@@ -104,7 +109,7 @@ class MediaPlayerImage {
     }
 
     /**
-     * Loads the image: sets src and waits for "load"/"error" (common.js waitEvent2), reads naturalWidth/Height
+     * Loads the image: sets src and waits for "load"/"error" (MediaPlayerTools.waitEvent2), reads naturalWidth/Height
      * into Width/Height, sets AspectRatio when AdaptiveSize, calls ApplyClip() and MediaPlayerTools.OnCacheComplete.
      * @param {boolean} [keepHidden] - When true the element keeps the MediaHidden class.
      * @returns {Promise<boolean>} True when loaded, false on a load error.
@@ -114,7 +119,7 @@ class MediaPlayerImage {
         const t = this;
         const e = t.Element;
         const c = t.Url;
-        const res = await waitEvent2(e, "load", "error", () => {
+        const res = await MediaPlayerTools.waitEvent2(e, "load", "error", () => {
             e.src = c;
         });
         if (res.type == "error")
@@ -275,3 +280,12 @@ class MediaPlayerImage {
 
 
 
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.MediaPlayerParamsImage = MediaPlayerParamsImage;
+    m.MediaPlayerImage = MediaPlayerImage;
+})();

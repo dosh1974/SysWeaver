@@ -1009,7 +1009,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Perform the actual prune, moved to it's own method to make it easier for the JIT to inline the Prune method (checking for pruning)
+        /// Perform the actual prune, moved to its own method to make it easier for the JIT to inline the Prune method (checking for pruning)
         /// </summary>
         /// <param name="exp">Items that expires at or before this time are removed</param>
         void InternalPrune(DateTime exp)

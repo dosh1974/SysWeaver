@@ -1,977 +1,824 @@
-﻿
-
-
-/**
- * @file Animation and interpolation helpers (easing, Hermite curves, smoothed values, springs, projectile/bounce motion).
- * Loaded as a classic script with a static `<script defer src="../common/anim.js">` tag by the media viewer pages of
- * SysWeaver.MicroService.Media (mediaView/MediaView.html, MediaPreview.html and the backgroundEffects/, collageEffects/,
- * counterEffects/, imageEffects/ and textEffects/ index.html pages); its consumer is mediaPlayer/media_player_effect.js
- * (uses SmoothBool, SmoothValue, SpringAnimation, BounceAnimation and Smoothness).
- * Globals (global lexical bindings, not window properties): const Smoothness, FalseValue, TrueValue and the classes
- * MathTools, CubicHermite, CubicHermiteInterpolator, SmoothValue, SmoothBool, SpringAnimation, ProjectileMotion,
- * BounceMotion, BounceAnimation.
- * Dependencies: none (no DOM access, does not use common.js); only `performance.now()` as a time fallback.
- * Conventions: arguments named `timeMs` are milliseconds; where a member falls back to `performance.now()` for a
- * non-number `timeMs` this is stated per member. Physics helpers (ProjectileMotion/BounceMotion) use seconds.
- * No code runs at load time except the static field initializers of MathTools and SpringAnimation.
+﻿/**
+ * @file Animation and interpolation helpers (easing, Hermite curves, smoothed values, springs, projectile / bounce
+ * motion). Pure maths: no DOM access, no dependency on common.js or Sw (only `performance.now()` as a time fallback).
+ *
+ * Loaded as a classic script with `<script defer src="../common/anim.js">` by the media viewer pages of
+ * SysWeaver.MicroService.Media (mediaView/MediaView.html, MediaPreview.html and the effect library pages); used by
+ * mediaPlayer/media_player_effect.js (SmoothBool, SmoothValue, SpringAnimation, BounceAnimation, Smoothness).
+ *
+ * Globals (global lexical bindings, the public API, kept unchanged): `Smoothness`, `FalseValue`, `TrueValue` and the
+ * classes `MathTools`, `CubicHermite`, `CubicHermiteInterpolator`, `SmoothValue`, `SmoothBool`, `SpringAnimation`,
+ * `ProjectileMotion`, `BounceMotion`, `BounceAnimation`. The same objects are also available as `Sw.Anim.<Name>`.
+ *
+ * Conventions: arguments named `timeMs` are milliseconds; members that fall back to `performance.now()` for a
+ * non-number `timeMs` say so. Physics helpers (ProjectileMotion / BounceMotion) use seconds.
  */
 
 /**
- * Represents an interpolation method with various smoothness (frozen enum).
- * The numeric value is used as an index into MathTools.#DoubleSmoothers (see MathTools.GetSmoothDoubleFunction).
+ * Interpolation smoothness (frozen enum); the value indexes MathTools.GetSmoothDoubleFunction.
  * @type {Readonly<{Normal:number, Smooth:number, Smoother:number, Step:number}>}
  */
-const Smoothness = Object.freeze(
-	{
-		/** Linear interpolation. C0 continuity */
-		Normal: 0,
-
-		/** "Smooth step". C0 and C1 continuity */
-		Smooth: 1,
-
-		/** Smoother interpoaltion. C0, C1 and C2 continuity */
-		Smoother: 2,
-
-		/** Hard step interpolation. No continuity */
-		Step: 3,
-	});
-
+const Smoothness = Object.freeze({
+    /** Linear interpolation (C0 continuity). */
+    Normal: 0,
+    /** "Smooth step" (C0 and C1 continuity). */
+    Smooth: 1,
+    /** Smoother step (C0, C1 and C2 continuity). */
+    Smoother: 2,
+    /** Hard step (no continuity). */
+    Step: 3,
+});
 
 /**
- * Static easing and smoothing functions operating on normalized values in [0, 1].
- * Never instantiated; all members are static.
+ * Clamp a value to [0, 1].
+ * @param {number} t - Value.
+ * @returns {number} Clamped value.
  */
-class MathTools
-{
-	/**
-	 * Smooths a value going from zero to one. The smoothed value could be used for smooth interpolation (ease in/out). C0 and C1 continuity
-	 * @param {number} t The input value [0, 1]
-	 * @returns {number} The smoothed value [0, 1]
-	 */
-	static Smooth(t)
-	{
-		if (t <= 0)
-			return 0;
-		if (t >= 1)
-			return 1;
-		return t * t * (3 - t - t);
-	}
-
-	/**
-	 * Smooths a value going from zero to one. The smoothed value could be used for smooth interpolation (ease in/out). C0, C1 and C2 continuity
-	 * @param {number} t The input value [0, 1]
-	 * @returns {number} The smoothed value [0, 1]
-	 */
-	static Smoother(t)
-	{
-		if (t <= 0)
-			return 0;
-		if (t >= 1)
-			return 1;
-		return t * t * t * (t * (t * 6 - 15) + 10);
-	}
-
-
-	/**
-	 * Function that steps a value, if input is less than a half the output is 0 else 1. No continuity
-	 * @param {number} t The input value [0, 1]
-	 * @returns {number} The stepped value 0 or 1
-	 */
-	static Step(t)
-	{
-		return t < 0.5 ? 0 : 1;
-	}
-
-	/**
-	 * Creates a smooth ease in / out for a time interval
-	 * Computes `Smooth(time / easeDuration) * Smooth((1 - time) / easeDuration)`: the factor rises from 0 to 1 during
-	 * the first `easeDuration` of the interval and falls back to 0 during the last `easeDuration`.
-	 * `time` is clamped to [0, 1], `easeDuration` is capped at 1; a non-number `easeDuration` becomes 0.1 and
-	 * `easeDuration <= 0` returns 1 (no easing).
-	 * @param {number} time The normalized time in the interval [0, 1]
-	 * @param {number} [easeDuration=0.1] The duration as a fraction of the normalized time for the ease in and out, [0, 1]
-	 * @returns {number} The factor 0 = out, 1 = in [0, 1]
-	 */
-	static EaseSmooth(time, easeDuration)
-	{
-		if (typeof easeDuration !== "number")
-			easeDuration = 0.1;
-		if (easeDuration <= 0)
-			return 1;
-		time = (time < 0) ? 0 : (time > 1 ? 1 : time);
-		easeDuration = (easeDuration > 1 ? 1 : easeDuration);
-		const t0 = time / easeDuration;
-		const t1 = 1 / easeDuration - t0;
-		return MathTools.Smooth(t0) * MathTools.Smooth(t1);
-	}
-
-	/**
-	 * Creates a smooth ease in / out for a time interval
-	 * Like EaseSmooth but with separate ease-in and ease-out fractions (each capped at 1). A fraction `<= 0` disables
-	 * that side (its factor is Smooth(1) = 1). There are no defaults for non-number fractions. `time` is clamped to [0, 1].
-	 * @param {number} time The normalized time in the interval [0, 1]
-	 * @param {number} easeInDuration The duration as a fraction of the normalized time for the ease in [0, 1]
-	 * @param {number} easeOutDuration The duration as a fraction of the normalized time for the ease out [0, 1]
-	 * @returns {number} The factor 0 = out, 1 = in [0, 1]
-	 */
-	static EaseSmooth2(time, easeInDuration, easeOutDuration)
-	{
-		time = (time < 0) ? 0 : (time > 1 ? 1 : time);
-		easeInDuration = (easeInDuration > 1 ? 1 : easeInDuration);
-		easeOutDuration = (easeOutDuration > 1 ? 1 : easeOutDuration);
-		const t0 = easeInDuration > 0 ? (time / easeInDuration) : 1;
-		const t1 = easeOutDuration > 0 ? ((1 - time) / easeOutDuration) : 1;
-		return MathTools.Smooth(t0) * MathTools.Smooth(t1);
-	}
-
-	/**
-	 * Creates a smoother ease in / out for a time interval
-	 * Same as EaseSmooth (same clamping and defaults) but using MathTools.Smoother (C2 continuous) as the curve.
-	 * @param {number} time The normalized time in the interval [0, 1]
-	 * @param {number} [easeDuration=0.1] The duration as a fraction of the normalized time for the easy in and out, [0, 1]
-	 * @returns {number} The factor 0 = out, 1 = in [0, 1]
-	 */
-	static EaseSmoother(time, easeDuration)
-	{
-		if (typeof easeDuration !== "number")
-			easeDuration = 0.1;
-		if (easeDuration <= 0)
-			return 1;
-		time = (time < 0) ? 0 : (time > 1 ? 1 : time);
-		easeDuration = (easeDuration > 1 ? 1 : easeDuration);
-		const t0 = time / easeDuration;
-		const t1 = 1 / easeDuration - t0;
-		return MathTools.Smoother(t0) * MathTools.Smoother(t1);
-	}
-
-	/**
-	 * Creates a smoother ease in / out for a time interval
-	 * Same as EaseSmooth2 (a fraction <= 0 disables that side, no defaults) but using MathTools.Smoother as the curve.
-	 * @param {number} time The normalized time in the interval [0, 1]
-	 * @param {number} easeInDuration The duration as a fraction of the normalized time for the ease in [0, 1]
-	 * @param {number} easeOutDuration The duration as a fraction of the normalized time for the ease out [0, 1]
-	 * @returns {number} The factor 0 = out, 1 = in [0, 1]
-	 */
-	static EaseSmoother2(time, easeInDuration, easeOutDuration)
-	{
-		time = (time < 0) ? 0 : (time > 1 ? 1 : time);
-		easeInDuration = (easeInDuration > 1 ? 1 : easeInDuration);
-		easeOutDuration = (easeOutDuration > 1 ? 1 : easeOutDuration);
-		const t0 = easeInDuration > 0 ? (time / easeInDuration) : 1;
-		const t1 = easeOutDuration > 0 ? ((1 - time) / easeOutDuration) : 1;
-		return MathTools.Smoother(t0) * MathTools.Smoother(t1);
-	}
-
-	/**
-	 * Returns a function that can be used for interpolation for the given smoothness
-	 * @param {Smoothness} s The smootness to give a function for
-	 * @returns {function(number):number} Smoothness function, input is a value from [0, 1] and the output is a "smoothed" values in the same range [0, 1]
-	 * (undefined for an unknown Smoothness index, there is no validation)
-	 */
-	static GetSmoothDoubleFunction(s) 
-	{
-		return MathTools.#DoubleSmoothers[s];
-	}
-
-
-	/**
-	 * List of smoothers (mapping Smoothness enum to function): [linear identity, Smooth, Smoother, Step].
-	 * @type {Array<function(number):number>}
-	 */
-	static #DoubleSmoothers = 
-	[
-		x => x,
-		MathTools.Smooth,
-		MathTools.Smoother,
-		MathTools.Step,
-	];
-}
-
-
-/**
- * Tools for computing cubic hermite basis weights (h00, h10, h01, h11) and their derivatives.
- * Never instantiated; all members are static. Used by CubicHermiteInterpolator.
- */
-class CubicHermite
-{
-	/**
-	 * Compute hermite basis weights
-	 * fromW = (1+2t)(1-t)^2, initW = t(1-t)^2, toW = t^2(3-2t), exitW = t^2(t-1). `t` is not clamped.
-	 * @param {number} t The time [0, 1]
-	 * @returns {{fromW:number, initW:number, toW:number, exitW:number}} Hermite weights, fromW, initW, toW, exitW
-	 */
-	static CalcBasis(t)
-	{
-		const t2 = t * t;
-		const it = 1 - t;
-		const td = t + t;
-		const it2 = it * it;
-		const fromW = (1 + td) * it2;
-		const initW = t * it2;
-		const toW = t2 * (3 - td);
-		const exitW = t2 * (t - 1);
-		return { fromW, initW, toW, exitW };
-	}
-
-	/**
-	 * Compute hermite derivative basis weights (derivatives of the CalcBasis weights with respect to t)
-	 * fromW = 6(t^2-t), initW = 3t^2-4t+1, toW = 6(t-t^2), exitW = 3t^2-2t. `t` is not clamped.
-	 * @param {number} t The time [0, 1]
-	 * @returns {{fromW:number, initW:number, toW:number, exitW:number}} Hermite weights, fromW, initW, toW, exitW
-	 */
-	static CalcDerivativeBasis(t)
-	{
-		const t2 = t * t;
-		const t2_3 = t2 * 3;
-		const fromW = 6 * (t2 - t);
-		const initW = t2_3 - 4 * t + 1;
-		const toW = 6 * (t - t2);
-		const exitW = t2_3 - 2 * t;
-		return { fromW, initW, toW, exitW };
-	}
-
+function animClamp01(t) {
+    return t < 0 ? 0 : (t > 1 ? 1 : t);
 }
 
 /**
- * Class used to interpolate within a hermite curve segment
- * A single, immutable cubic Hermite segment from `From` (with start tangent `Init`) to `To` (with end tangent `Exit`),
- * evaluated at a normalized segment time t in [0, 1]. Created by SmoothValue (new segment per target change);
- * can be copied with `new CubicHermiteInterpolator(other)`.
+ * Static easing and smoothing functions on normalized values in [0, 1] (never instantiated).
  */
-class CubicHermiteInterpolator
-{
-/*
-#if DEBUG
+class MathTools {
+    /**
+     * Smooth step (ease in / out), C0 and C1 continuous.
+     * @param {number} t - Input [0, 1] (clamped).
+     * @returns {number} Smoothed value [0, 1].
+     */
+    static Smooth(t) {
+        if (t <= 0)
+            return 0;
+        if (t >= 1)
+            return 1;
+        return t * t * (3 - t - t);
+    }
 
-	public override string ToString()
-	{
-		return String.Join("", From, " => ", To, ", ", Init, " -> ", Exit);
-	}
+    /**
+     * Smoother step (ease in / out), C0, C1 and C2 continuous.
+     * @param {number} t - Input [0, 1] (clamped).
+     * @returns {number} Smoothed value [0, 1].
+     */
+    static Smoother(t) {
+        if (t <= 0)
+            return 0;
+        if (t >= 1)
+            return 1;
+        return t * t * t * (t * (t * 6 - 15) + 10);
+    }
 
-#endif//DEBUG
-*/
-	/** {number} The from value */
-	#From;
-	/** {number} The inital velocity (derivative for the From value) */
-	#Init;
-	/** {number} The target value */
-	#To;
-	/** {number} The final velocity (derivative for the To value) */
-	#Exit;
+    /**
+     * Hard step: 0 below 0.5, else 1.
+     * @param {number} t - Input [0, 1].
+     * @returns {number} 0 or 1.
+     */
+    static Step(t) {
+        return t < 0.5 ? 0 : 1;
+    }
 
-	/**
-	 * Create an interpolator for
-	 * Copy form: if `from` is a non-null object (another CubicHermiteInterpolator) all four private fields are copied
-	 * from it and the other arguments are ignored. Otherwise non-number `init`/`exit` become 0.
-	 * @param {number|CubicHermiteInterpolator} from The value to interpolate from (or an interpolator to copy)
-	 * @param {number} to The value to interpolate to
-	 * @param {number} [init=0] The start velocity (derivative at the from value)
-	 * @param {number} [exit=0] The end velocity (derivative at the to value)
-	 * @returns {CubicHermiteInterpolator} An interpolator
-	 */
-	constructor(from, to, init, exit)
-	{
-		if ((typeof from === "object") && from)
-		{
-			this.#From = from.#From;
-			this.#Init = from.#Init;
-			this.#To = from.#To;
-			this.#Exit = from.#Exit;
-			return;
-		}
-		if (typeof init !== "number")
-			init = 0;
-		if (typeof exit !== "number")
-			exit = 0;
-	
-		this.#From = from;
-		this.#To = to;
-		this.#Init = init;
-		this.#Exit = exit;
-	}
+    /**
+     * Ease in / out factor for an interval: rises from 0 to 1 during the first `easeDuration` of the normalized time
+     * and falls back to 0 during the last `easeDuration` (Smooth curve).
+     * @param {number} time - Normalized time [0, 1] (clamped).
+     * @param {number} [easeDuration=0.1] - Ease fraction (capped at 1); <= 0 means no easing (returns 1).
+     * @returns {number} Factor [0, 1].
+     */
+    static EaseSmooth(time, easeDuration) {
+        return MathTools.#ease(MathTools.Smooth, time, easeDuration);
+    }
 
-	/** {number} The current target value */
-	get Target()
-	{
-		return this.#To;
-	}
+    /**
+     * Ease in / out factor with separate in / out fractions (Smooth curve). A fraction <= 0 disables that side.
+     * @param {number} time - Normalized time [0, 1] (clamped).
+     * @param {number} easeInDuration - Ease in fraction [0, 1].
+     * @param {number} easeOutDuration - Ease out fraction [0, 1].
+     * @returns {number} Factor [0, 1].
+     */
+    static EaseSmooth2(time, easeInDuration, easeOutDuration) {
+        return MathTools.#ease2(MathTools.Smooth, time, easeInDuration, easeOutDuration);
+    }
 
-	/**
-	 * Get the current value
-	 * Weighted sum of From/Init/To/Exit with CubicHermite.CalcBasis(t); t is not clamped.
-	 * @param {number} t The time within the cubic hermite segment [0, 1]
-	 * @returns {number} The interpolated value
-	 */
-	ValueAt(t)
-	{
-		const c = CubicHermite.CalcBasis(t);
-		return this.#From * c.fromW + this.#Init * c.initW + this.#To * c.toW + this.#Exit * c.exitW;
-	}
-	
-	/**
-	 * Get the current velocity (derivivative)
-	 * Derivative with respect to the normalized segment time t (not real time), using CubicHermite.CalcDerivativeBasis.
-	 * Note the method name is spelled "DerivativAt" (without the "e").
-	 * @param {number} t The time within the cubic hermite segment [0, 1]
-	 * @returns {number} The interpolated velocity
-	 */
-	DerivativAt(t)
-	{
-		const c = CubicHermite.CalcDerivativeBasis(t);
-		return this.#From * c.fromW + this.#Init * c.initW + this.#To * c.toW + this.#Exit * c.exitW;
-	}
+    /**
+     * Like EaseSmooth with the Smoother curve.
+     * @param {number} time - Normalized time [0, 1] (clamped).
+     * @param {number} [easeDuration=0.1] - Ease fraction (capped at 1); <= 0 means no easing (returns 1).
+     * @returns {number} Factor [0, 1].
+     */
+    static EaseSmoother(time, easeDuration) {
+        return MathTools.#ease(MathTools.Smoother, time, easeDuration);
+    }
+
+    /**
+     * Like EaseSmooth2 with the Smoother curve.
+     * @param {number} time - Normalized time [0, 1] (clamped).
+     * @param {number} easeInDuration - Ease in fraction [0, 1].
+     * @param {number} easeOutDuration - Ease out fraction [0, 1].
+     * @returns {number} Factor [0, 1].
+     */
+    static EaseSmoother2(time, easeInDuration, easeOutDuration) {
+        return MathTools.#ease2(MathTools.Smoother, time, easeInDuration, easeOutDuration);
+    }
+
+    /**
+     * The interpolation function of a smoothness.
+     * @param {number} s - A Smoothness value.
+     * @returns {function(number):number} Function [0, 1] -> [0, 1] (undefined for an unknown value).
+     */
+    static GetSmoothDoubleFunction(s) {
+        return MathTools.#DoubleSmoothers[s];
+    }
+
+    /**
+     * Symmetric ease (shared by EaseSmooth / EaseSmoother).
+     * @param {function(number):number} curve - Curve.
+     * @param {number} time - Normalized time.
+     * @param {number} [easeDuration=0.1] - Ease fraction.
+     * @returns {number} Factor.
+     */
+    static #ease(curve, time, easeDuration) {
+        if (typeof easeDuration !== "number")
+            easeDuration = 0.1;
+        if (easeDuration <= 0)
+            return 1;
+        time = animClamp01(time);
+        easeDuration = easeDuration > 1 ? 1 : easeDuration;
+        const t0 = time / easeDuration;
+        const t1 = 1 / easeDuration - t0;
+        return curve(t0) * curve(t1);
+    }
+
+    /**
+     * Asymmetric ease (shared by EaseSmooth2 / EaseSmoother2).
+     * @param {function(number):number} curve - Curve.
+     * @param {number} time - Normalized time.
+     * @param {number} easeIn - Ease in fraction.
+     * @param {number} easeOut - Ease out fraction.
+     * @returns {number} Factor.
+     */
+    static #ease2(curve, time, easeIn, easeOut) {
+        time = animClamp01(time);
+        easeIn = easeIn > 1 ? 1 : easeIn;
+        easeOut = easeOut > 1 ? 1 : easeOut;
+        const t0 = easeIn > 0 ? (time / easeIn) : 1;
+        const t1 = easeOut > 0 ? ((1 - time) / easeOut) : 1;
+        return curve(t0) * curve(t1);
+    }
+
+    /** Smoothers indexed by Smoothness: linear, Smooth, Smoother, Step. @type {Array<function(number):number>} */
+    static #DoubleSmoothers = [
+        x => x,
+        MathTools.Smooth,
+        MathTools.Smoother,
+        MathTools.Step,
+    ];
 }
 
-
-
 /**
- * Hold the state for a value that changes in a smooth fashion
- * A scalar that glides C1-continuously toward new targets: every Update with a new target (or new duration) starts
- * a new CubicHermiteInterpolator segment from the current value, carrying over the current derivative.
- * Created with `new SmoothValue(...)` (or copied with `new SmoothValue({}, other)`); also used internally by SmoothBool.
+ * Cubic Hermite basis weights and their derivatives (never instantiated).
  */
-class SmoothValue
-{
-/*
-#if DEBUG
+class CubicHermite {
+    /**
+     * Hermite basis weights: fromW = (1+2t)(1-t)^2, initW = t(1-t)^2, toW = t^2(3-2t), exitW = t^2(t-1). t is not clamped.
+     * @param {number} t - Time [0, 1].
+     * @returns {{fromW:number, initW:number, toW:number, exitW:number}} Weights.
+     */
+    static CalcBasis(t) {
+        const t2 = t * t;
+        const it = 1 - t;
+        const td = t + t;
+        const it2 = it * it;
+        return { fromW: (1 + td) * it2, initW: t * it2, toW: t2 * (3 - td), exitW: t2 * (t - 1) };
+    }
 
-	public override string ToString()
-	{
-		return String.Join(" => ", ValueAt(DateTime.UtcNow), Target);
-	}
-
-#endif//DEBUG
-*/
-	/** {number} The time stamp (ms) at which the current segment started */
-	#Time = 0;
-	/** {CubicHermiteInterpolator} The hermite interpolator (current segment) */
-	#Hermite;
-	/** {number} Current adaption time: duration (ms) of the current segment, 0 = stationary at the segment start */
-	#AdaptionTime = 0;
-	/** The fixed adaption time (default if none is supplied when chaning the value) */
-	#FixedTime = 0;
-
-	/// <summary>
-	/// Create a new smoothed value
-	/// </summary>
-	/// <param name="timeMs">Current time stamp, use: performance.now()</param>
-	/// <param name="value">The start value</param>
-	/// <param name="duration">The default duration for changes</param>
-	/// <param name="init">The initial derivate (tanget, speed etc)</param>
-	/// <param name="from">If supplied the start value will be this and the target value will be the supplied value</param>
-	/**
-	 * Create a new smoothed value
-	 * Creates a segment from `from` (or `value` when `from` is not a number) to `value` with start tangent `init`.
-	 * The adaption time starts at 0, so the value stays at the start value until the first Update.
-	 * Copy form: if `timeMs` is a non-null object, the state is copied from the SECOND argument `value`, which must
-	 * be a SmoothValue (its interpolator is cloned); the other arguments are ignored.
-	 * @param {number|object} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @param {number|SmoothValue} [value=0] The start value (or the SmoothValue to copy in the copy form)
-	 * @param {number} [duration=1000] Optional default duration (ms) for any value changes
-	 * @param {number} [init=0] Optional initial derivate (tangent, speed etc)
-	 * @param {number} [from] If supplied the start value will be this and the target value will be the supplied value
-	 * @returns {SmoothValue} A smooth value instance
-	 */
-	constructor(timeMs, value, duration, init, from)
-	{
-		const ut = typeof timeMs;
-		if ((ut === "object") && timeMs)
-		{
-			this.#Hermite = new CubicHermiteInterpolator(value.#Hermite);
-			this.#Time = value.#Time;
-			this.#AdaptionTime = value.#AdaptionTime;
-			this.#FixedTime = value.#FixedTime;
-			return;
-		}
-		if (ut !== "number")
-			timeMs = performance.now();
-		if (typeof value !== "number")
-			value = 0;
-		if (typeof init !== "number")
-			init = 0;
-		if (typeof duration !== "number")
-			duration = 1000;
-		this.#Time = timeMs;
-		this.#Hermite = new CubicHermiteInterpolator(typeof from !== "number" ? value : from, value, init);
-		this.#FixedTime = duration;
-	}
-
-
-	/// <summary>
-	/// Sets a new target for the smooth value
-	/// </summary>
-	/// <param name="timeMs">Current time stamp, use: performance.now()</param>
-	/// <param name="value">The new target value</param>
-	/// <param name="duration">The transition duration in seconds from the current state to the new value</param>
-	/// <param name="exitVelocity">The exit velocity</param>
-	/// <returns>The current value</returns>
-	/**
-	 * Sets a new target for the smooth value
-	 * Evaluates the current value `tv` at `timeMs` (elapsed time normalized by the adaption time, clamped to [0, 1]);
-	 * if `duration <= 0`, `tv` is the new `value` (immediate jump). If `value` differs from the current target or
-	 * `duration` differs from the current adaption time, a new segment starts at `timeMs` from `tv` to `value`; its start
-	 * tangent is the old segment's derivative at the normalized time (carried over unscaled, not converted between
-	 * durations), its end tangent `exitVelocity`, and its adaption time `duration` (milliseconds, despite the
-	 * "seconds" in the legacy comment above).
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @param {number} value The new value
-	 * @param {number} [duration] Optional duration (ms) for the value change, defaults to the constructor's duration
-	 * @param {number} [exitVelocity=0] Optional velocity at the end (0 is default)
-	 * @returns {number} The interpolated value at `timeMs` (evaluated before the retarget)
-	 */
-	Update(timeMs, value, duration, exitVelocity)
-	{
-		if (typeof timeMs !== "number")
-			timeMs = performance.now();
-		if (typeof exitVelocity !== "number")
-			exitVelocity = 0;
-		if (typeof duration !== "number")
-			duration = this.#FixedTime;
-		let elapsed = timeMs - this.#Time;
-		if (elapsed < 0)
-			elapsed = 0;
-		const at = this.#AdaptionTime;
-		let dt = at > 0 ? (elapsed / at) : 0;
-		dt = dt > 1 ? 1 : dt;
-		const h = this.#Hermite;
-		const tv = duration <= 0 ? value : h.ValueAt(dt);
-		if ((value != h.Target) || (at != duration))
-		{
-			this.#Time = timeMs;
-			const init = h.DerivativAt(dt);
-			this.#Hermite = new CubicHermiteInterpolator(tv, value, init, exitVelocity);
-			this.#AdaptionTime = duration;
-		}
-		return tv;
-	}
-
-	/** {number} The target value (from the last Update) where the value will eventually end up at */
-	get Target()
-	{
-		return this.#Hermite.Target;
-	}
-
-	/**
-	 * Returns the value at the given time
-	 * The normalized segment time is clamped to [0, 1], so the value holds at the target after the segment ends.
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @returns {number} The interpolated value
-	 */
-	ValueAt(timeMs)
-	{
-		if (typeof timeMs !== "number")
-			timeMs = performance.now();
-		let elapsed = timeMs - this.#Time;
-		if (elapsed < 0)
-			elapsed = 0;
-		const a = this.#AdaptionTime;
-		let dt = a > 0 ? (elapsed / a) : 0.0;
-		if (dt > 1)
-			dt = 1;
-		return this.#Hermite.ValueAt(dt);
-	}
-
-	/**
-	 * Returns the derivative (speed) at the given time
-	 * The derivative is with respect to the normalized segment time (not per millisecond).
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @returns {number} The derivative (speed) at the given time
-	 */
-	DerivativeAt(timeMs)
-	{
-		if (typeof timeMs !== "number")
-			timeMs = performance.now();
-		let elapsed = timeMs - this.#Time;
-		if (elapsed < 0)
-			elapsed = 0;
-		const a = this.#AdaptionTime;
-		let dt = a > 0 ? (elapsed / a) : 0.0;
-		if (dt > 1)
-			dt = 1;
-		return this.#Hermite.DerivativAt(dt);
-	}
-
-	/**
-	 * Set the value, removing any target. This will break c0 and c1 continuity
-	 * Creates a stationary segment value -> value with both tangents `init`, sets the start time to `timeMs` and the
-	 * adaption time to 0.
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @param {number} value The new value
-	 * @param {number} [init=0] Optional initial derivate (tangent, speed etc)
-	 * @returns {number} The new value (`value`)
-	 */
-	SetTo(timeMs, value, init)
-	{
-		if (typeof timeMs !== "number")
-			timeMs = performance.now();
-		if (typeof init !== "number")
-			init = 0;
-		this.#Hermite = new CubicHermiteInterpolator(value, value, init, init);
-		this.#Time = timeMs;
-		this.#AdaptionTime = 0;
-		return value;
-	}
-
-
+    /**
+     * Derivatives of the basis weights: fromW = 6(t^2-t), initW = 3t^2-4t+1, toW = 6(t-t^2), exitW = 3t^2-2t.
+     * @param {number} t - Time [0, 1].
+     * @returns {{fromW:number, initW:number, toW:number, exitW:number}} Weights.
+     */
+    static CalcDerivativeBasis(t) {
+        const t2 = t * t;
+        const t2_3 = t2 * 3;
+        return { fromW: 6 * (t2 - t), initW: t2_3 - 4 * t + 1, toW: 6 * (t - t2), exitW: t2_3 - 2 * t };
+    }
 }
 
+/**
+ * An immutable cubic Hermite segment from `From` (tangent `Init`) to `To` (tangent `Exit`), evaluated at a normalized
+ * segment time t in [0, 1]. Copy with `new CubicHermiteInterpolator(other)`.
+ */
+class CubicHermiteInterpolator {
+    /** @type {number} Start value. */
+    #From;
+    /** @type {number} Start tangent. */
+    #Init;
+    /** @type {number} End (target) value. */
+    #To;
+    /** @type {number} End tangent. */
+    #Exit;
+
+    /**
+     * @param {number|CubicHermiteInterpolator} from - Start value, or an interpolator to copy (other args ignored).
+     * @param {number} to - Target value.
+     * @param {number} [init=0] - Start tangent.
+     * @param {number} [exit=0] - End tangent.
+     */
+    constructor(from, to, init, exit) {
+        if ((typeof from === "object") && from) {
+            this.#From = from.#From;
+            this.#Init = from.#Init;
+            this.#To = from.#To;
+            this.#Exit = from.#Exit;
+            return;
+        }
+        this.#From = from;
+        this.#To = to;
+        this.#Init = typeof init === "number" ? init : 0;
+        this.#Exit = typeof exit === "number" ? exit : 0;
+    }
+
+    /** @returns {number} The target value. */
+    get Target() {
+        return this.#To;
+    }
+
+    /**
+     * The value at a segment time (not clamped).
+     * @param {number} t - Segment time [0, 1].
+     * @returns {number} Value.
+     */
+    ValueAt(t) {
+        return this.#weigh(CubicHermite.CalcBasis(t));
+    }
+
+    /**
+     * The derivative with respect to the segment time (not clamped). The name (without the "e") is kept for
+     * compatibility; `DerivativeAt` is an alias.
+     * @param {number} t - Segment time [0, 1].
+     * @returns {number} Derivative.
+     */
+    DerivativAt(t) {
+        return this.#weigh(CubicHermite.CalcDerivativeBasis(t));
+    }
+
+    /**
+     * Alias of DerivativAt.
+     * @param {number} t - Segment time [0, 1].
+     * @returns {number} Derivative.
+     */
+    DerivativeAt(t) {
+        return this.DerivativAt(t);
+    }
+
+    /**
+     * Weighted sum of the control values.
+     * @param {{fromW:number, initW:number, toW:number, exitW:number}} c - Weights.
+     * @returns {number} Sum.
+     */
+    #weigh(c) {
+        return this.#From * c.fromW + this.#Init * c.initW + this.#To * c.toW + this.#Exit * c.exitW;
+    }
+}
 
 /**
- * {number} The value that the SmoothBoolen uses for false
- * (-0.0001: slightly below 0, so SmoothBool's clamped output reaches exactly 0)
+ * A scalar that glides C1 continuously toward new targets: every Update with a new target (or duration) starts a new
+ * Hermite segment from the current value, carrying over the current derivative. Copy with `new SmoothValue({}, other)`.
  */
+class SmoothValue {
+    /** @type {number} Start time (ms) of the current segment. */
+    #Time = 0;
+    /** @type {CubicHermiteInterpolator} Current segment. */
+    #Hermite;
+    /** @type {number} Duration (ms) of the current segment; 0 = stationary at the segment start. */
+    #AdaptionTime = 0;
+    /** @type {number} Default duration (ms) of changes. */
+    #FixedTime = 0;
+
+    /**
+     * @param {number|object} [timeMs=performance.now()] - Time stamp; a non-null object selects the copy form, copying
+     * the SmoothValue passed as the second argument.
+     * @param {number|SmoothValue} [value=0] - Start (and target) value, or the SmoothValue to copy.
+     * @param {number} [duration=1000] - Default duration (ms) of changes.
+     * @param {number} [init=0] - Initial derivative.
+     * @param {number} [from] - If set the value starts here and `value` is the target (moves on the first Update).
+     */
+    constructor(timeMs, value, duration, init, from) {
+        if ((typeof timeMs === "object") && timeMs) {
+            this.#Hermite = new CubicHermiteInterpolator(value.#Hermite);
+            this.#Time = value.#Time;
+            this.#AdaptionTime = value.#AdaptionTime;
+            this.#FixedTime = value.#FixedTime;
+            return;
+        }
+        if (typeof value !== "number")
+            value = 0;
+        this.#Time = SmoothValue.#now(timeMs);
+        this.#Hermite = new CubicHermiteInterpolator(typeof from === "number" ? from : value, value, typeof init === "number" ? init : 0);
+        this.#FixedTime = typeof duration === "number" ? duration : 1000;
+    }
+
+    /**
+     * A time stamp or performance.now().
+     * @param {*} timeMs - Time stamp.
+     * @returns {number} ms.
+     */
+    static #now(timeMs) {
+        return typeof timeMs === "number" ? timeMs : performance.now();
+    }
+
+    /**
+     * Normalized time of the current segment at a time stamp, clamped to [0, 1].
+     * @param {number} timeMs - Time stamp.
+     * @returns {number} Segment time.
+     */
+    #segmentTime(timeMs) {
+        const elapsed = Math.max(0, timeMs - this.#Time);
+        const a = this.#AdaptionTime;
+        const dt = a > 0 ? (elapsed / a) : 0;
+        return dt > 1 ? 1 : dt;
+    }
+
+    /**
+     * Set a new target. If the target or duration differs from the current segment a new segment starts at timeMs
+     * from the current value, with the current derivative as start tangent; `duration <= 0` jumps.
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @param {number} value - New target.
+     * @param {number} [duration] - Duration (ms), default the constructor's.
+     * @param {number} [exitVelocity=0] - End tangent.
+     * @returns {number} The value at timeMs (evaluated before the retarget).
+     */
+    Update(timeMs, value, duration, exitVelocity) {
+        timeMs = SmoothValue.#now(timeMs);
+        if (typeof exitVelocity !== "number")
+            exitVelocity = 0;
+        if (typeof duration !== "number")
+            duration = this.#FixedTime;
+        const dt = this.#segmentTime(timeMs);
+        const h = this.#Hermite;
+        const tv = duration <= 0 ? value : h.ValueAt(dt);
+        if ((value != h.Target) || (this.#AdaptionTime != duration)) {
+            this.#Time = timeMs;
+            this.#Hermite = new CubicHermiteInterpolator(tv, value, h.DerivativAt(dt), exitVelocity);
+            this.#AdaptionTime = duration;
+        }
+        return tv;
+    }
+
+    /** @returns {number} The target value (where the value ends up). */
+    get Target() {
+        return this.#Hermite.Target;
+    }
+
+    /**
+     * The value at a time (holds at the target after the segment ended).
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @returns {number} Value.
+     */
+    ValueAt(timeMs) {
+        return this.#Hermite.ValueAt(this.#segmentTime(SmoothValue.#now(timeMs)));
+    }
+
+    /**
+     * The derivative (with respect to the normalized segment time) at a time.
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @returns {number} Derivative.
+     */
+    DerivativeAt(timeMs) {
+        return this.#Hermite.DerivativAt(this.#segmentTime(SmoothValue.#now(timeMs)));
+    }
+
+    /**
+     * Set the value immediately, removing any target (breaks continuity).
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @param {number} value - Value.
+     * @param {number} [init=0] - Tangent.
+     * @returns {number} The value.
+     */
+    SetTo(timeMs, value, init) {
+        if (typeof init !== "number")
+            init = 0;
+        this.#Hermite = new CubicHermiteInterpolator(value, value, init, init);
+        this.#Time = SmoothValue.#now(timeMs);
+        this.#AdaptionTime = 0;
+        return value;
+    }
+}
+
+/** @type {number} Internal value of SmoothBool false (slightly below 0, so the clamped output reaches 0). */
 const FalseValue = -0.0001;
 
-/**
- * {number} The value that the SmoothBoolen uses for true
- * (1.0001: slightly above 1, so SmoothBool's clamped output reaches exactly 1)
- */
+/** @type {number} Internal value of SmoothBool true (slightly above 1, so the clamped output reaches 1). */
 const TrueValue = 1.0001;
 
 /**
- * Represents a boolean that is smoothly changed to new targets
- * Wraps a SmoothValue moving between FalseValue and TrueValue; the output is clamped to [0, 1] and shaped with the
- * Smoothness function chosen at construction (0 = false, 1 = true). Created with `new SmoothBool(...)`.
+ * A boolean that changes smoothly: a SmoothValue between FalseValue and TrueValue, clamped to [0, 1] and shaped with
+ * a Smoothness function (0 = false, 1 = true).
  */
-class SmoothBool
-{
-	/** {function(number):number} The smoothing method (function from MathTools.GetSmoothDoubleFunction) */
-	#Smooth;
-	/** {SmoothValue} The internal SmoothValue used for keeping track */
-	#Spline;
-	/** {boolean} The current target (where we're interpolating towards or stopped at) */
-	#InternalTarget;
-	
-	/** {boolean} The target state (from the last Update) where the value will eventually end up at */
-	get Target()
-	{ 
-		return this.#InternalTarget;
-	}
+class SmoothBool {
+    /** @type {function(number):number} Shaping function. */
+    #Smooth;
+    /** @type {SmoothValue} The underlying value. */
+    #Spline;
+    /** @type {boolean} The current target. */
+    #InternalTarget;
 
+    /** @returns {boolean} The target state. */
+    get Target() {
+        return this.#InternalTarget;
+    }
 
-	/**
-	 * Create a new smoothed boolean value
-	 * Creates the internal `SmoothValue(timeMs, startState ? TrueValue : FalseValue, duration)`.
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @param {boolean} [startState] Optional start state, default is False
-	 * @param {number} [duration=1000] Optional default duration (ms) for any value changes
-	 * @param {Smoothness} [smoothness=Smoothness.Normal] The smoothing method to use (a non-number means Normal)
-	 * @returns {SmoothBool} The pbject instance that represents a smooth boolean
-	 */
-	constructor(timeMs, startState, duration, smoothness)
-	{
-		if (typeof smoothness !== "number")
-			smoothness = Smoothness.Normal;
-		this.#Spline = new SmoothValue(timeMs, startState ? TrueValue : FalseValue, duration);
-		this.#Smooth = MathTools.GetSmoothDoubleFunction(smoothness);
-		this.#InternalTarget = startState;
-	}
+    /**
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @param {boolean} [startState=false] - Start state.
+     * @param {number} [duration=1000] - Default duration (ms) of changes.
+     * @param {number} [smoothness=Smoothness.Normal] - A Smoothness value.
+     */
+    constructor(timeMs, startState, duration, smoothness) {
+        this.#Spline = new SmoothValue(timeMs, startState ? TrueValue : FalseValue, duration);
+        this.#Smooth = MathTools.GetSmoothDoubleFunction(typeof smoothness === "number" ? smoothness : Smoothness.Normal);
+        this.#InternalTarget = startState;
+    }
 
-	/**
-	 * Returns the value [0, 1] at the given time
-	 * The underlying value is clamped to [0, 1] and passed through the smoothing function.
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @returns {number} The interpolated value between [0, 1], represnting false to true
-	 */
-	ValueAt(timeMs)
-	{
-		const v = this.#Spline.ValueAt(timeMs);
-		if (v <= 0)
-			return 0;
-		if (v >= 1)
-			return 1;
-		return this.#Smooth(v);
-	}
+    /**
+     * Clamp and shape an internal value.
+     * @param {number} v - Value.
+     * @returns {number} [0, 1].
+     */
+    #shape(v) {
+        if (v <= 0)
+            return 0;
+        if (v >= 1)
+            return 1;
+        return this.#Smooth(v);
+    }
 
-	/**
-	 * Sets a new target for the smooth boolean
-	 * Retargets the underlying SmoothValue to TrueValue/FalseValue (see SmoothValue.Update), records `state` as Target
-	 * and returns the current clamped, smoothed value.
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @param {boolean} state The new value
-	 * @param {number} [duration] Optional duration (ms) for the value change, defaults to the constructor's duration
-	 * @returns {number} The interpolated value [0, 1] at `timeMs`
-	 */
-	Update(timeMs, state, duration)
-	{
-		const v = this.#Spline.Update(timeMs, state ? TrueValue : FalseValue, duration);
-		this.#InternalTarget = state;
-		if (v <= 0)
-			return 0;
-		if (v >= 1)
-			return 1;
-		return this.#Smooth(v);
-	}
+    /**
+     * The value [0, 1] at a time.
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @returns {number} 0 (false) .. 1 (true).
+     */
+    ValueAt(timeMs) {
+        return this.#shape(this.#Spline.ValueAt(timeMs));
+    }
 
-	/**
-	 * Sets the smooth boolean immediately (no transition)
-	 * Jumps the underlying SmoothValue to TrueValue/FalseValue (SmoothValue.SetTo, breaks continuity) and records
-	 * `state` as Target.
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @param {boolean} state The new value
-	 * @returns {void} Nothing (no value is returned)
-	 */
+    /**
+     * Set a new target state.
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @param {boolean} state - Target.
+     * @param {number} [duration] - Duration (ms), default the constructor's.
+     * @returns {number} The value [0, 1] at timeMs.
+     */
+    Update(timeMs, state, duration) {
+        const v = this.#Spline.Update(timeMs, state ? TrueValue : FalseValue, duration);
+        this.#InternalTarget = state;
+        return this.#shape(v);
+    }
 
-	SetTo(timeMs, state)
-	{
-		this.#Spline.SetTo(timeMs, state ? TrueValue : FalseValue);
-		this.#InternalTarget = state;
-	}
+    /**
+     * Set the state immediately (no transition).
+     * @param {number} [timeMs=performance.now()] - Time stamp.
+     * @param {boolean} state - State.
+     * @returns {void}
+     */
+    SetTo(timeMs, state) {
+        this.#Spline.SetTo(timeMs, state ? TrueValue : FalseValue);
+        this.#InternalTarget = state;
+    }
 }
 
-
 /**
- * Creates an object that can be used for "springy" animations
- * A damped cosine oscillation `initialLength * cos(omega t) / e^(decayRate t)` as a function of elapsed time.
- * Create with `new SpringAnimation(...)` or use the shared preset `SpringAnimation.Zoom`; callers pass the elapsed
- * time since the animation started.
+ * A "springy" animation: a damped cosine `initialLength * cos(omega t) / e^(decayRate t)` of the elapsed time.
+ * `SpringAnimation.Zoom` is a shared preset.
  */
 class SpringAnimation {
+    /** @type {number} Angular frequency (rad/s). */
+    #Frequency;
+    /** @type {number} Amplitude. */
+    #InitialLength;
+    /** @type {number} Exponential decay rate per second. */
+    #Decay;
+    /** @type {number} Time (s) after which the displacement is 0. */
+    #EndTime;
 
-	/** {SpringAnimation} A "default" springy zoom animation: new SpringAnimation(3, 1, 500, 0.001), created at class definition */
-	static #InternalZoom = new SpringAnimation(3, 1, 500, 0.001);
+    /** @type {SpringAnimation} The shared zoom preset (3, 1, 500, 0.001). */
+    static #InternalZoom = new SpringAnimation(3, 1, 500, 0.001);
 
-	/** {SpringAnimation} A "default" springy zoom animation (the shared #InternalZoom instance) */
-	static get Zoom() {
-		return SpringAnimation.#InternalZoom;
-	}
+    /** @returns {SpringAnimation} A "default" springy zoom animation (shared instance). */
+    static get Zoom() {
+        return SpringAnimation.#InternalZoom;
+    }
 
-	/**
-	 * Defines a "springy" animation
-	 * Stores the angular frequency `frequency * 2 * PI`, the amplitude `initialLength` and the decay rate
-	 * `decay * 0.01` (per second). The end time is `ln(initialLength / snap) / decayRate` seconds when `snap > 0`,
-	 * otherwise 1000 seconds.
-	 * @param {number} [frequency=7] The oscillation frequency (typically in cycles per second)
-	 * @param {number} [initialLength=100] The initial spring length (how tense it is at start)
-	 * @param {number} [decay=90] Determines how much energy is maintained over time as a percentage [0, 100) (used as exponential decay rate decay/100 per second)
-	 * @param {number} [snap=0.01] Can force stop the spring earlier if it reaches this length
-	 */
-	constructor(frequency = 7, initialLength = 100, decay = 90, snap = 0.01) {
-		this.#Frequency = frequency * Math.PI * 2;
-		this.#InitialLength = initialLength;
-		this.#Decay = decay * 0.01;
-		this.#EndTime = snap > 0 ? Math.log(initialLength / snap) / this.#Decay : 1000;
-	}
+    /**
+     * @param {number} [frequency=7] - Oscillation frequency (cycles per second).
+     * @param {number} [initialLength=100] - Amplitude at start.
+     * @param {number} [decay=90] - Decay in percent per second (rate decay / 100).
+     * @param {number} [snap=0.01] - Stop when the envelope falls below this length (<= 0: run 1000 s).
+     */
+    constructor(frequency = 7, initialLength = 100, decay = 90, snap = 0.01) {
+        this.#Frequency = frequency * Math.PI * 2;
+        this.#InitialLength = initialLength;
+        this.#Decay = decay * 0.01;
+        this.#EndTime = snap > 0 ? Math.log(initialLength / snap) / this.#Decay : 1000;
+    }
 
-	/** {number} The oscillation frequency, stored as angular frequency (radians per second = frequency * 2 * PI) */
-	#Frequency;
-	/** {number} The initial spring length (how tense it is at start), i.e. the amplitude */
-	#InitialLength;
-	/** {number} Exponential decay rate per second (constructor's decay * 0.01) */
-	#Decay;
-	/** {number} Cutoff time in seconds after which Displacement returns 0 (derived from snap, or 1000) */
-	#EndTime;
+    /**
+     * The displacement at an elapsed time (0 after the end time).
+     * @param {number} [timeMs=performance.now()] - Elapsed time (ms) since the animation started.
+     * @returns {number} Displacement.
+     */
+    Displacement(timeMs) {
+        if (typeof timeMs !== "number")
+            timeMs = performance.now();
+        let t = timeMs * 0.001;
+        if (t > this.#EndTime)
+            return 0;
+        if (t < 0)
+            t = 0;
+        return this.#InitialLength * Math.cos(this.#Frequency * t) / Math.exp(this.#Decay * t);
+    }
 
-	/**
-	 * Evaluate the value at the given time
-	 * `timeMs` is converted to seconds; returns 0 after the end time, negative times are clamped to 0.
-	 * Callers normally pass the elapsed time since the animation started (the performance.now() fallback is an
-	 * absolute time stamp, which is usually past the end time and therefore gives 0).
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @returns {number} The current displacement
-	 */
-	Displacement(timeMs) {
-		if (typeof timeMs !== "number")
-			timeMs = performance.now();
-		timeMs *= 0.001;
-		if (timeMs > this.#EndTime)
-			return 0;
-		if (timeMs < 0)
-			timeMs = 0;
-		return this.#InitialLength * Math.cos(this.#Frequency * timeMs) / Math.exp(this.#Decay * timeMs);
-	}
-
-	/**
-	 * Evaluate the value at the given time (alias for Displacement)
-	 * @param {number} [timeMs=performance.now()] Optional time stamp (for slow-mo, stepping etc), if this isn't a value, performance.now() is used
-	 * @returns {number} The current displacement
-	 */
-	ValueAt(timeMs) {
-		return this.Displacement(timeMs);
-	}
+    /**
+     * Alias of Displacement.
+     * @param {number} [timeMs=performance.now()] - Elapsed time (ms).
+     * @returns {number} Displacement.
+     */
+    ValueAt(timeMs) {
+        return this.Displacement(timeMs);
+    }
 }
 
-
-
 /**
- * Equations related to a projectile motion where the projectile is shot upwards
- * Static formulas for a projectile launched straight up from height 0; never instantiated.
+ * Formulas of a projectile shot straight up from height 0 (never instantiated).
  */
 class ProjectileMotion {
+    /**
+     * Time of flight (ground to ground).
+     * @param {number} initialVelocity - Upwards velocity (m/s).
+     * @param {number} gravity - Gravity (m/s2, downwards).
+     * @returns {number} Seconds.
+     */
+    static FlightTime(initialVelocity, gravity) {
+        return (initialVelocity * 2) / gravity;
+    }
 
-	/**
-	 * Compute the time of flight for a projectile starting at ground and ending at ground
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @returns {number} The time of flight, typically in seconds 
-	 */
-	static FlightTime(initialVelocity, gravity) {
-		return (initialVelocity * 2) / gravity;
-	}
+    /**
+     * Maximum height.
+     * @param {number} initialVelocity - Upwards velocity (m/s).
+     * @param {number} gravity - Gravity (m/s2).
+     * @returns {number} Meters.
+     */
+    static MaxHeight(initialVelocity, gravity) {
+        return initialVelocity * initialVelocity * 0.5 / Math.abs(gravity);
+    }
 
-	/**
-	 * Compute the maximum height of projectile starting at ground
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @returns {number} The maximum height, typically in meter
-	 */
-	static MaxHeight(initialVelocity, gravity) {
-		return initialVelocity * initialVelocity * 0.5 / Math.abs(gravity);
-	}
+    /**
+     * Height at a time (below 0 after the flight time).
+     * @param {number} initialVelocity - Upwards velocity (m/s).
+     * @param {number} gravity - Gravity (m/s2).
+     * @param {number} time - Seconds.
+     * @returns {number} Meters.
+     */
+    static Displacement(initialVelocity, gravity, time) {
+        return (initialVelocity - gravity * 0.5 * time) * time;
+    }
 
-	/**
-	 * The position at a given time for a projectile starting at the ground
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @param {number} time The time, typically in seconds, if greater than the computed flight time it will be below ground
-	 * @returns {number} The vertical position, typically in meters as the height above ground
-	 */
-	static Displacement(initialVelocity, gravity, time) {
-		return (initialVelocity - gravity * 0.5 * time) * time;
-	}
+    /**
+     * Vertical velocity at a time.
+     * @param {number} initialVelocity - Upwards velocity (m/s).
+     * @param {number} gravity - Gravity (m/s2).
+     * @param {number} time - Seconds.
+     * @returns {number} m/s.
+     */
+    static Velocity(initialVelocity, gravity, time) {
+        return initialVelocity - gravity * time;
+    }
 
-	/**
-	 * The velocity at a given time for a projectile starting at the ground
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @param {number} time The time, typically in seconds, if greater than the computed flight time it will be below ground
-	 * @returns {number} The vertical velocity, typically in m/s
-	 */
-	static Velocity(initialVelocity, gravity, time) {
-		return initialVelocity - gravity * time;
-	}
-
-	/**
-	 * Compute an inital velocity and gravity that gives the desired max height and flight time
-	 * @param {number} maxHeight The maximum height, typically in meters
-	 * @param {number} flightTime The time of flight, typically in seconds
-	 * Inverse problem: initialVelocity = 4h/T, gravity = 8h/T^2.
-	 * @returns {{initialVelocity:number, gravity:number}} initialVelocity = The initial velocity (upwards), typically m/s
-	 * gravity = The gravity (downwards), typically m/s2
-	 */
-	static Solve(maxHeight, flightTime) {
-		const initialVelocity = maxHeight * 4 / flightTime;
-		const gravity = maxHeight * 8 / (flightTime * flightTime);
-		return { initialVelocity, gravity };
-	}
+    /**
+     * Initial velocity and gravity giving a max height and flight time (v = 4h/T, g = 8h/T^2).
+     * @param {number} maxHeight - Meters.
+     * @param {number} flightTime - Seconds.
+     * @returns {{initialVelocity:number, gravity:number}} Parameters.
+     */
+    static Solve(maxHeight, flightTime) {
+        return { initialVelocity: maxHeight * 4 / flightTime, gravity: maxHeight * 8 / (flightTime * flightTime) };
+    }
 }
 
-
 /**
- * Represent a bounce motion
- * Static formulas for a bouncing projectile whose launch velocity is multiplied by `restitution` at each bounce.
- * Period p has start velocity r^p * v and lasts r^p * T, where T is the first flight time. Never instantiated.
+ * Formulas of a bouncing projectile whose launch velocity is multiplied by `restitution` at each bounce: period p
+ * starts with r^p * v and lasts r^p * T (T = first flight time). Never instantiated.
  */
 class BounceMotion {
+    /**
+     * The period (bounce index) a time belongs to.
+     * @param {number} initialVelocity - Unused (kept for the signature).
+     * @param {number} gravity - Unused (kept for the signature).
+     * @param {number} restitution - (0, 1] velocity factor per bounce.
+     * @param {number} flightTime - First flight time (s).
+     * @param {number} time - Seconds.
+     * @returns {number} Period index (integer >= 0).
+     */
+    static Period(initialVelocity, gravity, restitution, flightTime, time) {
+        const t = time / flightTime;
+        const p = Math.log(Math.max(0.000000001, (restitution - 1) * t + 1)) / Math.log(restitution);
+        return Math.floor(Math.max(0, p));
+    }
 
-	/**
-	 * Computes what period the specified time is in given the intital conditions
-	 * floor(max(0, log(max(1e-9, (r-1)*t/T + 1)) / log r)). `initialVelocity` and `gravity` are unused.
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s (unused)
-	 * @param {number} gravity The gravity (downwards), typically m/s2 (unused)
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {number} flightTime The time of flight for the initial period, use the projectile motion to compute
-	 * @param {number} time The time, typically in seconds
-	 * @returns {integer} The period (number of bounces) that the time belong to
-	 */
-	static Period(initialVelocity, gravity, restitution, flightTime, time) {
-		const t = time / flightTime;
-		const p = Math.log(Math.max(0.000000001, (restitution - 1) * t + 1)) / Math.log(restitution);
-		return Math.floor(Math.max(0, p));
-	}
+    /**
+     * The period after which the motion is at rest.
+     * @param {number} initialVelocity - m/s.
+     * @param {number} restitution - (0, 1].
+     * @param {number} restVelocity - Velocity considered at rest (m/s).
+     * @returns {number} Period index.
+     */
+    static RestAfterPeriod(initialVelocity, restitution, restVelocity) {
+        const p = Math.log(restVelocity / initialVelocity) / Math.log(restitution);
+        return Math.floor(Math.max(0, p));
+    }
 
-	/**
-	 * Compute the number of periods (bounces) that is required before we consider the motion to be at rest
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {number} restVelocity The velocity where we consider the motion to be at rest at, typically in m/s
-	 * @returns {integer} he period where we reach the rest velocity (or lower)
-	 */
-	static RestAfterPeriod(initialVelocity, restitution, restVelocity) {
-		const p = Math.log(restVelocity / initialVelocity) / Math.log(restitution);
-		return Math.floor(Math.max(0, p));
-	}
+    /**
+     * The time when the motion is at rest.
+     * @param {number} initialVelocity - m/s.
+     * @param {number} restitution - (0, 1].
+     * @param {number} restVelocity - m/s.
+     * @param {number} flightTime - First flight time (s).
+     * @returns {number} Seconds.
+     */
+    static RestTime(initialVelocity, restitution, restVelocity, flightTime) {
+        const p = BounceMotion.RestAfterPeriod(initialVelocity, restitution, restVelocity);
+        return BounceMotion.PeriodEndTime(restitution, p) * flightTime;
+    }
 
-	/**
-	 * Compute the time where the motion becomes at rest
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {number} restVelocity The velocity where we consider the motion to be at rest at, typically in m/s
-	 * @param {number} flightTime The time of flight for the initial period, use the projectile motion to compute
-	 * @returns {number} The time when the motion reaches the rest velocity (or lower)
-	 */
-	static RestTime(initialVelocity, restitution, restVelocity, flightTime) {
-		const p = BounceMotion.RestAfterPeriod(initialVelocity, restitution, restVelocity);
-		return BounceMotion.PeriodEndTime(restitution, p) * flightTime;
-	}
+    /**
+     * Launch velocity of a period (r^period * v).
+     * @param {number} initialVelocity - m/s.
+     * @param {number} restitution - (0, 1].
+     * @param {number} period - Period index.
+     * @returns {number} m/s.
+     */
+    static PeriodVelocity(initialVelocity, restitution, period) {
+        return Math.pow(restitution, period) * initialVelocity;
+    }
 
-	/**
-	 * Computes the (intital) velocity for a given period (bounce)
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {integer} period The period index, 0 = initial, 1 is outgoing velocity after 1 bounce and so on
-	 * @returns {number} The velocity for the given period, typically in m/s
-	 */
-	static PeriodVelocity(initialVelocity, restitution, period) {
-		return Math.pow(restitution, period) * initialVelocity;
-	}
+    /**
+     * Duration of a period as a fraction of the first flight time (r^period).
+     * @param {number} restitution - (0, 1].
+     * @param {number} period - Period index.
+     * @returns {number} Fraction.
+     */
+    static PeriodDuration(restitution, period) {
+        return Math.pow(restitution, period);
+    }
 
-	/**
-	 * Computes the duration of a given period
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {integer} period The period index, 0 = initial, 1 is outgoing velocity after 1 bounce and so on
-	 * @returns {number} The duration for the given period as a fraction of the first flight time (r^period); multiply by the flight time for seconds
-	 */
-	static PeriodDuration(restitution, period) {
-		return Math.pow(restitution, period);
-	}
+    /**
+     * Normalized end time of a period: 1 + r(r^period - 1)/(r - 1) (multiply by the first flight time).
+     * @param {number} restitution - (0, 1).
+     * @param {number} period - Period index.
+     * @returns {number} Normalized time.
+     */
+    static PeriodEndTime(restitution, period) {
+        return 1.0 + (restitution * (Math.pow(restitution, period) - 1)) / (restitution - 1);
+    }
 
-	/**
-	 * Computes the end time of a given period
-	 * @param {number} restitution The "friction" or dampening at each bounc
-	 * @param {integer} period The period index, 0 = initial, 1 is outgoing velocity after 1 bounce and so on
-	 * @returns {number} The normalized time when the given period ends: 1 + r(r^period - 1)/(r - 1); multiply by the first flight time for seconds
-	 */
-	static PeriodEndTime(restitution, period) {
-		return (1.0 + (restitution * (Math.pow(restitution, period) - 1)) / (restitution - 1));
-	}
+    /**
+     * Height at a time (computes the first flight time).
+     * @param {number} initialVelocity - m/s.
+     * @param {number} gravity - m/s2.
+     * @param {number} restitution - (0, 1].
+     * @param {number} time - Seconds.
+     * @returns {number} Meters.
+     */
+    static Displacement(initialVelocity, gravity, restitution, time) {
+        return BounceMotion.Displacement2(initialVelocity, gravity, restitution, ProjectileMotion.FlightTime(initialVelocity, gravity), time);
+    }
 
-	/**
-	 * Computes the position at the given time and parameters, computes the inital flight time (can be precomputed)
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @param {number} restitution The "friction" or dampening at each bounce
-	 * @param {number} time The time, typically in seconds
-	 * @returns {number} he position at the given time and parameters, typically in meters
-	 */
-	static Displacement(initialVelocity, gravity, restitution, time) {
-		return BounceMotion.Displacement2(initialVelocity, gravity, restitution, ProjectileMotion.FlightTime(initialVelocity, gravity), time);
-	}
+    /**
+     * Height at a time with a precomputed first flight time.
+     * @param {number} initialVelocity - m/s.
+     * @param {number} gravity - m/s2.
+     * @param {number} restitution - (0, 1].
+     * @param {number} flightTime - First flight time (s).
+     * @param {number} time - Seconds.
+     * @returns {number} Meters.
+     */
+    static Displacement2(initialVelocity, gravity, restitution, flightTime, time) {
+        const s = BounceMotion.#inPeriod(initialVelocity, gravity, restitution, flightTime, time);
+        return ProjectileMotion.Displacement(s.v, gravity, s.dt);
+    }
 
-	/**
-	 * Computes the position at the given time and parameters
-	 * Finds the period p (BounceMotion.Period), the time inside that period (clamped to [0, period duration]) and
-	 * returns ProjectileMotion.Displacement(PeriodVelocity(p), gravity, dt).
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @param {number} restitution The "friction" or dampening at each bounce
-	 * @param {number} flightTime The time of flight for the initial period, use the projectile motion to compute
-	 * @param {number} time The time, typically in seconds
-	 * @returns {number} The position at the given time and parameters, typically in meters
-	 */
-	static Displacement2(initialVelocity, gravity, restitution, flightTime, time) {
-		const p = BounceMotion.Period(initialVelocity, gravity, restitution, flightTime, time);
-		const t1 = BounceMotion.PeriodEndTime(restitution, p) * flightTime;
-		const tm = BounceMotion.PeriodDuration(restitution, p) * flightTime;
-		const dt = Math.max(0, Math.min(tm, time - (t1 - tm)));
-		const v = BounceMotion.PeriodVelocity(initialVelocity, restitution, p);
-		return ProjectileMotion.Displacement(v, gravity, dt);
-	}
+    /**
+     * Velocity at a time (computes the first flight time).
+     * @param {number} initialVelocity - m/s.
+     * @param {number} gravity - m/s2.
+     * @param {number} restitution - (0, 1].
+     * @param {number} time - Seconds.
+     * @returns {number} m/s.
+     */
+    static Velocity(initialVelocity, gravity, restitution, time) {
+        return BounceMotion.Velocity2(initialVelocity, gravity, restitution, ProjectileMotion.FlightTime(initialVelocity, gravity), time);
+    }
 
-	/**
-	 * Computes the velocity at the given time and parameters, computes the inital flight time (can be precomputed)
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {number} time The time, typically in seconds
-	 * @returns {number} The velocity at the given time and parameters, typically in m/s
-	 */
-	static Velocity(initialVelocity, gravity, restitution, time) {
-		return BounceMotion.Velocity2(initialVelocity, gravity, restitution, ProjectileMotion.FlightTime(initialVelocity, gravity), time);
-	}
+    /**
+     * Velocity at a time with a precomputed first flight time.
+     * @param {number} initialVelocity - m/s.
+     * @param {number} gravity - m/s2.
+     * @param {number} restitution - (0, 1].
+     * @param {number} flightTime - First flight time (s).
+     * @param {number} time - Seconds.
+     * @returns {number} m/s.
+     */
+    static Velocity2(initialVelocity, gravity, restitution, flightTime, time) {
+        const s = BounceMotion.#inPeriod(initialVelocity, gravity, restitution, flightTime, time);
+        return ProjectileMotion.Velocity(s.v, gravity, s.dt);
+    }
 
-	/**
-	 * Computes the velocity at the given time and parameters
-	 * Velocity counterpart of Displacement2: same period / in-period time computation, then
-	 * ProjectileMotion.Velocity(PeriodVelocity(p), gravity, dt).
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s
-	 * @param {number} gravity The gravity (downwards), typically m/s2
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {number} flightTime The time of flight for the initial period, use the projectile motion to comput
-	 * @param {number} time The time, typically in seconds
-	 * @returns {number} The velocity at the given time and parameters, typically in m/s
-	 */
-	static Velocity2(initialVelocity, gravity, restitution, flightTime, time) {
-		const p = BounceMotion.Period(initialVelocity, gravity, restitution, flightTime, time);
-		const t1 = BounceMotion.PeriodEndTime(restitution, p) * flightTime;
-		const tm = BounceMotion.PeriodDuration(restitution, p) * flightTime;
-		const dt = Math.max(0, Math.min(tm, time - (t1 - tm)));
-		const v = BounceMotion.PeriodVelocity(initialVelocity, restitution, p);
-		return ProjectileMotion.Velocity(v, gravity, dt);
-	}
+    /**
+     * The launch velocity of the period of a time and the time inside that period.
+     * @param {number} initialVelocity - m/s.
+     * @param {number} gravity - m/s2.
+     * @param {number} restitution - (0, 1].
+     * @param {number} flightTime - First flight time (s).
+     * @param {number} time - Seconds.
+     * @returns {{v:number, dt:number}} Velocity and time in the period.
+     */
+    static #inPeriod(initialVelocity, gravity, restitution, flightTime, time) {
+        const p = BounceMotion.Period(initialVelocity, gravity, restitution, flightTime, time);
+        const t1 = BounceMotion.PeriodEndTime(restitution, p) * flightTime;
+        const tm = BounceMotion.PeriodDuration(restitution, p) * flightTime;
+        return {
+            v: BounceMotion.PeriodVelocity(initialVelocity, restitution, p),
+            dt: Math.max(0, Math.min(tm, time - (t1 - tm))),
+        };
+    }
 }
 
 /**
- * Represent a bounce motion
- * A preconfigured bounce curve evaluated by time (ms) via ValueAt. Create with `new BounceAnimation(...)`;
- * used by media_player_effect.js.
+ * A preconfigured bounce curve evaluated by elapsed time (ms).
  */
 class BounceAnimation {
+    /** @type {number} Time offset (s): 0, or half a flight time with startAtPeak. */
+    #TimeAdjust = 0;
+    /** @type {number} Output scale: 1, or 1 / MaxHeight when normalized. */
+    #Scale = 1;
+    /** @type {number} Launch velocity of the first period. */
+    #InitialVelocity;
+    /** @type {number} Gravity. */
+    #Gravity;
+    /** @type {number} Restitution. */
+    #Restitution;
+    /** @type {number} First flight time (s). */
+    #FlightTime;
+    /** @type {number} Rest time (s); 0 = never rests (restitution >= 1). */
+    #RestAt = 0;
 
-	/**
-	 * Create an object that represents a bounce motion
-	 * Stores the parameters and the first flight time. With `normalize` the output is scaled by 1/MaxHeight (first
-	 * peak = 1); with `startAtPeak` the time is offset by half a flight time. If `restitution < 1` the rest time is
-	 * computed with BounceMotion.RestTime, otherwise the motion never rests (first parabola repeats forever).
-	 * @param {number} initialVelocity The initial velocity (upwards), typically m/s, try 5
-	 * @param {number} gravity The gravity (downwards), typically m/s2, try 10
-	 * @param {number} restitution (0, 1] The "friction" or dampening at each bounce, try 0.7
-	 * @param {number} [restVelocity=0.1] The velocity where we consider the motion to be at rest at, typically in m/s
-	 * @param {boolean} [normalize=true] If true, the output values will be between 0 and 1, initial velocity and gravity magnitude will loose it's meanig and the ratio between the two will describe the motion
-	 * @param {boolean} [startAtPeak=false] If true the motion will start at the peak value instead of the at rest value
-	 */
-	constructor(initialVelocity, gravity, restitution, restVelocity = 0.1, normalize = true, startAtPeak = false) {
-		this.#InitialVelocity = initialVelocity;
-		this.#Gravity = gravity;
-		this.#Restitution = restitution;
-		var flightTime = ProjectileMotion.FlightTime(initialVelocity, gravity);
-		if (normalize)
-			this.#Scale = 1.0 / ProjectileMotion.MaxHeight(initialVelocity, gravity);
-		if (startAtPeak)
-			this.#TimeAdjust = flightTime * 0.5;
-		this.#FlightTime = flightTime;
-		if (restitution < 1)
-			this.#RestAt = BounceMotion.RestTime(initialVelocity, restitution, restVelocity, flightTime);
-	}
+    /**
+     * @param {number} initialVelocity - Upwards velocity (try 5).
+     * @param {number} gravity - Gravity (try 10).
+     * @param {number} restitution - (0, 1] velocity factor per bounce (try 0.7); >= 1 repeats the first bounce forever.
+     * @param {number} [restVelocity=0.1] - Velocity considered at rest.
+     * @param {boolean} [normalize=true] - Scale the output so the first peak is 1.
+     * @param {boolean} [startAtPeak=false] - Start at the peak instead of at rest.
+     */
+    constructor(initialVelocity, gravity, restitution, restVelocity = 0.1, normalize = true, startAtPeak = false) {
+        this.#InitialVelocity = initialVelocity;
+        this.#Gravity = gravity;
+        this.#Restitution = restitution;
+        const flightTime = ProjectileMotion.FlightTime(initialVelocity, gravity);
+        if (normalize)
+            this.#Scale = 1.0 / ProjectileMotion.MaxHeight(initialVelocity, gravity);
+        if (startAtPeak)
+            this.#TimeAdjust = flightTime * 0.5;
+        this.#FlightTime = flightTime;
+        if (restitution < 1)
+            this.#RestAt = BounceMotion.RestTime(initialVelocity, restitution, restVelocity, flightTime);
+    }
 
-	/** {number} Time offset in seconds added to the evaluated time: 0, or half the flight time with startAtPeak */
-	#TimeAdjust = 0;
-	/** {number} Output scale: 1, or 1/MaxHeight with normalize */
-	#Scale = 1;
-	/** {number} Initial (upwards) velocity of the first period */
-	#InitialVelocity;
-	/** {number} Gravity (downwards) */
-	#Gravity;
-	/** {number} Restitution factor applied to the velocity at each bounce */
-	#Restitution;
-	/** {number} Flight time (s) of the first period (ProjectileMotion.FlightTime) */
-	#FlightTime;
-	/** {number} Rest time in seconds after which ValueAt returns 0; 0 means "never rests" (restitution >= 1) */
-	#RestAt = 0;
-
-	/**
-	 * Evaluate the value at the given time
-	 * Converts `timeMs` to seconds and adds #TimeAdjust. If #RestAt <= 0 the first parabola repeats forever (time modulo
-	 * the flight time); otherwise returns 0 from the rest time on, and before that BounceMotion.Displacement2(...) * #Scale.
-	 * Negative times are clamped to 0. There is NO performance.now() fallback: `timeMs` must be a number (elapsed time).
-	 * @param {number} timeMs Time stamp in milliseconds (typically elapsed time since the animation started)
-	 * @returns {number} The value at the specified time, typically in meters (or [0, 1] when normalized)
-	 */
-	ValueAt(timeMs) {
-		timeMs *= 0.001;
-		timeMs += this.#TimeAdjust;
-		var r = this.#RestAt;
-		if (r <= 0) {
-			if (timeMs < 0)
-				timeMs = 0;
-			timeMs %= this.#FlightTime;
-			return ProjectileMotion.Displacement(this.#InitialVelocity, this.#Gravity, timeMs) * this.#Scale;
-		}
-		if (timeMs >= this.#RestAt)
-			return 0;
-		if (timeMs < 0)
-			timeMs = 0;
-		return BounceMotion.Displacement2(this.#InitialVelocity, this.#Gravity, this.#Restitution, this.#FlightTime, timeMs) * this.#Scale;
-	}
-
+    /**
+     * The value at an elapsed time (no performance.now() fallback: pass the elapsed time).
+     * @param {number} timeMs - Elapsed time (ms).
+     * @returns {number} Height (0..1 when normalized), 0 once at rest.
+     */
+    ValueAt(timeMs) {
+        let t = timeMs * 0.001 + this.#TimeAdjust;
+        const r = this.#RestAt;
+        if (r <= 0) {
+            if (t < 0)
+                t = 0;
+            t %= this.#FlightTime;
+            return ProjectileMotion.Displacement(this.#InitialVelocity, this.#Gravity, t) * this.#Scale;
+        }
+        if (t >= r)
+            return 0;
+        if (t < 0)
+            t = 0;
+        return BounceMotion.Displacement2(this.#InitialVelocity, this.#Gravity, this.#Restitution, this.#FlightTime, t) * this.#Scale;
+    }
 }
+
+/**
+ * `Sw.Anim`: the same API under the Sw namespace (created when missing; the core keeps an existing `window.Sw`).
+ */
+(window.Sw = window.Sw || {}).Anim = Object.freeze({
+    Smoothness, FalseValue, TrueValue, MathTools, CubicHermite, CubicHermiteInterpolator, SmoothValue, SmoothBool,
+    SpringAnimation, ProjectileMotion, BounceMotion, BounceAnimation,
+});

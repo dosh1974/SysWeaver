@@ -19,7 +19,7 @@ Most network helpers (`NetworkTools`, `WebTools`) live in the project root, not 
 
 | Item | Description |
 |---|---|
-| [`HttpResponseException.cs`](HttpResponseException.cs) | Exception with an http status code, a message and the message language |
+| [`HttpResponseException.cs`](HttpResponseException.cs) | Exception with an http status code, a message and the message language; **`IHttpRefusal`**: implement it (`int ResponseCode`, a 4xx) on an exception type that means "refused" (a user mistake or a changed state, ex: a link that no longer works, an address in use) rather than "the server failed": the http server answers that status with the exception message as the reason (`X-Sw-Reason: 1`, translated from english), not a 500, and it is no server problem. Use it when code also catches the type (ex: `catch (TokenExpiredException)`). **`HttpOutcomes`** + `HttpResponseException.Outcome` / `IHttpRefusal.Outcome`: the outcome kind the server sends as `X-Sw-Outcome` (`AlreadyDone`, `Refused`, `Gone`, `Denied`; `HttpOutcomes.Default(status, denied)` when not given); `HttpResponseException.AlreadyDone(msg)` / `Refused(msg)` / `Gone(msg)` (409 by default). |
 
 ## Relationships
 

@@ -11,12 +11,14 @@ namespace SysWeaver.Map
         /// The CSS color to use for filling, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
         [AiOptional]
+        [EditColor(EditColorFormat.Css, true)]
         public String FillColor;
 
         /// <summary>
         /// The CSS color to use for strokes, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
         [AiOptional]
+        [EditColor(EditColorFormat.Css, true)]
         public String StrokeColor;
 
         /// <summary>
@@ -35,12 +37,14 @@ namespace SysWeaver.Map
         /// The CSS color to use for the filling the extruded polygons, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
         [AiOptional]
+        [EditColor(EditColorFormat.Css, true)]
         public String ExtrudeFillColor;
 
         /// <summary>
         /// The CSS color to use for stroking of the extruded polygons, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
         [AiIgnore]
+        [EditColor(EditColorFormat.Css, true)]
         public String ExtrudeStrokeColor;
 
         /// <summary>
@@ -62,12 +66,14 @@ namespace SysWeaver.Map
         /// The css color to use for text
         /// </summary>
         [AiOptional]
+        [EditColor(EditColorFormat.Css, true)]
         public String TextColor = "#fff";
 
         /// <summary>
         /// The css color to use for text the outline
         /// </summary>
         [AiOptional]
+        [EditColor(EditColorFormat.Css, true)]
         public String TextOutlineColor;
 
         /// <summary>

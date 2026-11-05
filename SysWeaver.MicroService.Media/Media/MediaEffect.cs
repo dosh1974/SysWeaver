@@ -109,12 +109,12 @@ namespace SysWeaver.MicroService.Media
         public bool AntiAlias = false;
 
         /// <summary>
-        /// Optional id of a HTML element to read the scroll paramaters from.
+        /// Optional id of a HTML element to read the scroll parameters from.
         /// </summary>
         public String ScrollId = null;
 
         /// <summary>
-        /// Optional id of a HTML element to read the mouse paramaters from.
+        /// Optional id of a HTML element to read the mouse parameters from.
         /// </summary>
         public String MouseId = null;
 

@@ -2,10 +2,11 @@
  * @file parseTools.js - generic "URL parameters / JSON / object -> typed params object" mapper.
  *
  * Loaded with a classic `<script defer>` (no module) by the effect sub-folder pages
- * (`backgroundEffects/`, `imageEffects/`, `collageEffects/`, `textEffects/` `index.html`, as `../parseTools.js`)
- * and by `TextDemo.html`.
+ * (`backgroundEffects/`, `imageEffects/`, `collageEffects/`, `textEffects/` `index.html`, as `../parseTools.js`, used by
+ * effectPage.js) and by `TextDemo.html`. Needs no SysWeaver core.
  *
- * Globals defined: the class `ParseTools` (static members only).
+ * Globals defined: the class `ParseTools` (static members only), also published as `Sw.Media.ParseTools`.
+ * It also holds the shared security rule of url-like media parameters (UrlProblem, InApp, IsAppContent, TextFromUrl).
  * Dependencies: none (only browser APIs: URLSearchParams, fetch, window.postMessage).
  *
  * Conventions:
@@ -23,6 +24,83 @@
  * Never instantiated; all members are static.
  */
 class ParseTools {
+
+    /**
+     * Maximum length of a text from the url that is rendered inside the application (TextFromUrl).
+     * @type {number}
+     */
+    static MaxAppText = 80;
+
+    /**
+     * True when this page is shown inside the SysWeaver application (the app shell is the top window, same origin),
+     * at any depth (the shell's content frame or a frame inside it).
+     * @returns {boolean}
+     */
+    static InApp() {
+        try {
+            return window.top !== window && !!window.top.SysWeaverApp;
+        }
+        catch {
+            return false;
+        }
+    }
+
+    /**
+     * True when this page is the content frame of the app shell itself (shown right under the application's header).
+     * @returns {boolean}
+     */
+    static IsAppContent() {
+        try {
+            return window.parent !== window && window.parent === window.top && !!window.top.SysWeaverApp;
+        }
+        catch {
+            return false;
+        }
+    }
+
+    /**
+     * The security rule of url-like media parameters that come from the page url (the same rule as the `link` parameter
+     * of MediaView.html, see media.js MediaLinkProblem): a http(s) url of this site is allowed; any other scheme
+     * ("javascript:", "data:", "blob:", ...) is refused; a url of another site is refused inside the application (InApp),
+     * where it would look like content of this site, and allowed in a window of its own or when framed by another host.
+     * Check every such parameter (effect, image, font) before fetching it or its side json.
+     * @param {string} url - The url (relative urls resolve against base); empty = nothing to check.
+     * @param {string} [base] - Base url (default the page location).
+     * @returns {{Kind: string, Url: (string|null), Host: string}|null} null when allowed, else Kind "Scheme" (not a web
+     * address) or "Site" (another site, Url = the absolute url, Host = its host name).
+     */
+    static UrlProblem(url, base) {
+        if (url === null || typeof url === "undefined" || url === "")
+            return null;
+        let u = null;
+        try {
+            u = new URL(String(url), base || window.location.href);
+        }
+        catch {
+            return { Kind: "Scheme", Url: null, Host: "" };
+        }
+        if (u.protocol !== "http:" && u.protocol !== "https:")
+            return { Kind: "Scheme", Url: null, Host: "" };
+        if (u.origin === window.location.origin || !ParseTools.InApp())
+            return null;
+        return { Kind: "Site", Url: u.href, Host: u.host };
+    }
+
+    /**
+     * Limit a text that comes from the page url when it is rendered inside the application (InApp): at most MaxAppText
+     * characters (an ellipsis marks the cut), so a crafted link can't paint a long message under the application header.
+     * Outside the application the text is returned unchanged.
+     * @param {string} text - The text.
+     * @param {number} [max] - Maximum length (default MaxAppText).
+     * @returns {string} The (possibly shortened) text.
+     */
+    static TextFromUrl(text, max) {
+        const s = text === null || typeof text === "undefined" ? "" : String(text);
+        const m = max > 1 ? max : ParseTools.MaxAppText;
+        if (s.length <= m || !ParseTools.InApp())
+            return s;
+        return s.substring(0, m - 1) + "…";
+    }
 
 
     /**
@@ -78,18 +156,21 @@ class ParseTools {
      * Installs a two-way message relay between the parent window and a child iframe, so an outer host can
      * control a player nested two frames deep (e.g. a page that renders through an iframe of `MediaPreview.html`).
      * Replaces `window.onmessage`: messages from the iframe's window are re-posted to `window.parent`,
-     * messages from any other source are re-posted into the iframe; both use the original `e.origin` as target origin.
-     * Messages from this window itself are ignored, and nothing is forwarded while the iframe has no content window.
+     * messages from the parent (or the top window) are re-posted into the iframe; both use the original `e.origin` as target
+     * origin. Security: only messages of this origin are relayed (a foreign window can't control the player); messages from
+     * this window itself are ignored, and nothing is forwarded while the iframe has no content window.
      * @param {HTMLIFrameElement} iframe - The child iframe to relay messages to/from.
      * @returns {void}
      */
     static MessageProxy(iframe) {
         const p = window.parent;
         window.onmessage = e => {
-            if (e.source === window)
+            if (e.source === window || e.origin !== window.location.origin)
                 return;
             const w = iframe.contentWindow;
             if (!w)
+                return;
+            if (e.source !== w && e.source !== p && e.source !== window.top)
                 return;
              (e.source === w ? p : w).postMessage(e.data, e.origin);
         }
@@ -253,11 +334,6 @@ class ParseTools {
             }));
             if (res.status === 200) {
                 effectVars = await res.json();
-/*                const t = await res.text();
-                if (t) {
-                    const a = JSON.parse(t);
-                    effectVars = a;
-                }*/
             }
         }
         catch {
@@ -270,3 +346,10 @@ class ParseTools {
 
 
 }
+
+/** Publish the new API name (ParseTools stays the public legacy global). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    (Sw.Media = Sw.Media || {}).ParseTools = ParseTools;
+})();

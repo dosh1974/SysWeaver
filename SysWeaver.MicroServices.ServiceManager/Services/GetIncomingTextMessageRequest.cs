@@ -6,7 +6,7 @@ namespace SysWeaver.MicroService
     public sealed class GetIncomingTextMessageRequest
     {
         /// <summary>
-        /// The id of the last recieved message (start with null).
+        /// The id of the last received message (start with null).
         /// Will block until a message arrives that is newer than this.
         /// </summary>
         public String LastId;

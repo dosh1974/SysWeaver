@@ -1057,7 +1057,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, HttpServerBase.MenuPath, "Manged folders", "Details about folders that can be updated (managed) remotely", "IconSync", 50)]
+        [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Managed folders", "Details about folders that can be updated (managed) remotely", "IconSync", 20)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData ManagedFoldersTable(TableDataRequest r)

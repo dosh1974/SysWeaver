@@ -87,12 +87,12 @@ namespace SysWeaver.MicroService
             var am = ApiModule;
             var ep = am.TryGet(api);
             if (ep == null)
-                throw new Exception("Unknown API: " + api.ToQuoted());
+                throw UnknownTableApi(api);
             if (!context.Session.IsValid(ep.Auth))
-                throw new Exception("Session is not authorized to acccess the API: " + api.ToQuoted());
+                throw NotAllowedTableApi(api);
             if (s.RequireUser)
                 if (context.Session.Auth == null)
-                    throw new Exception("Session is not authorized to acccess the API: " + api.ToQuoted());
+                    throw NotAllowedTableApi(api);
             var ser = am.DefaultSerializer;
             const int limit = 100000;
             context.Data["TableRowLimit"] = limit;
@@ -137,11 +137,11 @@ namespace SysWeaver.MicroService
         [WebApi]
         public Task<MemoryFile> ExportTableData(ExportTableDataRequest export, HttpServerRequest request)
         {
-            if (!TableExporters.TryGetValue(export.ExportAs, out var exporter))
-                throw new Exception(export.ExportAs.ToQuoted() + " is not a reqistered data table exporter!");
+            if (!TableExporters.TryGetValue(export.ExportAs ?? "", out var exporter))
+                throw UnknownExporter(export.ExportAs);
             if (exporter.RequireUser)
                 if (request.Session?.Auth == null)
-                    throw new Exception("Session is not authorized to use the data table exporter: " + export.ExportAs.ToQuoted());
+                    throw ExporterNeedsUser(export.ExportAs);
             var opt = export.Options;
             if (opt != null)
             {
@@ -224,14 +224,14 @@ namespace SysWeaver.MicroService
             var am = ApiModule;
             var ep = am.TryGet(api);
             if (ep == null)
-                throw new Exception("Unknown API: " + api.ToQuoted());
+                throw UnknownTableApi(api);
             if (!request.Session.IsValid(ep.Auth))
-                throw new Exception("Session is not authorized to acccess the API: " + api.ToQuoted());
-            if (!TableExporters.TryGetValue(export.ExportAs, out var exporter))
-                throw new Exception(export.ExportAs.ToQuoted() + " is not a reqistered data table exporter!");
+                throw NotAllowedTableApi(api);
+            if (!TableExporters.TryGetValue(export.ExportAs ?? "", out var exporter))
+                throw UnknownExporter(export.ExportAs);
             if (exporter.RequireUser)
                 if (request.Session.Auth == null)
-                    throw new Exception("Session is not authorized to acccess the API: " + api.ToQuoted());
+                    throw ExporterNeedsUser(export.ExportAs);
             const int limit = 100000;
             request.Data["TableRowLimit"] = limit;
             var ser = am.DefaultSerializer;
@@ -245,6 +245,126 @@ namespace SysWeaver.MicroService
             TableData tableData = GetTableCreator(ep.MethodInfo.ReturnType)(ser, output);
             return await exporter.Export(tableData, request, export.Options).ConfigureAwait(false);
         }
+
+
+        #region Exports as background jobs
+
+        /// <summary>
+        /// Start an export of some table data as a background job (see <see cref="ExportTableData"/>): the result is kept on the server, so it survives a page reload.
+        /// Follow the job with "Api/jobs/GetJob" / "Api/jobs/WaitJob" / the "sw.job" push message, get the file with "Api/jobs/GetJobResult" (the same file as <see cref="ExportTableData"/> returns),
+        /// cancel it with "Api/jobs/CancelJob". The exporter and the access are checked before the job starts (an error is returned at once).
+        /// </summary>
+        /// <param name="export">The same parameters as <see cref="ExportTableData"/>, plus the optional job Key and Title</param>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>The job (IsNew false if a running export with the same Key was returned)</returns>
+        /// <exception cref="HttpResponseException">400: unknown exporter, 403: not allowed (each with a reason for the user)</exception>
+        /// <exception cref="HttpResponseException">429: too many running jobs</exception>
+        [WebApi]
+        public BackgroundJobInfo StartExportTableData(ExportTableDataRequest export, HttpServerRequest request)
+        {
+            if (!TableExporters.TryGetValue(export.ExportAs ?? "", out var exporter))
+                throw UnknownExporter(export.ExportAs);
+            if (exporter.RequireUser)
+                if (request.Session?.Auth == null)
+                    throw ExporterNeedsUser(export.ExportAs);
+            var opt = SafeOptions(export.Options);
+            var data = export.Data;
+            return request.Server.StartJob(request, JobTitle(export.Title, opt), async ctx =>
+            {
+                //  The detached copy of the request (the original one ends when this api answered)
+                return await exporter.Export(data, ctx.Request, opt).ConfigureAwait(false);
+            }, export.Key, "export");
+        }
+
+        /// <summary>
+        /// Start an export of a table data API as a background job (see <see cref="ExportTableApi"/>): the result is kept on the server, so it survives a page reload.
+        /// Follow the job with "Api/jobs/GetJob" / "Api/jobs/WaitJob" / the "sw.job" push message, get the file with "Api/jobs/GetJobResult" (the same file as <see cref="ExportTableApi"/> returns),
+        /// cancel it with "Api/jobs/CancelJob". The API, the exporter and the access are checked before the job starts (an error is returned at once).
+        /// </summary>
+        /// <param name="export">The same parameters as <see cref="ExportTableApi"/>, plus the optional job Key and Title</param>
+        /// <param name="request">Automatically populated by the request handler, don't use</param>
+        /// <returns>The job (IsNew false if a running export with the same Key was returned)</returns>
+        /// <exception cref="HttpResponseException">404: unknown table api, 403: not allowed, 400: unknown exporter (each with a reason for the user)</exception>
+        /// <exception cref="HttpResponseException">429: too many running jobs</exception>
+        [WebApi]
+        public BackgroundJobInfo StartExportTableApi(ExportTableApiRequest export, HttpServerRequest request)
+        {
+            var api = request.MakeAbsolute(export.Api).Substring(request.Prefix.Length);
+            var am = ApiModule;
+            var ep = am.TryGet(api);
+            if (ep == null)
+                throw UnknownTableApi(api);
+            if (!request.Session.IsValid(ep.Auth))
+                throw NotAllowedTableApi(api);
+            if (!TableExporters.TryGetValue(export.ExportAs ?? "", out var exporter))
+                throw UnknownExporter(export.ExportAs);
+            if (exporter.RequireUser)
+                if (request.Session.Auth == null)
+                    throw ExporterNeedsUser(export.ExportAs);
+            const int limit = 100000;
+            var ser = am.DefaultSerializer;
+            var tr = export.Req ?? new TableDataRequest();
+            tr.Cc = 0;
+            tr.LookAheadCount = 0;
+            tr.MaxRowCount = limit;
+            tr.Row = 0;
+            var input = ser.Serialize(tr);
+            var opt = SafeOptions(export.Options);
+            return request.Server.StartJob(request, JobTitle(export.Title, opt), async ctx =>
+            {
+                //  The detached copy of the request (the original one ends when this api answered)
+                var r = ctx.Request;
+                r.Data["TableRowLimit"] = limit;
+                ctx.Report(null, "Reading the rows");
+                var output = await ep.InvokeAsync(r, input).ConfigureAwait(false);
+                ctx.Cancel.ThrowIfCancellationRequested();
+                TableData tableData = GetTableCreator(ep.MethodInfo.ReturnType)(ser, output);
+                ctx.Report(0.5, "Making the file");
+                return await exporter.Export(tableData, r, opt).ConfigureAwait(false);
+            }, export.Key, "export");
+        }
+
+        /// <summary>
+        /// The export options with a safe file name (no path).
+        /// </summary>
+        static TableDataExportOptions SafeOptions(TableDataExportOptions opt)
+        {
+            if (opt?.Filename != null)
+                opt.Filename = PathExt.SafeFilename(opt.Filename);
+            return opt;
+        }
+
+        /// <summary>
+        /// The title of an export job.
+        /// </summary>
+        static String JobTitle(String title, TableDataExportOptions opt)
+            => String.IsNullOrWhiteSpace(title) ? "Exporting " + (opt?.Filename ?? "Table") : title.Trim();
+
+        /// <summary>
+        /// 404 with a reason: the table api of an export doesn't exist (any more).
+        /// </summary>
+        static HttpResponseException UnknownTableApi(String api)
+            => new HttpResponseException(404, "The table to export was not found in the service (" + (api ?? "").ToQuoted() + "): reload the page and try again");
+
+        /// <summary>
+        /// 403 with a reason: the caller may not read the table api of an export.
+        /// </summary>
+        static HttpResponseException NotAllowedTableApi(String api)
+            => new HttpResponseException(403, "You are not allowed to read this table (" + (api ?? "").ToQuoted() + "), so it can't be exported");
+
+        /// <summary>
+        /// 403 with a reason: the exporter needs a signed in user.
+        /// </summary>
+        static HttpResponseException ExporterNeedsUser(String exporter)
+            => new HttpResponseException(403, "Sign in to export to " + (exporter ?? "").ToQuoted());
+
+        /// <summary>
+        /// 400 with a reason: there is no exporter with that id (the reason names the valid ones).
+        /// </summary>
+        HttpResponseException UnknownExporter(String exporter)
+            => new HttpResponseException(400, String.Concat((exporter ?? "").ToQuoted(), " is not an export format of this service, use one of: ", String.Join(", ", TableExporters.Keys.Order(StringComparer.Ordinal))));
+
+        #endregion//Exports as background jobs
 
 
         /// <summary>
@@ -398,14 +518,14 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get trace log
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.OpsDev)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
-        [WebMenuTable(null, "Debug/{0}", "Log", null, "IconTableLog")]
+        [WebMenuTable(null, "Monitoring/{0}", "Recent log entries", null, "IconTableLog", 1)]
         public TableData LogTable(TableDataRequest r) => TableDataTools.Get(r, 1000, Manager.Messages);
 
 

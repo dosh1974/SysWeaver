@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<!--
+    ui/design.html - Design v2 prototype (static, local assets only; not used by product pages).
+    The target look of the SysWeaver web UI: app shell (full height sidebar with the menu tools row, flat top bar), a dashboard (Home,
+    Server), a data table page and an editor (API input / result) page, in every theme and density.
+    Url parameters: theme=light|dark|pro|application|hacker, density=compact|comfortable|touch, view=home|server|table|editor,
+    rail=1 (collapsed sidebar), state=data|loading|empty|error (table), result=null|object (editor).
+    Rules: SysWeaver.HttpServer/srcWeb/PORTING.md part B and ui/README.md.
+    SwWeb:no-framework (a static design prototype with its own mock shell and data; it shows the target look, product pages use the bundles)
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SysWeaver Design v2</title>
+    <link rel="icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../brand/fonts.css">
+    <link rel="stylesheet" href="design.css">
+    <script defer src="design.js"></script>
+</head>
+<body translate="no">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M10 21v-6h4v6" /></symbol>
+        <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.7 12.3 9.3-9.3M17 6l3 3M14.5 8.5l2 2" /></symbol>
+        <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" /><rect x="9.5" y="9.5" width="5" height="5" /><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3" /></symbol>
+        <symbol id="i-drive" viewBox="0 0 24 24"><rect x="2.5" y="13" width="19" height="7" rx="2" /><path d="M5.5 13 8 5h8l2.5 8" /><path d="M6.5 16.5h.01M10 16.5h.01" stroke-width="2.5" /></symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 13 9 5 9-5" /><path d="m3 17.5 9 4.5 9-4.5" /></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8Z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" stroke-width="2.5" /></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 4 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4" /><path d="M12 17h.01" stroke-width="2.5" /></symbol>
+        <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M3.5 18a8.5 8.5 0 1 1 17 0" /><path d="m12 18 4-6" /></symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 5-6" /></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6" /></symbol>
+        <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6Z" /></symbol>
+        <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="3" /><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4.5L3 9" /><path d="M3 4v5h5" /><path d="M4 13a8 8 0 0 0 14.5 4.5L21 15" /><path d="M21 20v-5h-5" /></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16" /></symbol>
+        <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" /></symbol>
+        <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8Z" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+        <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></symbol>
+        <symbol id="i-more" viewBox="0 0 24 24"><path d="M12 5h.01M12 12h.01M12 19h.01" stroke-width="3" /></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
+        <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></symbol>
+        <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" /></symbol>
+        <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-chevs-l" viewBox="0 0 24 24"><path d="m11 6-6 6 6 6M18 6l-6 6 6 6" /></symbol>
+        <symbol id="i-chevs-r" viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M6 6l6 6-6 6" /></symbol>
+        <symbol id="i-sort" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6" /></symbol>
+        <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3Z" /><path d="M12 14v7" /></symbol>
+        <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></symbol>
+        <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m7 20 5-5 5 5M7 4l5 5 5-5" /></symbol>
+        <symbol id="i-expand" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" /></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></symbol>
+        <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9" /><path d="M6.3 6.3a8 8 0 1 0 11.4 0" /></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></symbol>
+        <symbol id="i-rows" viewBox="0 0 24 24"><path d="M3 5h18M3 10h18M3 15h18M3 20h18" /></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10" /></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 11v6" /><path d="M12 7.5h.01" stroke-width="2.5" /></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5Z" /></symbol>
+        <symbol id="i-kill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="m9 9 6 6M15 9l-6 6" /></symbol>
+        <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1" /></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z" /></symbol>
+        <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.5" /><path d="M7.5 7v10M12 7v10M16.5 7v10M6 17v3M18 17v3" /></symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3Z" /></symbol>
+        <symbol id="i-format" viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h10" /></symbol>
+    </svg>
+
+    <a class="dv-sr" href="#main">Skip to content</a>
+
+    <div class="dv-app" id="app">
+        <aside class="dv-side" id="side" aria-label="Main menu">
+            <div class="dv-brand">
+                <div class="dv-brand-logo" role="img" aria-label="App logo"></div>
+                <div class="dv-brand-mark" role="img" aria-label="SysWeaver"></div>
+            </div>
+            <div class="dv-appname"><b>Home-server Manager</b>HOME-SERVER &middot; v1.0.0</div>
+            <div class="dv-navtools" role="toolbar" aria-label="Menu tools">
+                <button class="dv-btn is-ghost is-sm is-icon" data-act="pin" aria-pressed="true" title="Keep the menu open (pin)" aria-label="Keep the menu open"><svg class="dv-ico"><use href="#i-pin" /></svg></button>
+                <span class="dv-spacer"></span>
+                <button class="dv-btn is-ghost is-sm is-icon" data-act="collapse" title="Collapse all folders" aria-label="Collapse all folders"><svg class="dv-ico"><use href="#i-collapse" /></svg></button>
+                <button class="dv-btn is-ghost is-sm is-icon" data-act="expand" title="Expand all folders" aria-label="Expand all folders"><svg class="dv-ico"><use href="#i-expand" /></svg></button>
+            </div>
+            <div class="dv-navsearch">
+                <svg class="dv-ico"><use href="#i-search" /></svg>
+                <input type="search" id="navFilter" placeholder="Search the menu" aria-label="Search the menu" aria-keyshortcuts="Alt+M">
+                <span class="dv-kbd">Alt+M</span>
+            </div>
+            <nav class="dv-nav" id="nav"></nav>
+            <div class="dv-sidefoot"><span class="dv-dot" title="Connected"></span><span class="dv-sidefoot-text">Connected &middot; server time <span id="srvTime">20:10</span></span></div>
+        </aside>
+        <div class="dv-backdrop" id="backdrop"></div>
+
+        <header class="dv-top">
+            <button class="dv-btn is-ghost is-icon dv-menubtn" id="menuBtn" aria-label="Show the menu" aria-expanded="false"><svg class="dv-ico"><use href="#i-menu" /></svg></button>
+            <div class="dv-crumbs" id="crumbs"></div>
+            <div class="dv-top-tools">
+                <div class="dv-proto dv-hide-narrow">
+                    <select class="dv-select" id="themeSel" aria-label="Theme">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="pro">Pro</option>
+                        <option value="application">Application</option>
+                        <option value="hacker">Hacker</option>
+                    </select>
+                    <select class="dv-select" id="densSel" aria-label="Density">
+                        <option value="">Density: auto</option>
+                        <option value="compact">Compact</option>
+                        <option value="comfortable">Comfortable</option>
+                        <option value="touch">Touch</option>
+                    </select>
+                </div>
+                <button class="dv-btn is-ghost is-icon" id="schemeBtn" aria-label="Switch light / dark" title="Switch light / dark"><svg class="dv-ico"><use href="#i-moon" /></svg></button>
+                <button class="dv-avatar" aria-label="User menu, debug" title="Signed in as debug">D</button>
+            </div>
+        </header>
+
+        <main class="dv-main" id="main" tabindex="-1">
+
+            <!-- ============ Home ============ -->
+            <section class="dv-view" data-view="home">
+                <div class="dv-page">
+                    <div class="dv-ph">
+                        <div class="dv-ph-text">
+                            <h1>Good evening, debug</h1>
+                            <p>Home-server Manager manages SysWeaver services on HOME-SERVER.</p>
+                        </div>
+                        <div class="dv-ph-actions">
+                            <span class="dv-badge is-ok"><span class="dv-dot"></span>All systems normal</span>
+                        </div>
+                    </div>
+                    <div class="dv-grid">
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-clock" /></svg>Server uptime</div><div class="dv-kpi-value">1 h 45 <small>min</small></div><div class="dv-kpi-sub">Since 18:25 today</div></div>
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-grid" /></svg>Managed services</div><div class="dv-kpi-value">4 <small>of 5 running</small></div><div class="dv-kpi-sub"><span class="dv-badge is-warn">1 stopped</span></div></div>
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-alert" /></svg>Problems, last 24 h</div><div class="dv-kpi-value">3</div><div class="dv-kpi-sub">Latest 12 min ago</div></div>
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-layers" /></svg>Version</div><div class="dv-kpi-value">1.0.0</div><div class="dv-kpi-sub">Build 2026-10-19</div></div>
+                    </div>
+                    <div class="dv-section-title"><h2>Shortcuts</h2><span>Your most used pages</span></div>
+                    <div class="dv-tiles" id="tiles"></div>
+                    <div class="dv-grid" style="margin-top:var(--sw-space-8)">
+                        <div class="dv-card dv-span-6">
+                            <div class="dv-card-head"><h2>Recent pages</h2><a class="dv-push" href="#" style="font-size:var(--sw-text-sm)">Clear</a></div>
+                            <ul class="dv-list">
+                                <li><svg class="dv-ico"><use href="#i-cpu" /></svg>Process information<span class="dv-meta">2 min ago</span></li>
+                                <li><svg class="dv-ico"><use href="#i-server" /></svg>Server<span class="dv-meta">14 min ago</span></li>
+                                <li><svg class="dv-ico"><use href="#i-braces" /></svg>Api's / debug/i18n/SetLanguages<span class="dv-meta">1 h ago</span></li>
+                                <li><svg class="dv-ico"><use href="#i-list" /></svg>Recent log entries<span class="dv-meta">Yesterday</span></li>
+                            </ul>
+                        </div>
+                        <div class="dv-card dv-span-6">
+                            <div class="dv-card-head"><h2>Problems</h2><span class="dv-badge is-danger">3</span><a class="dv-push" href="#" style="font-size:var(--sw-text-sm)">Open the exception tracker</a></div>
+                            <ul class="dv-list">
+                                <li><span class="dv-badge is-danger">Error</span>ExchangeRateService: source timed out<span class="dv-meta">12 min ago</span></li>
+                                <li><span class="dv-badge is-warn">Warning</span>Drive D:\ is 68 % full<span class="dv-meta">40 min ago</span></li>
+                                <li><span class="dv-badge is-warn">Warning</span>Translator endpoint not reachable<span class="dv-meta">1 h ago</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============ Server dashboard ============ -->
+            <section class="dv-view" data-view="server">
+                <div class="dv-page">
+                    <div class="dv-ph">
+                        <div class="dv-ph-text">
+                            <h1>Server</h1>
+                            <p>Live resource use of HOME-SERVER, updated every 2 seconds.</p>
+                        </div>
+                        <div class="dv-ph-actions">
+                            <button class="dv-btn"><svg class="dv-ico"><use href="#i-trash" /></svg>Deleted files</button>
+                            <button class="dv-btn is-danger" data-dialog="reboot"><svg class="dv-ico"><use href="#i-power" /></svg>Reboot&hellip;</button>
+                        </div>
+                    </div>
+                    <dl class="dv-card dv-facts" style="margin:0 0 var(--sw-space-4)">
+                        <div class="dv-fact"><dt>Host</dt><dd>HOME-SERVER</dd></div>
+                        <div class="dv-fact"><dt>Operating system</dt><dd title="Microsoft Windows 11 Pro build 26200 (64 bits)">Windows 11 Pro 26200 (64-bit)</dd></div>
+                        <div class="dv-fact"><dt>Processors</dt><dd>24 logical CPUs</dd></div>
+                        <div class="dv-fact"><dt>Memory</dt><dd>63.35 GB</dd></div>
+                        <div class="dv-fact"><dt>Processes</dt><dd>671</dd></div>
+                        <div class="dv-fact"><dt>Server time</dt><dd id="srvTime2">20:10:53</dd></div>
+                    </dl>
+                    <div class="dv-grid">
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-cpu" /></svg>CPU</div><div class="dv-kpi-value" id="cpuNow">6.1 <small>%</small></div><div class="dv-meter"><i style="width:6.1%" id="cpuMeter"></i></div><div class="dv-kpi-sub">Average 3 min: 7.4 %</div></div>
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-memory" /></svg>Memory</div><div class="dv-kpi-value">44.8 <small>%</small></div><div class="dv-meter"><i style="width:44.8%"></i></div><div class="dv-kpi-sub">28.36 GB of 63.35 GB</div></div>
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-drive" /></svg>Drive C:\</div><div class="dv-kpi-value">41.9 <small>%</small></div><div class="dv-meter"><i style="width:41.9%"></i></div><div class="dv-kpi-sub">798 GB of 1 906 GB used</div></div>
+                        <div class="dv-card dv-kpi dv-span-3"><div class="dv-kpi-label"><svg class="dv-ico"><use href="#i-drive" /></svg>Drive D:\ Store</div><div class="dv-kpi-value">67.6 <small>%</small></div><div class="dv-meter is-warn"><i style="width:67.6%"></i></div><div class="dv-kpi-sub">1 260 GB of 1 863 GB used</div></div>
+
+                        <div class="dv-card dv-span-6">
+                            <div class="dv-card-head"><h2>CPU use</h2><span class="dv-sub">last 3 minutes</span><div class="dv-push dv-seg" role="group" aria-label="Range"><button aria-pressed="true">3 min</button><button>1 h</button><button>24 h</button></div></div>
+                            <div class="dv-chart" data-chart="cpu" data-max="30" data-unit="%"></div>
+                        </div>
+                        <div class="dv-card dv-span-6">
+                            <div class="dv-card-head"><h2>Memory use</h2><span class="dv-sub">last 3 minutes</span><div class="dv-push dv-seg" role="group" aria-label="Range"><button aria-pressed="true">3 min</button><button>1 h</button><button>24 h</button></div></div>
+                            <div class="dv-chart" data-chart="mem" data-max="60" data-unit="%"></div>
+                        </div>
+                        <div class="dv-card dv-span-12">
+                            <div class="dv-card-head"><h2>Running services</h2><span class="dv-badge">5</span><button class="dv-btn is-sm dv-push">Manage</button></div>
+                            <ul class="dv-list">
+                                <li><span class="dv-badge is-ok"><span class="dv-dot"></span>Running</span>ExchangeRateService<span class="dv-meta">:8201 &middot; 258.8 MB &middot; 1 h 45 min</span></li>
+                                <li><span class="dv-badge is-ok"><span class="dv-dot"></span>Running</span>FakeEmailService<span class="dv-meta">:8202 &middot; 201.2 MB &middot; 1 h 45 min</span></li>
+                                <li><span class="dv-badge is-ok"><span class="dv-dot"></span>Running</span>ReverseProxyServer<span class="dv-meta">:8206 &middot; 189.7 MB &middot; 1 h 45 min</span></li>
+                                <li><span class="dv-badge is-ok"><span class="dv-dot"></span>Running</span>TranslationService<span class="dv-meta">:8209 &middot; 176.0 MB &middot; 1 h 45 min</span></li>
+                                <li><span class="dv-badge is-warn"><span class="dv-dot"></span>Stopped</span>IpLocationService<span class="dv-meta">stopped 20:01 by ops</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============ Table page ============ -->
+            <section class="dv-view is-fill" data-view="table">
+                <div class="dv-page">
+                    <div class="dv-ph">
+                        <div class="dv-ph-text">
+                            <h1>Process information</h1>
+                            <p>Processes running on HOME-SERVER. Live: refreshes every 5 seconds.</p>
+                        </div>
+                        <div class="dv-ph-actions">
+                            <div class="dv-seg" role="group" aria-label="Prototype: table state" id="stateSeg">
+                                <button data-state="data" aria-pressed="true">Data</button>
+                                <button data-state="loading">Loading</button>
+                                <button data-state="empty">Empty</button>
+                                <button data-state="error">Error</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dv-card dv-table-card" id="tcard">
+                        <div class="dv-tbar">
+                            <div class="dv-search"><svg class="dv-ico"><use href="#i-search" /></svg><input type="search" id="tSearch" placeholder="Search processes" aria-label="Search processes"></div>
+                            <button class="dv-btn is-ghost" id="filterBtn" aria-pressed="false"><svg class="dv-ico"><use href="#i-filter" /></svg><span class="dv-hide-narrow">Filter</span><span class="dv-badge is-accent" id="filterCount" hidden>1</span></button>
+                            <div class="dv-push">
+                                <button class="dv-btn is-ghost is-icon dv-hide-narrow" title="Columns" aria-label="Columns"><svg class="dv-ico"><use href="#i-columns" /></svg></button>
+                                <button class="dv-btn is-ghost is-icon dv-hide-narrow" id="densBtn" title="Row density" aria-label="Row density"><svg class="dv-ico"><use href="#i-rows" /></svg></button>
+                                <button class="dv-btn is-ghost is-icon" title="Download (CSV, Excel, JSON)" aria-label="Download"><svg class="dv-ico"><use href="#i-download" /></svg></button>
+                                <button class="dv-btn is-ghost is-icon" id="refreshBtn" title="Refresh" aria-label="Refresh"><svg class="dv-ico"><use href="#i-refresh" /></svg></button>
+                            </div>
+                        </div>
+                        <div class="dv-chips" id="chips" hidden>
+                            <span class="dv-chip"><span>Memory</span><b>&gt; 100 MB</b><button aria-label="Remove the filter Memory greater than 100 MB"><svg class="dv-ico" style="width:14px;height:14px"><use href="#i-x" /></svg></button></span>
+                            <button class="dv-btn is-ghost is-sm"><svg class="dv-ico"><use href="#i-plus" /></svg>Add filter</button>
+                            <button class="dv-linkbtn" style="margin-left:auto">Clear all</button>
+                        </div>
+                        <div class="dv-tscroll" id="tscroll">
+                            <table class="dv-table" id="table" aria-rowcount="671">
+                                <colgroup id="tcols"></colgroup>
+                                <thead><tr id="thead"></tr></thead>
+                                <tbody id="tbody"></tbody>
+                            </table>
+                            <ul class="dv-cards" id="tcards"></ul>
+                            <div class="dv-state" id="tstate" hidden></div>
+                        </div>
+                        <div class="dv-tfoot">
+                            <span class="dv-range" id="trange" aria-live="polite"></span>
+                            <div class="dv-push">
+                                <label class="dv-pps">Rows <select class="dv-select" id="pageSize"><option>25</option><option selected>50</option><option>100</option></select></label>
+                                <div class="dv-pager">
+                                    <button class="dv-btn is-ghost is-icon" id="pFirst" aria-label="First page" title="First page (Home)"><svg class="dv-ico"><use href="#i-chevs-l" /></svg></button>
+                                    <button class="dv-btn is-ghost is-icon" id="pPrev" aria-label="Previous page" title="Previous page (Page up)"><svg class="dv-ico"><use href="#i-chev-l" /></svg></button>
+                                    <span class="dv-pageno" id="pageNo"></span>
+                                    <button class="dv-btn is-ghost is-icon" id="pNext" aria-label="Next page" title="Next page (Page down)"><svg class="dv-ico"><use href="#i-chev-r" /></svg></button>
+                                    <button class="dv-btn is-ghost is-icon" id="pLast" aria-label="Last page" title="Last page (End)"><svg class="dv-ico"><use href="#i-chevs-r" /></svg></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============ Editor (API input / result) ============ -->
+            <section class="dv-view" data-view="editor">
+                <div class="dv-page is-form">
+                    <div class="dv-ph">
+                        <div class="dv-ph-text">
+                            <h1>SetLanguages</h1>
+                            <p><span class="dv-badge">POST</span> <span class="dv-badge is-accent">Debug</span> &nbsp;Api/debug/i18n/SetLanguages &mdash; replaces the language list of the translator.</p>
+                        </div>
+                        <div class="dv-ph-actions">
+                            <button class="dv-btn"><svg class="dv-ico"><use href="#i-copy" /></svg>Copy as curl</button>
+                        </div>
+                    </div>
+                    <div class="dv-split">
+                        <div class="dv-card">
+                            <div class="dv-tabs" role="tablist" aria-label="Input">
+                                <button class="dv-tab" role="tab" aria-selected="true" data-itab="form">Input</button>
+                                <button class="dv-tab" role="tab" aria-selected="false" data-itab="json">JSON</button>
+                                <div class="dv-push"><span class="dv-badge is-accent" id="dirty">2 changes</span></div>
+                            </div>
+                            <div id="iform">
+                                <div class="dv-pg">
+                                    <div class="dv-pggroup">
+                                        <div class="dv-pggroup-head">General</div>
+                                        <div class="dv-pgrow"><label class="dv-pglabel is-modified" for="f-name">Name</label><div class="dv-pgval"><input class="dv-input" id="f-name" value="Default languages"></div></div>
+                                        <div class="dv-pgrow"><label class="dv-pglabel" for="f-root">Root url<small>Uri</small></label><div class="dv-pgval"><input class="dv-input" id="f-root" placeholder="https://example.com/" value=""></div><div class="dv-help">Leave empty to use the server url.</div></div>
+                                        <div class="dv-pgrow"><label class="dv-pglabel" for="f-max">Max items per request<small>Int32 &middot; 1 to 500</small></label><div class="dv-pgval"><input class="dv-input is-num is-invalid" id="f-max" value="900" inputmode="numeric" aria-invalid="true" aria-describedby="f-max-err"></div><div class="dv-err" id="f-max-err"><svg class="dv-ico" style="width:14px;height:14px"><use href="#i-alert" /></svg>Must be 500 or less.</div></div>
+                                        <div class="dv-pgrow"><span class="dv-pglabel is-modified" id="l-en">Enabled</span><div class="dv-pgval"><button class="dv-switch" role="switch" aria-checked="true" aria-labelledby="l-en"></button></div></div>
+                                        <div class="dv-pgrow"><label class="dv-pglabel" for="f-mode">Fallback mode</label><div class="dv-pgval"><select class="dv-select" id="f-mode" style="min-width:12rem"><option>Invariant</option><option selected>Parent culture</option><option>None</option></select></div></div>
+                                        <div class="dv-pgrow"><label class="dv-pglabel" for="f-col">Highlight color<small>[EditColor(Rgba32)]</small></label><div class="dv-pgval"><div class="dv-color"><button class="dv-swatch" style="--c:#E5823FCC" aria-label="Pick a color"></button><input class="dv-input" id="f-col" value="0xE5823FCC"><select class="dv-select" aria-label="Color format"><option>0xRRGGBBAA</option><option>rgba()</option><option>#RRGGBB</option><option>HDR rgb</option></select></div></div></div>
+                                        <div class="dv-pgrow"><span class="dv-pglabel">Description</span><div class="dv-pgval"><span class="dv-null">null</span><button class="dv-linkbtn">Set a value</button></div></div>
+                                    </div>
+                                    <div class="dv-pggroup">
+                                        <div class="dv-pggroup-head">Languages</div>
+                                        <div class="dv-coll" id="coll">
+                                            <div class="dv-coll-head">
+                                                <b>Languages</b><span class="dv-type">LanguageInfo[]</span><span class="dv-badge" id="collCount">3</span>
+                                                <div class="dv-push">
+                                                    <button class="dv-btn is-ghost is-sm is-icon" title="Paste items" aria-label="Paste items"><svg class="dv-ico"><use href="#i-copy" /></svg></button>
+                                                    <button class="dv-btn is-sm" id="collAdd"><svg class="dv-ico"><use href="#i-plus" /></svg>Add</button>
+                                                </div>
+                                            </div>
+                                            <div id="collItems"></div>
+                                            <button class="dv-coll-add" id="collAdd2"><svg class="dv-ico"><use href="#i-plus" /></svg>Add a language</button>
+                                        </div>
+                                    </div>
+                                    <div class="dv-pggroup">
+                                        <div class="dv-pggroup-head"><svg class="dv-ico"><use href="#i-lock" /></svg>Read only</div>
+                                        <div class="dv-pgrow"><span class="dv-pglabel">Id</span><div class="dv-pgval"><span class="dv-ro is-mono">7f3c2a91-0b8e-4c55-9a1e-55c0d2f4b6aa</span></div></div>
+                                        <div class="dv-pgrow"><span class="dv-pglabel">Created</span><div class="dv-pgval"><span class="dv-ro">2026-10-19 16:37:00 UTC</span></div></div>
+                                        <div class="dv-pgrow"><span class="dv-pglabel">Updated by</span><div class="dv-pgval"><span class="dv-ro">ops</span></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="ijson" hidden style="padding:var(--sw-space-4)">
+                                <textarea class="dv-code" id="ijsonText" spellcheck="false" aria-label="Input as JSON"></textarea>
+                                <div class="dv-result-meta" style="margin-top:var(--sw-space-2)" id="ijsonMsg"><svg class="dv-ico" style="width:14px;height:14px;color:var(--sw-ok)"><use href="#i-check" /></svg>Valid JSON. Switching back to Input applies it.</div>
+                            </div>
+                            <div class="dv-formfoot">
+                                <button class="dv-btn is-ghost"><svg class="dv-ico"><use href="#i-undo" /></svg>Reset</button>
+                                <div class="dv-push">
+                                    <button class="dv-btn is-primary" id="invokeBtn" title="Invoke (Ctrl+Enter)"><svg class="dv-ico"><use href="#i-play" /></svg>Invoke</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dv-card">
+                            <div class="dv-tabs" role="tablist" aria-label="Result">
+                                <button class="dv-tab" role="tab" aria-selected="true" data-rtab="result">Result</button>
+                                <button class="dv-tab" role="tab" aria-selected="false" data-rtab="json">JSON</button>
+                                <div class="dv-push dv-result-meta"><span class="dv-badge is-ok">200 OK</span><span>14 ms</span></div>
+                            </div>
+                            <div id="rresult"></div>
+                            <div id="rjson" hidden style="padding:var(--sw-space-4)"><textarea class="dv-code" readonly id="rjsonText" aria-label="Result as JSON"></textarea></div>
+                            <div class="dv-formfoot">
+                                <span class="dv-result-meta">Invoked 20:10:53 by debug</span>
+                                <div class="dv-push"><div class="dv-seg" role="group" aria-label="Prototype: result"><button data-result="null" aria-pressed="true">null</button><button data-result="object">Object</button></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div class="dv-toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

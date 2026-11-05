@@ -14,7 +14,8 @@ namespace SysWeaver.Data
         /// First argument is the text formatting:
         /// {0} = Value.
         /// {1} = Next value (must exist). 
-        /// The second argument is the title formatting. 
+        /// The second argument is the         /// text|title|getUri|icon[|confirm|visible[|done[|final]]]
+        /// The optional confirm and visible parts are set by <see cref="TableDataActionsExAttribute"/> (and <see cref="TableDataActionsFullAttribute"/>): formatting. 
         /// {0} = Formatted value.
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
@@ -33,6 +34,10 @@ namespace SysWeaver.Data
         /// {2} = Value before formatting.
         /// {3} = The text (after formatting). 
         /// If the fourth argument is true, the original value will be copied to the clipboard on click.
+        /// The optional fifth argument is a currency (ISO 4217 code) format, if not empty the value is an amount in that currency (see <see cref="TableDataCurrencyAttribute"/>):
+        /// {0} = Formatted value.
+        /// {1} = Next value (must exist).
+        /// {2} = Value before formatting.
         /// </summary>
         Number,
         /// <summary>
@@ -68,7 +73,10 @@ namespace SysWeaver.Data
         /// {1} = Value without optional, ex "Banana", "Apple", "Orange". 
         /// {2} = Optional, ex: "Yellow", "Green", "Orange". 
         /// {3} = The text (after formatting). 
-        /// {4} = The title (after formatting). 
+        /// {4} = The title (after formatting).
+        /// Fourth argument: "true" = clicking the cell copies the raw value.
+        /// Fifth argument: "Auth" = the value is an auth requirement (<see cref="TableDataAuthAttribute"/>): null = open to anyone (an accent "Open" tag),
+        /// "" = any signed in user (a tag), else the tokens where one is required.
         /// </summary>
         Tags,
 
@@ -90,9 +98,9 @@ namespace SysWeaver.Data
         /// <summary>
         /// Add a boolean toggle button.
         /// First argument is the true text.
-        /// {0} is the current value.
+        /// {0} is the value (its first part when it is a comma separated string).
         /// {1} is the next value.
-        /// Optionally {2} to {x} is populated from the value if it's a comma separated string.
+        /// Optionally {2} to {x} are the following comma separated parts of the value (ex: "token,who": {0} = token, {2} = who).
         /// Second argument is the false text.
         /// {0} is the current value.
         /// {1} is the next value.
@@ -115,10 +123,15 @@ namespace SysWeaver.Data
         /// <summary>
         /// Action buttons.
         /// Each argument is a button, the button is a string with the following format:
-        /// text|title|getUri|icon
-        /// {0} is the current value.
+        /// text|title|getUri|icon[|confirm|visible[|done[|final]]]
+        /// The optional confirm and visible parts are set by <see cref="TableDataActionsExAttribute"/> (all three by <see cref="TableDataActionsFullAttribute"/>):
+        /// confirm = the confirmation question (empty = the renderer decides, "-" = never ask),
+        /// visible = empty for always visible, else the action is hidden on a row when the formatted text is empty, "0", "false" or "no".
+        /// done = the text shown after the action succeeded (empty = the generic text), set by <see cref="TableDataActionsFullAttribute"/>.
+        /// final = "final" when the action ends or removes the row's item (Delete, Kill, Withdraw ...), else empty; set by <see cref="TableDataActionsFullAttribute"/> (<see cref="TableDataActionFlags.Final"/>). Without the part the action is not final.
+        /// {0} is the value (its first part when it is a comma separated string).
         /// {1} is the next value.
-        /// Optionally {2} to {x} is populated from the value if it's a comma separated string.
+        /// Optionally {2} to {x} are the following comma separated parts of the value (ex: "token,who": {0} = token, {2} = who).
         /// </summary>
         Actions,
 
@@ -159,7 +172,7 @@ namespace SysWeaver.Data
         Text,
 
         /// <summary>
-        /// Format as multiline mark down, only the first line (or max length) is shown.
+        /// Format as multiline Markdown, only the first line (or max length) is shown.
         /// </summary>
         MD,
 

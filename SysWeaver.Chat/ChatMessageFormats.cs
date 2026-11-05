@@ -16,6 +16,8 @@
         MarkDown,
         /// <summary>
         /// HTML code.
+        /// Only the server application may send HTML messages (clients posting HTML to <see cref="ChatService.UserMessage"/> are refused with 400).
+        /// The web front end still sanitizes it (an element / attribute allow list) before showing it.
         /// </summary>
         HTML,
     }

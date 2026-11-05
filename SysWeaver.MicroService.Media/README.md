@@ -48,7 +48,7 @@ flowchart LR
 ## Limitations and considerations
 
 - Effects require WebGL-capable browsers and GPUs; heavy effects can be demanding on low-end devices
-- The Google map demo only works when a Google Maps key is configured
+- Map views load their tiles from the map site (OpenStreetMap; the Google map types need a Google Maps key, without one they are shown with OpenStreetMap). The Google map demo only shows Google maps when a Google Maps key is configured
 
 ## Folder layout
 

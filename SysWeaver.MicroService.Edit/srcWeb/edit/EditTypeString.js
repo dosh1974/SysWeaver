@@ -1,220 +1,155 @@
 ﻿/**
- * @file EditTypeString.js - type handler for System.String (and, read only, System.Object) members of the object editor.
+ * @file Type handler for System.String (and, read only, System.Object) members (`Sw.Edit.Handlers.String`, legacy global
+ * `EditTypeString`).
  *
- * Loaded by Edit.Init() (Edit.js) via includeJs(current, "EditTypeString.js").
- * Defines the global class EditTypeString. Instances are created in Edit.GetTypeMap():
- * `new EditTypeString()` for "System.String" and `new EditTypeString(true)` (forced read only) for "System.Object".
- *
- * Dependencies: Edit (GetIntParam, IsValid, CreateTextInput, CreateChangeEvent), ValueFormat (AddNonNullLine,
- * countSuffix) from common, TypeMemberFlags (type.js).
- * Conventions: implements the duck-typed type handler contract (CreateDefault, IsOfType, Condition, Validate,
- * ToString, GetDefault, AddEditor). A member.Default of "\t" is the server's marker for an empty string.
+ * Loaded by Edit.js. A single line input, a resizable textarea (Multiline flag) or a password input (Password flag).
+ * A member Default of "\t" is the server's marker for an empty string.
  */
+(function () {
+    "use strict";
 
-/**
- * Type handler for text values: a single-line text input, a 3-line textarea (Multiline flag, not for passwords)
- * or a password input (Password flag).
- */
-class EditTypeString {
-
-
-    /**
-     * @param {boolean} [forceReadOnly=false] - When truthy the editor is always read only (used for System.Object).
-     */
-    constructor(forceReadOnly) {
-        /** @type {boolean} Forces read-only editors regardless of options / member flags. */
-        this.ForceReadOnly = !!forceReadOnly;
-    }
+    const E = Sw.Edit;
+    const F = E.Flags;
+    const Has = E.Util.Has;
+    const addLine = E.Util.AddLine;
 
     /**
-     * Creates the default value for a new member.
-     * @param {object} member - Member description (TypeMemberDesc).
-     * @param {EditOptions} options - Editor options.
-     * @returns {?string} Same as GetDefault.
+     * Text handler.
      */
-    CreateDefault(member, options) {
-        return this.GetDefault(member, options);
-    }
-
-    /**
-     * Checks whether a pasted / dropped value can be used as text.
-     * @param {*} obj - Candidate value.
-     * @returns {boolean} true for anything that is neither undefined nor an object (null is an object, so rejected).
-     */
-    IsOfType(obj) {
-        const t = typeof (obj);
-        return (t !== "undefined") && (t !== "object");
-    }
-
-    /**
-     * Converts a pasted / dropped value to a string that fits the member: truncates to member.Max characters
-     * (when > 0) and replaces line breaks with spaces unless the member is Multiline (and not Password).
-     * @param {*} obj - Value to convert ("" + obj).
-     * @param {object} member - Member description (Max, Flags).
-     * @param {EditOptions} [options] - Editor options (unused).
-     * @returns {string} The conditioned text.
-     */
-    Condition(obj, member, options) {
-        obj = "" + obj;
-        const maxLength = Edit.GetIntParam(member.Max, 0);
-        if (maxLength > 0)
-            if (obj.length > maxLength)
-                obj = obj.substr(0, maxLength);
-
-        const isPassword = (member.Flags & TypeMemberFlags.Password) !== 0;
-        const isMultiLine = ((member.Flags & TypeMemberFlags.Multiline) !== 0) && (!isPassword);
-        if (!isMultiLine)
-            obj = obj.replace(/(\r\n|\n|\r)/gm, " ");
-        return obj;
-    }
-
-    /**
-     * Validates a value: null is only allowed with TypeMemberFlags.AcceptNull; the text length ("" + obj) must be
-     * within member.Min..member.Max (each only checked when > 0).
-     * @param {*} obj - Value to validate.
-     * @param {object} member - Member description (Flags, Min, Max, DisplayName).
-     * @param {EditOptions} options - Editor options (unused).
-     * @param {string} name - Member path/name returned with the error.
-     * @returns {Promise<?Array<string>>} null when valid, otherwise [name, message].
-     */
-    async Validate(obj, member, options, name) {
-        if (obj == null) {
-            if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
-                return null;
-            return [name, member.DisplayName + ": Value may not be null"];
+    class EditTypeString extends E.Handler {
+        /**
+         * @param {boolean} [forceReadOnly] - Always read only (System.Object).
+         */
+        constructor(forceReadOnly) {
+            super();
+            /** @type {boolean} Always read only. */
+            this.ForceReadOnly = !!forceReadOnly;
         }
-        obj = "" + obj;
-        const ol = obj.length;
-        const maxLength = Edit.GetIntParam(member.Max, 0);
-        if (maxLength && (maxLength > 0) && (ol > maxLength))
-            return [name, member.DisplayName + ": Text to long! Maximum allowed length is " + ValueFormat.countSuffix(maxLength, " char", " chars") + ", the current text is " + ValueFormat.countSuffix(ol, " char!", " chars!")];
-        const minLength = Edit.GetIntParam(member.Min, 0);
-        if (minLength && (minLength > 0) && (ol < minLength))
-            return [name, member.DisplayName + ": Text to short! Minimum allowed length is " + ValueFormat.countSuffix(minLength, " char", " chars") + ", the current text is " + ValueFormat.countSuffix(ol, " char!", " chars!")];
-        return null;
-    }
 
+        /**
+         * Accept anything that is not an object (null is rejected here, the engine accepts null with AcceptNull).
+         * @param {*} obj - Candidate.
+         * @returns {boolean} True when usable as text.
+         */
+        IsOfType(obj) {
+            const t = typeof obj;
+            return t !== "undefined" && t !== "object";
+        }
 
-    /**
-     * Formats a value for display.
-     * @param {*} obj - Value.
-     * @param {object} member - Member description (unused).
-     * @param {EditOptions} options - Editor options (unused).
-     * @returns {string} "" + obj.
-     */
-    ToString(obj, member, options) {
-        return "" + obj;
-    }
+        /**
+         * Convert a pasted / dropped value: text, truncated to Max, line breaks become spaces unless multi line.
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @returns {string} The text.
+         */
+        Condition(obj, member) {
+            obj = "" + obj;
+            const max = E.GetIntParam(member.Max, 0);
+            if (max > 0 && obj.length > max)
+                obj = obj.substring(0, max);
+            if (!EditTypeString.IsMultiline(member))
+                obj = obj.replace(/(\r\n|\n|\r)/gm, " ");
+            return obj;
+        }
 
-    /**
-     * Computes the default value.
-     * @param {object} member - Member description (Default, Flags).
-     * @param {EditOptions} options - Editor options (unused).
-     * @returns {?string} member.Default when Edit.IsValid ("\t" maps to ""), else null with AcceptNull, else "".
-     */
-    GetDefault(member, options) {
-        //  Default
-        let def = member.Default;
-        if (Edit.IsValid(def))
-            return def === "\t" ? "" : def;
-        if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
+        /**
+         * Test for a multi line (non password) member.
+         * @param {object} member - The member.
+         * @returns {boolean} True for a textarea.
+         */
+        static IsMultiline(member) {
+            return (member.Flags & F.Multiline) !== 0 && (member.Flags & F.Password) === 0;
+        }
+
+        /**
+         * Validate: null only with AcceptNull; length within Min..Max.
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @param {object} options - Options.
+         * @param {string} name - Path.
+         * @returns {Promise<?Array<string>>} Null or [path, message].
+         */
+        async Validate(obj, member, options, name) {
+            if (obj === null || obj === undefined)
+                return E.Handler.NullCheck(obj, member, name);
+            const l = ("" + obj).length;
+            const dn = member.DisplayName || member.Name;
+            const max = E.GetIntParam(member.Max, 0);
+            if (max > 0 && l > max)
+                return [name, dn + ": " + _T("Text too long: at most {0} characters are allowed, the text has {1}.", max, l, "Validation error of a text value that is too long.{0} is replaced with the maximum number of characters.{1} is replaced with the current number of characters.")];
+            const min = E.GetIntParam(member.Min, 0);
+            if (min > 0 && l < min)
+                return [name, dn + ": " + _T("Text too short: at least {0} characters are needed, the text has {1}.", min, l, "Validation error of a text value that is too short.{0} is replaced with the minimum number of characters.{1} is replaced with the current number of characters.")];
             return null;
-        return "";
+        }
+
+        /**
+         * The default: metadata ("\t" = empty), else null with AcceptNull, else "".
+         * @param {object} member - The member.
+         * @returns {?string} The default.
+         */
+        GetDefault(member) {
+            const def = member.Default;
+            if (Has(def))
+                return def === "\t" ? "" : def;
+            if ((member.Flags & F.AcceptNull) !== 0)
+                return null;
+            return "";
+        }
+
+        /**
+         * Build the editor.
+         * @param {object} obj - The object.
+         * @param {Sw.Edit} editor - The editor.
+         * @param {object} editContext - Layout context.
+         * @param {object} member - The member.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         * @returns {Promise<object>} The item.
+         */
+        async AddEditor(obj, editor, editContext, member, title, options) {
+            const mn = member.Name;
+            const readOnly = this.IsReadOnly(member, options);
+            const min = E.GetIntParam(member.Min, 0);
+            const max = E.GetIntParam(member.Max, 0);
+            let tip = null;
+            if (min > 0)
+                tip = addLine(tip, _TF("Minimum length", "Header of a tool tip row with the minimum number of characters of a text"), min);
+            if (max > 0)
+                tip = addLine(tip, _TF("Maximum length", "Header of a tool tip row with the maximum number of characters of a text"), max);
+            const def = this.GetDefault(member);
+            const defText = def === null ? "null" : ('"' + def + '"');
+            tip = addLine(tip, _TF("Default value", "Header of a tool tip row with the default value of a property"), defText);
+            if (obj[mn] === undefined)
+                obj[mn] = def;
+            const isPassword = (member.Flags & F.Password) !== 0;
+            const multi = EditTypeString.IsMultiline(member);
+            const text = E.CreateTextInput(
+                () => obj[mn] ?? "",
+                async (v, ev, token) => {
+                    const old = obj[mn];
+                    if (old === v || (old === null && v === ""))
+                        return;
+                    await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", isPassword ? "***" : v, "Command text stored in a log when a property value was changed.{0} is replaced with the new value."), token);
+                },
+                v => v, v => (v === null || v === undefined) ? "" : ("" + v),
+                member.Summary, null, null, max > 0 ? max : null, def, readOnly, multi ? 3 : 0);
+            if (isPassword) {
+                text.type = "password";
+                text.autocomplete = "new-password";
+            }
+            if (obj[mn] === null && (member.Flags & F.AcceptNull) !== 0)
+                text.placeholder = "null";
+            text.setAttribute("aria-label", member.DisplayName || mn);
+            editContext.Element.append(text);
+            return E.Handler.Item(obj, editor, member, {
+                Focus: text, Title: tip, DefValue: def, DefValueText: defText,
+                Update: () => text.UpdateValue(),
+            });
+        }
     }
 
-    /**
-     * Builds the text editor in editContext.Element using Edit.CreateTextInput.
-     * Read only when options.ReadOnly, the member has TypeMemberFlags.ReadOnly, or ForceReadOnly.
-     * The tooltip (typeTitle) lists minimum/maximum length (member.Min/Max, when > 0) and the quoted default.
-     * maxlength comes from member.Max; Multiline members (non-password) get a 3-line textarea; Password members get
-     * type=password. obj[member.Name] is set to the default when undefined.
-     * User changes go through editor.Invoke ("Set value: \"...\""), passing the text element as the undo tracking
-     * object so consecutive typing is coalesced into one undo step.
-     * @param {object} obj - The object being edited.
-     * @param {Edit} editor - Owning editor (Invoke, Element, Key, KeyName).
-     * @param {{Element:HTMLElement}} editContext - Layout context; Element is the value cell.
-     * @param {object} member - Member description (Name, Min, Max, Default, Flags, Summary used as placeholder).
-     * @param {string} title - Member title (unused).
-     * @param {EditOptions} options - Editor options (ReadOnly).
-     * @returns {Promise<object>} Item {Focus, Title, DefValue, DefValueText, SetValue(v), UpdateValue(isFirst)};
-     *   SetValue writes obj[mn] and dispatches EditChange on editor.Element.
-     */
-    async AddEditor(obj, editor, editContext, member, title, options) {
-        let typeTitle = null;
-        const mn = member.Name;
-        const cell = editContext.Element;
-        const readOnly = options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0) || this.ForceReadOnly;
-
-        let minLength = parseInt(member.Min);
-        if (minLength && (minLength <= 0))
-            minLength = null;
-        if (minLength)
-            typeTitle = ValueFormat.AddNonNullLine(typeTitle, "Minimum length", minLength + " characters");
-
-        let maxLength = parseInt(member.Max);
-        if (maxLength && (maxLength <= 0))
-            maxLength = null;
-        if (maxLength)
-            typeTitle = ValueFormat.AddNonNullLine(typeTitle, "Maximum length", maxLength + " characters");
-
-        const def = this.GetDefault(member, options);
-        const defText = def == null ? null : ('"' + def + '"');
-        typeTitle = ValueFormat.AddNonNullLine(typeTitle, "Default value", defText);
-
-        if (typeof obj[mn] === "undefined")
-            obj[mn] = def;
-
-        let validateKeyOrPattern = null;
-        const isPassword = (member.Flags & TypeMemberFlags.Password) !== 0;
-        const isMultiLine = ((member.Flags & TypeMemberFlags.Multiline) !== 0) && (!isPassword);
-        const text = Edit.CreateTextInput(
-            () => obj[mn],
-            async v => {
-                const old = obj[mn];
-                if (old === v)
-                    return false;
-                const newValue = v;
-                await editor.Invoke(
-                    edit => {
-                        edit.SetValue(newValue);
-                    },
-                    edit => {
-                        edit.SetValue(old);
-                    },
-                    "Set value: \"" + newValue + "\"",
-                    mn,
-                    text,
-                );
-                return true;
-            },
-            v => v,
-            v => v,
-            member.Summary,
-            null,
-            validateKeyOrPattern,
-            maxLength,
-            def,
-            readOnly,
-            isMultiLine ? 3 : 0
-        );
-        if (isPassword)
-            text.type = "password";
-        cell.appendChild(text);
-        return {
-            Focus: text,
-            Title: typeTitle,
-            DefValue: def,
-            DefValueText: defText,
-            SetValue: newVal => {
-                obj[mn] = newVal;
-                editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, newVal, null, editor.Key, editor.KeyName));
-            },
-            UpdateValue: isFirst => {
-                text.UpdateValue();
-                if (!isFirst)
-                    text.focus();
-            },
-        };
-    }
-
-}
+    E.Handlers.String = EditTypeString;
+    if (!window.EditTypeString)
+        window.EditTypeString = EditTypeString;
+})();

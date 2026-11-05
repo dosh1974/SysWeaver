@@ -53,6 +53,7 @@ namespace SysWeaver.Remote
         /// The bearer token can also be read from a credentials file where the user name part is bearer, ex:
         /// "CredFile": "Test.txt" and "Test.txt" content is "bearer:the token" (only with <see cref="RemoteAuthMethod.HttpAuth"/>).
         /// </summary>
+        [EditPassword]
         public String BearerToken;
 
         /// <summary>

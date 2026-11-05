@@ -15,6 +15,7 @@ namespace SysWeaver.Email
         /// The ACS resource endpoint, ex: "https://my-acs.europe.communication.azure.com".
         /// Only required if the ApiKey (or the content of the CredFile) is an access key and not a full connection string.
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String Endpoint { get; set; }
 
         /// <summary>
@@ -22,6 +23,7 @@ namespace SysWeaver.Email
         /// Ex: "DoNotReply@xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.azurecomm.net" (Azure managed domain) or "noreply@example.com" (custom domain).
         /// The sender display name is configured on the MailFrom address in Azure.
         /// </summary>
+        [EditType(EditTypes.Email)]
         public String From { get; set; }
 
         /// <summary>

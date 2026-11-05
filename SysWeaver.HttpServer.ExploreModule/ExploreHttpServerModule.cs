@@ -19,10 +19,9 @@ namespace SysWeaver.Net.ExploreModule
 {
 
 
-    [WebMenuPath(null, "Debug", "Debug", "Debug functionality, not available to most users", "icons/search.svg", 100)]
-    [WebMenuEmbedded(null, "Debug/Explore", "Explore", "explore", "Explore the HTTP server end-points", "IconExplore", -10, "Debug,Dev,Ops")]
-    [WebMenuEmbedded(null, "Debug/LogoDesign", "Logo design", "explore/logo.html", "Open logo seed visualizer, the seed can be copied into an AppInfo to change the generated logo", "IconLogo", -3, "Debug")]
-    [WebMenuEmbedded(null, "Debug/Icons", "Icons", "explore/icons.html", "Shows all available icons ('icons/*.svg' files)", "IconImage", -2, "Debug,Dev")]
+    [WebMenuEmbedded(null, "Debug/Explore", "Explore", "explore", "Explore the HTTP server end points", "IconExplore", 1, "Debug,Dev,Ops")]
+    [WebMenuEmbedded(null, "Debug/LogoDesign", "App theme", "explore/logo.html", "The icon, logo, banner and colours of this app, and previews of the ones other seeds give (copy a seed into AppInfo AppSeed to change them)", "IconLogo", 11, "Debug")]
+    [WebMenuEmbedded(null, "Debug/Icons", "Icons", "explore/icons.html", "Shows all available icons ('icons/*.svg' files)", "IconImage", 10, "Debug,Dev")]
     [WebApiUrl("debug/explore")]
     public sealed class ExploreHttpServerModule : IHttpServerModule, IHttpRequestHandler, IPerfMonitored
     {
@@ -52,6 +51,7 @@ namespace SysWeaver.Net.ExploreModule
 
             FolderIcon = WebUtility.HtmlEncode(iconModule.FolderName);
             Main = new TextTemplate(text, "$(", ")");
+            PreviewThemeCss = new TextTemplate(Encoding.UTF8.GetString(asm.GetUncompressedResourceData(bn + "PreviewTheme.css").Span), "$(", ")");
             ToJson = (SerManager.Get("json") as ITextSerializer) ?? throw new NullReferenceException();
             Icons = iconModule;
         }
@@ -60,6 +60,7 @@ namespace SysWeaver.Net.ExploreModule
 
         readonly ITextSerializer ToJson;
         readonly TextTemplate Main;
+        readonly TextTemplate PreviewThemeCss;
         readonly String FolderIcon;
         readonly IconHttpServerModule Icons;
 
@@ -185,27 +186,27 @@ namespace SysWeaver.Net.ExploreModule
         /// <summary>
         /// Get information about all serializer formats known to the service
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Serializers", null, "IconTableSerializer")]
+        [WebMenuTable(null, HttpServerBase.MenuData + "/{0}", "Serializers", null, "IconTableSerializer", 51)]
         public TableData SerializerTable(TableDataRequest r) => TableDataTools.Get(r, 30000, SerManager.All.Select(x => new SerData(x)));
 
         /// <summary>
         /// Get information about all compression formats known to the service
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Compression formats", null, "IconTableCompression")]
+        [WebMenuTable(null, HttpServerBase.MenuData + "/{0}", "Compression formats", null, "IconTableCompression", 50)]
         public TableData CompressionTable(TableDataRequest r) => TableDataTools.Get(r, 30000, CompManager.All.Select(x => new CompData(x)));
 
 
@@ -220,6 +221,85 @@ namespace SysWeaver.Net.ExploreModule
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         public int GetAppSeed() => EnvInfo.AppSeed;
+
+        /// <summary>
+        /// The four base colors of the application theme for some logo seeds (the colors an app with that AppSeed gets, as the generated logos).
+        /// </summary>
+        /// <param name="seeds">The seeds (at most 100)</param>
+        /// <returns>The colors of each seed, in the same order</returns>
+        [WebApi]
+        [WebApiAuth(Roles.Debug)]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public SeedColors[] GetSeedColors(int[] seeds)
+            => (seeds ?? Array.Empty<int>()).Take(100).Select(x => new SeedColors(x, new HashColors(EnvInfo.AppName, x))).ToArray();
+
+        /// <summary>
+        /// The application theme for a logo seed, as a style sheet: the [data-theme="application"] colors an app with that AppSeed gets
+        /// (from the embedded text template srcData/PreviewTheme.css).
+        /// Used by the theme preview of the logo design page: "explore/themepreview.html?useTheme=application@../Api/debug/explore/PreviewTheme.css%3F123".
+        /// </summary>
+        /// <param name="seed">The seed</param>
+        /// <returns>The style sheet (text/css)</returns>
+        [WebApi("PreviewTheme.css")]
+        [WebApiAuth(Roles.Debug)]
+        [WebApiRaw("text/css")]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public ReadOnlyMemory<Byte> PreviewTheme(int seed)
+        {
+            var c = new SeedColors(seed, new HashColors(EnvInfo.AppName, seed));
+            var vars = new Dictionary<String, String>(StringComparer.Ordinal)
+            {
+                { "Seed", seed.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                { "Background", c.Background },
+                { "Main", c.Main },
+                { "Acc1", c.Acc1 },
+                { "Acc2", c.Acc2 },
+            };
+            return Encoding.UTF8.GetBytes(PreviewThemeCss.Get(vars));
+        }
+
+        /// <summary>
+        /// The four base colors of the application theme of a seed (the "application" theme of common/theme.css, always "#rrggbb").
+        /// </summary>
+        public sealed class SeedColors
+        {
+            /// <summary>
+            /// The colors of a seed.
+            /// </summary>
+            /// <param name="seed">The seed</param>
+            /// <param name="c">The colors of the seed</param>
+            public SeedColors(int seed, HashColors c)
+            {
+                Seed = seed;
+                Background = c.Background;
+                Main = c.Acc1;
+                Acc1 = c.Acc3;
+                Acc2 = c.Acc4;
+            }
+
+            /// <summary>
+            /// The seed
+            /// </summary>
+            public int Seed;
+            /// <summary>
+            /// The background color (--ThemeBackground, HashColors.Background)
+            /// </summary>
+            public String Background;
+            /// <summary>
+            /// The main (text) color (--ThemeMain, HashColors.Acc1)
+            /// </summary>
+            public String Main;
+            /// <summary>
+            /// The first accent color (--ThemeAcc1, HashColors.Acc3)
+            /// </summary>
+            public String Acc1;
+            /// <summary>
+            /// The second accent color (--ThemeAcc2, HashColors.Acc4)
+            /// </summary>
+            public String Acc2;
+        }
 
 
         /// <summary>
@@ -253,7 +333,7 @@ namespace SysWeaver.Net.ExploreModule
         /// Get table data from a table data reference.
         /// The returned rows are capped at <see cref="TableDataTools.DefaultMaxAllowedRows"/> (a request with no limit, or above the cap, gets the cap).
         /// </summary>
-        /// <param name="request">The request paramaters, must contain a table data reference in the Params</param>
+        /// <param name="request">The request parameters, must contain a table data reference in the Params</param>
         /// <param name="context"></param>
         /// <returns>The data contained is the table ref</returns>
         [WebApi]
@@ -386,7 +466,7 @@ namespace SysWeaver.Net.ExploreModule
         [WebApi]
         [WebApiAuth(Roles.Debug)]
         [WebApiClientCache(4000)]
-        [WebMenuTable(null, HttpServerBase.MenuPath)]
+        [WebMenuTable(null, HttpServerBase.MenuDevelopment + "/{0}", "Data table references", null, null, 4)]
         public TableData DataTableReferencesTable(TableDataRequest request, HttpServerRequest context)
             => TableDataTools.Get(request, 5000, context.Server.AllDataReferences.Select(x => new DataRefRow(x.Item1, x.Item2)));
 

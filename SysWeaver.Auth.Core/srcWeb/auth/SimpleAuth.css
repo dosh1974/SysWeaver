@@ -1,166 +1,145 @@
 ﻿/*
- * SimpleAuth.css - styles for the SimpleAuthorizer pages of SysWeaver.Auth.Core served under auth/:
- * index.html ("Generate password hash", pwdGenMain) and KeyMan.html ("API-key management", keyManMain),
- * both driven by SimpleAuth.js.
+ * SimpleAuth.css - styles of the SimpleAuthorizer pages of SysWeaver.Auth.Core (served as auth/SimpleAuth.css):
+ * auth/index.html (password hash generator, pwdGenMain) and auth/KeyMan.html (API keys, keyManMain).
  *
- * Load order: ../common/theme.css, (KeyMan.html only: ../app/application.css), Auth.css, SimpleAuth.css,
- * so these rules override Auth.css. Auth.css (and the SysWeaver-Auth* elements it styles, e.g.
- * SysWeaver-AuthBox, SysWeaver-AuthText, and the IconAuthCopy icon) is NOT in this project: it belongs to
- * SysWeaver.MicroService.Auth (srcWeb/auth) and is merged into the same auth/ url folder at runtime.
- * SysWeaver-CenterBlock is a common element from common.js / common.css.
- *
- * Uses theme variables from common/theme.css (--ThemeFontMono, --ThemeBackground, --ThemeBackgroundRGB,
- * --ThemeMainRGB, --ThemeAcc1, --ThemeAcc2, --ThemeRad, --ThemeRadInp). Not templated; defines no custom
- * properties, keyframes or media queries.
+ * Load after ../common/theme.css, ../sw/ui.css and Auth.css (MicroService.Auth, merged into the same auth/ folder),
+ * which provide the card, fields, lists and buttons. Icon classes (IconLock, IconKey, IconCopy, IconDownload,
+ * IconRemove, IconAdd) are defined in sw/ui.css. Not templated.
  */
 
-/* ===== Auth box overrides ===== */
-
-/*
- * SysWeaver-AuthText: read-only text element created by AuthText (AuthUi.js, MicroService.Auth); used by
- * pwdGenMain for the generated "user : hash" output. Mono bold accent text on the page background; the 40px
- * transparent right border leaves room for the IconAuthCopy icon added by AuthAddIcon.
- */
-SysWeaver-AuthText {
-    font-family: var(--ThemeFontMono);
-    font-weight: bold;
-    background-color: var(--ThemeBackground);
-    border-radius: var(--ThemeRadInp);
-    color: var(--ThemeAcc1);
-    height: 32px;
-    padding: 8px;
-    box-sizing: border-box;
-    white-space: nowrap;
-    border-right: 40px solid transparent;
-}
-
-
-
-
-/*
- * form.SysWeaver-AuthBox.SysWeaver-SimpleAuth: the auth box created inside the "create API key" PopUp by
- * createApiKey (CreateAuthWrapper() adds SysWeaver-AuthBox, SimpleAuth.js adds SysWeaver-SimpleAuth).
- * Resets every box property of Auth.css to initial so the floating, centered box renders as plain pop-up content.
- */
-form.SysWeaver-AuthBox.SysWeaver-SimpleAuth {
-    background: initial;
-    width: initial;
-    height: initial;
-    display: initial;
-    position: initial;
-    left: initial;
-    top: initial;
-    transform: initial;
-    border-radius: initial;
-    box-shadow: initial;
-    border: initial;
-    padding: initial;
-    margin: initial;
-    box-sizing: initial;
-}
-
-
-/* ===== Icons ===== */
-
-/*
- * Mask-image icon classes (the icon color comes from the element background, the svg is the mask), used via
- * AuthPage / ColorIcon / Button / AuthButton in SimpleAuth.js:
- * IconLock = page icon of pwdGenMain, IconCopy = copy key, IconRemove = remove key,
- * IconAdd = create key buttons, IconDownload = download credentials file.
- * IconLock and IconDownload also exist in app/application.css; the generic names may collide with other modules.
- */
-.IconLock {
-    mask-image: url("../icons/lock.svg");
-}
-
-.IconCopy {
-    mask-image: url("../icons/copy.svg");
-}
-
-.IconRemove {
-    mask-image: url("../icons/close.svg");
-}
-
-.IconAdd {
-    mask-image: url("../icons/plus.svg");
-}
-
-.IconDownload {
-    mask-image: url("../icons/download.svg");
-}
-
-/* ===== API key table (KeyMan.html, built by rebuild() in keyManMain) ===== */
-
-/*
- * table: global (unscoped) rule for the key table; applies to any table on a page loading this file.
- * Centered, collapsed borders, translucent main color background, 125% font.
- */
-table {
-    margin: 1em auto 1em auto;
-    border-collapse: collapse;
-    background-color: rgba(var(--ThemeMainRGB), 0.1);
-    border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.9);
-    border-radius: var(--ThemeRad);
-    font-size: 125%;
-    min-width: 16em;
-}
-
-/* td: table cells (name and icon cells), bordered and centered. */
-td {
-    border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.9);
-    padding: 0.25em 1em;
-    text-align: center;
-}
-
-/* tr:first-child th: the "API keys" caption cell (th.header); rounds only its top corners. */
-tr:first-child th {
-    border-radius: var(--ThemeRad);
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
-}
-
-/*
- * Row-position padding: row 3 is the first key row (after caption and title rows) and gets extra top padding;
- * the second-to-last row is the last key row (before the "action" row) and gets extra bottom padding.
- */
-tr:nth-child(3) td {
-    padding-top: 1em;
-}
-
-tr:nth-last-child(2) td {
-    padding-bottom: 1em;
-}
-
-
-/* SysWeaver-CenterBlock in the last ("action") row: holds the "Create new key" Button; adds vertical margin. */
-tr:last-child SysWeaver-CenterBlock {
-    margin: 0.5em 0;
-}
-
-
-    /* td:first-child: the key name column is left aligned. */
-    td:first-child {
-        text-align: left;
+/* ===== Tool pages (auth-tool: index.html, KeyMan.html; SimpleAuth.js toolPage -> AuthPage.SetHeader) =====
+   The Design v2 form page layout itself (page header above a start aligned card) is shared by every auth page: Auth.css
+   ("Form page layout"). Here only the key list page, whose card uses the page width. */
+    .auth-page.auth-tool.auth-wide form.auth-box {
+        width: 100%;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
     }
 
-    /* th: header cells (caption and column titles) on the accent 2 background. */
-    th {
-        border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.2);
-        padding: 0.1em 0.5em;
-        background-color: var(--ThemeAcc2);
+/* The key list: rows divided by hairlines (name and key left, the actions right), no boxes in a box */
+.auth-tool .auth-list.auth-keys {
+    gap: 0;
+}
+
+    .auth-tool .auth-list.auth-keys > .auth-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 2px var(--sw-space-4, 16px);
+        padding: var(--sw-space-3, 12px) var(--sw-space-4, 16px);
+        border: 0;
+        border-top: 1px solid var(--sw-border, var(--sw-border));
+        border-radius: 0;
+        background: transparent;
     }
 
-    /* th.title: column title cells "Name" / "Key" (class "title" set by rebuild): small, bold, uppercase, half transparent. */
-    th.title {
-        color: rgba(var(--ThemeBackgroundRGB), 0.5);
-        font-weight: bold;
-        font-size: 75%;
-        text-transform: uppercase;
-        text-align: left;
+        .auth-tool .auth-list.auth-keys > .auth-item:first-child {
+            border-top: 0;
+        }
+
+        .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons {
+            grid-column: 2;
+            grid-row: 1 / span 2;
+            margin: 0;
+            flex-wrap: nowrap;
+        }
+
+/* Phones: the actions go below the name and key */
+html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+    html.SwNarrow .auth-tool .auth-list.auth-keys > .auth-item > .auth-buttons {
+        grid-column: 1;
+        grid-row: auto;
     }
 
-    /* th.header: the "API keys" caption cell (class "header" set by rebuild), larger near-opaque text. */
-    th.header {
-        color: rgba(var(--ThemeBackgroundRGB), 0.9);
-        font-size: 125%;
+/* The key value of an API key item (long, monospace, selectable, wraps anywhere). */
+.auth-key {
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    overflow-wrap: anywhere;
+    user-select: all;
+    -webkit-user-select: all;
+}
+
+/* A masked key (dots until "Show the key" is pressed): not selectable, so the dots are never copied instead of the key. */
+.auth-key.auth-key-masked {
+    letter-spacing: 0.1em;
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* ===== Password hash generator (index.html, pwdGenMain): a Design v2 form page, Sw.Card + Sw.TextBox + Sw.Form =====
+   One form stack gap (--sw-space-4) between the fields, the policy rules as a quiet list under the password, the generate
+   button and the leak badge in one row, the result in code type with the "empty" token until the input is valid. */
+.auth-hashgen-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-4, 16px);
+}
+
+    .auth-hashgen-form > .sw-text,
+    .auth-hashgen-pwd {
+        max-width: 32rem;
     }
+
+.auth-hashgen-pwd {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-2, 8px);
+}
+
+.auth-hashgen-rules {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-xs, 0.75rem);
+    line-height: 1.5;
+}
+
+.auth-hashgen-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-3, 12px);
+}
+
+.auth-hashgen-leak:empty {
+    display: none;
+}
+
+.auth-hashgen-line {
+    display: block;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size, 0.8125rem);
+    color: var(--sw-text);
+    overflow-wrap: anywhere;
+    user-select: all;
+    -webkit-user-select: all;
+}
+
+    /* the shared "empty" token (the read only editor's, Design v2 states): mono, small, text-2, a hairline box */
+    .auth-hashgen-line.auth-hashgen-empty::before {
+        content: attr(data-empty);
+        display: inline-block;
+        padding: 0 0.375rem;
+        border: 1px solid var(--sw-border);
+        border-radius: var(--sw-radius-sm, 4px);
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-xs, 0.75rem);
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    .auth-hashgen-line.auth-hashgen-busy {
+        color: var(--sw-text-2);
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+.auth-hashgen-note {
+    margin: var(--sw-space-2, 8px) 0 0;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 0.875rem);
+}

@@ -25,4 +25,4 @@ At build time the icons are run through `SvgOpt` (`-RemoveFill -RemoveSize`) and
 ## Relationships
 
 - **Part of:** [srcWeb](../README.md) of [SysWeaver.MicroService.PassKey](../../README.md)
-- **Used by:** [`../auth/`](../auth/README.md)
+- **Used by:** [`../auth/`](../auth/README.md) (classes in `Passkey.css`) and the PassKeyService menu items (svg urls)

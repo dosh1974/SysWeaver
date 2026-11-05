@@ -30,9 +30,30 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Lifetime of the session cookie in minutes (capped to one year), at least 10 * <see cref="SessionExtendLifetime"/> + 30 minutes.
-        /// The server side session expires earlier if it's not used (see <see cref="SessionExtendLifetime"/>).
+        /// The server side session expires earlier if it's not used (see <see cref="SessionExtendLifetime"/>), a cookie of an expired session is useless (a new session is created).
+        /// The cookie is only set when a session starts (or its token is rotated, ex: at a sign in), so this is also the longest time a continuously used session can live.
+        /// Default 7 days (it used to be one year).
         /// </summary>
-        public int SessionCookieLifetime = 365 * 24 * 60;
+        public int SessionCookieLifetime = 7 * 24 * 60;
+
+        /// <summary>
+        /// The SameSite attribute of the session and device id cookies: "Lax" (default), "Strict" or empty (no attribute, the browser default).
+        /// "Lax": the cookies are sent for requests from this site and for top level navigations from other sites (ex: a link in an email opens the app signed in),
+        /// but not for requests that other sites make (images, forms, fetch, frames on another site): a basic cross site request forgery protection.
+        /// "Strict": the cookies are not even sent when following a link from another site (the user appears signed out on the first page).
+        /// Ignored when <see cref="CorsCookies"/> is true (that uses "SameSite=None;Secure").
+        /// The "Secure" attribute is always added for https requests.
+        /// </summary>
+        public String CookieSameSite = "Lax";
+
+        /// <summary>
+        /// Who may show the pages of this server in a frame (clickjacking protection): the value of the Content-Security-Policy "frame-ancestors" directive that is sent with every response.
+        /// "'self'" (default): only pages of this site (same scheme, host and port) may frame it (also sends "X-Frame-Options: SAMEORIGIN" for old browsers).
+        /// "'none'": never in a frame (also sends "X-Frame-Options: DENY").
+        /// A space separated list of sources allows other sites, ex: "'self' https://portal.mydomain.com https://*.mydomain.com" (no X-Frame-Options is sent then).
+        /// Null, empty or "*" sends no header (anyone may frame the site, the old behaviour).
+        /// </summary>
+        public String FrameAncestors = "'self'";
 
         /// <summary>
         /// Number of minutes to keep the session alive after some form of interaction (at least 1).
@@ -94,6 +115,7 @@ namespace SysWeaver.Net
         /// The external root uri (ex: "https://www.mydomain.com/"), used when building absolute links for use outside of a request (ex: in emails).
         /// If null, the local prefix (set by the implementation) or the prefix of the first request that is handled is used (see <see cref="HttpServerBase.ExternalRootUri"/>).
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String ExternalRootUri;
 
         /// <summary>
@@ -109,7 +131,8 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Allow the session and device id cookies to be sent cross origin ("SameSite=None;Secure", needed when the site is shown in an iframe on another site).
-        /// If false the cookies only use "HttpOnly" (no Secure or SameSite attribute).
+        /// If false the cookies use "HttpOnly" and the SameSite attribute of <see cref="CookieSameSite"/> ("Secure" is added for https requests).
+        /// When the site is shown in a frame on another site, also allow that site in <see cref="FrameAncestors"/>.
         /// </summary>
         public bool CorsCookies;
 
@@ -130,6 +153,15 @@ namespace SysWeaver.Net
         /// Zero (or a negative value) disables this, compressible responses are then always compressed.
         /// </summary>
         public int MinCompressSize = 128;
+
+        /// <summary>
+        /// If true, the web client of a DEBUG build also sends api arguments with the release ("optimized") encodings: GET with the json,
+        /// "_u" (base64url UTF-8) or "_d" (base64url deflated) query when small enough, else POST (see core/net.js Sw.Net.Send).
+        /// Release builds always do this (the client's debug-only code is stripped); by default debug builds POST every argument (easier to read in the browser tools),
+        /// so encoding problems that only happen in release builds are not seen while debugging. Set this to true to test the release encodings in a debug build.
+        /// Published to the client as the template variable "Client.OptimizedSend" ("true" / "false") in the templated "app/manifest.json" ("sysweaver_optimized_send").
+        /// </summary>
+        public bool OptimizedSend;
 
     }
 

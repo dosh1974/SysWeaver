@@ -47,7 +47,7 @@ namespace SysWeaver.MicroService
         public string Text;
 
         /// <summary>
-        /// The UTC time stamp of when this message was recieved
+        /// The UTC time stamp of when this message was received
         /// </summary>
         public DateTime Time;
 

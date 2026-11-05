@@ -39,14 +39,17 @@ namespace SysWeaver.Net
     /// <summary>
     /// Thrown when an operation (such as a login or sign up) requires that no user is logged into the session.
     /// </summary>
-    public sealed class UserAlreadyLoggedInException : Exception
+    public sealed class UserAlreadyLoggedInException : Exception, IHttpRefusal
     {
         /// <summary>
         /// Create the exception with a fixed message.
         /// </summary>
-        public UserAlreadyLoggedInException() : base("A user is already logged into this session!")
+        public UserAlreadyLoggedInException() : base("You are already signed in: sign out first")
         {
         }
+
+        /// <inheritdoc/>
+        public int ResponseCode => 409;
     }
 
     /// <summary>
@@ -65,36 +68,42 @@ namespace SysWeaver.Net
     /// <summary>
     /// Thrown when trying to create a user whose name is already taken.
     /// </summary>
-    public sealed class UserAlreadyExistException : Exception
+    public sealed class UserAlreadyExistException : Exception, IHttpRefusal
     {
         /// <summary>
         /// Create the exception.
         /// </summary>
         /// <param name="userName">The user name that already exists (quoted in the message)</param>
-        public UserAlreadyExistException(String userName) : base("User " + userName.ToQuoted() + " already exist!")
+        public UserAlreadyExistException(String userName) : base("An account " + userName.ToQuoted() + " already exists")
         {
         }
+
+        /// <inheritdoc/>
+        public int ResponseCode => 409;
     }
 
     /// <summary>
     /// Thrown when a referenced user can't be found.
     /// </summary>
-    public sealed class UserDoNotExistException : Exception
+    public sealed class UserDoNotExistException : Exception, IHttpRefusal
     {
         /// <summary>
         /// Create the exception.
         /// </summary>
         /// <param name="userName">The user name (or id as text) that wasn't found (quoted in the message)</param>
-        public UserDoNotExistException(String userName) : base("User " + userName.ToQuoted() + " do not exist!")
+        public UserDoNotExistException(String userName) : base("No account " + userName.ToQuoted() + " was found")
         {
         }
+
+        /// <inheritdoc/>
+        public int ResponseCode => 404;
     }
 
 
     /// <summary>
     /// Thrown when a user that was previously known (for example the one logged into a session) has been removed.
     /// </summary>
-    public sealed class UserNoLongerExistException : Exception
+    public sealed class UserNoLongerExistException : Exception, IHttpRefusal
     {
         /// <summary>
         /// Create the exception.
@@ -103,20 +112,26 @@ namespace SysWeaver.Net
         public UserNoLongerExistException(long id) : base("User #" + id + " does not exist anymore!")
         {
         }
+
+        /// <inheritdoc/>
+        public int ResponseCode => 410;
     }
 
 
     /// <summary>
     /// Thrown when authentication (credentials, token etc) fails.
     /// </summary>
-    public sealed class AuthenticationFailedException : Exception
+    public sealed class AuthenticationFailedException : Exception, IHttpRefusal
     {
         /// <summary>
         /// Create the exception with a fixed message.
         /// </summary>
-        public AuthenticationFailedException() : base("Authentication failed")
+        public AuthenticationFailedException() : base("Authentication failed: the password could not be verified, check it and try again")
         {
         }
+
+        /// <inheritdoc/>
+        public int ResponseCode => 400;
     }
 
 

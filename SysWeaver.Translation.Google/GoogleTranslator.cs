@@ -47,7 +47,7 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Translate some text to one or more languages
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> Translate(TranslateRequest request)
         {
@@ -81,7 +81,7 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Translate multiple texts to one or more languages
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
         {
@@ -115,7 +115,7 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Translate some text to a new language
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translated text</returns>
         public async ValueTask<string> TranslateOne(TranslateRequest request)
         {

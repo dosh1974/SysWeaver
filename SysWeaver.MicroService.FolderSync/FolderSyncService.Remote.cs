@@ -334,7 +334,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, HttpServerBase.MenuPath, "Remote folders", "Details about folders that are automatically synched from a remote service", "IconSync", 52)]
+        [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Remote folders", "Details about folders that are automatically synced from a remote service", "IconSync", 22)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData RemoteFoldersTable(TableDataRequest r)

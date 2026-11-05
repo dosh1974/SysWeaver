@@ -40,6 +40,7 @@ namespace SysWeaver.MicroService.ExtensionHandlers
                 "title",
                 "placeholder",
                 "alt",
+                "aria-label",
             ]);
 
         static bool NoopHandler(Dictionary<String, LanguageTemplateVar> vars, HtmlNode node)
@@ -171,6 +172,9 @@ namespace SysWeaver.MicroService.ExtensionHandlers
                 "\"-html attribute on a \"",
                 node.Name,
                 "\"-html element.");
+            //  Not shown on screen: tell the translator that screen readers read it aloud as the element's name
+            if (String.Equals(a.Name, "aria-label", StringComparison.OrdinalIgnoreCase))
+                text += "\nIt's not shown on screen, screen readers read it aloud as the accessible name of the element.";
 
             var cc = GetContext(node);
             if (cc == null)

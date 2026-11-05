@@ -122,7 +122,7 @@ namespace SysWeaver.AI
         /// <returns></returns>
         [WebApi]
         [WebApiAuth("")]
-        [WebMenuTable(null, "AiMemory", "AI Memory", null, "../icons/brain.svg", 8)]
+        [WebMenuTable(null, "AiMemory", "AI memory", null, "../icons/brain.svg", 8)]
         public async Task<TableData> GetAiMemoryTable(TableDataRequest r, HttpServerRequest context)
         {
             var mem = await GetMem(context.Session).ConfigureAwait(false);

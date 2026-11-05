@@ -195,7 +195,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Split some text in to AI tokens
         /// </summary>
-        /// <param name="encode">Paramaters for the text to encode</param>
+        /// <param name="encode">Parameters for the text to encode</param>
         /// <returns>An array of tokens</returns>
         [WebApi("debug/" + nameof(TokenEncode))]
         [WebApiAuth(Roles.Debug)]

@@ -32,7 +32,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Maximum number of concurrent requests
         /// </summary>
-        public int MaxConcurrency = 100;
+        public int MaxConcurrency = 32;
     }
 
 

@@ -39,7 +39,7 @@ namespace SysWeaver
         /// <param name="name">An optional name (for debugging)</param>
         /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
         /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
-        /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+        /// <param name="runAsync">If true the task runs in its own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
         /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         public static IDisposable Add(DateTime when, Action task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
@@ -66,7 +66,7 @@ namespace SysWeaver
         /// <param name="name">An optional name (for debugging)</param>
         /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
         /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
-        /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+        /// <param name="runAsync">If true the task runs in its own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
         /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         public static IDisposable AddTask(DateTime when, Func<Task> task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
@@ -93,7 +93,7 @@ namespace SysWeaver
         /// <param name="name">An optional name (for debugging)</param>
         /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
         /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
-        /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+        /// <param name="runAsync">If true the task runs in its own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
         /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         public static IDisposable AddValueTask(DateTime when, Func<ValueTask> task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
@@ -178,7 +178,7 @@ namespace SysWeaver
 
 
             /// <summary>
-            /// True if the task runs in it's own async chain, false if it's executed (one after another) together with other non async tasks that are due at the same time
+            /// True if the task runs in its own async chain, false if it's executed (one after another) together with other non async tasks that are due at the same time
             /// </summary>
             public bool RunAsync { get; init; }
 

@@ -1,101 +1,36 @@
 ﻿/**
- * @file Script of the ServerManager "Key files" page (keys.html, menu item restricted to Roles.Admin).
- * Loaded with a static `<script defer>` tag by keys.html and started from `<body onload="keysMain()">`.
- * Wires a file-upload drop target (`<kf-upload>`) to the server side `Keys` BackupFileRepo and renders the
- * key file table (`<kf-table>`) through the explore table protocol.
+ * @file keys.js - the ServerManager "Key files" page (keys.html, entry `keysMain`; menu item restricted to Roles.Admin).
+ * Classic script loaded with `<script defer>` after ../sw/core.js, ../sw/ui.js, common/md5.js, common/UZIP.js,
+ * common/fileUploader.js, ../explore/table.js and smShared.js; started from `<body onload>`.
  *
- * Globals defined: `keysMain` (no other globals, no immediately executed code).
+ * A Design v2 fill page (Sw.PageLayout): the page header with the action "Upload key files" (SmShared.UploadButton: a button that
+ * opens the file picker and takes dropped files, multiple files, server repo "Keys") and the live key file table
+ * (SmShared.FillTable("../ServerManager/KeysTable")), refreshed after a successful upload.
  *
- * Dependencies (globals from other files):
- * - common/fileUploader.js (+ md5.js, UZIP.js): `fileUploaderSetup`, `UploadStatus`, `fileUploaderStatusText`.
- * - explore/table.js: `Table.addTable`.
- * - common/common.js: `Fail`, `Info`, `_T`, `PageLoaded`.
- *
- * Conventions: the `UploadCompleted` handler is a copy of the one in serviceInfo.js.
+ * Globals defined: `keysMain`.
  */
 
 /**
- * Entry point of keys.html (called from `<body onload>`).
- * Sets up the `<kf-upload>` element as an upload target for the repo "Keys" (fileUploaderSetup with a no-op
- * third callback, `UploadCompleted` as completion callback and `true` as last argument), then renders
- * `../ServerManager/KeysTable` into `<kf-table>` and finally calls `PageLoaded()`.
- * @returns {Promise<void>} Resolves when the key table has been created.
+ * Entry point of keys.html.
+ * @returns {Promise<void>}
  */
-async function keysMain() {
-
-    /**
-     * The handle returned by `Table.addTable` (has an `UpdateNow()` function); null until the table exists.
-     * @type {?{UpdateNow:function():void}}
-     */
-    let table = null;
-
-    /**
-     * Refreshes the key file table immediately (calls `table.UpdateNow()`); does nothing until the table exists.
-     * @returns {void}
-     */
-    function updateNow() {
-        if (table)
-            table.UpdateNow();
-    }
-
-    /**
-     * Upload-finished callback passed to `fileUploaderSetup`.
-     * If `res.Error` is set it shows `Fail(err)`. Otherwise it scans `res.Status` in three passes and reports
-     * only one message: the first status that is neither `UploadStatus.AlreadyUploaded` nor `UploadStatus.None`
-     * shows a `Fail` with `fileUploaderStatusText(status)` and the file name; else the first `AlreadyUploaded`
-     * shows an `Info` ("already uploaded"); else the first `None` (success) shows an `Info` ("Uploaded") and
-     * calls `updateNow()` to refresh the key table. All texts are localized with `_T`.
-     * @param {HTMLElement} e - The upload element (`<kf-upload>`).
-     * @param {{Error:?string, Status:Array<number>}} res - Upload result; `Status` holds one `UploadStatus` value per file.
-     * @param {File[]|FileList} files - The uploaded files (same order as `res.Status`).
-     * @returns {void}
-     */
-    function UploadCompleted(e, res, files) {
-        const err = res.Error;
-        if (err) {
-            Fail(err);
-            return;
-        }
-        const ss = res.Status;
-        const sl = ss.length;
-        for (let i = 0; i < sl; ++i) {
-            const res0 = ss[i];
-            switch (res0) {
-                case UploadStatus.AlreadyUploaded:
-                case UploadStatus.None:
-                    break;
-                default:
-                    Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[i].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
-                    return;
-            }
-        }
-        for (let i = 0; i < sl; ++i) {
-            const res0 = ss[i];
-            if (res0 === UploadStatus.AlreadyUploaded) {
-                Info(_T("File \"{0}\" was already uploaded", files[i].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
-                return;
-            }
-        }
-        for (let i = 0; i < sl; ++i) {
-            const res0 = ss[i];
-            if (res0 === UploadStatus.None) {
-                Info(_T("Uploaded \"{0}\"", files[i].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
-                updateNow();
-                return;
-            }
-        }
-    }
-
-
-    // Make <kf-upload> an upload target for the "Keys" repo (third argument is a no-op callback).
-    fileUploaderSetup(
-        document.body.getElementsByTagName("kf-upload")[0],
-        "Keys",
-        f => {
-        },
-        UploadCompleted,
-        null,
-        true);
-    table = await Table.addTable("../ServerManager/KeysTable", document.body.getElementsByTagName("kf-table")[0]);
-    PageLoaded();
+function keysMain() {
+    return Sw.Page.Main(async () => {
+        let table = null;
+        const page = Sw.PageLayout({
+            Main: ".kf-page",
+            Type: "fill",
+            Compact: false,
+            Title: _TF("Key files", "Title of the key files page"),
+            Description: _TF("Keys and certificates the managed services read. Upload files with the button or drop them on it.", "Description of the key files page"),
+            Actions: [SmShared.UploadButton({
+                Text: _TF("Upload key files", "Text of the button on the key files page that opens a file picker to upload key files (files can also be dropped on it)"),
+                Title: _TF("Select or drag key files to add them", "Tool tip of the key file upload button"),
+                Repo: "Keys",
+                OnUploaded: () => table && table.UpdateNow(),
+                //  No role check up front (no extra request, as the original page): the button is disabled after a refused request
+            })],
+        });
+        table = await SmShared.FillTable(page, "../ServerManager/KeysTable");
+    }, { Loading: true });
 }

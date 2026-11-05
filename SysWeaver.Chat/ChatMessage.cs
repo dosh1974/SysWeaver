@@ -77,6 +77,19 @@ namespace SysWeaver.Chat
         /// </summary>
         public ChatMenuItem[] MenuItems;
 
+        /// <summary>
+        /// Optional: how the <see cref="ChatMessageBody.Data"/> entries are shown, one per entry in the same order (raw asset, viewer url,
+        /// source view url). Null when there is no data, or no entry has a viewer.
+        /// Filled by the <see cref="ChatService"/> from the extension viewers when a message is sent (<see cref="ChatDataViews.Fill"/>);
+        /// a provider may set it itself (it's then kept as is).
+        /// </summary>
+        public ChatDataView[] DataViews;
+
+        /// <summary>
+        /// The <see cref="ChatMessageBody.Data"/> that <see cref="DataViews"/> was made from (null: set by the provider).
+        /// </summary>
+        internal String DataViewsOf;
+
         static readonly HttpCompressionPriority Comp = HttpCompressionPriority.GetSupportedEncoders("br:Balanced, deflate:Balanced, gzip:Balanced");
         static readonly ICompType CompType = CompManager.GetFromHttp("br") ?? CompManager.GetFromHttp("deflate") ?? CompManager.GetFromHttp("gzip");
 

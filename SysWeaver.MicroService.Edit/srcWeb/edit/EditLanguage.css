@@ -1,125 +1,58 @@
 ﻿/*
- * EditLanguage.css - styles of the language editor plugin (EditTypeLanguage.js) and of its language picker rows.
- * Loaded by EditTypeLanguage.Init() via includeCss(current, "EditLanguage.css") when EditTypeLanguage.js is included.
- * Depends on theme variables (common/theme.css: --ThemeBackground, --ThemeMain, --ThemeMainRGB, --ThemeAcc1,
- * --ThemeAcc1RGB, --ThemeAcc2, --ThemeAcc2RGB), --SysWeaverEditDesktopRadInp (EditDesktop.css) and
- * --SysWeaverEditFadeDuration (Edit.css).
+ * EditLanguage.css - the rows of the language selection of the Language plug-in (EditTypeLanguage.js; the selection is a
+ * Sw.SearchSelection dialog). Loaded by EditTypeLanguage.js. The value button itself is styled in Edit.css.
  */
 
-/* ===== Editor value ===== */
-
-/* SysWeaver-EditLanguage: the value element (flag + name) in the member cell; italic when read only, looks like an input with accent focus / hover border. */
-SysWeaver-EditLanguage {
-    display: block;
-    width: auto;
-    height: 29px;
-    line-height: 29px;
-    vertical-align: middle;
-    outline: none !important;
-    background-color: var(--ThemeBackground);
-    border-radius: var(--SysWeaverEditDesktopRadInp);
-    padding: 0 0.5em 0 0.5em;
-    overflow: hidden;
-    border: 2px solid var(--ThemeBackground);
-    transition: color linear var(--SysWeaverEditFadeDuration), border linear var(--SysWeaverEditFadeDuration);
-    white-space: nowrap;
-    font-style: italic;
+.sw-edit-langsel {
     display: flex;
     align-items: center;
-}
-
-    /* Enabled: added by EditTypeLanguage.AddEditor when editable (click opens the picker). */
-    SysWeaver-EditLanguage.Enabled {
-        font-style: normal;
-        cursor: pointer;
-    }
-
-    SysWeaver-EditLanguage:focus {
-        border: 2px solid var(--ThemeAcc2);
-        color: var(--ThemeAcc1);
-    }
-
-    SysWeaver-EditLanguage:hover {
-        border: 2px solid rgba(var(--ThemeAcc2RGB), 0.5);
-    }
-
-    SysWeaver-EditLanguage:focus:hover {
-        border: 2px solid var(--ThemeAcc2);
-    }
-
-
-
-    /* Flag image and SysWeaver-EditLangText (language name, selectable) inside the value element. */
-    SysWeaver-EditLanguage img {
-        display: inline;
-        max-height: 23px;
-        max-width: 48px;
-    }
-
-    SysWeaver-EditLanguage SysWeaver-EditLangText {
-        user-select: text;
-        margin-left: 0.5em;
-        display: inline;
-        white-space: nowrap;
-    }
-
-
-
-/* ===== Picker rows ===== */
-
-/* SysWeaver-EditLangSel: one language row in the EditTypeLanguage.LanguageSel popup (SearchablePoupSelection); accent border on hover / focus. */
-SysWeaver-EditLangSel {
-    display: block;
-    display: block;
-    width: auto;
-    height: 35px;
-    line-height: 35px;
-    vertical-align: middle;
-    outline: none !important;
-    background-color: rgba(var(--ThemeMainRGB), 0.1);
-    border-radius: var(--SysWeaverEditDesktopRadInp);
-    padding: 0 0.5em 0 0.5em;
-    overflow: hidden;
-    border: 2px solid var(--ThemeBackground);
-    transition: color linear var(--SysWeaverEditFadeDuration), border linear var(--SysWeaverEditFadeDuration);
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: var(--sw-control-h);
+    padding: 4px 10px;
+    margin: 2px 0;
+    border: 1px solid transparent;
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface);
+    color: var(--sw-fg);
+    font: inherit;
+    text-align: left;
     cursor: pointer;
-    margin-top: 0.25em;
-    margin-right: 0.5em;
 }
-    /* Recent: rows of recently used languages get a half-transparent accent border. */
-    SysWeaver-EditLangSel.Recent {
-        border: 2px solid rgba(var(--ThemeAcc1RGB), 0.5);
+
+    .sw-edit-langsel:focus-visible {
+        border-color: var(--sw-accent2);
+        color: var(--sw-text-accent);
+        outline: none;
     }
 
-    SysWeaver-EditLangSel:focus {
-        border: 2px solid var(--ThemeAcc2);
-        color: var(--ThemeAcc1);
+@media (hover: hover) {
+    .sw-edit-langsel:hover {
+        border-color: var(--sw-accent2);
+        color: var(--sw-text-accent);
+        outline: none;
+    }
+}
+
+    /* Recently used languages. */
+    .sw-edit-langsel.Recent {
+        border-color: var(--sw-accent1-soft);
+        background: var(--sw-accent1-soft);
     }
 
-    SysWeaver-EditLangSel:hover {
-        border: 2px solid var(--ThemeAcc2);
-        color: var(--ThemeAcc1);
+    .sw-edit-langsel img {
+        width: 32px;
+        height: 20px;
+        object-fit: contain;
+        flex: 0 0 32px;
     }
 
-
-    /* Fixed 48px wide flag and larger name text in picker rows. */
-    SysWeaver-EditLangSel img {
-        display: inline;
-        max-height: 23px;
-        max-width: 48px;
-        min-width: 48px;
-        width: 48px;
+    .sw-edit-langsel > span:nth-of-type(1) {
+        flex: 1 1 auto;
+        font-size: 110%;
     }
 
-    SysWeaver-EditLangSel SysWeaver-EditLangText {
-        user-select: text;
-        margin-left: 0.5em;
-        display: inline;
-        white-space: nowrap;
-        font-size: 125%;
-        color: var(--ThemeMain);
-    }
-
+.sw-edit-langcode {
+    font-family: var(--sw-mono);
+    color: var(--sw-text-2);
+}

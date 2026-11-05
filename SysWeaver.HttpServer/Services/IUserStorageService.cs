@@ -163,7 +163,7 @@ namespace SysWeaver.Net
         /// "" - any logged in user can see this file.
         /// [other] - Users with at least one of these tokens can see the file.
         /// </summary>
-        [TableDataTags("{^0}", null, "{0}", true)]
+        [TableDataAuth]
         [TableDataOrder(2)]
         public String Auth;
 
@@ -245,7 +245,7 @@ namespace SysWeaver.Net
         /// "" - any logged in user can see this url.
         /// [other] - Users with at least one of these tokens can see the url.
         /// </summary>
-        [TableDataTags("{^0}", null, "{0}", true)]
+        [TableDataAuth]
         [TableDataOrder(2)]
         public String Auth;
 

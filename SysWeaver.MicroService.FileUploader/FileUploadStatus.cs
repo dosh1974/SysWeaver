@@ -36,7 +36,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         NotAuthorized = -6,
         /// <summary>
-        /// Some paramaters are wrong
+        /// Some parameters are wrong
         /// </summary>
         InvalidParams = -5,
         /// <summary>

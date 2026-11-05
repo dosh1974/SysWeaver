@@ -25,12 +25,14 @@ namespace SysWeaver.TextMessage
         /// A secret string of your choice, Meta sends it when the webhook is configured in the Meta app (the "Verify token").
         /// Required to receive messages.
         /// </summary>
+        [EditPassword]
         public String VerifyToken;
 
         /// <summary>
         /// The local url of the webhook, the public url (https) must be entered as the "Callback URL" in the Meta app.
         /// Default: "whatsapp/webhook".
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String WebhookUrl = "whatsapp/webhook";
 
         /// <summary>
@@ -101,6 +103,7 @@ namespace SysWeaver.TextMessage
         /// The phone number (with country code), ex: "+46 70 123 45 67".
         /// Used to select the sender for recipients in the same country, and for display.
         /// </summary>
+        [EditType(EditTypes.Phone)]
         public String PhoneNumber;
 
         /// <summary>

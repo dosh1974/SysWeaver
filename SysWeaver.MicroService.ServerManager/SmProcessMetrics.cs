@@ -17,6 +17,9 @@ namespace SysWeaver.MicroService
             StartTime = s;
             Duration = s;
             MainFilename = p.MainFilename;
+            var ck = SmProcessKillToken.CanKill(i, p.Name);
+            CanKill = ck;
+            KillToken = ck ? SmProcessKillToken.Create(i, s) : null;
         }
 
         /// <summary>
@@ -46,26 +49,39 @@ namespace SysWeaver.MicroService
         [TableDataNumber(2, "{0} %")]
         public double CpuUsage;
 
-        [TableDataUrl("📊", "*../ServerManager/server_metrics.html?q1=GetProcessCpuChart?{0}&q2=GetProcessCpuHistoryShortChart?{0}&q3=GetProcessCpuHistoryChart?{0}&title=Process {0} Cpu use", "Click to show Cpu use details")]
+        /// <summary>
+        /// Charts of the CPU use of the process
+        /// </summary>
+        //  An icon only column: the header shows no title text (TableDataNoTitle)
+        [TableDataUrl("📊", "*../ServerManager/server_metrics.html?q1=GetProcessCpuChart?{0}&q2=GetProcessCpuHistoryShortChart?{0}&q3=GetProcessCpuHistoryChart?{0}&title=Process {0} CPU use", "Show CPU use details")]
+        [TableDataTitle("CPU chart")]
+        [TableDataNoTitle]
         public long C;
 
         /// <summary>
-        /// Current physical memory usage
+        /// Current physical memory usage (working set), 0 if the process can't be read
         /// </summary>
         [TableDataByteSize]
         public long MemUsage;
 
-        [TableDataUrl("📊", "*../ServerManager/server_metrics.html?q1=GetProcessMemChart?{0}&q2=GetProcessMemHistoryShortChart?{0}&q3=GetProcessMemHistoryChart?{0}&title=Process {0} memory use", "Click to show memory use details")]
+        /// <summary>
+        /// Charts of the memory use of the process
+        /// </summary>
+        //  An icon only column: the header shows no title text (TableDataNoTitle)
+        [TableDataUrl("📊", "*../ServerManager/server_metrics.html?q1=GetProcessMemChart?{0}&q2=GetProcessMemHistoryShortChart?{0}&q3=GetProcessMemHistoryChart?{0}&title=Process {0} memory use", "Show memory use details")]
+        [TableDataTitle("Memory chart")]
+        [TableDataNoTitle]
         public long M;
 
         /// <summary>
-        /// The peak physical memory usage
+        /// The peak physical memory usage (peak working set), 0 if the process can't be read
         /// </summary>
         [TableDataByteSize]
         public long PeakMemUsage;
 
         /// <summary>
-        /// The maximum allowed physical memory
+        /// The maximum working set size that the OS tries to keep for the process (a soft quota, not a usage: the same default, ex: 1380 KB on Windows, for most processes), 0 if the process can't be read.
+        /// Shown as "Max mem usage", as before; see <see cref="PeakMemUsage"/> for the highest memory use.
         /// </summary>
         [TableDataByteSize]
         public long MaxMemUsage;
@@ -89,6 +105,8 @@ namespace SysWeaver.MicroService
         /// Indicating whether the associated process priority should be temporarily boosted by the operating system when the main window has focus
         /// </summary>
         public bool PriorityBoost;
+
+        //  The memory values below are 0 if the process can't be read (as before)
 
         [TableDataByteSize]
         public long NonpagedSystemMemory;
@@ -133,16 +151,34 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
+        /// True if the process may be killed (not the idle or system process, nor the server manager itself)
+        /// </summary>
+        [TableDataIgnore]
+        public bool CanKill;
+
+        /// <summary>
+        /// The token required to kill the process (see <see cref="SmProcessKillToken"/>), null if it can't be killed
+        /// </summary>
+        [TableDataIgnore]
+        public String KillToken;
+
+        /// <summary>
         /// Actions to perform on the process
         /// </summary>
-        [TableDataActions(
+        //  The value is "pid,canKill,killToken" ({0}, {2} and {3} in the action formats): the Kill action is only shown if the process can be killed,
+        //  and the kill request must include the kill token (so a plain link or GET request can't kill a process).
+        //  Kill is final (G47, declared, never guessed from the words): the web table keeps the row muted without actions until the user refreshes.
+        [TableDataActionsFull(new[] { TableDataActionFlags.Final },
     "Kill",
-    "Click to kill the process",
-    "../ServerManager/KillProcess?{0}",
-    "../icons/skull.svg"
+    "Kill the process",
+    "../ServerManager/KillProcess?\"{3}\"",
+    "kill",
+    "Kill the process?",
+    "{2}",
+    ""
     )]
         [TableDataOrder(100)]
-        public long Actions => Id; 
+        public String Actions => String.Join(',', Id, CanKill ? "1" : "0", KillToken ?? "");
     }
 
 }

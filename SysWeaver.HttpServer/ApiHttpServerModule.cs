@@ -347,7 +347,10 @@ namespace SysWeaver.Net
             OnAuditException?.Invoke(id, r, api, ex);
         }
 
-        readonly ApiIoParams IoParams;
+        /// <summary>
+        /// The serializers (input / output, the defaults) and request size limits shared by all API end points of this module.
+        /// </summary>
+        public readonly ApiIoParams IoParams;
 
 
 
@@ -502,6 +505,59 @@ namespace SysWeaver.Net
         /// </summary>
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor("API");
 
+        #region Auth
+
+        /// <summary>
+        /// The max number of urls that <see cref="CanCall"/> answers in one request.
+        /// </summary>
+        public const int MaxCanCallUrls = 128;
+
+        /// <summary>
+        /// Tell which of some APIs the current user (of the session) may call, used by user interfaces to disable actions before they are clicked
+        /// and to name the role that is needed (core/access.js: Sw.Access.CanCall / Guard).
+        /// Anyone may ask (the answer for a user that isn't signed in is "not allowed" for every protected API).
+        /// Only the required roles of the asked urls are returned (no signature, types or assembly as in "Api/debug/GetApiInfo").
+        /// </summary>
+        /// <param name="urls">The API urls relative to the site root, ex: "Api/logFile/DeleteLogFile" or "ServerManager/KillProcess" (a query string is ignored), max <see cref="MaxCanCallUrls"/></param>
+        /// <param name="context">The request.</param>
+        /// <returns>One item per url (in the same order)</returns>
+        [WebApi("auth/{0}")]
+        [WebApiAuth(null)]
+        public ApiCallPermission[] CanCall(String[] urls, HttpServerRequest context)
+        {
+            if (urls == null)
+                return Array.Empty<ApiCallPermission>();
+            if (urls.Length > MaxCanCallUrls)
+                throw new HttpResponseException(400, "Too many urls in one request: at most " + MaxCanCallUrls + " can be asked for at once");
+            var session = context?.Session;
+            var entries = Entries;
+            var l = urls.Length;
+            var res = new ApiCallPermission[l];
+            for (int i = 0; i < l; ++i)
+            {
+                var url = urls[i] ?? "";
+                var r = new ApiCallPermission
+                {
+                    Url = url,
+                };
+                res[i] = r;
+                var key = url;
+                var qs = key.IndexOf('?');
+                if (qs >= 0)
+                    key = key.Substring(0, qs);
+                key = key.TrimStart('/');
+                if (!entries.TryGetValue(key, out var e))
+                    continue;
+                var a = e.Auth;
+                r.Found = true;
+                r.Auth = a == null ? null : String.Join(", ", a);
+                r.Allowed = (a == null) || ((session != null) && session.IsValid(a));
+            }
+            return res;
+        }
+
+        #endregion//Auth
+
         #region Debug
 
 
@@ -518,7 +574,7 @@ namespace SysWeaver.Net
         [WebApiClientCache(30)]
         [WebApiRequestCache(30, WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/{0}", "Api's", null, "IconTableApi")]
+        [WebMenuTable(null, HttpServerBase.MenuDevelopment + "/{0}", "APIs", "All registered APIs", "IconTableApi", 2)]
         public Task<TableData> ApiTable(TableDataRequest r, HttpServerRequest context)
             => TableDataTools.Get(context, r, 30000, Entries.Values.Select(x => SetApiInfo(x)).ToList());
 
@@ -533,7 +589,7 @@ namespace SysWeaver.Net
         [WebApiClientCache(30)]
         [WebApiRequestCache(30, WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/{0}", "Data tables", "All registered data tables end points", "IconTableTables")]
+        [WebMenuTable(null, HttpServerBase.MenuDevelopment + "/{0}", "Data tables", "All registered data table end points", "IconTableTables", 3)]
         public Task<TableData> ApiTableTable(TableDataRequest r, HttpServerRequest context) 
             => TableDataTools.Get(context, r, 30000, Tables.Keys.Select(x => new DataT(x)).ToList());
 
@@ -600,7 +656,7 @@ namespace SysWeaver.Net
             /// <summary>
             /// Auth information: null = open, empty = any logged in user, else comma separated tokens where at least one is required.
             /// </summary>
-            [TableDataTags("{^0}", null, "{0}", true)]
+            [TableDataAuth]
             public String Auth;
 
             /// <summary>

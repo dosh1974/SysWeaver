@@ -29,9 +29,10 @@ Stands in for the senders ([SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README
 - Implements both `IEmailSender` and `IEmailReceiverService`
 - Plain text and html emails
 - Simulated failures: emails sent to addresses in `FailDomains` (sub domains included) fail (`Send` throws), the email is still listed as failed
-- `FakeIncoming` simulates an email from a user to the system (returned by `GetIncoming`), `SendEmail` sends one as the system
+- `FakeIncoming` simulates an email from a user to the system (returned by `GetIncoming`), `SendEmail` sends one as the system (it keeps the `System` of the message, as the fake text service; the user manager sends its own system)
 - A standalone web inbox at `fakeEmail/index.html` (menu *Debug / Fake email*): live updates, search, html rendered in a sandboxed iframe or as source, compose, reply and delete, no external libraries
 - `MessageTable` lists every email
+- Access: `Auth` (FakeEmailParams) protects the APIs and the menu items. The default `null` leaves them open, as the original: the services that send through it and the testers call it without signing in. Set it (ex: `"Ops,Dev,Debug"`, or `""` = any signed in user) when others can reach the service: the fake emails can hold sign in codes and password reset links
 
 ## Key components
 
@@ -50,7 +51,7 @@ Stands in for the senders ([SysWeaver.Email.Smtp](../SysWeaver.Email.Smtp/README
 
 ## Limitations and considerations
 
-- Development only: its endpoints declare no authentication of their own, so on a server with anonymous API defaults email contents would be public
+- Development only; open by default, protect it with `Auth` (above) when others can reach it
 - The API is placed at `Api/fakeEmail/`, so only one instance per server is supported
 - Emails are kept in memory only, and nothing is actually delivered
 

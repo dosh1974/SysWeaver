@@ -759,7 +759,51 @@ namespace SysWeaver.MicroService
                 //context.SetResHeader("Location", newUrl);
                 //return HttpServerTools.AlreadyHandled;
             }
+            if (IsActiveContent(mime.Item1))
+                SetSandbox(context);
             return new FileHttpRequestHandler(mime, fi, Opt, true, compType);
+        }
+
+        /// <summary>
+        /// The Content-Security-Policy sandbox of stored files that can run scripts (html, svg, xml, see <see cref="IsActiveContent"/>).
+        /// Stored files are user content (uploads) or generated content (ex: html written by an LLM), so they are shown in a sandbox WITHOUT "allow-same-origin":
+        /// scripts, forms, popups and downloads still work (interactive LLM pages stay useful), but the document gets a unique (opaque) origin, so it can't read
+        /// the cookies, storage or pages of this site, can't call its APIs as the signed in user and can't reach the page that shows it.
+        /// This applies to a file opened directly in a tab too (the chat also shows html attachments in an iframe sandbox without "allow-same-origin").
+        /// Trade-off: the page can't use localStorage / sessionStorage / IndexedDB / cookies, and requests it makes to this site are cross site (no session cookie),
+        /// so it can only use public resources (a relative image in a private or protected folder doesn't load).
+        /// </summary>
+        public const String SandboxPolicy = "sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation";
+
+        /// <summary>
+        /// Test if a mime type can run scripts when it's opened as a document (html, xhtml, svg, xml).
+        /// </summary>
+        /// <param name="mime">The mime type</param>
+        /// <returns>True if it's active content that should be sandboxed</returns>
+        static bool IsActiveContent(String mime)
+        {
+            if (String.IsNullOrEmpty(mime))
+                return false;
+            var m = mime.AsSpan();
+            var i = m.IndexOf(';');
+            if (i >= 0)
+                m = m.Slice(0, i);
+            m = m.Trim();
+            return m.Equals("text/html", StringComparison.OrdinalIgnoreCase)
+                || m.Equals("application/xhtml+xml", StringComparison.OrdinalIgnoreCase)
+                || m.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase)
+                || m.Equals("text/xml", StringComparison.OrdinalIgnoreCase)
+                || m.Equals("application/xml", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Add the <see cref="SandboxPolicy"/> to the Content-Security-Policy of a response (keeping any existing policy, ex: frame-ancestors).
+        /// </summary>
+        /// <param name="context">The request</param>
+        static void SetSandbox(HttpServerRequest context)
+        {
+            var csp = context.GetResHeader("Content-Security-Policy");
+            context.SetResHeader("Content-Security-Policy", String.IsNullOrEmpty(csp) ? SandboxPolicy : String.Concat(csp, "; ", SandboxPolicy));
         }
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
@@ -856,11 +900,12 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="url">The url of the file</param>
         /// <param name="context"></param>
-        /// <returns>True if file was deleted</returns>
+        /// <returns>True when the file was deleted (never false: a file that is not found is a 409 with the reason, so the client can show why nothing was done)</returns>
+        /// <exception cref="HttpResponseException">409: the file was not found (it may already be deleted)</exception>
         [WebApi]
         [WebApiAuth]
         public bool DeleteStoredFile(String url, HttpServerRequest context)
-            => LinkedDeleteStoredFile(url, context);
+            => LinkedDeleteStoredFile(url, context) ? true : throw HttpResponseException.Gone("The file was not found (it may already be deleted): refresh the list");
         
         bool LinkedDeleteStoredFile(String url, HttpServerRequest context, bool isLinked = false)
         {
@@ -1000,7 +1045,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all files stored by the logged in user
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <param name="context"></param>
         /// <returns>Table data with the files</returns>
         [WebApi]
@@ -1118,10 +1163,14 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="url">The url</param>
         /// <param name="context"></param>
-        /// <returns>True if url was deleted</returns>
+        /// <returns>True when the url was deleted (never false: a url that is not found is a 409 with the reason, so the client can show why nothing was done)</returns>
+        /// <exception cref="HttpResponseException">409: the url was not found (it may already be deleted)</exception>
         [WebApi]
         [WebApiAuth]
         public bool DeleteStoredUrl(String url, HttpServerRequest context)
+            => InternalDeleteStoredUrl(url, context) ? true : throw HttpResponseException.Gone("The url was not found (it may already be deleted): refresh the list");
+
+        bool InternalDeleteStoredUrl(String url, HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(DeleteStoredUrl));
             var session = context.Session;
@@ -1230,7 +1279,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get all urls stored by the logged in user
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <param name="context"></param>
         /// <returns>Table data with the urls</returns>
         [WebApi]

@@ -22,12 +22,14 @@ uniform sampler2D tex;
 
 vec2 uv;
 
-float rand(vec2 co){
+// No overloaded functions in effects: the shader minifier of the build (shader_minifier 1.6.0) renamed randomLine(float)
+// to the minified name of rand(float), two functions with the same signature, the built effect failed to compile.
+float rand2(vec2 co){
     return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
 }
 
 float rand(float c){
-	return rand(vec2(c,1.0));
+	return rand2(vec2(c,1.0));
 }
 
 float randomLine(float seed)
@@ -133,7 +135,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 		
 	// Add some grain (thanks, Jose!)
 	#ifdef GRAIN
-    fragColor.xyz *= (1.0+(rand(uv+t*.01)-.2)*.15);		
+    fragColor.xyz *= (1.0+(rand2(uv+t*.01)-.2)*.15);		
     #endif		
 		
 	fragColor.xyz *= fragColor.w;

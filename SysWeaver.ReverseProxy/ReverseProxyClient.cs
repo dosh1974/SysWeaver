@@ -116,12 +116,16 @@ namespace SysWeaver.ReverseProxy
             if (p.IgnoreCertErrors)
                 certValid = (requestMessage, certificate, chain, sslErrors) => true;
 
+            MaxInProgress = Math.Max(0, p.MaxRequestsInProgress);
+            //  Every poll and every request in progress (it sends its response with a poll of its own) needs a connection to the server
+            if (p.MaxConcurrency < threadCount + MaxInProgress)
+                p.MaxConcurrency = threadCount + MaxInProgress;
             var handler = new HttpClientTimeoutHandler
             {
                 DefaultTimeout = TimeSpan.FromMinutes(6),
                 InnerHandler = new HttpClientHandler
                 {
-                    MaxConnectionsPerServer = threadCount,
+                    MaxConnectionsPerServer = threadCount + MaxInProgress,
                     ClientCertificateOptions = certValid == null ? ClientCertificateOption.Automatic : ClientCertificateOption.Manual,
                     ServerCertificateCustomValidationCallback = certValid,
                     AutomaticDecompression = System.Net.DecompressionMethods.None,
@@ -131,6 +135,11 @@ namespace SysWeaver.ReverseProxy
             Client = new HttpClient(handler);
             ConnectionTasks = Enumerable.Range(0, threadCount).Select(x => new PeriodicTask(Connection, 1)).ToArray();
         }
+
+        /// <summary>
+        /// The max number of requests handled by their own task (<see cref="ReverseProxyClientParams.MaxRequestsInProgress"/>).
+        /// </summary>
+        readonly int MaxInProgress;
 
         HttpClient Client;
         DelegatingHandler ClientHandler;
@@ -209,168 +218,236 @@ namespace SysWeaver.ReverseProxy
             {
                 ClientId = ClientId,
             };
-            var eps = EndPoints;
             for (; ; )
             {
-                ReverseProxyRequest res;
-                try
+                var res = await Poll(server, response).ConfigureAwait(false);
+                if (res == null)
+                    return !IsDisposing;
+                if (res == PollFailed)
                 {
-                    res = await server.GetReverseProxyRequest(response).ConfigureAwait(false);
-                    if (res == null)
-                        return true;
-                }
-                catch (Exception ex)
-                {
-                    ProxyFails.OnException(ex);
                     if (IsDisposing)
                         return false;
                     await Task.Delay(5000, cancel).ConfigureAwait(false);
-                    var aa = ex as HttpResponseException;
-                    if (aa == null)
-                    {
-                        //  TODO: Only recreate connection on certain errors?
-                        if (Interlocked.Exchange(ref Server, null) == server)
-                        {
-                            try
-                            {
-                                server.Dispose();
-                            }
-                            catch
-                            {
-                            }
-                        }
-                    }
                     return true;
                 }
-                String url = res.Url;
-                //  Find end point
-                var epName = res.EndPoint ?? DefaultEndPointName;
-                eps.TryGetValue(epName, out var endPoint);
-                if (endPoint == null)
+                //  A request can take long (ex: a long poll of the end point, GetMessages is held up to 90 s): if this connection handled
+                //  it, every request behind it would wait (with few connections the proxied site jams). Hand it to its own task, that
+                //  sends the response itself, and poll again at once (up to MaxRequestsInProgress requests; above that a connection
+                //  handles its request itself as before)
+                if (TryStartInProgress())
                 {
-                    SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
+                    _ = HandleInBackground(server, res, local);
+                    response = new ReverseProxyResponse
+                    {
+                        ClientId = ClientId,
+                    };
                     continue;
                 }
+                await HandleRequest(res, response, local).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Returned by <see cref="Poll"/> when the poll failed (the failure is tracked and a broken connection is dropped).
+        /// </summary>
+        static readonly ReverseProxyRequest PollFailed = new ReverseProxyRequest();
+
+        /// <summary>
+        /// Long poll the server for the next request, sending the response of the previous one (if any).
+        /// </summary>
+        /// <param name="server">The server connection</param>
+        /// <param name="response">The response of the previous request (RequestId null if none)</param>
+        /// <returns>The next request, null if the poll ended without a request, or <see cref="PollFailed"/></returns>
+        async Task<ReverseProxyRequest> Poll(IReverseProxyServer server, ReverseProxyResponse response)
+        {
+            try
+            {
+                ReverseProxyRequest res;
+                Interlocked.Increment(ref ActivePolls);
                 try
                 {
-                    Interlocked.Increment(ref endPoint.InProgress);
-                    var baseUrl = endPoint.BaseUrl;
-                    url = baseUrl + url;
-                    var headers = res.Headers;
-                    var hl = headers.Length;
-                    for (int i = 0; i < hl; ++ i)
-                    {
-                        var h = headers[i];
-                        if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var t = baseUrl + h.Substring(8);
-                            headers[i] = "Referer:" + t;
-                        }
-
-                    }
-                    if (endPoint.IsInternal)
-                    {
-                        //  Local (in process)
-                        url = local.LocalUri + url;
-                        var host = local.GetHost(out var prefix, out int qs, out var didIndex, ref url);
-                        using var t = new ManualHttpServerRequest(res.Method.ToString(), url, prefix, local, host, qs);
-                        var data = res.Data;
-                        if (data != null)
-                        {
-                            t._ReqContentLength = data.Length;
-                            t._InputStream = new MemoryStream(data);
-                        }
-                        var h = new ManualHttpServerRequest.Headers();
-                        foreach (var x in res.Headers.Nullable())
-                        {
-                            var key = x.SplitFirst(':', out var value);
-//                            if (ReverseProxyTools.QuotedHeaders.Contains(key.FastToLower()))
-//                                value = value.EnsureQuoted();
-                            h.TryAddWithoutValidation(key, value);
-                        }
-                        t.ReqHeaders = h;
-                        t._AcceptEncoding = t.GetReqHeader("Accept-Encoding");
-                        t._IfNoneMatch = t.GetReqHeader("If-None-Match");
-                        var cookies = t.GetReqHeader("Cookie");
-                        if (cookies != null)
-                            t.ReqCookies = HttpServerTools.ParseCookieString(cookies);
-                        else
-                            t.ReqCookies = ReadOnlyData.EmptyDictionary<String, String>();
-                        var dest = new ArrayPoolStream();
-                        t._OutputStream = dest;
-                        await local.Handle(t).ConfigureAwait(false);
-                        var resData = dest.ToArray();
-                        t.SetResContentLength(resData.Length);
-                        response.Data = resData;
-                        response.RequestId = res.RequestId;
-                        response.Headers = ProxyTools.EncodeHeaders(t.ResHeaders);
-                        response.StatusCode = t._ResStatusCode;
-                    }else
-                    {
-                        var ret = await ProxyTools.ProxyRequest(Client, url, new ProxyData(res.Method, res.Headers, res.Data)).ConfigureAwait(false);
-                        response.Data = ret.Data;
-                        response.RequestId = res.RequestId;
-                        response.Headers = ret.Headers;
-                        response.StatusCode = ret.StatusCode;
-
-
-
-
-/*                        var c = Client;
-                        var method = new HttpMethod(res.Method.ToString());
-                        using var localRequest = new HttpRequestMessage(method, url);
-                        HttpContent content = null;
-                        try
-                        {
-                            if (res.Method == HttpServerMethods.POST)
-                            {
-                                var postData = res.Data;
-                                if (postData != null)
-                                {
-                                    content = new ReadOnlyMemoryContent(postData);
-                                    localRequest.Content = content;
-                                }
-                            }
-                            var h = localRequest.Headers;
-                            var ch = ReverseProxyTools.ContentHeaders;
-                            // TODO: Set: X-Forwarded-For:
-                            foreach (var x in res.Headers.Nullable())
-                            {
-                                var key = x.SplitFirst(':', out var value);
-                                if (ch.Contains(key.FastToLower()))
-                                    content?.Headers?.TryAddWithoutValidation(key, value);
-                                else
-                                    h.TryAddWithoutValidation(key, value);
-                            }
-                            using var localResponse = await c.SendAsync(localRequest).ConfigureAwait(false);
-                            var resData = await localResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                            response.Data = resData;
-                            response.RequestId = res.RequestId;
-                            response.Headers = ReverseProxyTools.EncodeHeaders(localResponse.Headers, localResponse.Content?.Headers);
-                            response.StatusCode = (int)localResponse.StatusCode;
-                        }
-                        finally
-                        {
-                            content?.Dispose();
-                        }
-*/
-                    }
-                }
-                catch (Exception ex)
-                {
-
-                    EndPointFails.OnException(ex);
-                    endPoint?.Fails?.OnException(ex);
-                    //  Sensitive information (paths, private ips etc) is removed from the message
-                    SetErrorResponse(response, res.RequestId, "Internal Server Error: " + ex.SafeMessage(), 500);
-                    continue;
+                    res = await server.GetReverseProxyRequest(response).ConfigureAwait(false);
                 }
                 finally
                 {
-                    Interlocked.Decrement(ref endPoint.InProgress);
-                    Interlocked.Increment(ref endPoint.Completed);
+                    Interlocked.Decrement(ref ActivePolls);
                 }
+                OnPollOk();
+                return res;
+            }
+            catch (Exception ex)
+            {
+                ProxyFails.OnException(ex);
+                if (IsDisposing)
+                    return PollFailed;
+                var aa = ex as HttpResponseException;
+                if (aa == null)
+                {
+                    //  TODO: Only recreate connection on certain errors?
+                    if (Interlocked.Exchange(ref Server, null) == server)
+                    {
+                        try
+                        {
+                            server.Dispose();
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+                return PollFailed;
+            }
+        }
 
+        /// <summary>
+        /// Number of requests handled by their own task (see <see cref="HandleInBackground"/>).
+        /// </summary>
+        int InProgress;
+
+        /// <summary>
+        /// Reserve a slot for a request handled by its own task.
+        /// </summary>
+        /// <returns>True if a slot was reserved (released by <see cref="HandleInBackground"/>), false if MaxRequestsInProgress requests are in progress</returns>
+        bool TryStartInProgress()
+        {
+            var max = MaxInProgress;
+            for (; ; )
+            {
+                var c = Volatile.Read(ref InProgress);
+                if (c >= max)
+                    return false;
+                if (Interlocked.CompareExchange(ref InProgress, c + 1, c) == c)
+                    return true;
+            }
+        }
+
+        /// <summary>
+        /// Handle a request on its own task: the response is sent with a poll of its own, and a request that this poll gets is handled
+        /// the same way (the task ends when a poll ends without a request). Releases the slot reserved by <see cref="TryStartInProgress"/>.
+        /// </summary>
+        /// <param name="server">The server connection</param>
+        /// <param name="res">The request</param>
+        /// <param name="local">The local http server</param>
+        async Task HandleInBackground(IReverseProxyServer server, ReverseProxyRequest res, HttpServerBase local)
+        {
+            try
+            {
+                await Task.Yield();
+                for (; ; )
+                {
+                    var response = new ReverseProxyResponse
+                    {
+                        ClientId = ClientId,
+                    };
+                    await HandleRequest(res, response, local).ConfigureAwait(false);
+                    if (IsDisposing)
+                        return;
+                    res = await Poll(server, response).ConfigureAwait(false);
+                    if ((res == null) || (res == PollFailed) || IsDisposing)
+                        return;
+                }
+            }
+            catch (Exception ex)
+            {
+                ProxyFails.OnException(ex);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref InProgress);
+            }
+        }
+
+        /// <summary>
+        /// Execute a request on its end point and fill in the response (an error response on failure, never throws).
+        /// </summary>
+        /// <param name="res">The request</param>
+        /// <param name="response">The response to fill in</param>
+        /// <param name="local">The local http server</param>
+        async Task HandleRequest(ReverseProxyRequest res, ReverseProxyResponse response, HttpServerBase local)
+        {
+            var eps = EndPoints;
+            String url = res.Url;
+            //  Find end point
+            var epName = res.EndPoint ?? DefaultEndPointName;
+            eps.TryGetValue(epName, out var endPoint);
+            if (endPoint == null)
+            {
+                SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
+                return;
+            }
+            try
+            {
+                Interlocked.Increment(ref endPoint.InProgress);
+                var baseUrl = endPoint.BaseUrl;
+                url = baseUrl + url;
+                var headers = res.Headers;
+                var hl = headers?.Length ?? 0;
+                for (int i = 0; i < hl; ++ i)
+                {
+                    var h = headers[i];
+                    if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var t = baseUrl + h.Substring(8);
+                        headers[i] = "Referer:" + t;
+                    }
+
+                }
+                if (endPoint.IsInternal)
+                {
+                    //  Local (in process)
+                    url = local.LocalUri + url;
+                    var host = local.GetHost(out var prefix, out int qs, out var didIndex, ref url);
+                    using var t = new ManualHttpServerRequest(res.Method.ToString(), url, prefix, local, host, qs);
+                    var data = res.Data;
+                    if (data != null)
+                    {
+                        t._ReqContentLength = data.Length;
+                        t._InputStream = new MemoryStream(data);
+                    }
+                    var h = new ManualHttpServerRequest.Headers();
+                    foreach (var x in res.Headers.Nullable())
+                    {
+                        var key = x.SplitFirst(':', out var value);
+                        h.TryAddWithoutValidation(key, value);
+                    }
+                    t.ReqHeaders = h;
+                    t._AcceptEncoding = t.GetReqHeader("Accept-Encoding");
+                    t._IfNoneMatch = t.GetReqHeader("If-None-Match");
+                    var cookies = t.GetReqHeader("Cookie");
+                    if (cookies != null)
+                        t.ReqCookies = HttpServerTools.ParseCookieString(cookies);
+                    else
+                        t.ReqCookies = ReadOnlyData.EmptyDictionary<String, String>();
+                    var dest = new ArrayPoolStream();
+                    t._OutputStream = dest;
+                    await local.Handle(t).ConfigureAwait(false);
+                    var resData = dest.ToArray();
+                    t.SetResContentLength(resData.Length);
+                    response.Data = resData;
+                    response.RequestId = res.RequestId;
+                    response.Headers = ProxyTools.EncodeHeaders(t.ResHeaders);
+                    response.StatusCode = t._ResStatusCode;
+                }
+                else
+                {
+                    var ret = await ProxyTools.ProxyRequest(Client, url, new ProxyData(res.Method, res.Headers, res.Data)).ConfigureAwait(false);
+                    response.Data = ret.Data;
+                    response.RequestId = res.RequestId;
+                    response.Headers = ret.Headers;
+                    response.StatusCode = ret.StatusCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                EndPointFails.OnException(ex);
+                endPoint?.Fails?.OnException(ex);
+                //  Sensitive information (paths, private ips etc) is removed from the message
+                SetErrorResponse(response, res.RequestId, "Internal Server Error: " + ex.SafeMessage(), 500);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref endPoint.InProgress);
+                Interlocked.Increment(ref endPoint.Completed);
             }
         }
 
@@ -419,15 +496,15 @@ namespace SysWeaver.ReverseProxy
         /// <summary>
         /// All local reverse proxy endpoints
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <param name="context">Paramaters</param>
+        /// <param name="r">Parameters</param>
+        /// <param name="context">Parameters</param>
         /// <returns></returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.DevAdminOps)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Http Server/{0}", "Reverse proxy end points", null, "icons/network.svg")]
+        [WebMenuTable(null, "Operations/{0}", "Reverse proxy end points", null, "icons/network.svg", 31)]
         public TableData ReverseProxyEndPointsTable(TableDataRequest r, HttpServerRequest context)
         {
             var b = ServerBaseUrl;

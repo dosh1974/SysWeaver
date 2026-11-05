@@ -1,0 +1,1291 @@
+﻿/**
+ * @file core/theme.js - the theme engine: the opt-in theme script sw/theme.js (after sw/session.js, or before it: it starts with the messaging core), also part of sw/core.js and
+ * common/common.js (same file, it runs once per page).
+ *
+ * Purpose: `Sw.Theme` plus the permanent globals getTheme, applyTheme, setTheme, resetTheme, toggleTheme and
+ * appendTheme (used by the server Theme menu: "if(setTheme('dark'));false", "if(resetTheme());false").
+ *  - Start (when evaluated, the theme part of the old SysWeaverInit): the "css" url flag (an extra stylesheet of this site), Apply,
+ *    WatchOs, and re-apply on Sw.Events "theme.request" (core/session_start.js: another window's setTheme / resetTheme drops a forced
+ *    theme in every window, as the original; a host's "theme.use" / "theme.set" message to a frame started with usetheme / settheme).
+ *  - Resolution order (Get): the forced theme (Sw.Theme.Forced = Sw.Session.RequestedTheme, from the "usetheme" url parameter), then
+ *    localStorage "SysWeaver.Theme" (if not empty), then the OS preference (prefers-color-scheme light/dark),
+ *    default "dark". The automatic light / dark choice maps to the app's own themes when app/app.css sets
+ *    --sw-theme-light / --sw-theme-dark on :root (remembered per site root in localStorage "SysWeaver.ThemeAuto", so
+ *    the next page starts with them). A name may carry an "@css" suffix ("name@url") naming an extra stylesheet
+ *    (relative to common/) that is included before the theme is applied.
+ *  - Apply: "light" removes the data-theme attribute of html, other names set data-theme=<name>; then the
+ *    derived custom properties of --ThemeBackground/--ThemeMain/--ThemeAcc1/--ThemeAcc2 are written inline on
+ *    html: name+"R"/"G"/"B" (0-255), name+"RGB" ("r,g,b") and name+"25"/"50"/"75" (rgba with 0.25/0.5/0.75 alpha).
+ *    The scheme, data-sw-scheme="light"|"dark" on html (used by ui/tokens.css) and IsDark, comes from what the
+ *    theme declares, never from the mere presence of data-theme: a registered theme's Scheme, else the computed
+ *    color-scheme of html (built in themes and css themes declare it), else, for a css theme without a dark
+ *    color-scheme, the lightness of its --ThemeBackground (a dark background then also gets color-scheme dark); when nothing
+ *    declares a scheme (a page with its own look, without common/theme.css) a built in theme's own one (light, else dark).
+ *    A per theme animation runs while the theme is active (built in: "hacker" scrolls --ThemePos; also any global
+ *    function named theme + "ThemeAnimate"). Applying the already applied theme does nothing.
+ *  - Brand stylesheet: every page gets app/app.css, the per app hook that the server serves empty (200, cached)
+ *    when the app has none, so it never fails. The shell links it in index.html; any other page fetches it once
+ *    and, only when it has content, adopts it as the last style sheet of the document (it wins over page css of
+ *    the same specificity; @import is not supported in it) and re-applies the theme. Sw.Theme.BrandReady resolves
+ *    when that is done. No frame of the default brand: what a page found is remembered per site root in localStorage
+ *    "SysWeaver.ThemeBrand" ({Has, Css}; text up to 1M characters), and the first Apply of the next page adopts that
+ *    text at once (then the fetched text replaces it if it changed). While nothing is known (first visit of the
+ *    site, or a brand too big to remember) the page stays hidden (html visibility) until the brand was applied, at
+ *    most 3 s; a focus() asked for meanwhile (ex: a page's first field) is given again when the page shows, unless the
+ *    focus moved. Pages may also link app/app.css render blocking (index.html, app/Home.html, app/Welcome.html).
+ *  - Set / Reset / Toggle persist the choice, apply it and post the InterOp message "Theme.Changed" (other
+ *    windows drop their forced theme and re-apply, see core/session_start.js).
+ *  - Custom themes: Register({Name, Title, Scheme: "dark"|"light", Colors: {Background,
+ *    Foreground, Accent1, Accent2}, Base}) - applying such a name sets data-theme to def.Base or the scheme's built
+ *    in theme ("light" = no attribute, else "dark") and the 4 base colors inline; without Colors and Base,
+ *    data-theme is the name itself (the colors come from css, ex: [data-theme="name"] in app/app.css).
+ *    Registered themes reach every page of the site: a page that doesn't know a name asks the top window (the
+ *    shell, where app/app.js registers them) and else uses the definitions remembered in localStorage
+ *    "SysWeaver.ThemeDefs" (written when a registered theme is applied). Registering the applied theme re-applies
+ *    it. Themes with a Title are listed by Custom() (the shell adds them to the Theme section of its settings menu).
+ *  - WatchOs(): follow OS color scheme changes (every window re-applies; the top window posts "Theme.Changed"
+ *    when its theme changed).
+ *  - Events: Sw.Events "theme.changed" {Theme, IsDark}, OnChange(fn).
+ *  - Transparent frames (MatchFrame): every same-origin iframe of the page gets the color-scheme of its document (inline, on load and when
+ *    that document's theme changes), since a browser paints an opaque canvas behind a framed document whose color-scheme differs from its
+ *    iframe element (a lean color-scheme normal page in a dark shell was white).
+ *  - Density (Sw.Theme.Density): html data-density = compact | comfortable | touch (ui/tokens.css), from the url parameter "density",
+ *    localStorage "SysWeaver.Density", else automatic (touch on touch screens / mobile, else the theme's css property --sw-theme-density
+ *    ("compact" | "comfortable"), compact for Pro, else comfortable); Set posts
+ *    the InterOp message "Density.Changed" (every window re-applies); Sw.Events "density.changed" {Density, Auto}.
+ *  - Text size (Sw.Theme.TextSize): html data-text-size = 80 | 110 | 125 | 150 (percent, none = 100; ui/tokens.css scales the html font
+ *    size), from localStorage "SysWeaver.TextSize"; Set posts "TextSize.Changed"; Sw.Events "textsize.changed" {TextSize}.
+ *
+ * Load order: any (best after core/session_start.js; loaded before sw/session.js it starts when the messaging core starts, Sw.AfterSession). Dependencies: Sw.Session (RequestedTheme, ThemeStorageKey), Sw.Storage, Sw.Url,
+ * Sw.Net.IncludeCss (core/include.js), Sw.InterOp, Sw.Util.Animator, Sw.Events; Sw.Layout (density) when present.
+ * Globals defined: getTheme, applyTheme, setTheme, resetTheme, toggleTheme, appendTheme.
+ */
+(function () {
+    "use strict";
+
+    const Sw = window.Sw = window.Sw || {};
+
+    //  The theme script needs the messaging core (sw/session.js, or sw/core.js / common/common.js, which contain it): the requested theme
+    //  (Sw.Session.RequestedTheme), the url, storage and InterOp.
+    const ready = () => !!(Sw.Session && Sw.Url && Sw.Storage && Sw.InterOp && Sw.Net && Sw.Net.IncludeCss);
+    if (ready()) {
+        start();
+        return;
+    }
+    //  The order of the scripts doesn't matter (AS6-3): run before sw/session.js (ex: a classic <script> before a deferred sw/session.js,
+    //  or async scripts), the theme starts when the messaging core starts (core/session_start.js runs Sw.AfterSession); without it, a loud
+    //  error when the page has loaded
+    let started = false;
+    (Sw.AfterSession = Sw.AfterSession || []).push(() => {
+        if (started || !ready())
+            return;
+        started = true;
+        start();
+    });
+    window.addEventListener("load", () => {
+        if (!started)
+            console.error("sw/theme.js: the page loads no sw/session.js (or sw/core.js, which contains both): no theme is applied");
+    }, { once: true });
+
+    /** Start the theme engine (when the messaging core is there). */
+    function start() {
+
+        /** localStorage key of the chosen theme. */
+        const storeKey = Sw.Session.ThemeStorageKey;
+
+        /** localStorage key of the remembered custom theme definitions (json {siteRoot: {name: def}}). */
+        const defsKey = "SysWeaver.ThemeDefs";
+
+        /** localStorage key of the remembered automatic brand themes (json {siteRoot: {light, dark}}), from app/app.css. */
+        const autoKey = "SysWeaver.ThemeAuto";
+
+        /** The brand stylesheet of the app, relative to the site root. */
+        const brandFile = "app/app.css";
+
+        /**
+         * localStorage key of the remembered brand stylesheet (json {siteRoot: {Has: boolean, Css: string}}): what the last page
+         * found in app/app.css, so the next page applies it before its first paint (no frame of the default brand).
+         */
+        const brandKey = "SysWeaver.ThemeBrand";
+
+        /** Largest app/app.css text (characters) that is remembered in localStorage (bigger brand files are loaded every time). */
+        const brandCacheMax = 1000000;
+
+        /** Longest time (ms) a page stays hidden while it waits for an unknown brand stylesheet. */
+        const brandWaitMs = 3000;
+
+        /** The 4 base color custom properties (server templated in common/theme.css). */
+        const baseVars = ["--ThemeBackground", "--ThemeMain", "--ThemeAcc1", "--ThemeAcc2"];
+
+        /** @type {string[]} Built in theme names (common/theme.css). */
+        const builtIn = ["light", "dark", "hacker", "application", "pro"];
+
+        /** @type {Map<string, object>} Registered custom themes. */
+        const registered = new Map();
+
+        /**
+         * The forced theme (url "usetheme", the InterOp message "theme.use", the legacy window.UseTheme), not persisted: kept by the
+         * session (Sw.Session.RequestedTheme, core/session_start.js), so a page without this script knows it too.
+         * @returns {string|null}
+         */
+        const forced = () => Sw.Session.RequestedTheme;
+
+        /** @type {string|null} The applied theme string (including any "@css" part). */
+        let current = null;
+
+        /** @type {boolean} True if the applied theme uses a dark color scheme. */
+        let isDark = false;
+
+        /** @type {Function|null} The running theme animation. */
+        let anim = null;
+
+        /** @type {boolean} True while custom colors are set inline. */
+        let haveInline = false;
+
+        /** @type {boolean} True while a color-scheme is set inline. */
+        let inlineScheme = false;
+
+        /** @type {number} Last --ThemePos written by the hacker animation. */
+        let lastPos = NaN;
+
+        /**
+         * Built in animation of the hacker theme: scrolls the background pattern by setting --ThemePos in steps of
+         * 4px (0..-60px); only writes when the value changes.
+         * @param {number} time - Elapsed ms.
+         */
+        function hackerAnimate(time) {
+            const pos = -Math.round((time * 0.01) % 16) * 4;
+            if (pos === lastPos)
+                return;
+            lastPos = pos;
+            document.documentElement.style.setProperty("--ThemePos", pos + "px");
+        }
+
+        /** @type {Object<string, function(number):*>} Built in theme animations by theme name. */
+        const animations = { hacker: hackerAnimate };
+
+        /** @type {CanvasRenderingContext2D|null|undefined} The 1x1 canvas of parseColor's fallback (null: no canvas here). */
+        let colorCtx;
+
+        /**
+         * Any other css color syntax (oklab(), oklch(), hsl(), color-mix(), color(), a name) through a 1x1 canvas, which the browser
+         * paints in sRGB (AS7-9: a base colour defined with color-mix() / oklch() gave --Theme*RGB = 0,0,0). Opaque colours keep their
+         * exact rgb; null when the browser doesn't know the syntax.
+         * @param {string} v - The color.
+         * @returns {number[]|null} [r, g, b], or null.
+         */
+        function canvasColor(v) {
+            if (colorCtx === undefined) {
+                try {
+                    const c = document.createElement("canvas");
+                    c.width = c.height = 1;
+                    colorCtx = c.getContext("2d", { willReadFrequently: true });
+                }
+                catch {
+                    colorCtx = null;
+                }
+            }
+            const x = colorCtx;
+            if (!x)
+                return null;
+            //  (two different sentinels: a value the canvas doesn't take leaves the sentinel, so "not a colour" is never read as black)
+            for (const s of ["#010203", "#040506"]) {
+                x.fillStyle = s;
+                x.fillStyle = v;
+                if (x.fillStyle === s)
+                    return null;
+            }
+            x.clearRect(0, 0, 1, 1);
+            x.fillRect(0, 0, 1, 1);
+            const d = x.getImageData(0, 0, 1, 1).data;
+            return [d[0], d[1], d[2]];
+        }
+
+        /**
+         * Parse a css color value (#rgb, #rrggbb, #rrggbbaa, rgb()/rgba(); any other syntax through canvasColor) into [r, g, b].
+         * @param {string} v - Computed custom property value.
+         * @returns {number[]|null} Components, or null if not parsable.
+         */
+        function parseColor(v) {
+            v = (v || "").trim();
+            if (!v)
+                return null;
+            if (v.charAt(0) === '#') {
+                const h = v.substring(1);
+                if ((h.length === 3) || (h.length === 4)) {
+                    const r = parseInt(h.charAt(0), 16), g = parseInt(h.charAt(1), 16), b = parseInt(h.charAt(2), 16);
+                    return [r | (r << 4), g | (g << 4), b | (b << 4)];
+                }
+                if ((h.length === 6) || (h.length === 8))
+                    return [parseInt(h.substring(0, 2), 16), parseInt(h.substring(2, 4), 16), parseInt(h.substring(4, 6), 16)];
+                return null;
+            }
+            const m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(v);
+            if (m)
+                return [Math.round(+m[1]), Math.round(+m[2]), Math.round(+m[3])];
+            return canvasColor(v);
+        }
+
+        /**
+         * Write the derived custom properties of the 4 base colors (one getComputedStyle call). Values that can't be
+         * parsed give 0,0,0 (as before); missing values are skipped.
+         */
+        function writeDerived() {
+            const de = document.documentElement;
+            const cs = getComputedStyle(de, null);
+            const ss = de.style;
+            baseVars.forEach(name => {
+                const raw = cs.getPropertyValue(name);
+                if (!raw || !raw.trim())
+                    return;
+                const c = parseColor(raw) || [0, 0, 0];
+                const r = c[0], g = c[1], b = c[2];
+                ss.setProperty(name + "R", r);
+                ss.setProperty(name + "G", g);
+                ss.setProperty(name + "B", b);
+                ss.setProperty(name + "RGB", "" + r + "," + g + "," + b);
+                const rgb = "rgba(" + r + "," + g + "," + b + ",";
+                ss.setProperty(name + "25", rgb + "0.25)");
+                ss.setProperty(name + "50", rgb + "0.50)");
+                ss.setProperty(name + "75", rgb + "0.75)");
+            });
+        }
+
+        /**
+         * Read the entry of this site (Sw.Url.Root) from a json map in localStorage.
+         * @param {string} key - Storage key.
+         * @returns {object|null}
+         */
+        function siteGet(key) {
+            const m = Sw.Storage.GetJson(key, null);
+            const v = (m && typeof m === "object") ? m[Sw.Url.Root] : null;
+            return (v && typeof v === "object") ? v : null;
+        }
+
+        /**
+         * Write the entry of this site in a json map in localStorage (only when it changed).
+         * @param {string} key - Storage key.
+         * @param {object|null} value - New entry (null removes it).
+         */
+        function siteSet(key, value) {
+            let m = Sw.Storage.GetJson(key, null);
+            if (!m || typeof m !== "object")
+                m = {};
+            const root = Sw.Url.Root;
+            if (JSON.stringify(m[root] ?? null) === JSON.stringify(value ?? null))
+                return;
+            if (value)
+                m[root] = value;
+            else
+                delete m[root];
+            Sw.Storage.SetJson(key, m);
+        }
+
+        /**
+         * Find a custom theme definition: registered in this window, else in the top window (the shell, where app/app.js registers
+         * themes; same origin only), else remembered in localStorage.
+         * @param {string} name - Theme name (without "@css").
+         * @returns {object|null}
+         */
+        function findDef(name) {
+            const own = registered.get(name);
+            if (own)
+                return own;
+            try {
+                const top = window.top;
+                if (top && top !== window) {
+                    const d = top.Sw?.Theme?.GetRegistered?.(name);
+                    if (d)
+                        return JSON.parse(JSON.stringify(d));
+                }
+            }
+            catch {
+                //  Cross-origin top window
+            }
+            const stored = siteGet(defsKey);
+            const d = stored ? stored[name] : null;
+            return (d && typeof d === "object") ? d : null;
+        }
+
+        /**
+         * Remember an applied custom theme definition for the other pages of this site (pages without app/app.js).
+         * @param {object} def - Definition.
+         */
+        function rememberDef(def) {
+            try {
+                const stored = Object.assign({}, siteGet(defsKey));
+                stored[def.Name] = JSON.parse(JSON.stringify(def));
+                siteSet(defsKey, stored);
+            }
+            catch {
+                //  Not serializable: the other pages ask the shell
+            }
+        }
+
+        /**
+         * Lightness (0..1, Rec. 709 luma) of a css color, or -1 if not parsable.
+         * @param {string} v - Color.
+         * @returns {number}
+         */
+        function lightness(v) {
+            const c = parseColor(v);
+            if (!c)
+                return -1;
+            return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+        }
+
+        /**
+         * Get the theme to use (see the file header for the order).
+         * @returns {string} Theme name (optionally "name@css").
+         */
+        function get() {
+            const f = forced();
+            if (f)
+                return f;
+            const stored = Sw.Storage.Get(storeKey, null);
+            if (stored)
+                return stored;
+            let light = false;
+            if (window.matchMedia) {
+                if (window.matchMedia("(prefers-color-scheme: light)").matches)
+                    light = true;
+            }
+            const auto = siteGet(autoKey);
+            const brand = auto ? auto[light ? "light" : "dark"] : null;
+            if (brand && typeof brand === "string")
+                return brand;
+            return light ? "light" : "dark";
+        }
+
+        /**
+         * Apply the theme from get() to the document (no-op if already applied).
+         * @returns {Promise<void>}
+         */
+        async function apply() {
+            let theme = get();
+            if (current === theme)
+                return;
+            const de = document.documentElement;
+            const themeOrg = theme;
+            const cssPos = theme.indexOf('@');
+            if (cssPos > 0) {
+                const css = theme.substring(cssPos + 1);
+                theme = theme.substring(0, cssPos);
+                const r = await Sw.Net.IncludeCss(null, css, true);
+                if (r.error)
+                    console.warn("Theme: " + r.error);
+            }
+            const custom = builtIn.indexOf(theme) < 0 ? findDef(theme) : null;
+            if (haveInline) {
+                baseVars.forEach(n => de.style.removeProperty(n));
+                haveInline = false;
+            }
+            if (inlineScheme) {
+                de.style.removeProperty("color-scheme");
+                inlineScheme = false;
+            }
+            let attr = theme;
+            if (custom) {
+                const c = custom.Colors;
+                if (c && typeof c === "object") {
+                    attr = custom.Base ?? (custom.Scheme === "light" ? "light" : "dark");
+                    const set = (n, v) => {
+                        if (v)
+                            de.style.setProperty(n, v);
+                    };
+                    set("--ThemeBackground", c.Background);
+                    set("--ThemeMain", c.Foreground ?? c.Main);
+                    set("--ThemeAcc1", c.Accent1 ?? c.Acc1);
+                    set("--ThemeAcc2", c.Accent2 ?? c.Acc2);
+                    haveInline = true;
+                }
+                else if (custom.Base)
+                    attr = custom.Base;
+                if (custom.Scheme) {
+                    de.style.setProperty("color-scheme", custom.Scheme === "light" ? "light" : "dark");
+                    inlineScheme = true;
+                }
+                if (registered.get(theme) === custom)
+                    rememberDef(custom);
+            }
+            if (attr === "light")
+                de.removeAttribute("data-theme");
+            else
+                de.setAttribute("data-theme", attr);
+            Sw.Log("Theme: Applying theme \"" + themeOrg + "\"");
+            //  The scheme the theme declares (see the file header); the server generated "application" theme (color-scheme dark) also falls back to the
+            //  lightness of its background
+            const cs = getComputedStyle(de);
+            const declared = (cs.getPropertyValue("color-scheme") || "").trim();
+            let dark = declared.split(/\s+/)[0] === "dark";
+            let known = false;
+            if (!dark && !(custom && custom.Scheme) && ((builtIn.indexOf(attr) < 0) || (attr === "application"))) {
+                const l = lightness(cs.getPropertyValue("--ThemeBackground"));
+                known = l >= 0;
+                if (l >= 0 && l < 0.4) {
+                    dark = true;
+                    de.style.setProperty("color-scheme", "dark");
+                    inlineScheme = true;
+                }
+            }
+            //  No style sheet declares a scheme (a page with its own look: sw/session.js + sw/theme.js without common/theme.css): a built in
+            //  theme's own scheme (light = light; dark, pro, hacker, application = dark), so data-sw-scheme / IsDark are right (S6-D5)
+            if (!dark && !known && !(custom && custom.Scheme) && (!declared || declared === "normal") && (builtIn.indexOf(attr) >= 0) && (attr !== "light"))
+                dark = true;
+            de.setAttribute("data-sw-scheme", dark ? "dark" : "light");
+            densityApply();
+            textSizeApply();
+            writeDerived();
+            current = themeOrg;
+            isDark = dark;
+            const Animator = Sw.Util.Animator;
+            if (anim)
+                Animator.Remove(anim);
+            anim = null;
+            const f = animations[theme] ?? window[theme + "ThemeAnimate"];
+            if (typeof f === "function") {
+                anim = f;
+                Animator.Add(f);
+            }
+            Sw.Events.Emit("theme.changed", { Theme: themeOrg, IsDark: isDark });
+        }
+
+        /**
+         * Read the automatic brand themes (--sw-theme-light / --sw-theme-dark on :root, from app/app.css) and remember them for this
+         * site; re-apply when the theme to use or the brand colors changed.
+         * @param {boolean} hasBrand - True if app/app.css has content.
+         * @returns {Promise<void>}
+         */
+        async function brandLoaded(hasBrand) {
+            let auto = null;
+            if (hasBrand) {
+                const cs = getComputedStyle(document.documentElement);
+                const name = n => {
+                    const v = (cs.getPropertyValue(n) || "").trim().replace(/^["']|["']$/g, "");
+                    return /^[\w.@/-]+$/.test(v) ? v : null;
+                };
+                const light = name("--sw-theme-light"), dark = name("--sw-theme-dark");
+                if (light || dark)
+                    auto = { light: light || "light", dark: dark || "dark" };
+            }
+            siteSet(autoKey, auto);
+            if (hasBrand) {
+                current = null;
+                await apply();
+            }
+            else
+                await apply();
+        }
+
+        /** @type {CSSStyleSheet|null} The brand stylesheet adopted before the first paint from the remembered text (brandEarly). */
+        let earlySheet = null;
+
+        /** @type {string|null} The remembered brand text that earlySheet was made from. */
+        let earlyCss = null;
+
+        /** @type {HTMLStyleElement|null} The style element that hides the page while it waits for an unknown brand. */
+        let waitStyle = null;
+
+        /**
+         * The focus asked for while the page was hidden (a browser refuses focus() in an invisible document, so a page that
+         * focuses its first field on load would start on body): { El, Opts }, given again when the page shows (brandShow).
+         * @type {{El: HTMLElement|SVGElement, Opts: object|undefined}|null}
+         */
+        let hiddenFocus = null;
+
+        /** @type {Array<Array<*>>|null} The focus methods replaced while hidden ([prototype, original]). */
+        let focusPatched = null;
+
+        /** Record focus() calls while the page is hidden (see hiddenFocus); the original focus still runs. */
+        function watchFocus() {
+            if (focusPatched)
+                return;
+            focusPatched = [];
+            for (const proto of [window.HTMLElement && HTMLElement.prototype, window.SVGElement && SVGElement.prototype]) {
+                if (!proto || !Object.prototype.hasOwnProperty.call(proto, "focus"))
+                    continue;
+                const orig = proto.focus;
+                proto.focus = function (opts) {
+                    if (waitStyle)
+                        hiddenFocus = { El: this, Opts: opts };
+                    return orig.call(this, opts);
+                };
+                focusPatched.push([proto, orig]);
+            }
+        }
+
+        /** Put the focus methods back and give the focus asked for while hidden, unless the focus moved meanwhile. */
+        function unwatchFocus() {
+            if (!focusPatched)
+                return;
+            for (const [proto, orig] of focusPatched)
+                proto.focus = orig;
+            focusPatched = null;
+            const f = hiddenFocus;
+            hiddenFocus = null;
+            if (!f || !f.El.isConnected)
+                return;
+            const ae = document.activeElement;
+            if (ae && ae !== document.body && ae !== document.documentElement)
+                return;
+            try {
+                f.El.focus(f.Opts);
+            }
+            catch {
+                //  Not focusable any more
+            }
+        }
+
+        /**
+         * Find the parser inserted link to app/app.css (index.html and some stand-alone pages link it, render blocking).
+         * @returns {HTMLLinkElement|null}
+         */
+        function brandLink() {
+            const url = Sw.Url.Root + brandFile;
+            for (const l of document.querySelectorAll("link[rel~='stylesheet']")) {
+                if (l.href === url)
+                    return l;
+            }
+            return null;
+        }
+
+        /**
+         * Create a constructable style sheet of brand css text (urls resolve against app/app.css).
+         * @param {string} text - Css text.
+         * @returns {CSSStyleSheet}
+         */
+        function brandSheet(text) {
+            const sheet = new CSSStyleSheet({ baseURL: Sw.Url.Root + brandFile });
+            sheet.replaceSync(text);
+            return sheet;
+        }
+
+        /** Show the page again (see brandEarly). */
+        function brandShow() {
+            if (waitStyle) {
+                waitStyle.remove();
+                waitStyle = null;
+            }
+            unwatchFocus();
+        }
+
+        /**
+         * The css text of a loaded style sheet (its rules serialized), null if it can't be read.
+         * @param {CSSStyleSheet} sheet - Style sheet.
+         * @returns {string|null}
+         */
+        function sheetText(sheet) {
+            try {
+                return Array.from(sheet.cssRules, r => r.cssText).join("\n");
+            }
+            catch {
+                return null;
+            }
+        }
+
+        /**
+         * The brand css text without a request (the original fetched app/app.css only in the shell): the text of the
+         * app/app.css link of a same origin ancestor window (the shell links it, render blocking), else what this site
+         * remembered (see brandRemember; the shell writes it), else null (nothing known: no brand, like the original).
+         * @returns {string|null} The text ("" = known to be empty), null if not known.
+         */
+        function brandText() {
+            const url = Sw.Url.Root + brandFile;
+            let w = window;
+            try {
+                while (w.parent && w.parent !== w) {
+                    w = w.parent;
+                    for (const l of w.document.querySelectorAll("link[rel~='stylesheet']")) {
+                        if (l.href === url && l.sheet) {
+                            const t = sheetText(l.sheet);
+                            if (t !== null)
+                                return t;
+                        }
+                    }
+                }
+            }
+            catch {
+                //  A cross origin ancestor: use what this site remembered
+            }
+            const known = siteGet(brandKey);
+            if (!known)
+                return null;
+            if (!known.Has)
+                return "";
+            return typeof known.Css === "string" ? known.Css : null;
+        }
+
+        /**
+         * Adopt brand css text as the last style sheet of this document (urls resolve against app/app.css); browsers
+         * without constructable style sheets get a style element.
+         * @param {string} text - Css text.
+         */
+        function brandAdopt(text) {
+            if (earlySheet) {
+                if (text !== earlyCss)
+                    earlySheet.replaceSync(text);
+            }
+            else {
+                try {
+                    earlySheet = brandSheet(text);
+                    document.adoptedStyleSheets = [...document.adoptedStyleSheets, earlySheet];
+                }
+                catch {
+                    const st = document.createElement("style");
+                    st.textContent = text;
+                    (document.head || document.documentElement).appendChild(st);
+                }
+            }
+            earlyCss = text;
+        }
+
+        /**
+         * Before the first theme is applied (core start up, before the first paint of a page with cached scripts): a page
+         * that doesn't link app/app.css adopts the brand text at once (see brandText; no request, no hidden frame). A page
+         * that links it (index.html) stays hidden only on the first visit of the site, until the link loaded (at most
+         * brandWaitMs): a brand theme from --sw-theme-light / -dark is only known then.
+         */
+        function brandEarly() {
+            if (!brandLink()) {
+                const text = brandText();
+                if (text && text.trim()) {
+                    try {
+                        brandAdopt(text);
+                    }
+                    catch {
+                        earlySheet = null;
+                        earlyCss = null;
+                    }
+                }
+                return;
+            }
+            if (siteGet(brandKey))
+                return;
+            waitStyle = document.createElement("style");
+            waitStyle.textContent = "html{visibility:hidden !important}";
+            (document.head || document.documentElement).appendChild(waitStyle);
+            watchFocus();
+            setTimeout(brandShow, brandWaitMs);
+        }
+
+        /**
+         * Remember what app/app.css holds for the next page of this site (see brandText).
+         * @param {boolean} has - True if it has content.
+         * @param {string|null} text - Its text (null if it can't be read).
+         */
+        function brandRemember(has, text) {
+            const known = siteGet(brandKey);
+            if (text === null) {
+                if (!known || known.Has !== has)
+                    siteSet(brandKey, { Has: has });
+                return;
+            }
+            const v = { Has: has };
+            if (has && text.length <= brandCacheMax)
+                v.Css = text;
+            if (known && known.Has === v.Has && known.Css === v.Css)
+                return;
+            siteSet(brandKey, v);
+        }
+
+        /**
+         * Apply the brand stylesheet app/app.css to this document (once, see the file header). Never requests it: a page
+         * that links it waits for its link, any other page uses brandText.
+         * @returns {Promise<void>}
+         */
+        function loadBrand() {
+            const link = brandLink();
+            if (link) {
+                //  The shell (index.html) links it: wait for it, then look at the content and remember it for the other pages
+                const done = async () => {
+                    let has = false;
+                    let text = null;
+                    try {
+                        if (link.sheet) {
+                            text = sheetText(link.sheet);
+                            has = link.sheet.cssRules.length > 0;
+                        }
+                    }
+                    catch {
+                    }
+                    brandRemember(has, text);
+                    try {
+                        await brandLoaded(has);
+                    }
+                    finally {
+                        brandShow();
+                    }
+                };
+                if (link.sheet)
+                    return done();
+                return new Promise(res => {
+                    let fired = false;
+                    const fin = () => {
+                        if (fired)
+                            return;
+                        fired = true;
+                        res(done());
+                    };
+                    link.addEventListener("load", fin, { once: true });
+                    link.addEventListener("error", fin, { once: true });
+                    //  An empty file may be refused (served without a css mime type) before the listeners were added
+                    setTimeout(fin, 3000);
+                });
+            }
+            return (async () => {
+                const text = brandText() ?? "";
+                if (!text.trim()) {
+                    if (earlySheet) {
+                        const es = earlySheet;
+                        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(s => s !== es);
+                        earlySheet = null;
+                        earlyCss = null;
+                    }
+                    return await brandLoaded(false);
+                }
+                brandAdopt(text);
+                return await brandLoaded(true);
+            })();
+        }
+
+        /** @type {Promise<void>|null} The brand stylesheet load (started by the first Apply). */
+        let brand = null;
+
+        /** @type {boolean} True once brandEarly ran (first Apply). */
+        let earlyDone = false;
+
+        /**
+         * Set and persist a theme, apply it and notify other windows ("Theme.Changed").
+         * @param {string} themeName - Theme name (optionally "name@cssUrl").
+         * @returns {Promise<boolean>} true if the theme changed.
+         */
+        async function set(themeName) {
+            const before = get();
+            Sw.Session.RequestedTheme = null;
+            Sw.Storage.Set(storeKey, themeName);
+            await apply();
+            Sw.InterOp.Post("Theme.Changed");
+            return before != get();
+        }
+
+        /**
+         * Reset to the automatic theme (removes the stored choice), apply and notify other windows.
+         * @returns {Promise<boolean>} true if the theme changed.
+         */
+        async function reset() {
+            const before = get();
+            Sw.Storage.Remove(storeKey);
+            await apply();
+            Sw.InterOp.Post("Theme.Changed");
+            return before != get();
+        }
+
+        /** @type {boolean} True once WatchOs installed its listener. */
+        let watching = false;
+
+        // ------------------------------------------------------------------ density
+
+        /** localStorage key of the chosen density (missing = automatic). */
+        const densityKey = "SysWeaver.Density";
+
+        /** @type {string[]} The density names (html data-density, ui/tokens.css). */
+        const densities = ["compact", "comfortable", "touch"];
+
+        /** @type {string|null} A density forced by the url parameter "density" (not persisted). */
+        let densityForced = null;
+
+        {
+            const d = Sw.Url && Sw.Url.Get ? Sw.Url.Get("density") : null;
+            densityForced = d && densities.indexOf(d) >= 0 ? d : null;
+        }
+
+        /**
+         * The automatic density: touch on touch screens (coarse pointer) and in the mobile layout (Sw.Layout.Mobile / html.SwMobile), else the
+         * density the theme declares in the css custom property --sw-theme-density on html ("compact" | "comfortable"; ex: a css theme
+         * [data-theme="x"] { --sw-theme-density: compact; }), else compact for the Pro theme (data-theme="pro", also custom themes based on
+         * it), else comfortable.
+         * @returns {string} "compact" | "comfortable" | "touch".
+         */
+        function densityAuto() {
+            const de = document.documentElement;
+            if ((Sw.Layout && Sw.Layout.Mobile) || de.classList.contains("SwMobile"))
+                return "touch";
+            if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
+                return "touch";
+            const declared = (getComputedStyle(de).getPropertyValue("--sw-theme-density") || "").trim();
+            if (declared === "compact" || declared === "comfortable")
+                return declared;
+            return de.getAttribute("data-theme") === "pro" ? "compact" : "comfortable";
+        }
+
+        /**
+         * The density to use: the url parameter "density", else the stored choice (localStorage "SysWeaver.Density"), else automatic.
+         * @returns {string} "compact" | "comfortable" | "touch".
+         */
+        function densityGet() {
+            if (densityForced)
+                return densityForced;
+            const s = Sw.Storage.Get(densityKey, null);
+            return s && densities.indexOf(s) >= 0 ? s : densityAuto();
+        }
+
+        /**
+         * Write the density to use as data-density on html (no-op if unchanged); emits "density.changed" {Density, Auto} when it changed.
+         * @returns {string} The applied density.
+         */
+        function densityApply() {
+            const de = document.documentElement;
+            const d = densityGet();
+            if (de.getAttribute("data-density") !== d) {
+                de.setAttribute("data-density", d);
+                Sw.Events.Emit("density.changed", { Density: d, Auto: !densityForced && !Sw.Storage.Get(densityKey, null) });
+            }
+            return d;
+        }
+
+        /**
+         * Choose (and persist) a density, apply it and tell the other windows ("Density.Changed"; every SysWeaver window and frame re-applies).
+         * @param {string|null} name - "compact" | "comfortable" | "touch", or null / "" / "auto" for the automatic density.
+         * @returns {string} The applied density.
+         */
+        function densitySet(name) {
+            densityForced = null;
+            if (name && densities.indexOf(name) >= 0)
+                Sw.Storage.Set(densityKey, name);
+            else
+                Sw.Storage.Remove(densityKey);
+            const d = densityApply();
+            Sw.InterOp.Post("Density.Changed");
+            return d;
+        }
+
+        if (Sw.InterOp && Sw.InterOp.On)
+            Sw.InterOp.On("Density.Changed", () => densityApply());
+        if (window.matchMedia) {
+            const q = window.matchMedia("(pointer: coarse)");
+            if (q.addEventListener)
+                q.addEventListener("change", () => densityApply());
+        }
+
+        // ------------------------------------------------------------------ text size
+
+        /** localStorage key of the chosen text size (missing = 100 %). */
+        const textSizeKey = "SysWeaver.TextSize";
+
+        /** @type {number[]} The text sizes (percent; html data-text-size, ui/tokens.css; 100 = no attribute). */
+        const textSizes = [80, 100, 110, 125, 150];
+
+        /**
+         * The text size to use: the stored choice (localStorage "SysWeaver.TextSize"), else 100.
+         * @returns {number} 80 | 100 | 110 | 125 | 150.
+         */
+        function textSizeGet() {
+            const s = parseInt(Sw.Storage.Get(textSizeKey, null), 10);
+            return textSizes.indexOf(s) >= 0 ? s : 100;
+        }
+
+        /**
+         * Write the text size as data-text-size on html (no attribute for 100; no-op if unchanged); emits "textsize.changed" {TextSize}
+         * when it changed.
+         * @returns {number} The applied text size.
+         */
+        function textSizeApply() {
+            const de = document.documentElement;
+            const s = textSizeGet();
+            const v = s === 100 ? null : String(s);
+            if (de.getAttribute("data-text-size") !== v) {
+                if (v)
+                    de.setAttribute("data-text-size", v);
+                else
+                    de.removeAttribute("data-text-size");
+                Sw.Events.Emit("textsize.changed", { TextSize: s });
+            }
+            return s;
+        }
+
+        /**
+         * Choose (and persist) a text size, apply it and tell the other windows ("TextSize.Changed"; every SysWeaver window and frame re-applies).
+         * @param {number|null} size - 80 | 100 | 110 | 125 | 150 (null / other = 100).
+         * @returns {number} The applied text size.
+         */
+        function textSizeSet(size) {
+            size = parseInt(size, 10);
+            if ((size !== 100) && (textSizes.indexOf(size) >= 0))
+                Sw.Storage.Set(textSizeKey, String(size));
+            else
+                Sw.Storage.Remove(textSizeKey);
+            const s = textSizeApply();
+            Sw.InterOp.Post("TextSize.Changed");
+            return s;
+        }
+
+        if (Sw.InterOp && Sw.InterOp.On)
+            Sw.InterOp.On("TextSize.Changed", () => textSizeApply());
+
+        // ------------------------------------------------------------------ transparent frames
+
+        /**
+         * The color-scheme a framed document is drawn with: its root's computed color-scheme, else (normal) its color-scheme meta.
+         * @param {Document} d The document.
+         * @returns {string} The scheme ("normal", "dark", "light dark", ...).
+         */
+        function docScheme(d) {
+            const w = d.defaultView || window;
+            let cs = (w.getComputedStyle(d.documentElement).colorScheme || "").trim() || "normal";
+            if (cs === "normal") {
+                const m = d.querySelector('meta[name="color-scheme"]');
+                const v = m ? (m.getAttribute("content") || "").trim() : "";
+                if (v)
+                    cs = v;
+            }
+            return cs;
+        }
+
+        /**
+         * Keep a same-origin iframe transparent (owner R1: the text effect pages were white in a dark shell): a browser paints an opaque
+         * canvas behind a framed document whose color-scheme differs from the used color-scheme of its iframe element (ex: a lean page
+         * with color-scheme normal inside a dark page). So the iframe element gets its document's color-scheme (inline), on every load
+         * and whenever the document's scheme changes (its theme: the attributes of its html, its head). The iframe element draws nothing
+         * of its own, so nothing else changes. A cross-origin frame can't be read and is left as it is (allowtransparency stays).
+         * Installed for every iframe of the page (a load listener in the capture phase), so no page or component has to call it.
+         * @param {HTMLIFrameElement} f The iframe.
+         */
+        function matchFrame(f) {
+            let d = null;
+            try {
+                d = f.contentDocument;
+            }
+            catch {
+            }
+            if (!d || !d.documentElement) {
+                if (f.SwSchemeObs) {
+                    f.SwSchemeObs.disconnect();
+                    f.SwSchemeObs = null;
+                    f.SwSchemeDoc = null;
+                }
+                return;
+            }
+            const set = () => {
+                try {
+                    const cs = docScheme(d);
+                    if (f.style.colorScheme !== cs)
+                        f.style.colorScheme = cs;
+                }
+                catch {
+                }
+            };
+            set();
+            if (f.SwSchemeDoc === d)
+                return;
+            if (f.SwSchemeObs)
+                f.SwSchemeObs.disconnect();
+            f.SwSchemeDoc = d;
+            f.SwSchemeObs = null;
+            try {
+                const MO = (d.defaultView && d.defaultView.MutationObserver) || MutationObserver;
+                const obs = new MO(set);
+                obs.observe(d.documentElement, { attributes: true, attributeFilter: ["style", "class", "data-theme", "data-sw-scheme"] });
+                if (d.head)
+                    obs.observe(d.head, { childList: true });
+                f.SwSchemeObs = obs;
+            }
+            catch {
+            }
+        }
+
+        //  Every iframe of the page, once per window (the core may be loaded twice: sw/core.js and an old common.js)
+        if (!(Sw.Theme && Sw.Theme.MatchFrame)) {
+            document.addEventListener("load", ev => {
+                const f = ev.target;
+                if (f && f.tagName === "IFRAME")
+                    matchFrame(f);
+            }, true);
+            //  frames that loaded before this script ran
+            const scan = () => document.querySelectorAll("iframe").forEach(matchFrame);
+            if (document.readyState === "loading")
+                document.addEventListener("DOMContentLoaded", scan, { once: true });
+            else
+                scan();
+        }
+
+        /**
+         * @namespace Sw.Theme - theme engine.
+         */
+        Sw.Theme = {
+
+            /**
+             * Keep a same-origin iframe transparent: the iframe element gets the color-scheme of its document. Done by itself for every
+             * iframe of the page when it loads and when the framed document's theme changes; exposed for frames moved between documents.
+             * @param {HTMLIFrameElement} f The iframe.
+             */
+            MatchFrame: matchFrame,
+
+            /** @type {string} localStorage key of the chosen theme ("SysWeaver.Theme"). */
+            StorageKey: storeKey,
+
+            /** @type {string|null} The forced theme (from the "usetheme" url parameter), not persisted. */
+            get Forced() {
+                return forced();
+            },
+            set Forced(v) {
+                Sw.Session.RequestedTheme = v;
+            },
+
+            /** @type {string|null} The applied theme string (null before the first Apply). */
+            get Current() {
+                return current;
+            },
+
+            /** @type {boolean} True if the applied theme has a dark color scheme (also data-sw-scheme="dark" on html). */
+            get IsDark() {
+                return isDark;
+            },
+
+            /** @type {Promise<void>} Resolves when the brand stylesheet app/app.css was applied (or found empty) and the theme re-applied. */
+            get BrandReady() {
+                return brand ?? (brand = loadBrand());
+            },
+
+            /** Get the theme to use (see get). */
+            Get: get,
+
+            /**
+             * Apply the theme to use (see apply); the first call also loads the brand stylesheet (see BrandReady).
+             * @returns {Promise<void>}
+             */
+            Apply() {
+                if (!brand && !earlyDone) {
+                    earlyDone = true;
+                    try {
+                        brandEarly();
+                    }
+                    catch (e) {
+                        console.warn("Theme: " + e);
+                    }
+                }
+                const p = apply();
+                if (!brand) {
+                    const b = () => Sw.Theme.BrandReady;
+                    p.then(b, b);
+                }
+                return p;
+            },
+
+            /**
+             * Apply even if the same theme is already applied (e.g. after a stylesheet change).
+             * @returns {Promise<void>}
+             */
+            Reapply() {
+                current = null;
+                return apply();
+            },
+
+            /** Set, persist, apply and broadcast a theme (see set). */
+            Set: set,
+
+            /** Reset to the automatic theme (see reset). */
+            Reset: reset,
+
+            /**
+             * Toggle between light and dark (any non "light" theme becomes "light").
+             * @returns {Promise<boolean>} true if the theme changed.
+             */
+            Toggle: () => set(get() === "light" ? "dark" : "light"),
+
+            /**
+             * Register a custom theme; registering the applied theme re-applies it.
+             * Use lower case names (the server and shell theme menus compare lower case names).
+             * @param {string|{Name:string, Title:string, Scheme:string, Colors:object, Base:string}} nameOrTheme - Name, or a theme object with Name.
+             * @param {{Title:string, Description:string, Scheme:string, Colors:{Background:string, Foreground:string, Accent1:string, Accent2:string}, Base:string}} [def] - Definition when a name is given.
+             * Title: the name shown in the shell's settings menu (omit to keep the theme out of the menu); Scheme: "light" or "dark";
+             * Colors: the 4 base colors (omit when [data-theme="name"] css defines them); Base: the data-theme to use with the Colors.
+             */
+            Register(nameOrTheme, def) {
+                const t = typeof nameOrTheme === "string" ? Object.assign({ Name: nameOrTheme }, def) : nameOrTheme;
+                registered.set(t.Name, t);
+                const cur = current;
+                if (cur !== null && cur.split('@')[0] === t.Name) {
+                    current = null;
+                    apply();
+                }
+            },
+
+            /**
+             * List the theme names (built in, then registered).
+             * @returns {string[]}
+             */
+            List: () => builtIn.concat(Array.from(registered.keys()).filter(n => builtIn.indexOf(n) < 0)),
+
+            /**
+             * The registered custom themes that have a Title (for theme menus), in registration order.
+             * @returns {Array<object>}
+             */
+            Custom: () => Array.from(registered.values()).filter(t => t && t.Title && builtIn.indexOf(t.Name) < 0),
+
+            /**
+             * Get a registered custom theme definition (of this window only).
+             * @param {string} name - Theme name.
+             * @returns {object|undefined}
+             */
+            GetRegistered: name => registered.get(name),
+
+            /** @type {Object<string, function(number):*>} Theme animations by name (add to extend). */
+            Animations: animations,
+
+            /**
+             * Call fn whenever a theme was applied.
+             * @param {function({Theme:string, IsDark:boolean}):void} fn - Handler.
+             * @returns {function():void} Removes the handler.
+             */
+            OnChange: fn => Sw.Events.On("theme.changed", fn),
+
+            /**
+             * Follow OS / browser color scheme changes while the page is open (installed once): re-apply the theme
+             * (a stored or forced theme still wins) and, in the top window, post "Theme.Changed" when it changed.
+             */
+            WatchOs() {
+                if (watching || !window.matchMedia)
+                    return;
+                watching = true;
+                const q = window.matchMedia("(prefers-color-scheme: dark)");
+                /** Color scheme change handler. @returns {Promise<void>} */
+                const onChange = async () => {
+                    const before = current;
+                    await apply();
+                    if ((window.top === window.self) && (current !== before))
+                        Sw.InterOp.Post("Theme.Changed");
+                };
+                if (q.addEventListener)
+                    q.addEventListener("change", onChange);
+                else if (q.addListener)
+                    q.addListener(onChange);
+            },
+
+            /** Write the derived color properties again (e.g. after the base colors were changed by code). */
+            UpdateDerived: writeDerived,
+
+            /**
+             * @namespace Sw.Theme.Density - the UI density (Design v2): html data-density = "compact" | "comfortable" | "touch"; ui/tokens.css
+             * sizes controls, rows, icons and body text from it. Order: url parameter "density" (not persisted), localStorage
+             * "SysWeaver.Density" (per browser, like the theme), else automatic (touch on touch screens / mobile, compact for Pro, else
+             * comfortable). Applied with every theme apply and by Sw.Layout.Init; Set posts "Density.Changed" so every window and frame follows.
+             */
+            Density: {
+                /** @type {string} localStorage key of the chosen density. */
+                StorageKey: densityKey,
+                /** @type {string[]} The density names. */
+                Names: densities,
+                /** The density to use. @returns {string} */
+                Get: densityGet,
+                /** The automatic density (what Set(null) gives). @returns {string} */
+                Auto: densityAuto,
+                /** @type {boolean} True if no density was chosen (automatic). */
+                get IsAuto() {
+                    return !densityForced && !Sw.Storage.Get(densityKey, null);
+                },
+                /** Write data-density on html (no-op if unchanged). @returns {string} */
+                Apply: densityApply,
+                /** Choose, persist, apply and broadcast a density (null = automatic). @returns {string} */
+                Set: densitySet,
+                /**
+                 * Call fn whenever the applied density changed.
+                 * @param {function({Density:string, Auto:boolean}):void} fn - Handler.
+                 * @returns {function():void} Removes the handler.
+                 */
+                OnChange: fn => Sw.Events.On("density.changed", fn),
+            },
+
+            /**
+             * @namespace Sw.Theme.TextSize - the text size (percent): html data-text-size = "80" | "110" | "125" | "150" (no attribute = 100);
+             * ui/tokens.css scales the html font size by it, so every rem size (text, icons, controls, rows) follows and the layout reflows
+             * (no zoom: pointer positions, media queries and px borders stay as they are). localStorage "SysWeaver.TextSize" (per browser,
+             * like the density); applied with every theme apply; Set posts "TextSize.Changed" so every window and frame follows.
+             */
+            TextSize: {
+                /** @type {string} localStorage key of the chosen text size. */
+                StorageKey: textSizeKey,
+                /** @type {number[]} The text sizes (percent). */
+                Sizes: textSizes,
+                /** The text size to use. @returns {number} */
+                Get: textSizeGet,
+                /** Write data-text-size on html (no-op if unchanged). @returns {number} */
+                Apply: textSizeApply,
+                /** Choose, persist, apply and broadcast a text size (null = 100). @returns {number} */
+                Set: textSizeSet,
+                /**
+                 * Call fn whenever the applied text size changed.
+                 * @param {function({TextSize:number}):void} fn - Handler.
+                 * @returns {function():void} Removes the handler.
+                 */
+                OnChange: fn => Sw.Events.On("textsize.changed", fn),
+            },
+        };
+
+        /**
+         * Global: get the theme to use. @returns {string}
+         */
+        window.getTheme = function getTheme() {
+            return get();
+        };
+
+        /**
+         * Global: apply the theme to use. @returns {Promise<void>}
+         */
+        window.applyTheme = function applyTheme() {
+            return Sw.Theme.Apply();
+        };
+
+        /**
+         * Global (server Theme menu): set a theme ('light', 'dark', 'application', 'pro', 'hacker' or custom).
+         * @param {string} themeName - Theme name.
+         * @returns {Promise<boolean>} true if the theme changed.
+         */
+        window.setTheme = function setTheme(themeName) {
+            return set(themeName);
+        };
+
+        /**
+         * Global (server Theme menu "Automatic"): reset to the default theme.
+         * @returns {Promise<boolean>} true if the theme changed.
+         */
+        window.resetTheme = function resetTheme() {
+            return reset();
+        };
+
+        /**
+         * Global: toggle light / dark.
+         * @returns {Promise<boolean>} true if the theme changed.
+         */
+        window.toggleTheme = function toggleTheme() {
+            return Sw.Theme.Toggle();
+        };
+
+        /**
+         * Global: append the forced theme to an url ("useTheme=<name>").
+         * @param {string} url - Url.
+         * @returns {string}
+         */
+        window.appendTheme = function appendTheme(url) {
+            return Sw.Url.AppendTheme(url);
+        };
+
+        // ------------------------------------------------------------------ start (the theme part of the old SysWeaverInit)
+
+        //  The "css" url flag: an extra stylesheet of this site (resolved like IncludeCss: relative to common/; a crafted link must not restyle
+        //  the page with another site's css)
+        {
+            const css = Sw.Url.Get("css");
+            if (css) {
+                if (Sw.Url.SafeSameOrigin(css, Sw.Url.Common))
+                    Sw.Net.IncludeCss(null, css, true);
+                else
+                    Sw.DevWarn("Sw.Theme: ignored the css parameter (not an url of this site)", "init.css");
+            }
+        }
+        Sw.Theme.Apply();
+        Sw.Theme.WatchOs();
+        //  The requested theme changed (core/session_start.js): another window's setTheme / resetTheme drops a forced theme, a host page's
+        //  "theme.use" / "theme.set" (frames started with usetheme / settheme), Sw.Session.RequestTheme
+        Sw.Events.On("theme.request", () => Sw.Theme.Apply());
+    }
+})();

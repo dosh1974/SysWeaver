@@ -32,6 +32,26 @@ namespace SysWeaver.Excel
         
         public static readonly FormatCellDelegate DefaultFormatter = (cell, value, next) => cell.Value = value;
 
+        /// <summary>
+        /// True if a column holds date times that are UTC by convention (a <see cref="DateTime"/> or <see cref="DateTimeOffset"/> column, nullable or not,
+        /// without a special format), so an export should state the time zone in the header.
+        /// </summary>
+        /// <param name="type">The column type, may be null.</param>
+        /// <param name="options">The column format, may be null.</param>
+        /// <returns>True for UTC date time columns.</returns>
+        public static bool IsUtcColumn(Type type, String options)
+        {
+            if (type == null)
+                return false;
+            type = Nullable.GetUnderlyingType(type) ?? type;
+            if ((type != typeof(DateTime)) && (type != typeof(DateTimeOffset)))
+                return false;
+            if (String.IsNullOrEmpty(options))
+                return true;
+            var k = options.Split(';')[0];
+            return (k == "Default") || (k == "utc") || (k == "local");
+        }
+
 
         public static String Format(String fmt, params Object[] ps)
         {
@@ -85,11 +105,35 @@ namespace SysWeaver.Excel
             fmt(cell, value, next);
         };
 
+        /// <summary>
+        /// The name of an enum value (an enum, or a number from a serializer), null stays null, other texts are kept.
+        /// </summary>
+        /// <param name="enumType">The enum type</param>
+        /// <param name="value">The value</param>
+        /// <returns>The name (the flag names for a flags enum), or the value</returns>
+        static Object EnumToText(Type enumType, Object value)
+        {
+            if ((value == null) || (value is String))
+                return value;
+            if (value is Enum e)
+                return e.ToString();
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
+            if (Int64.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                return Enum.ToObject(enumType, l).ToString();
+            if (UInt64.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ul))
+                return Enum.ToObject(enumType, ul).ToString();
+            return text;
+        }
+
         static FormatCellDelegate GetDefaultFormatter(Type dataType, TableDataFormats fmt, String[] options)
         {
             var fmtStr = TypeGeneric;
             if (dataType != null)
             {
+                //  Enums (also nullable): the name, as the web client and the CSV export show it (exported data is often serialized, so the value is a number)
+                var enumType = Nullable.GetUnderlyingType(dataType) ?? dataType;
+                if (enumType.IsEnum)
+                    return (cell, value, next) => cell.Value = EnumToText(enumType, value);
                 if (TypeFormatters.TryGetValue(dataType, out var tf))
                     return tf.Item1(dataType, tf.Item2, tf.Item3);
                 if (TypeStyle.TryGetValue(dataType, out var temp))
@@ -123,6 +167,19 @@ namespace SysWeaver.Excel
                     }
                     fmtStr = String.Join(';', p);
                 }
+            }
+            //  Exported table data is often deserialized from json (the web client's current view, an api), so a date time is an ISO 8601 text:
+            //  make it a real (UTC) date cell
+            if (dataType == typeof(DateTime))
+            {
+                var dfmt = fmtStr;
+                return (cell, value, next) =>
+                {
+                    if ((value is String s) && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+                        value = dt;
+                    cell.Value = value;
+                    cell.Style.NumberFormat = dfmt;
+                };
             }
             return (cell, value, next) =>
             {
@@ -209,6 +266,30 @@ namespace SysWeaver.Excel
             dec += suffix;
             var fmtStr = String.Concat(prefix, "#,##0", dec, ";[Red]", prefix, "-#,##0", dec, ";[Blue]", prefix, "0", dec);
             var fmtStrText = String.Join("@", prefix, suffix);
+            //  An amount in a currency (the fifth option, see TableDataCurrencyAttribute): a number cell with the ISO 4217 code in the number format ("1,234.50 USD")
+            var curFmt = ol > 5 ? options[5] : null;
+            if (!String.IsNullOrEmpty(curFmt))
+            {
+                return (cell, value, next) =>
+                {
+                    String code = null;
+                    try
+                    {
+                        code = Format(curFmt, value, next, value);
+                    }
+                    catch
+                    {
+                    }
+                    cell.Value = value;
+                    if (String.IsNullOrEmpty(code))
+                    {
+                        cell.Style.NumberFormat = fmtStr;
+                        return;
+                    }
+                    var d = dec + EscapeNumberFormat(" " + code);
+                    cell.Style.NumberFormat = String.Concat(prefix, "#,##0", d, ";[Red]", prefix, "-#,##0", d, ";[Blue]", prefix, "0", d);
+                };
+            }
             if (dataType == typeof(long))
             {
                 return (cell, value, next) =>

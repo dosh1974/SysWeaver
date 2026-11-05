@@ -73,11 +73,26 @@ namespace SysWeaver
             {
                 var lastTime = Interlocked.Read(ref InternalTime);
                 var lastException = InternalException;
-                yield return new Stats(system, prefix + "Count", l, "Total number of exceptions registered");
-                yield return new Stats(system, prefix + "Time", new DateTime(lastTime, DateTimeKind.Utc), "The last time an exception was registered");
-                yield return new Stats(system, prefix + "Exception", lastException.ToString(), "The message of the last exception", ExMessageText);
+                yield return new Stats(system, prefix + "Count", l, StatsCountDesc);
+                yield return new Stats(system, prefix + "Time", new DateTime(lastTime, DateTimeKind.Utc), StatsTimeDesc);
+                yield return new Stats(system, prefix + "Exception", lastException.ToString(), StatsExceptionDesc, ExMessageText);
             }
         }
+
+        /// <summary>
+        /// The description of the "Count" statistics returned by <see cref="GetStats(string, string)"/> (used to find the statistics of exception trackers, ex: a problems table)
+        /// </summary>
+        public const String StatsCountDesc = "Total number of exceptions registered";
+
+        /// <summary>
+        /// The description of the "Time" statistics returned by <see cref="GetStats(string, string)"/>
+        /// </summary>
+        public const String StatsTimeDesc = "The last time an exception was registered";
+
+        /// <summary>
+        /// The description of the "Exception" statistics returned by <see cref="GetStats(string, string)"/>
+        /// </summary>
+        public const String StatsExceptionDesc = "The message of the last exception";
 
         static readonly TableDataTextAttribute ExMessageText = new (64);
 

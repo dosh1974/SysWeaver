@@ -24,7 +24,9 @@ vec3 mod289(vec3 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
 }
 
-vec2 mod289(vec2 x) {
+// No overloaded functions in effects: the shader minifier of the build (shader_minifier 1.6.0) renamed snoise(vec2) to
+// the minified name of this overload, two functions with the same signature, the built effect failed to compile.
+vec2 mod289v2(vec2 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
 }
 
@@ -54,7 +56,7 @@ float snoise(vec2 v)
   x12.xy -= i1;
 
 // Permutations
-  i = mod289(i); // Avoid truncation effects in permutation
+  i = mod289v2(i); // Avoid truncation effects in permutation
   vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
 		+ i.x + vec3(0.0, i1.x, 1.0 ));
 

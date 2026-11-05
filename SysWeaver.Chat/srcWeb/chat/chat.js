@@ -1,3834 +1,3258 @@
-﻿
-
-/**
- * @file chat.js - the web chat client of SysWeaver.Chat (served under `chat/`).
+﻿/**
+ * @file chat.js - the web chat client of SysWeaver.Chat (served as `chat/chat.js`).
  *
- * Loading: classic (non-module) script, loaded with `<script defer src="chat.js">` by `Chat.html`
- * (whose `<body class="ChatMain" onload="chatMain()">` is empty and built entirely from script).
- * Any other page may include it and call `Chat.addChat` directly (that is what `apiBase` is for).
+ * Loading: classic script. `Chat.html` loads `../sw/core.js`, `../sw/ui.js`, `speech.js` and this file and calls `chatMain()`
+ * from `<body onload>`. Any other page (new format, or old format with common.js) may include this file (and chat.css) and call
+ * `Sw.Chat.Add(container, chatId, apiBase, options)` (legacy name `Chat.addChat`); `speech.js` is then loaded on demand.
  *
- * Globals defined:
- * - `SpeechGen`   (class, static only) - text-to-speech on `window.speechSynthesis`, incl. incremental
- *                 speech of a message that is still streaming.
- * - `SpeechInput` (class, static only) - keyword / push-to-talk speech recognition on
- *                 `SpeechRecognition`/`webkitSpeechRecognition` + `SpeechGrammarList`.
- * - `ChatOptions` (class) - options bag for `Chat.addChat`.
- * - `Chat`        (class, static only) - `Chat.addChat` builds the complete chat UI (one ~2500 line closure).
- * - `chatMain`    (async function) - page entry point of `Chat.html`.
- * - `window.ChatColors`, `window.SpeakCurrentText`, `window.SpeakCurrentQueue`, `window.SpeakCurrentInit`
- *   (window globals created lazily at runtime, see `Chat.chatColor` and `SpeechGen`).
+ * Structure (namespace `Sw.Chat`):
+ * - `Options`        options of a chat (legacy global `ChatOptions`).
+ * - `Settings`       the persisted settings and drafts (localStorage keys `SysWeaver.Chat.*`, unchanged).
+ * - `MessageRow`     one message (header, content, attachments) incl. the draft preview row.
+ * - `Attachments`    renders the `;` separated attachment urls of a message and builds their menus.
+ * - `MessageList`    the scrolling list: stick to bottom, lazy loading of older messages, lookup by id.
+ * - `Composer`       the input: textarea, send / mic buttons, history, draft, drag and drop, uploads, language, speech input.
+ * - `ChatView`       one chat: Join, menus, server push messages, postMessage commands, speech output.
+ * - `Add(...)`       creates a ChatView (legacy `Chat.addChat`), `Color(name)` (legacy `Chat.chatColor`), `Main()` (legacy `chatMain`).
  *
- * Dependencies (must be loaded first):
- * - common.js: `sendRequest`, `getUrlParams`, `AddLoading`, `Fail`, `Confirm`, `_T`/`_TF` (i18n), `ColorIcon`,
- *   `includeJs`, `SessionManager`, `InterOp`, `StickToBottom`, `IsAtMaxScrollV`, `ValueFormat`, `legacySha256`,
- *   `isLetter`, `isMobile`, `getPlatform`, `insertAtCursor`, `imageExtensions`, `createImg`, `createIFrame`,
- *   `appendTheme`, `SetImageSource`, `GetAbsolutePath`, `Open`, `downloadFile`, `badClick`, `keyboardClick`
- *   and the `UserInteracted` document event.
- * - application.js: `PopUpMenu`, `PopUpSelection`, `WebMenu`, `WebMenuItem`.
- * - Optional, loaded on demand via `includeJs` when the chat has an `UploadRepo` (FileUploader project):
- *   `md5.js`, `UZIP.js`, `fileUploader.js` (`fileUploader`, `fileUploaderStatusText`, `UploadStatus`, `selectFiles`).
+ * Server: `ChatService` api methods relative to the page (`apiBase` + Join, GetMessages, UserMessage, RemoveMessage, ClearAllMessages,
+ * SetValue, Translate, StoreFile, StoreLink, GetInputLanguages) and `../Api/UserStorage/DeleteStoredFile`; live updates are the
+ * session messages `chat.post|replace|remove|clear.<provider>.<chatId lower cased>` (Sw.Session). Uploads use the FileUploader
+ * library `common/fileUploader.js` (`Sw.Upload`, or the legacy global `fileUploader` of an older copy; loaded on demand when the
+ * chat has an `UploadRepo`).
  *
- * Server: all API calls go to `ChatService` (`/chat/<Method>`, page relative) through `sendRequest`;
- * live updates arrive as session push messages `chat.post|replace|remove|clear.<chatid lowercased>`.
+ * Frame contract: commands from the parent window `{Type: "chat.scrolltop" | "chat.scrollbottom" | "chat.showall" | "chat.hideall" |
+ * "chat.clear"}`; posts `{Type: "ViewProfile", Name, Image}` to the parent.
  *
- * Conventions: message `Format` (0 text, 1 markdown, 2 HTML) and `Flags` mirror C# enums; `Data` is a
- * `;`-separated list of `../`-prefixed URLs; DOM rows double as the state store (expando members);
- * static field initializers run at load time and call `isMobile()` / `getPlatform()` from common.js.
+ * Globals defined (legacy, kept for other pages): `Chat` (`addChat`, `chatColor`, `FlagIsWorking`, `FlagCanRemove`, `IsMobile`,
+ * `Platform`), `ChatOptions`, `chatMain`.
  */
+(() => {
+    "use strict";
 
-/**
- * Static-only text-to-speech helper around `window.speechSynthesis`.
- * Supports one-shot speech (`speakOnce`) and incremental speech of a streamed message
- * (`speakNew` followed by `speakContinue`). All state lives in the `window.SpeakCurrent*` globals,
- * so there is only one TTS stream per page. Never instantiated.
- */
-class SpeechGen
-{
+    const Sw = window.Sw = window.Sw || {};
+    /** @type {object} The chat namespace (shared with speech.js). */
+    const C = Sw.Chat = Sw.Chat || {};
 
     /**
-     * Checks if speech synthesis is available.
-     * @returns {boolean} true if `window.speechSynthesis` exists.
+     * Create an element (Sw.el).
+     * @param {...*} a The Sw.el arguments.
+     * @returns {HTMLElement} The element.
      */
-    static supportSpeechGen() {
-        const ss = window.speechSynthesis;
-        if (!ss)
-            return false;
-        return true;
-    }
+    const el = (...a) => Sw.el(...a);
+
+    /** @type {string} The url of this script (base for loading speech.js on demand). */
+    const ScriptUrl = (document.currentScript && document.currentScript.src) || (Sw.Url ? Sw.Url.Root + "chat/chat.js" : "chat.js");
+
+    /** Message flags (C# ChatMessageFlags). */
+    const Flags = Object.freeze({
+        /** The message is not completed yet (ex: a streaming AI answer). */
+        IsWorking: 1,
+        /** The message is written by an AI (the sender gets an "AI" tag). */
+        FromAi: 2,
+        /** The message can be removed by this user (no confirmation). */
+        CanRemove: 256,
+    });
+
+    /** Message formats (C# ChatMessageFormats). */
+    const Formats = Object.freeze({ Text: 0, MarkDown: 1, Html: 2 });
 
     /**
-     * Substrings of voice names that are replaced by "male" before gender scoring in `findVoice`.
-     * @type {string[]}
+     * Markdown syntax that is unlikely in plain text: `**bold**` / `__bold__`, `*italic*` (not `2*3*4`), `~~strike~~`, `` `code` ``,
+     * a fenced code block, `[text](url)` links, `# headings`.
      */
-    static MaleNames = [
-        "George",
-        "Bengt",
+    const MarkDownSyntax = [
+        /\*\*[^*\s](?:[^*]*[^*\s])?\*\*/,
+        /(^|[^\w])__[^_\s](?:[^_]*[^_\s])?__(?!\w)/,
+        /(^|[\s(])\*[^*\s](?:[^*\n]*[^*\s])?\*(?=$|[\s.,;:!?)])/m,
+        /~~[^~\s](?:[^~]*[^~\s])?~~/,
+        /`[^`\n]+`/,
+        /^```/m,
+        /\[[^\]\n]+\]\((?:https?:\/\/|\.{0,2}\/)[^)\s]+\)/,
+        /^#{1,6} \S/m,
     ];
 
+    /**
+     * Test if a text contains markdown syntax (the automatic input format sends such texts as markdown).
+     * @param {?string} text The text.
+     * @returns {boolean} True if it looks like markdown.
+     */
+    const LooksLikeMarkDown = text => !!text && MarkDownSyntax.some(r => r.test(text));
+
+    /** Attachment extensions shown in a sandboxed iframe. */
+    const HtmlExtensions = Object.freeze({ html: 1, htm: 1 });
 
     /**
-     * Substrings of voice names that are replaced by "female" before gender scoring in `findVoice`.
-     * @type {string[]}
+     * The sandbox of html attachments: scripts, forms, popups and downloads work (LLM generated pages stay useful), but
+     * WITHOUT allow-same-origin the page gets a unique origin: it can't read this site's cookies / storage, call its apis as the
+     * user or reach this page. The server adds the same sandbox (a CSP header) to html files of the user storage.
      */
-    static FemaleNames = [
-        "Hazel",
-        "Susan",
-    ];
+    const HtmlSandbox = "allow-forms allow-presentation allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox allow-modals";
 
+    const InternalHtmlSandbox = HtmlSandbox + " allow-same-origin";
+
+    /** The menu icon (the hamburger of the icon module; the shared IconMenu class is a different image). */
+    const MenuIcon = (Sw.Url ? Sw.Url.Root : "../") + "icons/menu.svg";
+
+    /** The folder of the chat icons (mic states). */
+    const ChatIcons = (Sw.Url ? Sw.Url.Root : "../") + "chat/icons/";
+
+    /** A chat lower than this (px, ex: a phone with the on screen keyboard open) uses the tight input (.chat-tight, Composer.WatchSize). */
+    const TightHeight = 320;
+
+    /** Url of the image of the current user. */
+    const CurrentUserImage = "../auth/UserImages/Current/small";
 
     /**
-     * Case-insensitive containment similarity of two strings.
-     * @param {string} s1 - First string.
-     * @param {string} s2 - Second string.
-     * @returns {number} If the shorter string occurs in the longer one at index f: 1 / (1 + 0.02 * f), else 0.
+     * The url of a language flag.
+     * @param {string} iso The iso 639-1 code.
+     * @returns {string} The url.
      */
-    static similarity(s1, s2) {
-        let longer = s1;
-        let shorter = s2;
-        if (s1.length < s2.length) {
-            longer = s2;
-            shorter = s1;
-        }
-        shorter = shorter.toLowerCase();
-        longer = longer.toLowerCase();
-        const f = longer.indexOf(shorter);
-        if (f < 0)
-            return 0;
-        return 1.0 / (1.0 + 0.02 * f);
-    }
-
+    const flagUrl = iso => "../iso_data/language/" + iso + ".svg";
 
     /**
-     * Finds the best matching speech synthesis voice.
-     * Each voice from `speechSynthesis.getVoices()` is scored as
-     * `similarity(language, voice.lang) * 10 + similarity("male"|"female", fixedName) + (localService ? 0.8 : 0)`,
-     * where fixedName is the voice name with `MaleNames`/`FemaleNames` replaced by "male"/"female".
-     * A local voice whose name equals `exact` gets score 10000 (wins outright).
-     * @param {string} language - Language code to match (e.g. "en-US").
-     * @param {boolean} male - True to prefer a male voice, false for a female voice.
-     * @param {string} [exact] - Exact voice name to prefer (only if it is a local voice).
-     * @returns {SpeechSynthesisVoice|null} The highest scoring voice, or null if none scored above 0.
+     * Append an exception text to an error message (the old "<text>\nError:\n<message>" format).
+     * @param {string} text The message.
+     * @param {*} [e] The exception.
+     * @returns {string} The text.
      */
-    static findVoice(language, male, exact) {
-        const g = male ? "male" : "female";
-        const ss = window.speechSynthesis;
-        const voices = ss.getVoices();
-        let bestScore = 0;
-        let bestVoice = null;
-        for (const voice of voices) {
-
-            let nameFix = voice.name;
-            for (const fix of SpeechGen.MaleNames)
-                nameFix = nameFix.replace(fix, "male");
-            for (const fix of SpeechGen.FemaleNames)
-                nameFix = nameFix.replace(fix, "female");
-
-            let score = SpeechGen.similarity(language, voice.lang) * 10 + SpeechGen.similarity(g, nameFix) + (voice.localService ? 0.8 : 0);
-            if (exact) {
-                if (voice.name == exact)
-                    if (voice.localService)
-                        score = 10000;
-            }
-            //console.log("Voice: " + voice.lang + " - " + voice.name + " @ " + score);
-            if (score <= bestScore)
-                continue;
-            bestScore = score;
-            bestVoice = voice;
-        }
-        //console.log("Best voice: " + bestVoice.lang + " - " + bestVoice.name + " @ " + bestScore);
-        return bestVoice;
-
-    }
-
-
-
-    /**
-     * Phrase end characters (`! ? . ,`). While a message is incomplete, `speakContinue` only speaks up to the last of these.
-     * @type {Map<string, boolean>}
-     */
-    static EndChars = function () {
-        const m = new Map();
-        m.set('!', true);
-        m.set('?', true);
-        m.set('.', true);
-        m.set(',', true);
-        return m;
-    }();
-
-
-    /**
-     * Punctuation kept by `filterText` (`! ? . ,`).
-     * @type {Map<string, boolean>}
-     */
-    static ValidChars = function () {
-        const m = new Map();
-        m.set('!', true);
-        m.set('?', true);
-        m.set('.', true);
-        m.set(',', true);
-        return m;
-    }();
-
-    /**
-     * White space characters recognized by `filterText` (space, tab, \n, \r).
-     * @type {Map<string, boolean>}
-     */
-    static WhiteSpaces = function () {
-        const m = new Map();
-        m.set(' ', true);
-        m.set('\t', true);
-        m.set('\n', true);
-        m.set('\r', true);
-        return m;
-    }();
-
-
-    /**
-     * Math operator characters and their spoken form (`*` " times ", `+` " plus ", `-` " minus ", `/` " divided by ",
-     * `%` " modulo ", `^` " to the power of ", `=` " equals ", `≈` " is approximately "), used by `filterText`.
-     * @type {Map<string, string>}
-     */
-    static MathOps = function () {
-        const m = new Map();
-        m.set('*', " times ");
-        m.set('+', " plus ");
-        m.set('-', " minus ");
-        m.set('/', " divided by ");
-        m.set('%', " modulo ");
-        m.set('^', " to the power of ");
-        m.set('=', " equals ");
-        m.set('≈', " is approximately ");
-        return m;
-    }();
-
-
-
-    /**
-     * Converts text into speakable text.
-     * - Collapses white space runs to one space; white space between two digits is removed (joins digit groups).
-     * - Keeps digits and `ValidChars`; a comma directly after a digit is dropped (thousands separators).
-     * - A `MathOps` operator followed by a number is replaced by its words if preceded by a number (or always for `-`).
-     * - `(` becomes ", ".
-     * - Keeps letters (`isLetter` from common.js), drops everything else.
-     * @param {string} text - Raw text (plain or markdown).
-     * @returns {string} The filtered text ("" for empty input).
-     */
-    static filterText(text) {
-        const tl = text.length;
-        if (tl <= 0)
-            return "";
-        let wasWhite = true;
-        let prevIsNumber = false;
-        let out = "";
-        const white = SpeechGen.WhiteSpaces;
-        const mathOps = SpeechGen.MathOps;
-
-        /**
-         * Checks if the next non white space character after `pos` in `text` is a digit.
-         * @param {number} pos - Index to scan forward from (exclusive).
-         * @returns {boolean} true if a digit follows (skipping white space).
-         */
-        function NextIsNumber(pos) {
-            for (; ;) {
-                ++pos;
-                if (pos >= tl)
-                    return false;
-                const c = text.charAt(pos);
-                if ((c >= '0') && (c <= '9'))
-                    return true;
-                if (!white.get(c))
-                    return false;
-            }
-            return false;
-        }
-
-        /**
-         * Checks if the previous non white space character before `pos` in `text` is a digit.
-         * @param {number} pos - Index to scan backward from (exclusive).
-         * @returns {boolean} true if a digit precedes (skipping white space).
-         */
-        function PrevIsNumber(pos) {
-            for (; ;) {
-                --pos;
-                if (pos < 0)
-                    return false;
-                const c = text.charAt(pos);
-                if ((c >= '0') && (c <= '9'))
-                    return true;
-                if (!white.get(c))
-                    return false;
-            }
-            return false;
-        }
-
-        const valid = SpeechGen.ValidChars;
-        for (let i = 0; i < tl; ++i) {
-            const c = text.charAt(i);
-            if (white.get(c)) {
-                if (PrevIsNumber(i))
-                    if (NextIsNumber(i))
-                        continue;
-                prevIsNumber = false;
-                if (wasWhite)
-                    continue;
-                wasWhite = true;
-                out += ' ';
-                continue;
-            }
-            if ((c >= '0') && (c <= '9')) {
-                wasWhite = false;
-                prevIsNumber = true;
-                out += c;
-                continue;
-            }
-            if (valid.get(c)) {
-                if (prevIsNumber)
-                    if (c === ',')
-                        continue;
-                wasWhite = false;
-                prevIsNumber = false;
-                out += c;
-                continue;
-            }
-            const mathOp = mathOps.get(c);
-            if (mathOp) {
-                if (NextIsNumber(i)) {
-                    if ((c === '-') || PrevIsNumber(i)) {
-                        wasWhite = false;
-                        prevIsNumber = false;
-                        out += mathOp;
-                        continue;
-                    }
-                }
-            }
-            if (c === '('){
-                wasWhite = false;
-                prevIsNumber = false;
-                out += ", ";
-                continue;
-            }
-            if (!isLetter(c))
-                continue;
-            wasWhite = false;
-            prevIsNumber = false;
-            out += c;
-        }
-        return out;
-    }
-
-
-
-    /**
-     * `onend` handler of every utterance: if `window.SpeakCurrentQueue` holds non-empty (trimmed) text,
-     * clears the queue and speaks the text as a new utterance initialized by `window.SpeakCurrentInit`.
-     */
-    static onSpeakEnd() {
-        //console.log("SpeachSyntesis: onSpeakEnd");
-        const queue = window["SpeakCurrentQueue"];
-        if (!queue)
-            return;
-        if (queue.length <= 0)
-            return;
-        const text = queue.trim();
-        window["SpeakCurrentQueue"] = "";
-        if (text.length <= 0)
-            return;
-        const u = new SpeechSynthesisUtterance(text);
-        window["SpeakCurrentInit"](u);
-        const ss = window.speechSynthesis;
-        //console.log("SpeachSyntesis: Speaking (from queue): " + text);
-        ss.speak(u);
+    function withError(text, e) {
+        if (!e)
+            return text;
+        return text + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + (e.message || e);
     }
 
     /**
-     * Clears `window.SpeakCurrentQueue` and cancels any ongoing speech (`speechSynthesis.cancel()` if speaking).
+     * Call an api; a falsy result or an exception shows a fail toast.
+     * @param {string} url The api url.
+     * @param {*} arg The argument.
+     * @param {string} failText The fail text.
+     * @returns {Promise<*>} The result, or null on failure.
      */
-    static cancelSpeak() {
-        const ss = window.speechSynthesis;
-        window["SpeakCurrentQueue"] = "";
-        if (!ss.speaking)
-            return;
-        //console.log("SpeachSyntesis: Cancelling speach!");
-        ss.cancel();
-    }
-
-
-    /**
-     * Speaks a complete text once (not incremental). Cancels any current speech first.
-     * Does nothing if the filtered text is empty. Not called inside this file.
-     * @param {string} text - Text to speak (filtered with `filterText`).
-     * @param {SpeechSynthesisVoice} [voice] - Voice to use (browser default if falsy).
-     * @param {number} pitch - Utterance pitch (assigned as is).
-     * @param {number} [rate] - Utterance rate (browser default if falsy).
-     * @param {number} [volume=0.5] - Volume 0-1 (0.5 if falsy).
-     * @param {string} [lang="en"] - Utterance language.
-     */
-    static speakOnce(text, voice, pitch, rate, volume, lang) {
-        text = SpeechGen.filterText(text);
-        if (text.length <= 0)
-            return;
-        const ss = window.speechSynthesis;
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = lang ? lang : "en";
-        if (voice)
-            u.voice = voice;
-        u.pitch = pitch;
-        if (rate)
-            u.rate = rate;
-        u.volume = volume ? volume : 0.5;
-        u.onend = SpeechGen.onSpeakEnd;
-        SpeechGen.cancelSpeak();
-        //console.log("SpeachSyntesis: Speaking: " + newText);
-        ss.speak(u);
-    }
-
-    /**
-     * Starts a new incremental speech stream (used for newly posted messages).
-     * Resets `window.SpeakCurrentText` to "", stores an utterance initializer with the given settings in
-     * `window.SpeakCurrentInit` (lang, voice, pitch, rate, volume, onend = `onSpeakEnd`), then calls `speakContinue(text)`.
-     * @param {string} text - The (possibly incomplete) message text.
-     * @param {SpeechSynthesisVoice} [voice] - Voice to use (browser default if falsy).
-     * @param {number} pitch - Utterance pitch.
-     * @param {number} [rate] - Utterance rate (browser default if falsy).
-     * @param {number} [volume=0.5] - Volume 0-1 (0.5 if falsy).
-     * @param {string} [lang="en"] - Utterance language.
-     */
-    static speakNew(text, voice, pitch, rate, volume, lang) {
-        text = SpeechGen.filterText(text);
-        window["SpeakCurrentText"] = "";
-        window["SpeakCurrentInit"] = u => {
-            u.lang = lang ? lang : "en";
-            if (voice)
-                u.voice = voice;
-            u.pitch = pitch;
-            if (rate)
-                u.rate = rate;
-            u.volume = volume ? volume : 0.5;
-            u.onend = SpeechGen.onSpeakEnd;
-        };
-        SpeechGen.speakContinue(text);
-    }
-
-    /**
-     * Continues speaking a streamed message whose text has grown (used for `replace` push events).
-     * The text is filtered; if it no longer starts with the already spoken prefix (`window.SpeakCurrentText`),
-     * the prefix is reset and speech is cancelled. Unless `isCompleted`, returns while already speaking, and only
-     * takes the new suffix up to (and including) the last `EndChars` character. The taken part is appended to
-     * `SpeakCurrentText` and then either appended to `window.SpeakCurrentQueue` (if speaking, flushed by `onSpeakEnd`)
-     * or spoken immediately with `window.SpeakCurrentInit` (cancelling first if it is the first chunk).
-     * Requires a prior `speakNew` (uses `window.SpeakCurrentInit`).
-     * @param {string} text - The full current message text.
-     * @param {boolean} [isCompleted] - True when the message is complete: speak all remaining text.
-     */
-    static speakContinue(text, isCompleted) {
-        //console.log("Continue " + text);
-        text = SpeechGen.filterText(text);
-        let prev = window["SpeakCurrentText"];
-        if (!text.startsWith(prev)) {
-            prev = "";
-            window["SpeakCurrentText"] = prev;
-            SpeechGen.cancelSpeak();
-        }
-        const ss = window.speechSynthesis;
-        if (!isCompleted)
-            if (ss.speaking)
-                return;
-        const next = text.substring(prev.length);
-        let goodUntil = next.length;
-        if (!isCompleted) {
-            const end = SpeechGen.EndChars;
-            while (goodUntil > 0) {
-                --goodUntil;
-                if (end.get(next.charAt(goodUntil))) {
-                    ++goodUntil;
-                    break;
-                }
-            }
-        }
-        if (goodUntil <= 0)
-            return;
-        let newText = next.substring(0, goodUntil);
-        window["SpeakCurrentText"] = prev + newText;
-        newText = newText.trim();
-        if (newText.length <= 0)
-            return;
-        if (prev.length <= 0)
-            SpeechGen.cancelSpeak();
-        if (ss.speaking) {
-            let queue = window["SpeakCurrentQueue"];
-            if (!queue)
-                queue = "";
-            //console.log("SpeachSyntesis: Queuing: " + newText);
-            window["SpeakCurrentQueue"] = queue + newText;
-        } else {
-            const u = new SpeechSynthesisUtterance(newText);
-            window["SpeakCurrentInit"](u);
-            //console.log("SpeachSyntesis: Speaking: " + newText);
-            ss.speak(u);
-
-        }
-    }
-
-
-}
-
-/**
- * Static-only speech recognition helper around `SpeechRecognition` / `webkitSpeechRecognition` and
- * `SpeechGrammarList`. `triggerOnSpeech` creates a recognizer for wake words (open mic) or push-to-talk
- * and returns its stop function. Never instantiated.
- */
-class SpeechInput {
-    /**
-     * `isMobile()` (common.js) evaluated at load; open mic and joining of final results are disabled on mobile.
-     * @type {boolean}
-     */
-    static IsMobile = isMobile();
-
-    /**
-     * Checks if continuous (open mic, keyword triggered) listening is supported.
-     * @returns {boolean} false on mobile devices.
-     */
-    static supportOpenMic() {
-        return !SpeechInput.IsMobile;
-    }
-
-    /**
-     * Checks if speech recognition is supported.
-     * @returns {boolean} true if both a `SpeechRecognition` and a `SpeechGrammarList` constructor (standard or webkit prefixed) exist.
-     */
-    static supportSpeechRec() {
-        const sr = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-        const sgl = window.SpeechGrammarList ?? window.webkitSpeechGrammarList;
-        if (!sr)
-            return false;
-        if (!sgl)
-            return false;
-        return true;
-    }
-
-
-    /**
-     * Stop words (abort, stop, cancel, reset, restart): a final result whose last word is one of these aborts the current input.
-     * Note: compared case sensitively against `GetLastWord` (which preserves case).
-     * @type {Map<string, number>}
-     */
-    static StopWords = function () {
-        const m = new Map();
-        m.set('abort', 1);
-        m.set('stop', 1);
-        m.set('cancel', 1);
-        m.set('reset', 1);
-        m.set('restart', 1);
-        return m;
-    }();
-
-    /**
-     * Characters that separate words for `GetLastWord`: white space and `! ? . , ¡ ¿`.
-     * @type {Map<string, number>}
-     */
-    static NonWordChars = function () {
-        const m = new Map();
-        m.set(' ', 1);
-        m.set('\t', 1);
-        m.set('\n', 1);
-        m.set('\r', 1);
-        m.set('!', 1);
-        m.set('?', 1);
-        m.set('.', 1);
-        m.set(',', 1);
-        m.set('¡', 1);
-        m.set('¿', 1);
-        return m;
-    }();
-
-
-    /**
-     * Question words (who/what/where/when/why/which/whose/how and their "'s" forms, lower case):
-     * any occurrence makes a sentence a question (ends with "?").
-     * @type {Map<string, number>}
-     */
-    static QuestionWordMap = function () {
-        const m = new Map();
-        m.set("who", 1);
-        m.set("who's", 1);
-        m.set("what", 1);
-        m.set("what's", 1);
-        m.set("where", 1);
-        m.set("where's", 1);
-        m.set("when", 1);
-        m.set("when's", 1);
-        m.set("why", 1);
-        m.set("why's", 1);
-        m.set("which", 1);
-        m.set("which's", 1);
-        m.set("whose", 1);
-        m.set("whose's", 1);
-        m.set("how", 1);
-        m.set("how's", 1);
-        return m;
-    }();
-
-    /**
-     * Words (are/aren't/am/is/isn't/do/don't/does/doesn't) that make a sentence a question only when they are its first word.
-     * @type {Map<string, number>}
-     */
-    static QuestionWordStartMap = function () {
-        const m = new Map();
-        m.set("are", 1);
-        m.set("aren't", 1);
-        m.set("am", 1);
-        m.set("is", 1);
-        m.set("isn't", 1);
-        m.set("do", 1);
-        m.set("don't", 1);
-        m.set("does", 1);
-        m.set("doesn't", 1);
-        return m;
-    }();
-
-    /**
-     * Gets the last word of a text (trailing `NonWordChars` are skipped).
-     * @param {string} text - Text to inspect.
-     * @returns {string} The last run of non `NonWordChars` characters (case preserved), or "".
-     * Note: because of the `l > 0` loop bound, returns "" when the last word is a single character at index 0.
-     */
-    static GetLastWord(text) {
-
-        let l = text.length;
-        if (l <= 0)
-            return "";
-        const nc = SpeechInput.NonWordChars;
-        while (l > 0) {
-            --l;
-            const c = text.charAt(l);
-            if (!nc.get(c))
-                break;
-        }
-        if (l <= 0)
-            return "";
-        const e = l + 1;
-        while (l > 0) {
-            --l;
-            const c = text.charAt(l);
-            if (nc.get(c)) {
-                ++l;
-                break;
-            }
-        }
-        return text.substring(l, e);
-    }
-
-    /**
-     * Creates and starts a speech recognizer that activates on wake words (open mic) or immediately (push-to-talk).
-     * - Builds a JSGF grammar `public <keyword> = k1,k2...`, sets `continuous`, `interimResults`, `maxAlternatives = 1`.
-     * - If `start()` throws (no user gesture yet), retries on the common.js `UserInteracted` document event.
-     * - With `noOpenMic`, calls `onActivate(true, true)` right after starting.
-     * - `onend` restarts (open mic) or stops (`noOpenMic`).
-     * - `onerror`: "no-speech" ignored; "aborted" stops (`noOpenMic`) or calls `onActivate(null, false)`;
-     *   other errors are logged with `console.warn` and stop.
-     * - `onresult`: detects the keyword once per sentence (`onActivate(key, true)`), streams `filter(part)` as interim
-     *   text via `onSentance(text, false)`. On a final result: if the last word is a `StopWords` entry the input is
-     *   aborted (`onSentance("", true)`), else a 1500 ms debounce timer delivers `onSentance(filter(final), true)`;
-     *   new results reset the timer. On non mobile, consecutive results of one activation are joined with ". ".
-     * @param {string|string[]} keyword - Wake word entries `"wakeword|prefix"`; the wake word is lowercased, the
-     *   optional prefix is prepended to every produced sentence.
-     * @param {function(?(string|boolean), boolean):(void|Promise<void>)} [onActivate] - Called with the detected keyword
-     *   on activation (`true` for push-to-talk start), `(null, true)` after a sentence completes in open mic mode,
-     *   `(null, false)` when stopped.
-     * @param {function(string, boolean):(void|Promise<void>)} [onSentance] - Receives filtered text; second arg false
-     *   for interim text, true for the final sentence.
-     * @param {string} [language="en-US"] - Recognition language.
-     * @param {boolean} [ignoreKeyword] - If true any speech activates (the first keyword is used for prefix/filtering).
-     * @param {boolean} [noOpenMic] - If true, stop after one sentence instead of restarting (push-to-talk).
-     * @returns {?function():Promise<void>} The async stop function, or null if speech recognition is unsupported.
-     */
-    static triggerOnSpeech(keyword, onActivate, onSentance, language, ignoreKeyword, noOpenMic) {
-
-        const keywordMap = new Map();
-        if (keyword) {
-            if (Array.isArray(keyword)) {
-                keyword.forEach(x => {
-                    const kv = x.split('|');
-                    keywordMap.set(kv[0].toLowerCase(), kv.length > 1 ? kv[1] : "");
-
-                });
-            } else {
-                const kv = keyword.split('|');
-                keywordMap.set(kv[0].toLowerCase(), kv.length > 1 ? kv[1] : "");
-            }
-        }
-        const keywordArray = Array.from(keywordMap.keys());
-        const keywords = keywordArray.join(",");
-        const keywordCount = keywordArray.length;
-
-        /**
-         * Finds the first keyword contained in a transcript.
-         * @param {string} str - Transcript (compared lowercased).
-         * @returns {?string} The first matching keyword; with `ignoreKeyword` the first keyword when none matches; else null.
-         */
-        function haveKeyword(str) {
-            str = str.toLowerCase();
-            for (let i = 0; i < keywordCount; ++i) {
-                const x = keywordArray[i];
-                if (str.indexOf(x) >= 0)
-                    return x;
-            }
-            if (ignoreKeyword)
-                return keywordArray[0];
-            return null;
-        }
-
-
-        onActivate = onActivate ?? (x => { });
-        onSentance = onSentance ?? (x => { });
-        const sr = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-        const sgl = window.SpeechGrammarList ?? window.webkitSpeechGrammarList;
-        if (!sr)
-            return null;
-        if (!sgl)
-            return null;
-        let recognition = new sr();
-        const speechRecognitionList = new sgl();
-        speechRecognitionList.addFromString("#JSGF V1.0; grammar keywords; public <keyword> = " + keywords, 1);
-        recognition.grammars = speechRecognitionList;
-        recognition.continuous = true;
-        recognition.lang = language ?? "en-US";
-        recognition.interimResults = true;
-        recognition.maxAlternatives = 1;
-        /**
-         * Starts the recognizer and removes itself as a `UserInteracted` listener. Also used as `onend` handler in open mic mode (restart).
-         * @throws If the browser refuses to start (e.g. no user gesture yet).
-         */
-        const start = () => {
-            recognition.start();
-            //console.log("Speech recognition: Started");
-            document.removeEventListener("UserInteracted", start);
-        };
-
-        /**
-         * Stops recognition for good: detaches handlers, stops the recognizer, nulls it and calls `onActivate(null, false)`.
-         * No-op if already stopped. This is the function returned by `triggerOnSpeech`.
-         * @returns {Promise<void>}
-         */
-        const stop = async () => {
-            if (!recognition)
-                return;
-            //console.log("Speech recognition: Destroyed");
-            recognition.onerror = null;
-            recognition.onend = null;
-            recognition.onresult = null;
-            recognition.stop();
-            recognition = null;
-            await onActivate(null, false);
-        };
-
-
-        /** Accumulated final text of the current activation (joined with ". " on non mobile). @type {string} */
-        let add = "";
-        /** Pending debounce timer (setTimeout handle) that delivers the final sentence, or null. */
-        let del = null;
-        /** The keyword of the current activation, or null when not activated. @type {?string} */
-        let isKey = null;
-
-        /**
-         * Tests for white space.
-         * @param {string} s - Text (usually one character).
-         * @returns {boolean} true if `s` contains white space.
-         */
-        function hasWhiteSpace(s) {
-            return RegExp(/\s/g).test(s);
-        }
-
-        /**
-         * Tests if `s` starts with a Unicode letter. Not used.
-         * @param {string} s - Text.
-         * @returns {boolean} true if the first character is a letter.
-         */
-        function isChar(s) {
-            return RegExp(/^\p{L}/, 'u').test(s);
-        }
-
-
-        /**
-         * Checks if a word makes its sentence a question.
-         * @param {string} word - The word (compared lowercased).
-         * @param {boolean} isFirstWord - True if it is the first word of the sentence (enables `QuestionWordStartMap`).
-         * @returns {boolean} true for a question word.
-         */
-        function isQuestionWord(word, isFirstWord) {
-            word = word.toLowerCase();
-            if (isFirstWord && (SpeechInput.QuestionWordStartMap.get(word) === 1))
-                return true;
-            return SpeechInput.QuestionWordMap.get(word) === 1;
-        }
-
-        /**
-         * Turns a raw transcript into a sentence: removes text up to and including the keyword, trims, capitalizes the
-         * first letter of each sentence, replaces `.` by `?` for question sentences, strips trailing space/`.`/`!`/`?`,
-         * appends "? " or ". " and prepends the keyword's prefix (from `keywordMap`).
-         * @param {string} text - Transcript.
-         * @param {string} keyw - The active keyword.
-         * @returns {string} The filtered sentence, or "" for empty text.
-         */
-        function filter(text, keyw) {
-            const ff = text.toLowerCase().indexOf(keyw);
-            if (ff >= 0)
-                text = text.substring(ff + keyw.length);
-            text = text.trim();
-            if (text.length <= 0)
-                return "";
-            let out = "";
-            let makeNextUpper = true;
-            let isQuestion = false;
-            let removeWhiteSpace = true;
-            let isFirstWord = true;
-            const tl = text.length;
-            let wordStart = -1;
-            for (let i = 0; i < tl; ++i) {
-                let ch = text.charAt(i);
-                const isWhiteSpace = hasWhiteSpace(ch) || (ch === '.');
-                if (removeWhiteSpace) {
-                    if (isWhiteSpace)
-                        continue;
-                    removeWhiteSpace = false;
-                }
-                if (makeNextUpper) {
-                    makeNextUpper = false;
-                    ch = ch.toUpperCase();
-                }
-                if (wordStart >= 0) {
-                    if (isWhiteSpace) {
-                        isQuestion |= isQuestionWord(text.substring(wordStart, i), isFirstWord);
-                        wordStart = -1;
-                        isFirstWord = false;
-                    }
-                } else {
-                    if (isLetter(ch))
-                        wordStart = i;
-                }
-                if (ch === '.') {
-                    if (isQuestion) {
-                        ch = '?';
-                        isQuestion = false;
-                    }
-                    makeNextUpper = true;
-                    isFirstWord = true;
-                }
-                out += ch;
-            }
-            if (wordStart >= 0)
-                isQuestion |= isQuestionWord(text.substring(wordStart, tl), isFirstWord);
-            out = out.trim();
-            const ol = out.length;
-            if (ol <= 0)
-                return "";
-            for (; ;) {
-                const last = out.charAt(ol - 1);
-                switch (last) {
-                    case ' ':
-                    case '.':
-                    case '!':
-                    case '?':
-                        out = out.substring(0, ol - 1);
-                        continue;
-                }
-                break;
-            }
-            out += (isQuestion ? "? " : ". ");
-            return keywordMap.get(keyw) + out;
-        }
-
-
-
-        /**
-         * Recognition error handler: ignores "no-speech"; "aborted" stops (push-to-talk) or deactivates (open mic);
-         * other errors are logged and stop recognition.
-         * @param {SpeechRecognitionErrorEvent} ev - The error event.
-         * @returns {Promise<void>}
-         */
-        recognition.onerror = async ev => {
-            if (ev.error === "no-speech")
-                return;
-            if (ev.error === "aborted") {
-                if (noOpenMic)
-                    await stop();
-                else
-                    await onActivate(null, false);
-                return;
-            }
-            console.warn("Speech recognition: Error - " + ev.error);
-            await stop();
-        };
-        recognition.onend = noOpenMic ? stop : start;
-        /**
-         * Recognition result handler: keyword detection, interim streaming, stop word abort and the 1500 ms
-         * debounced delivery of the final sentence (see `triggerOnSpeech`).
-         * @param {SpeechRecognitionEvent} event - The result event (`event.results[event.resultIndex][0].transcript`).
-         * @returns {Promise<void>}
-         */
-        recognition.onresult = async event => {
-            const res = event.results[event.resultIndex];
-            const a = res[0];
-            if (del) {
-                clearTimeout(del);
-                del = null;
-            }
-            const t = a.transcript;
-            if (t.length <= 0)
-                return;
-            //console.log("Speech: " + t);
-            const pk = isKey;
-            isKey = isKey ?? haveKeyword(t);
-            if (pk !== isKey) {
-                await onActivate(isKey, true);
-                add = "";
-            }
-            const part = SpeechInput.IsMobile ? t : (add.length > 0 ? (add + ". " + t) : t);
-            /*
-            const lw = SpeechInput.GetLastWord(part);
-            if (SpeechInput.StopWords.get(lw)) {
-                console.log("Speech recognition: Input aborted!");
-                if (noOpenMic)
-                    await stop();
-                if (isKey)
-                    await onActivate(null, !noOpenMic);
-                await onSentance("", false);
-                del = null;
-                add = "";
-                return;
-            }
-            */
-
-            if (isKey)
-                await onSentance(filter(part, isKey), false);
-            if (res.isFinal) {
-                add = part;
-                const final = add.trim();
-                const lw = SpeechInput.GetLastWord(final);
-                if (SpeechInput.StopWords.get(lw)) {
-                    if (isKey) {
-                        isKey = null;
-                        del = null;
-                        add = "";
-                        //console.log("Speech recognition: Input aborted!");
-                        if (noOpenMic)
-                            await stop();
-                        else
-                            await onActivate(null, true);
-                        await onSentance("", true);
-                        return;
-                    }
-                }
-                del = setTimeout(async () => {
-                    del = null;
-                    add = "";
-                    if (isKey) {
-                        const finalKey = isKey;
-                        isKey = null;
-                        if (noOpenMic)
-                            await stop();
-                        else
-                            await onActivate(null, true);
-                        await onSentance(filter(final, finalKey), true);
-                    }
-                }, noOpenMic ? 1500 : 1500);
-            }
-        };
+    async function call(url, arg, failText) {
         try {
-            //console.log("Speech recognition: Created");
-            start();
-            if (noOpenMic)
-                onActivate(true, true);
+            const r = await Sw.Net.Send(url, arg);
+            if (!r)
+                Sw.Fail(failText);
+            return r || null;
         }
-        catch
-        {
-            document.addEventListener("UserInteracted", start);
+        catch (e) {
+            Sw.Fail(withError(failText, e));
+            return null;
         }
-        return stop;
     }
 
-
-}
-
-
-/**
- * Options bag for `Chat.addChat`. Created with `new ChatOptions()` (by `chatMain`, merged with the `options`
- * URL parameter via `Object.assign`, or by `addChat` when no options are given).
- */
-class ChatOptions {
-    /** The size in pixels of the top right menu icon (scaled with theme) */
-    MenuIconSize = 48;
-    /** The size in pixels of the microphone icon (scaled with theme) */
-    AudioIconSize = 48;
-    /** The size in pixels of the send icon (scaled with theme) */
-    SendIconSize = 48;
-    /** If true use per user color */
-    UserColor = true;
-    /** Used to determine what local storage keys to use for settings:
-     * - '*', use the chat id (per chat settings).
-     * - null, use the same settings for all chats.
-     * - Some string used in the key (group settings for all chats with same string).
+    /**
+     * Copy a text to the clipboard with an info toast.
+     * @param {string} text The text.
+     * @returns {Promise<boolean>} True on success.
      */
-    SettingsName = null;
-
-}
-
-/**
- * Static-only chat UI factory. `Chat.addChat` builds the complete UI of one chat inside a container element
- * (message list, input, preview, menus, speech, uploads, push updates); all logic lives in closures inside it.
- */
-class Chat {
-
-    /** If this flag is set on a message it means that it's not completed yet, like streaming chat */
-    static FlagIsWorking = 1;
-
-    /** If this flag is set on a message it means that the message can be remvoed by this user */
-    static FlagCanRemove = 256;
-
+    const copy = text => Sw.Clipboard.Copy(text ?? "");
 
     /**
-     * Converts a text (the sender name, `m.From`) to a stable set of colors.
-     * Hashes `text` with `legacySha256` (common.js) into hue/saturation/lightness; results are cached in the
-     * lazily created `window.ChatColors` Map.
-     * @param {string} text - The sender name.
-     * @returns {string[]} `[border, headerBackground, headerText]`: `"hsl(h s l / 0.5)"`, `"hsl(h s l / 0.05)"`, `"hsl(h s l)"`.
+     * Parse a message time (a falsy value or "0001-01-01T00:00:00" gives null).
+     * @param {string|number|Date} value The ChatMessage.Time.
+     * @returns {?Date} The date.
      */
-    static chatColor(text) {
-        const t = window.ChatColors ?? new Map();
-        /** Global cache: sender name -> [border, headerBackground, headerText] colors. @type {Map<string, string[]>} */
-        window.ChatColors = t;
-        let c = t.get(text);
+    function messageDate(value) {
+        if (!value || value === "0001-01-01T00:00:00")
+            return null;
+        const d = value instanceof Date ? value : new Date(value);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    /**
+     * The age text of a message (the age mode, ChatView.ShowTimeStamp off), in words with the largest readable units and
+     * correct singular / plural forms: "1 second ago", "12 seconds ago", "5 minutes ago", "3 hours 49 minutes ago" (below a day),
+     * "2 days 4 hours ago" (below a week), then "12 days ago". Every singular / plural combination is its own translatable
+     * literal (words are never built by adding an "s"). The full time stamp is in the tool tip.
+     * @param {?Date} d The message time (null = now).
+     * @param {number} now The current time (ms).
+     * @returns {string} The text.
+     */
+    function ageText(d, now) {
+        const s = Math.max(0, Math.floor((d ? now - d.getTime() : 0) / 1000));
+        if (s < 60)
+            return s === 1
+                ? _TF("1 second ago", "Text that indicates that a chat message was written one second ago")
+                : _T("{0} seconds ago", s, "Text that indicates how old a chat message is (less than a minute, never 1).{0} is replaced with the number of seconds");
+        const min = Math.floor(s / 60);
+        if (min < 60)
+            return min === 1
+                ? _TF("1 minute ago", "Text that indicates that a chat message was written one minute ago")
+                : _T("{0} minutes ago", min, "Text that indicates how old a chat message is (less than an hour, never 1).{0} is replaced with the number of minutes");
+        const h = Math.floor(min / 60);
+        const m = min % 60;
+        if (h < 24) {
+            if (h === 1)
+                return m === 0
+                    ? _TF("1 hour ago", "Text that indicates that a chat message was written one hour ago")
+                    : (m === 1
+                        ? _TF("1 hour 1 minute ago", "Text that indicates that a chat message was written one hour and one minute ago")
+                        : _T("1 hour {0} minutes ago", m, "Text that indicates how old a chat message is (one hour and some minutes, never 1).{0} is replaced with the number of minutes"));
+            return m === 0
+                ? _T("{0} hours ago", h, "Text that indicates how old a chat message is (whole hours, less than a day, never 1).{0} is replaced with the number of hours")
+                : (m === 1
+                    ? _T("{0} hours 1 minute ago", h, "Text that indicates how old a chat message is (some hours, never 1, and one minute).{0} is replaced with the number of hours")
+                    : _T("{0} hours {1} minutes ago", h, m, "Text that indicates how old a chat message is (less than a day, never 1 hour or 1 minute).{0} is replaced with the number of hours, {1} with the minutes"));
+        }
+        const days = Math.floor(h / 24);
+        const hr = h % 24;
+        if (days < 7) {
+            if (days === 1)
+                return hr === 0
+                    ? _TF("1 day ago", "Text that indicates that a chat message was written one day ago")
+                    : (hr === 1
+                        ? _TF("1 day 1 hour ago", "Text that indicates that a chat message was written one day and one hour ago")
+                        : _T("1 day {0} hours ago", hr, "Text that indicates how old a chat message is (one day and some hours, never 1).{0} is replaced with the number of hours"));
+            return hr === 0
+                ? _T("{0} days ago", days, "Text that indicates how old a chat message is in days (never 1).{0} is replaced with the number of days")
+                : (hr === 1
+                    ? _T("{0} days 1 hour ago", days, "Text that indicates how old a chat message is (some days, never 1, and one hour).{0} is replaced with the number of days")
+                    : _T("{0} days {1} hours ago", days, hr, "Text that indicates how old a chat message is (less than a week, never 1 day or 1 hour).{0} is replaced with the number of days, {1} with the hours"));
+        }
+        return _T("{0} days ago", days, "Text that indicates how old a chat message is in days (never 1).{0} is replaced with the number of days");
+    }
+
+    /**
+     * The full time stamp tool tip of a message time: local date and time, plus UTC.
+     * @param {?Date} d The message time.
+     * @returns {string} The text ("" without a time).
+     */
+    function timeTitle(d) {
+        if (!d)
+            return "";
+        return d.toLocaleString([], { dateStyle: "full", timeStyle: "medium" }) + "\n" +
+            _TF("UTC", "Tool tip row prefix to some time stamp written using js Date.toUTCString() syntax") + ": " + d.toISOString().replace("T", " ").substring(0, 19);
+    }
+
+    // ------------------------------------------------------------------ icon button names
+
+    /**
+     * Set the name of an icon only button: the tool tip (mouse hover) and the accessible name.
+     * @param {HTMLElement} b The button.
+     * @param {string} text The name.
+     */
+    function setButtonName(b, text) {
+        if (b.title !== text)
+            b.title = text;
+        if (b.getAttribute("aria-label") !== text)
+            b.setAttribute("aria-label", text);
+    }
+
+    /**
+     * Show the name (tool tip) of a plain icon only button on long press (touch / pen) and keyboard focus (Sw.Hint; Sw.Button does
+     * this itself). A touch press on the button does not start the long press of a surrounding element (the message header
+     * menu), so a long press on the button shows its name.
+     * @param {HTMLElement} b The button.
+     */
+    function attachHint(b) {
+        if (Sw.Hint)
+            Sw.Hint.Attach(b);
+        b.addEventListener("pointerdown", ev => {
+            if (ev.pointerType !== "mouse")
+                ev.stopPropagation();
+        });
+    }
+
+    /**
+     * Add a short text label to an icon only button: below the icon (.chat-labels, the stacked layout), beside the icon where the
+     * input has room (the slim menu bar), see Composer.WatchSize; hidden from assistive technology (the button has
+     * its full accessible name). The class sw-button-extra keeps it when Sw.Button replaces its content (SetWorking, SetIcon).
+     * @param {HTMLElement} b The button.
+     * @param {string} text The label.
+     * @returns {HTMLElement} The label element (span.chat-tlabel).
+     */
+    function addTouchLabel(b, text) {
+        const l = el("span.chat-tlabel.sw-button-extra", { text, attrs: { "aria-hidden": "true" } });
+        b.append(l);
+        b.classList.add("chat-labelled");
+        return l;
+    }
+
+    // ------------------------------------------------------------------ options, colors, settings
+
+    /** Options of a chat (legacy global `ChatOptions`); the `options` url parameter of Chat.html is merged into it. */
+    class Options {
+        /** The size in pixels of the top right menu icon. @type {number} */
+        MenuIconSize = 48;
+        /** The size in pixels of the microphone icon. @type {number} */
+        AudioIconSize = 48;
+        /** The size in pixels of the send icon. @type {number} */
+        SendIconSize = 48;
+        /** If true every sender gets its own (stable) colors. @type {boolean} */
+        UserColor = true;
+        /**
+         * Selects the local storage keys of the settings: null = shared by all chats, "*" = per chat id, any other string = a named group.
+         * @type {?string}
+         */
+        SettingsName = null;
+    }
+
+    /** @type {Map<string, string[]>} Sender name -> colors cache. */
+    const colorCache = new Map();
+
+    /**
+     * Stable colors of a sender name (sha-256 of the name -> hue / saturation / lightness).
+     * @param {string} text The sender name.
+     * @returns {string[]} `[border, headerBackground, headerText]`.
+     */
+    function Color(text) {
+        text = text || "";
+        let c = colorCache.get(text);
         if (c)
             return c;
-        const h = new Uint8Array(legacySha256(new TextEncoder().encode(text)));
+        const h = Sw.Util.Sha256Sync(new TextEncoder().encode(text));
         const hue = (h[0] % 90) * 4;
         const sat = (h[1] % 40) + 50;
         const l = (Math.max(0, 40 - Math.abs(hue - 240)) + 40) | 0;
         const bc = "hsl(" + hue + " " + sat + " " + l;
-        c = [
-            bc + " / 0.5)",
-            bc + " / 0.05)",
-            bc + ")",
-        ];
-        t.set(text, c);
+        //  The name text leans to the theme's text color, so it keeps its contrast (4.5:1) on light and dark themes, the hue stays
+        c = [bc + " / 0.5)", bc + " / 0.05)", "color-mix(in oklab, " + bc + ") 50%, var(--sw-fg))"];
+        colorCache.set(text, c);
         return c;
     }
 
-    /** Cache if we're on mobile or not (`isMobile()` at load); on mobile no "ALT+Enter" hint is added to the placeholder. @type {boolean} */
-    static IsMobile = isMobile();
+    /**
+     * The persisted settings and drafts of a chat (localStorage, keys unchanged from the old client).
+     * `<s>` = "" (shared), "." + chatId (SettingsName "*") or "." + SettingsName.
+     */
+    class Settings {
+        /**
+         * @param {string} chatId The chat id.
+         * @param {?string} settingsName The SettingsName option.
+         */
+        constructor(chatId, settingsName) {
+            const s = settingsName ? "." + (settingsName === "*" ? chatId : settingsName) : "";
+            /**
+             * The key names: time vs age, TTS volume, TTS on, auto send, markdown, preview, split size (per settings scope); open mic,
+             * hidden senders, draft text, draft data, input language (per chat).
+             * @type {Object<string, string>}
+             */
+            this.Keys = {
+                TimeStamp: "SysWeaver.Chat.ShowTimeStamp" + s,
+                Volume: "SysWeaver.Chat.SpeechGenVol" + s,
+                Speech: "SysWeaver.Chat.SpeechGen" + s,
+                AutoSend: "SysWeaver.Chat.SpeechSend" + s,
+                MarkDown: "SysWeaver.Chat.UseMarkDown" + s,
+                Preview: "SysWeaver.Chat.Preview" + s,
+                Size: "SysWeaver.Chat.Size" + s,
+                Listen: "SysWeaver.Chat.SpeechListen" + chatId,
+                Hide: "SysWeaver.Chat.Hide." + chatId,
+                Input: "SysWeaver.Chat.Input." + chatId,
+                Data: "SysWeaver.Chat.Data." + chatId,
+                Lang: "SysWeaver.Chat.Lang." + chatId,
+            };
+        }
 
-    /** Cache platform name (`getPlatform()` at load); a value starting with "mac" selects the "Option+Enter" hint. @type {string} */
-    static Platform = getPlatform();
+        /**
+         * Read a value.
+         * @param {string} name The key name (a member of Keys).
+         * @returns {?string} The stored string, or null.
+         */
+        Get(name) {
+            return Sw.Storage.Local.Get(this.Keys[name], null);
+        }
+
+        /**
+         * Write a value (null / undefined removes it).
+         * @param {string} name The key name (a member of Keys).
+         * @param {*} value The value (stored as a string).
+         */
+        Set(name, value) {
+            const k = this.Keys[name];
+            if (value === null || value === undefined)
+                Sw.Storage.Local.Remove(k);
+            else
+                Sw.Storage.Local.Set(k, String(value));
+        }
+
+        /**
+         * Read a "true" / "false" value.
+         * @param {string} name The key name.
+         * @param {boolean} def The default.
+         * @param {boolean} [store] Store the default when missing (the old behavior of some keys).
+         * @returns {boolean} The value.
+         */
+        Bool(name, def, store) {
+            const v = this.Get(name);
+            if (v === null) {
+                if (store)
+                    this.Set(name, def ? "true" : "false");
+                return !!def;
+            }
+            return v === "true";
+        }
+    }
+
+    // ------------------------------------------------------------------ attachments
 
     /**
-     * Builds the complete chat UI for one chat inside `chatBackground`. In order it:
-     * cancels ongoing speech synthesis; computes the localStorage key names; creates `<SysWeaver-ChatMain>`;
-     * calls `Join {ChatId, MaxCount: 10, FromId: 0}` (`ChatJoinResponse`); loads dynamic deps in parallel
-     * (`GetInputLanguages` if `CanTranslate`, `md5.js`/`UZIP.js`/`fileUploader.js` if `UploadRepo`);
-     * if `CanPost` builds the input area, preview row, drag and drop, language picker, speech input and uploads and
-     * restores the draft; registers postMessage commands (window `message`), server push events
-     * (`chat.post|replace|remove|clear.<chatid lowercased>` via `SessionManager.AddServerEvent` / `InterOp`) and speech
-     * synthesis; adds the top-right menu; renders the initial messages; installs `StickToBottom` with lazy loading of
-     * older messages (`GetMessages`); restores the saved split height and scrolls to the bottom; finally runs `doLast`.
-     * localStorage keys (`<s>` = "", "." + chatId or "." + SettingsName): `SysWeaver.Chat.ShowTimeStamp<s>`,
-     * `.SpeechGenVol<s>`, `.SpeechGen<s>`, `.SpeechSend<s>`, `.UseMarkDown<s>`, `.Preview<s>`, `.Size<s>`;
-     * per chat: `SysWeaver.Chat.SpeechListen<chatId>`, `.Hide.<chatId>`, `.Input.<chatId>`, `.Data.<chatId>`, `.Lang.<chatId>`.
-     * @param {HTMLElement} chatBackground - The html element that the chat should be created as a child to (normally `<SysWeaver-Chat>`).
-     * @param {string} chatId - The ID of the chat (channel), `<provider>.<providerChatId>`.
-     * @param {string} [apiBase=""] - An optional api base prefix for all `sendRequest` calls (depends where the html resides).
-     * @param {ChatOptions} [options=new ChatOptions()] - Optional options for more control.
-     * @returns {Promise<HTMLElement>} The created `SysWeaver-ChatMain` element (the message list).
+     * Keeps images and embedded pages at least 16:9 (min-height = width * 9 / 16), again whenever their width changes (the chat is
+     * resized, or the user resized the box); one observer for all of them.
      */
-    static async addChat(chatBackground, chatId, apiBase, options) {
+    const aspectObserver = typeof ResizeObserver === "function"
+        ? new ResizeObserver(entries => {
+            for (const e of entries) {
+                const box = e.target;
+                //  Removed (the message was rendered again or deleted): stop observing it
+                if (!box.isConnected) {
+                    aspectObserver.unobserve(box);
+                    continue;
+                }
+                //  The width from the observer entry; the write waits for the next frame (a size change of an observed element inside
+                //  its own callback would be reported as a ResizeObserver loop)
+                const w = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].inlineSize : box.getBoundingClientRect().width;
+                if (w > 0) {
+                    const h = Math.round(w * 9 / 16) + "px";
+                    if (box.style.minHeight !== h)
+                        requestAnimationFrame(() => {
+                            box.style.minHeight = h;
+                        });
+                }
+            }
+        })
+        : null;
 
-        if (!apiBase)
-            apiBase = "";
-        if (!options)
-            options = new ChatOptions();
-        const ss = window.speechSynthesis;
-        if (ss)
-            ss.cancel();
-        else
-            console.warn("No speech synthesis supported");
+    /**
+     * A message text is a Tab stop only while it is cut at the height limit (it scrolls while focused); else a click still focuses it.
+     * @param {HTMLElement} body The .chat-content.
+     */
+    function checkTabStop(body) {
+        const ti = body.scrollHeight > body.clientHeight + 1 ? 0 : -1;
+        if (body.tabIndex !== ti)
+            body.tabIndex = ti;
+    }
 
-        /** Input languages from `GetInputLanguages` (null until loaded). @type {?Array<{Iso:string, Name:string, LocalName:string, EnName:string, Comment:string}>} */
-        let languages = null;
-        /** Iso code to LanguageInfo map built from `languages` (null until loaded). @type {?Map<string, object>} */
-        let languageMap = null;
+    /** Re-checks the Tab stop of a message text when its size changes (one observer for all; removed rows are dropped). */
+    const bodyObserver = typeof ResizeObserver === "function"
+        ? new ResizeObserver(entries => {
+            for (const e of entries) {
+                if (e.target.isConnected)
+                    checkTabStop(e.target);
+                else
+                    bodyObserver.unobserve(e.target);
+            }
+        })
+        : null;
 
+    /** Renders the attachments of a message and builds their menus. */
+    class Attachments {
+        /**
+         * Describe one attachment url.
+         * @param {ChatView} view The chat.
+         * @param {string} orgUrl The url as stored in the message data (normally "../" relative).
+         * @returns {object} { Org, Url (absolute), Ext, Name, IsImage, IsHtml, CanSave, CanLink }.
+         */
+        static Describe(view, orgUrl) {
+            const url = Sw.Url.Absolute(orgUrl);
+            //  The name is for showing and saving: uri decoded ("My%20file.png" -> "My file"); the urls stay escaped
+            const file = Sw.Url.FileName(url);
+            const dot = file.lastIndexOf(".");
+            const ext = dot >= 0 ? file.substring(dot + 1).toLowerCase() : "";
+            const isHtml = !!HtmlExtensions[ext];
+            return {
+                Org: orgUrl,
+                Url: url,
+                Ext: ext,
+                Name: dot >= 0 ? file.substring(0, dot) : file,
+                IsImage: Sw.Format.IsImageExt(ext),
+                IsHtml: isHtml,
+                CanSave: !isHtml && !orgUrl.startsWith("../storage/" + view.Data.UserStore + "/"),
+                CanLink: orgUrl.indexOf("://") < 0,
+            };
+        }
 
         /**
-         * Loads the input languages once: `sendRequest("GetInputLanguages")` into `languages` and builds `languageMap`.
-         * Awaited at startup when `CanTranslate`, and lazily by `selectLanguage`.
+         * Render the attachments into the data element of a row. The message's DataViews (C# ChatDataView {Raw, Viewer, Source}, one
+         * per data entry, filled by the server from the extension viewers) say how an entry is shown; without them (older servers, the
+         * draft preview) an entry is shown by its extension alone.
+         * @param {MessageRow} row The row.
+         * @param {?string} data The `;` separated urls.
+         */
+        static Render(row, data) {
+            const holder = row.DataE;
+            holder.replaceChildren();
+            if (!data)
+                return;
+            //  A message that is still being produced: its data is a status (ex: the AI's working.svg), shown as a plain small image,
+            //  no info bar, menu or size rules (the real attachments come with the finished message)
+            if (row.Msg && (row.Msg.Flags & Flags.IsWorking) !== 0) {
+                for (const part of data.split(";")) {
+                    const org = part.trim();
+                    if (org)
+                        holder.append(Attachments.Status(org));
+                }
+                return;
+            }
+            const views = (row.Msg && Array.isArray(row.Msg.DataViews)) ? row.Msg.DataViews : null;
+            data.split(";").forEach((part, i) => {
+                const org = part.trim();
+                if (!org)
+                    return;
+                const v = views && views[i] && views[i].Raw === org ? views[i] : null;
+                holder.append(Attachments.Item(row, org, v));
+            });
+        }
+
+        /**
+         * A status image of a message that is still being produced (ex: the working indicator): a plain decorative image.
+         * @param {string} org The url as stored.
+         * @returns {HTMLElement} The element (div.chat-att-status).
+         */
+        static Status(org) {
+            const text = _TF("Working…", "Text alternative of the animated image shown while a chat answer is being produced");
+            //  Reduced motion: the image may animate by itself (svg animations can't be stopped from css), so a quiet text instead
+            if (matchMedia("(prefers-reduced-motion: reduce)").matches)
+                return el("div.chat-att-status.chat-att-status-text", { text });
+            const img = Sw.CreateImg();
+            img.alt = text;
+            img.src = Sw.Url.Absolute(org);
+            return el("div.chat-att-status", null, img);
+        }
+
+        /**
+         * Create the element of one attachment: an image (click opens it), an embedded page (html, or the viewer page of the asset)
+         * under an info bar, or a file type icon with the file name (click downloads, the name copies the url); plus a menu button
+         * (over the image / file, in the info bar of an embedded page). The menu always works on the raw asset.
+         * @param {MessageRow} row The row.
+         * @param {string} org The url as stored (the raw asset).
+         * @param {?object} [view] The data view {Raw, Viewer, Source} from the server.
+         * @returns {HTMLElement} The attachment element.
+         */
+        static Item(row, org, view) {
+            const a = Attachments.Describe(row.View, org);
+            const box = el("div.chat-att");
+            const menu = new Sw.Button({
+                Icon: "moreV", Kind: "ghost", Small: true, Class: "chat-att-menu",
+                Title: _TF("Show menu", "Tool tip description of a button that when clicked will show a context menu with options"),
+                Menu: () => Attachments.MenuItems(row, a), MenuOptions: { Align: "end" },
+            });
+            const viewer = view && view.Viewer ? Sw.Url.Absolute(view.Viewer) : null;
+            const source = view && view.Source ? Sw.Url.Absolute(view.Source) : null;
+            //  Same rule as markdown images: other origins / api / query urls load on click only (tracking pixels, GET requests)
+            const blocked = a.IsImage && Sw.Markdown && Sw.Markdown.CanAutoLoadImage && !Sw.Markdown.CanAutoLoadImage(a.Url);
+            if (a.IsHtml || viewer || (a.IsImage && !blocked)) {
+                //  The main view: the viewer page, the html page itself, or the image (all with the same info bar)
+                const main = viewer
+                    ? { Url: viewer, Frame: true, ReadTitle: false }
+                    : a.IsHtml ? { Url: a.Url, Frame: true, ReadTitle: true } : { Url: a.Url, Frame: false, ReadTitle: false };
+                box.classList.add("chat-att-html");
+                Attachments.Framed(box, a, menu, main, source);
+                //  A right click (a long press on touch, the Menu key) on the info bar shows the same menu as its ⋮ button, at the pointer
+                Sw.Menu.Context(box.querySelector(".chat-att-bar"), () => Attachments.MenuItems(row, a));
+                if (aspectObserver)
+                    aspectObserver.observe(box);
+                return box;
+            }
+            else if (blocked) {
+                box.classList.add("chat-att-image", "chat-att-blocked");
+                box.append(Sw.Markdown.ImagePlaceholder(a.Url, a.Name));
+            }
+            else {
+                //  Any other file: its type icon (a click downloads it) and its name (a click copies the url)
+                const img = Sw.CreateImg();
+                img.alt = a.Name;
+                img.src = "../icons/ext/" + encodeURIComponent(a.Ext) + ".svg";
+                box.classList.add("chat-att-file");
+                img.title = _T('Download "{0}"', a.Url, "Tool tip description on some content that when clicked will download the content.{0} is replaced with the url");
+                img.setAttribute("role", "button");
+                Sw.KeyClick(img, ev => {
+                    if (!Sw.BadClick(ev))
+                        Sw.Net.Download(a.Url);
+                });
+                const label = el("div.chat-att-label", { text: a.Name, title: a.Url });
+                Sw.Clipboard.CopyOnClick(label, a.Url, { Keyboard: true, AddTitle: true });
+                box.append(img, label);
+            }
+            box.append(menu.E);
+            if (aspectObserver && box.classList.contains("chat-att-image"))
+                aspectObserver.observe(box);
+            return box;
+        }
+
+        /**
+         * Fill an embedded attachment: the info bar (as wide as the content, so nothing covers it) above the content:
+         * [collapse / expand] [name] ... [source] [open in a new tab] [menu].
+         * - The name: the document title of an html page when it can be read (same origin), else the file name (with extension).
+         * - Source (only with a source view): switches the content between the main view and the source view (aria-pressed).
+         * - Open in a new tab: the view that is shown (the raw page, the viewer or the source view); the menu works on the raw asset.
+         * - Collapsed (.chat-att-collapsed) only the bar shows; the size the user gave the box is kept for expanding again.
+         * @param {HTMLElement} box The attachment box (.chat-att-html).
+         * @param {object} a The attachment info (Attachments.Describe, the raw asset).
+         * @param {object} menu The menu button (Sw.Button).
+         * @param {{Url: string, Frame: boolean, ReadTitle: boolean}} main The main view (Frame: an iframe, else an image).
+         * @param {?string} source The source view url (an iframe), or null.
+         */
+        static Framed(box, a, menu, main, source) {
+            const fileName = a.Ext ? a.Name + "." + a.Ext : a.Name;
+            const title = el("span.chat-att-title", { text: fileName, title: a.Url });
+            /**
+             * Create the content element of a view.
+             * @param {string} url The url.
+             * @param {boolean} frame An iframe (else an image).
+             * @param {boolean} readTitle Show the frame's document title as the name.
+             * @returns {HTMLElement} The element.
+             */
+            const create = (url, frame, readTitle) => {
+                if (!frame) {
+                    const img = Sw.CreateImg();
+                    img.alt = fileName;
+                    img.src = url;
+                    img.className = "chat-att-view";
+                    return img;
+                }
+                const f = Sw.CreateIFrame();
+                f.sandbox = InternalHtmlSandbox; // HtmlSandbox;
+                f.title = fileName;
+                f.className = "chat-att-view";
+                f.src = Sw.Url.AppendTheme(url);
+                if (readTitle)
+                    f.addEventListener("load", () => {
+                        let t = "";
+                        try {
+                            t = ((f.contentDocument && f.contentDocument.title) || "").trim();
+                        }
+                        catch {
+                            //  Another origin: the title can't be read
+                        }
+                        if (t) {
+                            title.textContent = t;
+                            f.title = t;
+                        }
+                    });
+                return f;
+            };
+            const content = create(main.Url, main.Frame, main.ReadTitle);
+            /** @type {?HTMLElement} The source view (made on the first "Source"). */
+            let srcView = null;
+            let shown = main.Url;
+            //  One name with the file ("Show <name>"), the state in aria-expanded (and the arrow), not a name that changes
+            const flip = () => {
+                const collapsed = box.classList.toggle("chat-att-collapsed");
+                toggle.SetIcon(collapsed ? "right" : "down");
+                toggle.E.setAttribute("aria-expanded", collapsed ? "false" : "true");
+            };
+            const toggle = new Sw.Button({
+                Icon: "down", Kind: "ghost", Small: true, Class: "chat-att-toggle",
+                Title: _T("Show {0}", fileName, "Name of the collapse / expand toggle of an embedded page or file in a chat message (its pressed state says if it is shown).{0} is replaced with the file name"),
+                OnClick: flip,
+            });
+            toggle.E.setAttribute("aria-expanded", "true");
+            const bar = el("div.chat-att-bar", null, toggle.E, title);
+            //  A click anywhere on the bar (not on its buttons) collapses / expands too; the keyboard uses the toggle button
+            bar.addEventListener("click", ev => {
+                if (ev.target.closest && ev.target.closest("button, a, input"))
+                    return;
+                if (Sw.BadClick && Sw.BadClick(ev))
+                    return;
+                flip();
+            });
+            if (source) {
+                //  A toggle with one name ("Source") and its state in aria-pressed (and the pressed look), not a name that changes
+                let onSource = false;
+                const src = new Sw.Button({
+                    Icon: "code", Kind: "ghost", Small: true, Class: "chat-att-source",
+                    Text: _TF("Source", "Text of a toggle button in the title bar of an embedded page or image in a chat message: shows its source code instead of the page while pressed"),
+                    Title: _TF("Show the source code instead of the page", "Tool tip of a toggle button in the title bar of an embedded page or image in a chat message: shows its source code instead"),
+                    OnClick: () => {
+                        onSource = !onSource;
+                        //  Both views are kept once made (shown / hidden), so the page keeps its state and scroll and is not loaded again
+                        if (!srcView) {
+                            srcView = create(source, true, false);
+                            srcView.hidden = true;
+                            content.after(srcView);
+                        }
+                        content.hidden = onSource;
+                        srcView.hidden = !onSource;
+                        shown = onSource ? source : main.Url;
+                        src.E.setAttribute("aria-pressed", onSource ? "true" : "false");
+                        box.classList.toggle("chat-att-on-source", onSource);
+                    },
+                });
+                src.E.setAttribute("aria-pressed", "false");
+                bar.append(src.E);
+            }
+            const open = new Sw.Button({
+                Icon: "external", Kind: "ghost", Small: true, Class: "chat-att-open",
+                Title: _TF("Open in a new tab", "Tool tip of a button that opens an embedded page of a chat message in a new browser tab"),
+                OnClick: () => Sw.Page.Navigate(shown, "_blank"),
+            });
+            bar.append(open.E, menu.E);
+            box.append(bar, content);
+        }
+
+        /**
+         * Store a file / create a link on the server, then copy the result and open it.
+         * @param {ChatView} view The chat.
+         * @param {string} method "StoreFile" or "StoreLink".
+         * @param {string} url The (absolute) url.
+         * @param {number} scope 0 private, 1 protected, 2 public.
          * @returns {Promise<void>}
          */
-        async function GetLanguages() {
-            if (languages)
+        static async Store(view, method, url, scope) {
+            const failText = method === "StoreFile"
+                ? _TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.")
+                : _TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.");
+            const stored = await call(view.Api(method), { Url: url, Scope: scope }, failText);
+            if (!stored)
                 return;
-
-            languages = await sendRequest(apiBase + "GetInputLanguages");
-            languageMap = new Map();
-            const lc = languages.length;
-            for (let i = 0; i < lc; ++i) {
-                const l = languages[i];
-                languageMap.set(l.Iso, l);
-            }
-        }
-
-        /** Settings key suffix: "" (shared), "." + chatId (SettingsName "*") or "." + SettingsName. @type {string} */
-        let sname = options.SettingsName;
-        if (!sname) {
-            sname = "";
-        } else {
-            sname = "." + (sname === "*" ? chatId : sname);
-        }
-
-        // localStorage key names: settings (scoped by sname) followed by per chat keys (scoped by chatId)
-        const timeStampName = "SysWeaver.Chat.ShowTimeStamp" + sname;
-        const volumeKey = "SysWeaver.Chat.SpeechGenVol" + sname;
-        const genKey = "SysWeaver.Chat.SpeechGen" + sname;
-
-        const autoSendKey = "SysWeaver.Chat.SpeechSend" + sname;
-
-
-        const useMarkDownKey = "SysWeaver.Chat.UseMarkDown" + sname;
-        const previewKey = "SysWeaver.Chat.Preview" + sname;
-
-        const sizeKey = "SysWeaver.Chat.Size" + sname;
-
-        const listenKey = "SysWeaver.Chat.SpeechListen" + chatId;
-        const hideName = "SysWeaver.Chat.Hide." + chatId;
-        const inputSaveKey = "SysWeaver.Chat.Input." + chatId;
-        const dataSaveKey = "SysWeaver.Chat.Data." + chatId;
-        const langSaveKey = "SysWeaver.Chat.Lang." + chatId;
-
-        /** True once `GetMessages` returned no older messages (stops history paging). @type {boolean} */
-        let isAtTop = false;
-
-
-        /** The scrolling message list `<SysWeaver-ChatMain>`; its children are the message rows. @type {HTMLElement} */
-        const chatE = document.createElement("SysWeaver-ChatMain");
-
-        /** Saved split height fraction (string from `sizeKey`), restored at the end (only when posting). @type {?string} */
-        let initSize;
-
-        chatBackground.appendChild(chatE);
-
-
-        //  Hide show
-
-        const titleVisible = _TF("Click to hide message content and future message content from {0}", "A tool tip message for a buttan that when clicked will hide the content of a specific chat message and all further messages from that user.{0} is replaced with the user name. ");
-        const titleHidden = _TF("Click to show message content and future message content from {0}", "A tool tip message for a buttan that when clicked will show the hidden content of a specific chat message and all continue to show all further messages from that user.{0} is replaced with the user name. ");
-        /** True to show absolute time stamps, false to show live age ("x ago"). @type {boolean} */
-        let showTimeStamp = localStorage.getItem(timeStampName) === "true";
-        /** Sender names whose message content is hidden (value 1), persisted in `hideName`. @type {Map<string, number>} */
-        const hideFrom = new Map();
-        const hideData = localStorage.getItem(hideName);
-        if (hideData) {
-            const ha = JSON.parse(hideData);
-            if (Array.isArray(ha))
-                ha.forEach(x => hideFrom.set(x, 1));
-        }
-        const hiddenClass = "Hidden";
-
-        /**
-         * Checks if the content from a sender is hidden.
-         * @param {string} name - The sender name.
-         * @returns {boolean} true if `name` is in `hideFrom`.
-         */
-        function isHidden(name) {
-            return hideFrom.get(name) === 1;
+            const abs = Sw.Url.Absolute(stored);
+            await copy(abs);
+            Sw.Page.Navigate(abs, "_blank");
         }
 
         /**
-         * Hide or show messages from a user; persists the hidden names as a JSON array in `SysWeaver.Chat.Hide.<chatId>`.
-         * Does not update existing rows (callers do that with `row.Show` / `row.Hide`).
-         * @param {string} name - The sender name (`m.From`).
-         * @param {boolean} hide - True to hide (current and future) messages from this user, false to show.
+         * The scope sub menu of "Store file" / "Create link".
+         * @param {ChatView} view The chat.
+         * @param {string} method "StoreFile" or "StoreLink".
+         * @param {string} url The url.
+         * @returns {object[]} The items.
          */
-        function setHideFrom(name, hide) {
-            if (hide)
-                hideFrom.set(name, 1);
-            else
-                hideFrom.delete(name);
-            localStorage.setItem(hideName, JSON.stringify(Array.from(hideFrom.keys())));
-        }
-
-        /** Expand all items (none collapsed): clears `hideFrom` and removes the `SysWeaver.Chat.Hide.<chatId>` key. Does not update rows. */
-        function setHideNone() {
-            hideFrom.clear();
-            localStorage.removeItem(hideName);
-        }
-
-
-
-
-
-
-        /**
-         * The `Join` response (`ChatJoinResponse`): session config (UserName, UserGuid, UserStore, Lang, MaxTextLength,
-         * MaxDataLength, MaxDataCount, CanClear, CanPost, DoNotConfirmClear, Menus, SpeechName, Voices, AllowMarkDown,
-         * CanTranslate, CanShowProfile, UploadRepo, AllowPublicStore, EnableListenByDefault, EnableGenByDefault) and the latest `Messages`.
-         * @type {object}
-         */
-        const data = await sendRequest(apiBase + "Join", {
-            ChatId: chatId,
-            MaxCount: 10,
-            FromId: 0,
-        });
-
-        const canPost = data.CanPost;
-
-        if (!canPost)
-            chatE.classList.add("NoPost");
-        const userName = data.UserName;
-        const currentImage = "../auth/UserImages/" + data.UserGuid + "/small";
-        const canTranslate = data.CanTranslate;
-        const msg = data.Messages;
-        const workingAttribute = "Working";
-        const sl = localStorage.getItem(langSaveKey);
-        let currentLang = data.Lang;
-        if (sl) {
-            if (sl === data.Lang)
-                localStorage.removeItem(langSaveKey);
-            else
-                currentLang = sl;
-        }
-
-        /** postMessage commands: `{Type}` string to handler (chat.scrolltop, chat.scrollbottom, chat.showall, chat.hideall, chat.clear). @type {Map<string, function():any>} */
-        const commandMap = new Map();
-        /** Uploaded (not already existing) URLs of the draft that are not sent yet; deleted again if removed from the draft. @type {Map<string, *>} */
-        const tempFiles = new Map();
-
-        // Draft / input state; the functions below are declared here but only assigned when canPost.
-        let useMarkDown = false;
-        let canSend = null;
-        let previewMessage;
-        let uploadFiles;
-        let markDownChanged;
-        let showPreview;
-        let previewChanged;
-        let selectLanguage;
-        let stopListening;
-        let startListening;
-        let clearCurrentMessage;
-        let cmdClear;
-        let previewElement;
-
-        //  Load dynamic dependencies
-        const deps = [];
-        if (canTranslate)
-            deps.push(GetLanguages());
-        if (data.UploadRepo) {
-            deps.push(includeJs(null, "md5.js", true));
-            deps.push(includeJs(null, "UZIP.js", true));
-            deps.push(includeJs(null, "fileUploader.js", true));
-        }
-        await Promise.all(deps);
-        /** The upload repository name; only set if `data.UploadRepo` is set and `fileUploader` got defined (upload enabled). @type {?string} */
-        let uploadRepo = null;
-        if (data.UploadRepo && (typeof fileUploader !== "undefined")) {
-            uploadRepo = data.UploadRepo;
-            console.log('File uploading to repository "' + uploadRepo + '" is enabled.');
-        }
-
-
-        //  Input
-        /**
-         * Run at the very end of `addChat`. Default no-op; with `canPost` it is replaced to call `sendEnable()` and focus
-         * the textarea (temporarily read-only so no on-screen keyboard is forced).
-         */
-        let doLast = () => { };
-        if (canPost) {
-            initSize = localStorage.getItem(sizeKey);
-            new ResizeObserver(ev => {
-                const f = chatE.offsetHeight / chatBackground.offsetHeight;
-                localStorage.setItem(sizeKey, "" + f);
-            }).observe(chatE);
-
-
-
-            /** The input area `<SysWeaver-ChatInput>` (children: textarea, send button, optional mic button). @type {HTMLElement} */
-            const chatInput = document.createElement("SysWeaver-ChatInput");
-            /** The message textarea (`NextLast` expando used by `insertAtCursor`). @type {HTMLTextAreaElement} */
-            const write = document.createElement("textarea");
-            chatBackground.appendChild(chatInput);
-            chatInput.appendChild(write);
-
-            /** Sent texts (max 100), browsed with Alt+Up/Down. @type {string[]} */
-            const inputHistory = [];
-            /** History position: 0 = the text being typed, -1 = empty, n = n-th last history entry. @type {number} */
-            let inputHistoryPos = 0;
-            /** The text being typed before history browsing started. @type {string} */
-            let inputCurrent = "";
-
-
-            /** True while a `UserMessage` request is in flight. @type {boolean} */
-            let isSending = false;
-            /**
-             * Sends the draft (text and attachments) with `UserMessage {ChatId, Body:{Format, Data, Text, Lang}}`.
-             * Returns if both text and data are empty or a send is in progress. Pushes the text into the input history,
-             * clears the input (showing the sent text as placeholder, read-only) and the preview. On success clears
-             * `tempFiles` and calls `StickForAwhile()`; on false/exception shows `Fail` and restores text/data if the input
-             * is still empty. Finally restores the input, calls `sendEnable()` and focuses unless `doFocus === "NoFocus"`.
-             * Bound to the send button, Alt+Enter and speech auto-send.
-             * @param {*} [doFocus] - Pass "NoFocus" to not focus the input box when done (any other value focuses).
-             * @returns {Promise<void>}
-             */
-            async function Send(doFocus) {
-                const t = write.value.trim();
-                const d = previewMessage.Data;
-                if ((!t) && (!d))
-                    return;
-                if (isSending)
-                    return;
-                isSending = true;
-
-                send.StartWorking();
-
-                inputHistory.push(t);
-                const hl = inputHistory.length;
-                if (hl > 100)
-                    inputHistory.splice(0, hl - 100);
-                inputHistoryPos = 0;
-                inputCurrent = "";
-
-                const wp = write.placeholder;
-                if (d) {
-                    previewMessage.Data = null;
-                    previewElement.UpdateData(null);
-                }
-                write.placeholder = t;
-                write.value = "";
-                write.readOnly = true;
-                write.NextLast = write.value.length;
-                setPreviewText(null);
-                try {
-                    if (await sendRequest(apiBase + "UserMessage", {
-                        ChatId: chatId,
-                        Body: {
-                            Format: useMarkDown ? 1 : 0,
-                            Data: d,
-                            Text: t,
-                            Lang: currentLang,
-                        },
-                    })) {
-                        tempFiles.clear();
-                        StickForAwhile();
-                        return;
-                    }
-                    Fail(_TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure"));
-                    if ((!write.value) || (write.value === "")) {
-                        previewMessage.Data = d;
-                        write.value = t;
-                    }
-                }
-                catch (e) {
-                    Fail(_TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                    if ((!write.value) || (write.value === "")) {
-                        previewMessage.Data = d;
-                        write.value = t;
-                    }
-                }
-                finally {
-                    isSending = false;
-                    send.StopWorking();
-                    sendEnable();
-                    write.readOnly = false;
-                    write.placeholder = wp;
-                    if (doFocus !== "NoFocus")
-                        write.focus();
-                }
-            }
-
-            /** True while the textarea is changed by history browsing (so `onInputChangeFn` keeps the history position). @type {boolean} */
-            let isInternalUpdate = false;
-
-            /**
-             * Set the input text from a history value: `inputHistoryPos` 0 restores `inputCurrent`, -1 clears, n takes the
-             * n-th last history entry. Updates `write.NextLast` and calls `sendEnable()`, flagged as internal update.
-             */
-            function SetFromHistory() {
-                isInternalUpdate = true;
-                if (inputHistoryPos === 0) {
-                    write.value = inputCurrent;
-                    write.NextLast = write.value.length;
-                    sendEnable();
-                    isInternalUpdate = false;
-                    return;
-                }
-                if (inputHistoryPos === -1) {
-                    write.value = "";
-                    write.NextLast = write.value.length;
-                    sendEnable();
-                    isInternalUpdate = false;
-                    return;
-                }
-                write.value = inputHistory[inputHistory.length - inputHistoryPos];
-                write.NextLast = write.value.length;
-                sendEnable();
-                isInternalUpdate = false;
-            }
-
-            write.onfocus = function () {
-                write.scrollIntoView({ behavior: "smooth" })
-            }
-
-            // Pure Alt (no Ctrl/Meta/Shift) shortcuts: Enter sends, ArrowUp/ArrowDown browse the input history.
-            write.onkeydown = async e => {
-                if (!e.altKey)
-                    return;
-                if (e.ctrlKey || e.metaKey || e.shiftKey)
-                    return;
-                if (isSending)
-                    return;
-                //  Pure alt
-                if (e.key === "Enter") {
-                    await Send();
-                    return;
-                }
-                if (e.key == "ArrowUp") {
-                    if (inputHistoryPos >= inputHistory.length)
-                        return;
-                    ++inputHistoryPos;
-                    SetFromHistory();
-                    return;
-                }
-                if (e.key == "ArrowDown") {
-                    if (inputHistoryPos <= -1)
-                        return;
-                    --inputHistoryPos;
-                    SetFromHistory();
-                    return;
-                }
-
-
-            };
-
-            /** The send button (`IconSend`). @type {ColorIcon} */
-            const send = new ColorIcon("IconSend", "IconColorThemeAcc1", options.SendIconSize, options.SendIconSize, _TF("Click to send the message", "A tool tip description on a button that when clicked will send the entered chat message to the server"), Send);
-            chatInput.appendChild(send.Element);
-            /** The push-to-talk mic button (`IconChatMicOn`, third child of chatInput), null if speech recognition is unsupported. @type {?ColorIcon} */
-            let listen = null;
-            if (SpeechInput.supportSpeechRec()) {
-                listen = new ColorIcon("IconChatMicOn", "IconColorThemeAcc1", options.AudioIconSize, options.AudioIconSize, _TF("Click to listen for speech input using the selected language", "A tool tip description on a button that when clicked will start listening to speech input"), () => {
-                    startListening(true, true);
+        static ScopeItems(view, method, url) {
+            const isFile = method === "StoreFile";
+            const items = [
+                {
+                    Text: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
+                    Icon: "IconChatLink0",
+                    Title: isFile
+                        ? _TF("Store the file on the server for later use, only available to you", "Tool tip description of menu item that when clicked will store some content on the server")
+                        : _TF("Save as a link that only you can view", "Tool tip description of menu item that when clicked will store some content on the server and create a private (only accesible by this user) link to it"),
+                    OnClick: () => Attachments.Store(view, method, url, 0),
+                },
+                {
+                    Text: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
+                    Icon: "IconChatLink1",
+                    Title: isFile
+                        ? _TF("Store the file on the server for later use, available to any logged in users", "Tool tip description of menu item that when clicked will store some content on the server")
+                        : _TF("Save as a link that all logged in users can view", "Tool tip description of menu item that when clicked will store some content on the server and create a protected (only accesible to logged in users) link to it"),
+                    OnClick: () => Attachments.Store(view, method, url, 1),
+                },
+            ];
+            if (view.Data.AllowPublicStore)
+                items.push({
+                    Text: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
+                    Icon: "IconChatLink2",
+                    Title: isFile
+                        ? _TF("Store the file on the server for later use, available to anyone", "Tool tip description of menu item that when clicked will store some content on the server")
+                        : _TF("Save as a link that anyone can view", "Tool tip description of menu item that when clicked will store some content on the server and create a public (accesible to anyone) link to it"),
+                    OnClick: () => Attachments.Store(view, method, url, 2),
                 });
-                chatInput.appendChild(listen.Element);
-            }
+            return items;
+        }
 
-            /**
-             * Called to enable/disable the send button (every time the input text changes).
-             * Recomputes `canSend` (trimmed text or data present), saves or removes the draft keys
-             * `SysWeaver.Chat.Input.<chatId>` / `SysWeaver.Chat.Data.<chatId>` and updates the preview text.
-             */
-            function sendEnable() {
-                const t = write.value.trim();
-                const d = previewMessage.Data;
-                canSend = (t && (t.length > 0)) || d;
-                if (canSend) {
-                    localStorage.setItem(inputSaveKey, t);
-                    if (d)
-                        localStorage.setItem(dataSaveKey, d);
-                    else
-                        localStorage.removeItem(dataSaveKey);
-                }
-                else {
-                    localStorage.removeItem(inputSaveKey);
-                    localStorage.removeItem(dataSaveKey);
-                }
-                setPreviewText(canSend ? t : null);
-                send.SetEnabled(canSend);
-            }
-
-            /** The saved draft text (restored into the textarea). @type {?string} */
-            const start = localStorage.getItem(inputSaveKey);
-            if (start) {
-                write.value = start;
-                write.NextLast = write.value.length;
-            }
-
-            /**
-             * Textarea `oninput` handler (also called after drops): `sendEnable()` and, unless the change came from
-             * history browsing, resets the history position and remembers the current text in `inputCurrent`.
-             */
-            const onInputChangeFn = () => {
-                sendEnable();
-                if (!isInternalUpdate) {
-                    inputHistoryPos = 0;
-                    inputCurrent = write.value;
-                }
-            };
-
-
-            write.oninput = onInputChangeFn;
-
-
-            chatInput.style.backgroundImage = "url('../iso_data/language/" + currentLang + ".svg')";
-            write.maxLength = data.MaxTextLength;
-
-
-            // Mark down and preview
-
-            useMarkDown = localStorage.getItem(useMarkDownKey) === "true";
-            useMarkDown &= data.AllowMarkDown;
-
-            showPreview = localStorage.getItem(previewKey); // null means auto (on for md and off for text)
-            // The preview pseudo message (Id 0), rendered as the last row (class Preview); Data is restored from the draft.
-            previewMessage = {
-                Data: localStorage.getItem(dataSaveKey) ?? null,
-                Time: null,
-                Flags: 0,
-                Format: useMarkDown ? 1 : 0,
-                From: data.UserName,
-                FromImage: "../auth/UserImages/Current/small",
-                Id: 0,
-                Lang: currentLang,
-                Text: write.value.trim(),
-
-                MenuItems: null,
-            };
-            previewElement = (await addMessage(previewMessage, true, true)).parentElement.parentElement;
-            previewElement.classList.add("Preview");
-
-
-            /**
-             * Updates the preview row visibility: shown (removes `Hide`, smooth-scrolls to the bottom) if it has data,
-             * or has text and preview is on (`showPreview`, or `useMarkDown` when `showPreview` is not a boolean);
-             * otherwise class `Hide` is added.
-             * @returns {boolean} true if the preview is visible.
-             */
-            previewChanged = () => {
-                const pm = previewElement.Msg;
-                const sp = (!!previewMessage.Data) || ((typeof showPreview !== "boolean" ? useMarkDown : showPreview) && (!!pm.Text));
-                if (sp) {
-                    if (previewElement.classList.contains("Hide")) {
-                        previewElement.classList.remove("Hide");
-                        chatE.scrollTo({
-                            left: chatE.scrollLeft,
-                            top: chatE.scrollHeight,
-                            behavior: "smooth",
-                        });
-                    }
-                }
-                else {
-                    if (!previewElement.classList.contains("Hide")) {
-                        previewElement.classList.add("Hide");
-                    }
-                }
-                return sp;
-            };
-
-            // Placeholders for text / markdown mode; on desktop a send hint (Option+Enter on mac, else ALT+Enter) is appended on a new line.
-            let placeholderText = _TF("Write your text here..", "A placeholder text for an input box where a user can enter a text message for a chat");
-            let placeholderMD = _TF("Write your Mark Down text here..", "A placeholder text for an input box where a user can enter a markdown formatted text message for a chat");
-            if (!Chat.IsMobile) {
-
-                const platform = Chat.Platform;
-                const t = "                  \n" +
-                    (platform.indexOf("mac") === 0
-                        ?
-                        _TF("Press Option+Enter to send", "A placeholder instruction on a Mac machine where the user can press the Enter key while holding down the Option key to send a chat message")
-                        :
-                        _TF("Press ALT+Enter to send", "A placeholder instruction on a Windows machine where the user can press the Enter key while holding down the ALT key to send a chat message")
-                    );
-                placeholderText += t;
-                placeholderMD += t;
-            }
-
-
-            /**
-             * Applies `useMarkDown` to the preview message format and the textarea placeholder (text vs markdown, plus
-             * the platform send hint), re-renders the preview body and calls `previewChanged()`.
-             * @returns {Promise<void>}
-             */
-            markDownChanged = async () => {
-                const pm = previewElement.Msg;
-                pm.Format = useMarkDown ? 1 : 0;
-                write.placeholder = useMarkDown ? placeholderMD : placeholderText;
-                await previewElement.UpdateBody(pm.Text, pm.Format, false);
-                previewChanged();
-            };
-
-            /**
-             * Sets the preview message text: if it changed, stores it on `previewElement.Msg`, re-renders the preview body
-             * and, if the preview is visible (`previewChanged()`), smooth-scrolls the list to the bottom.
-             * No-op before the preview element exists.
-             * @param {?string} newText - The new draft text (null when nothing can be sent).
-             * @returns {Promise<void>}
-             */
-            async function setPreviewText(newText) {
-                if (!previewElement)
-                    return;
-                const pm = previewElement.Msg;
-                if (pm.Text === newText)
-                    return;
-                pm.Text = newText;
-                await previewElement.UpdateBody(pm.Text, pm.Format, false);
-                if (previewChanged()) {
-                    chatE.scrollTo({
-                        left: chatE.scrollLeft,
-                        top: chatE.scrollHeight,
-                        behavior: "smooth",
+        /**
+         * The menu of one attachment.
+         * @param {MessageRow} row The row.
+         * @param {object} a The attachment info (Attachments.Describe).
+         * @returns {object[]} The menu items.
+         */
+        static MenuItems(row, a) {
+            const view = row.View;
+            const items = [];
+            if (row.IsPreview) {
+                const composer = view.Composer;
+                if (a.IsImage && composer.UseMarkDown)
+                    items.push({
+                        Text: _TF("Copy image Markdown", "Text of a menu item that when clicked will copy the Markdown required to display this image"),
+                        Icon: "IconChatCopyImage",
+                        Title: _TF("Copy the Markdown required to show the file to the clipboard", "Tool tip description of a menu item that when clicked will copy the Markdown required to display this image"),
+                        OnClick: () => copy("![](" + a.Org + ")"),
                     });
-                }
+                items.push({
+                    Text: _TF("Copy url", "Text of a menu item that when clicked will copy the url text"),
+                    Icon: "IconChatCopy",
+                    Title: _TF("Copy the url to the clipboard", "Tool tip description of a menu item that when clicked will copy the url text"),
+                    OnClick: () => copy(a.Url),
+                });
+                items.push({
+                    Text: _TF("Delete file", "Text of a menu item that when clicked will delete the file from the server"),
+                    Icon: "IconChatDeleteFile",
+                    Title: _TF("Delete this file from the server", "Tool tip description of a menu item that when clicked will delete the file from the server"),
+                    OnClick: () => composer.RemoveAttachment(a.Org, true),
+                });
+                items.push({
+                    Text: _TF("Hide file", "Text of a menu item that when clicked will hide the file"),
+                    Icon: "IconChatHideFile",
+                    Title: _TF("Hide this file", "Tool tip description of a menu item that when clicked will hide the file"),
+                    OnClick: async () => {
+                        await composer.RemoveAttachment(a.Org, false);
+                        await copy(a.IsImage ? "![](" + a.Org + ")" : "[" + a.Name.replace(/[[\]\\]/g, "\\$&") + "](" + a.Url + ")");
+                    },
+                });
             }
+            const download = !a.IsImage && !a.IsHtml;
+            if (!download)
+                items.push({
+                    Text: _TF("Open in new tab", "Text of a menu item that when clicked will open some content in a new browser tab"),
+                    Icon: "IconChatExpand",
+                    Title: _TF("Show in a new tab", "Tool tip description of a menu item that when clicked will open some content in a new browser tab"),
+                    OnClick: () => Sw.Page.Navigate(a.Url, "_blank"),
+                });
+            if (!a.IsHtml)
+                items.push({
+                    Text: _TF("Download", "Text of menu item that when clicked will download some content to a file"),
+                    Icon: "IconChatSave",
+                    Title: _TF("Save the file to your device", "Tool tip description of menu item that when clicked will download some content to a file"),
+                    OnClick: () => Sw.Net.Download(a.Url),
+                });
+            if (view.CanPost) {
+                if (a.CanSave)
+                    items.push({
+                        Text: _TF("Store file", "Text of a menu folder that contains items that when clicked store this file to the server"),
+                        Icon: "IconChatStore",
+                        Title: _TF("Store the file on the server for later use", "Tool tip description of menu folder that contains items that when clicked store this file to the server"),
+                        Items: () => Attachments.ScopeItems(view, "StoreFile", a.Url),
+                    });
+                if (a.CanLink)
+                    items.push({
+                        Text: _TF("Create link", "Text of a menu folder that contains items that when clicked will create a link to this file"),
+                        Icon: "IconChatLink",
+                        Title: _TF("Create a link to the file for later use", "Tool tip description of menu folder that contains items that when clicked will create a link to this file"),
+                        Items: () => Attachments.ScopeItems(view, "StoreLink", a.Url),
+                    });
+            }
+            return items;
+        }
+    }
 
-            markDownChanged();
+    // ------------------------------------------------------------------ message row
 
+    /** One message row (also the draft preview row): header (flag, name, time, sender image / menu button), content, attachments. */
+    class MessageRow {
+        /**
+         * Create the row elements (insert with MessageList.Insert, render with Update).
+         * @param {ChatView} view The chat.
+         * @param {object} m The ChatMessage { Id, From, FromImage, Time, Flags, Text, Data, Format, Lang, MenuItems }.
+         * @param {boolean} [isPreview] The draft preview row.
+         */
+        constructor(view, m, isPreview) {
+            const t = this;
+            /** @type {ChatView} The chat. */
+            t.View = view;
+            /** @type {object} The current message. */
+            t.Msg = m;
+            /** @type {boolean} The draft preview row. */
+            t.IsPreview = !!isPreview;
+            /** @type {boolean} The content is hidden. */
+            t.Hidden = false;
+            /** @type {?string} The cached translation. */
+            t.Translated = null;
+            /** @type {boolean} The translation is shown. */
+            t.IsTranslated = false;
+            /** @type {boolean} A translation request is running. */
+            t.Translating = false;
+            /** @type {number} Body render sequence (a newer render wins). */
+            t.Seq = 0;
+            /** @type {?string|undefined} The rendered text (to skip unchanged updates). */
+            t.CurText = undefined;
+            /** @type {?number|undefined} The rendered format. */
+            t.CurFormat = undefined;
+            /** @type {?string|undefined} The rendered attachments. */
+            t.CurData = undefined;
+            /** @type {?SpeechSynthesisVoice} The voice speaking this message (speech output). */
+            t.Voice = null;
 
-            // Drag and drop on text
-            /** URL schemas whose dropped image URLs are wrapped as markdown images (`![](url)`). @type {Map<string, number>} */
-            const validSchemas = new Map();
-            validSchemas.set("http", 1);
-            validSchemas.set("https", 1);
-            // Drop: uploads dropped files (if uploads are enabled), then inserts the first string item at the cursor
-            // (in markdown mode http(s) URLs with an image extension become `![](url)`).
-            write.addEventListener("drop", async ev => {
-                ev.preventDefault();
-                ev.target.classList.remove("Dragging");
-                if (uploadRepo)
-                    await uploadFiles(ev.dataTransfer.files);
-                const items = ev.dataTransfer.items;
-                const il = items.length;
-                for (let i = 0; i < il; ++i) {
-                    const item = items[i];
-                    if (item.kind === "string") {
-                        let val = await new Promise(res => {
-                            item.getAsString(x => res(x));
-                        });
-                        if (useMarkDown) {
-                            const sp = val.indexOf("://");
-                            if ((sp > 0) && validSchemas.get(val.substring(0, sp))) {
-                                let temp = val;
-                                const qstart = val.indexOf('?');
-                                if (qstart > 0)
-                                    temp = temp.substring(0, qstart);
-                                const extStart = temp.lastIndexOf('.');
-                                if (extStart >= 0) {
-                                    const ext = temp.substring(extStart + 1).toLowerCase();
-                                    if (imageExtensions[ext])
-                                        val = "![](" + val + ")";
-                                }
-                            }
-                        }
-                        insertAtCursor(write, val);
-                        onInputChangeFn();
+            const isMine = m.From === view.UserName;
+            /** The row element (expando SwChatRow = this). */
+            t.E = el("div.chat-row" + (isMine ? ".chat-mine" : "") + (isPreview ? ".chat-preview.chat-hide" : ""), { attrs: { role: "article" } });
+            t.E.SwChatRow = t;
+            /** The bubble. */
+            t.Bubble = el("div.chat-msg");
+            /** The header (click toggles hiding, long press / right click open the menu; a long press on its buttons shows their names). */
+            t.Header = el("div.chat-header");
+            /** The sender name. */
+            t.NameE = el("span.chat-name", { text: m.From });
+            /** The "AI" tag after the name (shown while the message has the FromAi flag, see UpdateLabels). */
+            t.AiTag = el("span.chat-ai-tag", {
+                text: _TF("AI", "A short tag after the sender name of a chat message that was written by an AI (artificial intelligence)"),
+                title: _TF("Written by an AI (artificial intelligence), not by a person", "Tool tip of the AI tag after the sender name of a chat message"),
+                attrs: { hidden: "" },
+            });
+            /** The time / age. */
+            t.TimeE = el("span.chat-time");
+            /** The sender image (a button opening the message menu). */
+            t.IconE = el("button.chat-icon", { type: "button", title: _TF("Show message menu", "Tool tip description on a button that when clicked will show a menu with options for a chat message") });
+            /** The content. */
+            t.Body = el("div.chat-content", { tabIndex: 0, attrs: { role: "group", "aria-label": _TF("Message text", "Accessible name of the text of one chat message (it can be focused to scroll a long message)") } });
+            if (bodyObserver)
+                bodyObserver.observe(t.Body);
+            //  An image inside that loads later makes the text taller (load does not bubble: capture)
+            t.Body.addEventListener("load", () => checkTabStop(t.Body), true);
+            /** The attachments. */
+            t.DataE = el("div.chat-data");
+            if (isPreview)
+                t.E.append(el("div.chat-preview-label", { text: _TF("Preview", "Tool tip description indicating that this is a chat preview message") }));
+            if (view.Options.UserColor) {
+                const cols = Color(m.From);
+                t.Bubble.style.borderColor = cols[0];
+                t.Header.style.backgroundColor = cols[1];
+                t.Header.style.color = cols[2];
+            }
+            if (view.CanTranslate) {
+                /** The language flag image. */
+                t.FlagImg = Sw.CreateImg();
+                t.FlagImg.alt = "";
+                /** The language button (translation). */
+                t.LangE = el("button.chat-lang", { type: "button" }, t.FlagImg);
+                attachHint(t.LangE);
+                t.LangE.addEventListener("click", ev => {
+                    if (!Sw.BadClick(ev))
+                        t.OnFlag();
+                });
+                t.Header.append(t.LangE);
+            }
+            t.Header.append(el("div.chat-who", null, el("span.chat-name-line", null, t.NameE, t.AiTag), t.TimeE), t.IconE);
+            /** A visible menu button (the menu is also on the sender image, a long press and a right click) */
+            t.MoreE = new Sw.Button({
+                Icon: "moreV", Kind: "ghost", Small: true, Class: "chat-msg-more",
+                Title: _TF("Message menu", "Tool tip of the button in a chat message header that shows the menu of the message"),
+                OnClick: (b, ev) => t.ShowMenu(ev, b.E),
+            });
+            //  A menu button (a right click opens it too: the header's long press / context menu handler, at the pointer)
+            t.MoreE.E.setAttribute("aria-haspopup", "menu");
+            t.Header.append(t.MoreE.E);
+            t.Bubble.append(t.Header, t.Body, t.DataE);
+            t.E.append(t.Bubble);
+            t.SetIcon(m.FromImage);
+            attachHint(t.IconE);
+            t.IconE.addEventListener("click", ev => {
+                if (!Sw.BadClick(ev))
+                    t.ShowMenu(ev, t.IconE);
+            });
+            //  Long press (touch), right click and the context menu key open the message menu (at the pointer, the key: at the ⋮ button)
+            Sw.LongPress(t.Header, ev => t.ShowMenu(ev, t.MoreE.E));
+            if (isPreview)
+                t.Header.title = _TF("This is a preview of a message, it's not visible to anyone but you", "Tool tip description letting the user know what this is");
+            else {
+                t.Header.classList.add("chat-toggle");
+                //  A header click toggles only this message; the new state becomes the default for new messages of the sender
+                t.Header.addEventListener("click", ev => {
+                    if (ev.target.closest("button") || Sw.BadClick(ev))
                         return;
-                    }
-
-                }
-            });
-            write.addEventListener("dragover", ev => {
-                ev.preventDefault();
-            });
-            write.addEventListener("dragenter", ev => ev.target.classList.add("Dragging"));
-            write.addEventListener("dragleave", ev => ev.target.classList.remove("Dragging"));
-
-
-            /**
-             * Opens a `PopUpSelection` (application.js) with a searchable list (Name/LocalName/EnName) of
-             * `<SysWeaver-ChatLangItem>` elements (flag background, tooltip with names, ISO code and comment).
-             * Clicking one sets `currentLang`, stores it in `SysWeaver.Chat.Lang.<chatId>` (removed when equal to the server
-             * default `data.Lang`), updates the input flag background and the preview flag (`UpdateLang`), restarts open
-             * mic listening if it is enabled, and closes the popup.
-             * @returns {Promise<void>}
-             */
-            selectLanguage = async () => {
-                const speechRec = SpeechInput.supportSpeechRec();
-                await PopUpSelection(
-                    _TF("Select the language to use", "Header text to a list of languages that can be selected"),
-                    speechRec ?
-                        _TF("Select the language you're using for the text and voice input", "Tool tip description of a header to a list of languages that can be selected")
-                        :
-                        _TF("Select the language you're using for the text input", "Tool tip description of a header to a list of languages that can be selected")
-                    ,
-                    async (search, closeFn) => {
-                        await GetLanguages();
-                        const ls = languages;
-                        const lc = ls.length;
-
-                        const items = [];
-                        search = search?.toLowerCase() ?? "";
-                        for (let ii = 0; ii < lc; ++ii) {
-                            const lang = ls[ii];
-                            if (search) {
-                                if (lang.Name.toLowerCase().indexOf(search) < 0)
-                                    if (lang.LocalName.toLowerCase().indexOf(search) < 0)
-                                        if (lang.EnName.toLowerCase().indexOf(search) < 0)
-                                            continue;
-                            }
-                            const item = document.createElement("SysWeaver-ChatLangItem");
-                            keyboardClick(item);
-                            items.push(item);
-                            const iso = lang.Iso;
-                            const name = lang.Name;
-                            const lname = lang.LocalName;
-                            const ename = lang.EnName;
-                            let text = _TF("Name", 'Tool tip prefix indicating what language this is, part of somthing like: "Name: English".') + ": " + name + "\n";
-                            if (name !== lname)
-                                text += _TF("Local name", 'Tool tip prefix indicating what language this is, part of somthing like: "Local name: Svenska".') + ": " + lname + "\n";
-                            if (name !== ename)
-                                text += _TF("English name", 'Tool tip prefix indicating what language this is, part of somthing like: "English name: German".') + ": " + ename + "\n";
-                            text +=
-                                "Iso639-1: " + iso + "\n\n" +
-                                _TF("Click to select this language", "Tool tip description on a button that when clicked will select tis language");
-                            const com = lang.Comment;
-                            if (com)
-                                text += "\n\n" + com;
-                            item.title = text;
-                            item.style.backgroundImage = "url('../iso_data/language/" + iso + ".svg')";
-                            text = name;
-                            if (text !== lname)
-                                text += " (" + lname + ")";
-                            item.innerText = text;
-                            item.onclick = ev => {
-                                if (badClick(ev))
-                                    return;
-                                currentLang = iso;
-                                if (currentLang === data.Lang)
-                                    localStorage.removeItem(langSaveKey);
-                                else
-                                    localStorage.setItem(langSaveKey, currentLang);
-                                chatInput.style.backgroundImage = "url('../iso_data/language/" + currentLang + ".svg')";
-                                previewMessage.Lang = currentLang;
-                                previewElement.UpdateLang();
-                                if (canListen()) {
-                                    if (localStorage.getItem(listenKey) === "true") {
-                                        stopListening();
-                                        startListening();
-                                        localStorage.setItem(listenKey, "true");
-                                    }
-                                }
-                                closeFn();
-                            }
-
-                        }
-                        return items;
-                    },
-                    null,
-                    true,
-                    true);
+                    view.ToggleRow(t);
+                });
+                t.SetHidden(view.IsHidden(m.From));
             }
+            t.UpdateLang();
+            t.UpdateFormat();
+        }
 
-            /**
-             * Clears the draft. Deletes every `tempFiles` entry referenced by the preview data with
-             * `../Api/UserStorage/DeleteStoredFile` (failures are logged with `console.warn`), then clears the preview
-             * data, the textarea and the preview text, and calls `previewChanged()` and `sendEnable()`.
-             * @returns {Promise<void>}
-             */
-            clearCurrentMessage = async () => {
-                const data = previewMessage.Data;
-                if (data) {
-                    const parts = data.split(';');
-                    const pl = parts.length;
-                    for (let ii = 0; ii < pl; ++ii) {
-                        const pr = parts[ii];
-                        if (tempFiles.get(pr)) {
-                            tempFiles.delete(pr);
-                            try {
-                                if (!await sendRequest(apiBase + "../Api/UserStorage/DeleteStoredFile", pr))
-                                    console.warn('Failed to delete stored file "' + pr + '".');
-                            }
-                            catch (e) {
-                                console.warn('Failed to delete stored file "' + pr + '", error: ' + e.message);
-                            }
-                        }
-                    }
-                    previewElement.UpdateData(null);
-                }
-                write.value = "";
-                write.NextLast = write.value.length;
-                previewMessage.Data = null;
-                previewMessage.Text = "";
-                previewChanged();
-                sendEnable();
-            };
-
-            /** Default `stopListening` (nothing is listening): only re-enables the mic button. */
-            const defStopListening = () => {
-                if (listen)
-                    listen.SetEnabled(true);
-                //console.log("Chat: No need to stop, wasn't listening!");
-            };
-
-            stopListening = defStopListening;
-
-            /**
-             * Starts speech input with `SpeechInput.triggerOnSpeech(data.SpeechName, ...)` in `currentLang`.
-             * Disables the mic button in open mic mode. Activation toggles class `Listening` on the textarea and the mic
-             * button's working state; deactivation stores "false" in the listen key (open mic only) and calls `stopListening()`.
-             * Sentences are inserted live with `insertAtCursor(write, text, !isLast)` (interim text is replaceable); a final
-             * non empty sentence is sent with `Send("NoFocus")` in open mic mode, or in push-to-talk mode when
-             * `SysWeaver.Chat.SpeechSend<s>` is "true"; otherwise `sendEnable()`.
-             * On success replaces `stopListening` with a function that stops the recognizer; else resets it to `defStopListening`.
-             * The mic button calls `startListening(true, true)` (push-to-talk).
-             * @param {boolean} [ignoreKeyword] - If true any speech activates (no wake word needed).
-             * @param {boolean} [noOpenMic] - If true stop after one sentence (push-to-talk).
-             */
-            startListening = (ignoreKeyword, noOpenMic) => {
-
-                if (!noOpenMic) {
-                    if (listen)
-                        listen.SetEnabled(false);
-                }
-                const stop = SpeechInput.triggerOnSpeech(data.SpeechName,
-                    (activeUser, isWorking) => {
-                        if (activeUser) {
-                            write.classList.add("Listening");
-                        }
-                        else {
-                            write.classList.remove("Listening");
-                        }
-                        if (isWorking) {
-                            if (listen)
-                                listen.StartWorking();
-                        }
-                        else {
-                            if (listen)
-                                listen.StopWorking();
-                            if (!ignoreKeyword)
-                                localStorage.setItem(listenKey, "false");
-                            stopListening();
-                        }
-                    },
-                    async (data, isLast) => {
-                        insertAtCursor(write, data, !isLast);
-                        if (isLast) {
-                            if (listen)
-                                listen.StopWorking();
-                            if (data.length > 0) {
-                                if ((!noOpenMic) || (localStorage.getItem(autoSendKey) === "true")) {
-                                    await Send("NoFocus");
-                                    return;
-                                }
-                            }
-                        }
-                        sendEnable();
-                    },
-                    currentLang, ignoreKeyword, noOpenMic);
-                if (stop) {
-                    /** Stops the active recognizer: ends the mic button's working state, re-enables it and calls the recognizer's stop function. */
-                    stopListening = () => {
-                        if (listen) {
-                            listen.StopWorking();
-                            listen.SetEnabled(true);
-                        }
-                        stop();
-                        //console.log("Chat: Stopped listening");
-                    }
-                    //console.log("Chat: Started listening");
-                } else {
-                    stopListening = defStopListening;
-                }
-            };
-
-            if (canListen()) {
-                let l = localStorage.getItem(listenKey);
-                if (l === null) {
-                    l = data.EnableListenByDefault ? "true" : "false";
-                    localStorage.setItem(listenKey, l);
-                }
-                if (l === "true") {
-
-                    startListening();
-                }
+        /**
+         * Set the sender image (falls back to a menu icon when missing or broken).
+         * @param {?string} src The image url (FromImage).
+         */
+        SetIcon(src) {
+            const iconE = this.IconE;
+            const fallback = () => iconE.replaceChildren(Sw.IconClass(MenuIcon, { Class: "chat-icon-fallback" }));
+            if (src === this.View.CurrentImage)
+                src = CurrentUserImage;
+            if (!src) {
+                fallback();
+                return;
             }
+            const img = el("img", { alt: "" });
+            iconE.replaceChildren(img);
+            Sw.SetImageSource(img, src, { OnLoaded: ok => ok || fallback() });
+        }
 
-            /**
-             * Uploads files and attaches them to the draft. Fails if the attachment count would exceed `data.MaxDataCount`;
-             * calls the global `fileUploader(uploadRepo, files)` -> `{Error, Urls, Status}` and shows `Fail` on `Error` or no
-             * URLs. Per URL: shows `fileUploaderStatusText` for a negative status, adds non `UploadStatus.AlreadyUploaded`
-             * URLs to `tempFiles` and appends `"../" + url` to the `;`-separated data unless that exceeds `data.MaxDataLength`
-             * (then `Fail` and stop). Updates `previewMessage.Data`, the preview attachments, `previewChanged()` and `sendEnable()`.
-             * Used by drop and the "Attach file" menu items. Only assigned when canPost.
-             * @param {File[]|FileList} files - The files to upload.
-             * @returns {Promise<void>}
-             */
-            uploadFiles = async (files) => {
-                if (files.length <= 0)
-                    return;
-                let na = previewMessage.Data ?? "";
-                const count = na ? na.split(';').length : 0;
-                if ((count + files.length) > data.MaxDataCount) {
-                    Fail(data.MaxDataCount <= 1
-                        ?
-                        _TF("Only one file may be attached!", "Error message displayed when the user tries to attach more than 1 file to a chat message")
-                        :
-                        _T("Only {0} files may be attached!", data.MaxDataCount, "Error message displayed when the user tries to attach more than the allowed number of files to a chat message.{0} is replaced with the maximum allowed number of files")
-                    );
-                    return;
-                }
-                const res = await fileUploader(uploadRepo, files);
-                const e = res.Error;
-                if (e) {
-                    Fail(e)
-                    return;
-                }
-                const urls = res.Urls;
-                const status = res.Status;
-                const ul = urls.length;
-                if (ul <= 0) {
-                    Fail(_TF("Failed to upload!", "Error message shown when a file upload failed"));
-                    return;
-                }
-                for (let i = 0; i < ul; ++i) {
-                    const s = status[i];
-                    if (s < 0)
-                        Fail(fileUploaderStatusText(s));
-                    const u = urls[i];
-                    if (!u)
-                        continue;
-                    if (s !== UploadStatus.AlreadyUploaded)
-                        tempFiles.set(u, 1);
-                    const prev = na;
-                    if (na.length > 0)
-                        na += ";";
-                    na += ("../" + u);
-                    if (na.length > data.MaxDataLength) {
-                        Fail(_TF("Can't attach more data!", "Error message shown when no more files can be attached to a chat message"));
-                        na = prev;
+        /**
+         * Show or hide the content (no persistence, see ChatView.ToggleRow).
+         * @param {boolean} hide True to hide.
+         */
+        SetHidden(hide) {
+            const t = this;
+            if (t.IsPreview)
+                return;
+            t.Hidden = !!hide;
+            t.E.classList.toggle("chat-hidden", t.Hidden);
+            const tip = t.Hidden
+                ? _T("Show this message, new messages from {0} are shown too", t.Msg.From, "A tool tip message for a chat message header that when clicked will show the hidden content of that message (only that one), new messages from that user will also be shown.{0} is replaced with the user name. ")
+                : _T("Hide this message, new messages from {0} are hidden too", t.Msg.From, "A tool tip message for a chat message header that when clicked will hide the content of that message (only that one), new messages from that user will also be hidden.{0} is replaced with the user name. ");
+            t.Header.title = "#" + t.Msg.Id + "\n" + tip;
+        }
+
+        /**
+         * Render the header time (ChatView.ShowTimeStamp: the absolute time stamp, else the age text of ageText, refreshed by
+         * MessageList.UpdateAges) and the accessible names.
+         */
+        UpdateFormat() {
+            const t = this;
+            if (t.IsPreview) {
+                t.UpdateLabels();
+                return;
+            }
+            if (t.View.ShowTimeStamp)
+                Sw.Cells.DateTime(t.TimeE, t.Msg.Time, null, null, false, null, null, false, true);
+            else {
+                //  Clears a previous time stamp renderer (classes, tool tip)
+                Sw.Cells.Reset(t.TimeE, "ChatAge");
+                const d = messageDate(t.Msg.Time);
+                t.TimeE.title = timeTitle(d);
+                t.UpdateAge(Date.now());
+            }
+            t.UpdateLabels();
+        }
+
+        /**
+         * Refresh the age text (age mode only) and the accessible names when it changed.
+         * @param {number} now The current time (ms).
+         */
+        UpdateAge(now) {
+            const t = this;
+            if (t.IsPreview || t.View.ShowTimeStamp)
+                return;
+            const text = ageText(messageDate(t.Msg.Time), now);
+            if (t.TimeE.textContent === text)
+                return;
+            t.TimeE.textContent = text;
+            t.UpdateLabels();
+        }
+
+        /** Set the accessible names of the row (sender and time) and of the message menu button. */
+        UpdateLabels() {
+            const t = this;
+            let row, menu;
+            if (t.IsPreview) {
+                row = _TF("Preview of your message", "Accessible name of the chat row that previews the message being written");
+                menu = _TF("Message menu, preview", "Accessible name of the button that shows the menu of the chat message preview");
+            }
+            else {
+                const when = t.TimeE.textContent;
+                const ai = (t.Msg.Flags & Flags.FromAi) !== 0;
+                t.AiTag.hidden = !ai;
+                row = ai
+                    ? _T("Message from the AI {0}, {1}", t.Msg.From, when, "Accessible name of a chat message written by an AI (artificial intelligence).{0} is replaced with the sender name, {1} with the time (ex: \"14:02\" or \"5 minutes ago\")")
+                    : _T("Message from {0}, {1}", t.Msg.From, when, "Accessible name of a chat message.{0} is replaced with the sender name, {1} with the time (ex: \"14:02\" or \"5 minutes ago\")");
+                menu = _T("Message menu, {0}, {1}", t.Msg.From, when, "Accessible name of the button that shows the menu of a chat message.{0} is replaced with the sender name, {1} with the time (ex: \"14:02\" or \"5 minutes ago\")");
+            }
+            if (t.E.getAttribute("aria-label") !== row)
+                t.E.setAttribute("aria-label", row);
+            if (t.IconE.getAttribute("aria-label") !== menu)
+                t.IconE.setAttribute("aria-label", menu);
+        }
+
+        /**
+         * Render the content (text, markdown or html). A render that finishes after a newer one started is discarded (streaming).
+         * @param {?string} text The text.
+         * @param {number} format The format (Formats).
+         * @param {boolean} isWorking The message is still being produced (row class chat-working).
+         * @returns {Promise<void>}
+         */
+        async UpdateBody(text, format, isWorking) {
+            const t = this;
+            t.E.classList.toggle("chat-working", !!isWorking);
+            if (t.CurText === text && t.CurFormat === format)
+                return;
+            t.CurText = text;
+            t.CurFormat = format;
+            const seq = ++t.Seq;
+            const body = t.Body;
+            if (!text) {
+                body.textContent = "";
+                body.removeAttribute("title");
+                body.tabIndex = -1;
+                return;
+            }
+            try {
+                switch (format) {
+                    case Formats.MarkDown: {
+                        const html = await Sw.Markdown.ToHtml(text);
+                        if (seq !== t.Seq)
+                            return;
+                        body.title = _TF("Message is markdown", "A tool tip for a chat message that is written using Markdown (MD)");
+                        body.innerHTML = html;
                         break;
                     }
-                }
-                previewMessage.Data = na;
-                previewElement.UpdateData(na);
-                previewChanged();
-                sendEnable();
-            };
-
-            /**
-             * Try to clear all messages from the chat room: `sendRequest("ClearAllMessages", chatId)`; `Fail` on false/exception.
-             * Registered as the `chat.clear` postMessage command when `CanClear`, and used by "Remove ALL messages".
-             * @returns {Promise<void>}
-             */
-            cmdClear = async () => {
-                try {
-                    if (!await sendRequest(apiBase + "ClearAllMessages", chatId))
-                        Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure"));
-                }
-                catch (e) {
-                    Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                }
-            };
-
-            if (data.CanClear)
-                commandMap.set("chat.clear", cmdClear);
-
-            /** Final step with canPost: `sendEnable()` and focus the textarea (read-only during focus so no on-screen keyboard is forced). */
-            doLast = () => {
-                sendEnable();
-                write.readOnly = true;
-                write.focus();
-                write.readOnly = false;
-            };
-        }
-
-        //  INputEnd
-
-        // Handling of PostMessage messages (from parent window)
-        commandMap.set("chat.scrolltop", () => chatE.scrollTo({
-            left: chatE.scrollLeft,
-            top: 0,
-            behavior: "smooth",
-        }));
-        commandMap.set("chat.scrollbottom", () => chatE.scrollTo({
-            left: chatE.scrollLeft,
-            top: chatE.scrollHeight,
-            behavior: "smooth",
-        }));
-        commandMap.set("chat.showall", () => {
-            Array.from(chatE.children).forEach(x => x.Show());
-            setHideNone();
-        });
-        commandMap.set("chat.hideall", () => {
-            Array.from(chatE.children).forEach(x => x.Hide());
-            setHideNone();
-        });
-
-
-
-        // Dispatches `{Type}` messages from the parent window to commandMap (origin is only logged, not checked).
-        window.addEventListener("message", ev => {
-            const evd = ev.data;
-            if (!evd)
-                return;
-            const evt = evd.Type;
-            if (!evt)
-                return;
-            const evf = commandMap.get(evt);
-            if (evf) {
-                console.log("Got command \"" + evt + "\" from " + ev.origin);
-                evf();
-            }
-        });
-
-
-        /**
-        * A function that checks if we can listen to user audio (open mic): speech recognition supported and not mobile.
-        * @returns {boolean} True if we can listen to user audio
-        */
-        function canListen() {
-            if (!SpeechInput.supportSpeechRec())
-                return false;
-            if (!SpeechInput.supportOpenMic())
-                return false;
-            return true;
-        }
-
-
-        // Set up speech generation
-        /** Server voice settings by sender name (`data.Voices`, entry with null Name is the fallback). @type {Map<?string, object>} */
-        const userVoices = new Map();
-        /** True if the server sent `Voices` (speech synthesis possible). @type {boolean} */
-        const userSpeak = !!data.Voices;
-        if (userSpeak) {
-            for (const voice of data.Voices)
-                userVoices.set(voice.Name, voice);
-        }
-
-        /**
-        * A function that checks if we can use speech generation (server sent `Voices` and speech synthesis is supported)
-        * @returns {boolean} True if we can use speech generation
-        */
-        function canSpeak() {
-            return userSpeak && SpeechGen.supportSpeechGen();
-        }
-
-        /**
-         * Get a language text string from a language iso id
-         * @param {string} langId A language id, like: "en"
-         * @returns {string} A string like "English [en]" or "[xx]" for unknown language ids
-         * Requires `languageMap` (only loaded when `CanTranslate`).
-         */
-        function getLangText(langId) {
-            var mLang = languageMap.get(langId);
-            return mLang ? (mLang.Name + " [" + langId + "]") : ("[" + langId + "]");
-        }
-
-        /**
-         * Add server side menu items: recursively converts server `ChatMenuItem[]` (`Id, Name, Desc, Icon, Value, Children`)
-         * into `WebMenuItem`s. Leaf items send `SetValue {ChatId, Key: Id, Value, Id: messageId}` (Fail on false/exception)
-         * and then call `close()`.
-         * @param {?WebMenuItem[]} dest The destination item array (created if null)
-         * @param {?Array<object>} menuList Array of server `ChatMenuItem`s to add (nothing added if null/empty)
-         * @param {?number} messageId The message id (if we're adding it to a message menu), defaults to 0
-         * @param {function():void} close Function that when invoked closes pop-up menu
-         * @returns {?WebMenuItem[]} The destination item array (unchanged `dest` when there is nothing to add)
-         */
-        function addRec(dest, menuList, messageId, close) {
-            if (!menuList)
-                return dest;
-            const l = menuList.length;
-            if (l <= 0)
-                return dest;
-            messageId = messageId ?? 0;
-            if (!dest)
-                dest = [];
-            for (let mi = 0; mi < l; ++mi) {
-                const menu = menuList[mi]
-                const key = menu.Id;
-                const value = menu.Value;
-                const children = menu.Children;
-                const item = WebMenuItem.From({
-                    Name: menu.Name,
-                    IconClass: menu.Icon,
-                    Title: menu.Desc,
-                    Data: children ? null : async () => {
-
-                        try {
-                            if (!await sendRequest(apiBase + "SetValue", {
-                                ChatId: chatId,
-                                Key: key,
-                                Value: value,
-                                Id: messageId,
-
-                            }))
-                                Fail(_T("Failed to set chat value \"{0}\".", key, "An error message shown when a user tries to set a server side value but the server returns a failure.{0} is replaced by the value key name."));
-                        }
-                        catch (e) {
-                            Fail(_T("Failed to set chat value \"{0}\".", key, "An error message shown when a user tries to set a server side value but the server returns a failure.{0} is replaced by the value key name.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                        }
-                        close();
-                    },
-                });
-                dest.push(item);
-                item.Children = addRec(item.Children, children, messageId, close);
-            }
-            return dest;
-        }
-
-        /** Attachment extensions shown as sandboxed iframes by `UpdateData`. @type {Readonly<Object<string, number>>} */
-        const htmlExtensions = Object.freeze({
-            html: 1,
-            htm: 1,
-        });
-
-        /**
-         * Add a message to the chat window. Creates the row structure
-         * `SysWeaver-ChatRow > SysWeaver-ChatMsg > (SysWeaver-ChatHeader > [SysWeaver-ChatLanguage], SysWeaver-ChatName,
-         * SysWeaver-ChatTime, SysWeaver-ChatIcon), SysWeaver-ChatContent, SysWeaver-ChatData`.
-         * The row is inserted first if `onTop`, else before the last child when `canPost` (the preview row stays last),
-         * else appended. Adds class `Mine` for own messages, sender colors (if `options.UserColor`), `Hidden` for hidden
-         * senders, header click (toggle hide/show + `setHideFrom`, not for the preview) and context menus.
-         * Expando members on the row: `Msg`, `Body`, `Translated`, `UpdateLang`, `UpdateBody`, `UpdateData`,
-         * `UpdateFormat`, `Show`, `Hide`. Renders time, body and data before returning.
-         * @param {object} m The message data to add (`ChatMessage`: Id, From, FromImage, Time, Flags, Text, Data, Format, Lang, MenuItems)
-         * @param {boolean} onTop If true, the message is added to the top, else to the bottom
-         * @param {boolean} isPreview If true, the message is the preview message
-         * @returns {Promise<HTMLElement>} The `SysWeaver-ChatContent` element of the new row
-         */
-        async function addMessage(m, onTop, isPreview) {
-            const msgRow = document.createElement("SysWeaver-ChatRow");
-            const f = onTop ? chatE.firstElementChild : (canPost ? chatE.lastElementChild : null);
-            if (f)
-                chatE.insertBefore(msgRow, f);
-            else
-                chatE.appendChild(msgRow);
-            msgRow.Msg = m;
-
-            const msgE = document.createElement("SysWeaver-ChatMsg");
-            msgRow.appendChild(msgE);
-
-            const isMine = m.From === userName;
-            if (isMine)
-                msgRow.classList.add("Mine");
-
-            const cols = options.UserColor ? Chat.chatColor(m.From) : null;
-            //            msgE.style.backgroundColor = cols[1];
-            if (cols)
-                msgE.style.borderColor = cols[0];
-
-            //  Create elements
-            const msgHeader = document.createElement("SysWeaver-ChatHeader");
-            const msgName = document.createElement("SysWeaver-ChatName");
-            const msgLanguage = canTranslate ? document.createElement("SysWeaver-ChatLanguage") : null;
-            const msgTime = document.createElement("SysWeaver-ChatTime");
-            const msgIcon = document.createElement("SysWeaver-ChatIcon");
-            const msgBody = document.createElement("SysWeaver-ChatContent");
-            const msgData = document.createElement("SysWeaver-ChatData");
-            msgBody.tabIndex = "0";
-
-            let isH = isPreview ? false : isHidden(m.From);
-            msgHeader.IsHidden = isH;
-            const tf = isPreview ? _TF("This is a preview of a message, it's not visible to anyone but you", "Tool tip description letting the user know what this is") : ValueFormat.stringFormat(isH ? titleHidden : titleVisible, m.From);
-            msgHeader.title = tf;
-            msgName.title = tf;
-            if (isH) {
-                msgBody.classList.add(hiddenClass);
-                msgData.classList.add(hiddenClass);
-            }
-
-            /**
-             * Context menu handler for a message: opens the message `PopUpMenu` at the sender icon (root gets class `Chat`;
-             * a `ResizeObserver` on `body` keeps it aligned). Items: preview -> "Attach file" (if uploads), copy items,
-             * "Clear"; others -> "View profile" (`parent.postMessage({Type:"ViewProfile", Name, Image}, "*")` if
-             * `CanShowProfile`), copy text / markdown / HTML (by `Format`; HTML items hidden on mobile), copy time stamp,
-             * copy user name, hide/show content, server `m.MenuItems` via `addRec`, and "Remove message"
-             * (`RemoveMessage {ChatId, MessageId}`; confirmation unless the message has `FlagCanRemove`).
-             * Bound to the icon click and to `contextmenu` on header and image.
-             * @param {Event} ev - The click / contextmenu event (ignored if `badClick`).
-             * @returns {Promise<void>}
-             */
-            const onMenuClick = async ev => {
-                if (badClick(ev))
-                    return;
-                m = msgRow.Msg;
-                const chatElement = msgIcon;
-                PopUpMenu(msgIcon, (close, backEl) => {
-
-                    const pp = backEl.parentElement;
-                    pp.classList.add("Chat");
-                    new ResizeObserver(() => {
-                        const cr = chatElement.getBoundingClientRect();
-                        pp.style.left = cr.right + "px";
-                    }).observe(document.body);
-
-                    /**
-                     * Copies text to the clipboard with an info toast (`ValueFormat.copyToClipboardInfo`), then closes the menu.
-                     * @param {string} text - Text to copy.
-                     * @returns {Promise<void>}
-                     */
-                    async function Copy(text) {
-                        await ValueFormat.copyToClipboardInfo(text);
-                        close();
-                    }
-
-                    const menu = new WebMenu();
-                    menu.Name = "ChatMsg";
-
-                    if (isPreview) {
-                        if (uploadRepo) {
-                            const filesLeft = data.MaxDataCount - GetDataCount();
-                            menu.Items.push(WebMenuItem.From({
-                                Name:
-                                    _TF("Attach file", "Text of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
-                                Flags: filesLeft <= 0 ? 1 : 0,
-                                IconClass: "IconChatAttachFile",
-                                Title:
-                                    _TF("Attach a file to the current message", "Tool tip description of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
-                                Data: async () => {
-                                    const files = await selectFiles(filesLeft > 1);
-                                    if (files)
-                                        await uploadFiles(files);
-                                    close();
-                                },
-                            }));
-                        }
-                    } else {
-                        if (data.CanShowProfile) {
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("View profile", "Name of a menu item that when clicked will view the profile of a web site member"),
-                                Flags: 0,
-                                IconClass: "IconProfile",
-                                Title: _T("View the public profile page for \"{0}\"", m.From, "Tool tip description of a menu item that when clicked will view the profile of a web site member.{0} is replaced with the nick name of the member"),
-                                Data: () => {
-                                    try {
-                                        const smsg = {
-                                            Type: "ViewProfile",
-                                            Name: m.From,
-                                            Image: m.FromImage,
-                                        };
-                                        parent.postMessage(smsg, "*")
-                                        console.log("Send ViewProfile message: " + JSON.stringify(smsg));
-                                    }
-                                    catch (e) {
-                                        console.warn("Failed to send ViewProfile message: " + e.message);
-                                    }
-                                    close();
-                                },
-                            }));
-                        }
-                    }
-
-
-                    switch (m.Format) {
-                        case 0:
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy text", "Name of a menu item that when clicked will copy the text of chat message to the clipboard"),
-                                Flags: 0,
-                                IconClass: "IconCopy",
-                                Title: _TF("Copy the message text to the clipboard", "Tool tip description of a menu item that when clicked will copy the text of chat message to the clipboard"),
-                                Data: async () => await Copy(msgBody.CurrentText),
-                            }));
-                            break;
-                        case 1:
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy markdown (original)", "Name of a menu item that when clicked will copy the original mark down text of chat message to the clipboard"),
-                                Flags: 0,
-                                IconClass: "IconCopy",
-                                Title: _TF("Copy the message markdown text to the clipboard", "Tool tip description of a menu item that when clicked will copy the original mark down text of chat message to the clipboard"),
-                                Data: async () => await Copy(msgBody.CurrentText),
-                            }));
-                            if (!SpeechInput.IsMobile) {
-                                menu.Items.push(WebMenuItem.From({
-                                    Name: _TF("Copy HTML", "Name of a menu item that when clicked will copy the generated HTML code of chat message to the clipboard"),
-                                    Flags: 0,
-                                    IconClass: "IconCopy",
-                                    Title: _TF("Copy the formatted HTML to the clipboard", "Tool tip description of a menu item that when clicked will copy the generated HTML code of chat message to the clipboard"),
-                                    Data: async () => await Copy(msgBody.innerHTML),
-                                }));
-                            }
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy text", "Name of a menu item that when clicked will copy the text of chat message to the clipboard"),
-                                Flags: 0,
-                                IconClass: "IconCopy",
-                                Title: _TF("Copy the message text to the clipboard", "Tool tip description of a menu item that when clicked will copy the text of chat message to the clipboard"),
-                                Data: async () => await Copy(msgBody.innerText),
-                            }));
-                            break;
-                        case 2:
-                            if (!SpeechInput.IsMobile) {
-                                menu.Items.push(WebMenuItem.From({
-                                    Name: _TF("Copy HTML (original)", "Name of a menu item that when clicked will copy the original HTML code of chat message to the clipboard"),
-                                    Flags: 0,
-                                    IconClass: "IconCopy",
-                                    Title: _TF("Copy the formatted HTML to the clipboard", "Tool tip description of a menu item that when clicked will copy the generated HTML code of chat message to the clipboard"),
-                                    Data: async () => await Copy(msgBody.innerHTML),
-                                }));
-                            }
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy text", "Name of a menu item that when clicked will copy the text of chat message to the clipboard"),
-                                Flags: 0,
-                                IconClass: "IconCopy",
-                                Title: _TF("Copy the message text to the clipboard", "Tool tip description of a menu item that when clicked will copy the text of chat message to the clipboard"),
-                                Data: async () => await Copy(msgBody.innerText),
-                            }));
-                            break;
-                    }
-                    if (isPreview) {
-                        menu.Items.push(WebMenuItem.From({
-                            Name: _TF("Clear", "Name of a menu item that when clicked will clear the current chat message"),
-                            Flags: 0,
-                            IconClass: "IconChatClearCurrent",
-                            Title: _TF("Clear the current message text and any data", "Tool tip description of a menu item that when clicked will clear the current chat message"),
-                            Data: async () => {
-                                await clearCurrentMessage();
-                                close();
-                            },
-                        }));
-                    } else {
-                        menu.Items.push(WebMenuItem.From({
-                            Name: _TF("Copy time stamp", "Name of a menu item that when clicked will copy the time stamp of chat message to the clipboard"),
-                            Flags: 0,
-                            IconClass: "IconCopy",
-                            Title: _T("Copy the time stamp \"{0}\" to the clipboard", m.Time, "Tool tip description of a menu item that when clicked will copy the time stamp of chat message to the clipboard.{0} is replaced with the time stamp"),
-                            Data: async () => await Copy(m.Time),
-                        }));
-                        menu.Items.push(WebMenuItem.From({
-                            Name: _TF("Copy user name", "Name of a menu item that when clicked will copy the user name of chat message to the clipboard"),
-                            Flags: 0,
-                            IconClass: "IconCopy",
-                            Title: _T("Copy the user name \"{0}\" to the clipboard", m.From, "Tool tip description of a menu item that when clicked will copy the user name of chat message to the clipboard.{0} is replaced with the name of the user that posted the message"),
-                            Data: async () => await Copy(m.From),
-                        }));
-
-
-                        if (msgHeader.IsHidden) {
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Show content", "Name of a menu item that when clicked will show the content of a chat message that is currently hidden"),
-                                Flags: 0,
-                                IconClass: "IconChatShow",
-                                Title: _T("Show the message content and all new messages from \"{0}\"", m.From, "Tool tip description of a menu item that when clicked will show the content of a chat message that is currently hidden.{0} is replaced with the name of the user"),
-                                Data: () => {
-                                    msgRow.Show();
-                                    setHideFrom(m.From, false);
-                                    close();
-                                },
-                            }));
-
-                        } else {
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Hide content", "Name of a menu item that when clicked will hide the content of a chat message"),
-                                Flags: 0,
-                                IconClass: "IconChatHide",
-                                Title: _T("Hide the message content and all new messages from \"{0}\"", m.From, "Tool tip description of a menu item that when clicked will hide the content of a chat message.{0} is replaced with the name of the user"),
-                                Data: () => {
-                                    msgRow.Hide();
-                                    setHideFrom(m.From, true);
-                                    close();
-                                },
-                            }));
-                        }
-
-                        addRec(menu.Items, m.MenuItems, m.Id, close);
-                        const canClear = data.CanClear
-                        const canRemove = ((m.Flags & Chat.FlagCanRemove) !== 0);
-                        if (canClear || canRemove) {
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Remove message", "Name of a menu item that when clicked will remove a chat message"),
-                                Flags: 0,
-                                IconClass: "IconChatRemove",
-                                Title: _TF("Remove this message from the chat", "Tool tip description of a menu item that when clicked will remove a chat message"),
-                                Data: async () => {
-                                    if (!canRemove) {
-                                        if (!await Confirm(
-                                            _TF("Remove message", "Title of a confirmation dialog that when confirmed will remove a chat message"),
-                                            _TF("Are you sure that you wan't to remove this message?", "Text of a confirmation dialog that when confirmed will remove a chat message"),
-                                            _TF("YES, remove", "Text of a button on a confirmation dialog that when clicked will remove a chat message"),
-                                            _TF("NO, keep it", "Text of a button on a confirmation dialog that when clicked will keep a chat message as opposed to remove it"),
-                                            "IconChatRemove", "IconChatKeep",
-                                            _TF("Click to remove the message, this can't be undone", "Tool tip description of a button on a confirmation dialog that when clicked will remove a chat message"),
-                                            _TF("Click to keep the message", "Tool tip description of a button on a confirmation dialog that when clicked will keep a chat message as opposed to remove it"),
-                                        )) {
-                                            close();
-                                            return;
-                                        }
-                                    }
-                                    try {
-                                        if (!await sendRequest(apiBase + "RemoveMessage", {
-                                            ChatId: chatId,
-                                            MessageId: m.Id
-                                        }))
-                                            Fail(_TF("Failed to remove the chat message.", "An error message shown when a user tries to remove a chat message but the server returns a failure."));
-                                    }
-                                    catch (e) {
-                                        Fail(_TF("Failed to remove the chat message.", "An error message shown when a user tries to remove a chat message but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                    }
-                                    close();
-                                },
-                            }));
-                        }
-
-                    }
-                    return menu;
-                }, isMine);
-            };
-
-
-
-
-
-
-            //  Header
-            msgE.appendChild(msgHeader);
-            if (cols) {
-                msgHeader.style.backgroundColor = cols[1];
-                msgHeader.style.color = cols[2];
-            }
-            msgHeader.title = isPreview ? _TF("Preview", "Tool tip description indicating that this is a chat preview message") : ("#" + m.Id);
-            /**
-             * Header context menu: opens the message menu (`onMenuClick`) instead of the browser menu.
-             * @param {MouseEvent} ev - The contextmenu event.
-             * @returns {boolean} true to allow the default menu (bad click), false to suppress it.
-             */
-            msgHeader.oncontextmenu = ev => {
-                if (badClick(ev, true))
-                    return true;
-                onMenuClick(ev);
-                return false;
-            };
-            //  Header language
-            if (msgLanguage) {
-                keyboardClick(msgLanguage);
-                const langFlag = createImg("img");
-                msgLanguage.appendChild(langFlag);
-
-                /**
-                 * Expando (translation enabled): sets the flag image to `m.Lang` and the tooltip, and (re)binds the flag click.
-                 * Preview row: the flag click opens `selectLanguage`. Other rows: the flag click toggles between the original
-                 * and the translation from `Translate {ChatId, MessageId}` (cached in `msgRow.Translated`), toggling classes
-                 * `Translating` (while requesting) and `Translated` and switching the flag to `data.Lang`; `Fail` on error.
-                 * Note: uses the `m` captured when the row was created (the preview message object is shared and mutated).
-                 */
-                msgRow.UpdateLang = () => {
-                    langFlag.src = "../iso_data/language/" + m.Lang + ".svg";
-                    const mLang = getLangText(m.Lang);
-                    const cLang = getLangText(currentLang);
-                    const dLang = getLangText(data.Lang);
-                    if (isPreview) {
-                        msgLanguage.title =
-                            _TF("This should be set to the language used in your text.", "Tool tip description indicating that the language specified should match the one used to write the text") +
-                            "\n\n" +
-                            _T("If the text is not written in \"{0}\", click to specify a different language", cLang, "Tool tip description for a button that when clicked will show a list of languages that the user can select.{0} is the current language")
-                            ;
-                        /**
-                         * Preview flag click: opens the input language selection.
-                         * @param {MouseEvent} ev - The click event (ignored if `badClick`).
-                         * @returns {Promise<void>}
-                         */
-                        msgLanguage.onclick = async ev => {
-                            if (badClick(ev))
-                                return;
-                            await selectLanguage();
-                        };
-                    } else {
-
-                        const msgLangTitle0 =
-                            _T("Message was probably written using \"{0}\"", mLang, "A tool tip description indicating what language was used to write a chat message.{0} is replaced by the ISO code of the language") +
-                            "\n" +
-                            _T("Click to translate the message to \"{0}\".", dLang, "A tool tip description on a button that when pressed will translate a chat message to the specified language.{0} is replaced by the ISO code of the language");
-
-                        const msgLangTitle1 =
-                            _T("Message is translated to \"{0}\".", dLang, "A tool tip description indicating that a chat message have been translated.{0} is replaced by the ISO code of the language") +
-                            "\n" +
-                            _T("Click to show the original message probably written using \"{0}\".", mLang, "A tool tip description on a button that when pressed will show the original message as opposed to a translated message.{0} is replaced by the ISO code of the language");
-
-
-                        msgLanguage.title = msgLangTitle0;
-                        /** True while a translate toggle is running (ignores further clicks). @type {boolean} */
-                        let isTranslating = false;
-                        /**
-                         * Message flag click: toggles between the original text and the (cached or requested) translation.
-                         * @param {MouseEvent} ev - The click event (ignored if `badClick`).
-                         * @returns {Promise<void>}
-                         */
-                        msgLanguage.onclick = async ev => {
-                            if (badClick(ev))
-                                return;
-                            if (isTranslating)
-                                return;
-                            isTranslating = true;
-                            try {
-                                const mm = msgRow.Msg;
-                                if (msgLanguage.IsTranslated) {
-                                    msgRow.UpdateBody(mm.Text, mm.Format, (m.Flags & Chat.FlagIsWorking) !== 0);
-                                    msgLanguage.title = msgLangTitle0;
-                                    msgLanguage.IsTranslated = false;
-                                    msgLanguage.classList.remove("Translated");
-                                    langFlag.src = "../iso_data/language/" + mm.Lang + ".svg";
-                                } else {
-                                    let tr = msgRow.Translated;
-                                    if (!tr) {
-                                        msgLanguage.classList.add("Translating");
-                                        tr = await sendRequest(apiBase + "Translate", {
-                                            ChatId: chatId,
-                                            MessageId: mm.Id,
-                                        });
-                                        msgRow.Translated = tr;
-                                    }
-                                    msgRow.UpdateBody(tr, mm.Format, (m.Flags & Chat.FlagIsWorking) !== 0);
-                                    msgLanguage.title = msgLangTitle1;
-                                    msgLanguage.IsTranslated = true;
-                                    msgLanguage.classList.add("Translated");
-                                    langFlag.src = "../iso_data/language/" + data.Lang + ".svg";
-                                }
-                            }
-                            catch (e) {
-                                Fail(_TF("Failed to translate the message.", "An error message shown when a user tries to translate a chat message but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                            }
-                            finally {
-                                msgLanguage.classList.remove("Translating");
-                                isTranslating = false;
-                            }
-                        };
-                    }
-                };
-                msgRow.UpdateLang();
-            } else {
-                /** Expando (no translation): no-op. */
-                msgRow.UpdateLang = () => { };
-            }
-
-            //  Header name
-            msgName.innerText = m.From;
-
-            //  Header time
-            msgTime.Value = m.Time;
-
-
-
-            //  Header icon: the sender image (own image rewritten to ../auth/UserImages/Current/small), falling back to an IconMenu ColorIcon
-            let fi = m.FromImage;
-            if (fi === currentImage)
-                fi = "../auth/UserImages/Current/small";
-
-            const ttt = _TF("Click to show message menu", "Tool tip description on a button that when clicked will show a menu with options for a chat message");
-            if (fi) {
-                const img = document.createElement("img"); // Do not use createImg here since we're using SetImageSource.
-                msgIcon.appendChild(img);
-                SetImageSource(img, fi, null, false, isOk => {
-                    if (isOk) {
-                        img.title = ttt;
-                        img.onclick = onMenuClick;
-                        img.oncontextmenu = ev => {
-                            if (badClick(ev, true))
-                                return true;
-                            onMenuClick(ev);
-                            return false;
-                        };
-                        keyboardClick(img);
-                    } else {
-                        img.remove();
-                        const clIcon = new ColorIcon("IconMenu", "IconColorThemeAcc1", 32, 32, ttt, onMenuClick, null, null, true);
-                        msgIcon.appendChild(clIcon.Element);
-                    }
-                });
-            } else {
-                const clIcon = new ColorIcon("IconMenu", "IconColorThemeAcc1", 32, 32, ttt, onMenuClick, null, null, true);
-                msgIcon.appendChild(clIcon.Element);
-            }
-            if (msgLanguage)
-                msgHeader.appendChild(msgLanguage);
-            msgHeader.appendChild(msgName);
-            msgHeader.appendChild(msgTime);
-            msgHeader.appendChild(msgIcon);
-
-            //  Body
-            msgE.appendChild(msgBody);
-            msgRow.Body = msgBody;
-            /**
-             * Expando: renders the message body. Toggles class `Working` on the row; if text or format changed, renders into
-             * `SysWeaver-ChatContent` by format: 0 -> `innerText`, 1 -> `innerHTML = await ValueFormat.MarkDownToHTML(text)`,
-             * 2 -> raw `innerHTML`, with a format tooltip; falls back to `innerText` on error. Stores `CurrentText` /
-             * `CurrentFormat` on the content element.
-             * @param {?string} newText - The text to show (empty clears the body).
-             * @param {number} newFormat - 0 text, 1 markdown, 2 HTML.
-             * @param {boolean} isWorking - True while the message is still being produced (`FlagIsWorking`).
-             * @returns {Promise<void>}
-             */
-            msgRow.UpdateBody = async (newText, newFormat, isWorking) => {
-                if (msgRow.classList.contains(workingAttribute) !== isWorking) {
-                    if (isWorking)
-                        msgRow.classList.add(workingAttribute);
-                    else
-                        msgRow.classList.remove(workingAttribute);
-                }
-                if (msgBody.CurrentText === newText)
-                    if (msgBody.CurrentFormat === newFormat)
-                        return;
-                msgBody.CurrentText = newText;
-                msgBody.CurrentFormat = newFormat;
-                if ((!newText) || (newText.length <= 0)) {
-                    msgBody.innerText = "";
-                    return;
-                }
-                try {
-                    switch (newFormat) {
-                        case 0:
-                            msgBody.title = _TF("Message is plain text", "A tool tip for a chat message that is written using plain text");
-                            msgBody.innerText = newText;
-                            break;
-                        case 1:
-                            msgBody.title = _TF("Message is markdown", "A tool tip for a chat message that is written using Mark Down (MD)");
-                            msgBody.innerHTML = await ValueFormat.MarkDownToHTML(newText);
-                            break;
-                        case 2:
-                            msgBody.title = _TF("Message is HTML", "A tool tip for a chat message that is written using HTML");
-                            msgBody.innerHTML = newText;
-                            break;
-                    }
-                }
-                catch
-                {
-                    msgBody.innerText = newText;
-                }
-            };
-            //  Data
-            msgE.appendChild(msgData);
-            /**
-             * Expando: rebuilds `SysWeaver-ChatData` from a `;`-separated URL list (skipped if unchanged). Per URL a
-             * `<SysWeaver-ChatHolder>` is created: image -> `<img>` (click opens with `Open`); `.html/.htm` -> sandboxed
-             * `<iframe>` (`allow-forms allow-presentation allow-scripts allow-same-origin allow-downloads allow-popups`,
-             * src through `appendTheme`); other -> `../icons/ext/<ext>.svg` plus a `<SysWeaver-ChatLabel>` (copies the URL on
-             * click), class `Extension`, click downloads (`downloadFile`). Clickable holders get class `Clickable`.
-             * Each holder has a `<SysWeaver-ChatExpand>` with a menu `ColorIcon` that opens a `PopUpMenu` (root class `ChatData`):
-             * preview only "Copy image Mark Down" (markdown mode, images), "Copy url", "Delete file" (removes it from the data
-             * and deletes a temp upload via `../Api/UserStorage/DeleteStoredFile`), "Hide file" (removes it from the data and
-             * copies a markdown reference); "Open in new tab" (non forced-download items); "Download" (temporary `<a download>`);
-             * with `canPost` a "Store file" submenu (`StoreFile {Url, Scope}`: Private 0, Protected 1, Public also sends 1 and
-             * is only shown if `AllowPublicStore`; not for HTML or URLs already under `../storage/<UserStore>/`) and a
-             * "Create link" submenu (`StoreLink {Url, Scope 0/1/2}`, non absolute URLs only). Store results are made absolute
-             * (`GetAbsolutePath`), copied to the clipboard and opened.
-             * @param {?string} newData - `;`-separated list of `../`-prefixed URLs, or null/empty to clear.
-             */
-            msgRow.UpdateData = newData => {
-                if (!newData)
-                    newData = null;
-                if (msgData.CurrentData === newData)
-                    return;
-                msgData.CurrentData = newData;
-                if ((!newData) || (newData.length <= 0)) {
-                    msgData.innerText = "";
-                    return;
-                }
-                msgData.innerText = "";
-                const parts = newData.split(';');
-                const pl = parts.length;
-                for (let i = 0; i < pl; ++i) {
-                    const orgP = parts[i].trim();
-                    const pr = orgP.substring(3);
-                    const p = GetAbsolutePath(orgP);
-                    const pp = p.indexOf('?');
-                    const pbase = pp < 0 ? p : p.substring(0, pp);
-                    const pep = pbase.lastIndexOf('.');
-                    const ext = pep >= 0 ? pbase.substring(pep + 1).toLowerCase() : "";
-                    const baseName = pbase.substring(pbase.lastIndexOf('/') + 1, pep >= 0 ? pep : pbase.length);
-                    let element = null;
-                    let elements = null;
-                    let canDownload = false;
-                    let canSave = !orgP.startsWith("../storage/" + data.UserStore + "/");
-                    let canLink = orgP.indexOf("://") < 0;
-                    let forceDownload = false;
-                    let extraClass = null;
-                    const isImage = imageExtensions[ext];
-                    if (isImage) {
-                        element = createImg("img");
-                        element.src = p;
-                        canDownload = true;
-                    } else {
-                        if (htmlExtensions[ext]) {
-                            element = createIFrame();
-                            element.sandbox = "allow-forms allow-presentation allow-scripts allow-same-origin allow-downloads allow-popups";
-                            element.src = appendTheme(p);
-                            canSave = false;
-                        } else {
-                            element = createImg("img");
-                            extraClass = "Extension";
-                            element.src = "../icons/ext/" + ext + ".svg";
-                            canDownload = true;
-                            forceDownload = true;
-
-                            const label = document.createElement("SysWeaver-ChatLabel");
-                            label.innerText = baseName;
-                            label.title = p;
-                            ValueFormat.copyOnClick(label, p, true, true);
-                            elements = [element, label];
-                        }
-                    }
-                    if (element) {
-                        const iframeHolder = document.createElement("SysWeaver-ChatHolder");
-                        const iframeExpand = document.createElement("SysWeaver-ChatExpand");
-                        if (extraClass)
-                            iframeHolder.classList.add(extraClass);
-                        if (canDownload) {
-
-                            iframeHolder.classList.add("Clickable");
-                            element.onclick = ev => {
-                                if (badClick(ev))
-                                    return;
-                                if (forceDownload)
-                                    downloadFile(null, p);
-                                else
-                                    Open(p);
-                                //open(p);
-                            };
-                            if (forceDownload)
-                                element.title = _T('Click to download "{0}"', p, "Tool tip description on some content that when clicked will download the content.{0} is replaced with the url");
-                            else
-                                element.title = _T('Click to open "{0}" in a new tab', p, "Tool tip description on some content that when clicked will open the content in a new browser tab.{0} is replaced with the url");
-                            keyboardClick(element);
-                        }
-
-                        const iframeIcon = new ColorIcon("IconMenu", "IconColorThemeAcc2", 32, 32, _TF("Click to show menu", "Tool tip description of a button that when clicked will show a context menu with options"), () => {
-
-                            PopUpMenu(iframeExpand, (close, backEl) => {
-
-                                const pp = backEl.parentElement;
-                                pp.classList.add("ChatData");
-
-                                const menu = new WebMenu();
-                                menu.Name = "ChatData";
-                                if (isPreview) {
-                                    if (isImage) {
-                                        if (useMarkDown) {
-                                            menu.Items.push(WebMenuItem.From({
-                                                Name: _TF("Copy image Mark Down", "Text of a menu item that when clicked will copy the mark down required to display this image"),
-                                                Flags: 0,
-                                                IconClass: "IconChatCopyImage",
-                                                Title: _TF("Click to copy the Mark Down required to show the file to the clipboard", "Tool tip description of a menu item that when clicked will copy the mark down required to display this image"),
-                                                Data: () => {
-                                                    ValueFormat.copyToClipboardInfo("![](" + orgP + ")");
-                                                    close();
-                                                },
-                                            }));
-                                        }
-                                    }
-                                    menu.Items.push(WebMenuItem.From({
-                                        Name: _TF("Copy url", "Text of a menu item that when clicked will copy the url text"),
-                                        Flags: 0,
-                                        IconClass: "IconChatCopy",
-                                        Title: _TF("Click to copy the url to the clipboard", "Tool tip description of a menu item that when clicked will copy the url text"),
-                                        Data: () => {
-                                            ValueFormat.copyToClipboardInfo(p);
-                                            close();
-                                        },
-                                    }));
-                                    menu.Items.push(WebMenuItem.From({
-                                        Name: _TF("Delete file", "Text of a menu item that when clicked will delete the file from the server"),
-                                        Flags: 0,
-                                        IconClass: "IconChatDeleteFile",
-                                        Title: _TF("Click to delete this file from the server", "Tool tip description of a menu item that when clicked will delete the file from the server"),
-                                        Data: async () => {
-                                            const np = [];
-                                            for (let ii = 0; ii < pl; ++ii) {
-                                                if (parts[ii] !== orgP)
-                                                    np.push(parts[ii]);
-                                            }
-                                            const m = np.length > 0 ? np.join(';') : null;
-                                            previewMessage.Data = m;
-                                            msgRow.UpdateData(m);
-                                            if (tempFiles.get(pr)) {
-                                                tempFiles.delete(pr);
-                                                try {
-                                                    if (!await sendRequest(apiBase + "../Api/UserStorage/DeleteStoredFile", pr))
-                                                        console.warn('Failed to delete stored file "' + pr + '".');
-                                                }
-                                                catch (e) {
-                                                    console.warn('Failed to delete stored file "' + pr + '", error: ' + e.message);
-                                                }
-                                            }
-                                            previewChanged();
-                                            close();
-                                        },
-                                    }));
-                                    menu.Items.push(WebMenuItem.From({
-                                        Name: _TF("Hide file", "Text of a menu item that when clicked will hide the file"),
-                                        Flags: 0,
-                                        IconClass: "IconChatHideFile",
-                                        Title: _TF("Click to hide this file", "Tool tip description of a menu item that when clicked will hide the file"),
-                                        Data: async () => {
-                                            parts.splice(i, 1);
-                                            let m = parts.join(';');
-                                            if (!m)
-                                                m = null;
-                                            const pr = p.substring(3);
-                                            previewMessage.Data = m;
-                                            msgRow.UpdateData(m);
-                                            previewChanged();
-                                            if (isImage)
-                                                ValueFormat.copyToClipboardInfo("![](" + orgP + ")");
-                                            else
-                                                ValueFormat.copyToClipboardInfo("[" + baseName + "](" + p + ")");
-                                            close();
-                                        },
-                                    }));
-
-                                }
-
-                                if (!forceDownload) {
-                                    menu.Items.push(WebMenuItem.From({
-                                        Name: _TF("Open in new tab", "Text of a menu item that when clicked will open some content in a new browser tab"),
-                                        Flags: 0,
-                                        IconClass: "IconChatExpand",
-                                        Title: _TF("Click to show in a new tab", "Tool tip description of a menu item that when clicked will open some content in a new browser tab"),
-                                        Data: () => {
-                                            open(p, "_blank");
-                                            close();
-                                        },
-                                    }));
-                                }
-                                if (canDownload) {
-                                    menu.Items.push(WebMenuItem.From({
-                                        Name: _TF("Download", "Text of menu item that when clicked will download some content to a file"),
-                                        Flags: 0,
-                                        IconClass: "IconChatSave",
-                                        Title: _TF("Save the file to your device", "Tool tip description of menu item that when clicked will download some content to a file"),
-                                        Data: () => {
-                                            const del = document.createElement('a');
-                                            del.setAttribute("href", p);
-                                            del.setAttribute('download', '');
-                                            del.style.display = 'none';
-                                            document.body.appendChild(del);
-                                            del.click();
-                                            document.body.removeChild(del);
-                                            close();
-                                        },
-                                    }));
-                                }
-                                if (canPost) {
-
-                                    if (canSave) {
-                                        const storeItems = [];
-                                        storeItems.push(WebMenuItem.From({
-                                            Name: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
-                                            Flags: 0,
-                                            IconClass: "IconChatLink0",
-                                            Title: _TF("Store the file on the server for later use, only available to you", "Tool tip description of menu item that when clicked will store some content on the server"),
-                                            Data: async () => {
-                                                try {
-                                                    const stored = await sendRequest(apiBase + "StoreFile", {
-                                                        Url: p,
-                                                        Scope: 0,
-                                                    });
-                                                    if (stored) {
-                                                        const str = GetAbsolutePath(stored);
-                                                        await ValueFormat.copyToClipboardInfo(str);
-                                                        Open(str);
-                                                    } else
-                                                        Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
-                                                }
-                                                catch (e) {
-                                                    Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                                }
-                                                close();
-                                            },
-                                        }));
-                                        storeItems.push(WebMenuItem.From({
-                                            Name: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
-                                            Flags: 0,
-                                            IconClass: "IconChatLink1",
-                                            Title: _TF("Store the file on the server for later use, available to any logged in users", "Tool tip description of menu item that when clicked will store some content on the server"),
-                                            Data: async () => {
-                                                try {
-                                                    const stored = await sendRequest(apiBase + "StoreFile", {
-                                                        Url: p,
-                                                        Scope: 1,
-                                                    });
-                                                    if (stored) {
-                                                        const str = GetAbsolutePath(stored);
-                                                        await ValueFormat.copyToClipboardInfo(str);
-                                                        Open(str);
-                                                    } else
-                                                        Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
-                                                }
-                                                catch (e) {
-                                                    Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                                }
-                                                close();
-                                            },
-                                        }));
-                                        if (data.AllowPublicStore) {
-                                            storeItems.push(WebMenuItem.From({
-                                                Name: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
-                                                Flags: 0,
-                                                IconClass: "IconChatLink2",
-                                                Title: _TF("Store the file on the server for later use, available to anyone", "Tool tip description of menu item that when clicked will store some content on the server"),
-                                                Data: async () => {
-                                                    try {
-                                                        const stored = await sendRequest(apiBase + "StoreFile", {
-                                                            Url: p,
-                                                            Scope: 1,
-                                                        });
-                                                        if (stored) {
-                                                            const str = GetAbsolutePath(stored);
-                                                            await ValueFormat.copyToClipboardInfo(str);
-                                                            Open(str);
-                                                        } else
-                                                            Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
-                                                    }
-                                                    catch (e) {
-                                                        Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                                    }
-                                                    close();
-                                                },
-                                            }));
-                                        }
-                                        if (storeItems.length > 0) {
-                                            menu.Items.push(WebMenuItem.From({
-                                                Name: _TF("Store file", "Text of a menu folder that contains items that when clicked store this file to the server"),
-                                                Flags: 0,
-                                                IconClass: "IconChatStore",
-                                                Title: _TF("Store the file on the server for later use", "Tool tip description of menu folder that contains items that when clicked store this file to the server"),
-                                                Children: storeItems
-                                            }));
-                                        }
-                                    }
-
-                                    if (canLink) {
-                                        const linkItems = [];
-
-                                        linkItems.push(WebMenuItem.From({
-                                            Name: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
-                                            Flags: 0,
-                                            IconClass: "IconChatLink0",
-                                            Title: _TF("Save as a link that only you can view", "Tool tip description of menu item that when clicked will store some content on the server and create a private (only accesible by this user) link to it"),
-                                            Data: async () => {
-                                                try {
-                                                    const stored = await sendRequest(apiBase + "StoreLink", {
-                                                        Url: p,
-                                                        Scope: 0,
-                                                    });
-                                                    if (stored) {
-                                                        const str = GetAbsolutePath(stored);
-                                                        await ValueFormat.copyToClipboardInfo(str);
-                                                        Open(str);
-                                                    } else
-                                                        Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
-                                                }
-                                                catch (e) {
-                                                    Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                                }
-                                                close();
-                                            },
-                                        }));
-                                        linkItems.push(WebMenuItem.From({
-                                            Name: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
-                                            Flags: 0,
-                                            IconClass: "IconChatLink1",
-                                            Title: _TF("Save as a link that all logged in users can view", "Tool tip description of menu item that when clicked will store some content on the server and create a protected (only accesible to logged in users) link to it"),
-                                            Data: async () => {
-                                                try {
-                                                    const stored = await sendRequest(apiBase + "StoreLink", {
-                                                        Url: p,
-                                                        Scope: 1,
-                                                    });
-                                                    if (stored) {
-                                                        const str = GetAbsolutePath(stored);
-                                                        await ValueFormat.copyToClipboardInfo(str);
-                                                        Open(str);
-                                                    } else
-                                                        Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
-                                                }
-                                                catch (e) {
-                                                    Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                                }
-                                                close();
-                                            },
-                                        }));
-                                        if (data.AllowPublicStore) {
-                                            linkItems.push(WebMenuItem.From({
-                                                Name: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
-                                                Flags: 0,
-                                                IconClass: "IconChatLink2",
-                                                Title: _TF("Save as a link that anyone can view", "Tool tip description of menu item that when clicked will store some content on the server and create a public (accesible to anyone) link to it"),
-                                                Data: async () => {
-                                                    try {
-                                                        const stored = await sendRequest(apiBase + "StoreLink", {
-                                                            Url: p,
-                                                            Scope: 2,
-                                                        });
-                                                        if (stored) {
-                                                            const str = GetAbsolutePath(stored);
-                                                            await ValueFormat.copyToClipboardInfo(str);
-                                                            Open(str);
-                                                        } else
-                                                            Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
-                                                    }
-                                                    catch (e) {
-                                                        Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                                    }
-                                                    close();
-                                                },
-                                            }));
-                                        }
-                                        if (linkItems.length > 0) {
-                                            menu.Items.push(WebMenuItem.From({
-                                                Name: _TF("Create link", "Text of a menu folder that contains items that when clicked will create a link to this file"),
-                                                Flags: 0,
-                                                IconClass: "IconChatLink",
-                                                Title: _TF("Create a link to the file for later use", "Tool tip description of menu folder that contains items that when clicked will create a link to this file"),
-                                                Children: linkItems
-                                            }));
-                                        }
-                                    }
-                                }
-                                return menu;
-                            }, true);
-
-
-                        }, null, null, true);
-
-
-
-                        iframeExpand.appendChild(iframeIcon.Element);
-                        if (elements)
-                            elements.forEach(x => iframeHolder.appendChild(x));
+                    case Formats.Html:
+                        body.title = _TF("Message is HTML", "A tool tip for a chat message that is written using HTML");
+                        //  Only the server application may send html; it is still sanitized (the markdown allow list)
+                        if (Sw.Markdown && Sw.Markdown.Sanitize)
+                            body.innerHTML = Sw.Markdown.Sanitize(text);
                         else
-                            iframeHolder.appendChild(element);
-                        iframeHolder.appendChild(iframeExpand);
-                        msgData.appendChild(iframeHolder);
-                    }
+                            body.textContent = text;
+                        break;
+                    default:
+                        body.title = _TF("Message is plain text", "A tool tip for a chat message that is written using plain text");
+                        body.innerText = text;
+                        break;
                 }
-            };
-
-            //  Timestamp
-            /**
-             * Expando: renders the header time. Clears a pending `msgTime.Updater` timer, then uses
-             * `ValueFormat.updateDateTime` (absolute, when `showTimeStamp`) or `ValueFormat.updateDateTimeLive` ("x ago").
-             * Uses the `m` captured at row creation (`m.Time`).
-             */
-            msgRow.UpdateFormat = () => {
-                const up = msgTime.Updater;
-                if (up) {
-                    clearTimeout(up);
-                    msgTime.Updater = null;
-                }
-                if (showTimeStamp)
-                    ValueFormat.updateDateTime(msgTime, m.Time, null, null, false, null, null, false, true);
-                else
-                    ValueFormat.updateDateTimeLive(msgTime, m.Time, ["", "", _TF("{0} ago", "Text that indicates how old a chat message is.{0} is replaced with the elapsed time, examples: \"10 minutes\", \"5.4 seconds\", \"3 days\" or \"1 hour\"")], null, false, null, null, true);
-            };
-            /**
-             * Expando: shows the content: removes class `Hidden` from content and data, clears `msgHeader.IsHidden` and sets
-             * the "click to hide" tooltip. Does not persist (callers use `setHideFrom` / `setHideNone`).
-             */
-            msgRow.Show = () => {
-                msgHeader.IsHidden = false;
-                const tf = ValueFormat.stringFormat(titleVisible, m.From);
-                msgHeader.title = tf;
-                msgName.title = tf;
-                msgBody.classList.remove(hiddenClass);
-                msgData.classList.remove(hiddenClass);
-            };
-            /**
-             * Expando: hides the content: adds class `Hidden` to content and data, sets `msgHeader.IsHidden` and the
-             * "click to show" tooltip. Does not persist (callers use `setHideFrom` / `setHideNone`).
-             */
-            msgRow.Hide = () => {
-                msgHeader.IsHidden = true;
-                const tf = ValueFormat.stringFormat(titleHidden, m.From);
-                msgHeader.title = tf;
-                msgName.title = tf;
-                msgBody.classList.add(hiddenClass);
-                msgData.classList.add(hiddenClass);
-            };
-
-
-            if (!isPreview) {
-                /**
-                 * Header click (not for the preview): toggles show/hide of this row and persists it for the sender (`setHideFrom`).
-                 * Other rows of the same sender are not updated until reloaded.
-                 * @param {MouseEvent} ev - The click event (ignored if `badClick`).
-                 */
-                msgHeader.onclick = ev => {
-                    if (badClick(ev))
-                        return;
-                    if (msgHeader.IsHidden) {
-                        msgRow.Show();
-                    } else {
-                        msgRow.Hide();
-                    }
-                    setHideFrom(m.From, msgHeader.IsHidden);
-                };
-            }
-
-            msgRow.UpdateFormat();
-            await msgRow.UpdateBody(m.Text, m.Format, (m.Flags & Chat.FlagIsWorking) !== 0);
-            msgRow.UpdateData(m.Data);
-
-            return msgBody;
-        }
-
-        /**
-         * Find the message element from message id (linear scan of `chatE.children` by `Msg.Id`)
-         * @param {number} msgId The message id to find
-         * @returns {?HTMLElement} The row element of the message or null if not found
-         */
-        function findMessageE(msgId) {
-            const e = chatE.children;
-            const el = e.length;
-            for (let i = 0; i < el; ++i) {
-                if (e[i].Msg.Id === msgId)
-                    return e[i];
-            }
-            return null;
-        }
-
-        /**
-         * Run a function for each message element
-         * @param {function(HTMLElement)} fn The function to execute once per message element
-         */
-        function onAllMessages(fn) {
-            const e = chatE.children;
-            const el = e.length;
-            for (let i = 0; i < el; ++i) {
-                fn(e[i]);
-            }
-        }
-
-        /** 
-         * Update the message format (time or age)
-         * by calling `UpdateFormat()` on every row (after toggling `showTimeStamp`).
-         * */
-        function updateMessageFormat() {
-            onAllMessages(e => e.UpdateFormat());
-        }
-
-
-        //  Handling server side messages
-        // Push event names (must match ChatService.Controller.MessageName, case folded): chat.<op>.<chatid lowercased>
-        const chatIdL = chatId.toLowerCase();
-        const msgClear = "chat.clear." + chatIdL;
-        const msgPost = "chat.post." + chatIdL;
-        const msgRemove = "chat.remove." + chatIdL;
-        const msgReplace = "chat.replace." + chatIdL;
-
-        SessionManager.AddServerEvent(msgClear);
-        SessionManager.AddServerEvent(msgPost);
-        SessionManager.AddServerEvent(msgRemove);
-        SessionManager.AddServerEvent(msgReplace);
-
-        // Push handler: post (append unless the id exists; speak if enabled and from another user), replace (update Msg,
-        // body and data; speech continues incrementally), remove (remove the row), clear (empty the list, keep the preview).
-        InterOp.AddListener(async ev => {
-            const m = InterOp.GetMessage(ev);
-            if (!m)
-                return;
-            const mt = m.Type;
-            if (mt === msgPost) {
-                const c = m.Chat;
-                const me = findMessageE(c.Id);
-                if (me)
-                    return;
-                const msgBdy = await addMessage(c);
-                if (enableSpeech) {
-                    if (c.From !== userName) {
-                        let vp = userVoices.get(c.From);
-                        if (!vp)
-                            vp = userVoices.get(null);
-                        if (vp) {
-                            const voice = SpeechGen.findVoice(vp.Language, vp.Male, vp.Voice);
-                            msgBdy.Voice = voice;
-                            SpeechGen.speakNew(msgBdy.innerText, voice, vp.Pitch, vp.Rate, speechVolume * 0.01);
-                        }
-                    }
-                }
-                return;
-            }
-            if (mt === msgReplace) {
-                const c = m.Chat;
-                const me = findMessageE(c.Id);
-                if (!me)
-                    return;
-                me.Msg = c;
-                const isWorking = (c.Flags & Chat.FlagIsWorking) !== 0;
-                await me.UpdateBody(c.Text, c.Format, isWorking);
-                me.UpdateData(c.Data);
-                if (enableSpeech) {
-                    const msgBdy = me.Body;
-                    if (msgBdy.Voice)
-                        SpeechGen.speakContinue(msgBdy.innerText, !isWorking);
-                }
-                return;
-            }
-            if (mt === msgClear) {
-                chatE.innerText = "";
-                if (previewElement)
-                    chatE.appendChild(previewElement);
-                return;
-            }
-            if (mt === msgRemove) {
-                const me = findMessageE(m.Value);
-                if (me)
-                    me.remove();
-                return;
-            }
-        });
-
-
-
-
-
-
-        /** True if incoming messages from other users are spoken (`SysWeaver.Chat.SpeechGen<s>` === "true"). @type {boolean} */
-        let enableSpeech = localStorage.getItem(genKey) === "true";
-        /** Speech volume in percent (25/50/75/100, default 50) from `SysWeaver.Chat.SpeechGenVol<s>`. @type {number} */
-        let speechVolume = localStorage.getItem(volumeKey);
-        if (!speechVolume)
-            speechVolume = 50;
-        else {
-            try {
-                speechVolume = parseInt(speechVolume);
             }
             catch {
-                speechVolume = 50;
+                if (seq === t.Seq)
+                    body.innerText = text;
+            }
+            //  Every render (messages, translations, the draft preview); also on a resize and when an image inside loads (MessageRow)
+            requestAnimationFrame(() => checkTabStop(body));
+        }
+
+        /**
+         * Render the attachments (skipped if unchanged).
+         * @param {?string} data The `;` separated urls.
+         */
+        UpdateData(data) {
+            data = data || null;
+            //  Rendered again when the data or the working state changes (a working message shows its data as a status)
+            const working = !!this.Msg && (this.Msg.Flags & Flags.IsWorking) !== 0;
+            const key = (working ? "w:" : "d:") + (data || "");
+            if (this.CurData === key)
+                return;
+            this.CurData = key;
+            Attachments.Render(this, data);
+        }
+
+        /**
+         * Apply a (new version of the) message: content and attachments (a shown translation stays until toggled back).
+         * @param {object} m The ChatMessage.
+         * @returns {Promise<void>}
+         */
+        async Update(m) {
+            const wasWorking = !!this.Msg && (this.Msg.Flags & Flags.IsWorking) !== 0;
+            this.Msg = m;
+            this.UpdateLabels();
+            this.UpdateData(m.Data);
+            if (this.IsTranslated) {
+                this.E.classList.toggle("chat-working", (m.Flags & Flags.IsWorking) !== 0);
+                return;
+            }
+            await this.UpdateBody(m.Text, m.Format, (m.Flags & Flags.IsWorking) !== 0);
+            //  A streamed answer is done: the list (role log, aria-relevant additions) only announced the row when it was added (often
+            //  still empty), so read the finished text once (the start of a long answer)
+            if (wasWorking && (m.Flags & Flags.IsWorking) === 0 && !this.IsPreview && Sw.Page && Sw.Page.Announce) {
+                const text = this.Text.trim();
+                if (text) {
+                    const ai = (m.Flags & Flags.FromAi) !== 0;
+                    const who = m.From ? (ai ? _T("{0} (AI)", m.From, "Who wrote a chat answer that is read to screen reader users, when it was written by an AI.{0} is replaced with the sender name") : m.From) + ": " : "";
+                    Sw.Page.Announce(who + (text.length > 400 ? text.substring(0, 400) + "…" : text));
+                }
             }
         }
 
         /**
-         * Counts the attachments of the draft.
-         * @returns {number} Number of `;`-separated entries in `previewMessage.Data` (0 if none).
-         * Note: only valid when `canPost` (otherwise `previewMessage` is undefined); callers check `uploadRepo`/preview first.
+         * The text of the rendered content (for copying and speech).
+         * @returns {string} The text.
          */
-        function GetDataCount() {
-            const data = previewMessage.Data;
-            if (!data)
-                return 0;
-            return data.split(';').length;
+        get Text() {
+            return this.Body.innerText;
         }
 
-        /**
-         * The top-right menu button (`IconMenu`, `<SysWeaver-Chat> > .IconButton`). Its click opens a `PopUpMenu` (root class
-         * `Chat`) with: scroll top/bottom (disabled when already there), show all, time vs age toggle; with `canPost`: text /
-         * markdown toggle (if `AllowMarkDown`) with a markdown help link, show/hide preview, set input language, clear draft,
-         * attach file, auto-send toggle, open mic toggle (lists the keywords); speech synthesis toggle and a volume submenu
-         * (25/50/75/100, Flags 3 = disabled+checked marks the selected one); server `data.Menus` via `addRec`; and
-         * "Remove ALL messages" (if `CanClear`, confirmed unless `DoNotConfirmClear`).
-         * @type {ColorIcon}
-         */
-        const menu = new ColorIcon("IconMenu", "IconColorThemeAcc2", options.MenuIconSize, options.MenuIconSize,
-            _TF("Click to show menu option", "Tool tip description of a button that when clicked will show a context menu")
-            , ev => {
-
-            const chatElement = menu.Element;
-            PopUpMenu(chatElement, (close, backEl) => {
-
-                const pp = backEl.parentElement;
-                pp.classList.add("Chat");
-                new ResizeObserver(() => {
-                    const cr = chatElement.getBoundingClientRect();
-                    pp.style.left = cr.right + "px";
-                }).observe(document.body);
-
-                const menu = new WebMenu();
-                menu.Name = "Chat";
-
-                // Navigation
-
-
-                menu.Items.push(WebMenuItem.From({
-                    Name:
-                        _TF("Scroll to top", "Text of a menu item that when clicked will scroll to the first chat message"),
-                    IconClass: "IconChatTop",
-                    Title:
-                        _TF("Scroll to the first loadded message in the chat", "Tool tip description of a menu item that when clicked will scroll to the first chat message"),
-                    Data: () => {
-                        chatE.scrollTo(
-                            {
-                                left: chatE.scrollLeft,
-                                top: 0,
-                                behavior: "smooth",
-                            });
-                        close();
-                    },
-                    Flags: chatE.scrollTop <= 0 ? 1 : 0,
-                }));
-                menu.Items.push(WebMenuItem.From({
-                    Name:
-                        _TF("Scroll to bottom", "Text of a menu item that when clicked will scroll to the last chat message"),
-                    IconClass: "IconChatBottom",
-                    Title:
-                        _TF("Scroll to the end of the chat", "Tool tip description of a menu item that when clicked will scroll to the last chat message"),
-                    Data: () => {
-                        chatE.scrollTo(
-                            {
-                                left: chatE.scrollLeft,
-                                top: chatE.scrollHeight,
-                                behavior: "smooth",
-                            });
-                        close();
-                    },
-                    Flags: IsAtMaxScrollV(chatE) ? 1 : 0,
-                }));
-
-                menu.Items.push(WebMenuItem.From({
-                    Name:
-                        _TF("Show all", "Text of a menu item that when clicked will show and hidden (collapsed) chat messages"),
-                    Flags: 0,
-                    IconClass: "IconChatShow",
-                    Title:
-                        _TF("Show any hidden content in all messages", "Tool tip description of a menu item that when clicked will show and hidden (collapsed) chat messages"),
-                    Data: () => {
-                        Array.from(chatE.children).forEach(x => x.Show());
-                        setHideNone();
-                        close();
-                    },
-                }));
-
-
-
-                if (showTimeStamp) {
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Show message age", "Text of a menu item that when clicked will show message age instead of message time"),
-                        Flags: 0,
-                        IconClass: "IconChatAge",
-                        Title:
-                            _TF("Show the message age instead of the time", "Tool tip description of a menu item that when clicked will show message age instead of message time"),
-                        Data: () => {
-                            showTimeStamp = false;
-                            localStorage.removeItem(timeStampName);
-                            updateMessageFormat();
-                            close();
-                        },
-                    }));
-
-                } else {
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Show message time", "Text of a menu item that when clicked will show message time instead of message age"),
-                        Flags: 0,
-                        IconClass: "IconChatTime",
-                        Title:
-                            _TF("Show the actual time of a message instead of age", "Tool tip description of a menu item that when clicked will show message time instead of message age"),
-                        Data: () => {
-                            showTimeStamp = true;
-                            localStorage.setItem(timeStampName, "true");
-                            updateMessageFormat();
-                            close();
-                        },
-                    }));
-                }
-
-                //  Message type
-                if (canPost) {
-
-
-                    if (data.AllowMarkDown) {
-                        if (useMarkDown) {
-                            menu.Items.push(WebMenuItem.From({
-                                Name:
-                                    _TF("Use regular text", "Text of a menu item that when clicked will select regular text input"),
-                                Flags: 0,
-                                IconClass: "IconChatText",
-                                Title:
-                                    _TF("Use regular text as input instead of mark down (MD)", "Tool tip description of a menu item that when clicked will select regular text input"),
-                                Data: () => {
-                                    useMarkDown = false;
-                                    localStorage.setItem(useMarkDownKey, useMarkDown);
-                                    markDownChanged();
-                                    close();
-                                },
-                            }));
-                            menu.Items.push(WebMenuItem.From({
-                                Name:
-                                    _TF("Mark Down syntax", "Text of a menu item that when clicked will show a help page for MD (Mark Down)"),
-                                Flags: 0,
-                                IconClass: "IconChatHelp",
-                                Title:
-                                    _TF("Open mark down syntax help in a new tab", "Tool tip description of a menu item that when clicked will show a help page for MD (Mark Down)"),
-                                Data: () => {
-                                    Open("https://www.markdownguide.org/basic-syntax/", "_blank");
-                                    close();
-                                },
-                            }));
-                        } else {
-                            menu.Items.push(WebMenuItem.From({
-                                Name:
-                                    _TF("Use Mark Down text", "Text of a menu item that when clicked will select markdown text input"),
-                                Flags: 0,
-                                IconClass: "IconChatMD",
-                                Title:
-                                    _TF("Use Mark Down (MD) input instead of regular text", "Tool tip description of a menu item that when clicked will select markdown text input"),
-                                Data: () => {
-                                    useMarkDown = true;
-                                    localStorage.setItem(useMarkDownKey, useMarkDown);
-                                    markDownChanged();
-                                    close();
-                                },
-                            }));
-                        }
-                    }
-                    const sp = typeof showPreview !== "boolean" ? useMarkDown : showPreview;
-                    if (sp) {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Hide preview", "Text of a menu item that when clicked will hide the chat message preview"),
-                            Flags: 0,
-                            IconClass: "IconChatHidePreview",
-                            Title:
-                                _TF("Hide the preview of a new chat message", "Tool tip description of a menu item that when clicked will hide the chat message preview"),
-                            Data: () => {
-                                showPreview = useMarkDown ? false : null;
-                                localStorage.setItem(previewKey, showPreview);
-                                previewChanged();
-                                close();
-                            },
-                        }));
-                    } else {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Show preview", "Text of a menu item that when clicked will show a preview of new a chat message"),
-                            Flags: 0,
-                            IconClass: "IconChatShowPreview",
-                            Title:
-                                _TF("Show a preview of the message", "Tool tip description of a menu item that when clicked will show a preview of new a chat message"),
-                            Data: () => {
-                                showPreview = useMarkDown ? null : true;
-                                localStorage.setItem(previewKey, showPreview);
-                                previewChanged();
-                                close();
-                            },
-                        }));
-                    }
-                    const speechRec = SpeechInput.supportSpeechRec();
-                    if (canTranslate || speechRec) {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Set input language", "Text of a menu item that when clicked will let the user select what language they used when writing chat messages"),
-                            Flags: 0,
-                            IconClass: "IconChatLanguage",
-                            Title:
-                                speechRec
-                                    ?
-                                    _TF("Specify what language you use for your text messages and voice input", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
-                                    :
-                                    _TF("Specify what language you use for your text messages", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
-                            ,
-                            Data: async () => {
-                                await selectLanguage();
-                                close();
-                            },
-                        }));
-                    }
-
-                    menu.Items.push(WebMenuItem.From({
-                        Name: _TF("Clear", "Name of a menu item that when clicked will clear the current chat message"),
-                        Flags: canSend ? 0 : 1,
-                        IconClass: "IconChatClearCurrent",
-                        Title: _TF("Clear the current message text and any data", "Tool tip description of a menu item that when clicked will clear the current chat message"),
-                        Data: async () => {
-                            await clearCurrentMessage();
-                            close();
-                        },
-                    }));
-
-
-
-                    //  Upload
-
-                    if (uploadRepo) {
-                        const filesLeft = data.MaxDataCount - GetDataCount();
-                        // The handler below only calls `uploadFiles(files)` when files were selected.
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Attach file", "Text of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
-                            Flags: filesLeft <= 0 ? 1 : 0,
-                            IconClass: "IconChatAttachFile",
-                            Title:
-                                _TF("Attach a file to the current message", "Tool tip description of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
-                            Data: async () => {
-                                const files = await selectFiles(filesLeft > 1);
-                                if (files)
-                                    await uploadFiles(files);
-                                close();
-                            },
-                        }));
-                    }
-
-
-                    //  Audio input
-                    if (speechRec) {
-                        let l = localStorage.getItem(autoSendKey);
-                        if (l === null) {
-                            l = false;
-                            localStorage.setItem(autoSendKey, l);
-                        }
-                        if (l === "true") {
-                            menu.Items.push(WebMenuItem.From({
-                                Name:
-                                    _TF("Disable auto send", "Text of a menu item that when clicked will disable the function to automatically send messages when speech input completes"),
-                                Flags: 0,
-                                IconClass: "IconChatAutoSendOff",
-                                Title:
-                                    _TF("Disable automatic send of message when speech input completes", "Tool tip description of a menu item that when clicked will disable the function to automatically send messages when speech input completes"),
-                                Data: () => {
-                                    localStorage.setItem(autoSendKey, "false");
-                                    close();
-                                },
-                            }));
-                        } else {
-                            menu.Items.push(WebMenuItem.From({
-                                Name:
-                                    _TF("Enable auto send", "Text of a menu item that when clicked will enable the function to automatically send messages when speech input completes"),
-                                Flags: 0,
-                                IconClass: "IconChatAutoSendOn",
-                                Title:
-                                    _TF("Enable automatic send of message when speech input completes", "Tool tip description of a menu item that when clicked will enable the function to automatically send messages when speech input completes"),
-                                Data: () => {
-                                    localStorage.setItem(autoSendKey, "true");
-                                    close();
-                                },
-                            }));
-                        }
-
-
-                    }
-
-
-                    if (canListen()) {
-
-                        if (data.SpeechName) {
-                            let l = localStorage.getItem(listenKey);
-                            if (l === null) {
-                                l = data.EnableListenByDefault ? "true" : "false";
-                                localStorage.setItem(listenKey, l);
-                            }
-                            if (l === "true") {
-                                menu.Items.push(WebMenuItem.From({
-                                    Name:
-                                        _TF("Disable speech input (open mic)", "Text of a menu item that when clicked will disable open microphone speech input"),
-                                    Flags: 0,
-                                    IconClass: "IconChatMicOff",
-                                    Title:
-                                        _TF("Disable open mic speech input", "Tool tip description of a menu item that when clicked will disable open microphone speech input"),
-                                    Data: () => {
-                                        localStorage.setItem(listenKey, "false");
-                                        stopListening();
-                                        close();
-                                    },
-                                }));
-                            } else {
-                                let t = _TF("Enable speech input, listening to: ", "Tool tip description of a menu item that when clicked will enable open microphone speech input, listening to a list of keywords that are listed below this text");
-                                data.SpeechName.forEach(x => t = t + "\n" + x.split('|')[0]);
-                                menu.Items.push(WebMenuItem.From({
-                                    Name:
-                                        _TF("Enable speech input (open mic)", "Text of a menu item that when clicked will enable open microphone speech input"),
-                                    Flags: 0,
-                                    IconClass: "IconChatMicOn",
-                                    Title: t,
-                                    Data: () => {
-                                        localStorage.setItem(listenKey, "true");
-                                        stopListening();
-                                        startListening();
-                                        close();
-                                    },
-                                }));
-
-                            }
-                        }
-                    }
-
-
-                }
-
-                if (canSpeak()) {
-                    let l = localStorage.getItem(genKey);
-                    if (l === null) {
-                        l = data.EnableGenByDefault ? "true" : "false";
-                        localStorage.setItem(genKey, l);
-                    }
-                    if (l === "true") {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Disable speech synthesis", "Text of a menu item that when clicked will disable speech generation (text to speech)"),
-                            Flags: 0,
-                            IconClass: "IconChatSpeechGenDisable",
-                            Title:
-                                _TF("Disable text to speech synthesis", "Tool tip description of a menu item that when clicked will disable speech generation (text to speech)"),
-                            Data: () => {
-                                localStorage.setItem(genKey, "false");
-                                SpeechGen.cancelSpeak();
-                                enableSpeech = false;
-                                close();
-                            },
-                        }));
-                    } else {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Enable speech synthesis", "Text of a menu item that when clicked will enable speech generation (text to speech)"),
-                            Flags: 0,
-                            IconClass: "IconChatSpeechGenEnable",
-                            Title:
-                                _TF("Enable text to speech synthesis.\nUses local services if available to avoid data leakage and bandwidth usage (this may sound worse than online solutions).",
-                                    "Tool tip description of a menu item that when clicked will enable speech generation (text to speech)"),
-                            Data: () => {
-                                localStorage.setItem(genKey, "true");
-                                enableSpeech = true;
-                                close();
-                            },
-                        }));
-                    }
-
-                    const flags = enableSpeech ? 0 : 1;
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Speech volume", "Text of a menu item that have a number of speech volume presets as children"),
-                        Flags: flags,
-                        IconClass: "IconChatSpeechVolume",
-                        Title:
-                            _TF("Adjust the volume of the audio from speech synthesis.", "Tool tip description of a menu item that have a number of speech volume presets as children"),
-                        Children: [
-                            {
-                                Name:
-                                    _TF("25% volume", "Text of a menu item that when clicked will set the speech volume to 25%"),
-                                Flags: (speechVolume === 25 ? 3 : flags),
-                                IconClass: "IconChatSpeechVolume25",
-                                Title:
-                                    _TF("Use 25% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 25%"),
-                                Data: () => {
-                                    localStorage.setItem(volumeKey, "25");
-                                    speechVolume = 25;
-                                    close();
-                                },
-                            },
-                            {
-                                Name:
-                                    _TF("50% volume", "Text of a menu item that when clicked will set the speech volume to 50%"),
-                                Flags: (speechVolume === 50 ? 3 : flags),
-                                IconClass: "IconChatSpeechVolume50",
-                                Title:
-                                    _TF("Use 50% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 50%"),
-                                Data: () => {
-                                    localStorage.setItem(volumeKey, "50");
-                                    speechVolume = 50;
-                                    close();
-                                },
-                            },
-                            {
-                                Name:
-                                    _TF("75% volume", "Text of a menu item that when clicked will set the speech volume to 75%"),
-                                Flags: (speechVolume === 75 ? 3 : flags),
-                                IconClass: "IconChatSpeechVolume75",
-                                Title:
-                                    _TF("Use 75% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 75%"),
-                                Data: () => {
-                                    localStorage.setItem(volumeKey, "75");
-                                    speechVolume = 75;
-                                    close();
-                                },
-                            },
-                            {
-                                Name:
-                                    _TF("Max volume", "Text of a menu item that when clicked will set the speech volume to the maximum (100%)"),
-                                Flags: (speechVolume === 100 ? 3 : flags),
-                                IconClass: "IconChatSpeechVolume100",
-                                Title:
-                                    _TF("Use 100% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 25%"),
-                                Data: () => {
-                                    localStorage.setItem(volumeKey, "100");
-                                    speechVolume = 100;
-                                    close();
-                                },
-                            },
-                        ]
-                    }));
-
-                }
-
-
-                //  Audio
-
-
-
-
-                addRec(menu.Items, data.Menus, null, close);
-                if (data.CanClear)
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Remove ALL messages", "Text of a menu item that when clicked will clear the chat (remove all messages)"),
-                        Flags: 0,
-                        IconClass: "IconChatClear",
-                        Title:
-                            _TF("Remove ALL chat messages", "Tool tip description of a menu item that when clicked will clear the chat (remove all messages)"),
-                        Data: async () => {
-                            if (!data.DoNotConfirmClear) {
-                                if (!await Confirm(
-                                    _TF("Remove all messages", "Title of a confirmation dialog that when confirmed will remove all chat messages in a room"),
-                                    _TF("Are you sure that you wan't to remove all chat messages?", "Text of a confirmation dialog that when confirmed will remove all chat messages in a room"),
-                                    _TF("YES, clear", "Text of a button on a confirmation dialog that when clicked will remove all chat messages in a room"),
-                                    _TF("NO, keep them", "Text of a button on a confirmation dialog that when clicked will keep all chat messages in a room as opposed to removing them"),
-                                    "IconChatRemove", "IconChatKeep",
-                                    _TF("Click to remove all chat messages, this can't be undone", "Tool tip description of a button on a confirmation dialog that when clicked will remove all chat messages in a room"),
-                                    _TF("Click to keep the chat messages", "Tool tip description of a button on a confirmation dialog that when clicked will keep all chat messages in a room as opposed to removing them"),
-                                )) {
-                                    close();
-                                    return;
-                                }
-                            }
-                            await cmdClear();
-                            close();
-                        },
-                    }));
-                return menu;
-            }, true);
-
-        }, null, null, true);
-        chatBackground.appendChild(menu.Element);
-
-
-
-        if (msg) {
-            const ml = msg.length;
-            for (let i = 0; i < ml; ++i)
-                await addMessage(msg[i]);
-        }
-
-
-
-
-
-        /** True while older messages are being fetched by the StickToBottom top callback. @type {boolean} */
-        let isLoading = false;
-        // StickToBottom (common.js): toggles class Stick while stuck to the bottom; when scrolled to the top, loads older
-        // messages with GetMessages {ChatId, MaxCount: -10, FromId: <first row id>}, prepends them keeping the scroll
-        // position, shows a 64x64 IconWorking spinner after 200 ms, and sets isAtTop when none are returned.
-        StickToBottom(chatE, true,
-            () => chatE.classList.add("Stick"),
-            () => chatE.classList.remove("Stick"),
-            async () =>
-            {
-                if (isAtTop)
-                    return;
-                if (isLoading)
-                    return;
-                const beforeH = chatE.scrollHeight;
-                isLoading = true;
-                let loadingElement = null;
-                const showLoading = setTimeout(() => {
-                    loadingElement = new ColorIcon("IconWorking", "IconColorThemeMain", 64, 64, _TF("Loading more messages", "Tool tip description of a loading indicator shown when the char is loading more messages")).Element;
-                    const f = chatE.firstElementChild;
-                    if (f)
-                        chatE.insertBefore(loadingElement, f);
-                    else
-                        chatE.appendChild(loadingElement);
-                }, 200);
-                console.log("Loading more messages..");
-                try {
-                    const first = chatE.firstElementChild;
-                    if (!first)
-                        return;
-                    const lastId = first.Msg.Id;
-                    const newMsg = await sendRequest(apiBase + "GetMessages", {
-                        ChatId: chatId,
-                        MaxCount: -10,
-                        FromId: lastId,
-                    });
-                    clearTimeout(showLoading);
-                    if (loadingElement)
-                        loadingElement.remove();
-                    loadingElement = null;
-                    if (newMsg) {
-                        let ml = newMsg.length;
-                        if (ml > 0) {
-                            while (ml > 0) {
-                                --ml;
-                                await addMessage(newMsg[ml], true);
-                                const added = chatE.scrollHeight - beforeH;
-                                chatE.scrollTo({
-                                    left: chatE.scrollLeft,
-                                    top: added,
-                                    behavior: "instant",
-                                });
-                            }
-                            return;
-                        }
-                    }
-                    isAtTop = true;
-                    console.log("All messages loaded!");
-                }
-                finally
-                {
-                    isLoading = false;
-                    clearTimeout(showLoading);
-                    if (loadingElement)
-                        loadingElement.remove();
-                }
+        /** Update the language flag and its tool tip (translation enabled only). */
+        UpdateLang() {
+            const t = this;
+            if (!t.LangE)
+                return;
+            const view = t.View;
+            const m = t.Msg;
+            if (t.IsPreview) {
+                t.FlagImg.src = flagUrl(view.CurrentLang);
+                setButtonName(t.LangE, _TF("This should be set to the language used in your text.", "Tool tip description indicating that the language specified should match the one used to write the text") + "\n\n" +
+                    _T("If the text is not written in \"{0}\", click to specify a different language", view.LangText(view.CurrentLang), "Tool tip description for a button that when clicked will show a list of languages that the user can select.{0} is the current language"));
+                return;
             }
-        );
+            const mLang = view.LangText(m.Lang);
+            const dLang = view.LangText(view.Data.Lang);
+            if (t.IsTranslated) {
+                t.FlagImg.src = flagUrl(view.Data.Lang);
+                setButtonName(t.LangE, _T("Message is translated to \"{0}\".", dLang, "A tool tip description indicating that a chat message have been translated.{0} is replaced by the ISO code of the language") + "\n" +
+                    _T("Show the original message probably written using \"{0}\".", mLang, "A tool tip description on a button that when pressed will show the original message as opposed to a translated message.{0} is replaced by the ISO code of the language"));
+            }
+            else {
+                t.FlagImg.src = flagUrl(m.Lang);
+                setButtonName(t.LangE, _T("Message was probably written using \"{0}\"", mLang, "A tool tip description indicating what language was used to write a chat message.{0} is replaced by the ISO code of the language") + "\n" +
+                    _T("Translate the message to \"{0}\".", dLang, "A tool tip description on a button that when pressed will translate a chat message to the specified language.{0} is replaced by the ISO code of the language"));
+            }
+            t.LangE.classList.toggle("chat-translated", t.IsTranslated);
+        }
 
         /**
-         * Forces the list to stay scrolled to the bottom for 500 ms (every animation frame), then scrolls once more.
-         * Covers async layout (images, markdown). Called after sending and at startup.
-         * @param {boolean} [direct] - True for `behavior: "instant"`, else "smooth".
+         * Flag click: the preview row opens the language selection, other rows toggle between the original and the translation
+         * (`Translate {ChatId, MessageId}`, cached).
+         * @returns {Promise<void>}
          */
-        function StickForAwhile(direct) {
+        async OnFlag() {
+            const t = this;
+            if (t.IsPreview) {
+                await t.View.Composer.SelectLanguage();
+                return;
+            }
+            if (t.Translating)
+                return;
+            t.Translating = true;
+            const m = t.Msg;
+            const working = (m.Flags & Flags.IsWorking) !== 0;
+            try {
+                if (t.IsTranslated) {
+                    t.IsTranslated = false;
+                    await t.UpdateBody(m.Text, m.Format, working);
+                }
+                else {
+                    if (!t.Translated) {
+                        t.LangE.classList.add("chat-translating");
+                        t.Translated = await Sw.Net.Send(t.View.Api("Translate"), { ChatId: t.View.ChatId, MessageId: m.Id });
+                    }
+                    t.IsTranslated = true;
+                    await t.UpdateBody(t.Translated, m.Format, working);
+                }
+                t.UpdateLang();
+            }
+            catch (e) {
+                Sw.Fail(withError(_TF("Failed to translate the message.", "An error message shown when a user tries to translate a chat message but the server returns a failure."), e));
+            }
+            finally {
+                t.LangE.classList.remove("chat-translating");
+                t.Translating = false;
+            }
+        }
+
+        /**
+         * Show the message menu at the pointer (a click, a right click or a long press), else (the keyboard) at the element.
+         * @param {?Event} [ev] The triggering event.
+         * @param {?HTMLElement} [at] The element to show it at without a pointer position (default the sender icon).
+         */
+        ShowMenu(ev, at) {
+            const items = this.View.MessageMenuItems(this);
+            if (!items.length)
+                return;
+            const point = ev && ev.clientX !== undefined && (ev.clientX || ev.clientY) ? { X: ev.clientX, Y: ev.clientY } : null;
+            Sw.Menu.Show(point || at || this.IconE, items, { Align: !point && !at && this.E.classList.contains("chat-mine") ? "end" : "start" });
+        }
+    }
+
+    // ------------------------------------------------------------------ message list
+
+    /** The scrolling message list: rows by id, the preview row last, stick to bottom, lazy loading of older messages. */
+    class MessageList {
+        /**
+         * @param {ChatView} view The chat.
+         */
+        constructor(view) {
+            const t = this;
+            /** @type {ChatView} The chat. */
+            t.View = view;
+            /** The scrolling element. */
+            t.E = el("div.chat-list", {
+                attrs: {
+                    role: "log",
+                    //  Announce new messages only, not the age texts ticking or a streamed answer growing
+                    "aria-relevant": "additions",
+                    "aria-label": _TF("Chat messages", "Accessible name of the list of messages in a chat"),
+                    //  Shown by chat.css while the list has no messages (the hidden preview row does not count)
+                    "data-empty": _TF("No messages yet", "Shown in an empty chat, where the messages will appear"),
+                }
+            });
+            /** @type {Map<number, MessageRow>} Rows by message id. */
+            t.Rows = new Map();
+            /** @type {?MessageRow} The preview row (kept last). */
+            t.Preview = null;
+            /** True while stuck to the bottom. */
+            t.Stuck = true;
+            /** True once all older messages are loaded. */
+            t.AtTop = false;
+            /** True while older messages load. */
+            t.Loading = false;
+            /** True while scrolling from code. */
+            t.Internal = false;
+            t.E.addEventListener("scroll", () => t.OnScroll(), { passive: true });
+            /** Keeps the bottom in view while the list or a row (images, markdown) changes size. */
+            t.Resizer = new ResizeObserver(() => {
+                if (t.Stuck)
+                    t.ToBottom(true);
+            });
+            t.Resizer.observe(t.E);
+            //  Rows and texts change many times while an answer streams: one scroll per frame
+            let bottomQueued = false;
+            new MutationObserver(() => {
+                if (!t.Stuck || bottomQueued)
+                    return;
+                bottomQueued = true;
+                requestAnimationFrame(() => {
+                    bottomQueued = false;
+                    if (t.Stuck)
+                        t.ToBottom(true);
+                });
+            }).observe(t.E, { childList: true, subtree: true });
+            /** Refreshes the age texts every second (only changed texts are written; stops once the list was removed from the document). */
+            t.AgeTimer = setInterval(() => {
+                if (t.E.isConnected)
+                    t.UpdateAges();
+                else if (t.WasConnected)
+                    clearInterval(t.AgeTimer);
+                t.WasConnected = t.WasConnected || t.E.isConnected;
+            }, 1000);
+            /** True once the list was in the document. */
+            t.WasConnected = false;
+        }
+
+        /** Refresh the age texts of all rows (age mode only, see MessageRow.UpdateAge). */
+        UpdateAges() {
+            if (this.View.ShowTimeStamp)
+                return;
+            const now = Date.now();
+            for (const row of this.Rows.values())
+                row.UpdateAge(now);
+        }
+
+        /**
+         * Scroll to the bottom.
+         * @param {boolean} [instant] No smooth scrolling.
+         */
+        ToBottom(instant) {
+            const e = this.E;
+            this.Internal = true;
+            e.scrollTo({ left: e.scrollLeft, top: e.scrollHeight, behavior: instant || (Sw.Motion && Sw.Motion.Reduced()) ? "instant" : "smooth" });
+            requestAnimationFrame(() => this.Internal = false);
+            if (instant)
+                this.Stuck = true;
+        }
+
+        /** Scroll to the top (smooth). */
+        ToTop() {
+            this.E.scrollTo({ left: this.E.scrollLeft, top: 0, behavior: Sw.Motion && Sw.Motion.Reduced() ? "instant" : "smooth" });
+        }
+
+        /** @returns {boolean} True if scrolled to the top. */
+        get IsAtTop() {
+            return this.E.scrollTop <= 0;
+        }
+
+        /** @returns {boolean} True if scrolled to the bottom. */
+        get IsAtBottom() {
+            const e = this.E;
+            return e.scrollTop >= e.scrollHeight - e.clientHeight - 1;
+        }
+
+        /**
+         * Keep the list at the bottom for 500 ms (covers async layout after sending and at start up).
+         * @param {boolean} [instant] No smooth scrolling.
+         */
+        StickForAwhile(instant) {
             let stick = true;
-            /** Per frame scroll-to-bottom callback; re-queues itself with `requestAnimationFrame` while `stick` is true. */
-            const stickFn = () => {
+            /** Per frame scroll to the bottom while sticking. */
+            const fn = () => {
                 if (!stick)
                     return;
-                chatE.scrollTo({
-                    left: chatE.scrollLeft,
-                    top: chatE.scrollHeight,
-                    behavior: direct ? "instant" : "smooth",
-                    });
-                requestAnimationFrame(stickFn);
+                this.ToBottom(instant);
+                requestAnimationFrame(fn);
             };
-            requestAnimationFrame(stickFn);
-
+            requestAnimationFrame(fn);
             setTimeout(() => {
-                chatE.scrollTo({
-                    left: chatE.scrollLeft,
-                    top: chatE.scrollHeight,
-                    behavior: direct ? "instant" : "smooth",
-                });
                 stick = false;
+                this.Stuck = true;
+                this.ToBottom(instant);
             }, 500);
         }
 
-        // Restore the saved split height (fraction of the container height)
-        if (initSize) {
-            initSize = parseFloat(initSize) * chatBackground.offsetHeight;
-            chatE.style.height = initSize + "px";
+        /** Scroll handler: tracks sticking to the bottom (class chat-stick flash) and loads older messages at the top. */
+        OnScroll() {
+            const t = this;
+            //  Scrolled away from the top: chat.css fades the top edge (transparent embeds), else the first message stays sharp
+            t.E.classList.toggle("chat-scrolled", t.E.scrollTop > 2);
+            if (t.Internal)
+                return;
+            if (t.E.scrollTop <= 1)
+                t.LoadOlder();
+            const s = t.E.scrollTop >= t.E.scrollHeight - t.E.clientHeight - 4;
+            if (s === t.Stuck)
+                return;
+            t.Stuck = s;
+            t.E.classList.toggle("chat-stick", s);
         }
 
+        /**
+         * Add a row element.
+         * @param {MessageRow} row The row.
+         * @param {boolean} [onTop] Insert first (older messages), else before the preview row.
+         */
+        Insert(row, onTop) {
+            const t = this;
+            const e = t.E;
+            if (row.IsPreview)
+                t.Preview = row;
+            else
+                t.Rows.set(row.Msg.Id, row);
+            const before = onTop ? e.firstElementChild : (t.Preview && !row.IsPreview ? t.Preview.E : null);
+            if (before && before.parentElement === e)
+                e.insertBefore(row.E, before);
+            else
+                e.append(row.E);
+            t.Resizer.observe(row.E);
+        }
 
-        StickForAwhile(true);
-        doLast();
-        return chatE;
+        /**
+         * Create, insert and render a message.
+         * @param {object} m The ChatMessage.
+         * @param {boolean} [onTop] Insert first.
+         * @returns {Promise<MessageRow>} The row.
+         */
+        async Add(m, onTop) {
+            const row = new MessageRow(this.View, m);
+            this.Insert(row, onTop);
+            await row.Update(m);
+            return row;
+        }
 
+        /**
+         * Find a row by message id.
+         * @param {number} id The message id.
+         * @returns {?MessageRow} The row.
+         */
+        Get(id) {
+            return this.Rows.get(id) || null;
+        }
+
+        /**
+         * Remove a message.
+         * @param {number} id The message id.
+         */
+        Remove(id) {
+            const row = this.Rows.get(id);
+            if (!row)
+                return;
+            this.Rows.delete(id);
+            this.Resizer.unobserve(row.E);
+            row.E.remove();
+        }
+
+        /** Remove all messages (the preview row stays). */
+        Clear() {
+            for (const row of this.Rows.values()) {
+                this.Resizer.unobserve(row.E);
+                row.E.remove();
+            }
+            this.Rows.clear();
+            this.E.querySelectorAll(":scope > .chat-loading").forEach(x => x.remove());
+        }
+
+        /**
+         * The message rows (not the preview), in display order.
+         * @returns {MessageRow[]} The rows.
+         */
+        All() {
+            return Array.from(this.E.children).map(x => x.SwChatRow).filter(x => x && !x.IsPreview);
+        }
+
+        /**
+         * Load up to 10 older messages (`GetMessages {ChatId, MaxCount: -10, FromId}`), keeping the scroll position; a spinner shows
+         * after 200 ms; stops when none are returned.
+         * @returns {Promise<void>}
+         */
+        async LoadOlder() {
+            const t = this;
+            if (t.AtTop || t.Loading)
+                return;
+            const first = t.All()[0];
+            if (!first)
+                return;
+            t.Loading = true;
+            const beforeH = t.E.scrollHeight;
+            let spinner = null;
+            const timer = setTimeout(() => {
+                spinner = el("div.chat-loading", null, new Sw.Spinner({ Size: "64px", Title: _TF("Loading more messages", "Tool tip description of a loading indicator shown when the char is loading more messages") }).E);
+                t.E.prepend(spinner);
+            }, 200);
+            try {
+                const view = t.View;
+                const older = await Sw.Net.Send(view.Api("GetMessages"), { ChatId: view.ChatId, MaxCount: -10, FromId: first.Msg.Id });
+                clearTimeout(timer);
+                if (spinner)
+                    spinner.remove();
+                spinner = null;
+                if (!older || older.length <= 0) {
+                    t.AtTop = true;
+                    return;
+                }
+                for (let i = older.length - 1; i >= 0; --i)
+                    if (!t.Get(older[i].Id))
+                        await t.Add(older[i], true);
+                t.E.scrollTo({ left: t.E.scrollLeft, top: t.E.scrollHeight - beforeH, behavior: "instant" });
+            }
+            catch (e) {
+                console.warn("Chat: failed to load older messages: " + e.message);
+            }
+            finally {
+                clearTimeout(timer);
+                if (spinner)
+                    spinner.remove();
+                t.Loading = false;
+            }
+        }
     }
 
-}
+    // ------------------------------------------------------------------ composer
 
-
-/**
- * Page entry point of `Chat.html` (`<body class="ChatMain" onload="chatMain()">`).
- * Shows a loader (`AddLoading`), reads URL params `id` (required, else throws "No id supplied!"), `options` (JSON merged
- * into a new `ChatOptions` with `Object.assign`) and `nobackground` (adds class `NoBackground`), creates
- * `<SysWeaver-Chat>` in `document.body` and awaits `Chat.addChat(chatBackground, chatId, null, options)`.
- * Errors are shown with `Fail(e.message)`; the loader is always removed.
- * @returns {Promise<void>}
- */
-async function chatMain() {
-    const stopLoading = AddLoading(null, _TF("Loading chat messages", "Message shown while waiting for chat messages to be loaded"), true);
-    try {
-        const ps = getUrlParams();
-        const chatId = ps.get('id');
-        if (!chatId)
-            throw new Error(_TF("No id supplied!", "Error message thrown when no 'id' parameter is supplied"));
-        const options = new ChatOptions();
-        const opt = ps.get('options');
-        if (opt)
-            Object.assign(options, JSON.parse(opt));
-
-        const page = document.body;
-
-        const chatBackground = document.createElement("SysWeaver-Chat");
-        if (ps.has("nobackground"))
-            chatBackground.classList.add("NoBackground");
-        page.appendChild(chatBackground);
-        await Chat.addChat(chatBackground, chatId, null, options);
+    /**
+     * Let the user pick files (a temporary file input; must run from a user interaction).
+     * @param {boolean} multiple Allow several files.
+     * @returns {Promise<?FileList>} The files, or null when cancelled.
+     */
+    function selectFiles(multiple) {
+        return new Promise(resolve => {
+            const fi = el("input", { type: "file", multiple: !!multiple });
+            fi.addEventListener("change", () => resolve(fi.files && fi.files.length ? fi.files : null), { once: true });
+            fi.addEventListener("cancel", () => resolve(null), { once: true });
+            fi.click();
+        });
     }
 
-    catch (e) {
-        Fail(e.message);
-    }
-    finally {
-        stopLoading();
+    /** The input area (only when the user can post): textarea, send / mic buttons, language flag, preview row, draft, uploads, speech input. */
+    class Composer {
+        /**
+         * @param {ChatView} view The chat.
+         */
+        constructor(view) {
+            const t = this;
+            /** @type {ChatView} The chat. */
+            t.View = view;
+            const data = view.Data;
+            const st = view.Settings;
+            /** @type {string[]} Sent texts (max 100, not persisted), browsed with Alt+Up / Alt+Down. */
+            t.History = [];
+            /** History position: 0 = the typed text, -1 = empty, n = the n:th last entry. */
+            t.HistoryPos = 0;
+            /** The typed text before browsing the history. */
+            t.Typed = "";
+            /** True while the textarea is changed by history browsing. */
+            t.InHistory = false;
+            /** True while sending. */
+            t.Sending = false;
+            /** @type {Set<string>} Uploaded (new) urls of the draft, deleted again when removed from the draft. */
+            t.TempFiles = new Set();
+            /** Markdown input format. */
+            t.UseMarkDown = !!data.AllowMarkDown && st.Bool("MarkDown", false);
+            /**
+             * Automatic format (the user never picked text or markdown, and the chat allows markdown): a draft that contains markdown
+             * syntax (`**bold**`, `*italic*`, `` `code` ``, `~~strike~~`, links, headings, code blocks) is sent as markdown, else as text.
+             * Picking a format in the input menu turns it off.
+             */
+            t.AutoMarkDown = !!data.AllowMarkDown && st.Get("MarkDown") === null;
+            const pv = st.Get("Preview");
+            /** @type {?boolean} Preview: null = auto (on for markdown), else explicit. */
+            t.ShowPreview = pv === "true" ? true : (pv === "false" ? false : null);
+            /** @type {?function():Promise<void>} The stop function of the active speech recognition. */
+            t.StopRecognition = null;
+
+            /** The input element. */
+            t.E = el("div.chat-input");
+            /** The textarea. */
+            t.Write = el("textarea.chat-write", { maxLength: data.MaxTextLength || 4096, attrs: { "aria-label": _TF("Message", "Accessible name of the text box where a chat message is written"), "aria-keyshortcuts": "Alt+Enter" } });
+            /** The send button. */
+            t.Send = new Sw.Button({
+                Icon: "send", Kind: "ghost", Class: "chat-send",
+                Title: _TF("Send the message", "A tool tip description on a button that when clicked will send the entered chat message to the server"),
+                OnClick: () => t.DoSend(),
+            });
+            t.Send.E.style.setProperty("--chat-ics", (view.Options.SendIconSize || 48) + "px");
+            addTouchLabel(t.Send.E, _TF("Send", "Short label below the send button of a chat (touch devices), keep it short"));
+            /** The input language flag (click selects the language). */
+            t.Flag = el("button.chat-input-flag", { type: "button" }, el("img", { alt: "" }));
+            attachHint(t.Flag);
+            /** The short label of the flag (the language code). */
+            t.FlagLabel = addTouchLabel(t.Flag, "");
+            t.Flag.addEventListener("click", ev => {
+                if (!Sw.BadClick(ev))
+                    t.SelectLanguage();
+            });
+            /** @type {?Sw.Button} The push-to-talk button (speech recognition only). */
+            t.Mic = null;
+            if (C.SpeechInput.Supported()) {
+                t.Mic = new Sw.Button({
+                    Icon: "mic", Kind: "ghost", Class: "chat-mic",
+                    Title: _TF("Speak: listen for speech input in the selected language", "A tool tip description on a button that when clicked will start listening to speech input (starts with the word shown on the button)"),
+                    OnClick: () => {
+                        //  A toggle: a click while recording stops it
+                        if (t.StopRecognition && t.Mic.E.classList.contains("chat-recording"))
+                            t.StopListening();
+                        else
+                            t.StartListening(true, true);
+                    },
+                });
+                t.Mic.E.style.setProperty("--chat-ics", (view.Options.AudioIconSize || 48) + "px");
+                //  A toggle from the start (pressed while recording or listening, SetMicState)
+                t.Mic.E.setAttribute("aria-pressed", "false");
+                addTouchLabel(t.Mic.E, _TF("Speak", "Short label below the speech input (microphone) button of a chat (touch devices), keep it short"));
+            }
+            /** @type {?Sw.Button} The attach file button (the same as "Attach file" in the menu; only with an upload repository). */
+            t.Attach = null;
+            if (view.UploadRepo) {
+                t.Attach = new Sw.Button({
+                    Icon: "attach", Kind: "ghost", Class: "chat-attach",
+                    Title: _TF("Attach a file to the current message", "Tool tip description of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
+                    OnClick: () => t.AttachFiles(),
+                });
+                addTouchLabel(t.Attach.E, _TF("Attach", "Short label below the attach file button of a chat input, keep it short"));
+            }
+            /**
+             * The buttons beside the text box (never over the text): a 2 x 2 square at its right (Attach, Language / Speak, Send), then
+             * the Menu button (ChatView); a row below the text box when the input is narrow (.chat-pad-row, Composer.WatchSize).
+             */
+            t.Pad = el("div.chat-input-pad", null, ...[t.Attach && t.Attach.E, t.Flag, t.Mic && t.Mic.E, t.Send.E].filter(x => x));
+            t.E.append(el("div.chat-write-box", null, t.Write), t.Pad);
+            t.UpdateFlag();
+
+            //  Placeholders: "Write a message...", plus a small second line with the send key on devices with a keyboard and a mouse
+            //  (not on phones / tablets); the key is also added to the send button tool tip
+            let hint = "";
+            if (!Sw.Platform.IsMobileDevice && matchMedia("(any-pointer: fine)").matches) {
+                const isMac = Sw.Platform.IsMac;
+                hint = "\n" + (isMac
+                    ? _TF("Option+Enter to send", "A short hint below the placeholder of a chat input on a Mac: the user can press the Enter key while holding down the Option key to send the chat message")
+                    : _TF("Alt+Enter to send", "A short hint below the placeholder of a chat input on Windows / Linux: the user can press the Enter key while holding down the Alt key to send the chat message"));
+                t.Send.SetTitle(t.Send.Title + " (" + (isMac ? "Option+Enter" : "Alt+Enter") + ")");
+            }
+            /** Placeholder in text mode. */
+            t.PlaceholderText = _TF("Write a message...", "A placeholder text for an input box where a user can enter a text message for a chat") + hint;
+            /** Placeholder in markdown mode. */
+            t.PlaceholderMD = _TF("Write a message (Markdown)...", "A placeholder text for an input box where a user can enter a markdown formatted text message for a chat") + hint;
+
+            //  Draft
+            const draft = st.Get("Input");
+            if (draft)
+                t.Write.value = draft;
+            /** The preview pseudo message (Id 0). */
+            t.PreviewMsg = {
+                Id: 0, Time: null, Flags: 0, MenuItems: null,
+                Data: st.Get("Data") || null,
+                Format: t.UseMarkDown ? Formats.MarkDown : Formats.Text,
+                From: data.UserName,
+                FromImage: CurrentUserImage,
+                Lang: view.CurrentLang,
+                Text: null,
+            };
+            /** The preview row. */
+            t.Preview = new MessageRow(view, t.PreviewMsg, true);
+            view.List.Insert(t.Preview);
+            t.Preview.UpdateData(t.PreviewMsg.Data);
+
+            t.Write.addEventListener("input", () => t.OnInput());
+            t.Write.addEventListener("keydown", e => t.OnKey(e));
+            //  Keep the text box in view when it gets the focus (a phone keyboard), not inside a frame: there it would scroll the host page too
+            t.Write.addEventListener("focus", () => {
+                if (window.parent === window)
+                    t.Write.scrollIntoView({ behavior: Sw.Motion && Sw.Motion.Reduced() ? "instant" : "smooth", block: "nearest" });
+            });
+            t.InitDrop();
+            t.WatchSize();
+        }
+
+        /**
+         * Pick the input layout from the chat size, again on every resize (see chat.css):
+         * - `.chat-compact` (chat root): a low chat (phone landscape, height below 540 px): less padding.
+         * - `.chat-pad-row` (input): a narrow input (below 480 px, ex: phones): the four buttons are a row below the text box
+         *   (with the Menu button at its end; the text keeps the whole width), else a 2 x 2 square and the Menu button at its right.
+         * - `.chat-tight` (chat root): a very low chat (below TightHeight, ex: a phone with the on screen keyboard open): one row, the
+         *   text box (one line, growing) beside Send and Menu (the other buttons and the splitter step aside, a user split is not
+         *   applied), the messages get the rest.
+         * The buttons always show a short word below the icon (`.chat-labels`). Then sizes the text box (AutoGrow).
+         */
+        WatchSize() {
+            const t = this;
+            const c = t.View.Container;
+            t.E.classList.add("chat-labels");
+            const update = () => {
+                const w = c.clientWidth;
+                const h = c.clientHeight;
+                if (!w || !h)
+                    return;
+                c.classList.toggle("chat-compact", h < 540);
+                const tight = h < TightHeight;
+                c.classList.toggle("chat-tight", tight);
+                t.E.classList.toggle("chat-pad-row", !tight && ((t.E.clientWidth || w) < 480));
+                if (!tight && !c.classList.contains("chat-autosize") && t.View.Split && t.View.Split.isConnected)
+                    t.View.RestoreSize();
+                t.AutoGrow();
+                //  The splitter's value (the list's share of the chat height) also for the automatic split
+                const sp = t.View.Split;
+                if (sp)
+                    sp.setAttribute("aria-valuenow", String(Math.round(100 * t.View.List.E.offsetHeight / Math.max(1, h))));
+            };
+            if (typeof ResizeObserver === "function")
+                new ResizeObserver(update).observe(c);
+            update();
+        }
+
+        /**
+         * Size the text box to its text while the chat uses the automatic split (`.chat-autosize` on the chat root, the user never
+         * dragged the splitter): at least three lines (and the height of the buttons beside it), growing while typing up to 40% of the
+         * chat height (then it scrolls). With a user split the text box fills the input (no inline height).
+         */
+        AutoGrow() {
+            const t = this;
+            const w = t.Write;
+            const c = t.View.Container;
+            if (!w.isConnected)
+                return;
+            const tight = c.classList.contains("chat-tight");
+            if ((!tight && !c.classList.contains("chat-autosize")) || !c.clientHeight) {
+                w.style.height = "";
+                return;
+            }
+            const cs = getComputedStyle(w);
+            const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.25;
+            const borders = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+            const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+            //  At least three lines of text (one in a tight chat), and as high as the buttons beside it (the square and the Menu
+            //  button; the row is below it)
+            let min = Math.ceil((tight ? 1 : 3) * line + pad + borders);
+            if (!t.E.classList.contains("chat-pad-row")) {
+                min = Math.max(min, t.Pad.offsetHeight);
+                const menu = t.View.MenuButton && t.View.MenuButton.E.parentElement === t.E ? t.View.MenuButton.E.offsetHeight : 0;
+                min = Math.max(min, menu);
+            }
+            const max = Math.max(min, Math.round(c.clientHeight * 0.4));
+            const top = w.scrollTop;
+            w.style.height = "0px";
+            const want = w.scrollHeight + borders;
+            w.style.height = Math.max(min, Math.min(max, want)) + "px";
+            w.scrollTop = top;
+        }
+
+        /**
+         * @returns {number} The least height of the input (px) for a user split (ChatView.SetListHeight): the buttons beside the text box
+         * and two lines of text (the square layout: the higher of the two; the row layout: the text box above the row).
+         */
+        get MinHeight() {
+            const t = this;
+            const cs = getComputedStyle(t.E);
+            const ws = getComputedStyle(t.Write);
+            const line = parseFloat(ws.lineHeight) || parseFloat(ws.fontSize) * 1.25;
+            const text = Math.ceil(2 * line + parseFloat(ws.paddingTop) + parseFloat(ws.paddingBottom) + parseFloat(ws.borderTopWidth) + parseFloat(ws.borderBottomWidth));
+            const outer = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+            const menu = t.View.MenuButton && t.View.MenuButton.E.parentElement === t.E ? t.View.MenuButton.E.offsetHeight : 0;
+            const bar = Math.max(t.Pad.offsetHeight, menu);
+            return Math.ceil(outer + (t.E.classList.contains("chat-pad-row") ? text + (parseFloat(cs.rowGap) || 0) + bar : Math.max(text, bar)));
+        }
+
+        /** @returns {number} Number of draft attachments. */
+        get DataCount() {
+            const d = this.PreviewMsg.Data;
+            return d ? d.split(";").length : 0;
+        }
+
+        /** @returns {boolean} There is something to send. */
+        get CanSend() {
+            return !!(this.Write.value.trim() || this.PreviewMsg.Data);
+        }
+
+        /** Update the input language flag. */
+        UpdateFlag() {
+            const v = this.View;
+            this.Flag.firstElementChild.src = flagUrl(v.CurrentLang);
+            this.FlagLabel.textContent = String(v.CurrentLang || "").toUpperCase();
+            //  The name starts with the visible code (WCAG 2.5.3 Label in Name)
+            setButtonName(this.Flag, _T("{0}: the language of your text is \"{1}\", click to select another language", String(v.CurrentLang || "").toUpperCase(), v.LangText(v.CurrentLang), "Tool tip of a flag button showing the language used to write chat messages.{0} is replaced with the language code shown on the button (ex: EN), {1} with the language"));
+        }
+
+        /** Textarea input: update the draft and, unless browsing the history, remember the typed text. */
+        OnInput() {
+            this.Changed();
+            if (!this.InHistory) {
+                this.HistoryPos = 0;
+                this.Typed = this.Write.value;
+            }
+        }
+
+        /** The draft changed: enable the send button, persist the draft (keys Input / Data) and update the preview. */
+        Changed() {
+            const t = this;
+            const st = t.View.Settings;
+            const text = t.Write.value.trim();
+            const d = t.PreviewMsg.Data;
+            const can = !!(text || d);
+            st.Set("Input", can ? text : null);
+            st.Set("Data", can && d ? d : null);
+            t.Send.SetDisabled(!can, _TF("Type a message first", "Why the send button of a chat is disabled: the message input is empty"));
+            if (t.Attach)
+                t.Attach.SetDisabled(t.View.Data.MaxDataCount - t.DataCount <= 0, _TF("No more files can be attached to this message", "Why the attach file button of a chat is disabled: the message has the maximum number of files"));
+            t.SetPreviewText(can ? text : null);
+            t.AutoGrow();
+        }
+
+        /**
+         * Keyboard: pure Alt (Option on mac) + Enter sends, + ArrowUp / ArrowDown browse the history; plain Enter is a new line.
+         * @param {KeyboardEvent} e The event.
+         */
+        OnKey(e) {
+            const t = this;
+            if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || t.Sending)
+                return;
+            switch (e.key) {
+                case "Enter":
+                    e.preventDefault();
+                    t.DoSend();
+                    return;
+                case "ArrowUp":
+                    e.preventDefault();
+                    if (t.HistoryPos < t.History.length) {
+                        ++t.HistoryPos;
+                        t.FromHistory();
+                    }
+                    return;
+                case "ArrowDown":
+                    e.preventDefault();
+                    if (t.HistoryPos > -1) {
+                        --t.HistoryPos;
+                        t.FromHistory();
+                    }
+                    return;
+            }
+        }
+
+        /** Put the history entry at HistoryPos into the textarea (0 = the typed text, -1 = empty). */
+        FromHistory() {
+            const t = this;
+            const p = t.HistoryPos;
+            t.InHistory = true;
+            t.Write.value = p === 0 ? t.Typed : (p < 0 ? "" : t.History[t.History.length - p]);
+            t.Write.NextLast = t.Write.value.length;
+            t.Changed();
+            t.InHistory = false;
+        }
+
+        /**
+         * Insert text at the cursor (replaces the selection; with `select` the inserted text stays selected so the next insert
+         * replaces it, used for interim speech results).
+         * @param {string} text The text.
+         * @param {boolean} [select] Keep the inserted text selected.
+         */
+        InsertText(text, select) {
+            const w = this.Write;
+            const v = w.value;
+            let s = w.selectionStart;
+            let e = w.selectionEnd;
+            if (!s && w.NextLast) {
+                s = w.NextLast;
+                e = s;
+            }
+            w.NextLast = null;
+            s = s || 0;
+            w.value = v.substring(0, s) + text + v.substring(e);
+            e = s + text.length;
+            if (select)
+                w.setSelectionRange(s, e);
+            else {
+                w.setSelectionRange(e, e);
+                w.NextLast = e;
+            }
+        }
+
+        /**
+         * Send the draft (`UserMessage {ChatId, Body: {Format, Data, Text, Lang}}`). While sending the input is read only and shows
+         * the text as placeholder; a failure restores the draft and shows a fail toast.
+         * @param {boolean} [noFocus] Don't focus the input when done (speech auto send).
+         * @returns {Promise<void>}
+         */
+        async DoSend(noFocus) {
+            const t = this;
+            const view = t.View;
+            const w = t.Write;
+            const text = w.value.trim();
+            const d = t.PreviewMsg.Data;
+            if ((!text && !d) || t.Sending)
+                return;
+            t.Sending = true;
+            t.Send.SetWorking(true);
+            t.History.push(text);
+            if (t.History.length > 100)
+                t.History.splice(0, t.History.length - 100);
+            t.HistoryPos = 0;
+            t.Typed = "";
+            const ph = w.placeholder;
+            t.SetData(null);
+            w.placeholder = text;
+            w.value = "";
+            w.readOnly = true;
+            w.NextLast = 0;
+            t.SetPreviewText(null);
+            const failText = _TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure");
+            let ok = false;
+            try {
+                ok = !!await Sw.Net.Send(view.Api("UserMessage"), {
+                    ChatId: view.ChatId,
+                    Body: { Format: t.FormatOf(text), Data: d, Text: text, Lang: view.CurrentLang },
+                });
+                if (!ok)
+                    Sw.Fail(failText);
+            }
+            catch (e) {
+                Sw.Fail(withError(failText, e));
+            }
+            if (ok) {
+                t.TempFiles.clear();
+                view.List.StickForAwhile();
+            }
+            else if (!w.value) {
+                w.value = text;
+                t.SetData(d);
+            }
+            t.Sending = false;
+            t.Send.SetWorking(false);
+            w.readOnly = false;
+            w.placeholder = ph;
+            t.Changed();
+            if (!noFocus)
+                w.focus();
+        }
+
+        /**
+         * Set the draft attachments (the preview row is updated; call Changed to persist).
+         * @param {?string} d The `;` separated urls.
+         */
+        SetData(d) {
+            this.PreviewMsg.Data = d || null;
+            this.Preview.UpdateData(this.PreviewMsg.Data);
+        }
+
+        /**
+         * The preview setting (auto: on for markdown).
+         * @returns {boolean} True if the preview is on.
+         */
+        get PreviewOn() {
+            return typeof this.ShowPreview === "boolean" ? this.ShowPreview : this.UseMarkDown;
+        }
+
+        /**
+         * Show / hide the preview row: visible if it has attachments, or text with the preview on.
+         * @returns {boolean} True if visible.
+         */
+        PreviewChanged() {
+            const t = this;
+            const show = !!t.PreviewMsg.Data || (t.PreviewOn && !!t.PreviewMsg.Text);
+            const was = !t.Preview.E.classList.contains("chat-hide");
+            t.Preview.E.classList.toggle("chat-hide", !show);
+            if (show && !was)
+                t.View.List.ToBottom();
+            return show;
+        }
+
+        /**
+         * Set the preview text (re-renders the preview content).
+         * @param {?string} text The draft text (null when there is nothing to send).
+         * @returns {Promise<void>}
+         */
+        async SetPreviewText(text) {
+            const t = this;
+            if (t.PreviewMsg.Text === text)
+                return;
+            t.PreviewMsg.Text = text;
+            t.PreviewMsg.Format = t.FormatOf(text);
+            await t.Preview.UpdateBody(text, t.PreviewMsg.Format, false);
+            if (t.PreviewChanged())
+                t.View.List.ToBottom();
+        }
+
+        /**
+         * Apply the input format (text or markdown): placeholder, preview format.
+         * @returns {Promise<void>}
+         */
+        async FormatChanged() {
+            const t = this;
+            t.PreviewMsg.Format = t.FormatOf(t.PreviewMsg.Text);
+            t.Write.placeholder = t.UseMarkDown ? t.PlaceholderMD : t.PlaceholderText;
+            await t.Preview.UpdateBody(t.PreviewMsg.Text, t.PreviewMsg.Format, false);
+            t.PreviewChanged();
+        }
+
+        /**
+         * The format a draft text is sent (and previewed) with: markdown if picked, text if picked, else (automatic, see AutoMarkDown)
+         * markdown when the text contains markdown syntax.
+         * @param {?string} text The draft text.
+         * @returns {number} The format (Formats.MarkDown or Formats.Text).
+         */
+        FormatOf(text) {
+            if (this.UseMarkDown)
+                return Formats.MarkDown;
+            return (this.AutoMarkDown && LooksLikeMarkDown(text)) ? Formats.MarkDown : Formats.Text;
+        }
+
+        /**
+         * Switch the input format and persist it.
+         * @param {boolean} md True for markdown.
+         */
+        SetMarkDown(md) {
+            this.UseMarkDown = md;
+            this.AutoMarkDown = false;
+            this.View.Settings.Set("MarkDown", md ? "true" : "false");
+            this.FormatChanged();
+        }
+
+        /** Toggle the preview and persist it ("null" = auto). */
+        TogglePreview() {
+            const t = this;
+            t.ShowPreview = t.PreviewOn ? (t.UseMarkDown ? false : null) : (t.UseMarkDown ? null : true);
+            t.View.Settings.Set("Preview", String(t.ShowPreview));
+            t.PreviewChanged();
+        }
+
+        /**
+         * Delete uploaded (temporary) draft files on the server (`DeleteStoredFile` with the server root relative url).
+         * @param {string[]} urls The urls (as stored in the draft).
+         * @returns {Promise<void>}
+         */
+        async DeleteTemp(urls) {
+            for (const u of urls) {
+                if (!this.TempFiles.delete(u))
+                    continue;
+                try {
+                    if (!await Sw.Net.Send(this.View.Api("../Api/UserStorage/DeleteStoredFile"), u.startsWith("../") ? u.substring(3) : u))
+                        console.warn('Chat: failed to delete stored file "' + u + '".');
+                }
+                catch (e) {
+                    console.warn('Chat: failed to delete stored file "' + u + '", error: ' + e.message);
+                }
+            }
+        }
+
+        /**
+         * Remove one attachment from the draft.
+         * @param {string} org The url (as stored).
+         * @param {boolean} deleteFile Also delete an uploaded file from the server.
+         * @returns {Promise<void>}
+         */
+        async RemoveAttachment(org, deleteFile) {
+            const t = this;
+            const rest = (t.PreviewMsg.Data || "").split(";").filter(x => x && x !== org);
+            t.SetData(rest.length ? rest.join(";") : null);
+            t.Changed();
+            t.PreviewChanged();
+            if (deleteFile)
+                await t.DeleteTemp([org]);
+        }
+
+        /**
+         * Clear the draft: text and attachments (uploaded ones are deleted on the server).
+         * @returns {Promise<void>}
+         */
+        async Clear() {
+            const t = this;
+            const d = t.PreviewMsg.Data;
+            t.Write.value = "";
+            t.Write.NextLast = 0;
+            t.SetData(null);
+            t.Changed();
+            t.PreviewChanged();
+            if (d)
+                await t.DeleteTemp(d.split(";"));
+        }
+
+        /**
+         * Pick files and attach them.
+         * @returns {Promise<void>}
+         */
+        async AttachFiles() {
+            const multiple = this.View.Data.MaxDataCount - this.DataCount > 1;
+            const files = Sw.Upload ? await Sw.Upload.Pick({ Multiple: multiple }) : await selectFiles(multiple);
+            if (files)
+                await this.Upload(files);
+        }
+
+        /**
+         * Upload files (`Sw.Upload.Files(UploadRepo, files)`) and attach them to the draft, within MaxDataCount and MaxDataLength.
+         * @param {FileList|File[]} files The files.
+         * @returns {Promise<void>}
+         */
+        async Upload(files) {
+            const t = this;
+            const view = t.View;
+            const data = view.Data;
+            if (!view.UploadRepo || !files || files.length <= 0)
+                return;
+            if (t.DataCount + files.length > data.MaxDataCount) {
+                Sw.Fail(data.MaxDataCount <= 1
+                    ? _TF("Only one file may be attached!", "Error message displayed when the user tries to attach more than 1 file to a chat message")
+                    : _T("Only {0} files may be attached!", data.MaxDataCount, "Error message displayed when the user tries to attach more than the allowed number of files to a chat message.{0} is replaced with the maximum allowed number of files"));
+                return;
+            }
+            const U = Sw.Upload;
+            const res = U ? await U.Files(view.UploadRepo, files) : await window.fileUploader(view.UploadRepo, files);
+            if (res.Error) {
+                Sw.Fail(res.Error.message || String(res.Error));
+                return;
+            }
+            const urls = res.Urls || [];
+            if (urls.length <= 0) {
+                Sw.Fail(_TF("Failed to upload!", "Error message shown when a file upload failed"));
+                return;
+            }
+            const already = U ? U.Status.AlreadyUploaded : 1;
+            let d = t.PreviewMsg.Data || "";
+            for (let i = 0; i < urls.length; ++i) {
+                const s = res.Status[i];
+                if (s < 0)
+                    Sw.Fail(U ? U.StatusText(s) : (window.fileUploaderStatusText ? window.fileUploaderStatusText(s) : String(s)));
+                const u = urls[i];
+                if (!u)
+                    continue;
+                const org = "../" + u;
+                const next = d ? d + ";" + org : org;
+                if (next.length > data.MaxDataLength) {
+                    Sw.Fail(_TF("Can't attach more data!", "Error message shown when no more files can be attached to a chat message"));
+                    break;
+                }
+                if (s !== already)
+                    t.TempFiles.add(org);
+                d = next;
+            }
+            t.SetData(d || null);
+            t.PreviewChanged();
+            t.Changed();
+        }
+
+        /**
+         * Drag and drop: on the textarea files are uploaded and the first text item is inserted (image urls as markdown images); files
+         * dropped anywhere else on the chat are uploaded too.
+         */
+        InitDrop() {
+            const t = this;
+            const w = t.Write;
+            const mark = on => w.classList.toggle("chat-dragging", on);
+            w.addEventListener("dragover", ev => ev.preventDefault());
+            w.addEventListener("dragenter", () => mark(true));
+            w.addEventListener("dragleave", () => mark(false));
+            w.addEventListener("drop", async ev => {
+                ev.preventDefault();
+                mark(false);
+                const dt = ev.dataTransfer;
+                const textItem = Array.from(dt.items || []).find(x => x.kind === "string");
+                const textPromise = textItem ? new Promise(r => textItem.getAsString(r)) : null;
+                if (t.View.UploadRepo && dt.files && dt.files.length)
+                    await t.Upload(dt.files);
+                if (!textPromise)
+                    return;
+                let val = await textPromise;
+                if (t.UseMarkDown && /^https?:\/\//i.test(val) && Sw.Format.IsImageExt(Sw.Format.FileExtension(val.split("?")[0]).toLowerCase()))
+                    val = "![](" + val + ")";
+                t.InsertText(val);
+                t.OnInput();
+            });
+
+            //  Files dropped anywhere on the chat (the list, the splitter, the buttons) are attached to the draft, when the chat has an
+            //  upload repository; only drags with files (a text drag inside the list keeps the browser's behaviour). While files are
+            //  dragged over the chat, .chat-drop-files on the chat root shows "Drop files to attach" (data-drop), .chat-drop-full when
+            //  the message has the maximum number of files. A drop the chat can't take does nothing (the browser would open the file).
+            const c = t.View.Container;
+            const hasFiles = ev => !!ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files");
+            let timer = 0;
+            const show = on => {
+                clearTimeout(timer);
+                timer = 0;
+                c.classList.toggle("chat-drop-files", on);
+                if (!on)
+                    c.classList.remove("chat-drop-full");
+            };
+            c.addEventListener("dragover", ev => {
+                if (!hasFiles(ev) || !t.View.UploadRepo)
+                    return;
+                ev.preventDefault();
+                const full = t.View.Data.MaxDataCount - t.DataCount <= 0;
+                ev.dataTransfer.dropEffect = full ? "none" : "copy";
+                c.setAttribute("data-drop", full
+                    ? _TF("No more files can be attached to this message", "Why the attach file button of a chat is disabled: the message has the maximum number of files")
+                    : _TF("Drop files to attach them to the message", "Shown over a chat while the user drags files over it: dropping them attaches them to the message being written"));
+                c.classList.add("chat-drop-files");
+                c.classList.toggle("chat-drop-full", full);
+                //  (dragover repeats while the files are over the chat: no dragover for a moment = they left, or the drag ended)
+                clearTimeout(timer);
+                timer = setTimeout(() => show(false), 300);
+            });
+            c.addEventListener("drop", async ev => {
+                if (!hasFiles(ev) || !t.View.UploadRepo)
+                    return;
+                show(false);
+                //  (the text box handles its own drops: files and text)
+                if (ev.defaultPrevented)
+                    return;
+                ev.preventDefault();
+                if (ev.dataTransfer.files && ev.dataTransfer.files.length)
+                    await t.Upload(ev.dataTransfer.files);
+            });
+        }
+
+        /**
+         * Let the user select the input language (searchable list over Name / LocalName / EnName); persisted only when it differs from
+         * the server default; restarts an open mic.
+         * @returns {Promise<void>}
+         */
+        async SelectLanguage() {
+            const t = this;
+            const view = t.View;
+            const speech = C.SpeechInput.Supported();
+            const iso = await Sw.Dialog.Select({
+                Title: _TF("Select the language to use", "Header text to a list of languages that can be selected"),
+                Tip: speech
+                    ? _TF("Select the language you're using for the text and voice input", "Tool tip description of a header to a list of languages that can be selected")
+                    : _TF("Select the language you're using for the text input", "Tool tip description of a header to a list of languages that can be selected"),
+                GetAll: true,
+                Items: async search => {
+                    const langs = await view.GetLanguages();
+                    search = (search || "").toLowerCase();
+                    const res = [];
+                    for (const l of langs) {
+                        if (search && l.Name.toLowerCase().indexOf(search) < 0 && l.LocalName.toLowerCase().indexOf(search) < 0 && l.EnName.toLowerCase().indexOf(search) < 0)
+                            continue;
+                        let tip = _TF("Name", 'Tool tip prefix indicating what language this is, part of somthing like: "Name: English".') + ": " + l.Name + "\n";
+                        if (l.Name !== l.LocalName)
+                            tip += _TF("Local name", 'Tool tip prefix indicating what language this is, part of somthing like: "Local name: Svenska".') + ": " + l.LocalName + "\n";
+                        if (l.Name !== l.EnName)
+                            tip += _TF("English name", 'Tool tip prefix indicating what language this is, part of somthing like: "English name: German".') + ": " + l.EnName + "\n";
+                        tip += "Iso639-1: " + l.Iso + "\n\n" + _TF("Select this language", "Tool tip description on a button that when clicked will select tis language");
+                        if (l.Comment)
+                            tip += "\n\n" + l.Comment;
+                        res.push({
+                            Text: l.Name !== l.LocalName ? l.Name + " (" + l.LocalName + ")" : l.Name,
+                            Hint: l.Iso,
+                            Icon: flagUrl(l.Iso) + "*",
+                            Title: tip,
+                            Value: l.Iso,
+                        });
+                    }
+                    return res;
+                },
+            });
+            if (!iso)
+                return;
+            view.CurrentLang = iso;
+            view.Settings.Set("Lang", iso === view.Data.Lang ? null : iso);
+            t.PreviewMsg.Lang = iso;
+            t.Preview.UpdateLang();
+            t.UpdateFlag();
+            if (view.CanOpenMic && view.Settings.Get("Listen") === "true") {
+                t.StopListening();
+                t.StartListening();
+                view.Settings.Set("Listen", "true");
+            }
+        }
+
+        /** Stop the speech recognition (if any) and reset the mic button. */
+        StopListening() {
+            const stop = this.StopRecognition;
+            this.StopRecognition = null;
+            this.SetMicState(false, false);
+            if (stop)
+                stop();
+        }
+
+        /**
+         * Show the mic button state.
+         * @param {boolean} recording Speech is being recorded (recording icon).
+         * @param {boolean} openMic Open mic listening is active (the button is disabled while waiting for the wake word).
+         */
+        SetMicState(recording, openMic) {
+            const m = this.Mic;
+            if (!m)
+                return;
+            m.E.classList.toggle("chat-recording", recording);
+            m.E.setAttribute("aria-pressed", recording ? "true" : "false");
+            //  The recording / open mic icons animate by themselves (svg): with reduced motion the static mic (the color shows the state)
+            const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+            m.SetIcon(still ? "mic" : (recording ? ChatIcons + "ChatRecording.svg" : (openMic ? ChatIcons + "ChatInput.svg" : "mic")));
+            m.SetDisabled(openMic && !recording, _TF("Listening for the wake word: say it to start talking", "Why the microphone button of a chat is disabled: open mic listening is waiting for the spoken wake word (the name of the assistant)"));
+        }
+
+        /**
+         * Start speech input (`Sw.Chat.SpeechInput.Listen` with the SpeechName wake words, in the input language). Interim text is
+         * inserted live; a final sentence is sent in open mic mode, or after push-to-talk when auto send is on.
+         * @param {boolean} [ignoreKeyword] Any speech activates (push-to-talk).
+         * @param {boolean} [noOpenMic] Stop after one sentence (push-to-talk).
+         */
+        StartListening(ignoreKeyword, noOpenMic) {
+            const t = this;
+            const view = t.View;
+            if (t.StopRecognition)
+                t.StopListening();
+            const openMic = !noOpenMic;
+            t.SetMicState(false, openMic);
+            const stop = C.SpeechInput.Listen(view.Data.SpeechName,
+                (active, isWorking) => {
+                    t.Write.classList.toggle("chat-listening", !!active);
+                    if (isWorking) {
+                        t.SetMicState(!!active, openMic);
+                        return;
+                    }
+                    if (!ignoreKeyword)
+                        view.Settings.Set("Listen", "false");
+                    t.StopRecognition = null;
+                    t.SetMicState(false, false);
+                },
+                async (text, isLast) => {
+                    t.InsertText(text, !isLast);
+                    if (isLast) {
+                        t.SetMicState(false, openMic && !!t.StopRecognition);
+                        if (text.length > 0 && (openMic || view.Settings.Get("AutoSend") === "true")) {
+                            await t.DoSend(true);
+                            return;
+                        }
+                    }
+                    t.Changed();
+                },
+                view.CurrentLang, ignoreKeyword, noOpenMic);
+            t.StopRecognition = stop;
+            if (!stop)
+                t.SetMicState(false, false);
+        }
+
+        /** Final start up: apply the format, enable the send button, focus the textarea without forcing the on screen keyboard. */
+        Ready() {
+            const t = this;
+            t.FormatChanged();
+            t.Changed();
+            t.Focus();
+        }
+
+        /** Focus the textarea without forcing the on screen keyboard (read only while focusing). */
+        Focus() {
+            const w = this.Write;
+            w.readOnly = true;
+            w.focus({ preventScroll: true });
+            w.readOnly = false;
+        }
     }
 
+    // ------------------------------------------------------------------ the chat
 
-}
+    /** One chat: Join, message list, composer, menus, push messages, frame commands, speech output. */
+    class ChatView {
+        /**
+         * @param {HTMLElement} container The element the chat is created in.
+         * @param {string} chatId The chat id `<provider>.<providerChatId>`.
+         * @param {string} [apiBase] Prefix of the api calls (depends on where the page is).
+         * @param {Options} [options] Options.
+         */
+        constructor(container, chatId, apiBase, options) {
+            const t = this;
+            /** The container element. */
+            t.Container = container;
+            /** The chat id. */
+            t.ChatId = chatId;
+            /** The api prefix. */
+            t.ApiBase = apiBase || "";
+            /** @type {Options} The options. */
+            t.Options = Object.assign(new Options(), options || {});
+            /** @type {Settings} The persisted settings. */
+            t.Settings = new Settings(chatId, t.Options.SettingsName);
+            /** @type {Set<string>} Senders whose content is hidden. */
+            t.HideFrom = new Set();
+            const hidden = Sw.Storage.Local.GetJson(t.Settings.Keys.Hide, null);
+            if (Array.isArray(hidden))
+                hidden.forEach(x => t.HideFrom.add(x));
+            /** True: absolute time stamps, false: live age. */
+            t.ShowTimeStamp = t.Settings.Get("TimeStamp") === "true";
+            /** @type {?object[]} Input languages (GetInputLanguages). */
+            t.Languages = null;
+            /** @type {Map<string, object>} Iso -> language. */
+            t.LangMap = new Map();
+            /** @type {?Composer} The input (CanPost only). */
+            t.Composer = null;
+            /** @type {Array<function():void>} Removers of the push / frame handlers. */
+            t.Offs = [];
+        }
+
+        /**
+         * An api url.
+         * @param {string} method The method (or a relative url).
+         * @returns {string} The url.
+         */
+        Api(method) {
+            return this.ApiBase + method;
+        }
+
+        /**
+         * Load the input languages once.
+         * @returns {Promise<object[]>} The languages.
+         */
+        async GetLanguages() {
+            if (!this.Languages) {
+                const langs = await Sw.Net.Send(this.Api("GetInputLanguages"));
+                this.Languages = langs || [];
+                this.Languages.forEach(l => this.LangMap.set(l.Iso, l));
+            }
+            return this.Languages;
+        }
+
+        /**
+         * A language as text.
+         * @param {string} iso The iso code.
+         * @returns {string} "English [en]" or "[xx]" when unknown.
+         */
+        LangText(iso) {
+            const l = this.LangMap.get(iso);
+            return l ? l.Name + " [" + iso + "]" : "[" + iso + "]";
+        }
+
+        /**
+         * Are new messages of a sender hidden (the state the last toggled message of the sender was left in).
+         * @param {string} name The sender.
+         * @returns {boolean} True if hidden.
+         */
+        IsHidden(name) {
+            return this.HideFrom.has(name);
+        }
+
+        /**
+         * Set the default for new messages of a sender (persisted); existing rows are not changed.
+         * @param {string} name The sender.
+         * @param {boolean} hide True to hide.
+         */
+        SetHidden(name, hide) {
+            if (hide === this.HideFrom.has(name))
+                return;
+            if (hide)
+                this.HideFrom.add(name);
+            else
+                this.HideFrom.delete(name);
+            Sw.Storage.Local.SetJson(this.Settings.Keys.Hide, Array.from(this.HideFrom));
+        }
+
+        /**
+         * Hide / show one message (header click, message menu) and make that the default for new messages of its sender.
+         * @param {MessageRow} row The row.
+         * @param {boolean} [hide] True to hide, false to show, omitted: toggle.
+         */
+        ToggleRow(row, hide) {
+            row.SetHidden(hide === undefined ? !row.Hidden : hide);
+            this.SetHidden(row.Msg.From, row.Hidden);
+        }
+
+        /**
+         * Hide / show all messages of a sender (message menu), new messages of the sender too.
+         * @param {string} name The sender.
+         * @param {boolean} hide True to hide.
+         */
+        SetSenderHidden(name, hide) {
+            this.SetHidden(name, hide);
+            for (const r of this.List.All())
+                if (r.Msg.From === name)
+                    r.SetHidden(hide);
+        }
+
+        /**
+         * Show or hide all content and forget the hidden senders (`chat.showall` / `chat.hideall`, "Show all").
+         * @param {boolean} hide True to hide.
+         */
+        SetAllHidden(hide) {
+            this.HideFrom.clear();
+            Sw.Storage.Local.Remove(this.Settings.Keys.Hide);
+            this.List.All().forEach(r => r.SetHidden(hide));
+        }
+
+        /** @returns {boolean} Open mic is possible (speech recognition, not on mobile devices). */
+        get CanOpenMic() {
+            return C.SpeechInput.Supported() && C.SpeechInput.SupportOpenMic();
+        }
+
+        /** @returns {boolean} Speech output is possible (the server sends voices and the browser supports it). */
+        get CanSpeak() {
+            return !!this.Data.Voices && C.SpeechGen.Supported();
+        }
+
+        /**
+         * Load the upload library (common/fileUploader.js of the FileUploader service, may be missing) and its md5 dependency.
+         * @returns {Promise<void>}
+         */
+        async LoadUploader() {
+            if (!Sw.Upload && !window.fileUploader) {
+                await Sw.Net.IncludeJs(null, "md5.js", true);
+                await Sw.Net.IncludeJs(null, "fileUploader.js", true);
+            }
+            try {
+                if (Sw.Upload)
+                    await Sw.Upload.Ensure();
+            }
+            catch (e) {
+                console.warn("Chat: upload library not ready: " + e.message);
+            }
+        }
+
+        /**
+         * Build the chat: Join, optional dependencies, list, composer, menu, push messages, frame commands.
+         * @returns {Promise<HTMLElement>} The message list element.
+         */
+        async Init() {
+            const t = this;
+            if (!C.SpeechGen)
+                await Sw.Net.IncludeJs(ScriptUrl, "speech.js");
+            if (C.SpeechGen.Supported())
+                C.SpeechGen.Cancel();
+            else
+                console.warn("Chat: no speech synthesis supported");
+            /** The Join response (ChatJoinResponse). */
+            const data = t.Data = await Sw.Net.Send(t.Api("Join"), { ChatId: t.ChatId, MaxCount: 10, FromId: 0 });
+            if (!data)
+                throw new Error(_TF("Failed to join the chat!", "Error message shown when a chat could not be opened"));
+            t.UserName = data.UserName;
+            t.CanPost = !!data.CanPost;
+            t.CanTranslate = !!data.CanTranslate;
+            t.CurrentImage = "../auth/UserImages/" + data.UserGuid + "/small";
+            const lang = t.Settings.Get("Lang");
+            /** The input language. */
+            t.CurrentLang = data.Lang;
+            if (lang) {
+                if (lang === data.Lang)
+                    t.Settings.Set("Lang", null);
+                else
+                    t.CurrentLang = lang;
+            }
+            //  The server sends EnableSpeechByDefault (the names read by the old client were never sent)
+            t.ListenDefault = data.EnableListenByDefault ?? !!data.EnableSpeechByDefault;
+            t.SpeechDefault = data.EnableGenByDefault ?? !!data.EnableSpeechByDefault;
+            t.SpeechOn = t.CanSpeak && t.Settings.Bool("Speech", t.SpeechDefault, true);
+            const vol = parseInt(t.Settings.Get("Volume"));
+            /** Speech volume in percent. */
+            t.Volume = vol > 0 ? vol : 50;
+            /** @type {Map<?string, object>} Voices by sender (null = default). */
+            t.Voices = new Map((data.Voices || []).map(v => [v.Name ?? null, v]));
+
+            //  Optional dependencies
+            const deps = [];
+            if (t.CanTranslate)
+                deps.push(t.GetLanguages().catch(e => console.warn("Chat: failed to load languages: " + e.message)));
+            if (data.UploadRepo && t.CanPost)
+                deps.push(t.LoadUploader());
+            await Promise.all(deps);
+            /** @type {?string} The upload repository (uploads enabled). */
+            t.UploadRepo = data.UploadRepo && t.CanPost && (Sw.Upload || typeof window.fileUploader === "function") ? data.UploadRepo : null;
+            if (t.UploadRepo)
+                console.log('Chat: file uploading to repository "' + t.UploadRepo + '" is enabled.');
+
+            //  Elements
+            const c = t.Container;
+            c.classList.add("chat-root");
+            /** @type {MessageList} The message list. */
+            t.List = new MessageList(t);
+            /** The top right menu button. */
+            t.MenuButton = new Sw.Button({
+                Icon: "moreV", Kind: "ghost", Class: "chat-menu-button",
+                Title: _TF("Show menu option", "Tool tip description of a button that when clicked will show a context menu"),
+                Menu: () => t.MainMenuItems(), MenuOptions: { Align: "end" },
+            });
+            //  Never over the messages: beside the text box (outside it, the other buttons are inside it) when the user can post, else
+            //  in a slim bar above the list (sized by the MenuIconSize option)
+            c.append(t.List.E);
+            if (t.CanPost) {
+                //  The automatic split (the text box sized to its text) until the user drags the splitter (RestoreSize, SetListHeight)
+                c.classList.add("chat-autosize");
+                t.Composer = new Composer(t);
+                /** The splitter between the list and the input. */
+                t.Split = t.CreateSplit();
+                c.append(t.Split, t.Composer.E);
+                t.Composer.E.append(t.MenuButton.E);
+            }
+            else {
+                c.classList.add("chat-nopost");
+                t.MenuButton.E.style.setProperty("--chat-ics", (t.Options.MenuIconSize || 48) + "px");
+                c.prepend(t.MenuButton.E);
+            }
+            addTouchLabel(t.MenuButton.E, _TF("Menu", "Short label below the menu button of a chat (touch devices), keep it short"));
+
+            for (const m of data.Messages || [])
+                await t.List.Add(m);
+
+            t.InitPush();
+            t.InitCommands();
+            if (t.Composer) {
+                t.RestoreSize();
+                if (t.CanOpenMic && data.SpeechName && t.Settings.Bool("Listen", t.ListenDefault, true))
+                    t.Composer.StartListening();
+            }
+            t.List.StickForAwhile(true);
+            if (t.Composer)
+                t.Composer.Ready();
+            return t.List.E;
+        }
+
+        /**
+         * Create the splitter between the list and the input (drag with mouse / touch, or keyboard arrows (Shift = bigger steps),
+         * Home / End, Enter / double click resets); the list height fraction is saved in the Size setting.
+         * @returns {HTMLElement} The splitter.
+         */
+        CreateSplit() {
+            const t = this;
+            const bar = el("div.chat-split", {
+                tabIndex: 0,
+                title: _TF("Drag to resize the message list", "Tool tip of a bar between the chat messages and the input box that can be dragged to change their sizes"),
+                attrs: { role: "separator", "aria-orientation": "horizontal", "aria-valuemin": "0", "aria-valuemax": "100", "aria-label": _TF("Resize the message list", "Accessible name of a bar that changes the size of the chat message list") },
+            });
+            let startH = 0;
+            /** @type {?{Total: number, Split: number, Input: number}} The chat, splitter and least input heights at the drag start. */
+            let dims = null;
+            /** Reset to the default (automatic) split. */
+            const reset = () => {
+                t.List.E.style.height = "";
+                t.Settings.Set("Size", null);
+                t.Container.classList.add("chat-autosize");
+                t.Composer.AutoGrow();
+                bar.setAttribute("aria-valuenow", String(Math.round(100 * t.List.E.offsetHeight / Math.max(1, t.Container.offsetHeight))));
+            };
+            Sw.Drag(bar, {
+                OnStart: () => {
+                    startH = t.List.E.offsetHeight;
+                    //  The sizes that do not change during the drag, read once (no layout read per move)
+                    dims = { Total: t.Container.offsetHeight, Split: bar.offsetHeight, Input: t.Composer.MinHeight };
+                },
+                OnMove: (ev, s) => t.SetListHeight(startH + s.DY, dims),
+                OnEnd: () => t.SaveSize(),
+            });
+            bar.addEventListener("dblclick", reset);
+            bar.addEventListener("keydown", e => {
+                const h = t.List.E.offsetHeight;
+                const total = t.Container.offsetHeight;
+                const step = total * (e.shiftKey ? 0.2 : 0.05);
+                let n;
+                switch (e.key) {
+                    case "ArrowUp": n = h - step; break;
+                    case "ArrowDown": n = h + step; break;
+                    case "Home": n = 0; break;
+                    case "End": n = total; break;
+                    case "Enter":
+                        e.preventDefault();
+                        reset();
+                        return;
+                    default: return;
+                }
+                e.preventDefault();
+                t.SetListHeight(n);
+                t.SaveSize();
+            });
+            return bar;
+        }
+
+        /**
+         * Set the list height (a user split: ends the automatic split; clamped: the list keeps 10% / 80 px, the input keeps 104 px,
+         * 56 px in a compact (low) chat, and at least Composer.MinHeight: its buttons and two lines of text).
+         * @param {number} h Height in px.
+         * @param {?{Total: number, Split: number, Input: number}} [dims] The chat, splitter and least input heights read at the drag start
+         * (else read now).
+         */
+        SetListHeight(h, dims) {
+            const c = this.Container;
+            const total = dims ? dims.Total : c.offsetHeight;
+            const min = Math.min(total * 0.1, 80);
+            const input = Math.max(c.classList.contains("chat-compact") ? 56 : 104, dims ? dims.Input : this.Composer.MinHeight);
+            const max = Math.max(min, total - (dims ? dims.Split : this.Split.offsetHeight) - input);
+            if (c.classList.contains("chat-autosize")) {
+                c.classList.remove("chat-autosize");
+                this.Composer.AutoGrow();
+            }
+            //  One layout read per call (the total above): the value is the height just set, not read back (a drag calls this per move)
+            const px = Math.round(Math.max(min, Math.min(max, h)));
+            this.List.E.style.height = px + "px";
+            this.Split.setAttribute("aria-valuemin", String(Math.round(100 * min / Math.max(1, total))));
+            this.Split.setAttribute("aria-valuemax", String(Math.round(100 * max / Math.max(1, total))));
+            this.Split.setAttribute("aria-valuenow", String(Math.round(100 * px / Math.max(1, total))));
+        }
+
+        /** Save the list height fraction (Size setting). */
+        SaveSize() {
+            const total = this.Container.offsetHeight;
+            if (total > 0)
+                this.Settings.Set("Size", this.List.E.offsetHeight / total);
+        }
+
+        /** Restore the saved list height fraction (a user split, also after the chat is resized), else keep the automatic split. */
+        RestoreSize() {
+            const f = parseFloat(this.Settings.Get("Size"));
+            if (f > 0 && f < 1)
+                this.SetListHeight(f * this.Container.offsetHeight);
+        }
+
+        /** Subscribe to the server push messages of this chat (post, replace, remove, clear). */
+        InitPush() {
+            const t = this;
+            const id = t.ChatId.toLowerCase();
+            /**
+             * Subscribe one message type.
+             * @param {string} type The operation.
+             * @param {function(object):*} fn The handler.
+             */
+            const on = (type, fn) => {
+                const name = "chat." + type + "." + id;
+                Sw.Session.Subscribe(name, fn);
+                t.Offs.push(() => Sw.Session.Unsubscribe(name, fn));
+            };
+            on("post", async m => {
+                const c = m.Chat;
+                if (!c || t.List.Get(c.Id))
+                    return;
+                t.SpeakNew(await t.List.Add(c));
+            });
+            on("replace", async m => {
+                const c = m.Chat;
+                const row = c ? t.List.Get(c.Id) : null;
+                if (!row)
+                    return;
+                await row.Update(c);
+                if (t.SpeechOn && row.Voice)
+                    C.SpeechGen.SpeakContinue(row.Text, (c.Flags & Flags.IsWorking) === 0);
+            });
+            on("remove", m => t.List.Remove(m.Value));
+            on("clear", () => t.List.Clear());
+        }
+
+        /**
+         * Speak a new message from another user (speech output on).
+         * @param {MessageRow} row The row.
+         */
+        SpeakNew(row) {
+            const t = this;
+            const m = row.Msg;
+            if (!t.SpeechOn || m.From === t.UserName)
+                return;
+            const vp = t.Voices.get(m.From) || t.Voices.get(null);
+            if (!vp)
+                return;
+            row.Voice = C.SpeechGen.FindVoice(vp.Language, vp.Male, vp.Voice);
+            C.SpeechGen.SpeakNew(row.Text, row.Voice, vp.Pitch, vp.Rate, t.Volume * 0.01, vp.Language, (m.Flags & Flags.IsWorking) === 0);
+        }
+
+        /** The commands from the hosting window (`{Type}` postMessage): scroll top / bottom, show / hide all, clear (CanClear only). */
+        InitCommands() {
+            const t = this;
+            const cmds = new Map([
+                ["chat.scrolltop", () => t.List.ToTop()],
+                ["chat.scrollbottom", () => t.List.ToBottom()],
+                ["chat.showall", () => t.SetAllHidden(false)],
+                ["chat.hideall", () => t.SetAllHidden(true)],
+            ]);
+            if (t.CanPost && t.Data.CanClear)
+                cmds.set("chat.clear", () => t.Clear());
+            /**
+             * Window message listener.
+             * @param {MessageEvent} ev The event.
+             */
+            const fn = ev => {
+                const d = ev.data;
+                const f = d && typeof d.Type === "string" ? cmds.get(d.Type) : null;
+                if (!f)
+                    return;
+                //  Only the hosting windows (or this window) may send commands
+                if (ev.source !== window.parent && ev.source !== window.top && ev.source !== window)
+                    return;
+                console.log("Chat: got command \"" + d.Type + "\" from " + ev.origin);
+                f();
+            };
+            window.addEventListener("message", fn);
+            t.Offs.push(() => window.removeEventListener("message", fn));
+        }
+
+        /**
+         * Remove all messages (`ClearAllMessages`, the chat id as argument).
+         * @returns {Promise<void>}
+         */
+        async Clear() {
+            await call(this.Api("ClearAllMessages"), this.ChatId, _TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure"));
+        }
+
+        /**
+         * Convert server menu items (ChatMenuItem {Id, Name, Desc, Icon, Value, Checked, Radio, Children}) to menu items; a leaf sends
+         * `SetValue {ChatId, Key: Id, Value, Id: messageId}`. Checked (true / false) makes a check box item (with Radio a radio item).
+         * @param {?object[]} list The server items.
+         * @param {number} [messageId=0] The message id (0 = the chat menu).
+         * @returns {object[]} The menu items.
+         */
+        ServerItems(list, messageId) {
+            const t = this;
+            return (list || []).map(mi => {
+                const sub = mi.Children && mi.Children.length;
+                return {
+                    Text: mi.Name,
+                    Icon: mi.Icon || undefined,
+                    Title: mi.Desc,
+                    Checked: (mi.Checked === true || mi.Checked === false) ? mi.Checked : undefined,
+                    Radio: !!mi.Radio,
+                    Items: sub ? t.ServerItems(mi.Children, messageId) : undefined,
+                    OnClick: sub ? undefined : () => call(t.Api("SetValue"), { ChatId: t.ChatId, Key: mi.Id, Value: mi.Value, Id: messageId || 0 },
+                        _T("Failed to set chat value \"{0}\".", mi.Id, "An error message shown when a user tries to set a server side value but the server returns a failure.{0} is replaced by the value key name.")),
+                };
+            });
+        }
+
+        /**
+         * The "Attach file" menu item.
+         * @returns {object} The item.
+         */
+        AttachItem() {
+            return {
+                Text: _TF("Attach file", "Text of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
+                Icon: "attach",
+                Title: _TF("Attach a file to the current message", "Tool tip description of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
+                Disabled: this.Data.MaxDataCount - this.Composer.DataCount <= 0,
+                OnClick: () => this.Composer.AttachFiles(),
+            };
+        }
+
+        /**
+         * The "Clear" (draft) menu item.
+         * @returns {object} The item.
+         */
+        ClearDraftItem() {
+            return {
+                Text: _TF("Clear the text box", "Name of a menu item that when clicked will clear the current chat message"),
+                Icon: "IconChatClearCurrent",
+                Title: _TF("Clear the current message text and any data", "Tool tip description of a menu item that when clicked will clear the current chat message"),
+                Disabled: !this.Composer.CanSend,
+                OnClick: () => this.Composer.Clear(),
+            };
+        }
+
+        /**
+         * The menu of a message (or of the preview row).
+         * @param {MessageRow} row The row.
+         * @returns {object[]} The items.
+         */
+        MessageMenuItems(row) {
+            const t = this;
+            const m = row.Msg;
+            const items = [];
+            const isMobile = Sw.Platform.IsMobileDevice;
+            if (row.IsPreview) {
+                if (t.UploadRepo)
+                    items.push(t.AttachItem());
+            }
+            else if (t.Data.CanShowProfile)
+                items.push({
+                    Text: _TF("View profile", "Name of a menu item that when clicked will view the profile of a web site member"),
+                    Icon: "IconProfile",
+                    Title: _T("View the public profile page for \"{0}\"", m.From, "Tool tip description of a menu item that when clicked will view the profile of a web site member.{0} is replaced with the nick name of the member"),
+                    OnClick: () => {
+                        Sw.Frame.PostParent("ViewProfile", { Name: m.From, Image: m.FromImage });
+                        console.log("Chat: sent ViewProfile for \"" + m.From + "\"");
+                    },
+                });
+            const copyText = {
+                Text: _TF("Copy text", "Name of a menu item that when clicked will copy the text of chat message to the clipboard"),
+                Icon: "copy",
+                Title: _TF("Copy the message text to the clipboard", "Tool tip description of a menu item that when clicked will copy the text of chat message to the clipboard"),
+                OnClick: () => copy(m.Format === Formats.Text ? row.CurText : row.Text),
+            };
+            switch (m.Format) {
+                case Formats.MarkDown:
+                    items.push({
+                        Text: _TF("Copy as Markdown", "Name of a menu item that when clicked will copy the original Markdown text of chat message to the clipboard"),
+                        Icon: "file",
+                        Title: _TF("Copy the message markdown text to the clipboard", "Tool tip description of a menu item that when clicked will copy the original Markdown text of chat message to the clipboard"),
+                        OnClick: () => copy(row.CurText),
+                    });
+                    if (!isMobile)
+                        items.push({
+                            Text: _TF("Copy as HTML", "Name of a menu item that when clicked will copy the generated HTML code of chat message to the clipboard"),
+                            Icon: "code",
+                            Title: _TF("Copy the formatted HTML to the clipboard", "Tool tip description of a menu item that when clicked will copy the generated HTML code of chat message to the clipboard"),
+                            OnClick: () => copy(row.Body.innerHTML),
+                        });
+                    break;
+                case Formats.Html:
+                    if (!isMobile)
+                        items.push({
+                            Text: _TF("Copy the original HTML", "Name of a menu item that when clicked will copy the original HTML code of chat message to the clipboard"),
+                            Icon: "code",
+                            Title: _TF("Copy the formatted HTML to the clipboard", "Tool tip description of a menu item that when clicked will copy the generated HTML code of chat message to the clipboard"),
+                            OnClick: () => copy(row.CurText),
+                        });
+                    break;
+            }
+            items.push(copyText);
+            if (row.IsPreview) {
+                items.push(t.ClearDraftItem());
+                return items;
+            }
+            items.push({
+                Text: _TF("Copy date and time", "Name of a menu item that when clicked will copy the time stamp of chat message to the clipboard"),
+                Icon: "clock",
+                Title: _T("Copy the time stamp \"{0}\" to the clipboard", m.Time, "Tool tip description of a menu item that when clicked will copy the time stamp of chat message to the clipboard.{0} is replaced with the time stamp"),
+                OnClick: () => copy(m.Time),
+            });
+            items.push({
+                Text: _TF("Copy user name", "Name of a menu item that when clicked will copy the user name of chat message to the clipboard"),
+                Icon: "user",
+                Title: _T("Copy the user name \"{0}\" to the clipboard", m.From, "Tool tip description of a menu item that when clicked will copy the user name of chat message to the clipboard.{0} is replaced with the name of the user that posted the message"),
+                OnClick: () => copy(m.From),
+            });
+            if (row.Hidden)
+                items.push({
+                    Text: _TF("Show this message", "Name of a menu item that when clicked will show the content of a chat message that is currently hidden"),
+                    Icon: "IconChatShow",
+                    Title: _T("Show the content of this message, new messages from \"{0}\" are shown too", m.From, "Tool tip description of a menu item that when clicked will show the content of a chat message that is currently hidden (only that message), new messages from that user will also be shown.{0} is replaced with the name of the user"),
+                    OnClick: () => t.ToggleRow(row, false),
+                });
+            else
+                items.push({
+                    Text: _TF("Hide for me", "Name of a menu item that when clicked will hide the content of a chat message (only for this user, on this device)"),
+                    Icon: "IconChatHide",
+                    Title: _T("Hide the content of this message, new messages from \"{0}\" are hidden too", m.From, "Tool tip description of a menu item that when clicked will hide the content of a chat message (only that message), new messages from that user will also be hidden.{0} is replaced with the name of the user"),
+                    OnClick: () => t.ToggleRow(row, true),
+                });
+            //  All messages of the sender (and new ones)
+            items.push({
+                Text: _TF("Hide all messages from this user", "Name of a menu item that when clicked will hide the content of all chat messages from the user that posted this message (only for this user, on this device)"),
+                Icon: "IconChatHide",
+                Title: _T("Hide the content of all messages from \"{0}\", new messages too", m.From, "Tool tip description of a menu item that when clicked will hide the content of all chat messages from a user, including new messages.{0} is replaced with the name of the user"),
+                OnClick: () => t.SetSenderHidden(m.From, true),
+            }, {
+                Text: _TF("Show all messages from this user", "Name of a menu item that when clicked will show the content of all chat messages from the user that posted this message"),
+                Icon: "IconChatShow",
+                Title: _T("Show the content of all messages from \"{0}\", new messages too", m.From, "Tool tip description of a menu item that when clicked will show the content of all chat messages from a user, including new messages.{0} is replaced with the name of the user"),
+                OnClick: () => t.SetSenderHidden(m.From, false),
+            });
+            items.push(...t.ServerItems(m.MenuItems, m.Id));
+            const canRemove = (m.Flags & Flags.CanRemove) !== 0;
+            if (t.Data.CanClear || canRemove)
+                items.push("-", {
+                    Text: _TF("Remove message", "Name of a menu item that when clicked will remove a chat message"),
+                    Icon: "IconChatRemove",
+                    Danger: true,
+                    Title: _TF("Remove this message from the chat", "Tool tip description of a menu item that when clicked will remove a chat message"),
+                    OnClick: async () => {
+                        if (!canRemove && !await Sw.Dialog.Confirm(
+                            _TF("Remove the message?", "Title of a confirmation dialog that when confirmed will remove a chat message"),
+                            _TF("The message is removed for everyone in the chat. This cannot be undone.", "Text of a confirmation dialog that when confirmed will remove a chat message"),
+                            _TF("Remove", "Text of a button on a confirmation dialog that when clicked will remove a chat message"), {
+                                OkIcon: "IconChatRemove", Danger: true,
+                                OkTitle: _TF("Remove the message, this can't be undone", "Tool tip description of a button on a confirmation dialog that when clicked will remove a chat message"),
+                                CancelTitle: _TF("Keep the message", "Tool tip description of a button on a confirmation dialog that when clicked will keep a chat message as opposed to remove it"),
+                            }))
+                            return;
+                        await call(t.Api("RemoveMessage"), { ChatId: t.ChatId, MessageId: m.Id },
+                            _TF("Failed to remove the chat message.", "An error message shown when a user tries to remove a chat message but the server returns a failure."));
+                    },
+                });
+            return items;
+        }
+
+        /**
+         * The items of the speech output part of the top right menu.
+         * @returns {object[]} The items.
+         */
+        SpeechItems() {
+            const t = this;
+            const st = t.Settings;
+            /**
+             * A volume item.
+             * @param {number} v The volume in percent.
+             * @param {string} text The text.
+             * @param {string} title The tool tip.
+             * @param {string} icon The icon class.
+             * @returns {object} The item.
+             */
+            const vol = (v, text, title, icon) => ({
+                Text: text, Title: title, Icon: icon, Radio: true, Checked: t.Volume === v, Disabled: !t.SpeechOn,
+                OnClick: () => {
+                    t.Volume = v;
+                    st.Set("Volume", String(v));
+                },
+            });
+            return [
+                //  On / off: a check box item (the check mark shows the current state)
+                {
+                    Text: _TF("Read new messages aloud", "Text of a check box menu item that turns speech generation (text to speech) on or off"),
+                    Icon: "IconChatSpeechGenEnable",
+                    Checked: !!t.SpeechOn,
+                    Title: _TF("Read new messages aloud (text to speech).", "Tool tip description of a check box menu item that turns speech generation (text to speech) on or off") + "\n" +
+                        _TF("Uses local services if available to avoid data leakage and bandwidth usage (this may sound worse than online solutions).", "Tool tip description of a menu item that when clicked will enable speech generation (text to speech), explains how the speech is generated"),
+                    OnClick: () => t.SetSpeech(!t.SpeechOn),
+                },
+                {
+                    Text: _TF("Reading volume", "Text of a menu item that have a number of speech volume presets as children"),
+                    Icon: "IconChatSpeechVolume",
+                    Title: _TF("Adjust the volume of the audio from speech synthesis.", "Tool tip description of a menu item that have a number of speech volume presets as children"),
+                    Disabled: !t.SpeechOn,
+                    Items: () => [
+                        vol(25, _TF("25% volume", "Text of a menu item that when clicked will set the speech volume to 25%"), _TF("Use 25% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 25%"), "IconChatSpeechVolume25"),
+                        vol(50, _TF("50% volume", "Text of a menu item that when clicked will set the speech volume to 50%"), _TF("Use 50% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 50%"), "IconChatSpeechVolume50"),
+                        vol(75, _TF("75% volume", "Text of a menu item that when clicked will set the speech volume to 75%"), _TF("Use 75% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to 75%"), "IconChatSpeechVolume75"),
+                        vol(100, _TF("Max volume", "Text of a menu item that when clicked will set the speech volume to the maximum (100%)"), _TF("Use 100% volume for speech.", "Tool tip description of a menu item that when clicked will set the speech volume to the maximum (100%)"), "IconChatSpeechVolume100"),
+                    ],
+                },
+            ];
+        }
+
+        /**
+         * The items of the input part of the top right menu (CanPost only).
+         * @returns {object[]} The items.
+         */
+        InputItems() {
+            const t = this;
+            const st = t.Settings;
+            const cmp = t.Composer;
+            const speechRec = C.SpeechInput.Supported();
+            const items = [];
+            if (t.Data.AllowMarkDown) {
+                //  The input format: radio items (the check mark shows the current choice; neither is checked while the format is
+                //  picked automatically, see Composer.AutoMarkDown)
+                items.push({
+                    Text: _TF("Write with formatting (Markdown)", "Text of a radio menu item that selects markdown text input"),
+                    Icon: "IconChatMD",
+                    Radio: true,
+                    Checked: !!cmp.UseMarkDown,
+                    Title: _TF("Use Markdown (MD) input instead of regular text", "Tool tip description of a menu item that when clicked will select markdown text input"),
+                    OnClick: () => cmp.SetMarkDown(true),
+                }, {
+                    Text: _TF("Write plain text", "Text of a radio menu item that selects regular text input"),
+                    Icon: "IconChatText",
+                    Radio: true,
+                    Checked: !cmp.UseMarkDown && !cmp.AutoMarkDown,
+                    Title: _TF("Use regular text as input instead of Markdown (MD)", "Tool tip description of a menu item that when clicked will select regular text input"),
+                    OnClick: () => cmp.SetMarkDown(false),
+                });
+                if (cmp.UseMarkDown)
+                    items.push({
+                        Text: _TF("Help on formatting (Markdown)", "Text of a menu item that when clicked will show a help page for MD (Markdown)"),
+                        Icon: "IconChatHelp",
+                        Title: _TF("Open Markdown syntax help in a new tab", "Tool tip description of a menu item that when clicked will show a help page for MD (Markdown)"),
+                        OnClick: () => Sw.Page.Navigate("https://www.markdownguide.org/basic-syntax/", "_blank"),
+                    });
+            }
+            items.push({
+                Text: _TF("Show a preview of my message", "Text of a check box menu item that shows or hides the preview of a new chat message"),
+                Icon: "IconChatShowPreview",
+                Checked: !!cmp.PreviewOn,
+                Title: _TF("Show a preview of the message", "Tool tip description of a menu item that when clicked will show a preview of new a chat message"),
+                OnClick: () => cmp.TogglePreview(),
+            });
+            if (t.CanTranslate || speechRec)
+                items.push({
+                    Text: _TF("Language I write in", "Text of a menu item that when clicked will let the user select what language they used when writing chat messages"),
+                    Icon: "IconChatLanguage",
+                    Title: speechRec
+                        ? _TF("Specify what language you use for your text messages and voice input", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
+                        : _TF("Specify what language you use for your text messages", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages"),
+                    OnClick: () => cmp.SelectLanguage(),
+                });
+            items.push(t.ClearDraftItem());
+            if (t.UploadRepo)
+                items.push(t.AttachItem());
+            if (speechRec) {
+                const autoSend = st.Bool("AutoSend", false, true);
+                items.push({
+                    Text: _TF("Send automatically after speaking", "Text of a check box menu item that turns automatic sending of messages when speech input completes on or off"),
+                    Icon: "bolt",
+                    Checked: autoSend,
+                    Title: _TF("Send the message automatically when speech input completes", "Tool tip description of a check box menu item that turns automatic sending of messages when speech input completes on or off"),
+                    OnClick: () => st.Set("AutoSend", autoSend ? "false" : "true"),
+                });
+            }
+            if (t.CanOpenMic && t.Data.SpeechName) {
+                const listening = st.Bool("Listen", t.ListenDefault, true);
+                items.push({
+                    Text: _TF("Listen all the time (open microphone)", "Text of a check box menu item that turns open microphone speech input on or off"),
+                    Icon: "mic",
+                    Checked: listening,
+                    Title: _TF("Enable speech input, listening to: ", "Tool tip description of a menu item that when clicked will enable open microphone speech input, listening to a list of keywords that are listed below this text") +
+                        t.Data.SpeechName.map(x => "\n" + x.split("|")[0]).join(""),
+                    OnClick: () => {
+                        st.Set("Listen", listening ? "false" : "true");
+                        if (listening)
+                            cmp.StopListening();
+                        else
+                            cmp.StartListening();
+                    },
+                });
+            }
+            return items;
+        }
+
+        /**
+         * The top right menu.
+         * @returns {object[]} The items.
+         */
+        MainMenuItems() {
+            const t = this;
+            const list = t.List;
+            const items = [
+                {
+                    Text: _TF("Scroll to top", "Text of a menu item that when clicked will scroll to the first chat message"),
+                    Icon: "up",
+                    Title: _TF("Scroll to the first loadded message in the chat", "Tool tip description of a menu item that when clicked will scroll to the first chat message"),
+                    Disabled: list.IsAtTop,
+                    OnClick: () => list.ToTop(),
+                },
+                {
+                    Text: _TF("Scroll to bottom", "Text of a menu item that when clicked will scroll to the last chat message"),
+                    Icon: "down",
+                    Title: _TF("Scroll to the end of the chat", "Tool tip description of a menu item that when clicked will scroll to the last chat message"),
+                    Disabled: list.IsAtBottom,
+                    OnClick: () => list.ToBottom(),
+                },
+                {
+                    Text: _TF("Show all hidden messages", "Text of a menu item that when clicked will show and hidden (collapsed) chat messages"),
+                    Icon: "IconChatShow",
+                    Title: _TF("Show any hidden content in all messages", "Tool tip description of a menu item that when clicked will show and hidden (collapsed) chat messages"),
+                    OnClick: () => t.SetAllHidden(false),
+                },
+                "-",
+                //  The time display: radio items (age or time stamp, the check mark shows the current choice)
+                {
+                    Text: _TF("Show how long ago", "Text of a radio menu item that shows the message age instead of the message time"),
+                    Icon: "history",
+                    Radio: true,
+                    Checked: !t.ShowTimeStamp,
+                    Title: _TF("Show the message age instead of the time", "Tool tip description of a menu item that when clicked will show message age instead of message time"),
+                    OnClick: () => t.SetTimeStamp(false),
+                },
+                {
+                    Text: _TF("Show date and time", "Text of a radio menu item that shows the message time instead of the message age"),
+                    Icon: "clock",
+                    Radio: true,
+                    Checked: !!t.ShowTimeStamp,
+                    Title: _TF("Show the actual time of a message instead of age", "Tool tip description of a menu item that when clicked will show message time instead of message age"),
+                    OnClick: () => t.SetTimeStamp(true),
+                },
+            ];
+            if (t.Composer)
+                items.push("-", ...t.InputItems());
+            if (t.CanSpeak)
+                items.push("-", ...t.SpeechItems());
+            const server = t.ServerItems(t.Data.Menus, 0);
+            if (server.length)
+                items.push("-", ...server);
+            if (t.CanPost && t.Data.CanClear)
+                items.push("-", {
+                    Text: _TF("Remove all messages", "Text of a menu item that when clicked will clear the chat (remove all messages)"),
+                    Icon: "IconChatClear",
+                    Danger: true,
+                    Title: _TF("Remove ALL chat messages", "Tool tip description of a menu item that when clicked will clear the chat (remove all messages)"),
+                    OnClick: async () => {
+                        const title = _TF("Remove all messages?", "Title of a confirmation dialog that when confirmed will remove all chat messages in a room");
+                        const text = _TF("Every message in this chat is removed for everyone. This cannot be undone.", "Text of a confirmation dialog that when confirmed will remove all chat messages in a room");
+                        const okText = _TF("Remove all", "Text of a button on a confirmation dialog that when clicked will remove all chat messages in a room");
+                        //  all messages of a room, for everyone: type to confirm (UX guide SAF-4)
+                        const word = _TF("remove all", "The text the user types to confirm removing all chat messages in a room (short, lower case)");
+                        if (!t.Data.DoNotConfirmClear && !await ((Sw.Cells && Sw.Cells.ConfirmDanger)
+                            ? Sw.Cells.ConfirmDanger({ Title: title, Text: text, OkText: okText, OkIcon: "IconChatRemove", Warning: "", Confirm: word })
+                            : Sw.Dialog.Confirm(title, text, okText, {
+                                OkIcon: "IconChatRemove", Danger: true,
+                                OkTitle: _TF("Remove all chat messages, this can't be undone", "Tool tip description of a button on a confirmation dialog that when clicked will remove all chat messages in a room"),
+                                CancelTitle: _TF("Keep the chat messages", "Tool tip description of a button on a confirmation dialog that when clicked will keep all chat messages in a room as opposed to removing them"),
+                            })))
+                            return;
+                        await t.Clear();
+                    },
+                });
+            return items;
+        }
+
+        /**
+         * Switch between time stamps and ages (persisted).
+         * @param {boolean} on True for time stamps.
+         */
+        SetTimeStamp(on) {
+            this.ShowTimeStamp = on;
+            this.Settings.Set("TimeStamp", on ? "true" : null);
+            this.List.All().forEach(r => r.UpdateFormat());
+        }
+
+        /**
+         * Enable / disable speech output (persisted).
+         * @param {boolean} on True to enable.
+         */
+        SetSpeech(on) {
+            this.SpeechOn = on;
+            this.Settings.Set("Speech", on ? "true" : "false");
+            if (!on)
+                C.SpeechGen.Cancel();
+        }
+
+        /** Stop listening, unsubscribe the push messages and the frame commands. */
+        Dispose() {
+            if (this.Composer)
+                this.Composer.StopListening();
+            this.Offs.forEach(f => f());
+            this.Offs = [];
+        }
+    }
+
+    /**
+     * Create a chat inside a container element.
+     * @param {HTMLElement} container The element the chat is created in.
+     * @param {string} chatId The chat id `<provider>.<providerChatId>`.
+     * @param {string} [apiBase] Prefix of the api calls (where ChatService is relative to the page; "" for pages in chat/).
+     * @param {Options} [options] Options.
+     * @returns {Promise<HTMLElement>} The message list element (its expando `SwChatView` is the ChatView).
+     */
+    async function Add(container, chatId, apiBase, options) {
+        const v = new ChatView(container, chatId, apiBase, options);
+        const e = await v.Init();
+        e.SwChatView = v;
+        return e;
+    }
+
+    /**
+     * Page entry of Chat.html: url parameters `id` (required), `options` (json merged into Options) and `nobackground`.
+     * @returns {Promise<void>}
+     */
+    async function Main() {
+        const done = Sw.Page.Loading({ Text: _TF("Loading chat messages", "Message shown while waiting for chat messages to be loaded"), Opaque: true });
+        const root = el("div.chat-page", { attrs: { role: "main" } });
+        if (Sw.Url.Has("nobackground"))
+            root.classList.add("chat-nobackground");
+        document.body.append(root);
+        /**
+         * Show a message in the page instead of the chat (missing id, failed to open).
+         * @param {string} title The heading.
+         * @param {string} text The explanation.
+         * @param {boolean} [retry] Add a "Try again" button (reloads the page).
+         */
+        const message = (title, text, retry) => {
+            const box = el("div.chat-message-box", { attrs: { role: retry ? "alert" : "status" } },
+                Sw.Icon(retry ? "warning" : "info", "chat-message-icon"),
+                el("h1.chat-message-title", { text: title }),
+                el("p.chat-message-text", { text }));
+            if (retry)
+                box.append(new Sw.Button({
+                    Text: _TF("Try again", "Text of a button that retries loading a page after an error"),
+                    Icon: "refresh",
+                    Kind: "primary",
+                    OnClick: () => location.reload(),
+                }).E);
+            root.replaceChildren(box);
+            root.classList.add("chat-page-message");
+        };
+        try {
+            const chatId = Sw.Url.Get("id");
+            if (!chatId) {
+                //  Expected user error: explain it in the page (no console error)
+                message(_TF("No chat selected", "Heading of the chat page when it was opened without a chat id"),
+                    _TF("This page shows one chat room. Open a chat from the application, or add the id of the chat as the id parameter, example: Chat.html?id=Simple.Generic", "Explanation on the chat page when it was opened without a chat id (the id url parameter is missing)"));
+                return;
+            }
+            const options = new Options();
+            const opt = Sw.Url.Get("options");
+            if (opt) {
+                //  Only known options with the expected value types (the url is not trusted)
+                const o = JSON.parse(opt);
+                if (o && typeof o === "object")
+                    for (const k of Object.keys(o))
+                        if (Object.prototype.hasOwnProperty.call(options, k) && (options[k] === null || typeof options[k] === typeof o[k]))
+                            options[k] = o[k];
+            }
+            const list = await Add(root, chatId, null, options);
+            done();
+            //  The loader kept the focus while loading
+            const cmp = list.SwChatView.Composer;
+            if (cmp)
+                cmp.Focus();
+        }
+        catch (e) {
+            const text = e && e.message ? e.message : String(e);
+            console.warn(text);
+            message(_TF("Could not open the chat", "Heading of the chat page when the chat could not be opened (followed by the reason)"), text, true);
+        }
+        finally {
+            done();
+        }
+    }
+
+    Object.assign(C, { Flags, Formats, Options, Settings, Color, MessageRow, Attachments, MessageList, Composer, ChatView, Add, Main });
+
+    /** Legacy global (old chat.js API): `Chat.addChat(container, chatId, apiBase, options)` and friends. */
+    window.Chat = {
+        addChat: Add,
+        chatColor: Color,
+        FlagIsWorking: Flags.IsWorking,
+        FlagCanRemove: Flags.CanRemove,
+        IsMobile: Sw.Platform.IsMobileDevice,
+        Platform: Sw.Platform.Name,
+    };
+    /** Legacy global: the options class. */
+    window.ChatOptions = Options;
+    /** Legacy global: the page entry of Chat.html. */
+    window.chatMain = Main;
+})();

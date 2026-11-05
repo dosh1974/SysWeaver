@@ -40,6 +40,17 @@ namespace SysWeaver.Chat
         public String Auth;
 
         /// <summary>
+        /// Null for a plain item, else a check box item (true = checked): the menu shows a check mark for the current state,
+        /// ex: an option that is on (send a <see cref="Value"/> that switches it).
+        /// </summary>
+        public bool? Checked;
+
+        /// <summary>
+        /// With <see cref="Checked"/>: a radio item (one of a group of choices, the checked one is the current choice).
+        /// </summary>
+        public bool Radio;
+
+        /// <summary>
         /// Any child items
         /// </summary>
         public ChatMenuItem[] Children;
@@ -67,6 +78,8 @@ namespace SysWeaver.Chat
             dest.Icon = Icon;
             dest.Value = Value;
             dest.Auth = Auth;
+            dest.Checked = Checked;
+            dest.Radio = Radio;
         }
 
         /// <summary>

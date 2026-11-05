@@ -188,6 +188,8 @@ This server supports the following sizes:
         /// </summary>
         /// <param name="mail">The address to validate</param>
         /// <returns>True if the email address seems to be valid</returns>
+        /// <exception cref="HttpResponseException">400 with the reason (for people) when the address isn't valid: a wrong or half typed address is
+        /// a mistake of the input, not a server failure (it was a 500, logged and counted as a failing part on every key typed on a public page).</exception>
         [WebApi]
         public bool ValidateEmailAddress(String mail)
             => ValidateEmailAddress(mail, true);
@@ -197,7 +199,7 @@ This server supports the following sizes:
         /// Validate an email address
         /// </summary>
         /// <param name="mail">The address to validate</param>
-        /// <param name="exceptions">If true, exceptions are thrown</param>
+        /// <param name="exceptions">If true, an invalid address throws a <see cref="HttpResponseException"/> (400, the reason as the message)</param>
         /// <returns>True if the email address seems to be valid</returns>
         public bool ValidateEmailAddress(String mail, bool exceptions)
         {
@@ -215,13 +217,21 @@ This server supports the following sizes:
                 }
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
                 if (exceptions)
-                    throw;
+                    throw BadInput(ex);
             }
             return false;
         }
+
+        /// <summary>
+        /// A validation failure of user input (an e-mail address, a phone number) as a 400 refusal with the reason, never a 500 (S7a N55)
+        /// </summary>
+        /// <param name="ex">The validation exception</param>
+        /// <returns>The exception to throw</returns>
+        static Exception BadInput(Exception ex)
+            => ex is HttpResponseException ? ex : new HttpResponseException(400, ex.Message);
 
 
 
@@ -257,10 +267,10 @@ This server supports the following sizes:
                 phoneNumber = String.Concat(a, ' ', b);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
                 if (exceptions)
-                    throw;
+                    throw BadInput(ex);
             }
             return false;
         }
@@ -270,10 +280,20 @@ This server supports the following sizes:
         /// </summary>
         /// <param name="phoneNumber">The international phone number to get information about</param>
         /// <returns>Information about the phone number</returns>
+        /// <exception cref="HttpResponseException">400 with the reason (for people) when the number isn't valid (yet), ex: "A Sweden phone number must contain at least 9 digits"</exception>
         [WebApi]
         public PhoneNumberInfo GetPhoneNumberInfo(String phoneNumber)
         {
-            var countries = PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var prefix, out var local, phoneNumber);
+            IReadOnlyList<PhonePrefix> countries;
+            String name, isoCountry, prefix, local;
+            try
+            {
+                countries = PhonePrefix.GetValidatedPhoneNumber(out name, out isoCountry, out prefix, out local, phoneNumber);
+            }
+            catch (Exception ex)
+            {
+                throw BadInput(ex);
+            }
             return new PhoneNumberInfo
             {
                 Prefix = prefix,
@@ -294,11 +314,14 @@ This server supports the following sizes:
         /// Get details about the phone number prefixes for a partial international phone number
         /// </summary>
         /// <param name="partialPhoneNumber">The partial international phone number to get phone number prefix information about</param>
-        /// <returns>Phone number prefix information for the partial international phone number</returns>
+        /// <returns>Phone number prefix information for the partial international phone number, empty when no prefix matches (yet), ex: "+" or ""</returns>
         [WebApi]
         public PhonePrefixInfo[] GetPhonePrefixInfo(String partialPhoneNumber)
         {
             var countries = PhonePrefix.Identify(partialPhoneNumber);
+            //  (no digits, or digits that match no prefix: no matches, not a server failure, S7a N55)
+            if (countries == null)
+                return [];
             return countries.Select(x => new PhonePrefixInfo
             {
                 Name = x.Name,

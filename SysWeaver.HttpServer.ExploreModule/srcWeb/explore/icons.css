@@ -1,91 +1,178 @@
 ﻿/*
- * icons.css - styles of explore/icons.html (icon gallery built by icons.js / iconsMain()).
- * Loaded by icons.html after common/theme.css; uses the theme variables --ThemeMain50, --ThemeAcc1 and
- * --ThemeRad. Not templated. Sizes adapt to the viewport through svw / svh units (no media queries).
- * logo.css is a near copy of this file.
+ * explore/icons.css - styles of the icon gallery explore/icons.html (explore/icons.js) and, shared, of the logo seed designer
+ * explore/logo.html (explore/logo.css adds its own rules). Uses the Sw tokens of sw/ui.css.
+ * Page: main.sw-page-dash.icons-page (ui/page.css, full width) with the Design v2 page header (Sw.PageHeader) and an empty state (Sw.StateView)
+ * when the filter matches nothing. Classes: icons-bar (filter box, size slider, count), icons-size (the "Size" label + slider), icons-list (a grid of tiles),
+ * icons-item (a tile: img on a checkerboard or icons-pic (an icon without a file), icons-name, icons-class (the class names)), icons-count.
+ * Custom properties: --icons-size (icon size in px before the large screen scaling, set on body by icons.js; default 64px; the logo
+ * designer sets its own), --s (the scaled image size of a tile).
  */
 
-/* ===== Page ===== */
+/* Page background: common/theme.css (the theme background stand-alone, transparent in the shell or a frame) */
 
-/* Whole page: disable text selection (tiles are click-to-copy). */
 body {
+    margin: 0;
+    padding: 0;
     user-select: none;
+    -webkit-user-select: none;
 }
 
-/* SysWeaver-CenterBlock: centered block element from common code (not created by icons.js); 1em bottom padding. */
-SysWeaver-CenterBlock {
-    padding-bottom: 1em;
+/* The page (main.sw-page-dash.icons-page, ui/page.css): a gallery uses the full width (no dashboard maximum) */
+.icons-page {
+    max-width: none;
 }
 
-/* ===== Icon list ===== */
-
-/* SysWeaver-IconList: container of all tiles (appended to body by iconsMain); centered inline-block, bold 125% text. */
-SysWeaver-IconList {
-    text-align: center;
-    display: inline-block;
-    font-weight: bold;
-    font-size: 125%;
+/* The tool bar (filter, copy mode, size, count): left aligned under the page header */
+.icons-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    margin: 0 0 var(--sw-space-4, 16px);
 }
 
-/*
- * SysWeaver-IconItem: one square tile per icon (click copies the icon url).
- * Custom properties defined here:
- *   --s  tile / image width: half of the smaller of viewport width and (viewport height - 64px - 1em),
- *        minus 3em, so roughly two tiles fit per row and column.
- *   --h  tile height: --s plus 1.5em for the caption.
- * Bordered with --ThemeMain50, rounded with --ThemeRad, box-shadow transition for the hover glow.
- */
-SysWeaver-IconItem {
-    --s: calc(min(100svw, 100svh - 64px - 1em) / 2 - 3em);
-    --h: calc(var(--s) + 1.5em);
-    display: inline-block;
+.icons-bar .sw-text {
+    width: 30ch;
+    max-width: 100%;
+}
+
+.icons-size {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--sw-text-2);
+}
+
+    .icons-size .sw-slider {
+        width: 10em;
+    }
+
+.icons-count {
+    color: var(--sw-text-2);
+    font-size: 90%;
+}
+
+/* A compact grid: as many tiles per row as fit, each a little wider than its icon (room for the name) */
+.icons-list {
+    --s: calc(var(--icons-size, 64px) * var(--sw-scale, 1));
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--s) + 3em)), 1fr));
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.icons-item {
     position: relative;
-    width: var(--s);
-    height: var(--h);
-    border: 1px solid var(--ThemeMain50);
-    margin: 0.5em;
-    border-radius: var(--ThemeRad);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 4px 4px;
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius-md, var(--sw-radius));
+    background: var(--sw-surface, transparent);
+    text-align: center;
     cursor: pointer;
-    transition: box-shadow linear 0.1s;
     overflow: hidden;
+    transition: border-color var(--sw-dur-1) linear, background-color var(--sw-dur-1) linear;
 }
 
+.icons-item[hidden] {
+    display: none;
+}
 
-    /* Hovered tile: 10px --ThemeAcc1 glow. */
-    SysWeaver-IconItem:hover {
-        box-shadow: var(--ThemeAcc1) 0 0 10px;
+/* Hover: a stronger hairline and a tone step (flat, no glow) */
+@media (hover: hover) {
+    .icons-item:hover {
+        border-color: var(--sw-border-strong, var(--sw-border-strong));
+        background: color-mix(in srgb, var(--sw-surface, var(--sw-bg)), var(--sw-fg) 4%);
     }
+}
 
-    /*
-     * Icon image (--s x --s) on a checkerboard background so transparent areas are visible.
-     * Custom properties defined here (checkerboard):
-     *   --D  dark square color (#666), --B  light square color (#aaa),
-     *   --C  offset of the second gradient layer (10px), --R  background tile size (20px).
-     * Technique: two 45deg linear-gradients, the second offset by --C, both sized --R.
-     */
-    SysWeaver-IconItem img {
-        position: relative;
-        display: block;
-        width: var(--s);
-        height: var(--s);
-        border-radius: var(--ThemeRad);
-        --D: #666;
-        --B: #aaa;
-        --C: 10px;
-        --R: 20px;
-        background-position: 0px 0px, var(--C) var(--C);
+.icons-item:focus-visible {
+    outline: 3px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+.icons-item img {
+    --D: #666;
+    --B: #aaa;
+    --C: 8px;
+    --R: 16px;
+    display: block;
+    width: var(--s);
+    height: var(--s);
+    max-width: 100%;
+    object-fit: contain;
+    border-radius: var(--sw-radius-sm);
+    /* a calm neutral well at rest (no wall of checkerboards); the checkerboard (to judge transparency) and the
+       original file colours only on hover / keyboard focus of the tile */
+    background-color: color-mix(in srgb, var(--sw-surface, var(--sw-bg)), var(--sw-fg) 5%);
+}
+
+/* Dark schemes: the (black) glyph files read in the text tone at rest (lightness inverted, hues kept); hover shows the real file */
+:root[data-sw-scheme="dark"] .icons-page .icons-item img {
+    filter: invert(1) hue-rotate(180deg);
+    /* the filter would invert the well too: the tile surface is the well here */
+    background-color: transparent;
+}
+
+.icons-item:focus-visible img {
+    background-color: transparent;
+    background-position: 0 0, var(--C) var(--C);
+    background-size: var(--R) var(--R);
+    background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%), linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
+}
+
+:root[data-sw-scheme="dark"] .icons-page .icons-item:focus-visible img {
+    filter: none;
+}
+
+@media (hover: hover) {
+    .icons-item:hover img {
+        background-color: transparent;
+        background-position: 0 0, var(--C) var(--C);
         background-size: var(--R) var(--R);
-        background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%),linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
+        background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%), linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
     }
 
-    /* SysWeaver-IconName: icon name caption below the image (1.25em high, centered, width --s). */
-    SysWeaver-IconItem SysWeaver-IconName {
-        position: relative;
-        display: block;
-        width: var(--s);
-        height: 1.25em;
-        text-align: center;
+    :root[data-sw-scheme="dark"] .icons-page .icons-item:hover img {
+        filter: none;
     }
+}
 
+.icons-name {
+    max-width: 100%;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
+/* The icon class names of a tile (what a click copies by default) */
+.icons-class {
+    max-width: 100%;
+    color: var(--sw-text-2);
+    font-family: var(--sw-mono, monospace);
+    font-size: 0.85em;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
+/* The picture of a tile without a file (an icon class with an inline picture, an inline Sw.Icon svg) */
+.icons-pic {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--s);
+    height: var(--s);
+    max-width: 100%;
+}
+
+    .icons-pic .sw-icon {
+        width: 80%;
+        height: 80%;
+    }

@@ -461,7 +461,9 @@ namespace SysWeaver.AI
                 Text = message.Text,
                 Data = message.Data,
                 Format = message.Format,
-                Time = DateTime.UtcNow
+                Time = DateTime.UtcNow,
+                //  Sent as the session's agent (ex: a welcome message of the AI): tagged as written by the AI
+                Flags = (from != null) && String.Equals(from, s.AgentName, StringComparison.Ordinal) ? ChatMessageFlags.FromAi : 0,
             };
             m.SetTo(toUserGuid);
             lock (s.Messages)
@@ -850,7 +852,7 @@ namespace SysWeaver.AI
                         Data = loadingData,
                         Lang = session?.Language,
                         Time = start,
-                        Flags = ChatMessageFlags.IsWorking,
+                        Flags = ChatMessageFlags.IsWorking | ChatMessageFlags.FromAi,
                     };
                     m.AddNamedData(AiTools.DebugKey, debug);
                     lock (s.Messages)

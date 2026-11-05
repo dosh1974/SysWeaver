@@ -247,7 +247,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, HttpServerBase.MenuPath, "Shared folders", "Details about folders that can be synched (downloaded)", "IconSync", 51)]
+        [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Shared folders", "Details about folders that can be synced (downloaded)", "IconSync", 21)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData SharedFoldersTable(TableDataRequest r)

@@ -4,154 +4,24 @@
     <meta charset="utf-8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body
-        {
-            overflow-x: hidden;
-        }
-
-        Effect-Card {
-            display: block;
-            position: relative;
-            background-color: rgba(var(--ThemeMainRGB), 0.1);
-            border-radius: var(--ThemeRad);
-            border: 1px solid var(--ThemeMain50);
-            margin: 1em 1em;
-            overflow: hidden;
-            width: calc(100% - 2em);
-            cursor: pointer;
-            outline: 2px solid transparent;
-            outline-offset: 3px;
-            transition: outline linear var(--ThemeFadeDuration);
-        }
-
-            Effect-Card:hover {
-                outline: 2px solid var(--ThemeAcc275);
-            }
-
-            Effect-Card:focus {
-                outline: 2px solid var(--ThemeAcc2);
-            }
-
-                Effect-Card:focus:hover {
-                    outline: 2px solid var(--ThemeAcc2);
-                }
-
-        Effect-Title {
-            display: block;
-            background-color: rgba(var(--ThemeMainRGB), 0.2);
-            color: var(--ThemeAcc1);
-            padding: 0.5em 1em;
-            font-weight: bold;
-            font-size: 125%;
-            width: 100%;
-        }
-
-        Effect-Info {
-            display: block;
-            color: var(--ThemeMain);
-            padding: 0.5em 1em;
-            width: 100%;
-            user-select: text;
-        }
-
-
-        Effect-Card img {
-            border: none;
-            display: block;
-            width: 100%;
-            height: auto;
-        }
-
-        canvas.MediaHidden
-        {
-            position: absolute;
-            left: 10000px;
-            bottom: 10000px;
-            opacity: 0.001;
-        }
-
-    </style>
-    <script>
-
-        async function main() {
-            const onLoaded = AddLoading();
-            try {
-                const GetApi = "GetImageEffects";
-                const Folder = "imageEffects";
-                const mp = new MediaPlayerParamsEffect();
-                mp.Width = 960;
-                mp.Height = 540;
-                mp.AdaptiveSize = false;
-                mp.Static = false;
-                function CreateTexture(gl) {
-                    return new MediaPlayerImageTexture(gl, {
-                        EffectSizeFromImage: true,
-                    }, "../logo.png");
-                }
-                const href = window.location.href;
-                const p = new URL(href).searchParams;
-                const b = document.createElement("SysWeaver-Page");
-                document.body.appendChild(b);
-                const effects = await getRequest("Api/" + GetApi);
-                const el = effects.length;
-                for (let i = 0; i < el; ++i) {
-                    const name = effects[i];
-                    const e = document.createElement("Effect-Card");
-                    const t = document.createElement("Effect-Title");
-                    const info = document.createElement("Effect-Info");
-                    const f = document.createElement("img");
-                    f.setAttribute("draggable", "false");
-                    t.innerText = name;
-                    const url = Folder + "/?Effect=" + name + "&Image=../logo.png";
-                    f.onclick = ev => {
-                        if (badClick(ev))
-                            return;
-                        Open(url, "_self");
-                    };
-                    const r = await MediaPlayerEffect.GetImage("Image", Folder + "/" + name + ".glsl", mp, CreateTexture);
-                    const image = r[0];
-                    if (!image)
-                        continue;
-                    f.src = image;
-                    const compilationTime = r[1];
-                    const avgDrawTimeMs = r[2];
-                    info.innerText = "" +
-                        _T("Compilation duration {0} ms", "" + compilationTime.toFixed(1), "Text that displays the compilation duration in milli seconds. {0} is replaced with the duration in milli seconds") +
-                        " - " +
-                        _T("Draw time {0} ms", "" + avgDrawTimeMs.toFixed(3), "Text that displays the number of milli seconds it takes on average to render a graphics frame on the GPU. {0} is replaced with the duration in milli seconds");
-
-                    e.appendChild(t);
-                    e.appendChild(info);
-                    e.appendChild(f);
-                    b.appendChild(e);
-                    ValueFormat.copyOnClick(e, url, true, true);
-                }
-            }
-            catch (e) {
-                Fail(e.message);
-            }
-            finally {
-                onLoaded();
-            }
-        }
-    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Image Effects Demo</title>
-    <script defer src="../common/common.js"></script>
-    <script defer src="../mediaPlayer/media_player_effect.js"></script>
-    <script defer src="../mediaPlayer/media_effect_program.js"></script>
+    <!-- Image effect gallery (effectsLib.js): opens imageEffects/?Effect=<name>&Image=../../logo.png (relative to the effect page). -->
+    <script defer src="../sw/core.js"></script>
+    <script defer src="../sw/ui.js"></script>
+    <script defer src="../common/anim.js"></script>
     <script defer src="../mediaPlayer/media_player_tools.js"></script>
+    <script defer src="../mediaPlayer/media_effect_program.js"></script>
+    <script defer src="../mediaPlayer/media_player_effect.js"></script>
+    <script defer src="effectsLib.js"></script>
     <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="../icon.svg">
     <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
     <link rel="manifest" href="../app/manifest.json">
     <link rel="stylesheet" href="../common/theme.css">
+    <link rel="stylesheet" href="../sw/ui.css">
+    <link rel="stylesheet" href="effectsLib.css">
 </head>
-<body onload="main()">
+<body class="sw-root sw-page" data-effects="Image">
 </body>
 </html>

@@ -202,8 +202,8 @@ namespace SysWeaver.MicroService
                     if (a != null)
                         a.OnApiEnd(id, r, ad, IsKey ? "** PROTECTED **" : text.LimitLength(2048));
                     Manager.Syncer.GetManagedFolders(Key);
-                    r.Session.InvalidateCache();
-                    r.Server.InvalidateCache();
+                    //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+                    r.Server.InvalidateCacheEverywhere();
                     return FileUploadResult.None;
                 }
                 catch (Exception ex)

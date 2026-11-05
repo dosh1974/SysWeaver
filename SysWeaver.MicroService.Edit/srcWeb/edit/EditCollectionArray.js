@@ -1,176 +1,174 @@
 ﻿/**
- * @file Array container strategy for the collection editor.
+ * @file Collection strategy for arrays / lists (`Sw.Edit.Collections.Array`, legacy global `EditCollectionArray`).
  *
- * Loaded on demand by `EditTypeCollection.Init()` (EditTypeCollection.js) via `includeJs`. Defines the global class
- * `EditCollectionArray`. No dependencies on other files.
- *
- * A "container strategy" abstracts the storage of a collection value so `EditTypeCollection` can treat JS arrays
- * and `Map`s alike (duck-typed interface shared with `EditCollectionMap`: createVal, countVal, getVal, setVal,
- * getKeyName, íterate, onKeys, addVal, removeVal; arrays additionally support insertAt, insertAfter, move).
+ * Loaded by Edit.js; used by EditTypeCollection.js for every collection without a key type. Keys are the indices.
+ * All methods tolerate a null collection where noted.
  */
-
-/**
- * Container strategy for JS arrays (collections without a `Key` in their member description).
- * Stateless; used through the singleton `EditCollectionArray.Inst` returned by `EditTypeCollection.GetContainer`.
- * In all methods `c` is the array and `key` an integer index.
- */
-class EditCollectionArray {
-
-
-    /** @type {EditCollectionArray} Shared singleton instance. */
-    static Inst = new EditCollectionArray();
+(function () {
+    "use strict";
 
     /**
-     * Creates a new empty collection value.
-     * @returns {Array} A new empty array.
+     * Array strategy (stateless; the shared instance is `EditCollectionArray.Inst`).
      */
-    createVal() {
-        return [];
-    }
-
-    /**
-     * Counts the elements.
-     * @param {?Array} c - The array (may be null/undefined).
-     * @returns {number} `c.length`, or 0 for a falsy `c`.
-     */
-    countVal(c) {
-        if (!c)
-            return 0;
-        return c.length;
-    }
-
-    /**
-     * Gets an element.
-     * @param {Array} c - The array.
-     * @param {number} key - Index.
-     * @returns {*} `c[key]`.
-     */
-    getVal(c, key) {
-        return c[key];
-    }
-
-    /**
-     * Sets an element in place.
-     * @param {Array} c - The array.
-     * @param {number} key - Index.
-     * @param {*} newValue - Value to store.
-     * @returns {void}
-     */
-    setVal(c, key, newValue) {
-        c[key] = newValue;
-    }
-
-    /**
-     * Display / path name of a key, used as item title and in undo paths.
-     * @param {number} key - Index.
-     * @returns {string} `"[" + key + "]"`.
-     */
-    getKeyName(key) {
-        return "[" + key + "]";
-    }
-
-    /**
-     * Iterates the elements in order, awaiting the callback for each (note: the name uses a non-ASCII `í`).
-     * Stops at the first element for which the callback returns a falsy value.
-     * @param {?Array} c - The array.
-     * @param {function(number, *):Promise<boolean>} onKeyValue - Called with (index, value); return truthy to continue.
-     * @returns {Promise<boolean|undefined>} False if stopped early, true if all elements were visited,
-     *   undefined for a falsy `c`.
-     */
-    async íterate(c, onKeyValue) {
-        if (!c)
-            return;
-        const l = c.length;
-        for (let i = 0; i < l; ++i) {
-            if (!(await onKeyValue(i, c[i])))
-                return false;
+    class EditCollectionArray {
+        /** @type {boolean} Items are ordered (insert / move are possible). */
+        get Indexed() {
+            return true;
         }
-        return true;
-    }
 
-    /**
-     * Awaits the callback for each index in order (the length is read once before iterating).
-     * @param {?Array} c - The array; nothing happens for a falsy value.
-     * @param {function(number):(Promise<void>|void)} onKey - Called with each index.
-     * @returns {Promise<void>}
-     */
-    async onKeys(c, onKey) {
-        if (!c)
-            return;
-        const l = c.length;
-        for (let i = 0; i < l; ++i)
-            await onKey(i);
-    }
+        /** @returns {Array} A new empty collection. */
+        createVal() {
+            return [];
+        }
 
-    /**
-     * Adds an element: inserts it at `key` when `key` is defined and `< c.length`, otherwise appends it.
-     * @param {Array} c - The array (modified in place).
-     * @param {*} newValue - Value to add.
-     * @param {number} [key] - Optional insert position.
-     * @returns {number} The index of the new element.
-     */
-    addVal(c, newValue, key) {
+        /**
+         * Number of items.
+         * @param {?Array} c - The collection.
+         * @returns {number} The count (0 for null).
+         */
+        countVal(c) {
+            return c ? c.length : 0;
+        }
 
-        if (typeof key !== "undefined") {
-            if (key < c.length) {
-                c.splice(key, 0, newValue);
+        /**
+         * Get an item.
+         * @param {Array} c - The collection.
+         * @param {number} key - Index.
+         * @returns {*} The item.
+         */
+        getVal(c, key) {
+            return c[key];
+        }
+
+        /**
+         * Set an item.
+         * @param {Array} c - The collection.
+         * @param {number} key - Index.
+         * @param {*} v - The value.
+         */
+        setVal(c, key, v) {
+            c[key] = v;
+        }
+
+        /**
+         * Display text of a key.
+         * @param {number} key - Index.
+         * @returns {string} "[key]".
+         */
+        getKeyName(key) {
+            return "[" + key + "]";
+        }
+
+        /**
+         * The keys in order.
+         * @param {?Array} c - The collection.
+         * @returns {number[]} The indices.
+         */
+        keys(c) {
+            return c ? c.map((x, i) => i) : [];
+        }
+
+        /**
+         * Iterate the items in order, awaiting the callback; stops when it returns falsy.
+         * @param {?Array} c - The collection.
+         * @param {function(number, *):Promise<boolean>} onKeyValue - Callback.
+         * @returns {Promise<boolean>} False when stopped early.
+         */
+        async iterate(c, onKeyValue) {
+            if (!c)
+                return true;
+            for (let i = 0; i < c.length; ++i)
+                if (!(await onKeyValue(i, c[i])))
+                    return false;
+            return true;
+        }
+
+        /**
+         * Old (misspelled, non ASCII) name of iterate.
+         * @param {?Array} c - The collection.
+         * @param {function(number, *):Promise<boolean>} fn - Callback.
+         * @returns {Promise<boolean>} See iterate.
+         */
+        íterate(c, fn) {
+            return this.iterate(c, fn);
+        }
+
+        /**
+         * Await a callback for each key.
+         * @param {?Array} c - The collection.
+         * @param {function(number):Promise<void>} onKey - Callback.
+         * @returns {Promise<void>}
+         */
+        async onKeys(c, onKey) {
+            for (const k of this.keys(c))
+                await onKey(k);
+        }
+
+        /**
+         * Add an item (at key when given and inside, else at the end).
+         * @param {Array} c - The collection.
+         * @param {*} v - The value.
+         * @param {number} [key] - Insert position.
+         * @returns {number} The key of the new item.
+         */
+        addVal(c, v, key) {
+            if (key !== undefined && key !== null && key < c.length) {
+                c.splice(key, 0, v);
                 return key;
             }
+            c.push(v);
+            return c.length - 1;
         }
-        c.push(newValue);
-        return c.length - 1;
+
+        /**
+         * Remove an item.
+         * @param {Array} c - The collection.
+         * @param {number} key - Index.
+         * @returns {boolean} True: the following keys changed (re-number).
+         */
+        removeVal(c, key) {
+            c.splice(key, 1);
+            return true;
+        }
+
+        /**
+         * Insert an item before an index.
+         * @param {Array} c - The collection.
+         * @param {*} v - The value.
+         * @param {number} key - Index.
+         * @returns {number} The new key.
+         */
+        insertAt(c, v, key) {
+            c.splice(key, 0, v);
+            return key;
+        }
+
+        /**
+         * Insert an item after an index.
+         * @param {Array} c - The collection.
+         * @param {*} v - The value.
+         * @param {number} key - Index.
+         * @returns {number} The new key.
+         */
+        insertAfter(c, v, key) {
+            c.splice(key + 1, 0, v);
+            return key + 1;
+        }
+
+        /**
+         * Move an item.
+         * @param {Array} c - The collection.
+         * @param {number} from - Source index.
+         * @param {number} to - Target index.
+         */
+        move(c, from, to) {
+            c.splice(to, 0, c.splice(from, 1)[0]);
+        }
     }
 
-    /**
-     * Removes the element at `key` (splice), shifting later elements down.
-     * @param {Array} c - The array (modified in place).
-     * @param {number} key - Index to remove.
-     * @returns {boolean} Always true: the keys of later elements changed and the item editors must be renumbered
-     *   (`reOrder` in EditTypeCollection).
-     */
-    removeVal(c, key) {
-        c.splice(key, 1);
-        return true;
-    }
-
-    //  Only for indexed:
-    /**
-     * Inserts an element at `key` (indexed collections only; `EditCollectionMap` has no such method).
-     * Used for "Insert before" and to undo a removal.
-     * @param {Array} c - The array (modified in place).
-     * @param {*} newValue - Value to insert.
-     * @param {number} key - Insert position.
-     * @returns {number} `key`.
-     */
-    insertAt(c, newValue, key) {
-        c.splice(key, 0, newValue);
-        return key;
-    }
-
-    /**
-     * Inserts an element after `key`, i.e. at `key + 1` (indexed collections only).
-     * @param {Array} c - The array (modified in place).
-     * @param {*} newValue - Value to insert.
-     * @param {number} key - Index of the element to insert after.
-     * @returns {number} The index of the new element (`key + 1`).
-     */
-    insertAfter(c, newValue, key) {
-        ++key;
-        c.splice(key, 0, newValue);
-        return key;
-    }
-
-    /**
-     * Moves one element from index `from` to index `to` (indexed collections only).
-     * @param {Array} c - The array (modified in place).
-     * @param {number} from - Current index.
-     * @param {number} to - Target index (after the element was removed).
-     * @returns {void}
-     */
-    move(c, from, to) {
-        c.splice(to, 0, c.splice(from, 1)[0]);
-    }
-
-
-
-}
+    /** @type {EditCollectionArray} Shared instance. */
+    EditCollectionArray.Inst = new EditCollectionArray();
+    Sw.Edit.Collections.Array = EditCollectionArray.Inst;
+    if (!window.EditCollectionArray)
+        window.EditCollectionArray = EditCollectionArray;
+})();

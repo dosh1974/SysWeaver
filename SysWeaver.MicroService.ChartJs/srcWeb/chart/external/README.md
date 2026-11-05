@@ -11,7 +11,7 @@
 
 ## Purpose
 
-The chart page renders entirely in the browser; these scripts are served from `chart/external/` so no CDN is needed. They are Brotli compressed and embedded like the rest of [`srcWeb/`](../../README.md).
+The chart page renders entirely in the browser; these scripts are served from `chart/external/` so no CDN is needed. They are Brotli compressed and embedded like the rest of [`srcWeb/`](../../README.md), but **not minified again** (`Compress.exe -OptimizeWebFiles false` in the project file, like `edit/external`): the embedded bytes are the distributed files.
 
 ## Contents
 
@@ -28,6 +28,7 @@ Version and licence are taken from the header comment of each file.
 
 - `chart.html` loads `chart.js`, `hammerjs.js` and `chartjs_plugin_datalabels.js` on every page load; nothing in the repository's own chart script references Hammer.js directly.
 - Updating Chart.js may require matching changes in the server-side configuration model (`ChartJsConfig` and related classes).
+- Do not let the build minify these files: minify v2.24.19 (used by Compress) reorders `const s=t.length,{end:o=s-1}=i` into `const{end:a=o-1}=n,o=e.length`, so Chart.js threw "ReferenceError: Cannot access 'o' before initialization" (`LineElement.pathSegment`) on every filled line chart. The unit test `ChartJsEmbeddedLibraryTests` (SysWeaver.Tests) checks the embedded files.
 
 ## Relationships
 

@@ -1,292 +1,394 @@
-﻿
-/*
- * explore.css - styles of the generated end point listing page (`<folder>/explore`).
- * Linked as $(CSSFILE) by the template srcData/index.html (served by ExploreHttpServerModule), together
- * with $(STYLECSSFILE) (the theme, common/theme.css). All classes are set by explore.js (BuildNavigator,
- * BuildTable, AddSortHeader, SetByteSize, SetCacheDuration). Uses theme variables --ThemeBackground,
- * --ThemeAcc2, --ThemeRad, --ThemeRadInp2 and --ThemeIconSize. No keyframes, media queries or theme variants.
+﻿/*
+ * explore/explore.css - styles of the generated end point listing page (`<any folder>/explore`, built by explore.js `Build`).
+ * Linked as $(CSSFILE) by the template srcData/index.html after $(STYLECSSFILE) (common/theme.css); sw/ui.css is linked by the legacy
+ * bundle common/common.js, so the Sw tokens (--sw-bg, --sw-fg, --sw-accent1/2, --sw-line, --sw-touch ...) are available.
+ * Design v2 page: main.sw-page-dash.ExplorePage (ui/page.css, full width) with a compact page header (Sw.PageHeader: "Explore", the item
+ * count badge, the path bar as its description line), the filter bar and the table (a flat card). Classes set by explore.js: ExploreNavigator (path bar, a.Path links), ExploreWrap (horizontal scroller), table.Explore with th.<Column>H
+ * (button.ExploreSort) and td.<Column> cells (ExploreIcon, ExploreName, ExploreSize, ExploreExt, ExploreAuth, ExploreTime,
+ * ExploreClientCache, ExploreRequestCache, ExploreCompPreference, ExplorePreCompressed), span.ExplorePill, Dimmed,
+ * ExploreCardBar (phones: the Sort button .ExploreCardBtn and the name filter .ExploreFilter), ExploreBlank (empty value, hidden in the cards),
+ * auth cells: the data table tags (span.sw-tag, Sw.Cells.AuthTag: the accent "Open" tag, "Any logged in user", one tag per token).
  */
 
-/* ===== Page and navigator ===== */
+body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--sw-fg);
+    font-family: var(--sw-sans);
+}
 
-/* Dimmed: 40% opacity; set by explore.js on non-primary sort icons, placeholder sizes, the public-resource warning icon and uncached durations. */
-.Dimmed{
+/* The page (main.sw-page-dash.ExplorePage, ui/page.css): a listing uses the full width (no dashboard maximum) */
+.ExplorePage {
+    max-width: none;
+}
+
+/* Dimmed: non primary sort icons, placeholder sizes, the public resource globe icon and uncached durations */
+.Dimmed {
     opacity: 0.4;
 }
 
-/* Links (and visited links) inherit the text color. */
-a {
-    color: inherit;
+/* Dimmed values (placeholder sizes "<DIR>", "-" durations): muted by the secondary text colour, not by opacity (0.4 gave text of 2.3:1;
+   the colour keeps 4.5:1 in every theme, S8); the cards' label keeps its normal colour */
+.Explore td.Dimmed {
+    opacity: 1;
+    color: var(--sw-text-2);
 }
 
-    a:visited {
-        color: inherit;
-    }
+/* ===== Path (the description line of the page header): a breadcrumb of links, the current folder last ===== */
 
-/* Page body without margin. */
-body {
-    margin: 0;
-}
-
-
-
-/* ExploreNavigator: the path bar created by BuildNavigator; centered (display: table, auto margins), bold 125%. */
 .ExploreNavigator {
-    display: table;
-    margin: 2px auto 8px auto;
-    font-size: 125%;
-    font-weight: bold;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 2px;
+    margin: var(--sw-space-1, 4px) 0 0;
+    font-size: var(--sw-text-md, 0.95em);
+    color: var(--sw-text-2, var(--sw-text-2));
 }
 
-/*
- * Path segment pills: SysWeaver-Link elements (from ValueFormat.createLink) with class Path added by
- * BuildNavigator; --ThemeAcc2 background, --ThemeBackground text, --ThemeRad corners. ::after appends a faded "/".
- */
-SysWeaver-Link.Path {
-    color: var(--ThemeBackground);
-    background-color: var(--ThemeAcc2);
-    margin: 2px 1px 0 0px;
-    padding: 2px 10px 2px 10px;
-    border-radius: var(--ThemeRad);
+a.sw-link.Path {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75em;
+    padding: 0 4px;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-weight: 400;
+    background: transparent;
+    border-radius: var(--sw-radius-sm, 4px);
+    text-decoration: none;
 }
 
-SysWeaver-Link.Path::after {
-    padding-left: 0.15em;
-    content: "/";
-    opacity: 0.25;
+    a.sw-link.Path::after {
+        padding-left: 6px;
+        content: "/";
+        color: var(--sw-text-3, var(--sw-text-3));
+    }
+
+    /* The current folder (opens it in a new tab) */
+    a.sw-link.Path:last-child {
+        color: var(--sw-text, var(--sw-fg));
+        font-weight: 500;
+    }
+
+@media (hover: hover) {
+    a.sw-link.Path:hover {
+        color: var(--sw-text-accent, var(--sw-accent1));
+        background: transparent;
+        text-decoration: underline;
+    }
 }
 
+/* ===== Table: a flat card (surface + hairline), sunken sentence case head, hairline rows, hover tint ===== */
 
+.ExploreWrap {
+    overflow-x: auto;
+    max-width: 100%;
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius-md, var(--sw-radius));
+    background: var(--sw-surface, var(--sw-bg));
+}
 
-/* ===== Listing table ===== */
-
-/* Explore: the listing table (table.Explore built by BuildTable); collapsed borders, horizontally centered. */
 .Explore {
-    border: 1px solid rgba(0,0,0,0.3);
-    border-collapse: collapse;
+    width: 100%;
+    border-collapse: separate;
     border-spacing: 0;
-    margin: 8px auto 4px auto;
+    margin: 0;
+    font-size: var(--sw-text-md, 1em);
+    font-variant-numeric: tabular-nums;
 }
 
-    /*
-     * Item icons (type / extension images). Defines custom property --s = icon width/height
-     * (--ThemeIconSize x 32px).
-     */
-    .Explore img {
-        --s: calc(var(--ThemeIconSize) * 32px);
-        display: inline-block;
-        width: var(--s);
-        height: var(--s);
-    }
-
-    /* Data cells: no wrap, no padding, left separator line (none on the first cell). */
-    .Explore td {
-        text-overflow: ellipsis;
-        /*overflow: hidden;*/
-        white-space: nowrap;
-        padding: 0;
-        border-left: 1px solid rgba(0,0,0,0.4);
-    }
-
-        .Explore td:first-child {
-            border-left: none;
-        }
-
-
-        /* Header cells: no wrap, uppercase, normal weight, --ThemeBackground text on the accent header row; outer top corners rounded (first / last child). */
-        .Explore th {
-            text-overflow: ellipsis;
-            /*overflow: hidden;*/
-            white-space: nowrap;
-            padding: 4px 0;
-            color: var(--ThemeBackground);
-            font-weight: normal;
-            text-transform: uppercase;
-            text-align: left;
-        }
-
-            .Explore th:first-child {
-                border-radius: var(--ThemeRad);
-                border-top-right-radius: 0;
-                border-bottom-right-radius: 0;
-                border-bottom-left-radius: 0;
-            }
-
-            .Explore th:last-child {
-                border-radius: var(--ThemeRad);
-                border-top-left-radius: 0;
-                border-bottom-right-radius: 0;
-                border-bottom-left-radius: 0;
-            }
-
-
-        /* Sort control from AddSortHeader: inline-flex div with a clickable 16px sort icon and a clickable title span. */
-        .Explore th div {
-            display: inline-flex;
-            align-items: center;
-        }
-
-        .Explore th img {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-
-        .Explore th span {
-            cursor: pointer;
-            margin-left: 4px;
-        }
-
-    /* Every even row slightly darkened (zebra striping). */
-    .Explore tr:nth-child(2n) {
-        background-color: rgba(0, 0, 0, 0.1);
-    }
-
-/*
- * Per-column header cells (classes set by BuildTable): ExploreIconH (type, centered), ExploreNameH,
- * ExploreSizeH (right-aligned), ExploreExtH, ExploreAuthH, ExploreTimeH, ExploreClientCacheH,
- * ExploreRequestCacheH, ExploreCompPreferenceH, ExplorePreCompressedH - all with 4px side padding.
- */
-th.ExploreSizeH {
-    padding: 0px 4px 0px 4px;
-    text-align: right;
+.Explore th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0;
+    white-space: nowrap;
+    text-align: left;
+    background: var(--sw-surface-sunken, var(--sw-surface));
+    border-bottom: 1px solid var(--sw-border, var(--sw-border));
 }
 
-th.ExploreNameH {
-    padding: 0px 4px 0px 4px;
+/* Sort buttons: the whole header cell */
+.ExploreSort {
+    transition: background-color var(--sw-dur-1) linear, color var(--sw-dur-1) linear;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    min-height: var(--sw-control-h);
+    padding: 0 8px;
+    border: none;
+    background: transparent;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font: inherit;
+    font-size: var(--sw-text-xs, 0.8em);
+    font-weight: 500;
+    cursor: pointer;
+    touch-action: manipulation;
 }
 
-th.ExploreIconH {
-    padding: 0px 4px 0px 4px;
+.ExploreSort .sw-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.ExploreSort:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: -2px;
+}
+
+@media (hover: hover) {
+    .ExploreSort:hover {
+        color: var(--sw-text, var(--sw-fg));
+        background: var(--sw-hover, var(--sw-accent1-soft));
+    }
+}
+
+.Explore td {
+    height: var(--sw-row-h, 2.25rem);
+    padding: 0 8px;
+    white-space: nowrap;
+    vertical-align: middle;
+    border-top: 1px solid var(--sw-border, var(--sw-border));
+}
+
+.Explore tbody tr:first-child td {
+    border-top: none;
+}
+
+@media (hover: hover) {
+    .Explore tbody tr:hover td {
+        background-color: var(--sw-hover, var(--sw-accent1-soft));
+    }
+}
+
+/* Type icons */
+td.ExploreIcon {
+    width: 1px;
     text-align: center;
+    padding: 1px 4px 1px 8px;
 }
 
-
-th.ExploreExtH {
-    padding: 0px 4px 0px 4px;
+td.ExploreIcon img {
+    --s: calc(var(--sw-scale, 1) * 24px);
+    display: inline-block;
+    width: var(--s);
+    height: var(--s);
+    vertical-align: middle;
 }
-
-th.ExploreAuthH {
-    padding: 0px 4px 0px 4px;
-}
-
-th.ExploreTimeH {
-    padding: 0px 4px 0px 4px;
-}
-
-th.ExploreClientCacheH {
-    padding: 0px 4px 0px 4px;
-}
-
-th.ExploreRequestCacheH {
-    padding: 0px 4px 0px 4px;
-}
-
-th.ExploreCompPreferenceH {
-    padding: 0px 4px 0px 4px;
-}
-
-th.ExplorePreCompressedH {
-    padding: 0px 4px 0px 4px;
-}
-
-
-/*
- * Data cells (classes set by BuildTable): ExploreSize (right-aligned), ExploreName (max 512px, clipped),
- * ExploreExt (max 64px), ExploreTime, ExploreClientCache / ExploreRequestCache (right-aligned) - 4px side padding.
- * td.ExploreIcon and td.ExplorePreCompressed are set by JS but have no active rule.
- */
-td.ExploreSize {
-    padding: 0px 4px 0px 4px;
-    text-align: right;
-}
-
 
 td.ExploreName {
-    padding: 0px 4px 0px 4px;
     max-width: 512px;
-    overflow: clip;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/*
-td.ExploreIcon SysWeaver-Link {
-    box-sizing: border-box;
-    display: inline-block;
-    padding: 0px;
-    transition: border-color linear 0.1s;
-    border: 1px solid transparent;
+td.ExploreSize, td.ExploreClientCache, td.ExploreRequestCache, th.ExploreSizeH .ExploreSort, th.ExploreClientCacheH .ExploreSort, th.ExploreRequestCacheH .ExploreSort {
+    text-align: right;
+    justify-content: flex-end;
+    font-variant-numeric: tabular-nums;
 }
-
-    td.ExploreIcon SysWeaver-Link:hover {
-        background-color: inherit;
-        border-color: var(--ThemeAcc1);
-    }
-*/
 
 td.ExploreExt {
-    padding: 0px 4px 0px 4px;
     max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--sw-text-2, var(--sw-text-2));
 }
-
-/*
- * ExploreAuth: auth cell = flex row (div) of the g_protected / g_warning icon and one small uppercase bold
- * pill (span, ThemeAccBg or ThemeMainBg) per auth token.
- */
-td.ExploreAuth {
-}
-
-    td.ExploreAuth div {
-        display: flex;
-        align-items: center;
-    }
-
-    td.ExploreAuth img {
-        display: inline-block;
-    }
-
-    td.ExploreAuth span {
-        display: inline-block;
-        text-transform: uppercase;
-        font-weight: bold;
-        padding: 2px 4px 2px 4px;
-        border-radius: 4px;
-        margin-right: 4px;
-        font-size: 60%;
-    }
 
 td.ExploreTime {
-    padding: 0px 4px 0px 4px;
+    color: var(--sw-text-2, var(--sw-text-2));
 }
 
-td.ExploreClientCache {
-    padding: 0px 4px 0px 4px;
-    text-align: right;
+/* Auth and compression cells: a row of small badges */
+td.ExploreAuth div, td.ExploreCompPreference div {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
-td.ExploreRequestCache {
-    padding: 0px 4px 0px 4px;
-    text-align: right;
+td.ExploreAuth .sw-tag {
+    margin: 0;
+    /* (the size of the data table tags: the explore rows use a larger text) */
+    font-size: calc(0.85 * var(--sw-text-md, 0.875rem));
 }
 
-
-/* ExploreCompPreference: compression cell = flex row (div) of small uppercase bold pills (span, --ThemeRadInp2), one per compression method. */
-td.ExploreCompPreference {
+.ExplorePill {
+    display: inline-flex;
+    align-items: center;
+    height: 1.25rem;
+    padding: 0 6px;
+    border-radius: var(--sw-radius-pill, 999px);
+    font-size: var(--sw-text-xs, 0.75em);
+    font-weight: 500;
+    /* (a touch towards the text colour: >= 4.5:1 on the soft accent fill in every theme; Pro was 4.3, S7a-A1-3) */
+    color: color-mix(in oklab, var(--sw-text-accent, var(--sw-accent1)), var(--sw-text, currentColor) 25%);
+    background: var(--sw-accent1-soft);
 }
 
-    td.ExploreCompPreference div {
+td.ExploreCompPreference .ExplorePill {
+    color: var(--sw-text-2, var(--sw-fg));
+    background: var(--sw-hover, var(--sw-surface-strong));
+}
+
+/* Tool bar: the name filter on every screen (left, between the page header and the table); the card Sort button and the auth words
+   only on narrow screens (below), where the column titles are hidden */
+.ExploreCardBar {
+    display: flex;
+    margin: 0 0 var(--sw-space-3, 12px);
+}
+
+    .ExploreCardBar .ExploreFilter {
+        width: 18rem;
+        max-width: 100%;
+    }
+
+.ExploreCardBtn {
+    display: none;
+}
+/* Narrow screens and touch screens up to 1000 px (phones in portrait and landscape, where the grid needed sideways scrolling; the same
+   rule as the data table cards): no sideways scrolling. The column titles are replaced by the card tool bar and every item is a card:
+   type icon and name on the first line, then one "label  value" line per column (labels = the td data-label set by explore.js) */
+@media (max-width: 600px), (pointer: coarse) and (max-width: 1000px) {
+    .Explore {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .Explore thead, .Explore tbody {
+        display: block;
+    }
+
+    /* The column titles are replaced by the card tool bar (the same Sort / Filter pattern as the data table cards) */
+    .Explore thead {
+        display: none;
+    }
+
+    .ExploreCardBar {
         display: flex;
         align-items: center;
-        padding-left: 4px;
+        gap: 4px;
     }
 
-
-    td.ExploreCompPreference span {
-        display: inline-block;
-        text-transform: uppercase;
-        font-weight: bold;
-        padding: 2px 4px 2px 4px;
-        border-radius: var(--ThemeRadInp2);
-        margin-right: 4px;
-        font-size: 60%;
+    .ExploreCardBtn {
+        display: inline-flex;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: var(--sw-control-h);
+        justify-content: center;
     }
 
+        .ExploreCardBtn > span:not(.sw-icon) {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .ExploreCardBar .ExploreFilter {
+        flex: 1 1 0;
+        width: auto;
+        min-width: 0;
+    }
+
+    /* Empty values are left out of the cards (explore.js) */
+    .Explore td.ExploreBlank {
+        display: none;
+    }
+
+    .Explore tbody tr[hidden] {
+        display: none;
+    }
+
+    .Explore thead tr {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .Explore th {
+        position: static;
+        flex: 1 1 auto;
+        border-radius: 0;
+    }
+
+    .Explore th.ExploreIconH {
+        display: none;
+    }
+
+    .Explore tbody tr {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: 8px;
+        padding: 6px 4px;
+        border-top: 1px solid var(--sw-border, var(--sw-border));
+    }
+
+    .Explore tbody tr:first-child {
+        border-top: none;
+    }
+
+    .Explore td {
+        height: auto;
+        border-top: none;
+        display: flex;
+        align-items: baseline;
+        justify-content: flex-start;
+        text-align: left;
+        gap: 8px;
+        grid-column: 1 / -1;
+        min-width: 0;
+        border-left: none;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        background-color: transparent;
+    }
+
+    .Explore td.ExploreIcon {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .Explore td.ExploreName {
+        grid-column: 2;
+        grid-row: 1;
+        max-width: none;
+        font-weight: 600;
+    }
+
+    .Explore td.ExploreSize, .Explore td.ExploreClientCache, .Explore td.ExploreRequestCache, .Explore td.ExploreExt {
+        max-width: none;
+        text-align: left;
+    }
+
+    .Explore td[data-label]::before {
+        content: attr(data-label);
+        flex: 0 0 7.5em;
+        font-family: var(--sw-sans);
+        font-size: 0.85em;
+        font-weight: normal;
+        color: var(--sw-text-2);
+    }
+
+    /* The name is the card heading (no label) */
+    .Explore td.ExploreName[data-label]::before {
+        content: none;
+    }
+}
+
+/* Touch screens wider than a phone in portrait (phones in landscape): the cards side by side */
+@media (pointer: coarse) and (min-width: 601px) and (max-width: 1000px) {
+    .Explore tbody {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        column-gap: 8px;
+    }
+
+    .Explore tbody tr[hidden] {
+        display: none;
+    }
+}

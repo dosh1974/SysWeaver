@@ -1,0 +1,191 @@
+/*
+ * example.css - styles of the upload example page (upload/Example.html, script example.js).
+ * Linked after ../common/theme.css and ../sw/ui.css; uses the Sw design tokens (--sw-*), so every theme applies.
+ * The drop zone (#drop) gets the state classes of Sw.Upload.Target (common/fileUploader.js): Dragging, Selecting,
+ * Uploading. The zone is neutral (dashed line color, never the maroon accent that reads as an error): the state icon is drawn by a
+ * masked ::after pseudo element (a flex item above the words .DropText; the mask would hide the border otherwise).
+ */
+
+/* Page column: a Design v2 reading page (.sw-page-read, ui/page.css: left aligned page header, max width 45rem, side gutters). */
+.UploadExample {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-4, 16px);
+}
+
+    .UploadExample > .sw-ph {
+        margin-bottom: var(--sw-space-2, 8px);
+    }
+
+/* The repository label and input. */
+.UploadRepo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 600;
+    color: var(--sw-text-2, var(--sw-text-2));
+}
+
+    .UploadRepo input {
+        font: inherit;
+        font-weight: normal;
+        font-size: 110%;
+        min-height: var(--sw-control-h);
+        padding: 0.25em 0.75em;
+        color: var(--sw-fg);
+        background-color: var(--sw-surface, var(--sw-surface-sunken));
+        border: 1px solid var(--sw-border-input, var(--sw-border));
+        border-radius: var(--sw-radius);
+        outline: none;
+        user-select: text;
+        transition: border-color var(--sw-dur-2), box-shadow var(--sw-dur-2);
+    }
+
+    @media (hover: hover) {
+        .UploadRepo input:hover {
+            border-color: var(--sw-border-strong, var(--sw-border-strong));
+        }
+    }
+
+        .UploadRepo input:focus-visible {
+            border-color: var(--sw-focus);
+            box-shadow: 0 0 0 2px var(--sw-focus);
+        }
+
+/* #drop: the click / drop area (keyboard focusable, role button, set up by Sw.Upload.Target). */
+#drop {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-gap);
+    padding: calc(var(--sw-gap) * 2);
+    min-height: max(8em, 25vh);
+    color: var(--sw-text-2, var(--sw-text-2));
+    background-color: var(--sw-surface, var(--sw-surface));
+    text-align: center;
+    border: 2px dashed var(--sw-border-strong, var(--sw-border-strong));
+    border-radius: var(--sw-radius-md, var(--sw-radius-lg));
+    cursor: pointer;
+    outline: none;
+    transition: border-color var(--sw-dur-2), opacity var(--sw-dur-2);
+}
+
+    #drop::after {
+        content: "";
+        order: -1;
+        width: calc(48px * var(--sw-scale, 1));
+        height: calc(48px * var(--sw-scale, 1));
+        background-color: var(--sw-text-2);
+        mask-image: url("../icons/upload.svg");
+        mask-size: contain;
+        mask-repeat: no-repeat;
+        mask-position: center;
+        transition: background-color var(--sw-dur-2);
+    }
+
+    #drop:focus-visible {
+        border-color: var(--sw-accent1);
+        color: var(--sw-fg);
+    }
+
+        #drop:focus-visible::after {
+            background-color: var(--sw-text-accent);
+        }
+
+@media (hover: hover) {
+    #drop:hover {
+        border-color: var(--sw-accent1);
+        color: var(--sw-fg);
+    }
+
+        #drop:hover::after {
+            background-color: var(--sw-text-accent);
+        }
+}
+
+    #drop:focus-visible {
+        box-shadow: 0 0 0 3px var(--sw-focus);
+    }
+
+    /* Selecting: the file picker is open (dimmed, disc icon). */
+    #drop.Selecting {
+        opacity: 0.4;
+    }
+
+        #drop.Selecting::after {
+            mask-image: url("../icons/disc.svg");
+        }
+
+    /* Dragging: files are dragged over the area (accent 1, plus icon). */
+    #drop.Dragging {
+        border-color: var(--sw-accent1);
+    }
+
+        #drop.Dragging::after {
+            background-color: var(--sw-accent1);
+            mask-image: url("../icons/plus.svg");
+        }
+
+    /* Uploading: busy (dimmed, loading icon, no hover highlight). */
+    #drop.Uploading, #drop.Uploading.Dragging {
+        cursor: progress;
+        opacity: 0.4;
+        border-color: var(--sw-border-strong);
+    }
+
+        #drop.Uploading::after {
+            background-color: var(--sw-text-2);
+            mask-image: url("../icons/loading.svg");
+        }
+
+/* #link: the url of the last uploaded file, hidden until there is one (class Show). */
+#link {
+    display: block;
+    text-align: center;
+    overflow-wrap: anywhere;
+    visibility: hidden;
+    min-height: var(--sw-control-h);
+    line-height: var(--sw-control-h);
+}
+
+    #link.Show {
+        visibility: visible;
+    }
+
+/*
+ * .UploadUserImage: the example figure, the current user picture (#userimage, reloaded after an upload to the UserImage
+ * repo) with its caption. Sized like a profile picture (at most 200 px, scaled on large screens), not half the screen.
+ */
+.UploadUserImage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+#userimage {
+    display: block;
+    width: calc(200px * var(--sw-scale, 1));
+    max-width: 60vw;
+    max-height: 30vh;
+    height: auto;
+    object-fit: contain;
+    border-radius: var(--sw-radius-lg);
+    outline: 1px solid var(--sw-border);
+}
+
+    .UploadUserImage figcaption {
+        max-width: 40ch;
+        text-align: center;
+        color: var(--sw-text-2);
+    }
+
+/* The words in the drop zone ("Drop files here or select to choose", on touch only devices "Tap here to choose files"). */
+.DropText {
+    font-size: 110%;
+    font-weight: 600;
+    pointer-events: none;
+}

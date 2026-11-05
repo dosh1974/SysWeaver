@@ -28,6 +28,13 @@ namespace SysWeaver
         public String AppDescription;
 
         /// <summary>
+        /// The version of the application (build / deployment), shown to users (ex: on the home page) and stored in <see cref="EnvInfo.AppVersion"/>.
+        /// Optional: null or empty uses the version of the executable (<see cref="EnvInfo.ExeAppVersion"/>, the informational version of the entry assembly).
+        /// Supports <see cref="PathTemplate"/> variables, so a deployment can set it, ex: "2.4.1 (2026-10-19)".
+        /// </summary>
+        public String AppVersion;
+
+        /// <summary>
         /// A seed (changes the automatically generated logo), stored in <see cref="EnvInfo.AppSeed"/>
         /// </summary>
         public int AppSeed;

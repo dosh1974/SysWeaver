@@ -1,0 +1,238 @@
+/*
+ * shell/compat_application.css - legacy styles of the old app/application.css (last part of the GENERATED app/application.css bundle =
+ * shell/shell.css + this file), for old format pages; also the last part of sw/compat.css (migrated new format pages that load sw/compat.js).
+ *
+ * - The element based pop-ups that old code builds into (shell/compat_application.js: CreatePopUpBlocker, CreatePopUpAtElement,
+ *   PopUpElement, PopUpElementMenu): <SysWeaver-Blocker>, <SysWeaver-PopupMenu>, <SysWeaver-PopupMenuBack> (.Right, .Rel), <SysWeaver-TabBlock>.
+ * - <SysWeaver-PopUpBackground>: the content element of PopUp (now inside a Sw dialog: the dialog draws the box, this keeps the old inner
+ *   element styles that pages rely on: <SysWeaver-PopUpText>, <SysWeaver-PopUpFilter>, inputs, <SysWeaver-SelectList>, <SysWeaver-PopSelData>,
+ *   <SysWeaver-PopSelEnd>, .Wide / .Resize variants).
+ * - Old content helpers: <SysWeaver-ConfTitle>, <SysWeaver-ConfText>, <SysWeaver-ConfButtons>, <SysWeaver-CenterBlockSpace>,
+ *   <SysWeaver-PopUpWorkingTitle/Icon/Text>, the global hr rule.
+ * The icon classes are in ui/icons.css (sw/ui.css, linked by common/common.js).
+ * Design v2 (like the Sw overlays): the blocker is the --sw-scrim (no blur; transparent behind an anchored menu, menus get no scrim),
+ * menus are the raised surface with a hairline, radius --sw-radius-md and --sw-elev-1; inputs follow .sw-input (surface, --sw-border-input,
+ * blue focus border + ring); titles are ink, not accent. Each new token has the earlier token as fallback.
+ */
+
+/* ---------- Element based pop-ups ---------- */
+
+SysWeaver-Blocker {
+    position: fixed;
+    display: block;
+    inset: 0;
+    z-index: 1000;
+    background-color: var(--sw-scrim, var(--sw-backdrop));
+    cursor: default;
+    outline: none;
+    animation: sw-fade-in var(--sw-dur-2, var(--sw-speed));
+}
+
+    /* An anchored menu (CreatePopUpAtElement / PopUpElementMenu) floats without dimming the page */
+    SysWeaver-Blocker:has(> SysWeaver-PopupMenu) {
+        background-color: transparent;
+    }
+
+SysWeaver-PopupMenu {
+    position: fixed;
+    display: block;
+    overflow: visible;
+}
+
+    SysWeaver-PopupMenu.Bottom SysWeaver-PopupMenuBack {
+        bottom: 0;
+    }
+
+/* The menu panel of PopUpElementMenu (also the backElement of PopUpMenu; there it is not shown) */
+SysWeaver-PopupMenuBack {
+    position: fixed;
+    display: block;
+    box-sizing: border-box;
+    min-width: 180px;
+    max-width: min(75vw, calc(100vw - 16px));
+    max-height: min(85vh, calc(100vh - 16px));
+    padding: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    background: var(--sw-surface-raised, var(--sw-bg-1));
+    color: var(--sw-text, var(--sw-fg));
+    border: 1px solid var(--sw-border, var(--sw-line));
+    border-radius: var(--sw-radius-md, var(--sw-radius-lg));
+    box-shadow: var(--sw-elev-1, var(--sw-shadow));
+    cursor: default;
+    text-align: left;
+    animation: sw-fade-in var(--sw-dur-2, var(--sw-speed));
+}
+
+    SysWeaver-PopupMenuBack.Rel {
+        position: relative;
+    }
+
+SysWeaver-TabBlock {
+    display: block;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    outline: none;
+}
+
+/* ---------- PopUp content (inside a Sw dialog) ---------- */
+
+SysWeaver-PopUpBackground {
+    display: block;
+    box-sizing: border-box;
+    min-width: 0;
+    outline: none;
+}
+
+.sw-dialog:has(> .sw-dialog-body > SysWeaver-PopUpBackground.Wide) {
+    width: min(75em, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+}
+
+.sw-dialog:has(> .sw-dialog-body > SysWeaver-PopUpBackground.Resize) {
+    resize: both;
+    overflow: auto;
+    min-width: 64px;
+    min-height: 32px;
+    max-width: min(80em, calc(100vw - 16px));
+}
+
+SysWeaver-PopUpBackground SysWeaver-PopUpText {
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sw-text-2, var(--sw-muted));
+    margin-bottom: 1em;
+    font-size: var(--sw-text-xs, 80%);
+    font-weight: 500;
+}
+
+SysWeaver-PopUpBackground SysWeaver-PopUpFilter {
+    box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+SysWeaver-PopUpBackground input:not([type=checkbox]):not([type=radio]):not([type=range]):not(.sw-input):not(.sw-text-input),
+SysWeaver-PopUpBackground textarea:not(.sw-input):not(.sw-text-input) {
+    box-sizing: border-box;
+    font: inherit;
+    font-size: var(--sw-text-md, 100%);
+    min-height: var(--sw-control-h, var(--sw-touch));
+    background-color: var(--sw-surface, var(--sw-bg-inset));
+    color: var(--sw-text, var(--sw-fg));
+    border-radius: var(--sw-radius);
+    padding: 2px 12px;
+    border: 1px solid var(--sw-border-input, var(--sw-line));
+    outline: none;
+    width: 100%;
+    max-width: 100%;
+}
+
+    SysWeaver-PopUpBackground input:focus-visible, SysWeaver-PopUpBackground textarea:focus-visible {
+        border-color: var(--sw-focus);
+        box-shadow: var(--sw-focus-ring, 0 0 0 3px color-mix(in srgb, var(--sw-focus) 28%, transparent));
+    }
+
+    SysWeaver-PopUpBackground input::placeholder, SysWeaver-PopUpBackground textarea::placeholder {
+        color: var(--sw-text-3, var(--sw-faint));
+        opacity: 1;
+    }
+
+SysWeaver-PopUpBackground textarea {
+    resize: vertical;
+    height: 6.25em;
+    min-height: 2.5em;
+    max-height: 60vh;
+}
+
+SysWeaver-PopUpBackground SysWeaver-SelectList,
+SysWeaver-PopUpBackground SysWeaver-PopSelData {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    max-height: calc(80vh - 10em);
+}
+
+SysWeaver-PopUpBackground SysWeaver-PopSelEnd {
+    display: block;
+    width: 100%;
+    margin: 1em 0;
+    font-size: var(--sw-text-sm, 80%);
+    color: var(--sw-text-2, var(--sw-muted));
+}
+
+/* ---------- Old content helpers ---------- */
+
+SysWeaver-ConfTitle {
+    display: block;
+    font-family: var(--sw-head);
+    font-size: var(--sw-text-xl, 125%);
+    font-weight: 600;
+    color: var(--sw-text, var(--sw-fg));
+}
+
+SysWeaver-ConfText {
+    display: block;
+    color: var(--sw-text-2, var(--sw-fg));
+    margin-top: 1em;
+}
+
+    SysWeaver-ConfTitle.MouseClick, SysWeaver-ConfText.MouseClick {
+        cursor: pointer;
+    }
+
+SysWeaver-ConfButtons {
+    margin-top: 2em;
+    display: flex;
+    width: 100%;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+SysWeaver-CenterBlockSpace {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin: 1em 0 0.25em 0;
+    padding: 0;
+    justify-content: space-around;
+}
+
+SysWeaver-PopUpWorkingTitle {
+    margin: 1em 0;
+    display: block;
+    font-family: var(--sw-head);
+    font-size: var(--sw-text-xl, 150%);
+    font-weight: 600;
+    text-align: center;
+    color: var(--sw-text, var(--sw-fg));
+}
+
+SysWeaver-PopUpWorkingIcon {
+    display: block;
+    text-align: center;
+}
+
+SysWeaver-PopUpWorkingText {
+    margin: 1em 0;
+    display: block;
+    text-align: center;
+}
+
+/* Global thin horizontal rule (old pages rely on it) */
+hr {
+    display: block;
+    height: 1px;
+    border: 0;
+    border-top: 1px solid var(--sw-border, var(--ThemeMain25, var(--sw-line)));
+    margin: 0.5em 0;
+    padding: 0;
+}

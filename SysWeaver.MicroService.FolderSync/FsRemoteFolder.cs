@@ -31,7 +31,7 @@ namespace SysWeaver.MicroService
         public String DiscFolder;
 
         /// <summary>
-        /// Optional web folder paramaters, if null the folder won't be available
+        /// Optional web folder parameters, if null the folder won't be available
         /// </summary>
         public FileHttpServerModuleWebFolder WebFolder;
 

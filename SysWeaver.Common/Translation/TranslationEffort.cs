@@ -34,7 +34,7 @@
         /// </summary>
         Text,
         /// <summary>
-        /// Mark down (aka MD) formatted text
+        /// Markdown (aka MD) formatted text
         /// </summary>
         MarkDown,
         /// <summary>

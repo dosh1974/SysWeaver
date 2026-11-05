@@ -27,7 +27,7 @@ flowchart LR
 
 ## Key features
 
-- HTML: text nodes and the `title`, `placeholder` and `alt` attributes are extracted, markup is preserved; inline scripts are handled as JavaScript
+- HTML: text nodes and the `title`, `placeholder`, `alt` and `aria-label` attributes are extracted (with `data-translation_context` from the nearest ancestors as extra context; `translate="no"` skips a subtree), markup is preserved; inline scripts are handled as JavaScript; `<style>` and css files are not translated
 - JavaScript: string literals are extracted and unescaped / re-escaped
 - Identical texts (with the same context) share one variable; `${...}` variables inside texts are kept
 

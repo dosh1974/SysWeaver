@@ -39,7 +39,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Auth information: null = open, empty = any logged in user, else comma separated tokens where at least one is required.
         /// </summary>
-        [TableDataTags("{^0}", null, "{0}", true)]
+        [TableDataAuth]
         public String Auth;
 
         /// <summary>
@@ -59,13 +59,13 @@ namespace SysWeaver.Net
         /// <summary>
         /// The duration in seconds that the client should keep the response cached (basically setting up the Cache header in the response)
         /// </summary>
-        [TableDataNumber(0, "{0} s")]
+        [TableDataDuration("-", "{0}", "{2} s")]
         public int ClientCacheDuration;
 
         /// <summary>
         /// The duration in seconds that the same request should be cached on the server, i.e the WriteStream / GetData for the same request from multiple clients within this period will only result in a single call to these methods (reduces server load).
         /// </summary>
-        [TableDataNumber(0, "{0} s")]
+        [TableDataDuration("-", "{0}", "{2} s")]
         public int RequestCacheDuration;
 
         /// <summary>

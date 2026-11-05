@@ -17,7 +17,8 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Static template variables: the "Key=Value" pairs from <see cref="HttpServerBaseParams.Variables"/> and the application colors ("Color.Background", "Color.Color", "Color.Acc1", "Color.Acc2").
+        /// Static template variables: the "Key=Value" pairs from <see cref="HttpServerBaseParams.Variables"/> and the application colors ("Color.Background", "Color.Color", "Color.Acc1", "Color.Acc2")
+        /// and the web client options ("Client.OptimizedSend": "true" / "false", see <see cref="HttpServerBaseParams.OptimizedSend"/>).
         /// </summary>
         readonly IReadOnlyDictionary<String, String> TempVars;
 
@@ -197,7 +198,7 @@ namespace SysWeaver.Net
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, MenuPath, null, null, "IconTableTemplates")]
+        [WebMenuTable(null, MenuDevelopment + "/{0}", "Template variables", null, "IconTableTemplates", 5)]
         public TableData TemplateVariables(TableDataRequest r, HttpServerRequest request) => TableDataTools.Get(r, 1000, GetTemplateVars(request));
 
 

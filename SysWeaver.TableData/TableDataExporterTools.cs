@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 
 
@@ -11,6 +12,7 @@ namespace SysWeaver.Data
     /// <remarks>
     /// Numbers (columns of the built-in numeric types and their nullable versions) are formatted using <c>ToValueString</c>
     /// (with the decimal count from a <see cref="TableDataFormats.Number"/> column format, default 3), other values using <see cref="Object.ToString"/>.
+    /// Dates are formatted using the invariant culture as <see cref="DateTimeFormat"/> (UTC by convention, see <see cref="UtcSuffix"/> and <see cref="GetHeader"/>).
     /// Null values are formatted as empty texts.
     /// If the column format is <see cref="TableDataFormats.Default"/> or <see cref="TableDataFormats.Number"/> with a format string part,
     /// the text is formatted using <see cref="String.Format(string, object, object)"/> with {0} = the value text and {1} = the next column's value.
@@ -126,6 +128,19 @@ namespace SysWeaver.Data
             var p = f.Split(";");
             if (!DoFormats.TryGetValue(p[0], out var fi))
                 return s.Replace(' ', (Char)0xa0);
+            //  An amount in a currency (the fifth Number option, see TableDataCurrencyAttribute): the ISO 4217 code is appended ("1 234.50 USD")
+            if ((fi == 2) && (p.Length > 5) && !String.IsNullOrEmpty(p[5]))
+            {
+                try
+                {
+                    var code = String.Format(p[5], s, nextValue, s);
+                    if (!String.IsNullOrEmpty(code))
+                        s = String.Concat(s, " ", code);
+                }
+                catch
+                {
+                }
+            }
             var fmt = GetIndexed(p, fi, "{0}");
             if (fmt.FastEquals("{0}"))
                 return s.Replace(' ', (Char)0xa0);
@@ -143,7 +158,8 @@ namespace SysWeaver.Data
             if (!p[0].FastEquals(NumberFmt))
                 return 3;
             var countText = GetIndexed(p, 1, "3");
-            return int.TryParse(countText, out var count) ? count : 3;
+            //  A negative count means that many decimals for the floating point types (only those use the decimals), as in the web client
+            return int.TryParse(countText, out var count) ? Math.Abs(count) : 3;
         }
 
         static readonly Formatter ObjToString = (data, nextData, col) =>
@@ -238,6 +254,166 @@ namespace SysWeaver.Data
 
 
 
+        /// <summary>
+        /// The invariant date and time format used by the exporters for <see cref="DateTime"/> values ("2026-10-19 16:37:00").
+        /// </summary>
+        public const String DateTimeFormat = "yyyy-MM-dd HH:mm:ss";
+
+        /// <summary>
+        /// The invariant date format used by the exporters for <see cref="DateOnly"/> values ("2026-10-19").
+        /// </summary>
+        public const String DateOnlyFormat = "yyyy-MM-dd";
+
+        /// <summary>
+        /// The text appended to the header of date time columns (<see cref="IsUtcColumn"/>): table data date times are UTC by convention,
+        /// and servers often run in another time zone than the reader, so the zone is always stated.
+        /// </summary>
+        public const String UtcSuffix = " (UTC)";
+
+        /// <summary>
+        /// Format a date time (UTC by convention) or a date time offset (converted to UTC) using the invariant <see cref="DateTimeFormat"/>,
+        /// a <see cref="DateOnly"/> using <see cref="DateOnlyFormat"/>, an ISO 8601 date time text (json) as a UTC date time, null as an empty text
+        /// and anything else using <see cref="Object.ToString"/>.
+        /// </summary>
+        /// <param name="data">The value, may be null.</param>
+        /// <returns>The text.</returns>
+        public static String DateToText(Object data)
+        {
+            switch (data)
+            {
+                case null:
+                    return "";
+                case DateTime dt:
+                    return dt.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+                case DateTimeOffset dto:
+                    return dto.UtcDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+                case DateOnly d:
+                    return d.ToString(DateOnlyFormat, CultureInfo.InvariantCulture);
+            }
+            //  Exported table data is often deserialized from json (the web client's current view, an api), so a date is an ISO 8601 text
+            var s = data.ToString();
+            if ((s != null) && (s.Length >= 19) && (s[4] == '-') && (s[10] == 'T')
+                && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var pdt))
+                return pdt.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+            return s;
+        }
+
+        static readonly Formatter DateToString = (data, nextData, col) =>
+        {
+            if (data == null)
+                return "";
+            return DateToText(data).Replace(' ', (Char)0xa0);
+        };
+
+        static readonly IReadOnlySet<String> DateTypes = ReadOnlyData.Set(StringComparer.Ordinal,
+            typeof(DateTime).FullName, typeof(DateTime?).FullName, typeof(DateTimeOffset).FullName, typeof(DateTimeOffset?).FullName,
+            typeof(DateOnly).FullName, typeof(DateOnly?).FullName);
+
+        static readonly IReadOnlySet<String> UtcTypes = ReadOnlyData.Set(StringComparer.Ordinal,
+            typeof(DateTime).FullName, typeof(DateTime?).FullName, typeof(DateTimeOffset).FullName, typeof(DateTimeOffset?).FullName);
+
+        /// <summary>
+        /// True if the column type is a date (<see cref="DateTime"/>, <see cref="DateTimeOffset"/> or <see cref="DateOnly"/>, nullable or not).
+        /// </summary>
+        /// <param name="typeName">The full type name of the column (<see cref="TableDataBaseColumn.Type"/>), may be null.</param>
+        /// <returns>True for date columns.</returns>
+        public static bool IsDateType(String typeName) => DateTypes.Contains(typeName ?? "");
+
+        /// <summary>
+        /// Get the enum type of a column (an enum or a nullable enum), the values of such a column are written as names, as the web client shows them
+        /// (exported table data often comes through a serializer, so the values are numbers, ex: a log level "1" instead of "Debug").
+        /// </summary>
+        /// <param name="typeName">The full type name of the column (<see cref="TableDataBaseColumn.Type"/>), may be null.</param>
+        /// <returns>The enum type, or null if the column isn't an enum (or the type isn't known or allowed here).</returns>
+        public static Type GetEnumType(String typeName)
+        {
+            if (String.IsNullOrEmpty(typeName) || DefToStrings.ContainsKey(typeName) || DateTypes.Contains(typeName) || (typeName == StringTypeName))
+                return null;
+            return EnumTypes.GetOrAdd(typeName, static tn =>
+            {
+                try
+                {
+                    //  The name may come from a client (exported data), so it's resolved as data (type policy applies)
+                    var t = TypeFinder.GetForData(tn);
+                    if (t == null)
+                        return null;
+                    t = Nullable.GetUnderlyingType(t) ?? t;
+                    return t.IsEnum ? t : null;
+                }
+                catch
+                {
+                    return null;
+                }
+            });
+        }
+
+        static readonly String StringTypeName = typeof(String).FullName;
+
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<String, Type> EnumTypes = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Get the name of an enum value (the names of the flags for a flags enum, ex: "Read, Write").
+        /// </summary>
+        /// <param name="enumType">The enum type.</param>
+        /// <param name="value">The value: an enum, a number (of any type, ex: from a serializer) or a text (returned as is), may be null.</param>
+        /// <returns>The name, an empty text for null, the value text if it isn't a number.</returns>
+        public static String EnumToText(Type enumType, Object value)
+        {
+            if (value == null)
+                return "";
+            if (value is Enum e)
+                return e.ToString();
+            if (value is String s)
+                return s;
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
+            if ((enumType == null) || !enumType.IsEnum)
+                return text;
+            if (Int64.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                return Enum.ToObject(enumType, l).ToString();
+            if (UInt64.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ul))
+                return Enum.ToObject(enumType, ul).ToString();
+            return text;
+        }
+
+        /// <summary>
+        /// Get a value to text conversion for an enum column (see <see cref="GetEnumType"/> and <see cref="EnumToText"/>).
+        /// </summary>
+        /// <param name="typeName">The full type name of the column (<see cref="TableDataBaseColumn.Type"/>), may be null.</param>
+        /// <returns>The conversion, or null if the column isn't an enum.</returns>
+        public static Func<Object, String> GetEnumToText(String typeName)
+        {
+            var t = GetEnumType(typeName);
+            return t == null ? null : (v => EnumToText(t, v));
+        }
+
+        /// <summary>
+        /// True if the column holds date times that are exported as UTC: a <see cref="DateTime"/> or <see cref="DateTimeOffset"/> column (nullable or not)
+        /// without a special format (no format, "Default", or the "utc" / "local" display hints).
+        /// </summary>
+        /// <param name="col">The column, may be null.</param>
+        /// <returns>True if the column header should be labeled with <see cref="UtcSuffix"/>.</returns>
+        public static bool IsUtcColumn(TableDataColumn col)
+        {
+            if ((col == null) || !UtcTypes.Contains(col.Type ?? ""))
+                return false;
+            var f = col.Format;
+            if (String.IsNullOrEmpty(f))
+                return true;
+            var k = f.SplitFirst(';');
+            return k.FastEquals("Default") || k.FastEquals("utc") || k.FastEquals("local");
+        }
+
+        /// <summary>
+        /// The header text of a column in an export: the title (or the name), with <see cref="UtcSuffix"/> appended for date time columns (<see cref="IsUtcColumn"/>).
+        /// </summary>
+        /// <param name="col">The column.</param>
+        /// <returns>The header text.</returns>
+        public static String GetHeader(TableDataColumn col)
+        {
+            var t = col.Title ?? col.Name ?? "";
+            return IsUtcColumn(col) ? t + UtcSuffix : t;
+        }
+
         static readonly IReadOnlyDictionary<String, Formatter> DefToStrings = new Dictionary<String, Formatter>(StringComparer.Ordinal)
         {
             { typeof(Single).FullName, SingleToString },
@@ -275,6 +451,15 @@ namespace SysWeaver.Data
         public static ValueTuple<Formatter, bool> Get(String typeName, String headerFormat, IReadOnlyDictionary<String, SpecialFormatter> specials = null)
         {
             var rightAlign = DefToStrings.TryGetValue(typeName ?? "", out var fmt);
+            if ((fmt == null) && IsDateType(typeName))
+                fmt = DateToString;
+            if (fmt == null)
+            {
+                //  Enums: the name (exported data is often serialized, so the value is a number)
+                var et = GetEnumToText(typeName);
+                if (et != null)
+                    fmt = (c, n, h) => ObjToString(c == null ? null : et(c), n, h);
+            }
             if ((specials != null) && (!String.IsNullOrEmpty(headerFormat)))
             {
                 var special = headerFormat.SplitFirst(';');
@@ -296,7 +481,10 @@ namespace SysWeaver.Data
         {
             if (value == null)
                 return (ObjToString, false);
-            var rightAlign = DefToStrings.TryGetValue(value.GetType().FullName, out var fmt);
+            var tn = value.GetType().FullName;
+            var rightAlign = DefToStrings.TryGetValue(tn, out var fmt);
+            if ((fmt == null) && IsDateType(tn))
+                fmt = DateToString;
             return (fmt ?? ObjToString, rightAlign);
         }
 

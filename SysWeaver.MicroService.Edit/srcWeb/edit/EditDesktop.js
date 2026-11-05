@@ -1,141 +1,125 @@
 ﻿/**
- * @file Desktop layout strategy of the object editor.
+ * @file Desktop layout strategy of the object editor (`Sw.Edit.Layouts.Desktop`, legacy global `EditDesktop`).
  *
- * Loaded on demand by `Edit.Init()` (Edit.js) via `includeJs` relative to Edit.js; never included directly by a page.
- * Defines the global class `EditDesktop`. The `Edit` constructor instantiates it with `eval("new EditDesktop()")`
- * when the editor style is `"Desktop"` (the default for landscape windows / wide screens).
+ * Loaded by Edit.js. Both layouts create the same rows; EditDesktop.css lays them out as three columns
+ * (title | icon / menu | value) and EditMobile.css as a title line above a full width value. Root editors with an
+ * automatic style switch between the two by their width (class sw-edit-desktop / sw-edit-mobile), so a rotated phone or
+ * a resized window re-flows without re-rendering.
  *
- * Dependencies (globals from other files): `Edit` (Edit.js: `Edit.SetMember` and `editor.SetTypeInfo`).
- * The read-only member flag is tested with the literal `16` (= `TypeMemberFlags.ReadOnly`).
- *
- * Layout: a three-column `<table>` per editor: [member title | icon cell | editor cell]. Rows created here get the
- * CSS classes `TitleRow`, `SeparatorRow`, `ValueRow` and (toggled) `Hide`, styled by EditDesktop.css.
+ * Row structure:
+ * ```
+ * div.sw-edit-row[data-member]          (one per member; class sw-edit-ro when read only, sw-hide when hidden)
+ *   div.sw-edit-label > span.sw-edit-name   (title: click / long press / right click = member menu, drag source, drop target)
+ *   div.sw-edit-icon                        (menu button when Options.MenuIcon, item buttons)
+ *   div.sw-edit-value                       (the handler's editor)
+ * div.sw-edit-data                       (optional full width row for nested editors: objects, collections)
+ * ```
  */
+(function () {
+    "use strict";
 
-/**
- * Desktop layout strategy: lays a form out as a three-column table (title, icon, editor).
- * Stateless; one instance is created per `Edit` instance (stored as `edit.Edit`) and called by
- * `Edit` (`AddTypeInfo` from the constructor, `AddMember` from `Edit.SetObject`).
- * Same duck-typed interface as `EditMobile`.
- */
-class EditDesktop {
-    /**
-     * Creates the (stateless) layout strategy. Does nothing.
-     */
-    constructor() {
-    }
+    const el = Sw.el;
 
     /**
-     * Adds the title row of an editor: a `tr.TitleRow` with one cell spanning all three columns, which is filled by
-     * `editor.SetTypeInfo(c, table, type, title, options)` (expand icon, menu icon, type title, drag/drop), followed by
-     * an empty `tr.SeparatorRow`.
-     * @param {Edit} editor - The editor the title row belongs to.
-     * @param {HTMLTableElement} table - The editor's table (`editor.Table`); also passed as the element that gets
-     *   class `EditorCollapsed` when the title row's expand icon collapses the editor.
-     * @param {object} type - The `TypeDesc` being edited.
-     * @param {string} title - Tooltip text for the title (type name, assembly, summary, remarks).
-     * @param {EditOptions} options - The editor options.
-     * @returns {void}
+     * Desktop layout strategy (stateless). Called by Sw.Edit: AddTypeInfo (title row) and AddMember (one member).
      */
-    AddTypeInfo(editor, table, type, title, options) {
-        const r = table.insertRow();
-        r.classList.add("TitleRow");
-        const c = r.insertCell();
-        c.colSpan = "3";
-        editor.SetTypeInfo(c, table, type, title, options);
-        const s = table.insertRow();
-        s.classList.add("SeparatorRow");
-        s.insertCell().colSpan = "3";
-    }
-
-    /**
-     * Adds the rows for one member: a `tr.ValueRow` with a title cell holding a `SysWeaver-MemberTitle`
-     * (`member.DisplayName`), an icon cell and the editor cell, then calls `Edit.SetMember` which lets the member's
-     * type handler build its editor in the editor cell.
-     * The handler receives an `editContext` `{ PrevRow, Element, CreateData() }`: `PrevRow` is the value row,
-     * `Element` the editor cell and `CreateData()` appends a new row with one cell spanning three columns (used by
-     * object/collection handlers for their expandable content) and returns that cell.
-     * Afterwards prepends `item.Title` (handler constraint text) to the tooltip, stores it as `BaseTitle` on the title
-     * text, adds a `tr.SeparatorRow` unless `isLast`, attaches `item.Hide()` / `item.Show()` (toggle class `Hide` on the
-     * value row and its separator), sets `item.Icon` to the icon cell and adds class `EditReadOnly` to the title cell
-     * when the options or the member (flag 16 = ReadOnly) are read only.
-     * @param {object} obj - The object being edited (member value is `obj[member.Name]`).
-     * @param {Edit} editor - The owning editor.
-     * @param {HTMLTableElement} table - The editor's table.
-     * @param {object} member - The `TypeMemberDesc` of the member.
-     * @param {string} title - Tooltip text for the member title.
-     * @param {EditOptions} options - The editor options.
-     * @param {boolean} isLast - True for the last visible member (no separator row is added).
-     * @returns {Promise<object|null>} The item returned by the type handler's `AddEditor` (extended with
-     *   `Hide`, `Show`, `Icon`, and by `Edit.SetMember` with `TypeHandler`, `TitleElement`), or null if the handler
-     *   returned nothing (the value row is left in the table in that case).
-     */
-    async AddMember(obj, editor, table, member, title, options, isLast) {
-        const r = table.insertRow();
-        r.classList.add("ValueRow");
-        const c = r.insertCell();
-        const text = document.createElement("SysWeaver-MemberTitle");
-        c.appendChild(text);
-        text.innerText = member.DisplayName;
-        const icon = r.insertCell();
-        const editContext = {
-            PrevRow: r,
-            Element: r.insertCell(),
-            CreateData: () => {
-                const dataR = table.insertRow();
-                const dataC = dataR.insertCell();
-                dataC.colSpan = "3";
-                return dataC;
-            },
-        };
-        const ret = await Edit.SetMember(obj, editor, editContext, member, title, options, c);
-        if (!ret)
-            return null;
-        if (ret.Title)
-            title = ret.Title + "\n" + title;
-        text.BaseTitle = title;
-        c.title = title;
-        if (!isLast) {
-            const s = table.insertRow();
-            s.classList.add("SeparatorRow");
-            s.insertCell().colSpan = "3";
-            /**
-             * Hides the member: adds class `Hide` to the value row and its separator row.
-             * @returns {void}
-             */
-            ret.Hide = () => {
-                r.classList.add("Hide");
-                s.classList.add("Hide");
-            };
-            /**
-             * Shows the member again: removes class `Hide` from the value row and its separator row.
-             * @returns {void}
-             */
-            ret.Show = () => {
-                r.classList.remove("Hide");
-                s.classList.remove("Hide");
-            };
-        } else {
-            /**
-             * Hides the (last) member: adds class `Hide` to the value row.
-             * @returns {void}
-             */
-            ret.Hide = () => {
-                r.classList.add("Hide");
-            };
-            /**
-             * Shows the (last) member again: removes class `Hide` from the value row.
-             * @returns {void}
-             */
-            ret.Show = () => {
-                r.classList.remove("Hide");
-            };
+    class EditDesktop {
+        /** @type {string} The style name. */
+        get Name() {
+            return "Desktop";
         }
 
-        ret.Icon = icon;
-        if (options.ReadOnly || ((member.Flags & 16) !== 0))
-            c.classList.add("EditReadOnly");
-        return ret;
+        /**
+         * Fill the title row (delegates to editor.SetTypeInfo).
+         * @param {Sw.Edit} editor - The editor.
+         * @param {HTMLElement} head - The title row element.
+         * @param {object} type - The type.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         */
+        AddTypeInfo(editor, head, type, title, options) {
+            editor.SetTypeInfo(head, editor.Element, type, title, options);
+        }
+
+        /**
+         * Add the row of one member and let its handler build the editor.
+         * The handler gets `editContext` {PrevRow, Row (the member row), Element (value cell), Icon (icon cell),
+         * CreateData() (creates the full width data row below the member and returns it)}.
+         * @param {object} obj - The object.
+         * @param {Sw.Edit} editor - The editor.
+         * @param {HTMLElement} body - The rows container.
+         * @param {object} member - The member.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         * @param {boolean} isLast - Last visible member (unused, kept for the signature).
+         * @returns {Promise<?object>} The handler's item extended with Hide(), Show(), Icon.
+         */
+        async AddMember(obj, editor, body, member, title, options, isLast) {
+            const name = el("span.sw-edit-name", { text: member.DisplayName ?? member.Name });
+            const label = el("div.sw-edit-label", null, name);
+            if (options.TypeHints !== false) {
+                //  The hint line: short type and constraints (Design v2: the type is no longer part of the label)
+                const hint = Sw.Edit.MemberHint(member, options);
+                if (hint && hint !== name.textContent)
+                    label.append(Sw.Edit.HintElement(hint));
+            }
+            const icon = el("div.sw-edit-icon");
+            const value = el("div.sw-edit-value");
+            const row = el("div.sw-edit-row", { dataset: { member: member.Name } }, label, icon, value);
+            const readOnly = Sw.Edit.IsReadOnly(member, options);
+            if (readOnly) {
+                row.classList.add("sw-edit-ro");
+                label.classList.add("EditReadOnly");
+            }
+            body.append(row);
+            let data = null;
+            const ctx = {
+                PrevRow: row,
+                Row: row,
+                Element: value,
+                Icon: icon,
+                ReadOnly: readOnly,
+                CreateData: () => {
+                    if (!data) {
+                        data = el("div.sw-edit-data");
+                        row.after(data);
+                    }
+                    return data;
+                },
+            };
+            label.title = title || "";
+            const ret = await Sw.Edit.SetMember(obj, editor, ctx, member, title, options, label);
+            if (!ret) {
+                row.remove();
+                if (data)
+                    data.remove();
+                return null;
+            }
+            if (ret.Title)
+                label.title = ret.Title + "\n" + label.title;
+            name.BaseTitle = label.title;
+            if (!ret.DataRow && data)
+                ret.DataRow = data;
+            ret.Icon = icon;
+            ret.Row = row;
+            /** Hide the member (row and data row). */
+            ret.Hide = () => {
+                row.classList.add("sw-hide");
+                if (data)
+                    data.classList.add("sw-hide");
+            };
+            /** Show the member again. */
+            ret.Show = () => {
+                row.classList.remove("sw-hide");
+                if (data)
+                    data.classList.remove("sw-hide");
+            };
+            return ret;
+        }
     }
 
-}
+    Sw.Edit.Layouts.Desktop = new EditDesktop();
+    Sw.Edit.LayoutDesktop = EditDesktop;
+    if (!window.EditDesktop)
+        window.EditDesktop = EditDesktop;
+})();

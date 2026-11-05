@@ -47,6 +47,8 @@ namespace SysWeaver.MicroService
             m[(int)UserManagerComOps.AddPhone] = p.AddPhone ?? new();
             m[(int)UserManagerComOps.ChangePhone] = p.ChangePhone ?? new();
             m[(int)UserManagerComOps.DeletedPhone] = p.DeletedPhone ?? new();
+            m[(int)UserManagerComOps.ForcedResetPassword] = p.ForcedResetPassword ?? new();
+            m[(int)UserManagerComOps.ChangedEmail] = p.ChangedEmail ?? new();
 
             Footer = p.Footer ?? new();
             Header = p.Header ?? new();
@@ -77,10 +79,23 @@ namespace SysWeaver.MicroService
             return am.ValidateEmailAddress(target, false);
         }
 
+        /// <summary>
+        /// True if a localized template is missing: not there, or an optional one whose files are not in the folder (it loads with an
+        /// empty body / subject)
+        /// </summary>
+        static bool IsMissing(ManagedMailMessage m)
+            => (m == null) || String.IsNullOrEmpty(m.Body) || String.IsNullOrEmpty(m.Subject);
+
         public Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system)
         {
             bool haveLang = messages != null;
             var m = haveLang ? messages.GetMail(ops) : Messages[(int)ops];
+            //  Localized message folders made before the forced reset template existed: use the reset template
+            if (IsMissing(m) && haveLang && (ops == UserManagerComOps.ForcedResetPassword))
+                m = messages.GetMail(UserManagerComOps.ResetPassword);
+            //  Localized message folders made before the changed e-mail notice existed: use the built in template
+            if (IsMissing(m) && haveLang && (ops == UserManagerComOps.ChangedEmail))
+                m = Messages[(int)ops];
             if (m == null)
                 throw new Exception("Undefined mail message " + ops);
             var wl = WhiteListPrefixes;
@@ -110,7 +125,7 @@ namespace SysWeaver.MicroService
             vars["[Header]"] = header;
             vars["[Footer]"] = footer;
             m.GetMessage(out var subject, out var body, vars);
-            return Email.Send(target, subject, body, m.IsHtml);
+            return Email.SendEmail(new OutgoingEmailMessage { Email = target, Subject = subject, Body = body, IsHtml = m.IsHtml, System = system });
         }
 
 
@@ -161,7 +176,7 @@ namespace SysWeaver.MicroService
             vars["[Header]"] = header;
             vars["[Footer]"] = footer;
             m.GetMessage(out var subject, out var body, vars);
-            return Email.Send(target, subject, body, m.IsHtml);
+            return Email.SendEmail(new OutgoingEmailMessage { Email = target, Subject = subject, Body = body, IsHtml = m.IsHtml, System = system });
         }
 
 

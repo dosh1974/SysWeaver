@@ -200,6 +200,15 @@ Public methods marked `[WebApi]` on any registered service are published under `
 
 The HTTP server embeds a single-page application shell. Services extend it declaratively: `[WebMenu*]` attributes add menu items; table-data APIs are shown in a generic, sortable, filterable grid ([SysWeaver.TableData](SysWeaver.TableData/README.md)); charts ([SysWeaver.MicroService.ChartJs](SysWeaver.MicroService.ChartJs/README.md)), an object editor ([SysWeaver.MicroService.Edit](SysWeaver.MicroService.Edit/README.md)), dashboards and exporters build on the same model. Files in a project's `web/` folder, embedded as resources, are served automatically.
 
+Pages are built on `Sw`, a dependency free vanilla JavaScript library in three layers: a UI-less core (requests, server push messages, cross window messaging, themes), UI components and the app shell. Developer entry points:
+
+- [Web client overview](_docs/Web.md): architecture, page format, server contract, build and translation rules
+- [Your first page in 5 minutes](_docs/WebQuickStart.md): a page, its API call, a table, the menu attribute, testing, migrating old pages
+- [Branding a deployed app](_docs/WebBranding.md): name, logo and icons, colors and own themes, page styles, without forking the framework
+- [Sw UI library (ui/README)](SysWeaver.HttpServer/srcWeb/ui/README.md) and the [core API (core/README)](SysWeaver.HttpServer/srcWeb/core/README.md)
+- [Component gallery (ui/gallery.html)](SysWeaver.HttpServer/srcWeb/ui/gallery.html): every component in every state, with its API name and a code snippet; served at `/ui/gallery.html`
+- [SwWeb tool](https://github.com/dosh1974/SysWeaver.Tools/blob/main/SwWeb/README.md): builds the bundles, checks web files against the server rules, migrates old pages
+
 **App icon, logo and banner.** Every server serves three source images in the site root. If no module, and no folder on disc, serves them, the server generates them from the app's display name, description and colors:
 
 | File | Aspect | Example size |
@@ -321,7 +330,7 @@ curl "http://localhost:8080/Api/hello/Greet?%22World%22"
 "Hello World"
 ```
 
-**6. Grow it** — add log file output ([SysWeaver.MicroServices.Log](SysWeaver.MicroServices.Log/README.md)), login ([SysWeaver.MicroService.Auth](SysWeaver.MicroService.Auth/README.md)), the menu, icons and explorer ([SysWeaver.MicroService.HttpServer](SysWeaver.MicroService.HttpServer/README.md)), your own pages (embed files under `web/`), and finally install it as an OS service with `HelloService install` ([SysWeaver.OsServices](SysWeaver.OsServices/README.md)).
+**6. Grow it** — add log file output ([SysWeaver.MicroServices.Log](SysWeaver.MicroServices.Log/README.md)), login ([SysWeaver.MicroService.Auth](SysWeaver.MicroService.Auth/README.md)), the menu, icons and explorer ([SysWeaver.MicroService.HttpServer](SysWeaver.MicroService.HttpServer/README.md)), your own pages (embed files under `web/`; see [Your first page in 5 minutes](_docs/WebQuickStart.md)), and finally install it as an OS service with `HelloService install` ([SysWeaver.OsServices](SysWeaver.OsServices/README.md)).
 
 ## Manifest ordering rules
 

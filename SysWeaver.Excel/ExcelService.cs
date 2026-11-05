@@ -102,7 +102,7 @@ namespace SysWeaver.Excel
         /// <summary>
         /// Set the license, have to be called once before using GemBox
         /// </summary>
-        /// <param name="p">Paramaters, if null the free limited license</param>
+        /// <param name="p">Parameters, if null the free limited license</param>
         /// <param name="mustExist">If p is non-null and there isn't a valid license, throw an exception, else use the free</param>
         public static void SetLicense(ApiKeyParams p, bool mustExist = true)
         {

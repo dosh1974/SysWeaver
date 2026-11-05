@@ -1,0 +1,1080 @@
+﻿/*
+ * ui/icons.css - SysWeaver UI library (Sw) styles, part 6 of 6: the SysWeaver icon classes.
+ *
+ * Every icon class used by the server (C# IconClass values, contract Appendix B) and by the pages: a class only sets mask-image
+ * (an svg of the icon module, ../icons/), the element's background color (currentColor for Sw.IconClass / Sw.Icon elements, the
+ * IconColor* class for old ColorIcon elements) shows through the mask, so icons follow the theme. Classes with background-image
+ * (IconLogo, IconCurrentUser, IconFile*) are full color images. Pages may override a class in their own style sheet.
+ * The paths are relative to this file's folder (ui/ or the bundle folder sw/), both are one level below the site root.
+ */
+
+.IconAdd {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconAddEmail {
+    mask-image: url("../icons/user_email_add.svg");
+}
+
+.IconAddPasskey {
+    mask-image: url("../icons/passkey_add.svg");
+}
+
+.IconAddPasskeyOther {
+    mask-image: url("../icons/qr_code.svg");
+}
+
+.IconAddPassword {
+    mask-image: url("../icons/user_password_add.svg");
+}
+
+.IconAddPhone {
+    mask-image: url("../icons/user_phone_add.svg");
+}
+
+.IconApply {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconAscending {
+    mask-image: url("../icons/m_sort_asc.svg");
+}
+
+.IconAuthAddEmail {
+    mask-image: url("../icons/user_email_add.svg");
+}
+
+.IconAuthAddPassword {
+    mask-image: url("../icons/user_password_add.svg");
+}
+
+.IconAuthAddPhone {
+    mask-image: url("../icons/user_phone_add.svg");
+}
+
+.IconAuthChangeEmail {
+    mask-image: url("../icons/user_email_change.svg");
+}
+
+.IconAuthChangePhone {
+    mask-image: url("../icons/user_phone_change.svg");
+}
+
+.IconAuthCopy {
+    mask-image: url("../icons/copy.svg");
+}
+
+.IconAuthDeleteAccount {
+    mask-image: url("../icons/user_delete.svg");
+}
+
+.IconAuthDeleteEmail {
+    mask-image: url("../icons/user_email_delete.svg");
+}
+
+.IconAuthDeleteMail {
+    mask-image: url("../icons/user_delete.svg");
+}
+
+.IconAuthDeletePassword {
+    mask-image: url("../icons/user_password_delete.svg");
+}
+
+.IconAuthDeletePhone {
+    mask-image: url("../icons/user_phone_delete.svg");
+}
+
+.IconAuthEmail {
+    mask-image: url("../icons/email.svg");
+}
+
+.IconAuthForgotPassword {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconAuthInviteUser {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconAuthLogin {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconAuthLogout {
+    mask-image: url("../icons/user_logout.svg");
+}
+
+.IconAuthPassword {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconAuthPhone {
+    mask-image: url("../icons/phone.svg");
+}
+
+.IconAuthPost {
+    mask-image: url("../icons/send.svg");
+}
+
+.IconAuthRandom {
+    mask-image: url("../icons/dice.svg");
+}
+
+.IconAuthResetPassword {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconAuthSetPassword {
+    mask-image: url("../icons/user_password.svg");
+}
+
+.IconAuthSignUp {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconAuthView {
+    mask-image: url("../icons/eye.svg");
+}
+
+.IconAuthViewOff {
+    mask-image: url("../icons/eye_off.svg");
+}
+
+.IconCancel {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconCashBill {
+    mask-image: url("../icons/cash_bill.svg");
+}
+
+.IconCashBills {
+    mask-image: url("../icons/cash_bills.svg");
+}
+
+.IconChangeEmail {
+    mask-image: url("../icons/user_email_change.svg");
+}
+
+.IconChangePassword {
+    mask-image: url("../icons/user_password.svg");
+}
+
+.IconChangePhone {
+    mask-image: url("../icons/user_phone_change.svg");
+}
+
+.IconChart {
+    mask-image: url("../icons/chart.svg");
+}
+
+.IconChartExport {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconChartMenu {
+    mask-image: url("../icons/menu.svg");
+}
+
+.IconChat {
+    mask-image: url("../icons/chat.svg");
+}
+
+.IconChatAge {
+    mask-image: url("../icons/hour_glass.svg");
+}
+
+.IconChatAttachFile {
+    mask-image: url("../icons/db_add.svg");
+}
+
+.IconChatAutoSendOff {
+    mask-image: url("../icons/edit.svg");
+}
+
+.IconChatAutoSendOn {
+    mask-image: url("../icons/send.svg");
+}
+
+.IconChatBottom {
+    mask-image: url("../icons/MoveBottom.svg");
+}
+
+.IconChatClear {
+    mask-image: url("../icons/trash.svg");
+}
+
+.IconChatClearCurrent {
+    mask-image: url("../icons/clear.svg");
+}
+
+.IconChatCopy {
+    mask-image: url("../icons/copy.svg");
+}
+
+.IconChatCopyImage {
+    mask-image: url("../icons/image.svg");
+}
+
+.IconChatDeleteFile {
+    mask-image: url("../icons/db_remove.svg");
+}
+
+.IconChatExpand {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconChatHelp {
+    mask-image: url("../icons/help.svg");
+}
+
+.IconChatHide {
+    mask-image: url("../icons/eye_off.svg");
+}
+
+.IconChatHideFile {
+    mask-image: url("../icons/eye_off.svg");
+}
+
+.IconChatKeep {
+    mask-image: url("../icons/fav_on.svg");
+}
+
+.IconChatLanguage {
+    mask-image: url("../icons/table_language.svg");
+}
+
+.IconChatLink {
+    mask-image: url("../icons/share.svg");
+}
+
+.IconChatLink0 {
+    mask-image: url("../icons/keep.svg");
+}
+
+.IconChatLink1 {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconChatLink2 {
+    mask-image: url("../icons/table_country.svg");
+}
+
+.IconChatMicOff {
+    mask-image: url("../icons/mic_off.svg");
+}
+
+.IconChatMicOn {
+    mask-image: url("../icons/mic_on.svg");
+}
+
+.IconChatRemove {
+    mask-image: url("../icons/trash.svg");
+}
+
+.IconChatSave {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconChatShow {
+    mask-image: url("../icons/eye.svg");
+}
+
+.IconChatSpeechGenDisable {
+    mask-image: url("../icons/preview_mute.svg");
+}
+
+.IconChatSpeechGenEnable {
+    mask-image: url("../icons/preview_vol_loud.svg");
+}
+
+.IconChatSpeechVolume {
+    mask-image: url("../icons/preview_unmute.svg");
+}
+
+.IconChatSpeechVolume100 {
+    mask-image: url("../icons/preview_vol_loud.svg");
+}
+
+.IconChatSpeechVolume25 {
+    mask-image: url("../icons/preview_vol_low.svg");
+}
+
+.IconChatSpeechVolume50 {
+    mask-image: url("../icons/preview_vol_low.svg");
+}
+
+.IconChatSpeechVolume75 {
+    mask-image: url("../icons/preview_vol_loud.svg");
+}
+
+.IconChatStore {
+    mask-image: url("../icons/db_add.svg");
+}
+
+.IconChatTime {
+    mask-image: url("../icons/clock.svg");
+}
+
+.IconChatTop {
+    mask-image: url("../icons/MoveTop.svg");
+}
+
+.IconChoosePassword {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconClear {
+    mask-image: url("../icons/clear.svg");
+}
+
+.IconClearInput {
+    mask-image: url("../icons/clear_input.svg");
+}
+
+.IconClearSort {
+    mask-image: url("../icons/m_menu.svg");
+}
+
+.IconClock {
+    mask-image: url("../icons/clock.svg");
+}
+
+.IconClose {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconClosePopUp {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconCoin {
+    mask-image: url("../icons/cash_bills.svg");
+}
+
+.IconCollapse {
+    mask-image: url("../icons/collapse.svg");
+}
+
+.IconCollapseMain {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconCopy {
+    mask-image: url("../icons/copy.svg");
+}
+
+.IconDb {
+    mask-image: url("../icons/db.svg");
+}
+
+.IconDbAdd {
+    mask-image: url("../icons/db_add.svg");
+}
+
+.IconDbMinus {
+    mask-image: url("../icons/db_minus.svg");
+}
+
+.IconDbRemove {
+    mask-image: url("../icons/db_remove.svg");
+}
+
+.IconDbTable {
+    mask-image: url("../icons/db.svg");
+}
+
+.IconDebug {
+    mask-image: url("../icons/table_api.svg");
+}
+
+.IconDebugDetails {
+    mask-image: url("../icons/rating_on.svg");
+}
+
+.IconDebugNone {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconDebugOverview {
+    mask-image: url("../icons/rating_off.svg");
+}
+
+.IconDebugParameters {
+    mask-image: url("../icons/rating_half.svg");
+}
+
+.IconDebugStats {
+    mask-image: url("../icons/fingerprint.svg");
+}
+
+.IconDelete {
+    mask-image: url("../icons/user_delete.svg");
+}
+
+.IconDeleteEmail {
+    mask-image: url("../icons/user_email_delete.svg");
+}
+
+.IconDeletePassword {
+    mask-image: url("../icons/user_password_delete.svg");
+}
+
+.IconDeletePhone {
+    mask-image: url("../icons/user_phone_delete.svg");
+}
+
+.IconDescending {
+    mask-image: url("../icons/m_sort_desc.svg");
+}
+
+.IconDice {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconDisc {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconDownload {
+    mask-image: url("../icons/download.svg");
+}
+
+.IconEdit {
+    mask-image: url("../icons/edit.svg");
+}
+
+.IconEmail {
+    mask-image: url("../icons/email.svg");
+}
+
+.IconExpand {
+    mask-image: url("../icons/expand.svg");
+}
+
+.IconExpandMain {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconExplore {
+    mask-image: url("../icons/explore.svg");
+}
+
+.IconExport {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconFilter {
+    mask-image: url("../icons/filter.svg");
+}
+
+.IconFullScreenEnter {
+    mask-image: url("../icons/fullscreen_enter.svg");
+}
+
+.IconFullScreenExit {
+    mask-image: url("../icons/fullscreen_exit.svg");
+}
+
+.IconHelp {
+    mask-image: url("../icons/help.svg");
+}
+
+.IconHome {
+    mask-image: url("../icons/home.svg");
+}
+
+.IconImage {
+    mask-image: url("../icons/image.svg");
+}
+
+.IconInvite {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconKey {
+    mask-image: url("../icons/key.svg");
+}
+
+.IconLink {
+    mask-image: url("../icons/share.svg");
+}
+
+.IconLock {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconLogin {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconLogout {
+    mask-image: url("../icons/user_logout.svg");
+}
+
+.IconMainMenu {
+    mask-image: url("../icons/left.svg");
+}
+
+.IconMediaCollapse {
+    mask-image: url("../icons/collapse.svg");
+}
+
+.IconMediaExpand {
+    mask-image: url("../icons/expand.svg");
+}
+
+.IconMediaNewWindow {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconMenu {
+    mask-image: url("../icons/more.svg");
+}
+
+.IconMinus {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconMore {
+    mask-image: url("../icons/more.svg");
+}
+
+.IconMoreData {
+    mask-image: url("../icons/more.svg");
+}
+
+.IconNavBack {
+    mask-image: url("../icons/left.svg");
+}
+
+.IconNetwork {
+    mask-image: url("../icons/network.svg");
+}
+
+.IconNewTab {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconNext {
+    mask-image: url("../icons/next.svg");
+}
+
+.IconNotes {
+    mask-image: url("../icons/notes.svg");
+}
+
+/* A check mark, inline (the icon module has no check mark svg; IconOk used to show the fav_on heart) */
+.IconOk {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 12.5l5 5L19.5 7'/%3E%3C/svg%3E");
+}
+
+.IconOrder {
+    mask-image: url("../icons/table_log.svg");
+}
+
+.IconOrderAscending {
+    mask-image: url("../icons/m_sort_asc.svg");
+}
+
+.IconOrderAscendingSel {
+    mask-image: url("../icons/m_sort_asc.svg");
+}
+
+.IconOrderDescending {
+    mask-image: url("../icons/m_sort_desc.svg");
+}
+
+.IconOrderDescendingSel {
+    mask-image: url("../icons/m_sort_desc.svg");
+}
+
+.IconOrderOriginal {
+    mask-image: url("../icons/home.svg");
+}
+
+.IconOrderOriginalSel {
+    mask-image: url("../icons/home.svg");
+}
+
+.IconPasskeyKey {
+    mask-image: url("../icons/passkey_key.svg");
+}
+
+.IconPasskeyRename {
+    mask-image: url("../icons/passkey_rename.svg");
+}
+
+.IconPassword {
+    mask-image: url("../icons/user_password.svg");
+}
+
+.IconPaused {
+    mask-image: url("../icons/preview_pause.svg");
+}
+
+.IconPhone {
+    mask-image: url("../icons/phone.svg");
+}
+
+.IconPlus {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconPower {
+    mask-image: url("../icons/power.svg");
+}
+
+.IconPrev {
+    mask-image: url("../icons/prev.svg");
+}
+
+.IconProfile {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconRecover {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconRefund {
+    mask-image: url("../icons/refund.svg");
+}
+
+.IconReload {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconRemove {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconReset {
+    mask-image: url("../icons/reset.svg");
+}
+
+.IconRetry {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconSave {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconSearch {
+    mask-image: url("../icons/search.svg");
+}
+
+.IconSecured {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconSend {
+    mask-image: url("../icons/send.svg");
+}
+
+.IconSendIt {
+    mask-image: url("../icons/table_api.svg");
+}
+
+.IconServer {
+    mask-image: url("../icons/server.svg");
+}
+
+.IconSettings {
+    mask-image: url("../icons/settings.svg");
+}
+
+.IconShareLink0 {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconShareLink1 {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconShareLink2 {
+    mask-image: url("../icons/share.svg");
+}
+
+.IconSignUp {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconSync {
+    mask-image: url("../icons/sync.svg");
+}
+
+.IconTable {
+    mask-image: url("../icons/table.svg");
+}
+
+.IconTableApi {
+    mask-image: url("../icons/table_api.svg");
+}
+
+.IconTableCache {
+    mask-image: url("../icons/table_cache.svg");
+}
+
+.IconTableCompression {
+    mask-image: url("../icons/table_compression.svg");
+}
+
+.IconTableCountry {
+    mask-image: url("../icons/table_country.svg");
+}
+
+.IconTableCurrency {
+    mask-image: url("../icons/table_currency.svg");
+}
+
+.IconTableLanguage {
+    mask-image: url("../icons/table_language.svg");
+}
+
+.IconTableLog {
+    mask-image: url("../icons/table_log.svg");
+}
+
+.IconTableMemory {
+    mask-image: url("../icons/memory.svg");
+}
+
+.IconTablePerfSystem {
+    mask-image: url("../icons/table_perf_system.svg");
+}
+
+.IconTablePerformance {
+    mask-image: url("../icons/table_performance.svg");
+}
+
+.IconTablePhone {
+    mask-image: url("../icons/phone.svg");
+}
+
+.IconTableSerializer {
+    mask-image: url("../icons/table_serializer.svg");
+}
+
+.IconTableServices {
+    mask-image: url("../icons/table_services.svg");
+}
+
+.IconTableSession {
+    mask-image: url("../icons/table_session.svg");
+}
+
+.IconTableStats {
+    mask-image: url("../icons/table_stats.svg");
+}
+
+.IconTableTables {
+    mask-image: url("../icons/table_tables.svg");
+}
+
+.IconTableTemplates {
+    mask-image: url("../icons/table_template.svg");
+}
+
+.IconTableTranslateFrom {
+    mask-image: url("../icons/table_translate_from.svg");
+}
+
+.IconTableTranslateTo {
+    mask-image: url("../icons/table_translate_to.svg");
+}
+
+.IconTableUsers {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconTagAdd {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconTagRemove {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconTheme {
+    mask-image: url("../icons/theme.svg");
+}
+
+.IconThemeAuto {
+    mask-image: url("../icons/theme_auto.svg");
+}
+
+.IconThemeDark {
+    mask-image: url("../icons/theme_dark.svg");
+}
+
+.IconThemeHacker {
+    mask-image: url("../icons/theme_hacker.svg");
+}
+
+/* The Pro theme (server Theme menu, HttpServerBase): a display, distinct from the Dark theme's moon */
+.IconThemePro {
+    mask-image: url("../icons/display.svg");
+}
+
+.IconThemeLight {
+    mask-image: url("../icons/theme_light.svg");
+}
+
+.IconTrash {
+    mask-image: url("../icons/trash.svg");
+}
+
+.IconUnlock {
+    mask-image: url("../icons/unlock.svg");
+}
+
+.IconUpload {
+    mask-image: url("../icons/upload.svg");
+}
+
+.IconUsePasskey {
+    mask-image: url("../icons/passkey_use.svg");
+}
+
+.IconUser {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconUsers {
+    mask-image: url("../icons/users.svg");
+}
+
+.IconWarning {
+    mask-image: url("../icons/warning.svg");
+}
+
+.IconWorking {
+    mask-image: url("../icons/Loading.svg");
+}
+
+.IconWorld {
+    mask-image: url("../icons/world.svg");
+}
+
+.IconChatSystem {
+    mask-image: url("../icons/chat.svg");
+}
+
+/* Old ColorIcon color classes (also usable on Sw.IconClass elements) */
+.IconColorThemeBackground {
+    background-color: var(--ThemeBackground);
+}
+
+.IconColorThemeMain {
+    background-color: var(--ThemeMain);
+}
+
+.IconColorThemeAcc1 {
+    background-color: var(--ThemeAcc1);
+}
+
+.IconColorThemeAcc2 {
+    background-color: var(--ThemeAcc2);
+}
+
+/* The main menu button arrow follows the shell state */
+body.SwNarrow .IconMainMenu {
+    mask-image: url("../icons/up.svg");
+}
+
+body.SwCollapsed .IconMainMenu {
+    mask-image: url("../icons/right.svg");
+}
+
+body.SwCollapsed.SwNarrow .IconMainMenu {
+    mask-image: url("../icons/down.svg");
+}
+
+/* Full color images (no mask) */
+.IconCurrentUser {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../auth/UserImages/Current/small");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconCurrentUserFill {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../auth/UserImages/Current/small");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFileCsv {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/csv.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFileHtml {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/html.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFileJson {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/json.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFileMD {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/md.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFilePdf {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/pdf.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFilePng {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/png.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFileSvg {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/svg.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconFileXlsx {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icons/ext/xlsx.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconLogo {
+    mask-image: none;
+    background-color: transparent !important;
+    background-image: url("../icon.svg");
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.IconCurrentUserFill {
+    background-size: cover;
+}
+
+/*
+ * distinct menu icons for framework pages that shared one glyph (the rail shows icons only, so every item needs its own).
+ * Servers may name these classes in their WebMenu attributes; until they do, shell/menu.js (MenuIcons) gives a menu item that shares its
+ * icon with another item of the same menu the distinct class of its page.
+ */
+.IconProblems {
+    mask-image: url("../icons/warning.svg");
+}
+
+.IconLogFile {
+    mask-image: url("../icons/log_file.svg");
+}
+
+.IconSessionCache {
+    mask-image: url("../icons/cache_session.svg");
+}
+
+.IconFolderManaged {
+    mask-image: url("../icons/folder_managed.svg");
+}
+
+.IconFolderShared {
+    mask-image: url("../icons/folder_shared.svg");
+}
+
+.IconFolderRemote {
+    mask-image: url("../icons/folder_remote.svg");
+}
+
+.IconTableRefs {
+    mask-image: url("../icons/table_refs.svg");
+}
+
+.IconTableEmails {
+    mask-image: url("../icons/email.svg");
+}
+
+.IconTableMessages {
+    mask-image: url("../icons/chat.svg");
+}
+
+.IconAiImageModels {
+    mask-image: url("../icons/image.svg");
+}
+
+/* chat (text / language models), not brain: the "AI models" folder above them shows brain */
+.IconAiTextModels {
+    mask-image: url("../icons/chat.svg");
+}
+
+.IconEndPoints {
+    mask-image: url("../icons/server.svg");
+}
+
+.IconTableClients {
+    mask-image: url("../icons/computer.svg");
+}
+
+.IconLoadedServices {
+    mask-image: url("../icons/services_loaded.svg");
+}
+
+.IconKeyFiles {
+    mask-image: url("../icons/key_file.svg");
+}
+
+/* a menu folder whose icon is also shown by an item inside it (shell/menu.js DistinctIcons) */
+.IconMenuFolder {
+    mask-image: url("../icons/menu_folder.svg");
+}
+
+.IconBackgroundEffects {
+    mask-image: url("../icons/gradient.svg");
+}
+
+.IconImageEffects {
+    mask-image: url("../icons/color_palette.svg");
+}
+
+.IconCollageEffects {
+    mask-image: url("../icons/collage.svg");
+}

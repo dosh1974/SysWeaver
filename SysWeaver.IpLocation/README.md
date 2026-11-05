@@ -29,7 +29,7 @@ The service requires at least one `IIpLocationSource` and optionally uses one `I
 ## Key features
 
 - Sources included: [ip2location.io](https://www.ip2location.io/) (`Ip2locationIoSource`), [ipgeolocation.io](https://ipgeolocation.io/) (`AppIpgeolocationIoSource`) and another SysWeaver server running this service (`IlsSysWeaverService`), so one central server with API keys and a persistent cache can serve many.
-- Sources are tried in registration order; when all of them fail, the lookup is retried with an increasing delay (`MinWaitMs` to `MaxWaitMs`).
+- Sources are tried in registration order; when all of them fail, the lookup is retried with an increasing delay (`MinWaitMs` to `MaxWaitMs`), at most `MaxRetryCount` rounds. A source that times out is not tried again for that ip, so the lookup ends at once when all sources timed out.
 - In-memory cache (`MaxCachedMinutes`, default one day) when no `IIpLocationCache` is registered.
 - `GetLocation` is published as a web API that requires the `Service` role, so other servers can use this one as their source.
 - Source failure stats and perf monitoring.
@@ -59,7 +59,6 @@ To use another SysWeaver server as the source, register `SysWeaver.IpLocation.So
 
 - Requires at least one source; commercial sources need API keys and are subject to quotas.
 - A source that answers without a location (null) ends the lookup, the next source is only tried when a source fails.
-- The number of retry rounds is currently fixed (10); `MaxRetryCount` only affects how fast the delay grows.
 - Geolocation accuracy is inherently limited by the source data.
 
 ## Folder layout

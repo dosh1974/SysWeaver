@@ -11,7 +11,7 @@
 
 ## Purpose
 
-At build time the icons are optimised by SvgOpt with `-RemoveFill -RemoveSize` (so they can be coloured by the theme through `mask-image`), Brotli compressed into `web/chat/icons/` and embedded (see [srcWeb](../../README.md)). They are referenced from [`chat.css`](../chat.css) as `icons/<name>.svg`; general icons such as send, menu and help come from the shared `../icons/` folder instead.
+At build time the icons are optimised by SvgOpt with `-RemoveFill -RemoveSize` (so they can be coloured by the theme through `mask-image`), Brotli compressed into `web/chat/icons/` and embedded (see [srcWeb](../../README.md)). They are referenced from [`chat.css`](../chat.css) as `icons/<name>.svg` (the two mic states from [`chat.js`](../chat.js) as `<root>chat/icons/<name>.svg`); general icons such as send, menu and help come from the shared `../icons/` folder instead.
 
 ## Contents
 
@@ -21,8 +21,8 @@ At build time the icons are optimised by SvgOpt with `-RemoveFill -RemoveSize` (
 | [`ChatFormatText.svg`](ChatFormatText.svg) | `.IconChatText`: plain text message format |
 | [`ChatHidePreview.svg`](ChatHidePreview.svg) | `.IconChatHidePreview`: hide the preview |
 | [`ChatShowPreview.svg`](ChatShowPreview.svg) | `.IconChatShowPreview`: show the preview |
-| [`ChatInput.svg`](ChatInput.svg) | Speech input button of the chat input, `IconDisabled` state |
-| [`ChatRecording.svg`](ChatRecording.svg) | Speech input button of the chat input, `IconWorking` state |
+| [`ChatInput.svg`](ChatInput.svg) | Speech input (mic) button while open mic listening waits for the wake word (set by `chat.js`, `Composer.SetMicState`) |
+| [`ChatRecording.svg`](ChatRecording.svg) | Speech input (mic) button while speech is recorded (set by `chat.js`, `Composer.SetMicState`) |
 
 ## Relationships
 

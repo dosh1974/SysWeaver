@@ -626,7 +626,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get an image (screenshot) from an url
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns>Response</returns>
         [WebApiClientCache(30)] 
         [WebApiRequestCache(25, WebApiCaches.Globally)]
@@ -638,7 +638,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get a jpeg (screenshot) from an url
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns>Response</returns>
         [WebApiClientCache(30)]
         [WebApiRequestCache(25, WebApiCaches.Globally)]

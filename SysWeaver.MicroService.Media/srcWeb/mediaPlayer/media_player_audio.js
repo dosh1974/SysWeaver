@@ -5,8 +5,8 @@
  * Loading: included by MediaPlayer.Init (when window.MediaLoadAll is set) or lazily by MediaPlayer.Create
  * (MediaTypes.Audio); MediaPlayerTools.CanUnMute also requires it (uses MediaPlayerAudio.LoadAudio).
  * Globals defined: MediaPlayerParamsAudio, MediaPlayerAudio.
- * Dependencies: MediaPlayerTools (media_player_tools.js: InitBase, OnCacheComplete), and the common.js globals
- * waitEvent2 and delay.
+ * Dependencies: MediaPlayerTools (media_player_tools.js: InitBase, OnCacheComplete), and MediaPlayerTools.waitEvent2
+ * and MediaPlayerTools.delay (no SysWeaver core needed).
  */
 
 /**
@@ -147,23 +147,25 @@ class MediaPlayerAudio {
 
     /**
      * Loads a media URL into an <audio> (or <video>) element: appends a <source src=c> child, waits for
-     * "loadeddata" or "error" (common.js waitEvent2), then polls every 100 ms until readyState >= 3 (HAVE_FUTURE_DATA).
+     * "loadeddata" or "error" (MediaPlayerTools.waitEvent2), then polls every 100 ms until readyState >= 3 (HAVE_FUTURE_DATA).
      * Also used by MediaPlayerTools.CanUnMute.
      * @param {HTMLMediaElement} e - The media element to load into.
      * @param {string} c - The source URL.
      * @returns {Promise<boolean>} False when the element fired "error", else true.
      */
     static async LoadAudio(e, c) {
-        const res = await waitEvent2(e, "loadeddata", "error", () => {
+        const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => {
             const source = document.createElement('source');
             source.src = c;
             //source.type = "audio/webm";
+            //  A failed <source> fires "error" on the source only (it does not bubble): without this a broken url waited forever
+            source.addEventListener("error", () => e.dispatchEvent(new Event("error")), { once: true });
             e.appendChild(source);
         });
         if (res.type == "error")
             return false;
         while (e.readyState < 3)
-            await delay(100);
+            await MediaPlayerTools.delay(100);
         return true;
     }
 
@@ -259,7 +261,7 @@ class MediaPlayerAudio {
         n.volume = e.volume;
         if (!await MediaPlayerAudio.LoadAudio(n, this.Url)) {
             t.Paused = true;
-            const res = await waitEvent2(e, "loadeddata", "error", () => e.load());
+            const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => e.load());
             if (res.type == "error")
                 return false;
             t.Paused = true;
@@ -329,6 +331,29 @@ class MediaPlayerAudio {
         return this.Element.currentTime;
     }
 
+    /**
+     * The playback speed (1 = normal).
+     * @type {number}
+     */
+    Rate = 1;
+
+    /**
+     * The fastest speed SetRate takes (the browsers play media up to 16 times faster).
+     * @type {number}
+     */
+    MaxRate = 16;
+
+    /**
+     * Set the playback speed (element.playbackRate; the pitch of the sound is kept).
+     * @param {number} rate The speed, 1 = normal (clamped to 0.0625..MaxRate).
+     * @returns {Promise<void>}
+     */
+    async SetRate(rate) {
+        const r = Math.max(0.0625, Math.min(this.MaxRate, rate || 1));
+        this.Rate = r;
+        this.Element.playbackRate = r;
+    }
+
 
     /**
      * Enables looping (Looping = element.loop = true). No-op when already looping.
@@ -356,3 +381,12 @@ class MediaPlayerAudio {
     }
 
 }
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.MediaPlayerParamsAudio = MediaPlayerParamsAudio;
+    m.MediaPlayerAudio = MediaPlayerAudio;
+})();

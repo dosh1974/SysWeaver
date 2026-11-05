@@ -7,7 +7,7 @@
  * (MediaTypes.YouTube; data is the YouTube video id).
  * Globals defined: MediaPlayerParamsYouTube, MediaPlayerYoutube.
  * Dependencies: MediaPlayerTools (media_player_tools.js: InitBase, MustBeAttached, OnCacheComplete, ApplyClip
- * default) and the common.js globals createIFrame, waitEvent2 and delay.
+ * default) and MediaPlayerTools.waitEvent2 and MediaPlayerTools.delay (no SysWeaver core needed).
  * Protocol: outgoing JSON strings {"event":"listening",...} and {"event":"command","func":...,"args":...} are
  * posted to the iframe's contentWindow (target "*"); incoming window "message" events with a matching "id" are
  * re-dispatched on the iframe as DOM CustomEvents "YT" + event (YTonReady, YTinfoDelivery, YTonError, ...).
@@ -80,7 +80,7 @@ class MediaPlayerParamsYouTube {
  */
 class MediaPlayerYoutube {
     /**
-     * Creates the player and its iframe (common.js createIFrame) with scrolling="no",
+     * Creates the player and its iframe (a plain iframe, no smooth load fade) with scrolling="no",
      * sandbox="allow-same-origin allow-scripts allow-presentation", allow="autoplay" and a fixed pixel size
      * (Width x Height, or 0x0 + opacity 0 for audio-only). Sets HaveVisual/HaveAudio from Stream, calls
      * MediaPlayerTools.InitBase, assigns a new InstanceId from GlobalInstanceId, Source, CurrentTime = StartAt,
@@ -97,7 +97,8 @@ class MediaPlayerYoutube {
         t.Params = params;
         //  No load fade (fadeIn = 0): visibility is controlled by the "MediaHidden" class (Show / Hide) and, for audio
         //  only, an inline opacity of 0; the generic load fade would override both while loading and then clear them.
-        const e = createIFrame(0);
+        //  (Was common.js createIFrame(0).) A plain iframe gets no smooth load fade from the Sw ui, which is what the fix wanted.
+        const e = document.createElement("iframe");
         const audioOnly = params.Stream == 2;
         t.HaveVisual = !audioOnly;
         t.HaveAudio = params.Stream != 1;
@@ -170,7 +171,7 @@ class MediaPlayerYoutube {
              * @returns {Promise<boolean>} True when an infoDelivery arrived; false on YTonError or timeout (warns).
              */
             t.WaitCommand = async (cmd, args) => {
-                const ev = await waitEvent2(e, "YTinfoDelivery", "YTonError", () => t.SendCommand(cmd, args), 500);
+                const ev = await MediaPlayerTools.waitEvent2(e, "YTinfoDelivery", "YTonError", () => t.SendCommand(cmd, args), 500);
                 const res = ev && (ev.type === "YTinfoDelivery");
                 if (!res)
                     console.warn("YT command \"" + cmd + "\", with args: \"" + args + "\" failed!");
@@ -192,6 +193,9 @@ class MediaPlayerYoutube {
              * @returns {Promise<void>}
              */
             async function messageHandler(ev) {
+                //  Security: only the player's own embed frame may drive it
+                if (ev.source !== e.contentWindow)
+                    return;
                 let d;
                 try {
                     d = JSON.parse(ev.data);
@@ -301,7 +305,7 @@ class MediaPlayerYoutube {
                 haveConnection = false;
                 isLooping = false;
                 gotError = false;
-                const res = await waitEvent2(e, "load", "error", () => e.src = url);
+                const res = await MediaPlayerTools.waitEvent2(e, "load", "error", () => e.src = url);
                 if (res.type === "error")
                     return false;
                 /**
@@ -315,7 +319,12 @@ class MediaPlayerYoutube {
                     e.contentWindow.postMessage('{"event":"listening","id":' + instanceId + ',"channel":"widget"}', '*');
                     setTimeout(conFn, 100);
                 };
-                const res2 = await waitEvent2(e, "YTonReady", "YTonError", conFn);
+                //  At most 10 s (a blocked or very slow embed must not hang the page; the handshake loop stops)
+                const res2 = await MediaPlayerTools.waitEvent2(e, "YTonReady", "YTonError", conFn, 10000);
+                if (!res2) {
+                    haveConnection = true;
+                    return false;
+                }
                 if (res2.type === "YTonError")
                     return false;
                 if (gotError)
@@ -338,7 +347,7 @@ class MediaPlayerYoutube {
             for (let retry = 0; ; ++retry) {
                 if (await connect()) {
                     t.SendCommand("mute");
-                    const res2 = await waitEvent2(e, "YTInitCompleted", "YTonError", () => {
+                    const res2 = await MediaPlayerTools.waitEvent2(e, "YTInitCompleted", "YTonError", () => {
                         let time = startAt - 0.001;
                         if (time < 0)
                             time = 0;
@@ -350,7 +359,7 @@ class MediaPlayerYoutube {
                         console.error("Youtube video playback failed for " + code);
                         return false;
                     }
-                    await delay(50);
+                    await MediaPlayerTools.delay(50);
                     break;
                 }
                 if (retry >= 5) {
@@ -358,7 +367,7 @@ class MediaPlayerYoutube {
                     return false;
                 }
                 console.warn("Youtube video playback failed for " + code + ", retrying in " + timeOut + " ms");
-                await delay(timeOut);
+                await MediaPlayerTools.delay(timeOut);
                 timeOut *= 2;
                 if (timeOut > 5000)
                     timeOut = 5000;
@@ -539,5 +548,37 @@ class MediaPlayerYoutube {
         return this.CurrentTime;
     }
 
+    /**
+     * The playback speed (1 = normal).
+     * @type {number}
+     */
+    Rate = 1;
+
+    /**
+     * The fastest speed of the YouTube player (it plays 0.25 to 2 times the speed).
+     * @type {number}
+     */
+    MaxRate = 2;
+
+    /**
+     * Set the playback speed ("setPlaybackRate", clamped to 0.25..2 as YouTube allows).
+     * @param {number} rate The speed, 1 = normal.
+     * @returns {Promise<void>}
+     */
+    async SetRate(rate) {
+        const r = Math.max(0.25, Math.min(this.MaxRate, rate || 1));
+        this.Rate = r;
+        this.SendCommand("setPlaybackRate", "[" + r + "]");
+    }
+
 }
 
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.MediaPlayerParamsYouTube = MediaPlayerParamsYouTube;
+    m.MediaPlayerYoutube = MediaPlayerYoutube;
+})();

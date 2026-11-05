@@ -5,7 +5,7 @@ namespace SysWeaver.AI
 #pragma warning disable CS0649
 
     /// <summary>
-    /// Paramaters for some data to be serverd from an url
+    /// Parameters for some data to be serverd from an url
     /// </summary>
     sealed class AiData
     {

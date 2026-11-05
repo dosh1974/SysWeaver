@@ -19,15 +19,17 @@ namespace SysWeaver.Net
             /// </summary>
             /// <param name="cs">The cache key (key, request type, accept encoding, method and optional language separated by '\n') and entry</param>
             /// <param name="utcNow">Not used</param>
-            public CacheData(KeyValuePair<String, HttpCacheEntry> cs, DateTime utcNow)
+            /// <param name="flag">True if the server serves the language flags (<see cref="HaveIsoFlags"/>), else <see cref="Flag"/> is null (no image that can't load)</param>
+            public CacheData(KeyValuePair<String, HttpCacheEntry> cs, DateTime utcNow, bool flag = true)
             {
                 var s = cs.Value;
                 var p = cs.Key.Split('\n');
                 var pl = p.Length;
-                if (pl >= 4)
+                //  Key parts: [0] key, [1] request type, [2] accept encoding, [3] method, [4] language (optional)
+                if (pl >= 5)
                 {
-                    var l = p[3];
-                    Flag = l;
+                    var l = p[4];
+                    Flag = flag ? l : null;
                     Language = IsoLanguage.TryGetName(l)?.Name ?? l;
                 }
                 LocalUrl = s.LocalUrl;

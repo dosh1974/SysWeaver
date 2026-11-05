@@ -298,7 +298,7 @@ namespace SysWeaver.EmailReader
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRequestCache(1)]
-        [WebMenuTable(null, "Emails", "POP3 emails", "The list of emails received using POP3")]
+        [WebMenuTable(null, "Pop3Emails", "POP3 emails", "The list of emails received using POP3")]
         public TableData MessageTable(TableDataRequest request)
             => TableDataTools.Get(request, 2000, Messages, "POP3 emails");
 

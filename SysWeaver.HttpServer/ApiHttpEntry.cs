@@ -26,8 +26,8 @@ namespace SysWeaver.Net
     /// Created through <see cref="Create"/>, normally by <see cref="ApiHttpServerModule"/> for every <c>[WebApi]</c> method it discovers.
     /// </summary>
     /// <remarks>
-    /// The method may take zero or one argument, optionally followed by a trailing <see cref="HttpServerRequest"/> context parameter,
-    /// and may return void, a value, <see cref="Task"/>/<see cref="Task{TResult}"/> or <see cref="ValueTask"/>/<see cref="ValueTask{TResult}"/>.
+    /// The method may take zero or one argument, optionally followed by a trailing <see cref="HttpServerRequest"/> context parameter
+    /// (or <see cref="SysWeaver.Auth.IAuthorizedRequest"/>, for services that can't reference the http server), and may return void, a value, <see cref="Task"/>/<see cref="Task{TResult}"/> or <see cref="ValueTask"/>/<see cref="ValueTask{TResult}"/>.
     /// A strongly typed invoker is compiled (via expression trees) for GET and POST at creation time.
     /// GET reads the argument from the query string using <see cref="ApiIoParams"/>, POST reads it from the request body
     /// (decompressed according to <c>Content-Encoding</c> and deserialized according to <c>Content-Type</c>).
@@ -179,7 +179,9 @@ namespace SysWeaver.Net
             bool hasContext = false;
             if (pl > 0)
             {
-                hasContext = p[pl - 1].ParameterType == typeof(HttpServerRequest);
+                //  The request, or the caller interface of services that can't reference the http server (the request implements it)
+                var ct = p[pl - 1].ParameterType;
+                hasContext = (ct == typeof(HttpServerRequest)) || (ct == typeof(SysWeaver.Auth.IAuthorizedRequest));
                 if (hasContext)
                 {
                     --pl;
@@ -1462,15 +1464,32 @@ namespace SysWeaver.Net
             catch (Exception ex)
             {
                 AuditInputFailed(api, request, ex);
+                var bad = BadInput(ex);
+                if (!ReferenceEquals(bad, ex))
+                    throw bad;
                 throw;
             }
         }
 
+        /// <summary>
+        /// The input of a request could not be read: a mistake of the client, never a server failure (a 500 counted as a server problem).
+        /// An <see cref="HttpResponseException"/> (ex: 413 too large, 415 unknown type), a refusal, a client that went away or an I/O failure of the read
+        /// is kept, anything else (a parse error of the data) is a 400 with the reason.
+        /// </summary>
+        /// <param name="ex">The exception of the read / deserialization</param>
+        /// <returns>The exception to throw</returns>
+        static Exception BadInput(Exception ex)
+        {
+            if ((ex is HttpResponseException) || (ex is IHttpRefusal) || (ex is System.IO.IOException) || (ex is OperationCanceledException) || (ex is ObjectDisposedException) || HttpServerBase.IsClientGone(ex))
+                return ex;
+            return new HttpResponseException(400, String.Concat("The data sent could not be read (", ex.SafeMessage(), "): send the input of this api as JSON"));
+        }
+
         static ICompType ThrowDecompress(String ce)
-            => throw new Exception(String.Concat("Don't know how to decompress \"", ce, '"'));
+            => throw new HttpResponseException(415, String.Concat("The data sent is compressed in a way the service can't read (\"", ce, "\")"));
 
         static void ThrowSerializer(String ct)
-            => throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
+            => throw new HttpResponseException(415, String.Concat("The data sent has a type the service can't read (\"", ct, "\"): send it as JSON (Content-Type: application/json)"));
 
         /// <summary>
         /// Read the entire request body into pooled memory (the caller must dispose the result).
@@ -1514,6 +1533,9 @@ namespace SysWeaver.Net
             catch (Exception ex)
             {
                 AuditInputFailed(api, request, ex);
+                var bad = BadInput(ex);
+                if (!ReferenceEquals(bad, ex))
+                    throw bad;
                 throw;
             }
         }
@@ -1531,6 +1553,9 @@ namespace SysWeaver.Net
             catch (Exception ex)
             {
                 AuditInputFailed(api, request, ex);
+                var bad = BadInput(ex);
+                if (!ReferenceEquals(bad, ex))
+                    throw bad;
                 throw;
             }
         }

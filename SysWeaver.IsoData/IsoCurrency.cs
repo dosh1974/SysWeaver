@@ -239,7 +239,7 @@ namespace SysWeaver.IsoData
             new IsoCurrency("CAD", 124, 2, ".", " ", "$ ", false, "Canadian dollar", "Canada", "CA"),
             new IsoCurrency("CDF", 976, 2, ",", " ", " FC", false, "Congolese franc", "Democratic Republic of the Congo", "CD"),
             new IsoCurrency("CHE", 947, 2, ".", " ", null, false, "WIR Euro (complementary currency)", "Switzerland", "CH"),
-            new IsoCurrency("CHF", 756, 2, ".", " ", " CHF", false, "Swiss franc", "Switzerland, Liechtenstein (LI)", "LI"),
+            new IsoCurrency("CHF", 756, 2, ".", " ", " CHF", false, "Swiss franc", "Switzerland, Liechtenstein (LI)", "CH"),
             new IsoCurrency("CHW", 948, 2, ".", " ", null, false, "WIR Franc (complementary currency)", "Switzerland"),
             new IsoCurrency("CLF", 990, 4, ".", " ", " UF", false, "Unidad de Fomento (funds code)", "Chile"),
             new IsoCurrency("CLP", 152, 0, ".", " ", "$ ", false, "Chilean peso", "Chile", "CL"),

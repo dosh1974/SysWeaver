@@ -115,6 +115,7 @@ namespace SysWeaver.TextMessage
         /// The phone number of the sender (E.164), only required if the origination identity isn't a phone number (ex: a pool or a phone number id) and two-way messages are received on it.
         /// Used to match incoming messages to the sender, and to select the sender for recipients in the same country.
         /// </summary>
+        [EditType(EditTypes.Phone)]
         public String PhoneNumber;
 
         /// <summary>

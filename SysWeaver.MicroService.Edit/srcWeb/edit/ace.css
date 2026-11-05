@@ -1,0 +1,315 @@
+/*
+ * edit/ace.css - the "ace-sysweaver" Ace theme (editor, gutter, tokens, search box, autocomplete popup, tooltips) built on the Sw
+ * tokens (sw/ui.css), so it follows every SysWeaver theme. Token colors use the same palette as the Sw code editor (ui/code.css).
+ * Used by the text page (edit/text.html, text.css adds the page and the log mode) and by Sw.AceEditor (edit/AceEditor.js, which
+ * loads this file with Ace on demand, ex: the JSON editors of explore/api.html).
+ */
+
+.ace-sysweaver {
+    --sw-code-bg: var(--sw-surface-sunken);
+    --sw-code-c: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 50%);
+    --sw-code-k: var(--sw-text-accent);
+    --sw-code-t: var(--sw-accent2);
+    --sw-code-f: color-mix(in oklab, var(--sw-accent2), #9be7a0 55%);
+    --sw-code-v: color-mix(in oklab, #ffb454, var(--sw-fg) 15%);
+    --sw-code-n: color-mix(in oklab, #f0a868, var(--sw-fg) 25%);
+    --sw-code-p: color-mix(in oklab, #c792ea, var(--sw-fg) 15%);
+    --sw-code-s: #f4c542;
+    --sw-code-sc: #4fd8b0;
+    --sw-code-u: color-mix(in oklab, #82aaff, var(--sw-fg) 25%);
+    --sw-code-m: color-mix(in oklab, #ff9cac, var(--sw-fg) 30%);
+    --sw-code-o: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 20%);
+    background: var(--sw-code-bg);
+    color: var(--sw-fg);
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+}
+
+:root:not([data-theme]) .ace-sysweaver, :root[data-sw-scheme="light"] .ace-sysweaver {
+    --sw-code-f: color-mix(in oklab, var(--sw-accent2), #1b7f3a 55%);
+    --sw-code-v: #a35a00;
+    --sw-code-n: #b4530a;
+    --sw-code-p: #7a3db8;
+    --sw-code-s: #9a6400;
+    --sw-code-sc: #0f7b5f;
+    --sw-code-u: #2f5fb3;
+    --sw-code-m: #b02a4a;
+}
+
+/* Line numbers in the secondary text colour (>= 4.5:1 in every theme; the quiet text-3 was 1.8-3.7:1, S7a-A1-3) */
+.ace-sysweaver .ace_gutter {
+    background: var(--sw-surface);
+    color: var(--sw-text-2);
+}
+
+.ace-sysweaver .ace_gutter-active-line {
+    background: var(--sw-surface-sunken);
+    color: var(--sw-fg);
+}
+
+.ace-sysweaver .ace_print-margin {
+    width: 1px;
+    background: var(--sw-border);
+}
+
+.ace-sysweaver .ace_cursor {
+    color: var(--sw-accent2);
+}
+
+.ace-sysweaver .ace_marker-layer .ace_selection {
+    background: color-mix(in srgb, var(--sw-accent2) 28%, transparent);
+}
+
+.ace-sysweaver.ace_multiselect .ace_selection.ace_start {
+    box-shadow: 0 0 0 1px var(--sw-accent2);
+}
+
+.ace-sysweaver .ace_marker-layer .ace_step {
+    background: var(--sw-warning-soft);
+}
+
+.ace-sysweaver .ace_marker-layer .ace_bracket {
+    margin: -1px 0 0 -1px;
+    border: 1px solid var(--sw-text-accent);
+}
+
+.ace-sysweaver .ace_marker-layer .ace_active-line {
+    background: color-mix(in oklab, var(--sw-code-bg), var(--sw-fg) 6%);
+}
+
+.ace-sysweaver .ace_marker-layer .ace_selected-word {
+    background: var(--sw-accent1-soft);
+    border: 1px solid var(--sw-text-accent);
+}
+
+.ace-sysweaver .ace_invisible {
+    color: var(--sw-text-3);
+}
+
+.ace-sysweaver .ace_indent-guide {
+    background: none;
+    border-right: 1px solid color-mix(in oklab, var(--sw-border), transparent 40%);
+}
+
+.ace-sysweaver .ace_indent-guide-active {
+    border-right: 1px solid var(--sw-text-accent);
+}
+
+.ace-sysweaver .ace_fold {
+    background-color: var(--sw-accent2-soft);
+    border-color: var(--sw-accent2);
+}
+
+.ace-sysweaver .ace_icon_svg {
+    vertical-align: middle;
+    width: 16px;
+}
+
+.ace-sysweaver .ace_icon_svg.ace_error {
+    background-color: var(--sw-danger);
+}
+
+.ace-sysweaver .ace_icon_svg.ace_warning {
+    background-color: var(--sw-warning);
+}
+
+/* Tokens */
+.ace-sysweaver .ace_comment {
+    color: var(--sw-code-c);
+    font-style: italic;
+}
+
+.ace-sysweaver .ace_keyword, .ace-sysweaver .ace_meta, .ace-sysweaver .ace_storage {
+    color: var(--sw-code-k);
+}
+
+.ace-sysweaver .ace_storage.ace_type, .ace-sysweaver .ace_support.ace_type, .ace-sysweaver .ace_support.ace_class {
+    color: var(--sw-code-t);
+}
+
+.ace-sysweaver .ace_entity.ace_name.ace_function, .ace-sysweaver .ace_support.ace_function {
+    color: var(--sw-code-f);
+}
+
+.ace-sysweaver .ace_variable, .ace-sysweaver .ace_variable.ace_parameter {
+    color: var(--sw-code-v);
+}
+
+.ace-sysweaver .ace_variable.ace_language {
+    color: var(--sw-code-k);
+    font-style: italic;
+}
+
+.ace-sysweaver .ace_constant.ace_numeric {
+    color: var(--sw-code-n);
+}
+
+.ace-sysweaver .ace_constant, .ace-sysweaver .ace_constant.ace_language, .ace-sysweaver .ace_support.ace_constant {
+    color: var(--sw-code-p);
+}
+
+.ace-sysweaver .ace_string {
+    color: var(--sw-code-s);
+}
+
+.ace-sysweaver .ace_string.ace_regexp, .ace-sysweaver .ace_constant.ace_escape, .ace-sysweaver .ace_constant.ace_character.ace_escape {
+    color: var(--sw-code-sc);
+}
+
+.ace-sysweaver .ace_entity.ace_other.ace_attribute-name {
+    color: var(--sw-code-u);
+}
+
+.ace-sysweaver .ace_meta.ace_tag, .ace-sysweaver .ace_entity.ace_name.ace_tag {
+    color: var(--sw-code-m);
+}
+
+.ace-sysweaver .ace_keyword.ace_operator, .ace-sysweaver .ace_paren, .ace-sysweaver .ace_punctuation {
+    color: var(--sw-code-o);
+}
+
+.ace-sysweaver .ace_heading, .ace-sysweaver .ace_markup.ace_heading {
+    color: var(--sw-code-k);
+    font-weight: bold;
+}
+
+.ace-sysweaver .ace_markup.ace_list {
+    color: var(--sw-code-t);
+}
+
+.ace-sysweaver .ace_invalid.ace_illegal {
+    color: var(--sw-on-accent);
+    background-color: var(--sw-danger);
+}
+
+.ace-sysweaver .ace_invalid.ace_deprecated {
+    text-decoration: underline;
+    color: var(--sw-warning);
+}
+
+/* Search box (Ctrl+F / Ctrl+H), tooltips and the autocomplete popup (tagged by Sw.AceEditor.Theme when Ace appends them to body) */
+.ace-sysweaver.ace_tooltip, .ace-sysweaver .ace_tooltip, .ace-sysweaver .ace_search {
+    background: var(--sw-surface);
+    color: var(--sw-fg);
+    border: 1px solid var(--sw-border-strong);
+    border-radius: var(--sw-radius);
+    box-shadow: var(--sw-elev-1);
+    font-family: var(--sw-sans);
+}
+
+.ace-sysweaver .ace_search_form, .ace-sysweaver .ace_replace_form {
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg);
+    overflow: hidden;
+}
+
+    .ace-sysweaver .ace_search_form.ace_nomatch {
+        outline: 2px solid var(--sw-danger);
+    }
+
+.ace-sysweaver .ace_search_field {
+    color: var(--sw-fg);
+    background: var(--sw-bg);
+    border: none;
+    outline: none;
+}
+
+    .ace-sysweaver .ace_search_field::placeholder {
+        color: var(--sw-text-3);
+    }
+
+.ace-sysweaver .ace_searchbtn {
+    color: var(--sw-fg);
+    background: var(--sw-surface-sunken);
+    border: none;
+    border-left: 1px solid var(--sw-border);
+}
+
+@media (hover: hover) {
+    .ace-sysweaver .ace_searchbtn:hover {
+        background: var(--sw-accent2-soft);
+    }
+}
+
+    .ace-sysweaver .ace_searchbtn.prev:after, .ace-sysweaver .ace_searchbtn.next:after {
+        border-color: var(--sw-fg);
+    }
+
+.ace-sysweaver .ace_searchbtn_close {
+    filter: none;
+    background-color: var(--sw-surface-strong);
+    border-radius: 50%;
+}
+
+.ace-sysweaver .ace_button {
+    color: var(--sw-fg);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg);
+}
+
+@media (hover: hover) {
+    .ace-sysweaver .ace_button:hover {
+        background: var(--sw-accent2-soft);
+    }
+}
+
+    .ace-sysweaver .ace_button.checked {
+        border-color: var(--sw-accent2);
+        background: var(--sw-accent2-soft);
+        color: var(--sw-accent2);
+    }
+
+.ace-sysweaver.ace_editor.ace_autocomplete {
+    border: 1px solid var(--sw-border-strong);
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface);
+    color: var(--sw-fg);
+    box-shadow: var(--sw-elev-1);
+}
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_marker-layer .ace_active-line {
+        background: var(--sw-accent2-soft);
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_marker-layer .ace_line-hover {
+        background: var(--sw-surface-sunken);
+        border: none;
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_completion-highlight {
+        color: var(--sw-accent2);
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_completion-meta {
+        color: var(--sw-text-2);
+        font-family: var(--sw-sans);
+    }
+
+
+/* Sw.AceEditor (edit/AceEditor.js): an editor in a page (ex: the JSON editors of explore/api.html), framed like an input; with MaxLines
+   Ace sizes the height to the text */
+.sw-ace {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    overflow: hidden;
+}
+
+    .sw-ace:focus-within {
+        border-color: var(--sw-accent2);
+        outline: 2px solid color-mix(in oklab, var(--sw-accent2) 35%, transparent);
+        outline-offset: 0;
+    }
+
+    .sw-ace .ace_placeholder {
+        font-family: var(--sw-mono);
+        color: var(--sw-text-3);
+        transform: none;
+        opacity: 1;
+        padding: 0 4px;
+    }

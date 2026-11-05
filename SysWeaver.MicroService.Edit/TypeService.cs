@@ -116,7 +116,9 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a default instance of a type
+        /// Get a default instance of a type.
+        /// Public writable fields and properties with an <see cref="EditDefaultAttribute"/> are set to that default value
+        /// (the same default that <see cref="GetTypeInfo(string, HttpServerRequest)"/> reports), so a new object starts valid.
         /// </summary>
         /// <param name="typeName">Name of the type to get an instance from</param>
         /// <returns>An instance or null if it failed</returns>
@@ -130,7 +132,85 @@ namespace SysWeaver.MicroService
             var type = FindType(typeName);
             if (type == null)
                 return null;
-            return TryCreate(type);
+            return ApplyEditDefaults(TryCreate(type));
+        }
+
+        /// <summary>
+        /// Set the public writable fields and properties of an instance that have an <see cref="EditDefaultAttribute"/> to that default value.
+        /// Only the members of the instance itself are changed (not nested objects); a default that can't be converted to the member type is ignored.
+        /// </summary>
+        /// <param name="inst">The instance (may be null)</param>
+        /// <returns>The instance</returns>
+        static Object ApplyEditDefaults(Object inst)
+        {
+            if (inst == null)
+                return null;
+            foreach (var m in inst.GetType().GetMembers(BindingFlags.Public | BindingFlags.Instance))
+            {
+                try
+                {
+                    var a = m.GetCustomAttribute<EditDefaultAttribute>(true);
+                    if (a == null)
+                        continue;
+                    if (m is FieldInfo f)
+                    {
+                        if (f.IsInitOnly || f.IsLiteral)
+                            continue;
+                        if (TryConvertDefault(f.FieldType, a.Def, out var v))
+                            f.SetValue(inst, v);
+                        continue;
+                    }
+                    if (m is PropertyInfo p)
+                    {
+                        if (!p.CanWrite || p.SetMethod?.IsPublic != true || p.GetIndexParameters().Length > 0)
+                            continue;
+                        if (TryConvertDefault(p.PropertyType, a.Def, out var v))
+                            p.SetValue(inst, v);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            return inst;
+        }
+
+        /// <summary>
+        /// Convert an <see cref="EditDefaultAttribute"/> value to a member type (invariant culture, enums by name or value).
+        /// </summary>
+        /// <param name="type">The member type</param>
+        /// <param name="value">The default value</param>
+        /// <param name="result">The converted value</param>
+        /// <returns>True if the value could be converted</returns>
+        static bool TryConvertDefault(Type type, Object value, out Object result)
+        {
+            result = null;
+            var u = Nullable.GetUnderlyingType(type);
+            if (value == null)
+                return (!type.IsValueType) || (u != null);
+            u = u ?? type;
+            try
+            {
+                if (u.IsInstanceOfType(value))
+                {
+                    result = value;
+                    return true;
+                }
+                if (u.IsEnum)
+                {
+                    result = value is String es ? Enum.Parse(u, es, true) : Enum.ToObject(u, value);
+                    return true;
+                }
+                if (value is IConvertible && typeof(IConvertible).IsAssignableFrom(u))
+                {
+                    result = Convert.ChangeType(value, u, CultureInfo.InvariantCulture);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+            return false;
         }
 
         /// <summary>
@@ -685,12 +765,14 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<String, ApiInfo> ApiInfoCacheDebug = new ConcurrentDictionary<string, ApiInfo>(StringComparer.Ordinal);
 
         /// <summary>
-        /// Get detailed information about an API
+        /// Get detailed information about an API (signature, types, auth etc).
+        /// Restricted to developers (Dev and Debug, the same as the list of all APIs), user interfaces that only need to know if the user may call an API use "Api/auth/CanCall".
         /// </summary>
         /// <param name="url">The api url (relative to the base url) to get information about</param>
         /// <param name="request"></param>
         /// <returns>Detailed information or null if not found</returns>
         [WebApi("../Api/debug/" + nameof(GetApiInfo))]
+        [WebApiAuth(Roles.Dev)]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
         public ApiInfo GetApiInfo(String url, HttpServerRequest request)
@@ -747,6 +829,42 @@ namespace SysWeaver.MicroService
             //r = await Translate(r, request.Translator, lang).ConfigureAwait(false);
             cache.TryAdd(key, r);
             return r;
+        }
+
+        /// <summary>
+        /// How the APIs of this service can be called: the enabled input / output serializers, the compression methods of a request body
+        /// and of a GET argument, and the request size limits (shown by explore/apihelp.html).
+        /// Restricted like <see cref="GetApiInfo"/> (Dev and Debug).
+        /// </summary>
+        /// <returns>The information, null when the service has no API module</returns>
+        [WebApi("../Api/debug/" + nameof(GetApiIoInfo))]
+        [WebApiAuth(Roles.Dev)]
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(30)]
+        public ApiIoInfo GetApiIoInfo()
+        {
+            var io = ApiMod?.IoParams;
+            if (io == null)
+                return null;
+            static ApiIoSerializer[] sers<T>(IEnumerable<T> l) where T : SysWeaver.Serialization.ISerializerInfo
+                => l.Distinct().Select(x => new ApiIoSerializer
+                {
+                    Name = x.Name,
+                    Mime = x.Mime,
+                    Extension = x.Extension,
+                    IsText = x.Encoding != null,
+                }).OrderBy(x => x.Name, StringComparer.Ordinal).ToArray();
+            return new ApiIoInfo
+            {
+                Input = sers(io.InputSerializers.Values),
+                Output = sers(io.OutputSerializers.Values),
+                DefaultInput = io.DefaultInput?.Name,
+                DefaultOutput = io.DefaultOutput?.Name,
+                Compression = SysWeaver.Compression.CompManager.HttpCodes.Order(StringComparer.Ordinal).ToArray(),
+                GetCompression = ApiIoParams.BinaryArgTypes.Select(x => new ApiIoGetCompression { Char = x.Key.ToString(), HttpCode = x.Value }).ToArray(),
+                MaxRequestSize = io.MaxRequestSize,
+                MaxDecompressedSize = io.MaxDecompressedSize,
+            };
         }
 
 
@@ -915,7 +1033,111 @@ namespace SysWeaver.MicroService
         /// </summary>
         public EditNestedTestObject NestedObject;
 
-       
+        /// <summary>
+        /// A css color string (#rrggbb)
+        /// </summary>
+        [EditColor]
+        [EditDefault("#ff8800")]
+        public String CssColor;
+
+        /// <summary>
+        /// A css color string with alpha (#rrggbbaa)
+        /// </summary>
+        [EditColor(EditColorFormat.Css, true)]
+        [EditDefault("#3366ff80")]
+        public String CssColorAlpha;
+
+        /// <summary>
+        /// A HDR color with alpha as 4 floats (r, g, b may exceed 1)
+        /// </summary>
+        [EditColor(EditColorFormat.HdrRgba, maxIntensity: 8)]
+        public float[] HdrColor = [2, 1.5f, 0.5f, 1];
+
+        /// <summary>
+        /// A color as an integer 0xRRGGBBAA
+        /// </summary>
+        [EditColor(EditColorFormat.UInt32Rgba)]
+        public uint PackedColor = 0xff8800ff;
+
+        /// <summary>
+        /// A color as an integer 0xAARRGGBB (System.Drawing.Color.ToArgb)
+        /// </summary>
+        [EditColor(EditColorFormat.UInt32Argb)]
+        public int ArgbColor = unchecked((int)0xff336699);
+
+        /// <summary>
+        /// A duration (TimeSpan)
+        /// </summary>
+        public TimeSpan Timeout = TimeSpan.FromSeconds(90);
+
+        /// <summary>
+        /// An id (Guid)
+        /// </summary>
+        public Guid Id;
+
+        /// <summary>
+        /// An e-mail address
+        /// </summary>
+        [EditType(EditTypes.Email)]
+        public String Email = "";
+
+        /// <summary>
+        /// An url
+        /// </summary>
+        [EditType(EditTypes.Url)]
+        public String Url = "https://example.com/";
+
+        /// <summary>
+        /// A phone number
+        /// </summary>
+        [EditType(EditTypes.Phone)]
+        public String Phone = "+1 555 0100";
+
+        /// <summary>
+        /// A css color that is always stored as #rrggbb (typed css colors are converted)
+        /// </summary>
+        [EditColor(EditColorFormat.Hex)]
+        public String HexColor = "#336699";
+
+        /// <summary>
+        /// A duration in seconds (EditUnit: type 90, 90s, 1h 30m)
+        /// </summary>
+        [EditUnit(EditUnits.Seconds)]
+        [EditRange(1, 86400)]
+        public int TimeoutSeconds = 90;
+
+        /// <summary>
+        /// A size in bytes (EditUnit: type 2 MB, 512k)
+        /// </summary>
+        [EditUnit(EditUnits.Bytes)]
+        public long MaxSize = 2 << 20;
+
+        /// <summary>
+        /// A quality in percent (EditUnit with a slider)
+        /// </summary>
+        [EditUnit(EditUnits.Percent)]
+        [EditRange(10, 100)]
+        [EditSlider]
+        public int Quality = 80;
+
+        /// <summary>
+        /// An opacity as a ratio, 0 to 1 (EditUnit: type 0.25 or 25%)
+        /// </summary>
+        [EditUnit(EditUnits.Ratio)]
+        [EditRange(0, 1)]
+        public double Opacity = 0.25;
+
+        /// <summary>
+        /// A read only nested object (nothing inside may become writable)
+        /// </summary>
+        [EditReadOnly]
+        public EditTestObject ReadOnlyObject = new EditTestObject { Name = "Fixed", Weight = 25 };
+
+        /// <summary>
+        /// A read only array of objects
+        /// </summary>
+        [EditReadOnly]
+        public EditTestObject[] ReadOnlyValues = [new EditTestObject { Name = "A", Weight = 1 }, new EditTestObject { Name = "B", Weight = 2 }];
     }
 
 #endif//DEBUG

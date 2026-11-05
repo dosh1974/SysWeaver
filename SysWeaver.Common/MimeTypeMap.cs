@@ -169,14 +169,15 @@ namespace SysWeaver
         public sealed class ExtensionEntry
         {
             /// <summary>
-            /// The file extension
+            /// The file extension (with the leading dot, ex: ".pdf")
             /// </summary>
-            [TableDataFileExtension]
+            [TableDataGoogleSearch("{0}", "Information about files with extension \"{0}\"")]
             public String Extension;
 
             /// <summary>
-            /// The file extension (displayed as an icon of the file extension)
+            /// File type icon
             /// </summary>
+            //  (the extension without the leading dot, shown as the built-in icon "icons/ext/{0}.svg")
             [TableDataFileExtensionImage]
             public String I;
 
@@ -1043,7 +1044,7 @@ namespace SysWeaver
             AllExtensionEntries = Map.Where(x => x.Key[0] == '.').OrderBy(x => x.Key).Select(x => new ExtensionEntry
             {
                 Extension = x.Key,
-                I = x.Key,
+                I = x.Key.Substring(1),
                 Mime = x.Value.Item1,
                 Compressed = x.Value.Item2,
                 MimeCharSet = s[x.Key].Item1

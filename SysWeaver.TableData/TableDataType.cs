@@ -75,7 +75,18 @@ namespace SysWeaver.Data
         /// Parameters: translator, target language, values array, effort, retention.
         /// </summary>
         public static readonly Func<ITranslator, String, Object[], TranslationEffort, TranslationCacheRetention, Task> TranslateRow;
-     
+
+        /// <summary>
+        /// The default sort order of the row type (<see cref="TableDataDefaultOrderAttribute"/>), used when a request has no order, null if none.
+        /// </summary>
+        public static readonly String[] DefaultOrder = GetDefaultOrder();
+
+        static String[] GetDefaultOrder()
+        {
+            var o = typeof(T).GetCustomAttribute<TableDataDefaultOrderAttribute>(true)?.Order;
+            return (o == null) || (o.Length == 0) ? null : o;
+        }
+
         static TableDataType()
         {
             var t = typeof(T);
@@ -612,6 +623,7 @@ namespace SysWeaver.Data
             }
             bool sortRev = canSort && (x.GetCustomAttribute<TableDataSortDescAttribute>() != null);
             bool hide = x.GetCustomAttribute<TableDataHideAttribute>() != null;
+            bool noTitle = x.GetCustomAttribute<TableDataNoTitleAttribute>() != null;
             nameToColumnIndex[name] = cols.Count;
 
             TableDataColumnProps props = 0;
@@ -655,6 +667,7 @@ namespace SysWeaver.Data
                     | TableDataColumnProps.CanSort
                     | (sortRev ? TableDataColumnProps.SortedDesc : 0)
                     | (hide ? TableDataColumnProps.Hide : 0)
+                    | (noTitle ? TableDataColumnProps.NoTitle : 0)
                     | (isReadOnly ? TableDataColumnProps.IsReadOnly : 0)
                     | (ww ? TableDataColumnProps.WordWrap : 0)
                     | TableDataColumnProps.Filter
@@ -681,32 +694,18 @@ namespace SysWeaver.Data
                 var s = prog.Compile();
                 prog = Expression.Lambda<Func<IEnumerable<T>, IEnumerable<T>>>(Expression.Call(null, TableDataTools.OrderDesc.MakeGenericMethod(t, sorType), ep, l), ep);
                 var sd = prog.Compile();
-                if (sortRev)
-                {
-                    sort.Add(sd);
-                    sortDesc.Add(s);
-                }
-                else
-                {
-                    sort.Add(s);
-                    sortDesc.Add(sd);
-                }
+                //  A TableDataSortDescAttribute (sortRev) is only a hint for the client (its first sort is descending): "Name" always sorts
+                //  ascending and "-Name" descending (the sort functions used to be swapped, so a client asking for "-Name" got ascending rows)
+                sort.Add(s);
+                sortDesc.Add(sd);
 
                 var eot = typeof(IOrderedEnumerable<T>);
                 prog = Expression.Lambda<Func<IEnumerable<T>, IEnumerable<T>>>(Expression.Call(null, TableDataTools.ThenBy.MakeGenericMethod(t, sorType), Expression.Convert(ep, eot), l), ep);
                 s = prog.Compile();
                 prog = Expression.Lambda<Func<IEnumerable<T>, IEnumerable<T>>>(Expression.Call(null, TableDataTools.ThenByDesc.MakeGenericMethod(t, sorType), Expression.Convert(ep, eot), l), ep);
                 sd = prog.Compile();
-                if (sortRev)
-                {
-                    thenBy.Add(sd);
-                    thenByDesc.Add(s);
-                }
-                else
-                {
-                    thenBy.Add(s);
-                    thenByDesc.Add(sd);
-                }
+                thenBy.Add(s);
+                thenByDesc.Add(sd);
 
             }
             //  Filter
@@ -965,14 +964,16 @@ namespace SysWeaver.Data
         /// Sort data (lazily, using LINQ).
         /// </summary>
         /// <param name="o">Column names to sort by, in priority order, a '-' prefix sorts in reverse. Unknown names are ignored.
-        /// Columns with a <see cref="TableDataSortDescAttribute"/> sort descending by default (and ascending with '-').</param>
+        /// "-" always means descending (a <see cref="TableDataSortDescAttribute"/> is only a client hint). A null or empty order uses the <see cref="TableDataDefaultOrderAttribute"/> of the row type, if any.</param>
         /// <param name="data">The source data.</param>
         /// <returns>The sorted sequence, null if <paramref name="data"/> is null.</returns>
         public static IEnumerable<T> Sort(String[] o, IEnumerable<T> data)
         {
             if (data == null)
                 return null;
-            //  Sorting
+            //  Sorting (no order: the default order of the row type, if any)
+            if ((o == null) || (o.Length == 0))
+                o = DefaultOrder;
             if (o == null)
                 return data;
             bool first = true;
@@ -1065,8 +1066,10 @@ namespace SysWeaver.Data
                     }
                 }
             }
-            //  Sorting
+            //  Sorting (no order: the default order of the row type, if any)
             var o = request.Order;
+            if ((o == null) || (o.Length == 0))
+                o = DefaultOrder;
             if (o != null)
             {
                 bool first = true;
@@ -1326,6 +1329,44 @@ namespace SysWeaver.Data
         static readonly double[] SearchWeights;
 
         /// <summary>
+        /// The text search of a request: a row matches when every word and number of the search text is found in its searched texts (AND,
+        /// in any of the texts; UX guide LST-7 "all words must match"), the matches are ordered by the rank of the whole search text.
+        /// Each word is tested with a ranker of its own (<see cref="ITextSearch.CreateRanker(string)"/> of the word), so a custom search keeps its own
+        /// matching per word. A search text with one word is a plain ranked search.
+        /// </summary>
+        /// <param name="data">The rows (filtered and sorted).</param>
+        /// <param name="st">The trimmed, non empty search text.</param>
+        /// <param name="search">The text search, null for <see cref="TableDataTools.DefaultSearch"/>.</param>
+        /// <returns>The matching rows by descending rank, the input if the type has no searchable members.</returns>
+        static IEnumerable<T> TextSearch(IEnumerable<T> data, String st, ITextSearch search)
+        {
+            var gt = GetTexts;
+            if (gt == null)
+                return data;
+            var s = search ?? TableDataTools.DefaultSearch;
+            var ranker = s.CreateRanker(st);
+            var sw = SearchWeights;
+            var words = st.ExtractWordsAndNumbers().Select(x => x.FastToLower()).Distinct(StringComparer.Ordinal).ToArray();
+            var each = words.Length > 1 ? words.Select(s.CreateRanker).ToArray() : null;
+            return data.Select(x =>
+            {
+                var texts = gt(x);
+                var r = ranker.Rank(sw, texts);
+                if ((r > 0.0) && (each != null))
+                {
+                    foreach (var e in each)
+                    {
+                        if (e.Rank(sw, texts) > 0.0)
+                            continue;
+                        r = 0;
+                        break;
+                    }
+                }
+                return ValueTuple.Create(r, x);
+            }).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+        }
+
+        /// <summary>
         /// Process a table request: filter, sort, text search (results ordered by rank), skip, limit (with look ahead) and extract rows.
         /// </summary>
         /// <param name="request">The request, may not be null.</param>
@@ -1350,15 +1391,7 @@ namespace SysWeaver.Data
                 //  Text search
                 var st = request.SearchText?.Trim();
                 if (!String.IsNullOrEmpty(st))
-                {
-                    var ranker = (search ?? TableDataTools.DefaultSearch).CreateRanker(st);
-                    var gt = GetTexts;
-                    if (gt != null)
-                    {
-                        var sw = SearchWeights;
-                        data = data.Select(x => ValueTuple.Create(ranker.Rank(sw, gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
-                    }
-                }
+                    data = TextSearch(data, st, search);
                 //  Skip
                 data = SkipLong(data, request.Row);
                 CapLimit(request, maxAllowedRows, out var limit, out var lookAhead);
@@ -1372,7 +1405,7 @@ namespace SysWeaver.Data
             {
                 Rows = rows,
                 RowCount = count,
-            }.HandleCc(request.Cc, Cols, title);
+            }.HandleCc(request.Cc, Cols, title).WithDefaultOrder(DefaultOrder);
         }
 
         /// <summary>
@@ -1398,15 +1431,7 @@ namespace SysWeaver.Data
                 //  Text search
                 var st = request.SearchText?.Trim();
                 if (!String.IsNullOrEmpty(st))
-                {
-                    var ranker = (search ?? TableDataTools.DefaultSearch).CreateRanker(st);
-                    var gt = GetTexts;
-                    if (gt != null)
-                    {
-                        var sw = SearchWeights;
-                        data = data.Select(x => ValueTuple.Create(ranker.Rank(sw, gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
-                    }
-                }
+                    data = TextSearch(data, st, search);
                 //  Skip
                 data = SkipLong(data, request.Row);
                 CapLimit(request, maxAllowedRows, out var limit, out var lookAhead);
@@ -1420,7 +1445,7 @@ namespace SysWeaver.Data
             {
                 Rows = rows,
                 RowCount = count,
-            }.HandleCc<T, R>(request.Cc, TypedCols, title);
+            }.HandleCc<T, R>(request.Cc, TypedCols, title).WithDefaultOrder(DefaultOrder);
 
         }
 

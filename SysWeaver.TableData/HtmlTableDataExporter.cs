@@ -171,7 +171,8 @@ namespace SysWeaver.Data
 
             /// <summary>
             /// Set the <see cref="Title"/> to the text of value?.ToString() ?? "".
-            /// The CoreLib types whose ToString() is the same text as TryFormat without a format and provider (the current culture) are formatted into the reused buffer.
+            /// The CoreLib types that are span formattable are formatted into the reused buffer using the invariant culture (the same text on every server,
+            /// ex: "1086.95", not "1086,95"), date times as "yyyy-MM-dd HH:mm:ss" (UTC by convention).
             /// </summary>
             /// <param name="value">The cell value</param>
             public void SetTitle(Object value)
@@ -188,7 +189,7 @@ namespace SysWeaver.Data
                     var b = TitleBuffer;
                     while (b.Length <= MaxTitleBuffer)
                     {
-                        if (f.TryFormat(b, out var written, default, null))
+                        if (f.TryFormat(b, out var written, value is DateTime ? TableDataExporterTools.DateTimeFormat : default, CultureInfo.InvariantCulture))
                         {
                             Title = new ReadOnlyMemory<Char>(b, 0, written);
                             return;
@@ -436,7 +437,7 @@ namespace SysWeaver.Data
                     if (headers)
                     {
                         vals.Title = (col.Desc ?? "").AsMemory();
-                        vals.Text = (col.Title ?? col.Name ?? "").Replace(' ', (Char)0xa0).AsMemory();
+                        vals.Text = TableDataExporterTools.GetHeader(col).Replace(' ', (Char)0xa0).AsMemory();
                         vals.Class = ((colFmt.Item2 ? "r " : "") + (cl ?? "").Replace("m", "").Trim()).AsMemory();
                         Header.AppendMemoryValuesTo(sb, vals, Vars.Get);
                     }

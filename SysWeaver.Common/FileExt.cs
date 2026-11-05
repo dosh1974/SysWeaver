@@ -31,7 +31,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         public static void WriteMemory(String filename, ReadOnlyMemory<Byte> memory, bool ensureWriteTo = false)
             => WriteSpan(filename, memory.Span, ensureWriteTo);
 
@@ -67,7 +67,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteToFile(this ReadOnlyMemory<Byte> memory, String filename, bool ensureWriteTo = false)
             => WriteMemory(filename, memory, ensureWriteTo);
@@ -82,7 +82,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         public static async Task WriteMemoryAsync(String filename, ReadOnlyMemory<Byte> memory, bool ensureWriteTo = false)
         {
             using var h = OpenWrite(filename);
@@ -102,7 +102,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename, bool ensureWriteTo = false)
             => WriteMemoryAsync(filename, memory, ensureWriteTo);
@@ -117,7 +117,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task WriteToFileAsync(this Memory<Byte> memory, String filename, bool ensureWriteTo = false)
             => WriteMemoryAsync(filename, memory, ensureWriteTo);
@@ -132,7 +132,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         public static void WriteSpan(String filename, ReadOnlySpan<Byte> span, bool ensureWriteTo = false)
         {
             using var h = OpenWrite(filename);
@@ -152,7 +152,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+        /// <exception cref="IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteToFile(this ReadOnlySpan<Byte> span, String filename, bool ensureWriteTo = false)
             => WriteSpan(filename, span, ensureWriteTo);
@@ -169,7 +169,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task<Byte[]> ReadBytesAsync(String filename)
             => FileReadOnlyMemory.ReadAllBytesAsync(filename);
@@ -185,7 +185,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte[] ReadBytes(String filename)
             => FileReadOnlyMemory.ReadAllBytes(filename);
@@ -202,7 +202,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task<String> ReadTextAsync(String filename, Encoding encoding = null)
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllTextAsync(encoding);
@@ -219,7 +219,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ReadText(String filename, Encoding encoding = null)
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllText(encoding);
@@ -240,7 +240,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task<String[]> ReadLinesAsync(String filename, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllLinesAsync(encoding, false, trim, removeEmpty);
@@ -259,7 +259,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String[] ReadLines(String filename, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllLines(encoding, false, trim, removeEmpty);
@@ -299,7 +299,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         public static String ReadNonCommentString(String filename, bool trimComment = false)
         {
             var l = ReadLines(filename, null, true, true);
@@ -327,7 +327,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         public static String[] ReadNonCommentLines(String filename, bool trimComment = false)
         {
             var l = ReadLines(filename, null, true, true);
@@ -360,7 +360,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         public static async Task<String> ReadNonCommentStringAsync(String filename, bool trimComment = false)
         {
             var l = await ReadLinesAsync(filename, null, true, true).ConfigureAwait(false);
@@ -388,7 +388,7 @@ namespace SysWeaver
         /// <exception cref="FileNotFoundException">The file doesn't exist.</exception>
         /// <exception cref="DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
         /// <exception cref="UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-        /// <exception cref="IOException">An I/O error occured.</exception>
+        /// <exception cref="IOException">An I/O error occurred.</exception>
         public static async Task<String[]> ReadNonCommentLinesAsync(String filename, bool trimComment = false)
         {
             var l = await ReadLinesAsync(filename, null, true, true).ConfigureAwait(false);

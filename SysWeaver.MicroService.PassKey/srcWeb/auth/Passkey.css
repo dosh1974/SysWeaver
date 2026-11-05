@@ -1,69 +1,41 @@
-﻿
-
-/*
- * Passkey.css - styles for the SysWeaver.MicroService.PassKey pages, served as auth/Passkey.css.
+﻿/*
+ * Passkey.css - styles of the passkey pages of SysWeaver.MicroService.PassKey (served as auth/Passkey.css).
  *
- * Loaded by UsePassKey.html, AddPassKey.html, AddPassKeyOnOtherDevice.html, MyPassKeys.html (this project) and by
- * Login.html (SysWeaver.MicroService.Auth) and ChoosePassword.html / ResetPassword.html
- * (SysWeaver.MicroService.UserManager), after ../common/theme.css and Auth.css (SysWeaver.MicroService.Auth).
- * Builds on Auth.css (form.SysWeaver-AuthBox) and the mask-image icon technique of common.css / ColorIcon (the
- * element's background color shows through the SVG mask, so icons follow the theme colors).
- * Icon SVGs come from this project's srcWeb/icons folder (served as icons/). No templating.
+ * Loaded by UsePassKey.html, AddPassKey.html, AddPassKeyOnOtherDevice.html, MyPassKeys.html and by Login.html
+ * (MicroService.Auth), after ../common/theme.css, ../sw/ui.css and Auth.css. The page layout, lists and buttons come
+ * from Auth.css. Not templated.
+ *
+ * The passkey icon classes (IconAddPasskey, IconUsePasskey, IconPasskeyKey, IconPasskeyRename) belong to this module: their
+ * svgs are ../icons/passkey_*.svg of this project (only served when the PassKey service is installed). They are defined
+ * here so the passkey pages do not depend on the shared icon sheet; ui/icons.css (sw/ui.css) still defines the same rules
+ * for compatibility (nothing is removed before all apps are checked). The menu items of
+ * PassKeyService use the svg urls directly. IconAddPasskeyOther uses qr_code.svg of the icon module (always present).
+ * Same rule form as ui/icons.css: a class only sets mask-image; the Sw.IconClass element colours it.
+
  */
 
-/* ===== Icons (mask images, used as ColorIcon / AuthPage / AuthButton icon classes) ===== */
+/* Live "{0} ago" times in the passkey list (Sw.Cells adds mono / right aligned classes meant for tables). */
+.auth-item-value {
+    font-family: inherit;
+    font-size: inherit;
+    text-align: left;
+    color: var(--sw-fg);
+}
 
-/* IconAddPasskey: add passkey icon (AddPassKey page image and "Add passkey" buttons in Passkey.js) */
+/* ===== Passkey icon classes (svgs of this module, ../icons/) ===== */
+
 .IconAddPasskey {
     mask-image: url("../icons/passkey_add.svg");
 }
 
-/* IconUsePasskey: sign in with passkey icon (UsePassKey / MyPassKeys page images, sign in button) */
 .IconUsePasskey {
     mask-image: url("../icons/passkey_use.svg");
 }
 
-/* IconPasskeyKey: small key icon of the passkey sign in icon button on the login page (AuthUi.js) */
 .IconPasskeyKey {
     mask-image: url("../icons/passkey_key.svg");
 }
 
-/* IconPasskeyRename: rename passkey icon (Rename buttons on MyPassKeys.html) */
 .IconPasskeyRename {
     mask-image: url("../icons/passkey_rename.svg");
 }
-
-/* ===== Rename pop up ===== */
-
-/*
- * An auth box inside a pop up (the rename passkey dialog)
- * form.SysWeaver-AuthBox (created by CreateAuthWrapper in AuthUi.js) with SysWeaver-PassKeyPopUp (added by rename()
- * in myPassKeysMain): resets the centered, fixed, card styling from Auth.css so the box flows inside the PopUp.
- */
-form.SysWeaver-AuthBox.SysWeaver-PassKeyPopUp {
-    background: initial;
-    width: initial;
-    height: initial;
-    display: initial;
-    position: initial;
-    left: initial;
-    top: initial;
-    transform: initial;
-    border-radius: initial;
-    box-shadow: initial;
-    border: initial;
-    padding: initial;
-    margin: initial;
-    box-sizing: initial;
-}
-
-/* ===== Login page ===== */
-
-/*
- * The small passkey icon button (used instead of a text button when no passkey is known to be on the device)
- * PasskeyIconButton: class added by AuthUi.js to the IconPasskeyKey ColorIcon on the login page; centered vertically in its row.
- */
-.PasskeyIconButton {
-    align-self: center;
-}
-

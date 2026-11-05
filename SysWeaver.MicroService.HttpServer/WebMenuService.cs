@@ -241,22 +241,21 @@ namespace SysWeaver.MicroService
                         dtype = instance.GetType();
                     }
                     var methodName = p[pl];
-                    var pReq = ParamReq;
-                    var pItem = ParamItem;
-                    var pAuth = ParamAuth;
-
-                    var method = dtype.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance, DynTypes);
-                    if ((method == null) || (method.ReturnType != typeof(Task<Boolean>)))
+                    //  The first accepted signature that the type has (see DynSigs)
+                    MethodInfo method = null;
+                    Expression[] args = null;
+                    foreach (var (types, values) in DynSigs)
                     {
-                        method = dtype.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance, DynTypes2);
-                        if ((method == null) || (method.ReturnType != typeof(Task<Boolean>)))
-                            throw new Exception("No method named " + methodName.ToQuoted() + " with the signature " + DynSig + " or " + DynSig2 + " found in the type " + dtype.FullName.ToQuoted());
-                        item.Dynamic = Expression.Lambda<Func<HttpServerRequest, WebMenuItem, Task<bool>>>(method.IsStatic ? Expression.Call(method, pAuth, pItem) : Expression.Call(Expression.Constant(instance, instance.GetType()), method, pAuth, pItem), Params).Compile();
+                        method = dtype.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance, types);
+                        if ((method != null) && (method.ReturnType == typeof(Task<Boolean>)))
+                        {
+                            args = values;
+                            break;
+                        }
                     }
-                    else
-                    {
-                        item.Dynamic = Expression.Lambda<Func<HttpServerRequest, WebMenuItem, Task<bool>>>(method.IsStatic ? Expression.Call(method, pReq, pItem) : Expression.Call(Expression.Constant(instance, instance.GetType()), method, pReq, pItem), Params).Compile();
-                    }
+                    if (args == null)
+                        throw new Exception("No method named " + methodName.ToQuoted() + " with the signature " + DynSigText + " found in the type " + dtype.FullName.ToQuoted());
+                    item.Dynamic = Expression.Lambda<Func<HttpServerRequest, WebMenuItem, Task<bool>>>(method.IsStatic ? Expression.Call(method, args) : Expression.Call(Expression.Constant(instance, instance.GetType()), method, args), Params).Compile();
                 }
             }
             for (; ;)
@@ -280,10 +279,18 @@ namespace SysWeaver.MicroService
         static readonly ParameterExpression ParamReq = Expression.Parameter(typeof(HttpServerRequest), "req");
         static readonly Expression ParamAuth = Expression.PropertyOrField(Expression.PropertyOrField(ParamReq, nameof(HttpServerRequest.Session)), nameof(HttpSession.Auth));
         static readonly ParameterExpression ParamItem = Expression.Parameter(typeof(WebMenuItem), "item");
-        static readonly Type[] DynTypes = [typeof(HttpServerRequest), typeof(WebMenuItem) ];
-        static readonly Type[] DynTypes2 = [typeof(Auth.Authorization), typeof(WebMenuItem)];
-        static readonly String DynSig = String.Concat(typeof(Task<Boolean>), " Method(", String.Join(", ", DynTypes.Select(x => x.ToString())), ')');
-        static readonly String DynSig2 = String.Concat(typeof(Task<Boolean>), " Method(", String.Join(", ", DynTypes2.Select(x => x.ToString())), ')');
+        /// <summary>
+        /// The accepted signatures of a dynamic menu item method (all return Task&lt;bool&gt;), in the order they are looked for, with the
+        /// arguments passed to each: (HttpServerRequest, WebMenuItem), (Authorization, WebMenuItem), (HttpServerRequest), (Authorization).
+        /// </summary>
+        static readonly (Type[] Types, Expression[] Args)[] DynSigs =
+        [
+            ([typeof(HttpServerRequest), typeof(WebMenuItem)], [ParamReq, ParamItem]),
+            ([typeof(Auth.Authorization), typeof(WebMenuItem)], [ParamAuth, ParamItem]),
+            ([typeof(HttpServerRequest)], [ParamReq]),
+            ([typeof(Auth.Authorization)], [ParamAuth]),
+        ];
+        static readonly String DynSigText = String.Join(" or ", DynSigs.Select(s => String.Concat(typeof(Task<Boolean>), " Method(", String.Join(", ", s.Types.Select(x => x.ToString())), ')')));
         static readonly ParameterExpression[] Params = [ParamReq, ParamItem];
 
 

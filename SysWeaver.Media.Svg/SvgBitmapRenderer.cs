@@ -74,7 +74,7 @@ namespace SysWeaver.Media
                 return SKTypeface.FromData(Fallback.Value);
             }
 
-            static readonly Lazy<SKData> Fallback = new Lazy<SKData>(() => SKData.CreateCopy(SvgFont.GetEmbeddedData(nameof(BrandFonts.BarlowRegular))));
+            static readonly Lazy<SKData> Fallback = new Lazy<SKData>(() => SKData.CreateCopy(SvgFont.GetEmbeddedData("Barlow-Regular")));
         }
 
         static void Load(SKSvg s, Stream data)

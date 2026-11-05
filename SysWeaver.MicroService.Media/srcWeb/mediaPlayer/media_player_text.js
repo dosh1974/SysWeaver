@@ -6,7 +6,7 @@
  * (MediaPlayer.Init loads canvasTools.js eagerly for this reason).
  * Globals defined: MediaPlayerParamsText, MediaPlayerText, MediaPlayerTextTexture.
  * Dependencies: TextStyle and CanvasTools (canvasTools.js), MediaPlayerTools (media_player_tools.js), the
- * common.js global waitEvent2, and the browser FontFace / document.fonts API for web fonts.
+ * MediaPlayerTools.waitEvent2 and LoadFont (the font url is parsed and escaped, never pasted into CSS), and the browser FontFace / document.fonts API for web fonts.
  * Note: the timeline methods of MediaPlayerText are copies of MediaPlayerImage's, and MediaPlayerTextTexture
  * shares its upload/mipmap/clip/apply code with MediaPlayerImageTexture (media_player_effect.js).
  * Blob URLs created for the text images are never revoked.
@@ -122,7 +122,8 @@ class MediaPlayerText {
 
     /**
      * Renders the text and loads it into the <img>.
-     * When FontUrl is set, loads the font as FontFace(FontUrlName, url(FontUrl)) and adds it to document.fonts.
+     * When FontUrl is set, loads the font with MediaPlayerTools.LoadFontOrFallback (parsed, http(s) only, escaped; on a
+     * failure a default font is used and the error is kept in FontError).
      * With CollageSeparator the text is split and rendered by CanvasTools.CreateTextGridUrl (grid stats written to
      * EffectParams.FxProps, both created when missing), otherwise by CanvasTools.CreateTextImageUrl (WebP blob URL).
      * Then sets src and waits for "load"/"error", logs the URL when DebugImage, reads naturalWidth/Height into
@@ -135,11 +136,8 @@ class MediaPlayerText {
 
         const t = this;
         const p = t.Params;
-        if (p.FontUrl) {
-            const ff = new FontFace(p.FontUrlName, "url('" + p.FontUrl + "')");
-            await ff.load();
-            document.fonts.add(ff);
-        }
+        /** {Error|null} The web font error of the last Cache (a default font was used), null when none. */
+        t.FontError = await MediaPlayerTools.LoadFontOrFallback(p);
         let c;
         if (p.CollageSeparator) {
             const texts = t.Url.split(p.CollageSeparator);
@@ -158,7 +156,7 @@ class MediaPlayerText {
             c = await CanvasTools.CreateTextImageUrl(t.Url, p);
         }
         const e = t.Element;
-        const res = await waitEvent2(e, "load", "error", () => {
+        const res = await MediaPlayerTools.waitEvent2(e, "load", "error", () => {
             e.src = c;
         });
         if (res.type == "error")
@@ -347,7 +345,8 @@ class MediaPlayerTextTexture {
 
     /**
      * Renders the text and uploads it to the texture.
-     * Loads FontUrl as a FontFace when set; renders a collage grid (CanvasTools.CreateTextGrid, stats into
+     * Loads FontUrl when set (MediaPlayerTools.LoadFontOrFallback: parsed, http(s) only, escaped; a default font on a
+     * failure, the error in FontError); renders a collage grid (CanvasTools.CreateTextGrid, stats into
      * EffectParams.FxProps, created when missing) or a single text (CanvasTools.CreateTextImage) to a canvas;
      * with DebugImage also creates a blob URL <img> (stored in Image) and logs it. Uploads the canvas flipped-Y with
      * clamp-to-edge wrapping and linear filtering. When haveLod or EffectParams.MipMap, generates mipmaps
@@ -360,11 +359,8 @@ class MediaPlayerTextTexture {
         const gl = t.GL;
         const texture = t.Texture;
         const p = t.Params;
-        if (p.FontUrl) {
-            const ff = new FontFace(p.FontUrlName, "url('" + p.FontUrl + "')");
-            await ff.load();
-            document.fonts.add(ff);
-        }
+        /** {Error|null} The web font error of the last Cache (a default font was used), null when none. */
+        t.FontError = await MediaPlayerTools.LoadFontOrFallback(p);
         let image;
         if (p.CollageSeparator) {
             const texts = t.Url.split(p.CollageSeparator);
@@ -385,7 +381,7 @@ class MediaPlayerTextTexture {
         if (p.DebugImage) {
             const c = await CanvasTools.CreateCanvasImageUrl(image);
             const e = new Image();
-            const res = await waitEvent2(e, "load", "error", () => {
+            const res = await MediaPlayerTools.waitEvent2(e, "load", "error", () => {
                 e.src = c[0];
             });
             if (res.type !== "error") {
@@ -491,3 +487,13 @@ class MediaPlayerTextTexture {
         t.GL.deleteTexture(t.Texture);
     }
 }
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.MediaPlayerParamsText = MediaPlayerParamsText;
+    m.MediaPlayerText = MediaPlayerText;
+    m.MediaPlayerTextTexture = MediaPlayerTextTexture;
+})();

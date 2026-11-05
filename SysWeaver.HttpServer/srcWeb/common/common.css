@@ -8,6 +8,7 @@
  * scaling) and border-radius 15px; only the first (fixed, blurred) SysWeaver-Loading rule exists.
  * Styles the elements created by common/common.js; the derived colour variables are filled by applyTheme() in
  * common.js only if a page loads both files.
+ * Design v2: the shadows of SysWeaver-Page and SysWeaver-Button were removed (flat surfaces); otherwise unchanged. Use theme.css.
  */
 
 /* ===== Theme custom properties (dark defaults) ===== */
@@ -148,7 +149,7 @@ SysWeaver-Link {
 
 /*
  * <SysWeaver-Page>: centred page column (left:50% + translate(-50%)), max width 52em, or 78em with class Wide;
- * 1em top padding; soft Acc1 glow box-shadow.
+ * 1em top padding; flat (Design v2: no glow).
  */
 SysWeaver-Page {
     position: absolute;
@@ -161,7 +162,7 @@ SysWeaver-Page {
     max-width: 52em;
     min-height: 100%;
     background-color: transparent;
-    box-shadow: 0 0 64px rgba(var(--ThemeAcc1RGB), 0.15);
+    box-shadow: none;
     display: block;
     text-align: left;
 }
@@ -228,7 +229,7 @@ SysWeaver-Button {
     font-size: 80%;
     font-weight: bold;
     min-width: 128px;
-    transition: opacity linear 0.1s, transform linear 0.03s, box-shadow linear 0.03s, outline linear 0.1s;
+    transition: opacity linear 0.1s, outline linear 0.1s;
     opacity: 0.8;
     margin: 8px;
     display: inline-flex;
@@ -238,7 +239,7 @@ SysWeaver-Button {
     color: var(--ThemeBackground);
     border-radius: 15px;
     cursor: pointer;
-    box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+    box-shadow: none;
     outline: none;
     flex-shrink: 0;
     justify-content: space-between;
@@ -262,18 +263,14 @@ SysWeaver-Button {
     }
 
 
-    /* SysWeaver-Button.Pressed: added by the Button class while held; shifted 1px/2px with a smaller shadow. */
+    /* SysWeaver-Button.Pressed: added by the Button class while held; full opacity (Design v2: no movement, no shadow). */
     SysWeaver-Button.Pressed {
-        transform: translate(1px, 2px);
-        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
         opacity: 1;
         cursor: pointer;
     }
 
-    /* SysWeaver-Button.Disabled: toggled by the Button class; pressed look at opacity 0.4 (also on hover), default cursor. */
+    /* SysWeaver-Button.Disabled: toggled by the Button class; opacity 0.4 (also on hover), default cursor. */
     SysWeaver-Button.Disabled {
-        transform: translate(1px, 2px);
-        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
         opacity: 0.4;
         cursor: default;
     }

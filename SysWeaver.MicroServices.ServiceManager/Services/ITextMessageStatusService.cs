@@ -16,7 +16,7 @@ namespace SysWeaver.MicroService
         /// If the last id is null or unknown (ex: the service restarted), only recent updates are returned.
         /// </summary>
         /// <param name="request">Request parameters</param>
-        /// <returns>The new updates or null if no new updates was recieved</returns>
+        /// <returns>The new updates or null if no new updates was received</returns>
         [RemoteEndPoint(HttpEndPointTypes.Post)]
         Task<TextMessageStatusUpdate[]> GetStatusUpdates(GetTextMessageStatusRequest request);
     }

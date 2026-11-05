@@ -20,11 +20,65 @@ namespace SysWeaver.MicroService
 
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
-    [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "icons/computer.svg", -9, "")]
+    [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "icons/computer.svg", -9, Roles.AdminOps)]
     [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "icons/settings.svg", -7, "")]
     [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "icons/key.svg", -6, Roles.Admin)]
-    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored, IHaveTextFiles
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored, IHaveTextFiles, IRunTimeWebApiAuth
     {
+
+        /// <summary>
+        /// The APIs that act on one managed service (the access is checked per service: <see cref="ManagedService.SyncAuth"/>, default <see cref="ServerManagerParams.SyncAuth"/>).
+        /// They declare the roles of all managed services (see <see cref="MethodAuths"/>) so that users without any of them are refused (403) before the call,
+        /// and user interfaces (Api/auth/CanCall) can tell that they can't use them.
+        /// </summary>
+        static readonly String[] PerServiceMethods =
+        [
+            nameof(GetServiceMemChart), nameof(GetServiceCpuChart), nameof(GetServiceMemHistoryChart), nameof(GetServiceCpuHistoryChart),
+            nameof(GetServiceMemHistoryShortChart), nameof(GetServiceCpuHistoryShortChart), nameof(GetDetail),
+            nameof(Restart), nameof(Pause), nameof(Continue), nameof(Stop), nameof(Start), nameof(Uninstall), nameof(Kill),
+            nameof(GetVersion), nameof(VersionActivate), nameof(VersionTouch), nameof(VersionVerify), nameof(VersionExpand), nameof(VersionCompress), nameof(VersionDelete),
+            nameof(UseMasterConfig), nameof(ActivateConfig), nameof(DeleteConfig), nameof(DeleteLog), nameof(UpdateConfig), nameof(DeleteConfigFile), nameof(DeleteLogFile),
+        ];
+
+        /// <summary>
+        /// The auth of the per service APIs (<see cref="PerServiceMethods"/>): the union of the roles of the configured and saved managed services and <see cref="ServerManagerParams.SyncAuth"/>
+        /// ("" if any service allows any signed in user).
+        /// A service added later (<see cref="AddService"/>) with a role that isn't in this union can only be used by users that have one of these roles (until a restart).
+        /// The per service check still applies (a user may only act on the services that its role allows, others are refused with 403).
+        /// </summary>
+        public IReadOnlyDictionary<String, String> MethodAuths { get; }
+
+        /// <summary>
+        /// Get the union of the auth of some managed services.
+        /// </summary>
+        /// <param name="p">The params (default auth)</param>
+        /// <param name="services">The services</param>
+        /// <returns>The auth (comma separated tokens), "" if any signed in user is allowed for some service</returns>
+        static String GetServicesAuth(ServerManagerParams p, IEnumerable<ManagedService> services)
+        {
+            var tokens = new List<String>();
+            var seen = new HashSet<String>(StringComparer.OrdinalIgnoreCase);
+            foreach (var a in services.Select(x => x.SyncAuth).Append(p.SyncAuth))
+            {
+                var auth = a ?? p.SyncAuth ?? Roles.Debug;
+                var req = Authorization.GetRequiredTokens(auth);
+                if (req == null)
+                    return null;
+                if (req.Count <= 0)
+                    return "";
+                //  A disabled service ("-") adds no role
+                if (req == AuthTools.NoAuth)
+                    continue;
+                foreach (var t in req)
+                {
+                    if (String.IsNullOrEmpty(t))
+                        continue;
+                    if (seen.Add(t))
+                        tokens.Add(t);
+                }
+            }
+            return tokens.Count > 0 ? String.Join(',', tokens) : Roles.Disabled;
+        }
 
         static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
               ".txt",
@@ -92,6 +146,8 @@ namespace SysWeaver.MicroService
             FileUploader.AddRepo(KeyRepo);
 
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
+            var servicesAuth = GetServicesAuth(p, p.Services.Nullable().Concat(savedServices.Nullable()));
+            MethodAuths = PerServiceMethods.ToDictionary(x => x, x => servicesAuth, StringComparer.Ordinal).Freeze();
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
                 InternalAddService(f).RunAsync();
 
@@ -563,7 +619,10 @@ namespace SysWeaver.MicroService
                 }
                 if (os.GetCpuUsage(out var cpu))
                 {
-                    CpuUsage = (float)cpu;
+                    //  One sample (every 200 ms) is very noisy (often 0), report the moving average of the last seconds
+                    var avg = CpuUsageAverage;
+                    avg.Add((decimal)cpu);
+                    CpuUsage = (float)avg.GetAverage(out var _, out var _, out var _);
                     CpuUsageHistory.Add(cpu);
                     CpuUsageHistoryShort.Add(cpu);
                 }else
@@ -646,6 +705,7 @@ namespace SysWeaver.MicroService
                     {
                         HandleCount = SafeRead(id, () => p.HandleCount),
 
+                        //  Memory values are 0 when the process can't be read (access denied), as before (shown as "0 bytes")
                         MemUsage = SafeRead(id, () => p.WorkingSet64),
                         PeakMemUsage = SafeRead(id, () => (long)p.PeakWorkingSet64),
                         MaxMemUsage = SafeRead(id, () => (long)p.MaxWorkingSet),
@@ -801,9 +861,10 @@ namespace SysWeaver.MicroService
         {
             serviceName = serviceName.FastToLower();
             if (!Services.TryGetValue(serviceName, out var info))
-                throw new Exception("Unknown service!");
+                throw new HttpResponseException(404, "There is no such service (it may have been removed): refresh the list");
+            //  The role of the user doesn't allow this service: forbidden (403), not a server error
             if (!context.Session.IsValid(info.Auth))
-                throw new Exception("Not authorized!");
+                throw new HttpResponseException(403, "Your role is not allowed to manage this service");
             return info;
         }
 
@@ -931,14 +992,20 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Reboot the computer
+        /// Reboot the computer.
+        /// The reboot token is required, it's only sent with <see cref="GetServerInfo"/> (<see cref="SmServerInfo.RebootToken"/>),
+        /// so a crafted link, a deep link scan or an image (a plain GET request) can't reboot the computer (see <see cref="SmProcessKillToken"/>).
         /// </summary>
-        /// <returns></returns>
+        /// <param name="token">The reboot token (valid for at least 15 minutes)</param>
+        /// <returns>True if the reboot was scheduled</returns>
+        /// <exception cref="UnauthorizedAccessException">The token is missing, invalid or expired</exception>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiAudit(AuditGroup)]
-        public bool RebootComputer()
+        public bool RebootComputer(String token)
         {
+            if (!SmProcessKillToken.IsValidReboot(token))
+                throw new UnauthorizedAccessException("A valid reboot token is required to reboot the computer (get it from GetServerInfo)");
             Manager.AddMessage(LogPrefix + "Rebooting", MessageLevels.Warning);
             Scheduler.Add(DateTime.UtcNow.AddSeconds(2), 
                 async () =>
@@ -968,20 +1035,45 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Kill a specific process
+        /// Kill a specific process (and its child processes).
+        /// The kill token of the process is required, it's only sent with the process list (<see cref="ProcessInfoTable(TableDataRequest)"/>),
+        /// so a crafted link, a deep link scan or an image (a plain GET request) can't kill a process (see <see cref="SmProcessKillToken"/>).
+        /// The idle and system processes and the server manager itself can't be killed.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="token">The kill token of the process, "pid-expires-mac" (as sent in the "Actions" column of the process list, valid for at least 15 minutes, up to 20)</param>
+        /// <param name="context">The request</param>
+        /// <returns>True if the process was killed</returns>
+        /// <exception cref="HttpResponseException">403 with the reason: the token is missing, invalid or expired, or the process may not be killed; 409 with the reason: the process has already ended, or its pid now belongs to another process (a clear outcome the client shows, never a bare false)</exception>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiAudit(AuditGroup)]
-        public bool KillProcess(int pid, HttpServerRequest context)
+        public bool KillProcess(String token, HttpServerRequest context)
         {
-            Process h = Process.GetProcessById((int)pid);
+            if (!SmProcessKillToken.TryGetPid(token, out var pid))
+                throw new HttpResponseException(403, "A valid kill token is required to kill a process (get it from the process list)");
+            if (!Processes.TryGetValue(pid, out var info))
+                throw HttpResponseException.AlreadyDone(String.Concat("Process #", pid, " has already ended (it is no longer in the process list)"));
+            if (!SmProcessKillToken.IsValid(token, pid, info.StartTime))
+                throw new HttpResponseException(403, "The kill token is invalid or has expired, refresh the process list and try again");
+            if (!SmProcessKillToken.CanKill(pid, info.Name))
+                throw new HttpResponseException(403, String.Concat("Process #", pid, " can't be killed (a system process or the server manager itself)"));
+            Process h = null;
+            try
+            {
+                h = Process.GetProcessById((int)pid);
+            }
+            catch (ArgumentException)
+            {
+            }
             if (h == null)
-                throw new Exception("Couldn't find a process with id " + pid);
+                throw HttpResponseException.AlreadyDone(String.Concat("Process #", pid, " has already ended"));
+            //  The pid may have been reused by another process since the list was sent
+            if (SafeRead(() => h.StartTime) != info.StartTime)
+                throw HttpResponseException.AlreadyDone(String.Concat("Process #", pid, " has already ended (its id now belongs to another process): refresh the process list"));
+            Manager.AddMessage(String.Concat(LogPrefix, "Killing process #", pid, " (", info.Name, ")"), MessageLevels.Warning);
             h.Kill(true);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -1039,7 +1131,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetProcessCpuChart(long processId)
         {
             var info = ValidateProcessMetrics(processId);
-            return GetCpuChart(info.CpuUsage, String.Concat(processId, ": ", info.Name, " Cpu use"));
+            return GetCpuChart(info.CpuUsage, String.Concat(processId, ": ", info.Name, " CPU use"));
         }
 
         /// <summary>
@@ -1055,7 +1147,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetProcessMemHistoryChart(long processId)
         {
             var info = ValidateProcess(processId);
-            return GetHistoryChart(info.History, x => x.MemUsage, String.Concat(processId, ": ", info.Name, " memory use last 24 hours"), "Memory use", "Mb", TimeSpan.FromHours(24), BarMemColor, "HH:mm", 1.0 / (1024 * 1024), 2);
+            return GetHistoryChart(info.History, x => x.MemUsage, String.Concat(processId, ": ", info.Name, " memory use last 24 hours"), "Memory use", "MB", TimeSpan.FromHours(24), BarMemColor, "HH:mm", 1.0 / (1024 * 1024), 2);
         }
 
 
@@ -1072,7 +1164,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetProcessCpuHistoryChart(long processId)
         {
             var info = ValidateProcess(processId);
-            return GetHistoryChart(info.History, x => x.CpuUsage, String.Concat(processId, ": ", info.Name, " Cpu use last 24 hours"), "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
+            return GetHistoryChart(info.History, x => x.CpuUsage, String.Concat(processId, ": ", info.Name, " CPU use last 24 hours"), "CPU use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
         }
 
         /// <summary>
@@ -1088,7 +1180,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetProcessMemHistoryShortChart(long processId)
         {
             var info = ValidateProcess(processId);
-            return GetHistoryChart(info.HistoryShort, x => x.MemUsage, String.Concat(processId, ": ", info.Name, " memory use last 3 minutes"), "Memory use", "Mb", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss", 1.0 / (1024 * 1024), 2);
+            return GetHistoryChart(info.HistoryShort, x => x.MemUsage, String.Concat(processId, ": ", info.Name, " memory use last 3 minutes"), "Memory use", "MB", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss", 1.0 / (1024 * 1024), 2);
         }
 
 
@@ -1105,7 +1197,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetProcessCpuHistoryShortChart(long processId)
         {
             var info = ValidateProcess(processId);
-            return GetHistoryChart(info.HistoryShort, x => x.CpuUsage, String.Concat(processId, ": ", info.Name, " Cpu use last 3 minutes"), "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
+            return GetHistoryChart(info.HistoryShort, x => x.CpuUsage, String.Concat(processId, ": ", info.Name, " CPU use last 3 minutes"), "CPU use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
         }
 
 
@@ -1114,7 +1206,15 @@ namespace SysWeaver.MicroService
 
         #region CPU info
 
+        /// <summary>
+        /// The current cpu use, the moving average of <see cref="CpuUsageAverage"/>
+        /// </summary>
         float CpuUsage;
+
+        /// <summary>
+        /// Smooths the raw cpu samples (taken every 200 ms) over the last 2 seconds
+        /// </summary>
+        readonly MovingAverage CpuUsageAverage = new(TimeSpan.FromSeconds(2));
 
         /// <summary>
         /// Get the current CPU use as a percentage
@@ -1138,7 +1238,7 @@ namespace SysWeaver.MicroService
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetCpuChart() => GetCpuChart(CpuUsage);
         
-        ReadOnlyMemory<Byte> GetCpuChart(double used, String title = "Cpu use")
+        ReadOnlyMemory<Byte> GetCpuChart(double used, String title = "CPU use")
         {
             double idle = 100.0 - used;
             var mem = String.Concat(used.ToString("0.00", CultureInfo.InvariantCulture), '%');
@@ -1200,7 +1300,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetCpuHistoryChart()
-            => GetHistoryChart(CpuUsageHistory, x => x, "Cpu use last 24 hours", "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
+            => GetHistoryChart(CpuUsageHistory, x => x, "CPU use last 24 hours", "CPU use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
 
 
         /// <summary>
@@ -1213,7 +1313,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetCpuHistoryShortChart()
-            => GetHistoryChart(CpuUsageHistoryShort, x => x, "Cpu use last 3 minutes", "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
+            => GetHistoryChart(CpuUsageHistoryShort, x => x, "CPU use last 3 minutes", "CPU use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
 
 
         readonly BucketValueHistory<double> CpuUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
@@ -1385,7 +1485,7 @@ namespace SysWeaver.MicroService
                 Utc = time,
                 Time = ltime.ToString("yyyy-MM-dd HH:mm:ss.fff"),
                 TzDayName = isDls ? t.DaylightName : t.StandardName,
-
+                RebootToken = SmProcessKillToken.CreateReboot(),
             };
         }
 
@@ -1631,7 +1731,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetServiceCpuChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            return GetCpuChart(info.Process?.Metrics.CpuUsage ?? 0, serviceName + " Cpu use");
+            return GetCpuChart(info.Process?.Metrics.CpuUsage ?? 0, serviceName + " CPU use");
         }
 
 
@@ -1649,7 +1749,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetServiceMemHistoryChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            return GetHistoryChart(info.Process?.History, x => x.MemUsage, serviceName + " memory use last 24 hours", "Memory use", "Mb", TimeSpan.FromHours(24), BarMemColor, "HH:mm", 1.0 / (1024 * 1024), 2);
+            return GetHistoryChart(info.Process?.History, x => x.MemUsage, serviceName + " memory use last 24 hours", "Memory use", "MB", TimeSpan.FromHours(24), BarMemColor, "HH:mm", 1.0 / (1024 * 1024), 2);
         }
 
 
@@ -1667,7 +1767,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetServiceCpuHistoryChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            return GetHistoryChart(info.Process?.History, x => x.CpuUsage, serviceName + " Cpu use last 24 hours", "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
+            return GetHistoryChart(info.Process?.History, x => x.CpuUsage, serviceName + " CPU use last 24 hours", "CPU use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
         }
 
         /// <summary>
@@ -1684,7 +1784,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetServiceMemHistoryShortChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            return GetHistoryChart(info.Process?.HistoryShort, x => x.MemUsage, serviceName + " memory use last 3 minutes", "Memory use", "Mb", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss", 1.0 / (1024 * 1024), 2);
+            return GetHistoryChart(info.Process?.HistoryShort, x => x.MemUsage, serviceName + " memory use last 3 minutes", "Memory use", "MB", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss", 1.0 / (1024 * 1024), 2);
         }
 
 
@@ -1702,7 +1802,7 @@ namespace SysWeaver.MicroService
         public ReadOnlyMemory<Byte> GetServiceCpuHistoryShortChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            return GetHistoryChart(info.Process?.HistoryShort, x => x.CpuUsage, serviceName + " Cpu use last 3 minutes", "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
+            return GetHistoryChart(info.Process?.HistoryShort, x => x.CpuUsage, serviceName + " CPU use last 3 minutes", "CPU use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
         }
 
         static SmFileInfo GetFileInfo(String fullname)
@@ -1787,8 +1887,8 @@ namespace SysWeaver.MicroService
             var res = await RunVerb(exe, verb).ConfigureAwait(false);
             if (res != 0)
                 throw new Exception("Failed to " + verb + " service \"" + serviceName + "\", exit code: " + res);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
             return InternalGetDetail(info);
         }
@@ -1915,8 +2015,8 @@ namespace SysWeaver.MicroService
                 Manager.AddMessage(MessageLevels.Info, $"{LogPrefix}Terminating process {serviceName}:{pid} and all child processes");
                 h.Kill(true);
             }
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
             return InternalGetDetail(info);
 
@@ -2074,8 +2174,8 @@ namespace SysWeaver.MicroService
             var exe = FindServiceExe(info.Syncher.DiscFolder);
             if (exe != null)
                 Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -2099,8 +2199,8 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return ret == null ? null : new SmCompFileStats(ret);
         }
 
@@ -2123,8 +2223,8 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, true, context).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return ret == null ? null : new SmCompFileStats(ret);
         }
 
@@ -2148,8 +2248,8 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return ret == null ? null : new SmCompFileStats(ret);
         }
 
@@ -2174,8 +2274,8 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return ret;
         }
 
@@ -2199,8 +2299,8 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return ret;
         }
 
@@ -2238,8 +2338,8 @@ namespace SysWeaver.MicroService
             if (ex != null)
                 throw ex;
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -2281,8 +2381,8 @@ namespace SysWeaver.MicroService
             if (ex != null)
                 throw ex;
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -2315,8 +2415,8 @@ namespace SysWeaver.MicroService
             if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
                 return false;
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -2345,8 +2445,8 @@ namespace SysWeaver.MicroService
             if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
                 return false;
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -2385,8 +2485,8 @@ namespace SysWeaver.MicroService
                 throw new Exception("Failed to backup exsiting file \"" + sname + "\"");
             await File.WriteAllTextAsync(sname, data.Content).ConfigureAwait(false);
             Syncer.GetManagedFolders(info.Syncher.Name);
-            context.Session.InvalidateCache();
-            context.Server.InvalidateCache();
+            //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
+            context.Server.InvalidateCacheEverywhere();
             return true;
         }
 
@@ -2476,8 +2576,8 @@ namespace SysWeaver.MicroService
         /// This will NOT stop, uninstall and remove the service from disc,
         /// </summary>
         /// <param name="serviceName">Name of the service</param>
-        /// <returns>True if sucessfully removed</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>True when removed (never false: a service that is not managed is a 409 with the reason)</returns>
+        /// <exception cref="HttpResponseException">409 with the reason: the service is not managed (any more)</exception>
         [WebApi]
         [WebApiAuth(Roles.Admin)]
         [WebApiAudit(AuditGroup)]
@@ -2485,13 +2585,13 @@ namespace SysWeaver.MicroService
         {
             using var l = ServiceLock.LockSync();
             if (!InternalRemoveService(serviceName))
-                return false;
+                throw HttpResponseException.Gone("The service " + serviceName.ToQuoted() + " is not managed (any more): refresh the list");
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             if (savedServices == null)
-                return false;
+                return true;    //  Removed (it was not saved)
             var i = savedServices.IndexOf(x => x.Name.FastEquals(serviceName));
             if (i < 0)
-                return false;
+                return true;    //  Removed (it was not saved)
             savedServices = savedServices.RemoveAt(i);
             KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices.Length == 0 ? null : savedServices);
             return true;
@@ -2646,7 +2746,7 @@ namespace SysWeaver.MicroService
             if (!x.AllowDelete)
                 throw new Exception("May not delete this file!");
             if (!context.Session.Auth.IsValid(RequiredTokensCache.Get(ref x.AuthTokens, x.Auth)))
-                throw new Exception("Not authorized to delete this file!");
+                throw new HttpResponseException(403, "You are not allowed to delete this file");
             return await DeleteFileWithBackup(x.Filename, Path.Combine(EnvInfo.ExecutableDir, "bak")).ConfigureAwait(false);
         }
 
@@ -2667,7 +2767,7 @@ namespace SysWeaver.MicroService
             if (!x.AllowEdit)
                 throw new Exception("May not save this file!");
             if (!context.Session.Auth.IsValid(RequiredTokensCache.Get(ref x.AuthTokens, x.Auth)))
-                throw new Exception("Not authorized to save this file!");
+                throw new HttpResponseException(403, "You are not allowed to save this file");
             await SaveWithBackup(x.Filename, file.Content).ConfigureAwait(false);
             return true;
         }

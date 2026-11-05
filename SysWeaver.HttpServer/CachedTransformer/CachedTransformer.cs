@@ -477,7 +477,7 @@ namespace SysWeaver.HttpTransformer
         [WebApiClientCache(30)]
         [WebApiRequestCache(29)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Http Server/{0}", "Cached transformers", null, "icons/world.svg")]
+        [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Cached transformers", null, "icons/world.svg", 12)]
         public TableData CachedTransformersTable(TableDataRequest r)
             => TableDataTools.Get(r, 30000, MimeHandlers.Select(x => new MimeHandler(x)));
 
@@ -548,7 +548,7 @@ namespace SysWeaver.HttpTransformer
         [WebApiClientCache(2)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Http Server/{0}", "Cached recent files", null, "icons/world.svg")]
+        [WebMenuTable(null, HttpServerBase.MenuOperations + "/{0}", "Cached recent files", null, "icons/world.svg", 13)]
         public TableData CachedRecentFilesTable(TableDataRequest r)
             => TableDataTools.Get(r, 2000, Cache.Select(x => new CachedFile(x)));
 

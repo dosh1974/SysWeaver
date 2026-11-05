@@ -39,14 +39,21 @@ namespace SysWeaver.Net
     [WebMenuEmbedded(null, "Welcome", "Welcome", "app/Welcome.html", "Show the welcome page", "IconHome", -100, null, true)]
     [WebMenuEmbedded(null, "Home", "Home", "app/Home.html", "Show the home page", "IconHome", -100, "")]
     [WebMenuPath("Theme", "Theme", "Theme", "Color themes", "IconTheme")]
-    [WebMenuPath(null, "Debug/Http Server", "Http Server", "Debug data from the http server", "icons/server.svg")]
-    [WebMenuPath(null, "Debug/Data", "Data", "Misc static data", "icons/book.svg", 100)]
+    //  The main menu folders (see _docs/Web.md "Main menu structure"); the user pages of an application are root items (order below 200).
+    //  A folder is only shown when the user may see at least one item in it.
+    [WebMenuPath(null, MenuMonitoring, "Monitoring", "Logs, performance, statistics and other run time information", "icons/chart.svg", 200)]
+    [WebMenuPath(null, MenuOperations, "Operations", "Sessions, caches, folder sync, reverse proxy and other operational tools", "icons/settings.svg", 300)]
+    [WebMenuPath(null, MenuAdministration, "Administration", "Users, API keys and passwords", "icons/protect.svg", 400)]
+    [WebMenuPath(null, MenuData, "Data", "Reference data: countries, currencies, languages, MIME types, exchange rates, AI models, compression formats, serializers etc", "icons/book.svg", 1000)]
+    [WebMenuPath(null, MenuDevelopment, "Development", "Tools for the developers of the service: explore end points, APIs, icons, demos and tests", "icons/ext/compile.svg", 900)]
+    [WebMenuPath(null, "Debug/Http Server", "Web server", "Web server internals (the folder of MenuPath, kept for other services)", "icons/server.svg", 100)]
+    [WebMenuPath(null, "Debug/Data", "Static data", "Misc static data (legacy folder, kept for other services)", "icons/book.svg", 110)]
     [WebMenuJs("Theme", "Theme/Auto", "(Automatic)", "if(resetTheme());false", "Automatically select (from browser / OS settings)", "IconThemeAuto", 0)]
     [WebMenuJs("Theme", "Theme/Light", "Light", "if(setTheme('light'));false", "Use the bright mode color scheme", "IconThemeLight", 1)]
     [WebMenuJs("Theme", "Theme/Dark", "Dark", "if(setTheme('dark'));false", "Use the dark mode color scheme", "IconThemeDark", 2)]
-    [WebMenuJs("Theme", "Theme/Application", "Application", "if(setTheme('application'));false", "Use a generated theme, unique to this application", "IconLogo", 3)]
-    [WebMenuJs("Theme", "Theme/Pro", "Pro", "if(setTheme('pro'));false", "Use a small font, dark color scheme suitable for desktop computers", "IconThemeDark", 4)]
-    [WebMenuJs("Theme", "Theme/Hacker", "Hacker", "if(setTheme('hacker'));false", "Use the hacker color scheme", "IconThemeHacker", 10, "Debug")]
+    [WebMenuJs("Theme", "Theme/Application", "Application", "if(setTheme('application'));false", "Use the colors of this application (unique per application, tells many open applications apart)", "IconLogo", 3)]
+    [WebMenuJs("Theme", "Theme/Pro", "Pro", "if(setTheme('pro'));false", "Use a compact, mid dark theme with smaller text, for desktop work", "IconThemePro", 4)]
+    [WebMenuJs("Theme", "Theme/Hacker", "Hacker", "if(setTheme('hacker'));false", "Use a retro terminal theme, easy on the eyes in a very dark room", "IconThemeHacker", 10, "Debug")]
     public abstract partial class HttpServerBase : IPerfMonitored, IHaveStats, IServicePausable, IDisposable
     {
 
@@ -177,6 +184,8 @@ namespace SysWeaver.Net
             vars["Color.Color"] = cols.Acc1;
             vars["Color.Acc1"] = cols.Acc3;
             vars["Color.Acc2"] = cols.Acc4;
+            //  Web client options (published in the templated app/manifest.json), see HttpServerBaseParams.OptimizedSend
+            vars["Client.OptimizedSend"] = p.OptimizedSend ? "true" : "false";
             TempVars = vars.Freeze();
 
             var varGroups = TempVarGroups;
@@ -256,8 +265,38 @@ namespace SysWeaver.Net
                 l.Validate();
                 SessionLimits = l;
             }
-            CookieOptions = p.CorsCookies ? "/;HttpOnly;SameSite=None;Secure" : "/;HttpOnly";
+            if (p.CorsCookies)
+            {
+                CookieOptions = "/;HttpOnly;SameSite=None;Secure";
+                CookieOptionsSecure = CookieOptions;
+            }
+            else
+            {
+                var sameSite = p.CookieSameSite?.Trim();
+                if (String.Equals(sameSite, "Strict", StringComparison.OrdinalIgnoreCase))
+                    CookieOptions = "/;HttpOnly;SameSite=Strict";
+                else if (String.Equals(sameSite, "Lax", StringComparison.OrdinalIgnoreCase))
+                    CookieOptions = "/;HttpOnly;SameSite=Lax";
+                else
+                {
+                    if (!String.IsNullOrEmpty(sameSite))
+                        msg?.AddMessage(MessageLevels.Warning, $"{Prefix}CookieSameSite must be \"Lax\", \"Strict\" or empty, found \"{sameSite}\", no SameSite attribute is used!");
+                    CookieOptions = "/;HttpOnly";
+                }
+                CookieOptionsSecure = CookieOptions + ";Secure";
+            }
+            var frameAnc = p.FrameAncestors?.Trim();
+            if (!String.IsNullOrEmpty(frameAnc) && (frameAnc != "*"))
+            {
+                FrameAncestorsCsp = "frame-ancestors " + frameAnc;
+                //  X-Frame-Options (old browsers) can only express "same origin" or "nowhere"
+                if (frameAnc == "'self'")
+                    FrameOptions = "SAMEORIGIN";
+                else if (frameAnc == "'none'")
+                    FrameOptions = "DENY";
+            }
             PruneTask = new PeriodicTask(Prune, 3000);
+            Jobs.OnChanged += OnJobChanged;
 
             var ip = NetworkTools.GetAnyLanIP();
             //  Only wait if the network doesn't seem to be up yet, a host that only have public IPv4 addresses (no private LAN ip) shouldn't be delayed
@@ -416,7 +455,7 @@ namespace SysWeaver.Net
                 Volatile.Write(ref session.Token, newToken);
             }
             var exp = new DateTime(DateTime.UtcNow.Ticks + SessionCookieLifetime, DateTimeKind.Utc);
-            request.UpdateCookie(HttpServerTools.MakeCookie(sn, newToken, exp, CookieOptions));
+            request.UpdateCookie(HttpServerTools.MakeCookie(sn, newToken, exp, GetCookieOptions(request)));
             return true;
         }
 
@@ -1347,6 +1386,12 @@ namespace SysWeaver.Net
                         temp[j] = t2;
                         ++j;
                     }
+                    //  Append ";" and the server's UTC offset in minutes, so the client can label server clocks (old clients parseInt the ms and ignore it)
+                    temp[l] = (Byte)';';
+                    ++l;
+                    var offset = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow).TotalMinutes;
+                    offset.TryFormat(temp.Slice(l), out var ow, default, System.Globalization.CultureInfo.InvariantCulture);
+                    l += ow;
                     //data.SetResBody(temp.Slice(0, l));
                     data.SetResBody(tempData, 0, l);
                 }
@@ -1390,6 +1435,100 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
+        /// The response header that marks the response text as a reason written for people (value "1"): the text is translated to the session language
+        /// and the client shows it as the reason ("why") of a refusal or failure, for any status, instead of a generic sentence for the status.
+        /// Set for every <see cref="HttpResponseException"/> with a message (<see cref="HttpResponseException.IsReason"/>) and for the server's own refusals (403 role, 401 sign in).
+        /// </summary>
+        public const String ReasonHeader = "X-Sw-Reason";
+
+        /// <summary>
+        /// The reason of a 403 when the signed in user (or visitor) doesn't have the role (security token) an end point needs.
+        /// </summary>
+        public const String NotAllowedReason = "You are not allowed to do this: your account doesn't have the role it needs";
+
+        /// <summary>
+        /// The reason of a 401 when an end point needs a signed in user.
+        /// </summary>
+        public const String SignInReason = "Sign in to do this";
+
+        /// <summary>
+        /// The response header that says WHY the server refused, as a machine signal, separate from the reason text (<see cref="ReasonHeader"/>):
+        /// <list type="bullet">
+        /// <item><see cref="DeniedRole"/> ("role") on a 403 because the user (or visitor) doesn't have the role (security token) the end point needs:
+        /// the user can never do this, so a client may disable the control that asked (whatever the reason text is).</item>
+        /// <item><see cref="DeniedSignIn"/> ("signin") on a 401 because the end point needs a signed in user.</item>
+        /// </list>
+        /// Any other refusal (a 403 / 409 / 400 with a reason from an end point) has no such header: the action may work later or with other input.
+        /// </summary>
+        public const String DeniedHeader = "X-Sw-Denied";
+
+        /// <summary>
+        /// The <see cref="DeniedHeader"/> value of a 403 for a missing role.
+        /// </summary>
+        public const String DeniedRole = "role";
+
+        /// <summary>
+        /// The <see cref="DeniedHeader"/> value of a 401 that asks to sign in.
+        /// </summary>
+        public const String DeniedSignIn = "signin";
+
+        /// <summary>
+        /// The response header that says what a refusal means for the person that asked, one of the <see cref="HttpOutcomes"/>:
+        /// "AlreadyDone" (the goal is already met: "not needed"), "Refused" (not done, the reason says why), "Gone" (the target no longer exists)
+        /// or "Denied" (a missing role / not signed in, with <see cref="DeniedHeader"/>).
+        /// Sent on every 4xx refusal of the server (an <see cref="HttpResponseException"/>, an <see cref="IHttpRefusal"/>, the server's own 401 / 403),
+        /// next to <see cref="ReasonHeader"/>, so a client never guesses the meaning from the status code. The code that refuses picks the kind
+        /// (<see cref="HttpResponseException.Outcome"/>, <see cref="IHttpRefusal.Outcome"/>), else <see cref="HttpOutcomes.Default"/> picks it from the status.
+        /// </summary>
+        public const String OutcomeHeader = "X-Sw-Outcome";
+
+        /// <summary>
+        /// Set the <see cref="OutcomeHeader"/> of a refusal: the given kind, else the default of the status (<see cref="HttpOutcomes.Default"/>), none for a non 4xx status.
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="status">The status code</param>
+        /// <param name="outcome">The kind the code that refused gave, null for the default of the status</param>
+        /// <param name="denied">The <see cref="DeniedHeader"/> value, null for none</param>
+        static void SetOutcome(HttpServerRequest data, int status, String outcome, String denied)
+        {
+            if ((status < 400) || (status >= 500))
+                return;
+            outcome = String.IsNullOrEmpty(outcome) ? HttpOutcomes.Default(status, denied) : outcome;
+            if (outcome != null)
+                data.SetResHeader(OutcomeHeader, outcome);
+        }
+
+        /// <summary>
+        /// Respond with a status and a reason for people (translated to the session language, marked with <see cref="ReasonHeader"/>).
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="status">The status code, ex: 403</param>
+        /// <param name="reason">The reason in english, ex: <see cref="NotAllowedReason"/></param>
+        /// <returns>A task</returns>
+        protected Task SetReason(HttpServerRequest data, int status, String reason)
+            => SetReason(data, status, reason, null);
+
+        /// <summary>
+        /// Respond with a status, a reason for people (translated to the session language, marked with <see cref="ReasonHeader"/>) and optionally the
+        /// machine signal of the refusal (<see cref="DeniedHeader"/>).
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="status">The status code, ex: 403</param>
+        /// <param name="reason">The reason in english, ex: <see cref="NotAllowedReason"/></param>
+        /// <param name="denied">The <see cref="DeniedHeader"/> value, ex: <see cref="DeniedRole"/>, null for none</param>
+        /// <returns>A task</returns>
+        protected async Task SetReason(HttpServerRequest data, int status, String reason, String denied)
+        {
+            data.SetResStatusCode(status);
+            data.SetResHeader(ReasonHeader, "1");
+            if (denied != null)
+                data.SetResHeader(DeniedHeader, denied);
+            SetOutcome(data, status, null, denied);
+            if (!data.IsHead)
+                data.SetResText(await Translator.TranslateSafe(reason, data.Session?.Language ?? data.Language, "en", "The reason why a web server refused a request, shown to the user", TranslationEffort.Medium, TranslationCacheRetention.Long).ConfigureAwait(false));
+        }
+
+        /// <summary>
         /// Validate an enpoint against a session.
         /// </summary>
         /// <param name="auth"></param>
@@ -1398,8 +1537,9 @@ namespace SysWeaver.Net
         /// <param name="localUrl"></param>
         /// <param name="url"></param>
         /// <param name="isHead"></param>
+        /// <param name="isApi">True if the handler is an API (<see cref="ApiHttpEntry"/>): a request without any auth then gets a 401 (with the sign in page in a "X-Login-Url" header) instead of a redirect to <see cref="HttpServerBaseParams.AuthRedirect"/>, unless it's a browser navigation (Sec-Fetch-Mode: navigate)</param>
         /// <returns>True if the request have been handled to completion, false if the request is allowed to continue</returns>
-        async Task<bool> HandleAuth(IReadOnlyList<String> auth, HttpServerRequest data, HttpSession session, String localUrl, String url, bool isHead)
+        async Task<bool> HandleAuth(IReadOnlyList<String> auth, HttpServerRequest data, HttpSession session, String localUrl, String url, bool isHead, bool isApi = false)
         {
             using var _ = TrackHandleAuth.Track();
             var user = session.Auth;
@@ -1436,7 +1576,18 @@ namespace SysWeaver.Net
                             if (li >= 0)
                                 ad = ad.Substring(0, li);
                         }
-                        data.SetResHeader("Location", String.Format(ad, HttpUtility.UrlEncode(url)));
+                        var loginUrl = String.Format(ad, HttpUtility.UrlEncode(url));
+                        //  API calls (fetch, scripts, other services) get a 401 that they can handle, a redirect would answer them with the html of the sign in page.
+                        //  Browser navigations to an API url still get the redirect.
+                        if (isApi && !String.Equals(data.GetReqHeader("Sec-Fetch-Mode"), "navigate", StringComparison.OrdinalIgnoreCase))
+                        {
+                            //  Not "Basic": a Basic challenge makes browsers show a user / password dialog for a fetch
+                            data.SetResHeader("WWW-Authenticate", "SysWeaver realm=" + am.Realm);
+                            data.SetResHeader("X-Login-Url", loginUrl);
+                            await SetReason(data, 401, SignInReason, DeniedSignIn).ConfigureAwait(false);
+                            return true;
+                        }
+                        data.SetResHeader("Location", loginUrl);
                         data.SetResStatusCode(302);
                         return true;
                     }
@@ -1488,8 +1639,8 @@ namespace SysWeaver.Net
             }
             if (!user.IsValid(auth))
             {
-                //  User doesn't have the correct security tokens
-                data.SetResStatusCode(403);
+                //  User doesn't have the correct security tokens: say why (the client shows the reason)
+                await SetReason(data, 403, NotAllowedReason, DeniedRole).ConfigureAwait(false);
                 return true;
             }
             return false;
@@ -1790,6 +1941,15 @@ namespace SysWeaver.Net
             }
             //  Handle forced end points (internal end points that can't be overridden)
             data.SetResStatusCode(200);
+            //  Who may show the responses in a frame (clickjacking protection, see HttpServerBaseParams.FrameAncestors)
+            var fa = FrameAncestorsCsp;
+            if (fa != null)
+            {
+                data.SetResHeader("Content-Security-Policy", fa);
+                var xfo = FrameOptions;
+                if (xfo != null)
+                    data.SetResHeader("X-Frame-Options", xfo);
+            }
             var localUrl = data.LocalUrl;
             if (ForcedEndPoints.TryGetValue(localUrl, out var fep))
             {
@@ -1818,6 +1978,12 @@ namespace SysWeaver.Net
                 if (await HandleAuth(Array.Empty<String>(), data, session, localUrl, url, isHead).ConfigureAwait(false))
                     return;
                 throw;
+            }
+            catch (UserNotAllowedException)
+            {
+                //  Signed in (or anonymous) but without the required tokens: forbidden (not a server error), with the reason
+                await SetReason(data, 403, NotAllowedReason, DeniedRole).ConfigureAwait(false);
+                return;
             }
             if (t == null)
             {
@@ -1859,7 +2025,7 @@ namespace SysWeaver.Net
                 //  Auth required
                 var auth = t.Auth;
                 if (auth != null)
-                    if (await HandleAuth(auth, data, session, localUrl, url, isHead).ConfigureAwait(false))
+                    if (await HandleAuth(auth, data, session, localUrl, url, isHead, t is ApiHttpEntry).ConfigureAwait(false))
                         return;
                 using var __ = TrackHandle(t.Name);
                 var etag = t.GetEtag(out bool useAsync, data);
@@ -2481,6 +2647,12 @@ namespace SysWeaver.Net
 
         async Task OnException(Exception ex, HttpServerRequest data)
         {
+            //  The client closed the connection (aborted fetch, closed tab, lost network): not a failure of the server
+            if (IsClientGone(ex))
+            {
+                OnClientGone(ex, data?.Url);
+                return;
+            }
             var le = ListenerExceptionType;
             if ((le != null) && (le.IsAssignableFrom(ex.GetType())))
             {
@@ -2492,9 +2664,34 @@ namespace SysWeaver.Net
                 var session = data.Session;
                 var translator = session == null ? null : data.Translator;
                 var re = ex as HttpResponseException;
+                String denied = null;
+                //  Auth refusals thrown by a handler (ex: an API that checks per item access) are 401 / 403, not server errors
+                if (re == null)
+                {
+                    if (ex is UserNotAllowedException)
+                    {
+                        re = new HttpResponseException(403, NotAllowedReason);
+                        denied = DeniedRole;
+                    }
+                    else if (ex is NoUserLoggedInException)
+                    {
+                        re = new HttpResponseException(401, SignInReason);
+                        denied = DeniedSignIn;
+                    }
+                    //  A refusal (user mistake or changed state) declared by the exception type: its status, and its message as the reason
+                    else if ((ex is IHttpRefusal hr) && (hr.ResponseCode >= 400) && (hr.ResponseCode < 500))
+                        re = new HttpResponseException(hr.ResponseCode, ex.Message) { Outcome = hr.Outcome };
+                }
                 if (re != null)
                 {
                     data.SetResStatusCode(re.ResponseCode);
+                    //  A text written for people: the client shows it as the reason (instead of a generic sentence for the status)
+                    if (re.IsReason)
+                        data.SetResHeader(ReasonHeader, "1");
+                    if (denied != null)
+                        data.SetResHeader(DeniedHeader, denied);
+                    //  What the refusal means (AlreadyDone / Refused / Gone / Denied): said by the server, never guessed by the client from the status
+                    SetOutcome(data, re.ResponseCode, re.Outcome, denied);
                     if (!isHead)
                     {
                         //  The message is intended for the client, normal messages are unchanged by SafeMessage
@@ -2677,6 +2874,27 @@ namespace SysWeaver.Net
         public IEnumerable<String> AllPrefixes => Prefixes.Select(x => x.Prefix);
 
         /// <summary>
+        /// The root for absolute links that leave the request (ex: links in e-mails and text messages), ex: "https://host/".
+        /// The prefix of the request when it is one of the listener prefixes as is (a fixed host name, the client can't change it), else
+        /// (a wildcard listener prefix: the host part is the client supplied Host header, so anyone could make a mailed link point to
+        /// their own site) the configured <see cref="ExternalRootUri"/>; the prefix of the request only when no root is configured.
+        /// </summary>
+        /// <param name="request">The request, null for none</param>
+        /// <returns>The root (ends with "/"), "" if nothing is known</returns>
+        public String GetLinkRoot(HttpServerRequest request)
+        {
+            var p = request?.Prefix;
+            if (p != null)
+                foreach (var x in Prefixes ?? [])
+                    if (String.Equals(x.Prefix, p, StringComparison.OrdinalIgnoreCase))
+                        return p;
+            var ext = ExternalRootUri;
+            if ((ext != null) && !ExternalRootUriFromRequest)
+                return ext;
+            return p ?? ext ?? "";
+        }
+
+        /// <summary>
         /// The prefixes the server listens on (set by <see cref="SetPrefixes"/>).
         /// </summary>
         protected HttpServerPrefix[] Prefixes { get; private set; }
@@ -2806,6 +3024,13 @@ namespace SysWeaver.Net
         /// A tree with modules that respond to certain prefixes only
         /// </summary>
         StringPrefixLookup<IReadOnlyList<IHttpServerModule>> PrefixMods;
+
+        /// <summary>
+        /// True if a module serves the language / country flag images under "iso_data/" (the optional IsoData module, a prefix module).
+        /// The flag columns of the debug tables (<see cref="ActiveSessions"/>, the cache entries) are empty without one, so a page never
+        /// requests a flag that can't load (S7a-B-2: every row asked for "iso_data/language/en.svg" and got a 404).
+        /// </summary>
+        bool HaveIsoFlags => PrefixMods?.StartsWithAny("iso_data/language/") != null;
 
         #endregion //Modules
 
@@ -2975,7 +3200,33 @@ namespace SysWeaver.Net
 
         readonly ConcurrentQueue<HttpSession> ExpiredSessions = new ConcurrentQueue<HttpSession>();
 
+        /// <summary>
+        /// The cookie path and attributes for http requests ("/;HttpOnly;SameSite=Lax" by default, see <see cref="HttpServerBaseParams.CookieSameSite"/> and <see cref="HttpServerBaseParams.CorsCookies"/>)
+        /// </summary>
         readonly String CookieOptions;
+
+        /// <summary>
+        /// The cookie path and attributes for https requests (<see cref="CookieOptions"/> with "Secure")
+        /// </summary>
+        readonly String CookieOptionsSecure;
+
+        /// <summary>
+        /// Get the cookie path and attributes to use for a request ("Secure" is added for https requests)
+        /// </summary>
+        /// <param name="req">The request</param>
+        /// <returns>The cookie path and attributes</returns>
+        String GetCookieOptions(HttpServerRequest req)
+            => (req.Prefix?.StartsWith("https:", StringComparison.OrdinalIgnoreCase) ?? false) ? CookieOptionsSecure : CookieOptions;
+
+        /// <summary>
+        /// The Content-Security-Policy header value sent with every response ("frame-ancestors 'self'" by default), null to not send one (see <see cref="HttpServerBaseParams.FrameAncestors"/>)
+        /// </summary>
+        readonly String FrameAncestorsCsp;
+
+        /// <summary>
+        /// The X-Frame-Options header value sent with every response ("SAMEORIGIN" or "DENY"), null to not send one (see <see cref="HttpServerBaseParams.FrameAncestors"/>)
+        /// </summary>
+        readonly String FrameOptions;
 
 
         readonly FastMemCache<String, String> AcceptLangCache = new FastMemCache<string, string>(TimeSpan.FromHours(24), StringComparer.Ordinal);
@@ -3126,7 +3377,7 @@ namespace SysWeaver.Net
             var ip = req.GetIpAddress();
             var dn = DeviceIdCookieName;
             String deviceId = req.GetReqCookie(dn, cookieString);
-            var cookieOpt = CookieOptions;
+            var cookieOpt = GetCookieOptions(req);
             var ua = req.GetReqHeader("User-Agent") ?? "";
             var prot = req.ProtocolVersion;
             var extLife = SessionExtendLifetime;
@@ -3183,7 +3434,15 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="session">The session, may be null</param>
         /// <returns>True if the session was active and has been removed</returns>
-        public bool CloseSession(HttpSession session)
+        public bool CloseSession(HttpSession session) => CloseSession(session, null);
+
+        /// <summary>
+        /// Close (remove) a session, the user is logged out of the session.
+        /// </summary>
+        /// <param name="session">The session, may be null</param>
+        /// <param name="reason">The logout reason pushed to the session ("user.logout"), null for "Session expired"</param>
+        /// <returns>True if the session was active and has been removed</returns>
+        public bool CloseSession(HttpSession session, String reason)
         {
             if (session == null)
                 return false;
@@ -3194,10 +3453,19 @@ namespace SysWeaver.Net
                     return false;
             }
             Interlocked.Decrement(ref CurrentSessionCount);
-            RunOnSessionRemove(session);
+            //  Remember who was signed in (the sign out clears the auth), so the active sessions table can still name the user of an ended session
+            var user = session.Auth?.Username;
+            if (user != null)
+                ClosedSessionUsers.AddOrUpdate(session, user);
+            RunOnSessionRemove(session, reason);
             ExpiredSessions.Enqueue(session);
             return true;
         }
+
+        /// <summary>
+        /// The user name that was signed in to a closed session (see <see cref="CloseSession(HttpSession, string)"/>), released with the session
+        /// </summary>
+        readonly System.Runtime.CompilerServices.ConditionalWeakTable<HttpSession, String> ClosedSessionUsers = new();
 
         #endregion//Session
 
@@ -3216,9 +3484,8 @@ namespace SysWeaver.Net
             var extP = url.LastIndexOf('.');
             if (extP < 0)
             {
-                var ext = url.Substring(extP + 1);
-                var mime = MimeTypeMap.GetMimeType(ext);
-                return new HttpServerEndPoint(url, "POST", 0, 0, HttpCompressionPriority.DefaultMethods, null, null, HttpServerEndpointTypes.Unknown, "Handled by " + typeof(HttpServerBase).FullName, null, HttpServerTools.StartedTime, HttpServerTools.StartedETag, HttpServerTools.JsonMime, null);
+                //  An extension-less forced / optional end point (login, logout, basic_auth, serverTime, auth/redirect ...) is API like but not in the API module
+                return new HttpServerEndPoint(url, "POST", 0, 0, HttpCompressionPriority.DefaultMethods, null, null, HttpServerEndpointTypes.Builtin, "Handled by " + typeof(HttpServerBase).FullName, null, HttpServerTools.StartedTime, HttpServerTools.StartedETag, HttpServerTools.JsonMime, null);
             }
             else
             {
@@ -3396,6 +3663,71 @@ namespace SysWeaver.Net
             yield return new Stats(sys, "Session.Expired", Interlocked.Read(ref ExpiredCount), "Number of expired sessions that are kept for 5 minutes extra for debug / tracking purposes");
             yield return new Stats(sys, "Session.Authenticated", Interlocked.Read(ref SessionUserCount), "Number of active sessions that have a user logged in");
             yield return new Stats(sys, "Session.Users", Interlocked.Read(ref UserCount), "Number of unique active users ");
+            yield return new Stats(sys, "ClientGone", Interlocked.Read(ref ClientGoneCount), ClientGoneDesc);
+        }
+
+        /// <summary>
+        /// The description of the "ClientGone" statistics (not a problem: the client left).
+        /// </summary>
+        public const String ClientGoneDesc = "Number of requests whose client closed the connection before the response was sent (an aborted request, a closed tab, a lost network): not a server failure";
+
+        long ClientGoneCount;
+
+        /// <summary>
+        /// The Windows (http.sys) error codes of a client that closed the connection: 22 ERROR_BAD_COMMAND (a write after the client reset the connection), 64 ERROR_NETNAME_DELETED ("The specified network name is no longer available"),
+        /// 995 ERROR_OPERATION_ABORTED, 1229 ERROR_CONNECTION_INVALID, 1236 ERROR_CONNECTION_ABORTED, 10053 / 10054 (a socket aborted / reset by the peer).
+        /// </summary>
+        static readonly HashSet<int> ClientGoneCodes = [22, 64, 995, 1229, 1236, 10053, 10054];
+
+        /// <summary>
+        /// True if an exception means that the client closed the connection (an aborted fetch, a closed tab, a lost network) while the request was handled
+        /// or the response was written: that is not a failure of the server, so it is counted as "ClientGone" (statistics) and logged as a debug line,
+        /// never as a problem.
+        /// Recognises (also as an inner exception): an <see cref="System.Net.HttpListenerException"/> with a "client gone" error code (22, 64, 995, 1229, 1236, 10053, 10054),
+        /// a <see cref="System.Net.Sockets.SocketException"/> connection reset / aborted / shut down, and the Kestrel connection reset / aborted exceptions.
+        /// </summary>
+        /// <param name="ex">The exception</param>
+        /// <returns>True if the client is gone</returns>
+        public static bool IsClientGone(Exception ex)
+        {
+            for (int depth = 0; (ex != null) && (depth < 8); ++depth, ex = ex.InnerException)
+            {
+                if (ex is System.Net.HttpListenerException hl)
+                {
+                    if (ClientGoneCodes.Contains(hl.NativeErrorCode) || ClientGoneCodes.Contains(hl.ErrorCode))
+                        return true;
+                    continue;
+                }
+                if (ex is System.Net.Sockets.SocketException se)
+                {
+                    switch (se.SocketErrorCode)
+                    {
+                        case System.Net.Sockets.SocketError.ConnectionReset:
+                        case System.Net.Sockets.SocketError.ConnectionAborted:
+                        case System.Net.Sockets.SocketError.Shutdown:
+                        case System.Net.Sockets.SocketError.OperationAborted:
+                            return true;
+                    }
+                    continue;
+                }
+                //  Kestrel (AspHttpServer), by name: no reference to asp.net core here
+                var n = ex.GetType().FullName;
+                if (String.Equals(n, "Microsoft.AspNetCore.Connections.ConnectionResetException", StringComparison.Ordinal)
+                    || String.Equals(n, "Microsoft.AspNetCore.Connections.ConnectionAbortedException", StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Count a request whose client closed the connection (see <see cref="IsClientGone"/>), nothing else: not a problem and not logged
+        /// (clients end long polls such as GetMessages all the time), the "ClientGone" statistics is the only trace.
+        /// </summary>
+        /// <param name="ex">The exception</param>
+        /// <param name="url">The url of the request (if known)</param>
+        protected void OnClientGone(Exception ex, String url)
+        {
+            Interlocked.Increment(ref ClientGoneCount);
         }
 
 
@@ -3531,9 +3863,28 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invalidate the cache if the predicate returns true, this does not invalidate per session cache entries
+        /// Invalidate the global cache and the cache of every session: the call to use after a change that the cached answers of an api
+        /// depend on. An api with [WebApiRequestCache] that takes an HttpServerRequest (or is per user) is cached per SESSION, which
+        /// <see cref="InvalidateCache(Func{string, bool})"/> alone doesn't reach (AS7-12).
         /// </summary>
-        /// <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+        /// <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url (null: every entry)</param>
+        public void InvalidateCacheEverywhere(Func<String, bool> shouldInvalidate = null)
+        {
+            if (shouldInvalidate == null)
+            {
+                InvalidateCache();
+                InvalidateAllSessionCaches();
+                return;
+            }
+            InvalidateCache(shouldInvalidate);
+            InvalidateAllSessionCaches(shouldInvalidate);
+        }
+
+        /// <summary>
+        /// Invalidate the cache if the predicate returns true, this does not invalidate per session cache entries
+        /// (see <see cref="InvalidateCacheEverywhere"/>)
+        /// </summary>
+        /// <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url</param>
         public void InvalidateCache(Func<String, bool> shouldInvalidate)
         {
             var c = Cache;
@@ -3562,7 +3913,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invalidate all session caches if the predicate returns true, this does not invalidate the "global" cache
         /// </summary>
-        /// <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+        /// <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url</param>
         public void InvalidateAllSessionCaches(Func<String, bool> shouldInvalidate)
         {
             foreach (var s in Sessions.Values)
@@ -3585,7 +3936,7 @@ namespace SysWeaver.Net
         /// Invalidate all user session caches the predicate returns true, this does not invalidate the "global" cache
         /// </summary>
         /// <param name="userGuid">The user to invalidate caches for</param>
-        /// <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+        /// <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url</param>
         public void InvalidateUserSessionCaches(String userGuid, Func<String, bool> shouldInvalidate)
         {
             if (!UserSessions.TryGetValue(userGuid, out var userData))
@@ -3735,6 +4086,23 @@ namespace SysWeaver.Net
             return new LanguageInfo(iso, name, n, ln, com);
         }
 
+        /// <summary>
+        /// The languages a user can switch to (the language choice of the app shell's settings menu): the localized languages when this
+        /// service translates its texts (it has a translator), else null (without a translator the texts stay as written, so the shell
+        /// offers no choice).
+        /// </summary>
+        /// <param name="context">The request</param>
+        /// <returns>The languages (see <see cref="GetLocalizedLanguages"/>), null when the service doesn't translate</returns>
+        [WebApi("application/{0}")]
+        [WebApiClientCache(1)]
+        public async Task<LanguageInfo[]> GetSelectableLanguages(HttpServerRequest context)
+        {
+            if (Translator == null)
+                return null;
+            var l = await GetLocalizedLanguages(context).ConfigureAwait(false);
+            return (l == null || l.Length <= 1) ? null : l;
+        }
+
 
         /// <summary>
         /// Change the language of the session (and the preferred language of the logged in user, if any).
@@ -3827,6 +4195,7 @@ namespace SysWeaver.Net
             PushMessageAllSessions(MessageServerShutDown);
             OnDispose();
             PruneTask.Dispose();
+            Jobs.Dispose();
             var firewallRules = FirewallRules;
             if (firewallRules != null)
             {
@@ -3863,9 +4232,35 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The menu path of the http server debug tables.
+        /// The legacy menu path of the http server debug tables (Development / Web server), kept for other services.
+        /// The framework's own tables use the main menu folders below.
         /// </summary>
         public const String MenuPath = "Debug/Http Server/{0}";
+
+        /// <summary>
+        /// Main menu folder id: run time information (logs, performance, statistics, sessions, audit), mostly for Ops.
+        /// </summary>
+        public const String MenuMonitoring = "Monitoring";
+
+        /// <summary>
+        /// Main menu folder id: operational tools (caches, folder sync, reverse proxy ...), mostly for Ops.
+        /// </summary>
+        public const String MenuOperations = "Operations";
+
+        /// <summary>
+        /// Main menu folder id: user, API key and password administration (shown as "Administration").
+        /// </summary>
+        public const String MenuAdministration = "Admin";
+
+        /// <summary>
+        /// Main menu folder id: reference data (countries, currencies, languages, MIME types ...).
+        /// </summary>
+        public const String MenuData = "Data";
+
+        /// <summary>
+        /// Main menu folder id: developer tools (shown as "Development"); the id stays "Debug" so items of other services that use "Debug/..." land here.
+        /// </summary>
+        public const String MenuDevelopment = "Debug";
 
 
         /// <summary>
@@ -3912,18 +4307,36 @@ namespace SysWeaver.Net
         /// Get all active (and recently expired) sessions, the tokens are redacted.
         /// </summary>
         /// <param name="r">Table parameters</param>
+        /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>The table data</returns>
+        //  The summary (and remarks) of a menu table is its menu tool tip (WebMenuTable without a description: XmlDoc().ToTitle()), so it
+        //  stays the original user sentence (S5-A-12, D26). Developer notes:
+        //  - An active session of a signed in user (other than your own) can be ended with its "End session" action (EndSession); the
+        //    caller's own session has IsCurrent true (a hidden column, for a "you" mark); ended and expired sessions stay listed
+        //    (Expired) for a while. The latest activity is first by default.
+        //  - The response is cached per session for 4 seconds (the method takes a HttpServerRequest, the end action depends on the
+        //    caller's session).
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]
         [WebApiRequestCache(4)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, MenuPath, null, null, "IconTableSession")]
-        public TableData ActiveSessions(TableDataRequest r)
+        [WebMenuTable(null, MenuMonitoring + "/{0}", "Active sessions", null, "IconTableSession", 20)]
+        public TableData ActiveSessions(TableDataRequest r, HttpServerRequest context)
         {
             var n = DateTime.UtcNow;
             HashSet<String> seen = new HashSet<string>(StringComparer.Ordinal);
-            var data = TableDataTools.Get(r, 5000, Sessions.Values.Where(x => seen.Add(x.Token)).Select(x => new SessionDebugData(x, n)).Concat(ExpiredSessions.Select(x => new SessionDebugData(x, n))));
+            var own = context?.Session;
+            var flags = HaveIsoFlags;
+            //  Default order: the latest activity first (SessionDebugData has a TableDataDefaultOrder)
+            var data = TableDataTools.Get(r, 5000, Sessions.Values.Where(x => seen.Add(x.Token)).Select(x => new SessionDebugData(x, n, false, null, flags)
+            {
+                //  End session: only active sessions with a signed in user, never the caller's own (sign out instead).
+                //  Ending an anonymous session is pointless: the browser just starts a new one with its next request (ex: the
+                //  signed out page of a user whose session was ended polls the user state, so it shows up as a new anonymous session)
+                EndToken = (x == own) || (x.Auth == null) ? null : SessionEndToken(x.Token),
+                IsCurrent = x == own,
+            }).Concat(ExpiredSessions.Where(x => seen.Add(x.Token)).Select(x => new SessionDebugData(x, n, true, ClosedSessionUsers.TryGetValue(x, out var u) ? u : null, flags))));
             var rows = data.Rows;
             if (rows != null)
             {
@@ -3952,7 +4365,7 @@ namespace SysWeaver.Net
         [WebApiClientCache(5)]
         [WebApiRequestCache(4)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, MenuPath, null, null, "IconTableUsers")]
+        [WebMenuTable(null, MenuMonitoring + "/{0}", "Active users", null, "IconTableUsers", 21)]
         public TableData ActiveUsers(TableDataRequest r)
         {
             var nt = DateTime.UtcNow.Ticks;
@@ -3970,11 +4383,12 @@ namespace SysWeaver.Net
         [WebApiClientCache(5)]
         [WebApiRequestCache(4)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, MenuPath, null, null, "IconTableCache")]
+        [WebMenuTable(null, MenuOperations + "/{0}", "Cache entries", null, "IconTableCache", 10)]
         public TableData CacheEntries(TableDataRequest r)
         {
             var n = DateTime.UtcNow;
-            return TableDataTools.Get(r, 5000, Cache.Select(x => new CacheData(x, n)));
+            var flags = HaveIsoFlags;
+            return TableDataTools.Get(r, 5000, Cache.Select(x => new CacheData(x, n, flags)));
         }
 
         /// <summary>
@@ -3989,11 +4403,12 @@ namespace SysWeaver.Net
         [WebApiClientCache(5)]
         [WebApiRequestCache(4)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, MenuPath, null, null, "IconTableCache")]
+        [WebMenuTable(null, MenuOperations + "/{0}", "Session cache entries", null, "IconTableCache", 11)]
         public TableData SessionCacheEntries(TableDataRequest r, HttpServerRequest context)
         {
             var n = DateTime.UtcNow;
-            return TableDataTools.Get(r, 5000, context.Session.Cache.Nullable().Select(x => new CacheData(x, n)));
+            var flags = HaveIsoFlags;
+            return TableDataTools.Get(r, 5000, context.Session.Cache.Nullable().Select(x => new CacheData(x, n, flags)));
         }
 
 
@@ -4007,7 +4422,7 @@ namespace SysWeaver.Net
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Mime mapping", null, "icons/file_types.svg", -2)]
+        [WebMenuTable(null, MenuData + "/{0}", "MIME mapping", null, "icons/file_types.svg", 20)]
         public TypedTableData<MimeTypeMap.ExtensionEntry> MimeMappingTable(TableDataRequest r)
             => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllExtensionEntries);
 
@@ -4021,7 +4436,7 @@ namespace SysWeaver.Net
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Mime types", null, "icons/world.svg", -1)]
+        [WebMenuTable(null, MenuData + "/{0}", "MIME types", null, "icons/world.svg", 21)]
         public TypedTableData<MimeTypeMap.MimeEntry> MimeTypesTable(TableDataRequest r)
             => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllMimeEntries);
 

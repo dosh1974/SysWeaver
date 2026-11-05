@@ -1,364 +1,259 @@
 ﻿/**
- * @file EditTypeEnum.js - type handler for enum members (normal and [Flags] enums) of the object editor.
+ * @file Type handler for enum members, including [Flags] enums (`Sw.Edit.Handlers.Enum`, legacy global `EditTypeEnum`).
  *
- * Loaded by Edit.Init() (Edit.js) via includeJs(current, "EditTypeEnum.js").
- * Defines the global class EditTypeEnum. A single shared instance is created lazily by Edit.GetTypeHandler()
- * (stored in Edit.EnumTypeHandler) for members with TypeMemberFlags.IsEnum.
- *
- * Enum metadata encoding: TypeService packs the enum into member.Default as
- * DEFAULT ">" ENTRY "|" ENTRY "|" ..., where each ENTRY is VALUE "<" NAME ["<" SUMMARY ["<" REMARKS]]:
- * ">" separates the default from the value list, "|" separates entries and "<" separates the fields of an entry.
- *
- * Dependencies: Edit (IsValid, CreateSelectionInput, CreateChangeEvent), ValueFormat (removeCamelCase,
- * AddNonNullLine) from common, TypeMemberFlags (type.js).
- * Conventions: implements the duck-typed type handler contract (CreateDefault, IsOfType, Condition, Validate,
- * ToString, GetDefault, AddEditor).
+ * Loaded by Edit.js. Enum values come packed in `member.Default` as `default>value<name<summary<remarks|...`.
+ * Normal enums use a Sw.Select (searchable when long), flags enums a row of toggle chips (bits are merged; multi bit values
+ * show their decomposition in the tooltip). A member `Type` spec `Allow.<Member>` disables values whose bit is not set in the
+ * sibling member `<Member>` (re-evaluated when the list opens / the chips get the focus). Read only: the value name as plain text (flags: the set names).
  */
+(function () {
+    "use strict";
 
-/**
- * Type handler for enums. Renders a select element (multi-select for IsFlags enums) and caches decoded enum
- * value maps per type name in this.TypeMap.
- */
-class EditTypeEnum {
+    const E = Sw.Edit;
+    const F = E.Flags;
+    const Has = E.Util.Has;
+    const addLine = E.Util.AddLine;
 
     /**
-     * Counts the number of set bits in a number (via its base-2 string).
-     * @param {number} num - Value to inspect.
-     * @returns {number} Number of "1" digits in num.toString(2).
+     * Enum handler (shared; value maps are cached per enum type name).
      */
-    static NumSetBits(num) {
-        const s = num.toString(2);
-        const l = s.length;
-        let c = 0;
-        for (let i = 0; i < l; ++i) {
-            if (s.charAt(i) === '1')
-                ++c;
+    class EditTypeEnum extends E.Handler {
+        /**
+         * @param {boolean} [forceReadOnly] - Always read only.
+         */
+        constructor(forceReadOnly) {
+            super();
+            /** @type {boolean} Always read only. */
+            this.ForceReadOnly = !!forceReadOnly;
+            /** @type {Map<string, object>} Enum type name -> value info. */
+            this.TypeMap = new Map();
         }
-        return c;
-    }
 
-    /**
-     * @param {boolean} [forceReadOnly=false] - When truthy every editor created is read only (Edit.GetTypeHandler passes nothing).
-     */
-    constructor(forceReadOnly) {
-        /** @type {boolean} Forces read-only editors. */
-        this.ForceReadOnly = !!forceReadOnly;
-        /** @type {Map<string, Map<*, *>>} Cache of value maps keyed by member.TypeName (see GetValueMap). */
-        this.TypeMap = new Map();
-    }
+        /**
+         * Number of set bits.
+         * @param {number} num - The value.
+         * @returns {number} The count.
+         */
+        static NumSetBits(num) {
+            let c = 0;
+            for (let v = num >>> 0; v; v >>>= 1)
+                c += v & 1;
+            return c;
+        }
 
-    /**
-     * Returns (and caches per member.TypeName) the decoded value map of an enum.
-     * The map is keyed by the numeric value, the numeric string, the raw name and the de-camel-cased name, each
-     * mapping to [value, displayName, rawName]; flags enums also map 0 and "0" to [0, "0", "0"].
-     * Special keys:
-     * - "___single___": [[value, displayName]] of flag values with exactly one bit set (flags enums only, else empty).
-     * - "___edit___": select options [value, displayName, tooltip] for editable selects; for flags enums,
-     *   multi-bit values get their combination text (ToString) prepended to the tooltip.
-     * - "___editro___": options for read-only selects (all values, or only single-bit values for flags enums).
-     * @param {object} member - Member description (TypeName, Flags, Default holding the encoded enum).
-     * @param {EditOptions} [options] - Editor options (passed to ToString).
-     * @returns {Map<*, *>} The value map.
-     */
-    GetValueMap(member, options) {
-        const m = this.TypeMap;
-        let t = m.get(member.TypeName);
-        if (t)
-            return t;
-        t = new Map();
-        m.set(member.TypeName, t);
-        const isFlags = (member.Flags & TypeMemberFlags.IsFlags) != 0;
-        const singleVals = [];
-        const vals = member.Default.split('>')[1].split('|');
-        const vl = vals.length;
-        if (isFlags) {
-            const zero = [0, "0", "0"];
-            t.set(0, zero);
-            t.set("0", zero);
-            for (let i = 0; i < vl; ++i) {
-                const kv = vals[i].split('<');
+        /**
+         * Test for a flags enum.
+         * @param {object} member - The member.
+         * @returns {boolean} True for [Flags] enums.
+         */
+        static IsFlags(member) {
+            return (member.Flags & F.IsFlags) !== 0 && (member.Flags & F.IsEnum) !== 0;
+        }
+
+        /**
+         * Decode the enum metadata (cached).
+         * @param {object} member - The member.
+         * @returns {{Lookup: Map, Values: Array, Single: Array, Default: number}} Lookup (value / text / name / display name ->
+         * [value, displayName, name]), Values ([value, displayName, title] in declaration order), Single (single bit values).
+         */
+        Info(member) {
+            const key = member.TypeName + "|" + member.Default;
+            let t = this.TypeMap.get(key);
+            if (t)
+                return t;
+            const isFlags = EditTypeEnum.IsFlags(member);
+            const packed = "" + (member.Default ?? "");
+            const gt = packed.indexOf(">");
+            const def = parseInt(gt >= 0 ? packed.substring(0, gt) : packed) || 0;
+            const vals = gt >= 0 ? packed.substring(gt + 1).split("|").filter(x => x) : [];
+            const lookup = new Map();
+            const values = [];
+            const single = [];
+            const decamel = s => Sw.Format.RemoveCamelCase ? Sw.Format.RemoveCamelCase(s) : s;
+            for (const vs of vals) {
+                const kv = vs.split("<");
                 const v = parseInt(kv[0]);
-                const k = kv[1];
-                const kf = ValueFormat.removeCamelCase(k);
-                if (EditTypeEnum.NumSetBits(v) === 1)
-                    singleVals.push([v, kf]);
+                const name = kv[1] || ("" + v);
+                const dn = decamel(name);
+                let title = v + ": " + name;
+                title = addLine(title, _TF("Summary", "The prefix of a row in a tool tip that ends with the C# code summary of an enum value"), kv[2] || null);
+                title = addLine(title, _TF("Remarks", "The prefix of a row in a tool tip that ends with the C# code remarks of an enum value"), kv[3] || null);
+                const e = [v, dn, name, title];
+                for (const k of [v, "" + v, name, dn, name.toLowerCase()])
+                    if (!lookup.has(k))
+                        lookup.set(k, e);
+                values.push(e);
+                if (isFlags && EditTypeEnum.NumSetBits(v) === 1)
+                    single.push(e);
             }
+            t = { Lookup: lookup, Values: values, Single: single, Default: def, IsFlags: isFlags };
+            this.TypeMap.set(key, t);
+            return t;
         }
-        t.set("___single___", singleVals);
-        
-        let haveZero = false;
-        const editVals = [];
-        const editValsRo = [];
-        for (let i = 0; i < vl; ++i) {
-            const kv = vals[i].split('<');
-            const kvl = kv.length;
-            const v = parseInt(kv[0]);
-            const k = kv[1];
-            const kf = ValueFormat.removeCamelCase(k);
-            const val = [v, kf, k];
-            haveZero |= (v == 0);
-            let title = v + ": " + k;
-            title = ValueFormat.AddNonNullLine(title, "Summary: ", kvl > 2 ? kv[2] : null);
-            title = ValueFormat.AddNonNullLine(title, "Remarks: ", kvl > 3 ? kv[3] : null);
-            t.set(v, val);
-            t.set("" + v, val);
-            t.set(k, val);
-            t.set(kf, val);
-            const eVal = [v, kf, title];
-            if (isFlags) {
-                const bs = EditTypeEnum.NumSetBits(v);
-                if (bs > 1) {
-                    editVals.push([v, kf, this.ToString(v, member, options) + "\n" + title]);
-                } else {
-                    editVals.push(eVal);
+
+        /**
+         * The old value map accessor (`___edit___`, `___editro___`, `___single___` keys plus lookups).
+         * @param {object} member - The member.
+         * @returns {Map} The map.
+         */
+        GetValueMap(member) {
+            const i = this.Info(member);
+            const m = new Map(i.Lookup);
+            m.set("___single___", i.Single.map(x => [x[0], x[1]]));
+            m.set("___edit___", i.Values.map(x => [x[0], x[1], x[3]]));
+            m.set("___editro___", (i.IsFlags ? i.Single : i.Values).map(x => [x[0], x[1], x[3]]));
+            return m;
+        }
+
+        /**
+         * Accept numbers and texts (names are resolved by Condition).
+         * @param {*} obj - Candidate.
+         * @returns {boolean} True for numbers and strings.
+         */
+        IsOfType(obj) {
+            return (typeof obj === "number" && !isNaN(obj)) || typeof obj === "string";
+        }
+
+        /**
+         * Decode a value: a number (each bit must be known for flags), a name, a de camel cased name or "A + B".
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @returns {?number} The value, or null if unknown.
+         */
+        Decode(obj, member) {
+            const i = this.Info(member);
+            if (typeof obj === "number") {
+                if (!i.IsFlags)
+                    return i.Lookup.has(obj) ? obj : null;
+                let rest = obj | 0;
+                for (const s of i.Single)
+                    if ((rest & s[0]) === s[0])
+                        rest &= ~s[0];
+                return rest === 0 ? (obj | 0) : null;
+            }
+            let x = 0;
+            for (let p of ("" + obj).split("+")) {
+                p = p.trim();
+                const e = i.Lookup.get(p) || i.Lookup.get(p.toLowerCase()) || (/^-?\d+$/.test(p) ? i.Lookup.get(parseInt(p)) : null);
+                if (!e) {
+                    if (/^-?\d+$/.test(p) && i.IsFlags) {
+                        x |= parseInt(p);
+                        continue;
+                    }
+                    return null;
                 }
-                if (bs == 1)
-                    editValsRo.push(eVal);
-            } else {
-                editValsRo.push(eVal);
-                editVals.push(eVal);
+                x |= e[0];
             }
+            return x;
         }
-//        if (isFlags && (!haveZero))
-//            editVals.splice(0, 0, [0, "-", "No values set"]);
-        t.set("___edit___", editVals);
-        t.set("___editro___", editValsRo);
-        return t;
-    }
 
-    /**
-     * Creates the default value for a new member.
-     * @param {object} member - Member description.
-     * @param {EditOptions} options - Editor options.
-     * @returns {number} Same as GetDefault.
-     */
-    CreateDefault(member, options) {
-
-        return this.GetDefault(member, options);
-    }
-
-    /**
-     * Checks whether a pasted / dropped value could be an enum value.
-     * @param {*} obj - Candidate value.
-     * @returns {boolean} true for numbers that parseInt accepts and for any string (names are not checked here).
-     */
-    IsOfType(obj) {
-        const t = typeof (obj);
-        if (t === "number") {
-            let res = parseInt(obj);
-            if (isNaN(res))
-                return false;
-            return true;
+        /**
+         * Convert an accepted value (unknown values become the default).
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @returns {number} The value.
+         */
+        Condition(obj, member) {
+            const v = this.Decode(obj, member);
+            return v === null ? this.GetDefault(member) : v;
         }
-        if (t !== "string")
-            return false;
-        return true;
-    }
 
-    /**
-     * Decodes a number or text into the numeric enum value.
-     * A number is truncated to an int and split into its individual bits, each of which must exist in the value
-     * map (so a non-flags value that is not a power of two is only accepted if all its bits are defined values);
-     * a string is split on "+" and each part must be a key of the value map (no trimming, so "A + B" fails).
-     * @param {number|string} obj - Value to decode.
-     * @param {object} member - Member description.
-     * @param {EditOptions} [options] - Editor options.
-     * @returns {?number} The OR of all decoded parts (0 for the number 0), or null when any part is unknown.
-     */
-    Decode(obj, member, options) {
-        const m = this.GetValueMap(member, options);
-        let p;
-        if (typeof obj === "number") {
-            obj |= 0;
-            p = [];
-            for (let mask = 1; obj != 0; mask += mask) {
-                if ((obj & mask) === 0)
-                    continue;
-                p.push(mask);
-                obj ^= mask;
+        /**
+         * Validate: a known value (null is not allowed).
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @param {object} options - Options.
+         * @param {string} name - Path.
+         * @returns {Promise<?Array<string>>} Null or [path, message].
+         */
+        async Validate(obj, member, options, name) {
+            const dn = member.DisplayName || member.Name;
+            if (obj === null || obj === undefined)
+                return E.Handler.NullCheck(obj, member, name);
+            if (this.Decode(obj, member) === null)
+                return [name, dn + ": " + _T("The value \"{0}\" is not a valid enum value", obj, "Validation error of an enum value.{0} is replaced with the invalid value.")];
+            return null;
+        }
+
+        /**
+         * Display text: the name, flags as "A + B" ("0" when none).
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @returns {string} The text.
+         */
+        ToString(obj, member) {
+            const i = this.Info(member);
+            if (!i.IsFlags) {
+                const e = i.Lookup.get(obj);
+                return e ? e[1] : ("" + obj);
             }
-        } else {
-            p = obj.split('+');
+            const v = this.Decode(obj, member) ?? 0;
+            const parts = i.Single.filter(s => (v & s[0]) === s[0]).map(s => s[1]);
+            return parts.length ? parts.join(" + ") : "0";
         }
-        let x = 0;
-        const pl = p.length;
-        for (let i = 0; i < pl; ++i) {
-            const xp = m.get(p[i]);
-            if (!xp)
-                return null;
-            x |= xp[0];
+
+        /**
+         * The default value (from the packed metadata).
+         * @param {object} member - The member.
+         * @returns {number} The default.
+         */
+        GetDefault(member) {
+            return this.Info(member).Default;
         }
-        return x;
-    }
 
-
-    /**
-     * Converts a pasted / dropped value (number or "A+B" name string) into a numeric enum value via Decode,
-     * falling back to the member default (GetDefault) when it cannot be decoded.
-     * @param {number|string} obj - Value to convert.
-     * @param {object} member - Member description.
-     * @param {EditOptions} [options] - Editor options.
-     * @returns {number} The enum value.
-     */
-    Condition(obj, member, options) {
-        obj = this.Decode(obj, member, options);
-        if (typeof (obj) !== "number")
-            obj = this.GetDefault(member, options);
-        return obj;
-    }
-
-    /**
-     * Validates a value: null is never allowed; otherwise it must be decodable by Decode.
-     * @param {*} obj - Value to validate.
-     * @param {object} member - Member description (DisplayName).
-     * @param {EditOptions} options - Editor options.
-     * @param {string} name - Member path/name returned with the error.
-     * @returns {Promise<?Array<string>>} null when valid, otherwise [name, message].
-     */
-    async Validate(obj, member, options, name) {
-        if (obj == null)
-            return [name, member.DisplayName + ": Value is null and null is not allowed!"];
-        const val = this.Decode(obj, member, options);
-        const t = typeof val;
-        if (t !== "number")
-            return [name, member.DisplayName + ': The value "' + obj + '" of type "' + t + '" is not a valid enum value, expecting a number or enum text'];
-        return null;
-    }
-
-    /**
-     * Formats an enum value for display.
-     * Non-flags: the de-camel-cased name from the value map, or obj itself when unknown.
-     * Flags: the de-camel-cased names of all single-bit values contained in obj joined with " + ", or "0".
-     * @param {number} obj - Numeric enum value.
-     * @param {object} member - Member description.
-     * @param {EditOptions} [options] - Editor options.
-     * @returns {string|*} Display text.
-     */
-    ToString(obj, member, options) {
-        const m = this.GetValueMap(member, options);
-        if ((member.Flags & TypeMemberFlags.IsFlags) == 0) {
-            let res = m.get(obj);
-            return res ? res[1] : obj;
-        }
-        const s = m.get("___single___");
-        const sl = s.length;
-        let n = "";
-        for (let i = 0; i < sl; ++i) {
-            const k = s[i];
-            if ((obj & k[0]) == 0)
-                continue;
-            if (n.length > 0)
-                n += " + ";
-            n += k[1];
-        }
-        return n.length <= 0 ? "0" : n;
-    }
-
-    /**
-     * Returns the default enum value: parseInt of the encoded member.Default (parseInt stops at the ">" separator,
-     * so this is the leading default number), or 0 when member.Default is not valid.
-     * @param {object} member - Member description.
-     * @param {EditOptions} [options] - Editor options (unused).
-     * @returns {number} Default numeric value (NaN if the encoded default is not numeric).
-     */
-    GetDefault(member, options) {
-        //  Default
-        let def = member.Default;
-        if (Edit.IsValid(def))
-            return parseInt(def.split(';')[0]);
-        return 0;
-    }
-
-    /**
-     * Builds the enum editor: a select (Edit.CreateSelectionInput) filled from "___edit___" (or "___editro___"
-     * when read only), multi-select for IsFlags members. Read only when options.ReadOnly, the member has
-     * TypeMemberFlags.ReadOnly, or ForceReadOnly. obj[member.Name] is set to the default when undefined.
-     * When member.Type is "Allow.<OtherMember>", focusing the select disables each option whose bit
-     * (1 << optionValue) is not set in obj[OtherMember] (a console warning is logged if that member is undefined).
-     * Selections go through editor.Invoke ("Set value: \"<n>\"", no tracking object) after parseInt.
-     * @param {object} obj - The object being edited.
-     * @param {Edit} editor - Owning editor (Invoke, Element, Key, KeyName).
-     * @param {{Element:HTMLElement}} editContext - Layout context; Element is the value cell.
-     * @param {object} member - Member description (Name, Type, Flags, Default).
-     * @param {string} title - Member title (unused).
-     * @param {EditOptions} options - Editor options (ReadOnly).
-     * @returns {Promise<object>} Item {Focus, Title, DefValue, DefValueText, SetValue(v), UpdateValue(isFirst)};
-     *   SetValue writes obj[mn] and dispatches EditChange on editor.Element.
-     */
-    async AddEditor(obj, editor, editContext, member, title, options) {
-        let typeTitle = null;
-        const mn = member.Name;
-        const cell = editContext.Element;
-        const readOnly = options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0) || this.ForceReadOnly;
-
-        const def = this.GetDefault(member, options);
-        const defText = this.ToString(def, member, options);
-        typeTitle = ValueFormat.AddNonNullLine(typeTitle, "Default value", defText);
-
-        if (typeof obj[mn] === "undefined")
-            obj[mn] = def;
-        let openFn = null;
-        if (member.Type) {
-            if (member.Type.startsWith("Allow.")) {
-                const mn = member.Type.substring(6);
-                if (typeof obj[mn] === "undefined") {
-                    console.warn(mn + " is undefined!");
-                } else {
+        /**
+         * Build the editor (Sw.Select, or flag chips).
+         * @param {object} obj - The object.
+         * @param {Sw.Edit} editor - The editor.
+         * @param {object} editContext - Layout context.
+         * @param {object} member - The member.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         * @returns {Promise<object>} The item.
+         */
+        async AddEditor(obj, editor, editContext, member, title, options) {
+            const t = this;
+            const mn = member.Name;
+            const i = this.Info(member);
+            const readOnly = this.IsReadOnly(member, options);
+            const def = i.Default;
+            const defText = this.ToString(def, member);
+            if (obj[mn] === undefined || obj[mn] === null)
+                obj[mn] = def;
+            else if (typeof obj[mn] === "string")
+                obj[mn] = this.Condition(obj[mn], member);
+            let openFn = null;
+            const spec = member.Type;
+            if (spec && spec.startsWith("Allow.")) {
+                const other = spec.substring(6);
+                if (obj[other] === undefined)
+                    console.warn(other + " is undefined!");
+                else
                     openFn = opts => {
-                        const allowed = obj[mn];
-                        const ol = opts.length;
-                        for (let i = 0; i < ol; ++i) {
-                            const opt = opts[i];
-                            const m = 1 << opt.KeyValue[0];
-                            opt.disabled = (allowed & m) === 0;
-                        }
+                        const allowed = obj[other] | 0;
+                        for (const o of opts)
+                            o.disabled = (allowed & (1 << o.KeyValue[0])) === 0;
                     };
-                }
             }
-        }
-        const text = Edit.CreateSelectionInput(
-            () => obj[mn],
-            async v => {
-                const newValue = parseInt("" + v);
+            const values = i.Values.map(x => [x[0], x[1], i.IsFlags && EditTypeEnum.NumSetBits(x[0]) > 1 ? (t.ToString(x[0], member) + "\n" + x[3]) : x[3]]);
+            const sel = E.CreateSelectionInput(() => obj[mn], async v => {
+                v = typeof v === "number" ? v : parseInt("" + v);
                 const old = obj[mn];
-                if (old === newValue)
-                    return false;
-                await editor.Invoke(
-                    edit => {
-                        edit.SetValue(newValue);
-                    },
-                    edit => {
-                        edit.SetValue(old);
-                    },
-                    "Set value: \"" + newValue + "\"",
-                    mn,
-                    null,
-                    text
-                );
-                return true;
-            },
-            this.GetValueMap(member, options).get(readOnly ? "___editro___" : "___edit___"),
-            def,
-            readOnly,
-            (member.Flags & TypeMemberFlags.IsFlags) != 0,
-            openFn
-        );
-        cell.appendChild(text);
-        return {
-            Focus: text,
-            Title: typeTitle,
-            DefValue: def,
-            DefValueText: defText,
-            SetValue: newVal => {
-                obj[mn] = newVal;
-                editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, newVal, null, editor.Key, editor.KeyName));
-            },
-            UpdateValue: isFirst => {
-                text.UpdateValue();
-                if (!isFirst)
-                    text.focus();
-            },
-        };
+                if (old === v)
+                    return;
+                await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", t.ToString(v, member), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
+            }, values, def, readOnly, i.IsFlags, openFn);
+            sel.setAttribute("aria-label", member.DisplayName || mn);
+            editContext.Element.append(sel);
+            return E.Handler.Item(obj, editor, member, {
+                Focus: sel, Title: addLine(null, _TF("Default value", "Header of a tool tip row with the default value of a property"), defText),
+                DefValue: def, DefValueText: defText,
+                Update: () => sel.UpdateValue(),
+            });
+        }
     }
 
-}
+    E.Handlers.Enum = EditTypeEnum;
+    if (!window.EditTypeEnum)
+        window.EditTypeEnum = EditTypeEnum;
+})();

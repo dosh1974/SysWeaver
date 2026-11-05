@@ -55,6 +55,11 @@ namespace SysWeaver.IpLocation
 
         public PerfMonitor PerfMon { get; } = new PerfMonitor("IpLocation");
 
+        /// <summary>
+        /// Try the sources in order, at most MaxRetryCount rounds with a growing wait between the rounds.
+        /// A source that times out is not tried again for this ip (it already used up its whole time out, a retry would only add to it),
+        /// when all sources timed out the look up ends at once.
+        /// </summary>
         async Task<IpLocation> InternalGetLocation(string ip)
         {
             var pf = PerfMon;
@@ -64,10 +69,15 @@ namespace SysWeaver.IpLocation
             var step = Step;
             var s = Sources;
             var sl = s.Length;
-            for (int i = 0; i < 10; ++ i)
+            var rounds = MaxRetryCount;
+            bool[] timedOut = null;
+            var live = sl;
+            for (int i = 0; i < rounds; ++ i)
             {
                 for (int si = 0; si < sl; ++ si)
                 {
+                    if ((timedOut != null) && timedOut[si])
+                        continue;
                     try
                     {
                         var ss = s[si];
@@ -77,14 +87,34 @@ namespace SysWeaver.IpLocation
                     catch (Exception ex)
                     {
                         SourceFails.OnException(ex);
+                        if (IsTimeout(ex))
+                        {
+                            (timedOut ??= new bool[sl])[si] = true;
+                            --live;
+                        }
                     }
                 }
+                if ((live <= 0) || ((i + 1) >= rounds))
+                    break;
                 await Task.Delay(wait).ConfigureAwait(false);
                 wait += step;
                 if (wait > max)
                     wait = max;
             }
             return null;
+        }
+
+        /// <summary>
+        /// True if the exception (or an inner exception) is a time out (a remote connection or HttpClient time out)
+        /// </summary>
+        static bool IsTimeout(Exception ex)
+        {
+            for (int depth = 0; (ex != null) && (depth < 8); ++depth, ex = ex.InnerException)
+            {
+                if ((ex is TimeoutException) || (ex is TaskCanceledException))
+                    return true;
+            }
+            return false;
         }
 
         public IEnumerable<Stats> GetStats()

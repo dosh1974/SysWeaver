@@ -54,7 +54,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get the domains
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.OpsDev)]

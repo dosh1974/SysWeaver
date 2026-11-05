@@ -16,7 +16,7 @@ namespace SysWeaver.MicroService
         /// If the last id is null or unknown (ex: the service restarted), only recent emails are returned.
         /// </summary>
         /// <param name="request">Request parameters</param>
-        /// <returns>The new emails or null if no new emails was recieved</returns>
+        /// <returns>The new emails or null if no new emails was received</returns>
         [RemoteEndPoint(HttpEndPointTypes.Post)]
         Task<IncomingEmail[]> GetIncoming(GetIncomingEmailRequest request);
     }

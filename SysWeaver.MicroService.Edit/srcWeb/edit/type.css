@@ -1,273 +1,134 @@
 ﻿/*
- * type.css - styles of the type information page edit/type.html (rendered by typeAdd() in type.js).
- * Loaded with <link> by type.html after common/theme.css and common/tab.css. Depends on theme variables
- * (--ThemeMain, --ThemeMainRGB, --ThemeAcc1, --ThemeAcc1RGB, --ThemeAcc2, --ThemeAcc2RGB, --ThemeFont, --ThemeFontMono).
+ * type.css - styles of the type documentation page edit/type.html (rendered by Sw.TypeDoc.Add in type.js).
+ * Uses the Sw design tokens (sw/ui.css); the text elements SysWeaver-Text come from AddTextElement (also styled by
+ * explore/api.css on the API page).
  */
 
-/* ===== Sections ===== */
-
-/* SysWeaver-TypeSection: one framed section (type name, summary, remarks, assembly, members / enum values), created by typeAddSection(). */
-SysWeaver-TypeSection {
+/* The page: a Design v2 form page (main.sw-page-form sets the width and padding), sections stacked. */
+.sw-type-page {
     box-sizing: border-box;
-    display: block;
-    width: 100%;
-    padding: 8px;
-    margin-bottom: 1.5em;
-    border: 1px solid rgba(var(--ThemeMainRGB), 0.1);
-    border-radius: 10px;
-    vertical-align: middle;
-    color: var(--ThemeAcc1);
-    overflow-x: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
-/* SysWeaver-TypeTitle: the small upper-case, half-transparent heading of a section (overrides the editor's Edit.css styling on this page). */
-SysWeaver-TypeTitle {
-    display: block;
-    margin-bottom: 4px;
-    opacity: 0.5;
+/* One section (type name, summary, remarks, assembly, members / enum values). */
+.sw-type-section {
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-lg);
+    background: var(--sw-surface);
+    padding: 10px 14px 12px;
+    color: var(--sw-fg);
+    min-width: 0;
+}
+
+/* Section heading: small upper case. */
+.sw-type-title {
+    margin: 0 0 6px;
+    font: 600 11px/1.4 var(--sw-sans);
+    letter-spacing: .06em;
     text-transform: uppercase;
-    color: var(--ThemeMain);
-    font-size: 80%;
-    font-weight: bold;
-    font-style: normal;
-    font-family: var(--ThemeFont);
-    user-select: none;
+    color: var(--sw-text-2);
 }
 
-
-/* Section classes set by typeAdd(): TypeCol = type name section of a collection (monospace, faded accent), TypeItalic = summary / remarks, TypeCode = type name section of other types (monospace; SysWeaver-Text parts slightly faded). */
-SysWeaver-TypeSection.TypeCol {
-    font-family: var(--ThemeFontMono);
-    color: rgba(var(--ThemeAcc1RGB), 0.7);
+.sw-type-text {
+    user-select: text;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
-SysWeaver-TypeSection.TypeItalic {
+/* TypeItalic: summary / remarks. TypeCode / TypeCol: the type name (collections in the accent color). */
+.sw-type-section.TypeItalic .sw-type-text {
     font-style: italic;
 }
 
-SysWeaver-TypeSection.TypeCode {
-    font-family: var(--ThemeFontMono);
+.sw-type-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    color: var(--sw-text-accent);
+    overflow-wrap: anywhere;
 }
 
-    SysWeaver-TypeSection.TypeCode SysWeaver-Text {
-        opacity: 0.8;
-    }
-
-/* Type name links (BuildLink / ValueFormat.createLink) aligned to the 24px text line. */
-SysWeaver-TypeSection a {
-    font-weight: normal;
-    display: inline-block;
-    line-height: 20px;
-    height: 20px;
-    vertical-align: top;
-    margin-bottom: 6px;
+.sw-type-section.TypeCol .sw-type-name {
+    color: var(--sw-accent2);
 }
 
-
-/* SysWeaver-Link (link element of ValueFormat.createLink, common.js) and SysWeaver-Text parts (AddTextElement) laid out inline on a 24px line. */
-SysWeaver-TypeSection > SysWeaver-Link{
-    display: inline-block;
-    line-height: 24px;
-    height: 24px;
+.sw-type-name > .sw-button {
+    margin-left: 6px;
 }
 
-SysWeaver-TypeSection > SysWeaver-Text {
-    padding-top: 2px;
-    padding-bottom: 2px;
+.sw-type-section SysWeaver-Text {
+    user-select: text;
 }
 
-/* Icon-24x24 / icon-24x24: the 24x24 ColorIcon element (external documentation link icon, SysWeaverTypeIconExternal); tag names are case-insensitive so both rules match it. */
-SysWeaver-TypeSection > Icon-24x24 {
-    margin-top: 2px;
+/* Tables (members / enum values): scroll horizontally on narrow screens. */
+.sw-type-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
-SysWeaver-TypeSection SysWeaver-Text {
-    display: inline-block;
-    line-height: 24px;
-    height: 24px;
-    vertical-align: top;
-    margin-bottom: 6px;
-}
-
-SysWeaver-TypeSection icon-24x24 {
-    margin-left: 16px;
-    vertical-align: top;
-}
-
-
-/* ===== Tables ===== */
-
-/* TypeMembers: members table (TYPE | NAME | SUMMARY) of a class / struct; zebra rows, accent hover; column 1 monospace type names, column 2 member name in accent, column 3 italic summary. */
-SysWeaver-TypeSection table.TypeMembers {
-    border: none;
-    border-collapse: collapse;
-    border-spacing: 0;
-    font-size: 100%;
+.sw-type-table {
     width: 100%;
-    position: relative;
-    user-select: none;
-}
-
-    SysWeaver-TypeSection table.TypeMembers tr {
-        transition: background-color 0.2s;
-        min-height: 28px;
-    }
-
-        SysWeaver-TypeSection table.TypeMembers tr:hover {
-            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-        }
-
-        SysWeaver-TypeSection table.TypeMembers tr:nth-child(2n) {
-            transition: background-color 0.2s;
-            background-color: rgba(0, 0, 0, 0.1);
-        }
-
-            SysWeaver-TypeSection table.TypeMembers tr:nth-child(2n):hover {
-                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-            }
-
-
-    SysWeaver-TypeSection table.TypeMembers th {
-        text-transform: uppercase;
-        color: var(--ThemeMain);
-        font-size: 80%;
-        font-weight: bold;
-        font-style: normal;
-        font-family: var(--ThemeFont);
-    }
-
-        SysWeaver-TypeSection table.TypeMembers th:nth-child(1) {
-            padding-left: 4px;
-        }
-
-
-    SysWeaver-TypeSection table.TypeMembers td {
-        overflow: hidden;
-        white-space: nowrap;
-        vertical-align: top;
-    }
-
-        SysWeaver-TypeSection table.TypeMembers td:nth-child(1) {
-            font-size: 90%;
-            font-family: var(--ThemeFontMono);
-            padding: 7px 8px 1px 0;
-        }
-
-            SysWeaver-TypeSection table.TypeMembers td > * {
-                display: inline-block;
-                line-height: 24px;
-                height: 24px;
-                vertical-align: top;
-                margin-bottom: 6px;
-                padding-top: 2px;
-                padding-bottom: 2px;
-            }
-
-        SysWeaver-TypeSection table.TypeMembers td:nth-child(2) {
-            padding: 4px 0 4px 0;
-            color: var(--ThemeAcc2);
-            user-select: text;
-        }
-
-        SysWeaver-TypeSection table.TypeMembers td:nth-child(3) {
-            font-style: italic;
-            padding: 4px 2px 4px 8px;
-            color: var(--ThemeMain);
-            user-select: text;
-        }
-
-        SysWeaver-TypeSection table.TypeMembers td:nth-child(1) SysWeaver-Text {
-            margin-left: 4px;
-            opacity: 0.8;
-        }
-
-        SysWeaver-TypeSection table.TypeMembers td:nth-child(2) SysWeaver-Text {
-            padding-top: 2px;
-            line-height: 24px;
-            height: 24px;
-        }
-
-        SysWeaver-TypeSection table.TypeMembers td:nth-child(3) SysWeaver-Text {
-            height: auto;
-        }
-
-
-/* TypeEnumValues: enum values table (VALUE | NAME | SUMMARY); same look as TypeMembers, value column right aligned monospace. */
-SysWeaver-TypeSection table.TypeEnumValues {
-    border: none;
     border-collapse: collapse;
-    border-spacing: 0;
-    font-size: 100%;
-    width: 100%;
-    position: relative;
-    user-select: none;
 }
 
-    SysWeaver-TypeSection table.TypeEnumValues tr {
-        transition: background-color 0.2s;
-        min-height: 28px;
-    }
-
-        SysWeaver-TypeSection table.TypeEnumValues tr:hover {
-            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-        }
-
-        SysWeaver-TypeSection table.TypeEnumValues tr:nth-child(2n) {
-            transition: background-color 0.2s;
-            background-color: rgba(0, 0, 0, 0.1);
-        }
-
-            SysWeaver-TypeSection table.TypeEnumValues tr:nth-child(2n):hover {
-                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-            }
-
-
-    SysWeaver-TypeSection table.TypeEnumValues th {
+    .sw-type-table th {
+        text-align: left;
+        font: 600 11px/1.4 var(--sw-sans);
+        letter-spacing: .06em;
         text-transform: uppercase;
-        color: var(--ThemeMain);
-        font-size: 80%;
-        font-weight: bold;
-        font-style: normal;
-        font-family: var(--ThemeFont);
+        color: var(--sw-text-2);
+        padding: 6px 10px 6px 4px;
+        border-bottom: 1px solid var(--sw-border);
     }
 
-        SysWeaver-TypeSection table.TypeEnumValues th:nth-child(1) {
-            text-align: right;
-            padding-right: 16px;
-        }
-
-    SysWeaver-TypeSection table.TypeEnumValues td {
-        overflow: hidden;
-        white-space: nowrap;
+    .sw-type-table td {
+        padding: 6px 10px 6px 4px;
         vertical-align: top;
+        border-bottom: 1px solid color-mix(in oklab, var(--sw-border), transparent 50%);
+        user-select: text;
     }
 
-        SysWeaver-TypeSection table.TypeEnumValues td:nth-child(1) {
-            font-size: 90%;
-            font-family: var(--ThemeFontMono);
-            padding: 7px 16px 1px 0;
-            text-align: right;
-            user-select: text;
-        }
+    .sw-type-table tbody tr:nth-child(2n) {
+        background: var(--sw-surface-sunken);
+    }
 
-        SysWeaver-TypeSection table.TypeEnumValues td:nth-child(2) {
-            padding: 4px 0 4px 0;
-            color: var(--ThemeAcc2);
-            user-select: text;
-        }
-
-        SysWeaver-TypeSection table.TypeEnumValues td:nth-child(3) {
-            font-style: italic;
-            padding: 4px 0 4px 8px;
-            color: var(--ThemeMain);
-            user-select: text;
-        }
-
-
-
-/* ===== Icons ===== */
-
-/* SysWeaverTypeIconExternal: mask icon (newtab.svg) of the external documentation ColorIcon in the type name section. */
-.SysWeaverTypeIconExternal {
-    mask-image: url("../icons/newtab.svg");
+@media (hover: hover) {
+    .sw-type-table tbody tr:hover {
+        background: var(--sw-accent2-soft);
+    }
 }
+
+    /* Members: type (mono), name (accent), summary (italic). */
+    .sw-type-table.TypeMembers td:nth-child(1) {
+        font-family: var(--sw-mono);
+        font-size: var(--sw-mono-size);
+        white-space: nowrap;
+    }
+
+    .sw-type-table.TypeMembers td:nth-child(2), .sw-type-table.TypeEnumValues td:nth-child(2) {
+        color: var(--sw-accent2);
+        white-space: nowrap;
+    }
+
+    .sw-type-table td:nth-child(3) {
+        font-style: italic;
+        min-width: 16em;
+    }
+
+    /* Enum values: right aligned mono value column. */
+    .sw-type-table.TypeEnumValues th:nth-child(1), .sw-type-table.TypeEnumValues td:nth-child(1) {
+        text-align: right;
+        font-family: var(--sw-mono);
+        font-size: var(--sw-mono-size);
+        white-space: nowrap;
+    }
+
+.sw-type-error {
+    color: var(--sw-danger);
+}
+

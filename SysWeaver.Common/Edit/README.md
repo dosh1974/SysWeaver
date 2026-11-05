@@ -30,7 +30,9 @@ Put these attributes on fields and properties of a type to control the editor th
 | [`EditOrderAttribute.cs`](EditOrderAttribute.cs) | Member order in the editor (low to high) |
 | [`EditPasswordAttribute.cs`](EditPasswordAttribute.cs) | Masked input, plus `EditHideAttribute` and `EditReadOnlyAttribute` |
 | [`EditTypeAttribute.cs`](EditTypeAttribute.cs) | Selects an editor type, plus `EditHideIfAttribute` / `EditHideOps` to hide a member based on another member or an expression |
-| [`EditTypes.cs`](EditTypes.cs) | Predefined editor types (language, country, currency, email, inline objects, ...) |
+| [`EditColorAttribute.cs`](EditColorAttribute.cs) | Edit a member as a color and say how it is stored (`EditColorFormat`: Css, Hex (css strings always stored as #rrggbb), Rgb, Rgba, HdrRgb, HdrRgba, Rgb8, Rgba8, UInt32Rgb / Rgba / Argb / Abgr, Auto) |
+| [`EditUnitAttribute.cs`](EditUnitAttribute.cs) | The unit of a number member (`EditUnits`: Milliseconds, Seconds, Minutes, Hours, Days, Bytes, KiloBytes, MegaBytes, GigaBytes, Percent, Ratio): the editor shows the unit and a readable form ("= 2 h"), and converts typed values with a unit ("90s", "2 MB", "25%") |
+| [`EditTypes.cs`](EditTypes.cs) | Predefined editor types (language, country, currency, email, url, phone, color, unit, inline objects, ...) |
 
 ## Relationships
 

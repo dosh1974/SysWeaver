@@ -279,7 +279,7 @@ namespace SysWeaver.Net.IsoDataModule
      */
     toString(amount, options, decimalSeparatorOverride, thousandSeparatorOverride)
     {
-        return ValueFormat.toAmount(this, amount, options, decimalSeparatorOverride, thousandSeparatorOverride);
+        return Sw.Format.Amount(this, amount, options, decimalSeparatorOverride, thousandSeparatorOverride);
     }
 
  }
@@ -342,33 +342,33 @@ namespace SysWeaver.Net.IsoDataModule
         /// <summary>
         /// Get information about all currencies known to the service
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi("debug/data/{0}")]
         [WebApiAuth(Roles.Debug)]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic(WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Currencies", null, "IconTableCurrency")]
+        [WebMenuTable(null, "Data/{0}", "Currencies", null, "IconTableCurrency", 2)]
         public TableData IsoCurrencyTable(TableDataRequest r) => TableDataTools.Get(r, 30000, IsoCurrency.Currencies);
 
         /// <summary>
         /// Get information about all countries known to the service
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi("debug/data/{0}")]
         [WebApiAuth(Roles.Debug)]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic(WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Countries", null, "IconTableCountry")]
+        [WebMenuTable(null, "Data/{0}", "Countries", null, "IconTableCountry", 1)]
         public TableData IsoCountryTable(TableDataRequest r) => TableDataTools.Get(r, 30000, IsoCountry.Countries);
 
         /// <summary>
         /// Get information about all languages known to the service
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <param name="context"></param>
         /// <returns></returns>
         [WebApi("debug/data/{0}")]
@@ -376,21 +376,21 @@ namespace SysWeaver.Net.IsoDataModule
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic(WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Languages", null, "IconTableLanguage")]
+        [WebMenuTable(null, "Data/{0}", "Languages", null, "IconTableLanguage", 3)]
         public Task<TableData> IsoLanguageTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 30000, IsoLanguage.Languages);
 
 
         /// <summary>
         /// Get information about all international phone number prefixes known to the service
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi("debug/data/{0}")]
         [WebApiAuth(Roles.Debug)]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic(WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Phone number prefixes", null, "IconTablePhone")]
+        [WebMenuTable(null, "Data/{0}", "Phone number prefixes", null, "IconTablePhone", 4)]
         public TableData PhonePrefixTable(TableDataRequest r) => TableDataTools.Get(r, 30000, PhonePrefix.Codes);
 
         const String FlagPrefix = "icons/flags/";

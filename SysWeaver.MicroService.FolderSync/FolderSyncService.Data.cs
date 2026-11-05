@@ -69,16 +69,19 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Actions that can be performed
             /// </summary>
-            [TableDataActions(
-                "Activate", 
+            //  Remove is final (G47, declared, never guessed from the words), Activate is not
+            [TableDataActionsFull(new[] { TableDataActionFlags.None, TableDataActionFlags.Final },
+                "Activate",
                 "Click to activate this folder (rename to base name)",
                 "../FolderSync/" + nameof(Activate) + "?{0}",
                 "IconOk",
+                "", "", "",
 
                 "Remove",
                 "Click to remove this folder",
                 "../FolderSync/" + nameof(Remove) + "?{0}",
-                "IconCancel"
+                "IconCancel",
+                "", "", ""
                 )]
             public String Actions;
 
@@ -97,7 +100,7 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Required auth
             /// </summary>
-            [TableDataTags]
+            [TableDataAuth]
             public String Auth;
 
 
@@ -128,7 +131,7 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Required auth
             /// </summary>
-            [TableDataTags]
+            [TableDataAuth]
             public String Auth;
 
 
@@ -281,7 +284,7 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// The required auth for these files (null = no auth required, "" = no special auth token is required, but user must be authenticated)
             /// </summary>
-            [TableDataTags]
+            [TableDataAuth]
             public String Auth;
 
             /// <summary>

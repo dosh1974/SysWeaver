@@ -24,7 +24,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Actions that can be performed
         /// </summary>
-        [TableDataActions("Delete", "Click to delete this url.\nWarning!\nThis operation can NOT be undone.", "../Api/UserStorage/" + nameof(UserStorageService.DeleteStoredUrl) + "?\"{0}\"", "IconDbRemove")]
+        //  Delete is final (G47): the web table keeps the row muted without actions until the user refreshes
+        [TableDataActionsFull(new[] { TableDataActionFlags.Final }, "Delete", "Click to delete this url.\nWarning!\nThis operation can NOT be undone.", "../Api/UserStorage/" + nameof(UserStorageService.DeleteStoredUrl) + "?\"{0}\"", "IconDbRemove", "", "", "")]
         [TableDataOrder(1)]
         public String Actions;
     }

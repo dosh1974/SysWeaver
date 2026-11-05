@@ -1,0 +1,390 @@
+﻿/*
+ * ui/code.css - SysWeaver UI library (Sw) styles, part 5 of 6: the code editor (Sw.CodeEditor, ui/code.js, loaded on demand).
+ *
+ * Colors: --sw-code-* (derived from the theme, a light variant for the light scheme), the background --sw-code-bg, line height --sw-code-lh.
+ * Token classes of the highlighter: c comment, k keyword, t type, f function, v variable, n number, p preprocessor, s / sc / sx snippets,
+ * u uniform, m macro, o operator, q quoted, h heading, b bold, i italic, l link.
+ */
+
+.sw-code {
+    --sw-code-lh: 20px;
+    --sw-code-bg: var(--sw-bg-inset);
+    --sw-code-c: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 50%);
+    --sw-code-k: var(--sw-accent1);
+    --sw-code-t: var(--sw-accent2);
+    --sw-code-f: color-mix(in oklab, var(--sw-accent2), #9be7a0 55%);
+    --sw-code-v: color-mix(in oklab, #ffb454, var(--sw-fg) 15%);
+    --sw-code-n: color-mix(in oklab, #f0a868, var(--sw-fg) 25%);
+    --sw-code-p: color-mix(in oklab, #c792ea, var(--sw-fg) 15%);
+    --sw-code-s: #f4c542;
+    --sw-code-sc: #4fd8b0;
+    --sw-code-u: color-mix(in oklab, #82aaff, var(--sw-fg) 25%);
+    --sw-code-m: color-mix(in oklab, #ff9cac, var(--sw-fg) 30%);
+    --sw-code-o: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 20%);
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--sw-code-bg);
+    color: var(--sw-fg);
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    line-height: var(--sw-code-lh);
+}
+
+:root:not([data-theme]):not([data-sw-scheme="dark"]) .sw-code, :root[data-sw-scheme="light"] .sw-code {
+    --sw-code-f: color-mix(in oklab, var(--sw-accent2), #1b7f3a 55%);
+    --sw-code-v: #a35a00;
+    --sw-code-n: #b4530a;
+    --sw-code-p: #7a3db8;
+    --sw-code-s: #9a6400;
+    --sw-code-sc: #0f7b5f;
+    --sw-code-u: #2f5fb3;
+    --sw-code-m: #b02a4a;
+}
+
+.sw-code-gutter {
+    position: relative;
+    flex: none;
+    width: 50px;
+    overflow: hidden;
+    border-right: 1px solid var(--sw-line);
+    background: var(--sw-bg-1);
+    color: var(--sw-faint);
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.sw-code-gutter-inner {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+}
+
+.sw-code-num {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--sw-code-lh);
+    padding: 0 10px 0 14px;
+    text-align: right;
+}
+
+.sw-code-num.sw-cur {
+    color: var(--sw-fg);
+}
+
+.sw-code-num.sw-error::before, .sw-code-num.sw-warning::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: calc(var(--sw-code-lh) / 2 - 4px);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--sw-danger);
+}
+
+.sw-code-num.sw-warning::before {
+    background: #e0a030;
+}
+
+.sw-code-num.sw-error {
+    color: var(--sw-danger);
+    cursor: pointer;
+}
+
+.sw-code-main {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sw-code-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 6px 12px 40vh 10px;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--sw-fg);
+    font: inherit;
+    line-height: var(--sw-code-lh);
+    letter-spacing: 0;
+    tab-size: 4;
+    white-space: pre;
+    overflow: auto;
+    z-index: 1;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sw-line-strong) transparent;
+}
+
+.sw-code-input::selection {
+    background: color-mix(in srgb, var(--sw-accent2) 32%, transparent);
+    color: transparent;
+}
+
+.sw-code-input::placeholder {
+    color: var(--sw-faint);
+}
+
+.sw-code-readonly .sw-code-input {
+    caret-color: transparent;
+}
+
+.sw-code-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    white-space: pre;
+    tab-size: 4;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.sw-code-measure {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+    left: 0;
+    top: 0;
+}
+
+.sw-code-line {
+    position: absolute;
+    height: var(--sw-code-lh);
+}
+
+.sw-code-cur, .sw-code-mark {
+    position: absolute;
+    left: 0;
+    width: 100000px;
+    height: var(--sw-code-lh);
+    background: color-mix(in srgb, var(--sw-fg) 6%, transparent);
+}
+
+.sw-code-cur.sw-blur {
+    background: color-mix(in srgb, var(--sw-fg) 3%, transparent);
+}
+
+.sw-code-mark.sw-error {
+    background: color-mix(in srgb, var(--sw-danger) 16%, transparent);
+}
+
+.sw-code-mark.sw-warning {
+    background: color-mix(in srgb, #e0a030 14%, transparent);
+}
+
+.sw-code-msg {
+    position: absolute;
+    height: var(--sw-code-lh);
+    padding: 0 8px;
+    border-radius: 4px;
+    color: var(--sw-danger);
+    font-family: var(--sw-sans);
+    font-size: 0.92em;
+    opacity: 0.9;
+}
+
+.sw-code-msg.sw-warning {
+    color: #e0a030;
+}
+
+.sw-code-match, .sw-code-bracket {
+    position: absolute;
+    height: var(--sw-code-lh);
+    border-radius: 2px;
+}
+
+.sw-code-match {
+    background: color-mix(in srgb, #ffd866 28%, transparent);
+}
+
+.sw-code-match.sw-current {
+    background: color-mix(in srgb, #ffd866 50%, transparent);
+    outline: 1px solid #ffd866;
+}
+
+.sw-code-bracket {
+    outline: 1px solid var(--sw-line-strong);
+    background: color-mix(in srgb, var(--sw-accent2) 18%, transparent);
+}
+
+.sw-code-bracket.sw-unmatched {
+    outline-color: var(--sw-danger);
+    background: var(--sw-danger-soft);
+}
+
+.sw-code .c { color: var(--sw-code-c); font-style: italic; }
+.sw-code .k { color: var(--sw-code-k); }
+.sw-code .t { color: var(--sw-code-t); }
+.sw-code .f { color: var(--sw-code-f); }
+.sw-code .v { color: var(--sw-code-v); }
+.sw-code .n { color: var(--sw-code-n); }
+.sw-code .p { color: var(--sw-code-p); }
+.sw-code .s { color: var(--sw-code-s); font-weight: 600; }
+.sw-code .sc { color: var(--sw-code-sc); font-weight: 600; }
+.sw-code .sx { color: var(--sw-code-s); text-decoration: wavy underline var(--sw-danger); text-underline-offset: 3px; }
+.sw-code .u { color: var(--sw-code-u); }
+.sw-code .m { color: var(--sw-code-m); }
+.sw-code .o { color: var(--sw-code-o); }
+.sw-code .q { color: var(--sw-code-n); }
+.sw-code .h { color: var(--sw-code-k); font-weight: 600; }
+.sw-code .b { font-weight: 700; }
+.sw-code .i { font-style: italic; }
+.sw-code .l { color: var(--sw-code-t); }
+
+/* Find / replace bar */
+.sw-code-find {
+    position: absolute;
+    top: 4px;
+    right: 18px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border: 1px solid var(--sw-line-strong);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg-2);
+    box-shadow: var(--sw-shadow);
+    font-family: var(--sw-sans);
+    font-size: var(--sw-size);
+    line-height: normal;
+}
+
+.sw-code-find[hidden], .sw-code-find-row[hidden] {
+    display: none;
+}
+
+.sw-code-find-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sw-code-find-input {
+    width: 220px;
+    min-height: 30px;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+}
+
+.sw-code-find-input.sw-invalid {
+    border-color: var(--sw-danger);
+}
+
+.sw-code-find .sw-button.sw-small {
+    min-height: 30px;
+    min-width: 30px;
+    padding: 0 6px;
+}
+
+.sw-code-find-opt {
+    font-family: var(--sw-mono);
+    font-size: 0.8em !important;
+}
+
+.sw-code-find-count {
+    min-width: 70px;
+    padding: 0 6px;
+    color: var(--sw-muted);
+    font-size: 0.85em;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Completion list */
+.sw-code-complete {
+    position: absolute;
+    z-index: 6;
+    min-width: 220px;
+    max-width: 520px;
+    max-height: 260px;
+    padding: 3px;
+    border: 1px solid var(--sw-line-strong);
+    border-radius: 6px;
+    background: var(--sw-bg-2);
+    box-shadow: var(--sw-shadow);
+}
+
+.sw-code-complete[hidden] {
+    display: none;
+}
+
+.sw-code-complete-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.sw-code-complete-item.sw-active {
+    background: var(--sw-accent2-soft);
+}
+
+.sw-code-complete-text {
+    flex: none;
+}
+
+.sw-code-complete-detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--sw-muted);
+    font-size: 0.9em;
+}
+
+.sw-code-ck {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: var(--sw-bg-3);
+    color: var(--sw-muted);
+    font-family: var(--sw-sans);
+    font-size: 10px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.sw-ck-keyword { color: var(--sw-code-k); }
+.sw-ck-type { color: var(--sw-code-t); }
+.sw-ck-function { color: var(--sw-code-f); }
+.sw-ck-variable { color: var(--sw-code-v); }
+.sw-ck-snippet { color: var(--sw-code-s); }
+.sw-ck-constant { color: var(--sw-code-sc); }
+.sw-ck-directive { color: var(--sw-code-p); }
+
+/* Hover information (CodeEditor option Hover) */
+.sw-code-hover {
+    position: absolute;
+    z-index: 7;
+    max-width: min(620px, 90%);
+    max-height: 340px;
+    padding: 8px 10px;
+    border: 1px solid var(--sw-line-strong);
+    border-radius: 6px;
+    background: var(--sw-bg-2);
+    box-shadow: var(--sw-shadow);
+    font-family: var(--sw-sans);
+    font-size: var(--sw-size);
+    line-height: 1.4;
+}
+
+.sw-code-hover[hidden] {
+    display: none;
+}

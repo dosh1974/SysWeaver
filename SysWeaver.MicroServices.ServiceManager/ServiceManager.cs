@@ -26,7 +26,7 @@ namespace SysWeaver.MicroService
     /// <summary>
     /// The service managers act as an object registry, where you can register object instances that can be used by other services.
     /// </summary>
-    public class ServiceManager : MessageHost, IDisposable, IPerfMonitored
+    public partial class ServiceManager : MessageHost, IDisposable, IPerfMonitored
     {
         /// <summary>
         /// Actions to perform when the service manager have been created
@@ -1704,14 +1704,14 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get information about all registered services as table data
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns></returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(29)]
         [WebApiRequestCache(30)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/{0}", "Loaded services", null, "IconTableServices")]
+        [WebMenuTable(null, "Monitoring/{0}", "Loaded services", null, "IconTableServices", 30)]
         public TableData ServicesTable(TableDataRequest r) => TableDataTools.Get(r, 30000, Instances.Values);
 
         #endregion//Debug
@@ -1924,7 +1924,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get statistics for all registered services as table data
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Table data</returns>
         [WebApi("debug/{0}")]
@@ -1932,20 +1932,20 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(1)]
         [WebApiRequestCache(1, WebApiCaches.Globally)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
-        [WebMenuTable(null, "Debug/{0}", "Statistics", null, "IconTableStats")]
+        [WebMenuTable(null, "Monitoring/{0}", "Statistics", null, "IconTableStats", 13)]
         public Task<TableData> StatsTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 1000, GetStats());
 
         /// <summary>
         /// A list of all scheduled (upcoming) tasks
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns>Table data</returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
-        [WebMenuTable(null, "Debug/{0}", "Scheduled tasks", null, "icons/clock.svg")]
+        [WebMenuTable(null, "Monitoring/{0}", "Scheduled tasks", null, "icons/clock.svg", 31)]
         public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks");
 
         /// <summary>
@@ -1956,7 +1956,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get performance information
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Table data</returns>
         [WebApi("debug/{0}")]
@@ -1964,10 +1964,10 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
-        [WebMenuTable(null, "Debug/{0}", "Performance", null, "IconTablePerformance")]
+        [WebMenuTable(null, "Monitoring/{0}", "Performance", null, "IconTablePerformance", 10)]
         public TableData PerfTable(TableDataRequest r, HttpServerRequest context)
         {
-            PerfTableApis.Add(context.LocalUrl);
+            AddPerfTableApi(context.LocalUrl);
             bool onlyApi = !context.Session.Auth.IsValid(DebugOpsTokens);
             var data = TableDataTools.Get(r, 1000, GetPerformanceEntries(onlyApi));
             if (onlyApi)
@@ -1979,7 +1979,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Get performance monitor information
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <param name="context">Automatically populated by the request handler, don't use</param>
         /// <returns>Table data</returns>
         [WebApi("debug/{0}")]
@@ -1987,21 +1987,58 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
-        [WebMenuTable(null, "Debug/{0}", "Performance systems", null, "IconTablePerfSystem")]
+        [WebMenuTable(null, "Monitoring/{0}", "Performance monitors", null, "IconTablePerfSystem", 11)]
         public TableData PerfSystemsTable(TableDataRequest r, HttpServerRequest context)
         {
-            PerfTableApis.Add(context.LocalUrl);
+            AddPerfTableApi(context.LocalUrl);
             return TableDataTools.Get(r, 30000, HavePerfMonitor.Keys.Select(x => x.PerfMon));
         }
 
-        readonly HashSet<String> PerfTableApis = new HashSet<string>();
+        /// <summary>
+        /// The local urls of the performance tables (<see cref="PerfTable"/>, <see cref="PerfSystemsTable"/>): their cached responses are
+        /// removed when a performance monitor is toggled or reset (locked: the table requests add to it concurrently)
+        /// </summary>
+        readonly HashSet<String> PerfTableApis = new HashSet<string>(StringComparer.Ordinal);
+
+        void AddPerfTableApi(String localUrl)
+        {
+            var tab = PerfTableApis;
+            lock (tab)
+                tab.Add(localUrl);
+        }
+
+        /// <summary>
+        /// Remove the cached responses of the performance tables, so the next request shows the change.
+        /// Both tables take the request context, so they are cached per session (<see cref="WebApiCaches.AutoDetect"/>): the session
+        /// caches are cleared too. Before, only the global cache was, so the tables showed the old state for up to 30 s and a second
+        /// click on the "Enabled" switch toggled it back (owner report 4 #11).
+        /// </summary>
+        void InvalidatePerfTables()
+        {
+            var s = Server;
+            if (s == null)
+            {
+                s = TryGet<HttpServerBase>();
+                Server = s;
+            }
+            if (s == null)
+                return;
+            var tab = PerfTableApis;
+            bool isPerfTable(String localUrl)
+            {
+                lock (tab)
+                    return tab.Contains(localUrl);
+            }
+            s.InvalidateCacheEverywhere(isPerfTable);
+        }
 
 
         /// <summary>
         /// Toggle performance monitor on/off
         /// </summary>
         /// <param name="systemName">The name of the system</param>
-        /// <returns></returns>
+        /// <returns>True when toggled (never false: an unknown system is a 409 with the reason)</returns>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">409: no performance monitor with that system name (any more)</exception>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         public bool TogglePerformanceMonitor(String systemName)
@@ -2012,18 +2049,11 @@ namespace SysWeaver.MicroService
                 if (i.System == systemName)
                 {
                     i.Enabled ^= true;
-                    var s = Server;
-                    if (s == null)
-                    {
-                        s = TryGet<HttpServerBase>();
-                        Server = s;
-                    }
-                    var tab = PerfTableApis;
-                    s?.InvalidateCache(localUrl => tab.Contains(localUrl));
+                    InvalidatePerfTables();
                     return true;
                 }
             }
-            return false;
+            throw SysWeaver.Net.HttpResponseException.Gone("There is no performance monitor named " + systemName.ToQuoted() + " (any more): refresh the table");
         }
 
         HttpServerBase Server;
@@ -2032,7 +2062,8 @@ namespace SysWeaver.MicroService
         /// Reset a performance monitor
         /// </summary>
         /// <param name="systemName">The name of the system</param>
-        /// <returns></returns>
+        /// <returns>True when reset (never false: an unknown system is a 409 with the reason)</returns>
+        /// <exception cref="SysWeaver.Net.HttpResponseException">409: no performance monitor with that system name (any more)</exception>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         public bool ResetPerformanceMonitor(String systemName)
@@ -2045,18 +2076,11 @@ namespace SysWeaver.MicroService
                     i.Reset();
                     if (!i.Enabled)
                         i.Enabled = true;
-                    var s = Server;
-                    if (s == null)
-                    {
-                        s = TryGet<HttpServerBase>();
-                        Server = s;
-                    }
-                    var tab = PerfTableApis;
-                    s?.InvalidateCache(localUrl => tab.Contains(localUrl));
+                    InvalidatePerfTables();
                     return true;
                 }
             }
-            return false;
+            throw SysWeaver.Net.HttpResponseException.Gone("There is no performance monitor named " + systemName.ToQuoted() + " (any more): refresh the table");
         }
 
         #endregion//Stats
@@ -2128,8 +2152,13 @@ namespace SysWeaver.MicroService
                 tokens.TryRemove(i.Item2, out var _);
                 queue.TryDequeue(out i);
             }
+            //  Every 10 seconds (this runs every 2 s): log new failures of the exception trackers (rate limited, see LogNewProblems)
+            if ((++PruneCount % ProblemLogPruneCycles) == 0)
+                LogNewProblems();
             return true;
         }
+
+        long PruneCount;
 
         readonly ConcurrentDictionary<String, String> OneTimePads = new ConcurrentDictionary<string, String>(StringComparer.Ordinal);
         readonly ConcurrentQueue<Tuple<long, String>> OneTimePadQueue = new ConcurrentQueue<Tuple<long, string>>();

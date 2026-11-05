@@ -1647,7 +1647,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Split a string into two parts (keeping the left part) on the first occurance of a char.
+        /// Split a string into two parts (keeping the left part) on the first occurrence of a char.
         /// Example:
         /// "name@example.com".SplitFirst('@') => "name"
         /// </summary>
@@ -1730,7 +1730,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Split a string into two parts on the first occurance of a char.
+        /// Split a string into two parts on the first occurrence of a char.
         /// Example:
         /// var left = "name@example.com".SplitFirst('@', out var right);
         /// left = "name";
@@ -1841,7 +1841,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Split a string into two parts (keeping the left part) on the first occurance of a char.
+        /// Split a string into two parts (keeping the left part) on the first occurrence of a char.
         /// Example:
         /// "name@example.com".SplitFirst('@') => "name"
         /// </summary>
@@ -1859,7 +1859,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Split a string into two parts on the first occurance of a char.
+        /// Split a string into two parts on the first occurrence of a char.
         /// Example:
         /// var left = "name@example.com".SplitFirst('@', out var right);
         /// left = "name";
@@ -1888,7 +1888,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Split a string into two parts on the last occurance of a char.
+        /// Split a string into two parts on the last occurrence of a char.
         /// Example:
         /// var right = "name@example.com".SplitLast('.', out var left);
         /// left = "name@example";
@@ -1917,7 +1917,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Split a string into two parts on the last occurance of a char.
+        /// Split a string into two parts on the last occurrence of a char.
         /// Example:
         /// var right = "name@example.com".SplitLast('.');
         /// right = "com";
@@ -2352,7 +2352,7 @@ namespace SysWeaver
             ]);
 
         /// <summary>
-        /// Escape some text to work inside mark down, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
+        /// Escape some text to work inside Markdown, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
         /// Doesn't escape +, - and . unless all is true
         /// A text that starts with the char 1 is considered to be markdown already, it's returned as is (without the first char).
         /// </summary>

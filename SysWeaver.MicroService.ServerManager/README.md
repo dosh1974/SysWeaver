@@ -30,9 +30,10 @@ flowchart TB
 - Service control by running the service host verbs (start, stop, pause, continue, restart, uninstall, kill) and per-service CPU and memory charts
 - Master configuration files copied into new versions, config and log file viewing, editing and deletion
 - Additional managed folders (`Folders`) and chunk storage statistics
-- Host monitoring: CPU, memory and drive charts with history, process table with per-process charts and kill
+- Host monitoring: CPU, memory and drive charts with history, process table with per-process charts and kill (Kill and Reboot need a token that is only sent with the process list / `GetServerInfo` (`SmProcessKillToken`: HMAC, random key per process, bound to the process start time, valid at least 15 minutes), so a crafted link or an image GET can't use them; the idle and system processes and the server manager itself can't be killed)
 - Configurable text files (`TextFiles`) and the hosts file (`AllowHosts`, `AllowHostsEdit`) viewable/editable in the browser
 - Key file management for the key folder, and reboot of the machine
+- Row actions give a clear outcome (never a bare false): `KillProcess` answers 403 with the reason (token missing / expired, a process that can't be killed) or 409 (the process has already ended, its id now belongs to another process); `RemoveService` answers 409 when the service is not managed (any more)
 
 ## Key components
 
@@ -57,6 +58,7 @@ flowchart TB
 ## Limitations and considerations
 
 - Powerful operations (kill processes, reboot, edit hosts and key files) — restrict to administrators; most host APIs require `AdminOps`.
+- The per service APIs (service verbs, charts, details, versions, configs, logs) declare the union of the roles of all managed services (`ManagedService.SyncAuth`, default `ServerManagerParams.SyncAuth`, through `IRunTimeWebApiAuth`), so users without any of them get 403 before the call and `Api/auth/CanCall` reports it; the per service check still applies and refuses with 403 (an unknown service is 404), not 500. A service added at run time with a new role is only usable by users with one of the declared roles until a restart.
 - Managed services are expected to be SysWeaver service hosts ([SysWeaver.OsServices](../SysWeaver.OsServices/README.md)) so the service verbs work.
 
 ## Folder layout

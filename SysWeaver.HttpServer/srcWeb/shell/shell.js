@@ -1,0 +1,3971 @@
+/**
+ * @file shell/shell.js - SysWeaver app shell (Sw.Shell), part 3 of 3: the application shell of the root page (index.html) and appMain.
+ *
+ * Layout (custom element names kept from the old shell, so application style sheets (app/app.css) keep working):
+ *   <app-header>  menu button, back button (mobile, or Params.Navigation), content title, user button, settings button
+ *   <app-menu>    the menu tools (pin, collapse all, expand all), the filter box, the main menu (server menu "Default"), an ARIA tree
+ *                 (Sw.Shell.MenuTree)
+ *   <app-capture> the backdrop while the menu is shown over the content
+ *   <app-content> the content frame (Sw.Shell.ContentHost)
+ * Menu states (body classes, as before): SwPinned (desktop: the menu is always shown, the content is offset), SwCollapsed (the menu is
+ * hidden: a rail of icons on wide screens, nothing on narrow screens). Neither class: the menu is shown over the content (temporary).
+ *  - Wide screens: the menu button toggles the temporary menu (or unpins a pinned menu), the pin button (first of the menu tools, above the
+ *    filter box) pins it (localStorage "SysWeaver.Pinned"), the mouse at the left edge of the rail shows it, moving the mouse away hides it.
+ *  - Narrow screens (<= 600 px) and phones: a drawer over the content with a backdrop; tap outside, Escape or a swipe to the left closes it.
+ *    Phones always start unpinned; the pin button is not shown on phones. The menu tools
+ *    "Collapse all" / "Expand all" fold or unfold every menu folder (stored like a user toggle; not in the icon rail).
+ *  - Keyboard: the menu is one tab stop (arrows inside), Escape closes a temporary menu and returns to the menu button, choosing a page
+ *    from a temporary menu moves the focus into the page. A "Skip to content" link is the first tab stop. The menu filter box (above the
+ *    tree; Params.MenuFilter) filters the items by name; the hot key Alt+M focuses it, also from inside same origin pages; Enter there opens
+ *    the first match and moves the focus into the page. Escape in the menu clears the filter, a second Escape continues in the page.
+ *    F6 / Shift+F6 cycle the focus between header, menu and page; "?" (outside text inputs, unless the page has its own) shows the shell
+ *    keyboard help. Header buttons have short accessible names ("Show the menu", "Settings" ...), the menu tools too
+ *    ("Keep the menu open" (aria-pressed), "Collapse all", "Expand all").
+ *    The content frame's accessible name is the page title.
+ *  - Without a stored pinned state the menu starts unpinned (the original default; pinned on windows at least Params.AutoPinWidth wide when
+ *    set); folders in Params.CollapsedMenus (default none) start collapsed. The rail shows the item names as tool tips / hints.
+ *  - The back button only shows when the previous history entry is this shell (it never leaves the application) and never goes back across
+ *    a sign in / sign out (MarkUser).
+ *  - Any page change closes a temporary menu (drawer, or the menu shown over the rail, ex: landscape phones); while a page loads the title
+ *    is its menu item name. The selected menu item is the best match of the shown url (or none).
+ *  - Shown main menu pages are remembered (localStorage "SysWeaver.RecentPages"); GetQuickLinks gives the start page its quick links.
+ *  - Keyboard short cut hints (Alt+M) only show on devices with a keyboard (HasKeyboard).
+ * Server: Api/application/GetMenu("User"), Api/auth/GetUser, GetMenu("Theme") (or "User,Theme" without a user button), GetMenu("Default").
+ * History: deep links "#" + Base64(url), back / forward, IframeNavigating {Url, Id} from the page in the content frame (answered with
+ * IframeNavigationHandled {Id, Url, Handled} when it has an Id, so the page cancels its fallback navigation; same origin,
+ * event.source = the frame's window) adds a history entry.
+ * Security: deep links, history states and IframeNavigating urls are only shown when SafeContentUrl accepts them (http(s) of this
+ * site, or the exact url of an external Embedded main menu item); a refused link opens the start page and shows a toast.
+ * Extension hooks: Params (Sw.Shell.Params / the old AppParams, or window.SysWeaverAppParams), window.AppMain (app/app.js) awaited
+ * before the first page opens. Branding (_docs/WebBranding.md): app/app.css (index.html links it; core/theme.js applies it to every other
+ * page too) and themes registered with a Title (Sw.Theme.Register, ex: in app/app.js), which are added to the settings menu's Theme section.
+ * Globals: appMain (index.html: <body onload="appMain()">), and in the shell window SysWeaverApp, SysWeaverAppTitle, ReloadAll (used by
+ * pages to reload the shell: the nested shell guard, AuthStartPage).
+ *
+ * Classic script (IIFE, "use strict"), needs sw/core.js, sw/ui.js, shell/menu.js and shell/content.js (bundle sw/shell.js).
+ * Documentation: shell/README.md.
+ */
+(() => {
+    "use strict";
+
+    const Sw = window.Sw = window.Sw || {};
+    const Shell = Sw.Shell = Sw.Shell || {};
+    //  Load once: this file is part of sw/shell.js, app/application.js and sw/compat.js, a page may load more than one of them
+    if (Shell.App)
+        return;
+
+    /** localStorage key of the pinned state (JSON bool). */
+    const PinnedKey = "SysWeaver.Pinned";
+
+    /** localStorage key of the density the user chose (Design v2; "" / missing = automatic). */
+    const DensityKey = "SysWeaver.Density";
+
+    /** The densities a user can choose. */
+    const Densities = ["compact", "comfortable", "touch"];
+
+    /** The menu is a drawer below this window width (css px) or height (phones in both orientations: no rail on phones). */
+    const DrawerQuery = "(max-width: 759.98px), (max-height: 499.98px)";
+
+    /** No auto show (mouse at the edge) for this long after the menu hid (ms). */
+    const AutoShowPauseMs = 250;
+
+    //  The icons of the menu tools "Collapse all" (chevrons pointing in) and "Expand all" (chevrons pointing out), see CreateMenuTools
+    if (Sw.Icons && !Sw.Icons.Has("collapseAll"))
+        Sw.Icons.Add("collapseAll", '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>');
+    if (Sw.Icons && !Sw.Icons.Has("expandAll"))
+        Sw.Icons.Add("expandAll", '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>');
+    //  The activity list button (a pulse line: work going on)
+    if (Sw.Icons && !Sw.Icons.Has("activity"))
+        Sw.Icons.Add("activity", '<path d="M3 12h4l3 7 4-14 3 7h4"/>');
+
+    /** Mouse distance (px) from the left edge that shows a collapsed menu. */
+    const EdgeWidth = 8;
+
+    /**
+     * Shell options (the old AppParams; same member names).
+     */
+    class Params {
+        /** Element to build the shell in (default document.body). @type {HTMLElement|null} */
+        PageElement = null;
+        /** Create the main menu and its header button. @type {boolean} */
+        MainMenu = true;
+        /** Comma separated server menu names of the main menu (null: "Default", "": none). @type {string|null} */
+        MainMenus = null;
+        /** Pinned on desktops when nothing is stored. @type {boolean} */
+        MainMenuPinned = false;
+        /** Create the content frame host. @type {boolean} */
+        Content = true;
+        /** Show the back button: true / false, or null = on phones only. @type {boolean|null} */
+        Navigation = null;
+        /** Show the user button (server menu "User"). @type {boolean} */
+        UserButton = true;
+        /** Show the light / dark quick switch in the top bar. @type {boolean} */
+        ThemeButton = true;
+        /** Show the activity list button (background work, Sw.Activity; UX guide FBK-4) in the top bar. @type {boolean} */
+        ActivityButton = true;
+        /** Show the calm offline line ("Offline, retrying…" / "Back online", UX guide FBK-9) while the server can't be reached. @type {boolean} */
+        OfflineLine = true;
+        /** Add the "Density" section (Compact, Comfortable, Touch, Automatic) to the settings menu. @type {boolean} */
+        SettingsDensity = true;
+        /** Add the "Text size" choices (80, 100, 110, 125, 150 %) to the settings menu (a section on touch screens, else a submenu). @type {boolean} */
+        SettingsTextSize = true;
+        /** Add the "Language" section to the settings menu when the service translates its texts (Api/application/GetSelectableLanguages). @type {boolean} */
+        SettingsLanguage = true;
+        /** Show the connection line (connected, server time) at the bottom of the menu. @type {boolean} */
+        MenuStatus = true;
+        /** Show the settings button. @type {boolean} */
+        SettingsButton = true;
+        /** Server menus of the settings menu (null: "Theme", or "User,Theme" without a user button; "": none). @type {string|null} */
+        SettingMenus = null;
+        /** Add the full screen item to the settings menu. @type {boolean} */
+        SettingsFs = true;
+        /** Add the "Open in new tab" item to the settings menu. @type {boolean} */
+        SettingsNewTab = true;
+        /** Called when the settings menu opens: fn(menu {Name, Items}, close) may add items. @type {function|null} */
+        OnSettingsMenuOpenFn = null;
+        /** Called before the main menu is rendered: async fn(menuDef, style, hide) may change it. @type {function|null} */
+        OnMainMenuDefFn = null;
+        /** Top level main menu folders (Id, else Name; case insensitive) that start collapsed until the user expands them (default none: every
+         * folder starts expanded, like the original shell). @type {Array<string>} */
+        CollapsedMenus = [];
+        /** Show the menu filter box (and its hot key Alt+M). @type {boolean} */
+        MenuFilter = true;
+        /** Without a stored pinned state the menu starts pinned (expanded with labels) on windows at least this wide (css px; 0 = never, the
+         * default: the menu starts unpinned, like the original shell, unless MainMenuPinned). @type {number} */
+        AutoPinWidth = 0;
+        /** Check the signed in session every this many seconds while the page is visible, and when it becomes visible (GET Api/auth/GetUser;
+         * 0 = never, the default: like the original shell, a sign out is only noticed by the server's push and by a "not signed in" reply of
+         * any request, InterOp "SysWeaver.AuthCheck"). @type {number} */
+        SessionCheckSeconds = 0;
+    }
+
+    /**
+     * Test if a key event is the menu filter hot key (Alt+M; by key code, so it works with any keyboard layout and on macOS).
+     * @param {KeyboardEvent} ev The event.
+     * @returns {boolean} True for Alt+M.
+     */
+    const isMenuHotKey = ev => ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && (ev.code === "KeyM" || (ev.key || "").toLowerCase() === "m");
+
+    /** localStorage key of the recently opened main menu pages (JSON array of {U: normalized url, C: open count, T: last opened ms}). */
+    const RecentKey = "SysWeaver.RecentPages";
+
+    /** sessionStorage key of the signed in user of the last shell in this tab (see App.MarkUser). */
+    const ShellUserKey = "SysWeaver.ShellUser";
+
+    /** sessionStorage key of the history entry (Navigation API key) the back button never goes past (see App.MarkUser). */
+    const BackBoundaryKey = "SysWeaver.ShellBackFrom";
+
+    /** sessionStorage key of the time (ms) the shell last reloaded because the session ended (App.SessionGone: never twice a minute). */
+    const EndedAtKey = "SysWeaver.ShellEndedAt";
+
+    /** The "You are signed out" notice after the reload closes by itself after this time (ms, App.ShowSignedOutNotice). */
+    const SignedOutCloseMs = 30000;
+
+    /** The number of recently opened pages that are remembered. */
+    const RecentMax = 20;
+
+    /**
+     * Test if the device likely has a hardware keyboard, so keyboard short cut hints (ex: Alt+M) are worth showing: not the mobile
+     * layout (phones, tablets), and not a touch only device (a touch screen with a fine pointer, ex: a laptop, counts as a keyboard device).
+     * @returns {boolean} True to show keyboard hints.
+     */
+    function HasKeyboard() {
+        if (Sw.Layout.Mobile)
+            return false;
+        if (!Sw.Platform.IsTouch)
+            return true;
+        try {
+            return window.matchMedia("(any-pointer: fine)").matches;
+        }
+        catch {
+            return true;
+        }
+    }
+
+    /**
+     * Create a header button (a real button with an icon class or an inline icon; the title shows on hover, long press and focus).
+     * @param {string} tag The custom element wrapping the button (app-MenuButton ...).
+     * @param {string} icon Icon (class, url or inline name).
+     * @param {string} title Tool tip (also the accessible name when no label is given).
+     * @param {function(Event):void} onClick Click handler.
+     * @param {string} [label] Short accessible name (ex: "Settings"; the tool tip may say more).
+     * @returns {{Wrap: HTMLElement, Button: HTMLButtonElement, Icon: Element}} The parts.
+     */
+    function headerButton(tag, icon, title, onClick, label) {
+        //  server icons are drawn as their line twins (one outline style in the shell, Sw.LineIcon)
+        const ic = Sw.LineIcon ? Sw.LineIcon(icon, "sw-shell-hicon") : Sw.Icon(icon, "sw-shell-hicon");
+        const b = Sw.el("button.sw-shell-hbutton", { type: "button", title, attrs: { "aria-label": label || title } }, ic);
+        if (Sw.Hint)
+            Sw.Hint.Attach(b);
+        b.addEventListener("click", ev => {
+            if (Sw.BadClick(ev))
+                return;
+            onClick(ev);
+        });
+        const wrap = document.createElement(tag);
+        wrap.append(b);
+        return { Wrap: wrap, Button: b, Icon: ic };
+    }
+
+    /**
+     * The application shell (the old App; same public members).
+     */
+    class App {
+        /** Element the shell is built in. @type {HTMLElement} */
+        Page = null;
+        /** <app-header>. @type {HTMLElement} */
+        AppHeader = null;
+        /** <app-menu>. @type {HTMLElement|null} */
+        AppMenu = null;
+        /** <app-content>. @type {HTMLElement|null} */
+        Content = null;
+        /** <app-MenuButton>. @type {HTMLElement|null} */
+        AppMenuButton = null;
+        /** <app-BackButton>. @type {HTMLElement|null} */
+        AppBackButton = null;
+        /** <app-PinButton> (the pin of the menu tools, see CreateMenuTools; null on phones). @type {HTMLElement|null} */
+        PinButton = null;
+        /** <app-ContentTitle>. @type {HTMLElement} */
+        Title = null;
+        /** Opens the initial page (hash deep link or the first menu item). @type {function():void} */
+        InitPage = () => { };
+        /** The main menu tree. @type {Sw.Shell.MenuTree|null} */
+        Menu = null;
+        /** The main menu definition (server menu). @type {object|null} */
+        MenuDef = null;
+        /** The content frame host. @type {Sw.Shell.ContentHost|null} */
+        Host = null;
+        /** The options. @type {Params} */
+        Params = null;
+        /** The current content title. @type {string} */
+        ContentTitle = "";
+
+        /**
+         * Create and initialize a shell.
+         * @param {Params|object} [params] Options.
+         * @returns {Promise<App>} The shell (InitPage set).
+         */
+        static async Create(params) {
+            const app = new this();
+            app.InitPage = await app.Init(params);
+            return app;
+        }
+
+        /**
+         * Build the shell (see the file header).
+         * @param {Params|object} [params] Options (missing members get the defaults).
+         * @returns {Promise<function():void>} Opens the initial page.
+         */
+        async Init(params) {
+            const t = this;
+            const p = Object.assign(new Params(), params || {});
+            t.Params = p;
+            /** The original document title ("<app title> - <content title>" is shown). @type {string} */
+            window.SysWeaverAppTitle = document.title;
+            Sw.Page.RememberAppName(document.title);
+            t.AppTitle = document.title;
+            /** The shell instance. @type {App} */
+            window.SysWeaverApp = t;
+            Shell.Current = t;
+            if (typeof window.ReloadAll !== "function")
+                window.ReloadAll = (flushCache, clearHash) => Sw.Page.Reload(flushCache, clearHash);
+            const page = p.PageElement || document.body;
+            t.Page = page;
+            page.classList.add("sw-shell", "sw-root");
+            const mobile = !!Sw.Layout.Mobile;
+            //  The on screen keyboard makes the window lower (Android; the shell, its content frame and a text field at the bottom of
+            //  the page then end above the keyboard), for an app page that does not ask for it itself; iOS: core/layout.js (Keyboard)
+            const vp = document.querySelector('meta[name="viewport"]');
+            if (vp && !/interactive-widget/i.test(vp.content || ""))
+                vp.content = (vp.content ? vp.content + ", " : "") + "interactive-widget=resizes-content";
+
+            //  Skip link (first tab stop, visible when focused): moves the focus into the page
+            if (p.Content) {
+                const skip = Sw.el("a.sw-shell-skip", {
+                    href: "#sw-shell-content",
+                    text: _TF("Skip to content", "Text of a link (shown when focused with the keyboard) that moves the focus past the application menu into the page"),
+                });
+                skip.addEventListener("click", ev => {
+                    ev.preventDefault();
+                    if (t.Host)
+                        t.Host.Focus();
+                });
+                page.append(skip);
+            }
+
+            //  Header
+            const header = document.createElement("app-header");
+            header.setAttribute("role", "banner");
+            t.AppHeader = header;
+            page.append(header);
+            const left = Sw.el("div.sw-shell-hleft");
+            header.append(left);
+
+            if (p.MainMenu) {
+                const mb = headerButton("app-MenuButton", "menu",
+                    _TF("Show the main menu", "The tool tip description of a button that when clicked will show the main application menu"),
+                    ev => t.MenuToggle(ev));
+                mb.Button.setAttribute("aria-expanded", "false");
+                mb.Button.classList.add("sw-shell-menubutton");
+                t.AppMenuButton = mb.Wrap;
+                t.MenuButton = mb.Button;
+                left.append(mb.Wrap);
+            }
+            if (p.Navigation === null ? mobile : p.Navigation) {
+                const bb = headerButton("app-BackButton", "left",
+                    _TF("Navigate back", "The tool tip description on a button that when clicked will navigate to the previous page in the history"),
+                    () => {
+                        //  Never leave the application (the button is hidden then anyway)
+                        if (t.CanGoBack())
+                            history.back();
+                    },
+                    _TF("Back", "Accessible name of the header button that goes back to the previous page of the application"));
+                t.AppBackButton = bb.Wrap;
+                t.BackBtn = bb.Button;
+                left.append(bb.Wrap);
+                if (window.navigation && typeof window.navigation.addEventListener === "function")
+                    window.navigation.addEventListener("currententrychange", () => t.UpdateBack());
+                t.UpdateBack();
+            }
+            //  (the pin button is in the menu, the first of the menu tools above the filter box: CreateMenuTools)
+
+            //  Breadcrumb (Design v2): the menu folders of the shown page (span.sw-shell-crumbs; a folder with a page of its own is a link),
+            //  then the page title. Click / tap on the title copies it (the copy toast quotes the full title, also when it is cut on a
+            //  phone). The page name is the document's h1 (heading navigation), styled as the current crumb (shell.css).
+            const title = document.createElement("app-ContentTitle");
+            title.className = "Hidden";
+            title.setAttribute("aria-live", "polite");
+            const crumbs = Sw.el("span.sw-shell-crumbs");
+            const titleText = Sw.el("h1.sw-shell-title");
+            title.append(crumbs, titleText);
+            t.Title = title;
+            t.TitleText = titleText;
+            t.Crumbs = crumbs;
+            titleText.addEventListener("click", ev => {
+                if (Sw.BadClick(ev) || !t.ContentTitle)
+                    return;
+                Sw.Clipboard.Copy(t.ContentTitle);
+            });
+            header.append(title);
+            const right = Sw.el("div.sw-shell-hright");
+            header.append(right);
+
+            //  User button (created first: the server requests stay in the old order; it is moved to the far right below)
+            if (p.UserButton)
+                await t.CreateUserButton(right, p);
+
+            //  The activity list (background work; also in the phone layout; shown only while the session has activity)
+            if (p.ActivityButton)
+                t.CreateActivityButton(right);
+
+            //  Light / dark quick switch
+            if (p.ThemeButton)
+                t.CreateThemeButton(right);
+
+            //  Settings button
+            if (p.SettingsButton)
+                await t.CreateSettingsButton(right, p);
+
+            //  The user (avatar) is the last tool of the top bar
+            const uw = t.UserBtn ? t.UserBtn.parentNode : null;
+            if (uw && uw.parentNode === right)
+                right.append(uw);
+
+            //  Content
+            if (p.Content) {
+                const content = document.createElement("app-content");
+                content.id = "sw-shell-content";
+                content.setAttribute("role", "main");
+                t.Content = content;
+                page.append(content);
+                t.Host = new Shell.ContentHost({
+                    Host: content,
+                    History: !!p.MainMenu,
+                    OnStart: url => t.OnContentStart(url),
+                    //  The page error state: "This page is not available in <app>", Home opens the start page
+                    AppName: () => t.AppTitle || "",
+                    OnHome: () => t.OpenFirst(),
+                    OnReveal: (url, ttl, win, frame) => t.OnContentReveal(url, ttl, win, frame),
+                    //  A page navigated the frame to another site (never shown): show the last page again and tell the user
+                    OnForeign: lastUrl => {
+                        t.Host.Navigate(lastUrl, { Replace: true });
+                        t.LinkRefused(true);
+                    },
+                    Title: (url, win, frame) => {
+                        const en = t.FindEntry(url, frame);
+                        return en ? en.Item.Name : null;
+                    },
+                });
+                t.BindFrameModal();
+                t.BindPageDirty();
+            }
+            if (p.OfflineLine)
+                t.CreateOfflineLine();
+            t.BindTimeOutWarning();
+            //  Reloaded right after a sign out in this tab: say so, once
+            t.ShowSignedOutNotice();
+
+            //  Main menu
+            if (!p.MainMenu)
+                return () => { };
+            return await t.CreateMainMenu(page, p);
+        }
+
+        // ------------------------------------------------------------------ header menus
+
+        /**
+         * Create the user button and its menu (server menu "User", a single root folder is unwrapped).
+         * @param {HTMLElement} to The header part.
+         * @param {Params} p Options.
+         */
+        async CreateUserButton(to, p) {
+            const t = this;
+            let items = [];
+            let user = null;
+            try {
+                items = p.SettingMenus === "" ? [] : (await Shell.GetMenu("User")).Items;
+                //  Never from the browser cache (the server allows 10 s): a shell that reloads right after a sign out (or a session that
+                //  ended) must not show the user that was signed in a moment ago
+                const userReq = Sw.Net.Get(Sw.Url.Root + "Api/auth/GetUser", { Reload: true });
+                //  (the shell's pages use this user, also while it is on its way: Sw.Access.User in a framed page sends no GetUser of its own)
+                if (Sw.Access && typeof Sw.Access.SeedUser === "function")
+                    Sw.Access.SeedUser(userReq);
+                user = await userReq;
+            }
+            catch (x) {
+                console.warn("Shell: user menu failed: " + (x && x.message));
+            }
+            if (items.length === 1 && Array.isArray(items[0].Children))
+                items = items[0].Children;
+            const haveUser = !!(user && user.Succeeded);
+            /** @type {boolean} Somebody is signed in (the app identity shows the version then). */
+            t.HaveUser = haveUser;
+            const tip = (haveUser ? (_T("Logged in as {0},", user.NickName, "A tool tip description descriping what user is logged into the page.{0} is replaced with the name of the user.") + "\n\n") : "")
+                + _TF("Show user options", "The tool tip description on a button that when clicked will show some user options");
+            const ub = headerButton("app-UserButton", haveUser ? "user" : "icons/user.svg", tip, () => open(),
+                haveUser
+                    ? _T("User menu, {0}", user.NickName, "Accessible name of the user button in the application header.{0} is replaced with the name of the signed in user")
+                    : _TF("User menu", "Accessible name of the user button in the application header when nobody is signed in"));
+            //  In-app back never crosses a sign in / sign out (see MarkUser)
+            t.MarkUser(haveUser ? String(user.Id ?? user.NickName ?? user.Name ?? "?") : "");
+            //  The drafts of the framed pages know the user at once: they are restored before any input is possible (SAF-11)
+            if (Sw.Draft && typeof Sw.Draft.SetUser === "function")
+                Sw.Draft.SetUser(haveUser ? user : null);
+            //  The server jobs of this user (exports that run on the server) come back after a reload (FBK-4); quiet without the job api
+            if (haveUser && Sw.Activity && typeof Sw.Activity.RestoreServer === "function")
+                Sw.Activity.RestoreServer();
+            const b = ub.Button;
+            b.classList.add("sw-shell-userbtn");
+            b.setAttribute("aria-haspopup", "menu");
+            b.setAttribute("aria-expanded", "false");
+            t.UserBtn = b;
+            if (haveUser) {
+                //  The user image, as the server serves it (an uploaded picture or the server generated one; the inline icon stays as a
+                //  fallback when there is no image)
+                const img = Sw.el("img.sw-shell-userimg", { alt: "", draggable: false });
+                const base = Sw.Url.Root + "auth/UserImages/Current/small";
+                let count = 0;
+                img.addEventListener("load", () => b.classList.add("WithUser"));
+                img.addEventListener("error", () => b.classList.remove("WithUser"));
+                img.src = base;
+                b.append(img);
+                Sw.InterOp.On("UserImageChanged", () => {
+                    img.src = base + "?" + (++count);
+                });
+                t.WatchSession(user);
+            }
+            /** Open the user menu. */
+            const open = () => {
+                if (!items.length)
+                    return;
+                b.setAttribute("aria-expanded", "true");
+                Shell.ShowMenu(b, items, t.MenuContext(), {
+                    Align: "end", Label: _TF("User", "Accessible name of the user menu of the application"),
+                    OnClose: () => b.setAttribute("aria-expanded", "false"),
+                });
+            };
+            Sw.LongPress(b, () => open());
+            to.append(ub.Wrap);
+        }
+
+        /**
+         * Create the light / dark quick switch of the top bar (a moon in light schemes, a sun in dark ones; Sw.Theme.Set stores the
+         * choice like the settings menu's theme items). Follows theme changes from anywhere (Sw.Theme.OnChange).
+         * @param {HTMLElement} to The header part.
+         */
+        CreateThemeButton(to) {
+            const t = this;
+            const tb = headerButton("app-ThemeButton", "moon", "", () => {
+                Sw.Theme.Set(Sw.Theme.IsDark ? "light" : "dark");
+                update();
+            });
+            const b = tb.Button;
+            b.classList.add("sw-shell-themebtn");
+            t.ThemeBtn = b;
+            let icon = tb.Icon;
+            /** Show the icon and the name of the scheme a click switches to. */
+            const update = () => {
+                const dark = !!Sw.Theme.IsDark;
+                const ic = Sw.Icon(dark ? "sun" : "moon", "sw-shell-hicon");
+                icon.replaceWith(ic);
+                icon = ic;
+                const txt = dark
+                    ? _TF("Switch to the light theme", "Name and tool tip of the top bar button that switches the application to the light theme")
+                    : _TF("Switch to the dark theme", "Name and tool tip of the top bar button that switches the application to the dark theme");
+                b.title = txt;
+                b.setAttribute("aria-label", txt);
+            };
+            update();
+            Sw.Theme.OnChange(() => update());
+            to.append(tb.Wrap);
+        }
+
+        /**
+         * The density the user chose ("" = automatic: by device and theme), see SetDensity.
+         * @returns {string} "compact", "comfortable", "touch" or "".
+         */
+        GetDensity() {
+            if (Sw.Theme && typeof Sw.Theme.GetDensity === "function")
+                return Sw.Theme.GetDensity() || "";
+            const v = Sw.Storage.Get(DensityKey, "") || "";
+            return Densities.includes(v) ? v : "";
+        }
+
+        /**
+         * Set the density (Design v2: html[data-density]; localStorage "SysWeaver.Density", per browser like the theme). Uses the core
+         * (Sw.Theme.SetDensity: storage, attribute and the frames) when it has it, else stores it and sets the attribute on the shell and
+         * the shown page.
+         * @param {string} v "compact", "comfortable", "touch" or "" (automatic).
+         */
+        SetDensity(v) {
+            v = Densities.includes(v) ? v : "";
+            if (Sw.Theme && typeof Sw.Theme.SetDensity === "function") {
+                Sw.Theme.SetDensity(v);
+                return;
+            }
+            if (v)
+                Sw.Storage.Set(DensityKey, v);
+            else
+                Sw.Storage.Remove(DensityKey);
+            const apply = doc => {
+                try {
+                    if (v)
+                        doc.documentElement.setAttribute("data-density", v);
+                    else
+                        doc.documentElement.removeAttribute("data-density");
+                }
+                catch {
+                    //  Cross-origin page
+                }
+            };
+            apply(document);
+            const f = this.Host ? this.Host.Frame : null;
+            if (f) {
+                try {
+                    if (f.contentDocument)
+                        apply(f.contentDocument);
+                }
+                catch {
+                }
+            }
+        }
+
+        /**
+         * The "Density" section of the settings menu (server menu item shape: a folder whose children run a function).
+         * @returns {object} The folder item.
+         */
+        DensityMenu() {
+            const t = this;
+            const cur = t.GetDensity();
+            //  One choice of four: radio items (menu.js `Radio`), each with a line glyph like the theme items above them, so the
+            //  settings menu has one icon column and one check column (Designer D14)
+            const icons = { "": "sliders", compact: "rows", comfortable: "list", touch: "grid" };
+            const item = (v, name, title) => ({
+                Id: "density-" + (v || "auto"),
+                Name: name,
+                Title: title,
+                IconClass: icons[v] || null,
+                Radio: true,
+                Flags: cur === v ? 2 : 0,
+                Data: async () => {
+                    t.SetDensity(v);
+                    return true;
+                },
+            });
+            return {
+                Id: "Density",
+                Name: _TF("Density", "Title of the section of the settings menu that chooses how dense (compact or roomy) the user interface is"),
+                Children: [
+                    item("", _TF("Automatic", "Settings menu item: the density follows the device (touch screens get large targets) and the theme"),
+                        _TF("Choose by the device and the theme", "Tool tip of the automatic density item of the settings menu")),
+                    item("compact", _TF("Compact", "Settings menu item: a dense user interface (small rows, more data on the screen)"),
+                        _TF("Small rows: more data on the screen", "Tool tip of the compact density item of the settings menu")),
+                    item("comfortable", _TF("Comfortable", "Settings menu item: the normal density of the user interface"),
+                        _TF("The normal row height", "Tool tip of the comfortable density item of the settings menu")),
+                    item("touch", _TF("Touch", "Settings menu item: large rows and buttons, easy to tap on touch screens"),
+                        _TF("Large rows and buttons, easy to tap", "Tool tip of the touch density item of the settings menu")),
+                ],
+            };
+        }
+
+        /**
+         * The "Text size" choices of the settings menu (Sw.Theme.TextSize: 80, 100, 110, 125, 150 %; the html font size, so the layout
+         * reflows): a section of its own on touch screens and phones (no Ctrl + mouse wheel there), else a submenu (shown only on hover /
+         * Enter) at the end of the Density section, since the browser zoom does the same on desktops. Null without Sw.Theme.TextSize.
+         * @returns {object|null} The folder item.
+         */
+        TextSizeMenu() {
+            const ts = Sw.Theme && Sw.Theme.TextSize;
+            if (!ts)
+                return null;
+            const cur = ts.Get();
+            const pct = s => {
+                try {
+                    return new Intl.NumberFormat(Sw.I18n && Sw.I18n.Language ? Sw.I18n.Language() : undefined, { style: "percent" }).format(s / 100);
+                }
+                catch {
+                    return s + " %";
+                }
+            };
+            const items = ts.Sizes.map(s => ({
+                Id: "textsize-" + s,
+                Name: pct(s),
+                Title: s === 100
+                    ? _TF("The normal text size", "Tool tip of the 100 % item of the Text size section of the settings menu")
+                    : _T("Text, icons and controls at {0} of the normal size", pct(s), "Tool tip of a text size item of the settings menu. {0} is a percentage, ex: 125 %"),
+                Radio: true,
+                Flags: cur === s ? 2 : 0,
+                Data: async () => {
+                    ts.Set(s);
+                    return true;
+                },
+            }));
+            return {
+                Id: "TextSize",
+                Name: _TF("Text size", "Title of the part of the settings menu that chooses the size of the text (and icons and controls) of the user interface"),
+                Title: _TF("Larger or smaller text, icons and controls", "Tool tip of the Text size submenu of the settings menu"),
+                IconClass: "text",
+                Children: items,
+            };
+        }
+
+        /**
+         * The languages the user can switch to (Api/application/GetSelectableLanguages: null when the service doesn't translate), asked
+         * once per page, when the settings button is first pointed at, focused or pressed (no request on page load).
+         * @returns {Promise<?Array<{Iso: string, Name: string, LocalName: string, EnName: string}>>} The languages, null for none.
+         */
+        LoadLanguages() {
+            const t = this;
+            if (!t.LanguagesP)
+                t.LanguagesP = Sw.Net.Get(Sw.Net.Api("application/GetSelectableLanguages"), { NoNavigate: true })
+                    .then(l => Array.isArray(l) && l.length > 1 ? l : null)
+                    .catch(() => null);
+            return t.LanguagesP;
+        }
+
+        /**
+         * The "Language" section of the settings menu: the current language as a submenu row (the list can be long) with every language as
+         * a radio item ("Français (French)": its own name, then the name in the current language). Choosing one sets the session language
+         * (Api/application/SetLanguage, also the user's preferred language); the server then asks every page of the session (of the user)
+         * to reload, translated (a reload of this page follows if that message doesn't come).
+         * @param {Array<object>} langs The languages (LoadLanguages).
+         * @returns {object} The folder item (a section).
+         */
+        LanguageMenu(langs) {
+            const cur = ((Sw.I18n && Sw.I18n.Language ? Sw.I18n.Language() : document.documentElement.lang) || "").toLowerCase();
+            const isCur = l => {
+                const i = (l.Iso || "").toLowerCase();
+                return i === cur || (!langs.some(x => (x.Iso || "").toLowerCase() === cur) && i === cur.split("-")[0]);
+            };
+            const name = l => {
+                const own = l.LocalName || l.Name || l.Iso;
+                return l.Name && l.Name !== own ? own + " (" + l.Name + ")" : own;
+            };
+            const items = langs.map(l => ({
+                Id: "lang-" + l.Iso,
+                Name: name(l),
+                Title: _T("Show the application in {0}", l.Name || l.Iso, "Tool tip of a language item of the settings menu. {0} is the name of the language"),
+                Radio: true,
+                Flags: isCur(l) ? 2 : 0,
+                Data: async () => {
+                    if (isCur(l))
+                        return true;
+                    await Sw.Net.Send(Sw.Net.Api("application/SetLanguage"), l.Iso);
+                    //  The server pushes a refresh to the session's pages; reload if it didn't arrive
+                    setTimeout(() => Sw.Page.Reload ? Sw.Page.Reload() : location.reload(), 2500);
+                    return true;
+                },
+            }));
+            const now = langs.find(isCur);
+            return {
+                Id: "LanguageSection",
+                Name: _TF("Language", "Title of the section of the settings menu that chooses the language of the user interface"),
+                Children: [{
+                    Id: "Language",
+                    Name: now ? name(now) : _TF("Choose a language", "Settings menu item that opens the list of languages when the current one is not in the list"),
+                    Title: _TF("The language of the application", "Tool tip of the language submenu of the settings menu"),
+                    IconClass: "language",
+                    Children: items,
+                }],
+            };
+        }
+
+        /**
+         * Create the settings button and its menu (full screen, server "Theme" menu items as a section, open in new tab, custom items).
+         * @param {HTMLElement} to The header part.
+         * @param {Params} p Options.
+         */
+        async CreateSettingsButton(to, p) {
+            const t = this;
+            const names = p.SettingMenus ?? (p.UserButton ? "Theme" : "User,Theme");
+            let items = [];
+            try {
+                items = p.SettingMenus === "" ? [] : (await Shell.GetMenu(names)).Items;
+            }
+            catch (x) {
+                console.warn("Shell: settings menu failed: " + (x && x.message));
+            }
+            /** @type {?Array<object>} The selectable languages once loaded (null: none / not yet). */
+            let langs = null;
+            const loadLangs = () => {
+                if (!p.SettingsLanguage)
+                    return Promise.resolve(null);
+                return t.LoadLanguages().then(l => langs = l);
+            };
+            const sb = headerButton("app-SettingsButton", "settings",
+                _TF("Show settings", "The tool tip description on a button that when clicked will show some settings"),
+                async () => {
+                    //  The language list is asked when the button is first pointed at or focused; a press before it arrived waits a little
+                    if (p.SettingsLanguage && !langs)
+                        await Promise.race([loadLangs(), new Promise(r => setTimeout(r, 1500))]);
+                    open();
+                },
+                _TF("Settings", "Accessible name of the settings button in the application header"));
+            const b = sb.Button;
+            if (p.SettingsLanguage) {
+                b.addEventListener("pointerenter", () => loadLangs(), { once: true });
+                b.addEventListener("focus", () => loadLangs(), { once: true });
+            }
+            b.setAttribute("aria-haspopup", "menu");
+            b.setAttribute("aria-expanded", "false");
+            t.SettingsBtn = b;
+            /** Build and open the settings menu. */
+            const open = () => {
+                let handle = null;
+                const close = () => {
+                    if (handle)
+                        handle.Close();
+                };
+                const menu = { Name: "AppSettings", Items: [] };
+                if (p.SettingsFs) {
+                    const full = Sw.FullScreen.IsFull();
+                    menu.Items.push({
+                        Name: full
+                            ? _TF("Exit full screen", "The text of a menu option that when clicked will exit from full screen mode")
+                            : _TF("Enter full screen", "The text of a menu option that when clicked will enter full screen mode"),
+                        IconClass: full ? "fullscreenExit" : "fullscreen",
+                        Title: full
+                            ? _TF("Exit full screen mode", "The tool tip description of a menu option that when clicked will exit from full screen mode")
+                            : _TF("Enter full screen mode", "The tool tip description of a menu option that when clicked will enter full screen mode"),
+                        Flags: 0,
+                        Data: async () => {
+                            close();
+                            if (full)
+                                await Sw.FullScreen.Exit();
+                            else
+                                await Sw.FullScreen.Enter();
+                            return false;
+                        },
+                    });
+                }
+                //  The app's own themes (Sw.Theme.Register with a Title, ex: in app/app.js) join the server's Theme section
+                const custom = Sw.Theme.Custom ? Sw.Theme.Custom().filter(d => /^[\w.-]+$/.test(d.Name)) : [];
+                for (const it of items) {
+                    if (custom.length && it && Array.isArray(it.Children) && ("" + (it.Id || "")).toLowerCase() === "theme") {
+                        const known = new Set(it.Children.map(c => Shell.ThemeOfItem(c)).filter(n => n !== null));
+                        const extra = custom.filter(d => !known.has(d.Name.toLowerCase())).map(d => ({
+                            Type: 5,
+                            Data: "if(setTheme('" + d.Name + "'));false",
+                            IconClass: d.Icon || "theme",
+                            Id: d.Name,
+                            Name: d.Title,
+                            Title: d.Description || null,
+                            Children: null,
+                        }));
+                        menu.Items.push(Object.assign({}, it, { Children: it.Children.concat(extra) }));
+                        continue;
+                    }
+                    menu.Items.push(it);
+                }
+                //  Density (Design v2): a section after the themes
+                if (p.SettingsDensity)
+                    menu.Items.push(t.DensityMenu());
+                //  Text size: a section on touch screens and phones, else a submenu in the Density section (or a section without it)
+                const size = p.SettingsTextSize ? t.TextSizeMenu() : null;
+                if (size) {
+                    let touch = !!Sw.Layout.Mobile;
+                    try {
+                        touch = touch || window.matchMedia("(pointer: coarse)").matches;
+                    }
+                    catch {
+                    }
+                    const dens = p.SettingsDensity ? menu.Items[menu.Items.length - 1] : null;
+                    if (!touch && dens)
+                        dens.Children.push(size);
+                    else
+                        menu.Items.push(size);
+                }
+                //  Language: when the service translates its texts
+                if (p.SettingsLanguage && langs)
+                    menu.Items.push(t.LanguageMenu(langs));
+                if (p.SettingsNewTab && p.Content) {
+                    menu.Items.push({ Id: "-", Name: "" });
+                    menu.Items.push({
+                        Name: _TF("Open in new tab", "The text of a menu option that when clicked will open the current content in a new browser tab"),
+                        IconClass: "external",
+                        Title: _TF("Open the current content in a new tab", "The tool tip description of a menu option that when clicked will open the current content in a new browser tab"),
+                        Flags: 0,
+                        Data: async () => {
+                            let u = t.Host ? t.Host.GetUrl() : null;
+                            if (u) {
+                                //  The live frame url already has the forced theme (Navigate appends it again): drop it first
+                                try {
+                                    const x = new URL(u);
+                                    const drop = [];
+                                    x.searchParams.forEach((v, k) => {
+                                        if (k.toLowerCase() === "usetheme")
+                                            drop.push(k);
+                                    });
+                                    if (drop.length) {
+                                        drop.forEach(k => x.searchParams.delete(k));
+                                        u = x.href;
+                                    }
+                                }
+                                catch {
+                                }
+                                Sw.Page.Navigate(u, "_blank");
+                            }
+                            return true;
+                        },
+                    });
+                }
+                if (p.OnSettingsMenuOpenFn)
+                    p.OnSettingsMenuOpenFn(menu, close);
+                b.setAttribute("aria-expanded", "true");
+                handle = Shell.ShowMenu(b, menu.Items, t.MenuContext(), {
+                    Align: "end", Sections: true, Label: _TF("Settings", "Accessible name of the settings menu of the application"),
+                    OnClose: () => b.setAttribute("aria-expanded", "false"),
+                });
+            };
+            Sw.LongPress(b, () => open());
+            to.append(sb.Wrap);
+        }
+
+        /**
+         * The action context of the header menus (embedding items load into the content frame).
+         * @returns {object} The context (see Sw.Shell.RunItem).
+         */
+        MenuContext() {
+            const t = this;
+            return {
+                Navigate: url => t.Navigate(url),
+                Style: t.Style || null,
+            };
+        }
+
+        // ------------------------------------------------------------------ leaving a page (UX guide SAF-10) and Back (MOB-3)
+
+        /**
+         * The window of the page in the content frame (null without one, or another origin).
+         * @returns {Window|null} The window.
+         */
+        ContentWindow() {
+            const f = this.Host ? this.Host.Frame : null;
+            try {
+                const w = f ? f.contentWindow : null;
+                return w && w.document ? w : null;
+            }
+            catch {
+                return null;
+            }
+        }
+
+        /**
+         * What is lost when the shown page is left: its unsaved edits (Sw.Page.SetDirty in the page or a frame inside it) and the work it
+         * runs that stops with it (Sw.Activity jobs with EndsWithPage).
+         * @returns {Array<{Text: string, Work: boolean}>} The entries (empty: leave without asking).
+         */
+        ContentLeaveTexts() {
+            const t = this;
+            const w = t.ContentWindow();
+            if (!w || w === t.LeaveOkFor)
+                return [];
+            const list = [];
+            try {
+                const P = w.Sw && w.Sw.Page;
+                if (P && typeof P.DirtyTexts === "function")
+                    list.push(...P.DirtyTexts(true).map(x => ({ Text: String(x.Text || ""), Work: !!x.Work, Draft: !!x.Draft })));
+            }
+            catch {
+                //  A page without the core (or another origin): nothing known
+            }
+            if (Sw.Activity && Sw.Activity.EndsWith)
+                for (const j of Sw.Activity.EndsWith(w))
+                    list.push({ Text: j.LeaveText || _T("{0} stops.", j.Title, "Text of the question 'Leave this page?' for work that runs in the page and stops when it is left.{0} is replaced with the work, ex: Exporting report.xlsx"), Work: true });
+            return list;
+        }
+
+        /**
+         * Ask before leaving the shown page (ContentLeaveTexts; Sw.Page.ConfirmLeave: "Leave" / "Stay"). One question at a time; a
+         * second attempt while it is open is answered with Stay.
+         * @returns {Promise<boolean>} True to leave.
+         */
+        async ConfirmLeaveContent() {
+            const t = this;
+            const texts = t.ContentLeaveTexts();
+            if (!texts.length)
+                return true;
+            if (t.AskingLeave)
+                return false;
+            t.AskingLeave = true;
+            try {
+                const ok = await Sw.Page.ConfirmLeave(texts, { Source: () => t.ContentLeaveTexts() });
+                if (ok) {
+                    //  Asked once: the page's own beforeunload (a reload or a navigation by itself) and the next navigation don't ask again
+                    const w = t.ContentWindow();
+                    t.LeaveOkFor = w;
+                    t.ClearDirtyIn(w);
+                }
+                return ok;
+            }
+            finally {
+                t.AskingLeave = false;
+            }
+        }
+
+        /**
+         * Clear the dirty state of a window and its same-origin frames (the user chose Leave).
+         * @param {Window|null} w The window.
+         */
+        ClearDirtyIn(w) {
+            if (!w)
+                return;
+            try {
+                if (w.Sw && w.Sw.Page && typeof w.Sw.Page.ClearDirty === "function")
+                    w.Sw.Page.ClearDirty();
+                for (let i = 0; i < w.frames.length; ++i)
+                    this.ClearDirtyIn(w.frames[i]);
+            }
+            catch {
+                //  Another origin
+            }
+        }
+
+        /** Stay on the page: the menu shows its item again (a menu click selected the item of the page that was not opened). */
+        ReselectShown() {
+            const t = this;
+            if (!t.Menu || !t.Host)
+                return;
+            const en = t.FindEntry(t.Host.GetUrl() || "", t.Host.Frame);
+            t.Menu.Select(en || null);
+        }
+
+        /**
+         * Watch the dirty state of the shown page ("SwPageDirty" from its windows, Sw.Page.SetDirty): the tab title gets a dot while the
+         * page has unsaved edits (UX guide SAF-10), and a navigation resets it.
+         */
+        BindPageDirty() {
+            const t = this;
+            t.ContentDirty = false;
+            Sw.Frame.On("SwPageDirty", (d, ev) => {
+                const cw = t.ContentWindow();
+                let w = ev.source;
+                for (let i = 0; w && cw && i < 10 && w !== cw; ++i)
+                    w = w.parent === w ? null : w.parent;
+                if (!cw || w !== cw)
+                    return;
+                t.UpdateContentDirty();
+            });
+            //  Running jobs of the shell: closing or reloading the tab asks first (they stop with it)
+            //  (the shell window owns the list: the listener lives as long as the app; the remover is kept for Dispose-like use)
+            if (Sw.Activity && Sw.Activity.On)
+                t.ActivityDirtyOff = Sw.Activity.On(() => {
+                    //  (server jobs go on on the server: they are not counted, SAF-10)
+                    const n = Sw.Activity.List().filter(j => j.Running && !j.ServerId).length;
+                    Sw.Page.SetDirty("sw-shell-activity", n > 0 ? _TF("Background work that runs in this tab may not finish.", "Text of the browser's question when the tab is closed while background work of the activity list runs in the tab (server jobs are not counted: they go on)") : null, { Work: true });
+                    t.UpdateContentDirty();
+                });
+        }
+
+        /** Recompute the dirty dot of the tab title (BindPageDirty). */
+        UpdateContentDirty() {
+            const t = this;
+            const d = t.ContentLeaveTexts().some(x => !x.Work);
+            if (d === !!t.ContentDirty)
+                return;
+            t.ContentDirty = d;
+            t.ApplyDocTitle();
+        }
+
+        /**
+         * Set the document title: the page title (DocTitle), a dot while the page has unsaved edits, and while the tab is hidden the
+         * result of finished background work first ("✓ Export done", UX guide FBK-4).
+         */
+        ApplyDocTitle() {
+            const t = this;
+            const base = t.DocTitle || t.AppTitle || document.title;
+            document.title = (t.ResultTitle ? t.ResultTitle + " · " : "") + (t.ContentDirty ? "● " : "") + base;
+        }
+
+        /**
+         * The windows of the shell (this one first, then the same-origin frames inside it that run the Sw ui library).
+         * @returns {Array<Window>} The windows.
+         */
+        PopupWindows() {
+            const out = [window];
+            const walk = (w, depth) => {
+                if (depth > 6)
+                    return;
+                for (let i = 0; i < w.frames.length; ++i) {
+                    try {
+                        const f = w.frames[i];
+                        if (f.Sw && f.Sw.Popup && typeof f.Sw.Popup.IsOpen === "function")
+                            out.push(f);
+                        walk(f, depth + 1);
+                    }
+                    catch {
+                        //  Another origin
+                    }
+                }
+            };
+            walk(window, 0);
+            return out;
+        }
+
+        /**
+         * The window whose pop-up is on top: the shell's own (it covers the page), else the innermost frame with an open pop-up.
+         * @returns {Window|null} The window.
+         */
+        TopPopupWindow() {
+            if (Sw.Popup && Sw.Popup.IsOpen())
+                return window;
+            const ws = this.PopupWindows();
+            for (let i = ws.length - 1; i > 0; --i) {
+                try {
+                    if (ws[i].Sw.Popup.IsOpen())
+                        return ws[i];
+                }
+                catch {
+                }
+            }
+            return null;
+        }
+
+        /** @returns {boolean} Back has a pop-up (or the menu drawer) to close first (MOB-3). */
+        HasBackTarget() {
+            return !!this.TopPopupWindow() || (!!this.Shown && this.IsDrawer());
+        }
+
+        /**
+         * Close the top pop-up as a close attempt (Back, UX guide MOB-3 / POP-6): Sw.Popup.CloseTop("back") when the ui library has it,
+         * else the Escape key semantics (a dirty or busy dialog stays open and says why; a dialog that can't be closed stays). Without a
+         * pop-up the menu drawer closes.
+         * @returns {boolean} True when Back was used for that.
+         */
+        CloseTopPopup() {
+            const t = this;
+            const w = t.TopPopupWindow();
+            if (!w) {
+                if (t.Shown && t.IsDrawer()) {
+                    t.MenuHide(true);
+                    return true;
+                }
+                return false;
+            }
+            try {
+                const P = w.Sw.Popup;
+                if (typeof P.CloseTop === "function") {
+                    P.CloseTop("back");
+                    return true;
+                }
+                const d = w.document;
+                const target = d.activeElement && d.activeElement !== d.body ? d.activeElement : d.body;
+                target.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+            }
+            catch (x) {
+                console.warn("Shell: closing the top pop-up failed: " + (x && x.message));
+            }
+            return true;
+        }
+
+        /**
+         * A Back / Forward was held back because the page has unsaved edits: ask, and go on when the user chooses Leave.
+         * @param {number} delta The history step (-1 = back).
+         * @returns {Promise<void>}
+         */
+        async AskTraverse(delta) {
+            const t = this;
+            if (!(await t.ConfirmLeaveContent()))
+                return;
+            t.AllowTraverse = true;
+            clearTimeout(t.AllowTimer);
+            //  Reset when the traversal never happens (ex: nothing to go back to)
+            t.AllowTimer = setTimeout(() => t.AllowTraverse = false, 3000);
+            history.go(delta || -1);
+        }
+
+        /**
+         * Hold back a Back / Forward with the Navigation API (when the browser lets the page cancel it): close the top pop-up instead, or
+         * ask before a page with unsaved edits is left. When it can't be cancelled the popstate handler undoes it (PendingDelta).
+         */
+        BindTraverseGuard() {
+            const t = this;
+            const nav = window.navigation;
+            if (!nav || typeof nav.addEventListener !== "function")
+                return;
+            nav.addEventListener("navigate", ev => {
+                if (ev.navigationType !== "traverse" || t.AllowTraverse || t.DropGuard)
+                    return;
+                const dest = ev.destination;
+                //  Leaving the shell document (another page of the browser history): not an in-app step
+                if (dest && dest.sameDocument === false)
+                    return;
+                const popup = t.HasBackTarget();
+                if (!popup && !t.ContentLeaveTexts().length)
+                    return;
+                const cur = nav.currentEntry ? nav.currentEntry.index : -1;
+                const di = dest && typeof dest.index === "number" ? dest.index : -1;
+                const delta = cur >= 0 && di >= 0 ? di - cur : -1;
+                if (ev.cancelable) {
+                    ev.preventDefault();
+                    if (popup)
+                        t.CloseTopPopup();
+                    else
+                        t.AskTraverse(delta);
+                    return;
+                }
+                t.PendingDelta = delta;
+            });
+        }
+
+        /**
+         * Back on the entry page (nothing in-app to go back to) with a pop-up open (a sheet, a dialog, a menu; the shell's or the framed
+         * page's, Sw.Popup.OnDepth) closes the pop-up instead of leaving the application (UX guide MOB-3): while a pop-up is open there,
+         * the shell adds one history entry of its own (state {SwPopupGuard}); Back pops it and closes the top pop-up; when the pop-up
+         * closes another way the entry is removed again.
+         */
+        BindPopupHistory() {
+            const t = this;
+            const P = Sw.Popup;
+            if (!P || typeof P.OnDepth !== "function")
+                return;
+            P.OnDepth(d => {
+                if (d > 0) {
+                    t.GuardPopup();
+                    return;
+                }
+                //  Closed: remove the guard entry, but only once a Back that closed the pop-up has landed (else it would be a second Back)
+                clearTimeout(t.GuardTimer);
+                t.GuardTimer = setTimeout(() => {
+                    if (!t.PopupGuard || P.Depth() > 0)
+                        return;
+                    t.PopupGuard = false;
+                    if (history.state && history.state.SwPopupGuard) {
+                        t.DropGuard = true;
+                        history.back();
+                    }
+                }, 150);
+            });
+        }
+
+        /**
+         * Add the pop-up guard entry (BindPopupHistory) when a pop-up is open on the entry page. Only on phones and touch screens
+         * (Sw.Layout.Mobile or a coarse pointer, where Back is a device key, MOB-3): on a desktop opening a menu adds no history entry,
+         * as the original (a menu item that reloads the shell, ex: Sign out, left the entry behind: Back needed an extra press).
+         */
+        GuardPopup() {
+            const t = this;
+            const P = Sw.Popup;
+            if (t.PopupGuard || !P || typeof P.Depth !== "function" || !(P.Depth() > 0) || t.CanGoBack())
+                return;
+            let touch = !!Sw.Layout.Mobile;
+            try {
+                touch = touch || window.matchMedia("(pointer: coarse)").matches;
+            }
+            catch {
+            }
+            if (!touch)
+                return;
+            t.PopupGuard = true;
+            try {
+                history.pushState({ SwPopupGuard: true, Url: history.state }, "", location.href);
+            }
+            catch {
+                t.PopupGuard = false;
+            }
+            //  A menu item that reloads the shell (Sign out) leaves no guard entry behind: Sw.Page.Reload removes it first (P3-A-11)
+            Sw.Page.BeforeReload = () => t.DropGuardNow();
+        }
+
+        /**
+         * Remove the pop-up guard entry now (before a reload of the shell). Resolves when it is gone (at most 400 ms); null when there is none.
+         * @returns {?Promise<void>}
+         */
+        DropGuardNow() {
+            const t = this;
+            clearTimeout(t.GuardTimer);
+            if (!(history.state && history.state.SwPopupGuard)) {
+                t.PopupGuard = false;
+                return null;
+            }
+            t.PopupGuard = false;
+            t.DropGuard = true;
+            return new Promise(res => {
+                const done = () => {
+                    window.removeEventListener("popstate", done);
+                    clearTimeout(tm);
+                    res();
+                };
+                const tm = setTimeout(done, 400);
+                window.addEventListener("popstate", done);
+                history.back();
+            });
+        }
+
+        // ------------------------------------------------------------------ activity list (UX guide FBK-4)
+
+        /**
+         * Create the activity list button of the top bar (Sw.Activity): 44 px on touch, shown only while this session has activity (a job
+         * running, finished or failed and not removed; UpdateActivityButton), a badge only while work runs or a failure was not opened yet,
+         * an accessible name with the counts ("Activity: 1 running, 1 failed"). It is the first tool of the right group, so showing it
+         * never moves the other tools. The list opens as a popover under the button, as a sheet in the phone layout.
+         * @param {HTMLElement} to The header part.
+         */
+        CreateActivityButton(to) {
+            const t = this;
+            const A = Sw.Activity;
+            if (!A || !A.ListObject)
+                return;
+            const list = A.ListObject;
+            list.IsHost = true;
+            list.OnOpen = () => t.ShowActivity();
+            const ab = headerButton("app-ActivityButton", "activity", "", () => t.ShowActivity(),
+                _TF("Activity", "Accessible name of the activity list button in the application header (background work)"));
+            const b = ab.Button;
+            b.classList.add("sw-shell-activitybtn");
+            b.setAttribute("aria-haspopup", "dialog");
+            b.setAttribute("aria-expanded", "false");
+            const badge = Sw.el("span.sw-shell-actbadge", { attrs: { "aria-hidden": "true" } });
+            b.append(badge);
+            t.ActivityBtn = b;
+            t.ActivityWrap = ab.Wrap;
+            t.ActivityBadge = badge;
+            /** @type {Array<function():void>} Result toasts that wait until the tab is visible again. */
+            t.PendingResults = [];
+            A.On(ev => t.OnActivity(ev));
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState !== "visible")
+                    return;
+                const l = t.PendingResults.splice(0);
+                t.ResultTitle = "";
+                t.ApplyDocTitle();
+                l.forEach(fn => fn());
+            });
+            t.UpdateActivityButton();
+            to.append(ab.Wrap);
+        }
+
+        /** Update the activity button: badge (count; a failure shows "!" in the danger colour) and accessible name / tool tip. */
+        UpdateActivityButton() {
+            const t = this;
+            const b = t.ActivityBtn;
+            if (!b)
+                return;
+            const c = Sw.Activity.Counts();
+            const r = c.Running, f = c.Failed;
+            //  Shown only while this session has activity (owner R1): a job running, finished or failed and not removed from the list (or
+            //  the list is open). Without any there is nothing to show, so the top bar has no empty tool.
+            const show = Sw.Activity.List().length > 0 || !!t.ActivityOpen;
+            const w = t.ActivityWrap;
+            if (w) {
+                //  (the focus on the button that goes away moves to the next tool of the top bar, never to the body)
+                if (!show && document.activeElement === b) {
+                    const next = w.parentNode ? Array.from(w.parentNode.querySelectorAll("button")).find(x => x !== b && !x.closest("[hidden]") && x.getClientRects().length) : null;
+                    if (next)
+                        next.focus({ preventScroll: true });
+                }
+                if (w.hidden === show)
+                    w.hidden = !show;
+            }
+            let name;
+            if (r && f)
+                name = _T("Activity: {0} running, {1} failed", r, f, "Accessible name of the activity list button.{0} is replaced with the number of running jobs, {1} with the number of failed jobs");
+            else if (r)
+                name = _T("Activity: {0} running", r, "Accessible name of the activity list button.{0} is replaced with the number of running jobs");
+            else if (f)
+                name = _T("Activity: {0} failed", f, "Accessible name of the activity list button.{0} is replaced with the number of failed jobs");
+            else
+                name = _TF("Activity", "Accessible name of the activity list button in the application header (background work)");
+            b.setAttribute("aria-label", name);
+            //  The tool tip is the name (an icon button); without counts it says what the list holds (no repeated name, TIP-2)
+            b.title = (r || f) ? name : _TF("Activity: running, finished and failed background work", "Tool tip of the activity list button in the application header when nothing runs");
+            const n = r + f;
+            //  A failure shows "!" alone (its own colour and icon, ACC-2); the counts are in the name, "!2" read as "2 failures"
+            t.ActivityBadge.textContent = n ? (f ? "!" : String(r)) : "";
+            t.ActivityBadge.classList.toggle("sw-shell-actbadge-on", n > 0);
+            t.ActivityBadge.classList.toggle("sw-shell-actbadge-failed", f > 0);
+            b.classList.toggle("sw-shell-actrunning", r > 0);
+        }
+
+        /**
+         * Announce a text from where a screen reader hears it: inside the page's open dialog when one is shown (UX guide POP-1), else here.
+         * @param {string} text The text.
+         * @param {object} [o] Announce options (Assertive).
+         */
+        AnnounceHere(text, o) {
+            const w = this.FrameModalWin;
+            try {
+                if (w && w.Sw && w.Sw.Page && typeof w.Sw.Page.Announce === "function") {
+                    w.Sw.Page.Announce(text, o);
+                    return;
+                }
+            }
+            catch {
+            }
+            Sw.Page.Announce(text, o);
+        }
+
+        /**
+         * A change of the activity list: the button, the open list, the announcements (start, result; a failure once as an alert) and
+         * the result toast (FBK-5; it waits while the tab is hidden, the tab title shows the result until then).
+         * @param {{Type: string, Job: object}} ev The change.
+         */
+        OnActivity(ev) {
+            const t = this;
+            t.UpdateActivityButton();
+            if (t.RenderActivity)
+                t.RenderActivity();
+            const j = ev.Job;
+            if (!j)
+                return;
+            if (ev.Type === "start" && j.IsNew)
+                t.AnnounceHere(j.Title);
+            if (ev.Type !== "done" && ev.Type !== "fail")
+                return;
+            //  The result was shown where it happened (a table row: job.Quiet, set by Sw.Cells): kept in the list, no second result (FBK-2)
+            if (j.Quiet)
+                return;
+            const failed = ev.Type === "fail";
+            //  One text source: the job's end sentence (work that finished after a Cancel says "finished before it could stop", never
+            //  "Done"); an older core without it: the same words here
+            const end = j.EndText && typeof j.EndText === "object" ? j.EndText : {
+                Text: failed
+                    ? _T("Failed: {0}. {1}", j.Title, j.Error, "Toast and announcement when background work of the activity list failed.{0} is replaced with the work, {1} with the error")
+                    : (j.Result && j.Result.Text ? j.Result.Text : _T("Done: {0}", j.Title, "Toast and announcement when background work of the activity list finished.{0} is replaced with the work")),
+                Kind: failed ? "error" : "ok",
+            };
+            const text = end.Text;
+            const show = () => {
+                //  The open list shows the result itself
+                if (t.ActivityOpen)
+                    return;
+                const action = { Text: failed ? _TF("Details", "Button of the toast of failed background work: opens the activity list") : _TF("Show", "Button of the toast of finished background work: opens the activity list"), OnClick: () => t.ShowActivity(j.Id) };
+                const toast = Sw.Toast(text, { Kind: end.Kind || (failed ? "error" : "ok"), Action: action, Duration: failed ? true : undefined });
+                //  Opening the list closes these toasts: the list shows the same result (one place, and no toast over the sheet on phones)
+                if (toast && typeof toast.Close === "function")
+                    (t.ActivityToasts = t.ActivityToasts || []).push(toast);
+                if (failed)
+                    t.AnnounceHere(text, { Assertive: true });
+            };
+            if (document.visibilityState === "hidden") {
+                t.ResultTitle = failed
+                    ? "✗ " + _T("{0} failed", j.Title, "Tab title prefix while the tab is hidden and background work failed.{0} is replaced with the work")
+                    : j.AfterCancel
+                        ? "! " + text
+                        : "✓ " + _T("{0} done", j.Title, "Tab title prefix while the tab is hidden and background work finished.{0} is replaced with the work");
+                t.ApplyDocTitle();
+                t.PendingResults.push(show);
+            }
+            else
+                show();
+        }
+
+        /**
+         * Show (or close) the activity list: a popover under the button, a sheet (dialog) in the phone layout. Opening marks the failures
+         * as seen (the badge drops them); the list follows the changes while open. The focus goes to the job (jobId, ex: from a result
+         * toast's "Show") or to the list, never onto a job's Cancel (FOC-2); the result toasts of the list close (the list shows them).
+         * @param {number} [jobId] The job to focus.
+         */
+        ShowActivity(jobId) {
+            const t = this;
+            if (t.ActivityOpen) {
+                t.ActivityOpen.Close();
+                return;
+            }
+            //  (opened from code while the list is empty, Sw.Activity.Open: the button the list hangs from is shown first)
+            if (t.ActivityWrap)
+                t.ActivityWrap.hidden = false;
+            for (const x of (t.ActivityToasts || []).splice(0)) {
+                try {
+                    x.Close();
+                }
+                catch {
+                }
+            }
+            const A = Sw.Activity;
+            const el = Sw.el;
+            const listE = el("ul.sw-shell-actlist.sw-scroll", { attrs: { "aria-label": _TF("Background work", "Accessible name of the list in the activity list popover") } });
+            const titleText = _TF("Activity", "Title of the activity list (background work) popover or sheet");
+            let timer = 0;
+            const close = () => {
+                clearInterval(timer);
+                t.RenderActivity = null;
+                t.ActivityOpen = null;
+                //  Failures shown while the list was open were seen
+                A.MarkSeen(true);
+                if (t.ActivityBtn)
+                    t.ActivityBtn.setAttribute("aria-expanded", "false");
+                t.UpdateActivityButton();
+                //  (again after the pop-up gave the focus back to the button: an emptied list hides it and moves the focus on)
+                requestAnimationFrame(() => t.UpdateActivityButton());
+            };
+            t.RenderActivity = () => t.RenderActivityList(listE);
+            t.RenderActivity();
+            A.MarkSeen();
+            const phone = (() => {
+                try {
+                    return window.matchMedia(DrawerQuery).matches;
+                }
+                catch {
+                    return false;
+                }
+            })();
+            if (phone || !Sw.Popup) {
+                const h = Sw.Dialog.Open({ Title: titleText, Content: listE, Class: "sw-shell-activity-dialog", OnClose: close });
+                //  Toasts lift above the sheet (they never cover its items and their Cancel, FBK-8)
+                const box = listE.closest(".sw-dialog");
+                if (box)
+                    box.setAttribute("data-sw-toastavoid", "");
+                t.ActivityOpen = { Close: () => h.Close(null) };
+            }
+            else {
+                const head = el("h2.sw-shell-acthead", { text: titleText });
+                const p = Sw.Popup.Show(t.ActivityBtn, [head, listE], {
+                    Align: "end", Class: "sw-shell-activity-pop", Label: titleText, Focus: true, MinWidth: 320, OnClose: close,
+                });
+                t.ActivityOpen = { Close: () => p.Close() };
+            }
+            if (t.ActivityBtn)
+                t.ActivityBtn.setAttribute("aria-expanded", "true");
+            //  The focus: the job asked for, else the list itself (its name is read; Tab goes on to the first button), never a Cancel
+            listE.tabIndex = -1;
+            const focusIn = () => {
+                const item = jobId !== undefined && jobId !== null ? listE.querySelector('[data-sw-job="' + jobId + '"]') : null;
+                (item || listE).focus({ preventScroll: !item });
+            };
+            focusIn();
+            requestAnimationFrame(focusIn);
+            //  The elapsed time of running jobs (text only, never a live region)
+            timer = setInterval(() => {
+                if (A.Counts().Running && t.RenderActivity)
+                    t.RenderActivity();
+            }, 1000);
+        }
+
+        /**
+         * Draw the jobs of the activity list (newest first): each one list item with its state in text, progress, Cancel, the result
+         * link, the error with Details and Try again, and Remove for jobs that ended. The focus stays on the same button across redraws.
+         * @param {HTMLElement} listE The list (ul).
+         */
+        RenderActivityList(listE) {
+            const el = Sw.el;
+            const A = Sw.Activity;
+            const jobs = A.List();
+            const ae = document.activeElement;
+            const keepFocus = ae && listE.contains(ae) && ae !== listE ? (ae.dataset.swAct || (ae.dataset.swJob ? "job:" + ae.dataset.swJob : null)) : null;
+            const fmtTime = d => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const btn = (key, j, o) => {
+                const b = new Sw.Button(Object.assign({ Small: true }, o));
+                b.E.dataset.swAct = key + ":" + j.Id;
+                return b.E;
+            };
+            //  One primary action per list: the Open of the newest finished job; the others are secondary (no wall of orange buttons)
+            const primaryOpen = jobs.find(j => j.State === "done" && j.Result && (j.Result.Url || j.Result.Open));
+            const items = jobs.map(j => {
+                const li = el("li.sw-shell-actitem", { attrs: { "data-state": j.State, "data-sw-job": String(j.Id), tabindex: "-1" } });
+                const icon = j.Running ? (Sw.Spinner ? new Sw.Spinner({ Size: "1.1em" }).E : Sw.Icon("clock")) : Sw.Icon(j.State === "done" ? "check" : j.State === "failed" ? "alert" : "close", "sw-shell-acticon");
+                let state;
+                //  Cancel asked, the work did not return yet: "Stopping…" (never "Cancelled" before the work confirmed it, Sw.Cancel)
+                if (j.Stopping)
+                    state = j.Text || (Sw.Cancel ? Sw.Cancel.Texts.Stopping() : "");
+                else if (j.Running) {
+                    const secs = Math.floor((Date.now() - j.Started.getTime()) / 1000);
+                    const el2 = secs < 60 || !(Sw.Format && Sw.Format.DurationMs)
+                        ? _T("{0} s", secs, "Time so far of a running job in the activity list, in whole seconds, ex: 12 s")
+                        : Sw.Format.DurationMs(secs * 1000);
+                    state = j.Progress !== null
+                        ? _T("Running: {0} %, {1}", Math.round(j.Progress * 100), el2, "State of a running job in the activity list.{0} is replaced with the progress in percent, {1} with the time so far")
+                        : _T("Running for {0}", el2, "State of a running job in the activity list whose progress is not known.{0} is replaced with the time so far");
+                }
+                else if (j.State === "done") {
+                    //  The end time is the server's for a server job (restored after a reload: not the reload time), and when the file goes
+                    state = _T("Done at {0}", fmtTime(j.Ended || new Date()), "State of a finished job in the activity list.{0} is replaced with the time it finished");
+                    if (j.Expires && j.Expires.getTime() > Date.now())
+                        state += " · " + _T("kept until {0}", fmtTime(j.Expires), "Added to the state of a finished server job in the activity list: the time its file is removed on the server, ex: kept until 21:33");
+                    if (j.AfterCancel && j.Text)
+                        state += " · " + j.Text;
+                }
+                else if (j.State === "failed")
+                    state = _T("Failed at {0}", fmtTime(j.Ended || new Date()), "State of a failed job in the activity list.{0} is replaced with the time it failed");
+                else
+                    state = j.Text || _TF("Cancelled", "State of a job in the activity list that was cancelled");
+                //  (the title computed by the job: the file name once done, the time added when two items have the same title)
+                const title = typeof j.Label === "string" ? j.Label : j.Title;
+                const main = el("div.sw-shell-actmain", null,
+                    el("div.sw-shell-acttitle.sw-selectable", { text: title }),
+                    el("div.sw-shell-actstate", { text: state }));
+                if (j.Running && !j.Stopping && j.Text)
+                    main.append(el("div.sw-shell-acttext.sw-selectable", { text: j.Text }));
+                if (j.Running && Sw.ProgressBar) {
+                    const pb = new Sw.ProgressBar(j.Progress === null ? { Indeterminate: true, Small: true, Label: j.Title } : { Value: j.Progress * 100, Small: true, Label: j.Title, Text: "" });
+                    main.append(pb.E);
+                }
+                //  The result text, unless it only repeats the title ("report.csv is ready" under the title "report.csv")
+                if (j.State === "done" && j.Result && j.Result.Text && !(j.DoneTitle && !j.AfterCancel && j.Result.Text.indexOf(j.DoneTitle) === 0 && j.Result.Text.length - j.DoneTitle.length < 24))
+                    main.append(el("div.sw-shell-acttext.sw-selectable", { text: j.Result.Text }));
+                if (j.State === "failed")
+                    main.append(el("div.sw-shell-acterror.sw-selectable", { text: j.Error }));
+                const acts = el("div.sw-shell-actbuttons");
+                //  (the item's own state line says how the cancel went: the button adds no "done" / "not done" toast of its own)
+                if (j.CanCancel)
+                    acts.append(btn("cancel", j, { Text: _TF("Cancel", "Button of a running job in the activity list: stops the work"), Title: _T("Stop {0}", j.Title, "Tool tip of the Cancel button of a running job in the activity list.{0} is replaced with the work"), Done: false, OnClick: () => Promise.resolve(j.Cancel()).then(() => undefined) }));
+                if (j.State === "done" && j.Result && (j.Result.Url || j.Result.Open)) {
+                    acts.append(btn("open", j, {
+                        Text: _TF("Open", "Button of a finished job in the activity list: shows the result"), Kind: j === primaryOpen ? "primary" : undefined, Icon: "open",
+                        Title: _T("Show the result of {0}", j.Title, "Tool tip of the Open button of a finished job in the activity list.{0} is replaced with the work"),
+                        OnClick: () => {
+                            if (j.Result.Open)
+                                return j.Result.Open();
+                            if (this.ActivityOpen)
+                                this.ActivityOpen.Close();
+                            Sw.Page.Navigate(j.Result.Url, "_self");
+                        },
+                    }));
+                }
+                if (j.State === "failed") {
+                    if (j.Details)
+                        acts.append(btn("details", j, {
+                            Text: _TF("Details", "Button of a failed job in the activity list: shows the error details"),
+                            Title: _TF("Show the error details (they can be copied)", "Tool tip of the Details button of a failed job in the activity list"),
+                            OnClick: () => Sw.Dialog.Show({ Title: j.Title, Content: el("pre.sw-shell-actdetails.sw-selectable", { text: j.Details }) }),
+                        }));
+                    if (j.CanRetry)
+                        acts.append(btn("retry", j, { Text: _TF("Try again", "Button of a failed job in the activity list: starts the same work again"), Icon: "refresh", Title: _T("Start {0} again with the same inputs", j.Title, "Tool tip of the Try again button of a failed job in the activity list.{0} is replaced with the work"), OnClick: () => j.Retry() }));
+                }
+                if (!j.Running)
+                    acts.append(btn("remove", j, { Icon: "close", Kind: "ghost", Title: _T("Remove {0} from the list", j.Title, "Tool tip of the remove button of an ended job in the activity list.{0} is replaced with the work"), OnClick: () => j.Remove() }));
+                li.append(el("span.sw-shell-actstateicon", { attrs: { "aria-hidden": "true" } }, icon), main, acts);
+                return li;
+            });
+            if (!items.length)
+                items.push(el("li.sw-shell-actempty", { text: _TF("Nothing runs in the background. Long work that goes on while you use the app is listed here, with its result.", "Empty state of the activity list (background work: long exports, uploads, jobs continued in the background)") }));
+            listE.replaceChildren(...items);
+            if (keepFocus) {
+                const f = keepFocus.startsWith("job:") ? listE.querySelector('[data-sw-job="' + keepFocus.substring(4) + '"]') : listE.querySelector('[data-sw-act="' + keepFocus + '"]');
+                if (f)
+                    f.focus({ preventScroll: true });
+                else {
+                    //  The focused job ended or was removed: its item, else the list itself (never a job's Cancel by surprise, FOC-2)
+                    const job = keepFocus.split(":")[1];
+                    const item = job ? listE.querySelector('[data-sw-job="' + job + '"]') : null;
+                    (item || listE).focus({ preventScroll: true });
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------ connection (UX guide FBK-9) and time-out (ACC-7)
+
+        /**
+         * The text of the offline line and the menu's connection line while the server can't be reached: it names a known pause, restart
+         * or shut down (the core's server block, Sw.Session.Blocked), else "Offline, retrying…" (S7a-A1-6: not "Offline" under "Server is
+         * paused.").
+         * @param {boolean} [short] The short form (the phone top bar).
+         * @returns {string} The text.
+         */
+        OfflineText(short) {
+            let k = "";
+            try {
+                const b = Sw.Session && Sw.Session.Blocked;
+                k = (b && b.Type) || "";
+            }
+            catch {
+            }
+            if (k === "server.pause")
+                return short ? _TF("Paused", "The short form of the line shown in the phone top bar while the server is paused (the application waits for it)")
+                    : _TF("Service paused, waiting…", "The line shown while the service is paused (the application waits until it continues); nothing typed is lost");
+            if (k === "server.restart")
+                return short ? _TF("Restarting", "The short form of the line shown in the phone top bar while the server restarts (the application waits for it)")
+                    : _TF("Service restarting, waiting…", "The line shown while the service restarts (the application waits until it is back); nothing typed is lost");
+            if (k === "server.shutdown")
+                return short ? _TF("Shut down", "The short form of the line shown in the phone top bar while the server is shut down (the application waits for it)")
+                    : _TF("Service shut down, waiting…", "The line shown while the service is shut down (the application waits until it is started again); nothing typed is lost");
+            return short ? _TF("Offline", "The short form of the line shown in the phone top bar while the server can't be reached (the application tries again by itself)")
+                : _TF("Offline, retrying…", "The line shown while the server can't be reached (the application tries again by itself); nothing typed is lost");
+        }
+
+        /**
+         * The calm offline line: one line "Offline, retrying…" (role="status", announced once) over the top of the page while the server
+         * can't be reached (Sw.Net "net.offline"), with "Try now"; "Back online" for a few seconds when it answers again. It never moves
+         * the page (it floats) and never blocks input. Frames report their connection failures ("SwNetState") to the shell.
+         */
+        CreateOfflineLine() {
+            const t = this;
+            const status = Sw.el("span.sw-shell-offline-text", { attrs: { role: "status", "aria-live": "polite" } });
+            const retry = new Sw.Button({
+                Text: _TF("Try now", "Button of the offline line: checks the connection to the server now"),
+                Small: true, Kind: "ghost", Icon: "refresh",
+                Title: _TF("Check the connection to the service now", "Tool tip of the Try now button of the offline line"),
+                OnClick: () => Sw.Net.Probe(),
+            });
+            //  The status region is always in the page (empty while connected), so its first text is announced
+            const line = Sw.el("div.sw-shell-offline-line.sw-root", null,
+                Sw.el("span.sw-shell-offline-dot", { attrs: { "aria-hidden": "true" } }), status, retry.E);
+            retry.E.hidden = true;
+            document.body.append(line);
+            t.OfflineLine = line;
+            //  (the framework's overlay geometry self-test in developer mode)
+            try {
+                if (Sw.Overlay && typeof Sw.Overlay.Register === "function")
+                    Sw.Overlay.Register(line, { Name: "Shell offline line" });
+            }
+            catch {
+            }
+            let backTimer = 0;
+            //  The phone layout (menu drawer): the line takes the place of the page title in the top bar (reserved space there), so it never
+            //  covers the page's own controls (a search field, a filter button)
+            const place = () => {
+                const s = line.style;
+                const tt = t.Title;
+                if (document.body.classList.contains("sw-shell-drawer") && tt && tt.isConnected && tt.offsetWidth > 120) {
+                    const r = tt.getBoundingClientRect();
+                    line.classList.add("sw-shell-offline-inbar");
+                    s.left = Math.round(r.left) + "px";
+                    s.width = Math.round(r.width) + "px";
+                    s.top = Math.round(r.top + (r.height - 48) / 2) + "px";
+                }
+                else {
+                    line.classList.remove("sw-shell-offline-inbar");
+                    s.left = s.width = s.top = "";
+                }
+            };
+            window.addEventListener("resize", () => {
+                if (line.classList.contains("sw-shell-offline-on"))
+                    place();
+            });
+            /* SwWeb:allow ux-fbk-7 (the offline line: one status text, "Back online" clears itself once; no rows) */
+            const set = (on, back) => {
+                clearTimeout(backTimer);
+                if (on || back)
+                    place();
+                line.classList.toggle("sw-shell-offline-on", on || back);
+                line.classList.toggle("sw-shell-offline-back", back);
+                retry.E.hidden = !on;
+                //  In the phone top bar only the short word fits (the button keeps its name "Try now" for screen readers, shown as an icon)
+                const short = line.classList.contains("sw-shell-offline-inbar");
+                status.textContent = on ? t.OfflineText(short)
+                    : back ? _TF("Back online", "The line shown for a few seconds when the server can be reached again") : "";
+                if (back)
+                    backTimer = setTimeout(() => set(false, false), 4000);
+                if (t.UpdateMenuStatus)
+                    t.UpdateMenuStatus();
+            };
+            Sw.Events.On("net.offline", () => set(true, false));
+            Sw.Events.On("net.online", () => {
+                if (line.classList.contains("sw-shell-offline-on") && !line.classList.contains("sw-shell-offline-back"))
+                    set(false, true);
+            });
+            //  A pause / restart / shut down block names itself in the line (not "Offline" for a server that is known to be paused)
+            const reword = () => {
+                if (line.classList.contains("sw-shell-offline-on") && !line.classList.contains("sw-shell-offline-back"))
+                    set(true, false);
+                else if (t.UpdateMenuStatus)
+                    t.UpdateMenuStatus();
+            };
+            Sw.Events.On("server.block", () => setTimeout(reword, 0));
+            Sw.Events.On("server.unblock", () => setTimeout(reword, 0));
+            //  A framed page could not reach the server: the shell checks the connection too
+            Sw.Frame.On("SwNetState", d => {
+                if (d && d.Online === false)
+                    Sw.Net.NoteFailure();
+                else if (d && d.Online === true && !Sw.Net.Online)
+                    Sw.Net.Probe();
+            });
+            if (Sw.Net.Online === false)
+                set(true, false);
+        }
+
+        /**
+         * The session time-out warning (UX guide ACC-7, Sw.Session.WarnTimeOut): at least 20 s before the time-out an alert dialog above
+         * any open dialog says when the session ends, with "Stay signed in" (focused; also every way to close it) and "Sign out"; the
+         * focus returns to where it was. When the time is over the shell checks the session (the "You were signed out" dialog).
+         */
+        BindTimeOutWarning() {
+            const t = this;
+            Sw.Events.On("session.warn", o => {
+                clearTimeout(t.TimeOutTimer);
+                if (t.TimeOutDlg && !o)
+                    t.TimeOutDlg.Close("cancel");
+                if (!o || !(o.At > 0))
+                    return;
+                const wait = o.At - o.WarnMs - Date.now();
+                t.TimeOutTimer = setTimeout(() => t.ShowTimeOutWarning(o), Math.max(0, wait));
+            });
+        }
+
+        /**
+         * Show the time-out warning (BindTimeOutWarning).
+         * @param {{At: number, Extend: function():Promise<*>, WarnMs: number}} o The time-out.
+         * @returns {Promise<void>}
+         */
+        async ShowTimeOutWarning(o) {
+            const t = this;
+            if (t.TimeOutDlg)
+                return;
+            //  The focus to return to: the element in the page (also inside the content frame and its dialog)
+            let back = document.activeElement;
+            try {
+                for (let i = 0; back && back.tagName === "IFRAME" && back.contentDocument && i < 6; ++i)
+                    back = back.contentDocument.activeElement;
+            }
+            catch {
+            }
+            const left = () => Math.max(0, Math.ceil((o.At - Date.now()) / 1000));
+            const textE = Sw.el("p.sw-dialog-text.sw-selectable");
+            const update = () => {
+                textE.textContent = _T("Your session ends in {0} seconds because nothing was sent for a while. Stay signed in to keep working; what you typed stays.", left(), "Text of the session time-out warning.{0} is replaced with the seconds left (counts down)");
+            };
+            update();
+            const tick = setInterval(() => {
+                update();
+                if (left() <= 0)
+                    h.Close("expired");
+            }, 1000);
+            const h = Sw.Dialog.Open({
+                Title: _TF("Your session is about to end", "Title of the session time-out warning"),
+                Icon: "clock",
+                Role: "alertdialog",
+                Content: textE,
+                Buttons: [
+                    { Text: _TF("Sign out", "Button of the session time-out warning: sign out now"), Value: "out" },
+                    { Text: _TF("Stay signed in", "Button of the session time-out warning: keep the session alive"), Kind: "primary", Value: "stay", Class: "sw-shell-staysigned" },
+                ],
+                Focus: ".sw-shell-staysigned",
+                EnterValue: "stay",
+                Class: "sw-shell-timeout",
+            });
+            t.TimeOutDlg = h;
+            //  Every other way to close it (Escape, the close button, a tap outside) keeps the session: the safe choice
+            const v = await h.Result;
+            clearInterval(tick);
+            t.TimeOutDlg = null;
+            try {
+                if (back && back.isConnected && typeof back.focus === "function")
+                    back.focus({ preventScroll: true });
+            }
+            catch {
+            }
+            if (v === "cancel")
+                return;
+            if (v === "out") {
+                location.href = Sw.Url.Root + "auth/Logout.html";
+                return;
+            }
+            if (v === "expired") {
+                if (t.CheckSession)
+                    await t.CheckSession();
+                else
+                    t.SessionGone();
+                return;
+            }
+            try {
+                const r = await o.Extend();
+                Sw.Page.Announce(_TF("You stay signed in.", "Announcement after the user chose 'Stay signed in' in the session time-out warning"));
+                const at = r instanceof Date ? r.getTime() : (typeof r === "number" && r > Date.now() ? r : 0);
+                if (at)
+                    Sw.Session.WarnTimeOut({ At: at, Extend: o.Extend, WarnMs: o.WarnMs });
+            }
+            catch (x) {
+                Sw.Fail(x);
+            }
+        }
+
+        // ------------------------------------------------------------------ main menu
+
+        /**
+         * Create the main menu, the menu state handling and the navigation listeners.
+         * @param {HTMLElement} page The page element.
+         * @param {Params} p Options.
+         * @returns {Promise<function():void>} Opens the initial page.
+         */
+        async CreateMainMenu(page, p) {
+            const t = this;
+            const body = document.body;
+            const menu = document.createElement("app-menu");
+            menu.id = "sw-shell-menu";
+            menu.setAttribute("role", "navigation");
+            menu.setAttribute("aria-label", _TF("Main menu", "Accessible name of the main menu of the application"));
+            t.AppMenu = menu;
+            if (t.MenuButton)
+                t.MenuButton.setAttribute("aria-controls", menu.id);
+            menu.append(...t.CreateMenuHead());
+            menu.append(t.CreateMenuTools());
+            if (p.MenuFilter)
+                menu.append(t.CreateMenuFilter());
+            const scroll = Sw.el("div.sw-shell-menuscroll");
+            /** @type {HTMLElement} The scroll container of the main menu tree (see ShowSelected). */
+            t.MenuScroll = scroll;
+            menu.append(scroll);
+            menu.append(t.CreateMenuMore(scroll));
+            if (p.MenuStatus)
+                menu.append(t.CreateMenuStatus());
+            //  The menu's arrival moves the top bar and the page edge from 0 to the rail / sidebar width: a jump in place, not a slide
+            //  (a slide from 0 shows the full width top bar for a frame and counts as a layout shift); the user's pin / unpin still slides
+            body.classList.add("sw-shell-settling");
+            requestAnimationFrame(() => requestAnimationFrame(() => body.classList.remove("sw-shell-settling")));
+            //  Before the content: the keyboard order is header, menu, page
+            if (t.Content && t.Content.parentNode === page)
+                page.insertBefore(menu, t.Content);
+            else
+                page.append(menu);
+            const capture = document.createElement("app-capture");
+            t.Capture = capture;
+
+            //  The style object of the old MainMenuStyle (passed to Js items and OnMainMenuDefFn; SelectFn / ExternalContentFn are honoured)
+            const style = {
+                Content: t.Content,
+                HideFn: () => t.MenuHide(),
+                SelectFn: null,
+                ExternalContentFn: null,
+                MenuStyle: "DefaultMenu",
+            };
+            t.Style = style;
+
+            //  Pinned state
+            t.Pinned = false;
+            t.Shown = false;
+            //  Without a stored choice: pinned (expanded with labels) when asked for, or when the window has room for it
+            const stored = Sw.Storage.GetJson(PinnedKey, null);
+            const roomy = p.AutoPinWidth > 0 && window.innerWidth >= p.AutoPinWidth;
+            t.WantPinned = Sw.Layout.Mobile ? false : (stored === null ? (!!p.MainMenuPinned || roomy) : !!stored);
+            t.ApplyMenuState();
+            Sw.Layout.OnChange(() => t.ApplyMenuState());
+            //  The drawer threshold (DrawerQuery) is not one of the core's layout steps: follow it too (resize, rotation)
+            try {
+                const mq = window.matchMedia(DrawerQuery);
+                if (typeof mq.addEventListener === "function")
+                    mq.addEventListener("change", () => t.ApplyMenuState());
+            }
+            catch {
+            }
+
+            //  Server menu
+            let def = { Items: [] };
+            if (p.MainMenus !== "") {
+                try {
+                    def = await Shell.GetMenu(p.MainMenus ?? "Default");
+                }
+                catch (x) {
+                    console.error("Shell: main menu failed: " + (x && x.message));
+                    Sw.Fail(_TF("Failed to load the menu", "Error message when the main menu of the application could not be loaded") + ". " + (x && x.message ? x.message : ""));
+                }
+            }
+            if (p.OnMainMenuDefFn)
+                await p.OnMainMenuDefFn(def, style, style.HideFn);
+            def.Name = "Main";
+            t.MenuDef = def;
+            //  The pin is always there on desktops, also signed out with a short menu (owner: OWN3-Shell-1); the choice is stored for
+            //  the site (localStorage, not per user), so it survives reloads and signing in / out
+            const collapsed = new Set((p.CollapsedMenus || []).map(x => String(x).toLowerCase()));
+            const tree = new Shell.MenuTree({
+                Menu: def,
+                Name: "Main",
+                Label: _TF("Main menu", "Accessible name of the main menu of the application"),
+                Context: {
+                    Navigate: (url, item, ev) => t.Navigate(url, { Keyboard: !!(ev && ev.type === "keydown") }),
+                    Hide: () => t.MenuHide(),
+                    Style: style,
+                },
+                DefaultCollapsed: (it, level) => level === 1 && collapsed.has(String(it.Id || it.Name || "").toLowerCase()),
+                OnTopUp: t.FilterInput ? () => t.FilterInput.focus() : null,
+                //  Design v2: the top level folders are section labels
+                Sections: true,
+            });
+            tree.E.id = "sw-shell-tree";
+            if (t.FilterInput)
+                t.FilterInput.setAttribute("aria-controls", tree.E.id);
+            t.Menu = tree;
+            t.WatchProblems();
+            /** @type {boolean} The main menu has folders ("Collapse all" / "Expand all" are shown, ApplyMenuState). */
+            t.MenuHasFolders = tree.Entries.some(en => en.Folder);
+            if (t.MenuTools)
+                t.MenuTools.querySelectorAll(".sw-shell-mtool-fold").forEach(b => b.setAttribute("aria-controls", tree.E.id));
+            scroll.append(tree.E);
+            t.ApplyMenuState();
+
+            t.BindMenuInput(menu, capture);
+            t.BindHotKeys(window);
+
+            //  History and frame messages. Security: urls from the hash, the history state and messages are untrusted (a crafted link);
+            //  they are only shown when SafeContentUrl accepts them (this site, or an external page of the main menu).
+            /** Open the start page instead of a refused link (replaces the history entry) and tell the user. */
+            const refused = () => {
+                if (t.Host)
+                    t.Host.DoneFirst = false;
+                window.SysWeaverDoneFirst = false;
+                t.OpenFirst();
+                t.LinkRefused();
+            };
+            //  Back / Forward (browser button, phone gesture, mouse button) closes the top pop-up first (UX guide MOB-3) and asks before
+            //  it leaves a page with unsaved edits (SAF-10): the Navigation API cancels such a traversal when it can, else popstate
+            //  undoes it (history.go back to where it was)
+            t.BindTraverseGuard();
+            t.BindPopupHistory();
+            window.addEventListener("popstate", ev => {
+                //  The undo of a traversal that was turned into "close the pop-up" / "ask first" (TraverseGuard)
+                if (t.IgnorePops > 0) {
+                    --t.IgnorePops;
+                    t.UpdateBack();
+                    return;
+                }
+                //  The pop-up guard entry was removed (the pop-up closed by itself) or Back left it: close the pop-up, stay on the page
+                if (t.DropGuard) {
+                    t.DropGuard = false;
+                    t.UpdateBack();
+                    return;
+                }
+                if (t.PopupGuard && !(ev.state && ev.state.SwPopupGuard)) {
+                    t.PopupGuard = false;
+                    t.CloseTopPopup();
+                    t.GuardPopup();
+                    return;
+                }
+                if (t.AllowTraverse)
+                    t.AllowTraverse = false;
+                else if (t.HasBackTarget() || t.ContentLeaveTexts().length) {
+                    const delta = t.PendingDelta || -1;
+                    t.PendingDelta = 0;
+                    t.IgnorePops = (t.IgnorePops || 0) + 1;
+                    history.go(-delta);
+                    if (!t.CloseTopPopup())
+                        t.AskTraverse(delta);
+                    return;
+                }
+                t.PendingDelta = 0;
+                //  Fallback count (no Navigation API): assume back
+                t.HistoryDepth = Math.max(0, (t.HistoryDepth || 0) - 1);
+                t.UpdateBack();
+                const s = ev.state;
+                if (typeof s === "string" && s) {
+                    const u = t.SafeContentUrl(s);
+                    if (u)
+                        t.Navigate(u, { NoHistory: true, Force: true });
+                    else
+                        refused();
+                    return;
+                }
+                if (!s || typeof s === "object") {
+                    //  Back to the initial entry (no url state; it may hold the shell's own page state, ex: {ScrollX, ScrollY} saved by
+                    //  Sw.Page.TrackScroll on a reload): the hash may still hold a deep link, else the first item
+                    const h = Shell.DecodeHash(window.location.hash);
+                    if (h) {
+                        const u = t.SafeContentUrl(h);
+                        if (u)
+                            t.Navigate(u, { NoHistory: true, Force: true });
+                        else
+                            refused();
+                        return;
+                    }
+                    if (t.Host)
+                        t.Host.DoneFirst = false;
+                    window.SysWeaverDoneFirst = false;
+                    t.OpenFirst();
+                }
+            });
+            window.addEventListener("message", ev => {
+                const d = ev.data;
+                if (!d || d.Type !== "IframeNavigating" || typeof d.Url !== "string")
+                    return;
+                //  Only messages from the page in the content frame itself (upstream 2026-10-30: not from frames nested inside it, ex:
+                //  a pop-up frame in the embedded page, which navigates itself; pages post to their parent, Sw.Page.Navigate), not a
+                //  popup or another window of this site, only from this site, and only to an allowed url (a page may pass on an url
+                //  parameter). Not isolation: same-origin script can post through the content window (parent.Sw.Frame);
+                //  SafeContentUrl is the real guard
+                if (ev.origin !== window.location.origin)
+                    return;
+                const f = t.Host ? t.Host.Frame : null;
+                if (!f || ev.source !== f.contentWindow)
+                    return;
+                const u = t.SafeContentUrl(d.Url);
+                //  Acknowledge: the page cancels its own fallback navigation when the shell takes over (Handled true) and
+                //  navigates itself at once when the shell refused the url (as before, without waiting); old pages send no Id
+                if (typeof d.Id === "string") {
+                    try {
+                        ev.source.postMessage({ Type: "IframeNavigationHandled", Id: d.Id, Url: d.Url, Handled: !!u }, window.location.origin);
+                    }
+                    catch {
+                        //  The frame is gone: nothing to acknowledge
+                    }
+                }
+                if (u)
+                    t.Navigate(u);
+                else
+                    t.LinkRefused(true);
+            });
+
+            const h = Shell.DecodeHash(window.location.hash);
+            if (h) {
+                const u = t.SafeContentUrl(h);
+                if (u)
+                    return () => t.Navigate(u);
+                return () => {
+                    t.OpenFirst();
+                    t.LinkRefused();
+                };
+            }
+            return () => t.OpenFirst();
+        }
+
+        /**
+         * Validate an untrusted content url (a deep link "#" + Base64(url), a history state, an IframeNavigating message): allowed are
+         * page urls of this site (relative or the same origin, Sw.Url.SafeSameOrigin, and a page or file by Sw.Url.IsPageUrl, or the
+         * url of a main menu item) and an external url that exactly matches the url of an Embedded item of the main menu (so a deep link
+         * to such a menu page keeps working). Everything else (raw server methods such as Api/... or ServerManager/KillProcess, which
+         * may perform an action on GET, other sites, "javascript:", "data:", "blob:", "vbscript:", ...) is refused.
+         * @param {string} url The url (relative urls resolve against the shell document).
+         * @returns {string|null} The absolute url, or null if refused.
+         */
+        SafeContentUrl(url) {
+            const m = this.Menu;
+            const same = Sw.Url.SafeSameOrigin(url, document.baseURI);
+            if (same) {
+                //  Only pages: a raw server method (Api/..., ServerManager/KillProcess) may perform an action on GET and is no page
+                //  (Sw.Url.IsPageUrl); an url of a main menu item is always allowed
+                if (Sw.Url.IsPageUrl(same) || (!!m && m.Entries.some(en => !en.Separator && en.Url === same)))
+                    return same;
+                return null;
+            }
+            if (!Sw.Url.IsHttp(url, document.baseURI))
+                return null;
+            let abs;
+            try {
+                abs = new URL(url, document.baseURI).href;
+            }
+            catch {
+                return null;
+            }
+            const ok = !!m && m.Entries.some(en => !en.Separator && en.Url === abs && en.Item && en.Item.Type === Shell.MenuTypes.Embedded);
+            return ok ? abs : null;
+        }
+
+        /**
+         * Tell the user that a link was not opened (a refused deep link or page navigation, see SafeContentUrl).
+         * @param {boolean} [stay] True: the current page stays (a refused navigation from a page), else the start page was opened.
+         */
+        LinkRefused(stay) {
+            console.warn("Sw.Shell: refused to open a link that is not on this site");
+            const text = stay
+                ? _TF("This link can't be opened here. Links must point to a page of this site.",
+                    "Message shown when a page in the application tried to open a link (address) that is not on this site, which is not allowed")
+                : _TF("This link can't be opened here, so the start page is shown instead. Links must point to a page of this site.",
+                    "Message shown when the application was opened with a link (address) to a page that is not on this site, which is not allowed");
+            Sw.Toast(text, { Kind: "warning", Duration: 8000 });
+            //  The inserted toast is not reliably read: announce it through the polite live region too
+            Sw.Page.Announce(text);
+        }
+
+        /**
+         * Create the head of the sidebar (OWN3-Banner): the brand bar, as high as the top bar, with the app's 9:2 banner
+         * (span.sw-shell-brandlogo, --sw-brand-banner: the generated banner.svg) in the full menu and the phone drawer and the square app
+         * icon (span.sw-shell-brandmark, --sw-brand-small: icon.svg) in the icon rail, crossfaded while the menu expands / collapses; the
+         * icon box is exactly the banner's left square, where the generated banner draws the icon (shell.css .sw-shell-brand).
+         * The app name: the banner shows it (the generated banner.svg is the app icon and name), so there is no name row under the bar
+         * (S7a-B-4: it repeated the name in large type). The bar is an image named after the app (role img, aria-label) with the name
+         * as its tool tip, in every mode (also in the rail, where only the icon shows). The version and the server address (host / port)
+         * are in the Session dialog of the bottom status line (owner OWN3-Shell-3, R1).
+         * The banner file is read ahead once the page has loaded and the browser is idle (or earlier: a pointer or the focus in the menu,
+         * an expanded menu, ApplyMenuState), so the first expand shows it at once.
+         * @returns {Array<HTMLElement>} The brand bar (div.sw-shell-brand).
+         */
+        CreateMenuHead() {
+            const t = this;
+            const name = t.AppTitle || "";
+            //  A link to the root of the site (the server prefix, nothing after it: the start page), as an app logo is on the web;
+            //  a real link, so middle click / "Open in new tab" work too
+            const label = name
+                ? _T("{0} - start page", name, "Accessible name and tool tip of the app banner at the top left of the app, a link to the start page. {0} is the app name")
+                : _TF("Start page", "Accessible name of the app banner at the top left of the app, a link to the start page");
+            const brand = Sw.el("a.sw-shell-brand", { href: Sw.Url.Root, title: label, attrs: { "aria-label": label } },
+                Sw.el("span.sw-shell-brandlogo"), Sw.el("span.sw-shell-brandmark"));
+            const menu = t.AppMenu;
+            if (menu) {
+                const warm = () => {
+                    menu.classList.add("sw-shell-brandon");
+                    menu.removeEventListener("pointerenter", warm);
+                    menu.removeEventListener("focusin", warm);
+                };
+                menu.addEventListener("pointerenter", warm);
+                menu.addEventListener("focusin", warm);
+                //  Read (and decode) the banner ahead, once the page has loaded and the browser is idle: read on the first expand it
+                //  came in the middle of the animation (the bar showed it late)
+                const ahead = () => {
+                    warm();
+                    try {
+                        const m = /url\(\s*["']?([^"')]+)["']?\s*\)/.exec(getComputedStyle(brand.firstChild).backgroundImage || "");
+                        if (m) {
+                            const img = new Image();
+                            img.src = m[1];
+                            if (img.decode)
+                                img.decode().catch(() => { });
+                            /** @type {HTMLImageElement} The banner, read ahead (kept: its decoded image stays in the cache). */
+                            t.BannerImage = img;
+                        }
+                    }
+                    catch {
+                    }
+                };
+                const idle = () => window.requestIdleCallback ? requestIdleCallback(ahead, { timeout: 3000 }) : setTimeout(ahead, 1000);
+                if (document.readyState === "complete")
+                    idle();
+                else
+                    window.addEventListener("load", idle, { once: true });
+            }
+            return [brand];
+        }
+
+        /**
+         * The scroll cue of the menu: while the menu tree is cut off, its edges fade (classes sw-more-above / sw-more-below
+         * of the scroll container) and a chevron button under it ("More menu items", a click scrolls down by most of a view) shows that
+         * there is more, in the sidebar, the icon rail and the phone drawer alike. Kept up to date on scroll, resize and folder changes.
+         * @param {HTMLElement} scroll The scroll container of the menu tree.
+         * @returns {HTMLElement} The button (button.sw-shell-menumore).
+         */
+        CreateMenuMore(scroll) {
+            const label = _TF("More menu items", "Tool tip of the arrow under the main menu when more items are below (a click scrolls the menu down)");
+            const b = Sw.el("button.sw-shell-menumore", { type: "button", title: label, tabIndex: -1, attrs: { "aria-label": label } }, Sw.Icon("down", "sw-shell-menumoreicon"));
+            b.hidden = true;
+            let raf = 0;
+            const update = () => {
+                raf = 0;
+                const max = scroll.scrollHeight - scroll.clientHeight;
+                const above = scroll.scrollTop > 2;
+                const below = max - scroll.scrollTop > 2;
+                scroll.classList.toggle("sw-more-above", above);
+                scroll.classList.toggle("sw-more-below", below);
+                if (b.hidden === below)
+                    b.hidden = !below;
+            };
+            const later = () => {
+                if (!raf)
+                    raf = requestAnimationFrame(update);
+            };
+            scroll.addEventListener("scroll", later, { passive: true });
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(later);
+                ro.observe(scroll);
+                const watch = () => {
+                    for (const c of scroll.children)
+                        ro.observe(c);
+                };
+                watch();
+                new MutationObserver(() => {
+                    watch();
+                    later();
+                }).observe(scroll, { childList: true });
+            }
+            else
+                window.addEventListener("resize", later);
+            b.addEventListener("click", ev => {
+                if (Sw.BadClick(ev))
+                    return;
+                scroll.scrollBy({ top: Math.max(40, scroll.clientHeight * 0.8), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            });
+            later();
+            return b;
+        }
+
+        /**
+         * Create the connection line at the bottom of the sidebar (Design v2): a status dot and "Connected, your time 20:10" ("server time 21:10 (UTC+2)" when the server zone is known and differs; or "Not
+         * connected"); the clock is decided once, "Connected" until then), refreshed every 10 s and on online / offline changes; in the rail only the dot (the text is its tool tip). A click
+         * shows the session details (connection, server and local time, address, version).
+         * @returns {HTMLElement} The line (button.sw-shell-status).
+         */
+        CreateMenuStatus() {
+            const t = this;
+            const dot = Sw.el("span.sw-shell-statusdot", { attrs: { "aria-hidden": "true" } });
+            const text = Sw.el("span.sw-shell-statustext");
+            const b = Sw.el("button.sw-shell-status", { type: "button" }, dot, text);
+            const online = () => {
+                let on = navigator.onLine !== false && Sw.Net.Online !== false;
+                try {
+                    if (Sw.Session && Sw.Session.Blocked)
+                        on = false;
+                }
+                catch {
+                }
+                return on;
+            };
+            const now = () => (Sw.Session && Sw.Session.TimeOffset !== undefined) ? Sw.Session.ServerTime() : new Date();
+            //  The clock of the line is decided once and kept (a label that changes from "your time" to "server time" by itself reads as
+            //  a different clock): when the server zone is known (it comes with the first server time reply, or is stored for this tab),
+            //  or when the first server time is there without a zone (an older server), or after 8 s at the latest. Until then the
+            //  line says only "Connected".
+            const started = Date.now();
+            /** @type {number|null|undefined} The decided server zone (minutes), null = not known (your time), undefined = not decided. */
+            let clock;
+            let fast = 0;
+            const decide = () => {
+                if (clock !== undefined)
+                    return;
+                const F = Sw.Format;
+                const zone = F && F.ServerZone ? F.ServerZone() : undefined;
+                if (typeof zone === "number")
+                    clock = zone;
+                else if ((Sw.Session && Sw.Session.TimeOffset !== undefined && Date.now() - started > 1500) || Date.now() - started > 8000)
+                    clock = null;
+            };
+            const update = () => {
+                const on = online();
+                const srv = now();
+                const F = Sw.Format;
+                decide();
+                if (clock !== undefined && fast) {
+                    clearInterval(fast);
+                    fast = 0;
+                }
+                //  The time rule (core/README "Times"): "server time" only labels the server's own wall clock (its zone known), shown with its
+                //  zone when it differs from the viewer's; otherwise the line shows the viewer's time and says so ("your time")
+                const zone = typeof clock === "number" ? clock : undefined;
+                const mine = -srv.getTimezoneOffset();
+                const local = srv.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                let s;
+                if (!on)
+                    s = t.OfflineText(false);
+                else if (clock === undefined)
+                    s = _TF("Connected", "Connection line at the bottom of the main menu for the first seconds, until it knows which clock (server or viewer) to show");
+                else if (typeof zone === "number" && zone !== mine)
+                    s = _T("Connected, server time {0} ({1})", F.ServerText(srv, "hm"), F.OffsetText(zone), "Connection line at the bottom of the main menu when the server is in another time zone than the viewer.{0} is replaced with the server's clock (hours and minutes), {1} with its zone, ex: UTC+2");
+                else if (typeof zone === "number")
+                    s = _T("Connected, server time {0}", local, "Connection line at the bottom of the main menu.{0} is replaced with the current time of the server (hours and minutes), the server is in the viewer's time zone");
+                else
+                    s = _T("Connected, your time {0}", local, "Connection line at the bottom of the main menu when the server's time zone is not known.{0} is replaced with the (server synchronized) time in the viewer's time zone (hours and minutes)");
+                b.classList.toggle("sw-shell-offline", !on);
+                text.textContent = s;
+                const lines = [s];
+                if (on && F && F.ZoneText)
+                    lines.push(_T("Your time: {0} ({1})", local, F.ZoneText(srv), "Tool tip row of the connection line.{0} is replaced with the time (hours and minutes), {1} with the viewer's time zone, ex: WEST, UTC+1") +
+                        (typeof zone === "number" ? "\n" + _T("Server time: {0} ({1})", F.ServerText(srv, "hm"), F.OffsetText(zone), "Tool tip row of the connection line.{0} is replaced with the server's clock (hours and minutes), {1} with its zone, ex: UTC+2") : ""));
+                b.title = lines.join("\n") + "\n\n" + _TF("Show the session details", "Tool tip of the connection line at the bottom of the main menu, a click shows details");
+                b.setAttribute("aria-label", s);
+            };
+            t.UpdateMenuStatus = update;
+            update();
+            setInterval(update, 10000);
+            if (clock === undefined)
+                fast = setInterval(update, 500);
+            window.addEventListener("online", update);
+            window.addEventListener("offline", update);
+            if (Sw.Hint)
+                Sw.Hint.Attach(b);
+            b.addEventListener("click", ev => {
+                if (Sw.BadClick(ev))
+                    return;
+                update();
+                t.ShowSession(online(), now());
+            });
+            t.StatusBtn = b;
+            return b;
+        }
+
+        /**
+         * Show the session details (the connection line's dialog).
+         * @param {boolean} on Connected.
+         * @param {Date} srv The server time.
+         */
+        ShowSession(on, srv) {
+            const el = Sw.el;
+            const row = (k, v) => el("div.sw-shell-keyrow", null, el("dt", { text: k }), el("dd", { text: v }));
+            const fmt = d => d.toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
+            const F = Sw.Format;
+            //  each clock says its zone; the server's clock only when its zone is known
+            const zone = F && F.ServerZone ? F.ServerZone() : undefined;
+            const zt = d => F && F.ZoneText ? " (" + F.ZoneText(d) + ")" : "";
+            const rows = [
+                row(_TF("Connection", "Label in the session details dialog"), on
+                    ? _TF("Connected to the service", "Value in the session details dialog")
+                    : _TF("Not connected to the service", "Value in the session details dialog")),
+                typeof zone === "number"
+                    ? row(_TF("Server time", "Label in the session details dialog"), F.ServerText(srv) + " (" + F.OffsetText(zone) + ")")
+                    : row(_TF("Server time zone", "Label in the session details dialog"), _TF("Not known (the server does not send it); the times are shown in your time zone", "Value in the session details dialog when the server's time zone is not known")),
+                row(_TF("Your time", "Label in the session details dialog: the (server synchronized) time in the viewer's time zone"), fmt(srv) + zt(srv)),
+                row(_TF("Time on this device", "Label in the session details dialog"), fmt(new Date()) + zt(new Date())),
+                row(_TF("Server address", "Label in the session details dialog"), window.location.host),
+                row(_TF("Application", "Label in the session details dialog"), this.AppTitle || ""),
+            ];
+            const v = String((document.body.dataset || {}).appversion || "").trim();
+            if (v && v.indexOf("${") < 0 && this.HaveUser)
+                rows.push(row(_TF("Version", "Label in the session details dialog"), v));
+            Sw.Dialog.Show({
+                Title: _TF("Session", "Title of the dialog with the connection details, opened from the bottom of the main menu"),
+                Content: el("dl.sw-shell-keys.sw-shell-session", null, ...rows),
+            });
+        }
+
+        /**
+         * Create the menu tools: a row of icon buttons above the menu filter box: Pin ("Keep the menu open", a toggle,
+         * aria-pressed; desktops only, see SetPinned), Collapse all and Expand all (every menu folder, Sw.Shell.MenuTree.SetAllExpanded,
+         * stored like a user toggle). Each button has a short accessible name, a tool tip (long press on touch screens) and the touch size
+         * on touch screens; Tab moves through them, Enter / Space press them. ApplyMenuState shows what makes sense per mode: the expanded
+         * menu shows all three, the icon rail only the pin (it pins the menu open), the phone drawer only the folder tools. Without the
+         * pin (the drawer, touch screens) the folder tools sit in the brand bar, right of the banner (shell.css sw-shell-toolsinbar).
+         * The pin keeps the old `<app-PinButton>` wrapper (App.PinButton / PinBtn), so application style sheets keep working.
+         * @returns {HTMLElement} The tools element (div.sw-shell-mtools).
+         */
+        CreateMenuTools() {
+            const t = this;
+            const tool = (icon, cls, title, label, onClick) => {
+                const b = Sw.el("button.sw-shell-mtool." + cls, { type: "button", title, attrs: { "aria-label": label } }, Sw.Icon(icon, "sw-shell-mtoolicon"));
+                if (Sw.Hint)
+                    Sw.Hint.Attach(b);
+                b.addEventListener("click", ev => {
+                    if (Sw.BadClick(ev))
+                        return;
+                    onClick(ev);
+                });
+                return b;
+            };
+            const tools = Sw.el("div.sw-shell-mtools", { attrs: { role: "group", "aria-label": _TF("Menu tools", "Accessible name of the row of buttons above the main menu (pin the menu, collapse all, expand all)") } });
+            /** @type {HTMLElement} The menu tools row (CreateMenuTools). */
+            t.MenuTools = tools;
+            if (!Sw.Layout.Mobile) {
+                //  A pin (not a padlock: a padlock read as "locked" / "sign in")
+                const pin = tool("pin", "sw-shell-mtool-pin",
+                    _TF("Pin the menu: keep it open next to the page", "The tool tip description on a button (a pin) that when clicked keeps the main menu open next to the page"),
+                    _TF("Keep the menu open", "Accessible name of the header toggle button that keeps the main menu expanded (pressed) or lets it collapse when not used"),
+                    () => t.SetPinned(!t.Pinned, true));
+                pin.setAttribute("aria-pressed", "false");
+                const wrap = document.createElement("app-PinButton");
+                wrap.append(pin);
+                t.PinButton = wrap;
+                t.PinBtn = pin;
+                tools.append(wrap);
+            }
+            const fold = expand => {
+                if (!t.Menu)
+                    return;
+                t.Menu.SetAllExpanded(expand);
+                t.ShowSelected();
+                Sw.Page.Announce(expand
+                    ? _TF("All menu folders expanded", "Screen reader text after the Expand all button above the main menu was pressed")
+                    : _TF("All menu folders collapsed", "Screen reader text after the Collapse all button above the main menu was pressed"));
+            };
+            tools.append(
+                tool("collapseAll", "sw-shell-mtool-fold sw-shell-mtool-collapse",
+                    _TF("Collapse all menu folders (show only the main sections)", "Tool tip of the Collapse all button above the main menu"),
+                    _TF("Collapse all", "Accessible name of the button above the main menu that collapses every menu folder"),
+                    () => fold(false)),
+                tool("expandAll", "sw-shell-mtool-fold sw-shell-mtool-expand",
+                    _TF("Expand all menu folders (show every page)", "Tool tip of the Expand all button above the main menu"),
+                    _TF("Expand all", "Accessible name of the button above the main menu that expands every menu folder"),
+                    () => fold(true)));
+            return tools;
+        }
+
+        /**
+         * Create the menu filter box (above the menu tree): typing filters the tree (Sw.Shell.MenuTree.Filter), ArrowDown moves into the
+         * tree, Enter opens the first match, Escape clears the text (an empty box lets Escape close a temporary menu). In the rail only its
+         * search button shows (it expands the menu and focuses the box). Hot key: Alt+M (see BindHotKeys).
+         * @returns {HTMLElement} The filter element (div.sw-shell-filter).
+         */
+        CreateMenuFilter() {
+            const t = this;
+            const label = _TF("Filter the menu", "Accessible name and place holder of a text box that filters the items of the main menu of the application");
+            //  Keyboard hints only on devices with a keyboard (not on phones / touch only devices)
+            const keys = HasKeyboard();
+            const hint = keys
+                ? _TF("Type to filter the menu items, Down arrow moves to the items, Enter opens the first match, Escape clears (hot key: Alt+M)",
+                    "Tool tip of a text box that filters the items of the main menu of the application. Alt+M is a keyboard short cut")
+                : _TF("Type a part of a page name to show only the matching menu items",
+                    "Tool tip of a text box that filters the items of the main menu of the application (on phones and touch devices)");
+            //  Design v2: a leading search icon and (devices with a keyboard) a trailing "Alt+M" key hint, hidden while there is text
+            const input = Sw.el("input.sw-shell-filterinput", {
+                type: "search", placeholder: label, title: hint,
+                attrs: { "aria-label": label, autocomplete: "off", spellcheck: "false", "aria-keyshortcuts": "Alt+M" },
+            });
+            //  The clear button (shown while there is text, in the place of the key hint; the browser's own search cancel button is hidden:
+            //  it was not themed and sat in the middle of the box, left of the space kept for the key hint). Not a tab stop: Escape clears.
+            const clearText = _TF("Clear the filter", "Tool tip and accessible name of the button that clears the text box that filters the items of the main menu of the application");
+            const clear = Sw.el("button.sw-shell-filterclear", {
+                type: "button", tabIndex: -1, title: keys ? clearText + " (Escape)" : clearText, attrs: { "aria-label": clearText },
+            }, Sw.Icon("close", "sw-shell-filterclearicon"));
+            clear.addEventListener("click", ev => {
+                if (Sw.BadClick(ev))
+                    return;
+                t.ClearMenuFilter();
+                input.focus({ preventScroll: true });
+            });
+            const box = Sw.el("span.sw-shell-filterbox", null, Sw.Icon("search", "sw-shell-filtericon"), input,
+                keys ? Sw.el("kbd.sw-shell-kbd", { text: "Alt+M", attrs: { "aria-hidden": "true" } }) : null, clear);
+            const status = Sw.el("div.sw-shell-filterstatus", { attrs: { role: "status", "aria-live": "polite" } });
+            const btn = Sw.el("button.sw-shell-mtool.sw-shell-filterbtn", {
+                type: "button", title: keys ? label + " (Alt+M)" : label, attrs: { "aria-label": label, "aria-keyshortcuts": "Alt+M" },
+            }, Sw.Icon("search", "sw-shell-mtoolicon"));
+            btn.addEventListener("click", ev => {
+                if (Sw.BadClick(ev))
+                    return;
+                t.FocusMenuFilter();
+            });
+            t.FilterInput = input;
+            t.FilterStatus = status;
+            input.addEventListener("input", () => t.ApplyMenuFilter());
+            input.addEventListener("keydown", ev => {
+                const tree = t.Menu;
+                if (!tree || ev.altKey || ev.ctrlKey || ev.metaKey)
+                    return;
+                switch (ev.key) {
+                    case "ArrowDown": {
+                        //  While filtering: the first matching page (folders only give the context), else the first item
+                        const r = input.value.trim() ? tree.Filter(input.value) : null;
+                        const v = tree.Visible();
+                        const en = (r && (r.FirstLeaf || r.First)) || v[0];
+                        if (en) {
+                            tree.SetTabStop(en);
+                            en.E.focus({ preventScroll: true });
+                            en.E.scrollIntoView({ block: "nearest" });
+                        }
+                        break;
+                    }
+                    case "Enter": {
+                        const r = tree.Filter(input.value);
+                        const en = r.FirstLeaf || r.First;
+                        if (!en)
+                            return;
+                        t.ClearMenuFilter();
+                        //  A "go to" action: the keyboard continues in the opened page (also with a pinned menu)
+                        if (en.Url && en === tree.Selected)
+                            t.FocusContent();
+                        else {
+                            t.GoContent = true;
+                            tree.Activate(en, ev);
+                            t.GoContent = false;
+                        }
+                        break;
+                    }
+                    case "Escape":
+                        if (!input.value)
+                            return;
+                        t.ClearMenuFilter();
+                        break;
+                    default:
+                        return;
+                }
+                ev.preventDefault();
+                ev.stopPropagation();
+            });
+            return Sw.el("div.sw-shell-filter", { attrs: { role: "search" } }, btn, box, status);
+        }
+
+        /**
+         * Apply the filter box text to the menu tree and announce the result.
+         */
+        ApplyMenuFilter() {
+            const t = this;
+            if (!t.Menu || !t.FilterInput)
+                return;
+            const r = t.Menu.Filter(t.FilterInput.value);
+            const s = t.FilterStatus;
+            if (r.Count < 0)
+                s.textContent = "";
+            else if (r.Count === 0)
+                s.textContent = _TF("No matching menu items", "Text shown below the menu filter box when no menu item matches the typed text");
+            else
+                s.textContent = _T("{0} matching menu items", r.Count, "Screen reader text after filtering the main menu.{0} is replaced with the number of matching items");
+            s.classList.toggle("sw-shell-nomatch", r.Count === 0);
+        }
+
+        /**
+         * Clear the menu filter (all items show again).
+         */
+        ClearMenuFilter() {
+            const t = this;
+            if (!t.FilterInput)
+                return;
+            t.FilterInput.value = "";
+            t.ApplyMenuFilter();
+        }
+
+        /**
+         * Focus the menu filter box (the hot key Alt+M and the rail's search button): shows a collapsed menu first.
+         */
+        FocusMenuFilter() {
+            const t = this;
+            const input = t.FilterInput;
+            if (!input)
+                return;
+            if (!t.Pinned)
+                t.MenuShow(false);
+            //  Focus the shell window first when the focus is inside the content frame
+            window.focus();
+            input.focus({ preventScroll: true });
+            input.select();
+        }
+
+        /**
+         * Listen for the shell hot keys in a window (the shell itself, and each same origin page shown in the content frame, so they work
+         * while the focus is inside the page):
+         *  - Alt+M: focus the menu filter box (Params.MenuFilter).
+         *  - F6 / Shift+F6: move the focus to the next / previous shell region (header, menu, page, the shown toasts; CycleFocus).
+         *  - "?" (not in text inputs, and only when the page did not handle it, ex: the table's own help): the shell keyboard help (ShowKeys).
+         * @param {Window} win The window.
+         */
+        BindHotKeys(win) {
+            const t = this;
+            try {
+                if (win.SwShellHotKeys)
+                    return;
+                win.SwShellHotKeys = true;
+                win.addEventListener("keydown", ev => {
+                    if (ev.defaultPrevented)
+                        return;
+                    if (ev.key === "F6" && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
+                        //  Inside an open modal dialog (its toasts included) the dialog owns F6 (between the dialog and its toasts, back
+                        //  to the field the user was in): the shell regions are inert behind it, so cycling them would drop the focus on
+                        //  the body (FOC-1, FBK-8)
+                        try {
+                            const tg = ev.target && ev.target.nodeType === 1 ? ev.target : null;
+                            const modal = tg && tg.closest ? tg.closest("[aria-modal='true']") : null;
+                            if (modal && !modal.hidden)
+                                return;
+                        }
+                        catch {
+                        }
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        t.CycleFocus(ev.shiftKey);
+                        return;
+                    }
+                    if (ev.repeat || !t.FilterInput || !isMenuHotKey(ev))
+                        return;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    t.FocusMenuFilter();
+                }, true);
+                //  Bubbling phase: a page's own "?" (Sw.Keys prevents the default) wins
+                win.addEventListener("keydown", ev => {
+                    if (ev.defaultPrevented || ev.isComposing || ev.key !== "?" || ev.ctrlKey || ev.altKey || ev.metaKey)
+                        return;
+                    const e = ev.target;
+                    if (e && (e.tagName === "INPUT" || e.tagName === "TEXTAREA" || e.tagName === "SELECT" || e.isContentEditable))
+                        return;
+                    if (Sw.Popup && Sw.Popup.IsOpen())
+                        return;
+                    ev.preventDefault();
+                    t.ShowKeys();
+                });
+            }
+            catch {
+                //  Cross-origin page: not possible
+            }
+        }
+
+        /**
+         * The shell region that has the focus.
+         * @returns {string} "header", "menu", "toasts" or "content".
+         */
+        FocusRegion() {
+            const t = this;
+            const ae = document.activeElement;
+            if (ae && t.AppHeader && t.AppHeader.contains(ae))
+                return "header";
+            if (ae && t.AppMenu && t.AppMenu.contains(ae))
+                return "menu";
+            const tr = t.ToastRegion();
+            if (tr) {
+                const fae = tr.Win === window ? ae : (ae && ae.tagName === "IFRAME" ? tr.Win.document.activeElement : null);
+                if (fae && tr.E.contains(fae))
+                    return "toasts";
+            }
+            return "content";
+        }
+
+        /**
+         * The toasts shown now (UX guide FBK-8, F6): the toast region of the shell window, else of the page in the content frame.
+         * @returns {{Win: Window, Toast: function, E: HTMLElement}|null} The window, its Sw.Toast and the region (null: no toast shown).
+         */
+        ToastRegion() {
+            const wins = [window];
+            const cw = this.ContentWindow();
+            if (cw)
+                wins.push(cw);
+            for (const w of wins) {
+                try {
+                    const T = w.Sw && w.Sw.Toast;
+                    const r = T && typeof T.Region === "function" ? T.Region() : null;
+                    if (r)
+                        return { Win: w, Toast: T, E: r };
+                }
+                catch {
+                    //  Another origin: not reachable
+                }
+            }
+            return null;
+        }
+
+        /**
+         * F6 / Shift+F6: move the focus to the next / previous region in the order header, menu, page, toasts (wraps around; the toasts
+         * only while one is shown, of the shell or of the page: UX guide FBK-8). The menu region opens a hidden drawer; leaving a
+         * temporary menu hides it.
+         * @param {boolean} [back] Backwards (Shift+F6).
+         */
+        CycleFocus(back) {
+            const t = this;
+            const regions = ["header"];
+            if (t.Menu)
+                regions.push("menu");
+            if (t.Host)
+                regions.push("content");
+            const tr = t.ToastRegion();
+            if (tr)
+                regions.push("toasts");
+            const i = regions.indexOf(t.FocusRegion());
+            const n = regions.length;
+            const next = regions[((i < 0 ? 0 : i) + (back ? n - 1 : 1)) % n];
+            //  Focus the shell window first when the focus is inside the content frame
+            window.focus();
+            switch (next) {
+                case "header": {
+                    if (t.Shown)
+                        t.MenuHide();
+                    const b = Array.from(t.AppHeader.querySelectorAll("button"))
+                        .find(x => !x.disabled && !x.hidden && x.getClientRects().length > 0 && getComputedStyle(x).visibility !== "hidden");
+                    if (b)
+                        b.focus({ preventScroll: true });
+                    break;
+                }
+                case "menu":
+                    if (t.IsDrawer() && !t.Shown)
+                        t.MenuShow(true);
+                    else
+                        t.Menu.Focus();
+                    break;
+                case "toasts": {
+                    if (t.Shown)
+                        t.MenuHide();
+                    //  A toast of the framed page: give that document the focus first (Sw.Focus only focuses in a focused document)
+                    if (tr.Win !== window && t.Host && t.Host.Frame) {
+                        t.Host.Frame.focus({ preventScroll: true });
+                        tr.Win.focus();
+                    }
+                    if (!tr.Toast.Focus || !tr.Toast.Focus())
+                        t.FocusContent();
+                    break;
+                }
+                default:
+                    t.FocusContent();
+                    break;
+            }
+        }
+
+        /**
+         * Move the focus into the page (hides a temporary menu first, the page is inert while it shows).
+         */
+        FocusContent() {
+            const t = this;
+            if (t.Shown)
+                t.MenuHide();
+            if (t.Host)
+                t.Host.Focus();
+        }
+
+        /**
+         * Show the shell keyboard help (a dialog listing the shell short cuts; pages may have their own "?" help).
+         */
+        ShowKeys() {
+            const t = this;
+            if (t.KeysOpen)
+                return;
+            const el = Sw.el;
+            const row = (keys, text) => el("div.sw-shell-keyrow", null, el("dt", null, el("kbd", { text: keys })), el("dd", { text }));
+            const rows = [];
+            if (t.FilterInput)
+                rows.push(row("Alt+M", _TF("Filter the menu (type a part of a page name)", "Description of the Alt+M key in the keyboard help of the application")));
+            rows.push(
+                row(_TF("F6, Shift+F6", "Keys shown in the keyboard help of the application"), _TF("Move between the header, the menu, the page and its messages", "Description of the F6 key in the keyboard help of the application (messages: the toasts shown at the bottom)")),
+                row(_TF("Tab (first)", "Keys shown in the keyboard help of the application: the first Tab press on a page"), _TF("Skip to content: move past the menu into the page", "Description of the skip link in the keyboard help of the application")));
+            if (t.Menu)
+                rows.push(
+                    row(_TF("Arrows, Home, End", "Keys shown in the keyboard help of the application"), _TF("Menu: move between the items, Right / Left expands / collapses a folder", "Description of the arrow keys in the menu in the keyboard help of the application")),
+                    row(_TF("Enter, Space", "Keys shown in the keyboard help of the application"), _TF("Menu: open the page", "Description of the Enter key in the menu in the keyboard help of the application")),
+                    row(_TF("Letters", "Keys shown in the keyboard help of the application: typing a letter"), _TF("Menu: jump to the next item starting with the letter", "Description of type ahead in the menu in the keyboard help of the application")));
+            if (t.FilterInput)
+                rows.push(
+                    row(_TF("Down arrow", "Keys shown in the keyboard help of the application"), _TF("Filter box: move to the first matching page", "Description of the Down key in the menu filter box in the keyboard help of the application")),
+                    row(_TF("Enter", "Key name shown in the keyboard help"), _TF("Filter box: open the first matching page and continue in it", "Description of the Enter key in the menu filter box in the keyboard help of the application")));
+            rows.push(
+                row(_TF("Escape", "Key name shown in the keyboard help"), _TF("Menu: clear the filter, press again to go back to the page", "Description of the Escape key in the menu in the keyboard help of the application")),
+                row("?", _TF("Show this help", "Description of the ? key in the keyboard help of the application")));
+            const content = el("div.sw-shell-keyhelp", null,
+                el("dl.sw-shell-keys", null, ...rows),
+                el("p.sw-muted", { text: _TF("Pages may have their own short cuts: press ? inside the page.", "Note below the keyboard help of the application") }));
+            t.KeysOpen = true;
+            Sw.Dialog.Show({ Title: _TF("Keyboard shortcuts", "Title of the dialog that lists the keyboard shortcuts"), Content: content })
+                .finally(() => t.KeysOpen = false);
+        }
+
+        /**
+         * Open the first main menu item (the start page: Welcome or Home).
+         */
+        OpenFirst() {
+            const t = this;
+            const en = t.StartEntry();
+            if (en)
+                t.Menu.Activate(en);
+        }
+
+        /**
+         * The start page entry of the main menu: the first item with an action (Welcome or Home).
+         * @returns {object|null} The entry.
+         */
+        StartEntry() {
+            const m = this.Menu;
+            return m ? (m.Entries.find(x => !x.Separator && x.HasAction && !x.Disabled) || null) : null;
+        }
+
+        /**
+         * Remember a shown main menu page in this browser (localStorage "SysWeaver.RecentPages": the last RecentMax pages with their open
+         * count and time; used by GetQuickLinks). The start page and pages that are shown again (back / forward, reload) are not counted.
+         * @param {object|null} en The menu entry of the shown page.
+         */
+        RecordRecent(en) {
+            const t = this;
+            if (!en || !en.Url || !en.HasAction || en.Folder || en === t.StartEntry())
+                return;
+            const k = Shell.NormalizeUrl(en.Url);
+            if (!k || k === t.LastRecent)
+                return;
+            t.LastRecent = k;
+            let list = Sw.Storage.GetJson(RecentKey, []);
+            if (!Array.isArray(list))
+                list = [];
+            list = list.filter(x => x && typeof x.U === "string");
+            let r = list.find(x => x.U === k);
+            if (!r) {
+                r = { U: k, C: 0, T: 0 };
+                list.push(r);
+            }
+            r.C = (r.C | 0) + 1;
+            r.T = Date.now();
+            list.sort((a, b) => (b.T || 0) - (a.T || 0));
+            if (list.length > RecentMax)
+                list.length = RecentMax;
+            Sw.Storage.SetJson(RecentKey, list);
+        }
+
+        /**
+         * The quick links of the start page (app/Home.html calls this on the shell window): the pages this browser opened most often
+         * (Recent; still in the main menu, the start page excluded), the same pages by last visit (Last) and the top level main menu pages (Top).
+         * A link: { Name, Title (description or null), Icon (icon class, absolute icon url or null), Url (absolute or null), Open(ev) (opens
+         * it like a click on its menu item) }.
+         * @param {object} [o] Options: { MaxRecent (default 6), MaxLast (default 6), MaxTop (default 8), MinCount (Recent only lists pages
+         * opened at least this many times, default 1) }.
+         * @returns {{Recent: Array<object>, Last: Array<object>, Top: Array<object>}} The links.
+         */
+        GetQuickLinks(o) {
+            const t = this;
+            o = o || {};
+            const res = { Recent: [], Last: [], Top: [] };
+            const m = t.Menu;
+            if (!m)
+                return res;
+            const start = t.StartEntry();
+            const ok = en => !!en && !en.Separator && en.HasAction && !en.Disabled && !en.Folder && en !== start;
+            /** Make the link of an entry. */
+            const link = en => {
+                const it = en.Item;
+                let icon = it.IconClass || null;
+                //  Icon urls are relative to the site root: make them absolute for the calling page
+                if (icon && (icon.indexOf("/") >= 0 || icon.indexOf(".") >= 0)) {
+                    const color = icon.charAt(icon.length - 1) === "*";
+                    try {
+                        icon = new URL(color ? icon.substring(0, icon.length - 1) : icon, Sw.Url.Root).href + (color ? "*" : "");
+                    }
+                    catch {
+                        icon = null;
+                    }
+                }
+                return {
+                    Name: it.Name || "",
+                    Title: (it.Title && it.Title !== it.Name) ? it.Title : null,
+                    Icon: icon,
+                    Url: en.Url ? new URL(en.Url, Sw.Url.Root).href : null,
+                    Open: ev => m.Activate(en, ev),
+                };
+            };
+            let list = Sw.Storage.GetJson(RecentKey, []);
+            if (!Array.isArray(list))
+                list = [];
+            const used = list
+                .filter(x => x && typeof x.U === "string")
+                .map(x => ({ En: m.UrlMap.get(x.U), C: x.C | 0, T: x.T || 0 }))
+                .filter(x => ok(x.En))
+                .sort((a, b) => (b.C - a.C) || (b.T - a.T));
+            const maxRecent = o.MaxRecent ?? 6;
+            const minCount = o.MinCount ?? 1;
+            for (const x of used)
+                if (res.Recent.length < maxRecent && x.C >= minCount)
+                    res.Recent.push(link(x.En));
+            //  Recently visited: the same pages by last visit time
+            const maxLast = o.MaxLast ?? 6;
+            for (const x of used.slice().sort((a, b) => b.T - a.T))
+                if (res.Last.length < maxLast)
+                    res.Last.push(link(x.En));
+            const maxTop = o.MaxTop ?? 8;
+            for (const en of m.Entries)
+                if (en.Depth === 0 && ok(en) && res.Top.length < maxTop)
+                    res.Top.push(link(en));
+            return res;
+        }
+
+        /**
+         * Show a page in the content frame. While the shown page has unsaved edits (Sw.Page.SetDirty) or runs work that stops with it
+         * (Sw.Activity, EndsWithPage), "Leave without saving?" is asked first (UX guide SAF-10); Stay keeps the page (and its menu item).
+         * @param {string} url The url.
+         * @param {object} [o] Options: { NoHistory, Keyboard (focus the page when revealed), Force (don't ask: already asked) }.
+         */
+        Navigate(url, o) {
+            const t = this;
+            o = o || {};
+            if (!t.Host)
+                return;
+            if (!o.Force && t.ContentLeaveTexts().length) {
+                t.ConfirmLeaveContent().then(ok => {
+                    if (ok)
+                        t.Navigate(url, Object.assign({}, o, { Force: true }));
+                    else
+                        t.ReselectShown();
+                });
+                return;
+            }
+            //  GoContent: opened from the menu filter box (Enter), the focus moves into the page even with a pinned menu
+            t.FocusOnReveal = (!!o.Keyboard && !t.Pinned) || !!t.GoContent;
+            t.GoContent = false;
+            //  The content host adds a history entry for every navigation but the first one (fallback count for CanGoBack)
+            if (t.Host.DoneFirst && !o.NoHistory && t.Params.MainMenu)
+                t.HistoryDepth = (t.HistoryDepth || 0) + 1;
+            t.Host.Navigate(url, { NoHistory: !!o.NoHistory, KeepState: !!o.KeepState });
+            t.UpdateBack();
+        }
+
+        /**
+         * Test if going back in the browser history stays inside the application (the previous entry is this shell document).
+         * Uses the Navigation API when available, else counts the shell's own history entries.
+         * @returns {boolean} True when there is an in-app page to go back to.
+         */
+        CanGoBack() {
+            //  The pop-up guard entry (BindPopupHistory) is only added on the entry page: it is not a page to go back to
+            if (this.PopupGuard)
+                return false;
+            const nav = window.navigation;
+            if (nav && nav.currentEntry && typeof nav.entries === "function") {
+                const i = nav.currentEntry.index;
+                if (!(i > 0))
+                    return false;
+                const list = nav.entries();
+                //  Never back across a sign in / sign out (MarkUser): those pages belong to the other user
+                const bk = Sw.Storage.Session.Get(BackBoundaryKey, null);
+                if (bk) {
+                    const b = list.findIndex(x => x.key === bk);
+                    if (b >= 0 && i - 1 < b)
+                        return false;
+                }
+                const prev = list[i - 1];
+                try {
+                    const a = new URL(prev.url), b = new URL(window.location.href);
+                    return a.origin === b.origin && a.pathname === b.pathname && a.search === b.search;
+                }
+                catch {
+                    return false;
+                }
+            }
+            return (this.HistoryDepth || 0) > 0;
+        }
+
+        /**
+         * The header menu button: its name / tool tip (MenuTip, from ApplyMenuState) plus a menu alert (MenuAlert, ex: "Problems: 1 part
+         * failing in the last 24 hours"), shown as a dot on the button, so a badge inside a closed drawer (phones) or a hidden menu is seen.
+         */
+        UpdateMenuAlert() {
+            const t = this;
+            const b = t.MenuButton;
+            if (!b)
+                return;
+            const tip = t.MenuTip || b.title || "";
+            const alert = t.MenuAlert || "";
+            const name = alert ? tip + ", " + alert : tip;
+            b.title = name;
+            b.setAttribute("aria-label", name);
+            let dot = b.querySelector(".sw-shell-alertdot");
+            if (alert && !dot)
+                b.append(dot = Sw.el("span.sw-shell-alertdot", { attrs: { "aria-hidden": "true" } }));
+            else if (!alert && dot)
+                dot.remove();
+        }
+
+        /**
+         * The Problems badge (Design v2 3.8): when the main menu has the Problems page (the exception trackers, Api/debug/ProblemsTable)
+         * and the user may read it (Sw.Access.CanCall), its row shows the number of parts that failed in the last 24 hours (the same
+         * count as the Home tile), refreshed every minute while the page is visible. No badge without access, without failures or on
+         * servers without the problems table. The header menu button shows a dot while the menu is a drawer (UpdateMenuAlert).
+         * The first answer is shared with the pages in the shell (ProblemsP: the Home page shows it instead of asking again).
+         * @returns {Promise<void>}
+         */
+        async WatchProblems() {
+            const t = this;
+            let first;
+            /**
+             * @type {Promise<object|null|undefined>} The first ProblemsTable answer of this shell (for the Home page, no second request):
+             * the TableData, null when the user may not read it, undefined when the shell did not ask (no Problems menu item, hidden, failed).
+             */
+            t.ProblemsP = new Promise(r => first = r);
+            const api = Sw.Url.Root + "Api/debug/ProblemsTable";
+            const en = t.Menu && t.Menu.Entries.find(e => /(^|[\/=])Api\/debug\/ProblemsTable([?&#]|$)/i.test(String(e.Url || e.Item.Data || "")));
+            if (!en || !t.Menu.SetBadge) {
+                first(undefined);
+                return;
+            }
+            try {
+                if (Sw.Access && await Sw.Access.CanCall(api) === false) {
+                    first(null);
+                    return;
+                }
+            }
+            catch {
+                first(undefined);
+                return;
+            }
+            const update = async () => {
+                if (document.visibilityState !== "visible") {
+                    first(undefined);
+                    return;
+                }
+                try {
+                    const r = await Sw.Net.Send(api, { MaxRowCount: 200, Order: ["-LastTime"] }, { NoNavigate: true });
+                    first(r);
+                    const cols = (r && r.Cols || []).map(c => c.Name);
+                    const it = cols.indexOf("LastTime");
+                    if (!r || !Array.isArray(r.Rows) || it < 0)
+                        return;
+                    const since = Date.now() - 86400000;
+                    const n = r.Rows.filter(x => (Date.parse((x.Values || x)[it]) || 0) > since).length;
+                    const text = n === 1
+                        ? _TF("1 part failing in the last 24 hours", "Accessible text and tool tip of the count badge of the Problems menu item (exactly one)")
+                        : _T("{0} parts failing in the last 24 hours", n, "Accessible text and tool tip of the count badge of the Problems menu item.{0} is replaced with the number of failing parts");
+                    t.Menu.SetBadge(en, n, text);
+                    //  the badge is inside the menu: a closed phone drawer shows it as a dot on the menu button (UpdateMenuAlert)
+                    t.MenuAlert = n > 0 ? (en.Item.Name ? en.Item.Name + ": " : "") + text : "";
+                    t.UpdateMenuAlert();
+                }
+                catch (x) {
+                    if (Sw.Access && Sw.Access.IsDenied && Sw.Access.IsDenied(x)) {
+                        first(null);
+                        t.Menu.SetBadge(en, 0);
+                        t.MenuAlert = "";
+                        t.UpdateMenuAlert();
+                        clearInterval(t.ProblemsTimer);
+                    }
+                    else
+                        first(undefined);
+                }
+            };
+            await update();
+            t.ProblemsTimer = setInterval(update, 60000);
+            document.addEventListener("visibilitychange", () => update());
+        }
+
+        /**
+         * Notice when the signed in user's session ends on the server (an admin ended it, it expired, the user signed out in another
+         * browser): the page then switches to the signed out state at once instead of showing a menu and data it can no longer use.
+         * The user is asked again (Api/auth/GetUser, no cache) (only with Params.SessionCheckSeconds: every that many seconds while the page is visible and when it becomes visible again;
+         * always)
+         * at once when any window of this site gets a "not signed in" reply (Sw.Net posts the InterOp message "SysWeaver.AuthCheck").
+         * Nobody signed in any more: the shell reloads (SessionGone, "Your session has ended" once). Another user (signed in elsewhere in this
+         * browser): the shell reloads. Network and server errors change nothing (the connection line shows them).
+         * @param {object} user The signed in user (GetUser reply).
+         */
+        WatchSession(user) {
+            const t = this;
+            if (t.SessionWatch)
+                return;
+            const key = u => String(u.Id ?? u.NickName ?? u.Name ?? "?");
+            const mine = key(user);
+            let busy = false;
+            let done = false;
+            const check = async () => {
+                if (busy || done)
+                    return;
+                busy = true;
+                try {
+                    //  The watch is also the shell's heartbeat for the connection line (one state, Sw.Net.Online): no answer in 10 s or a
+                    //  network error is a failed request, any answer but 502 / 504 means the server is there
+                    const ac = new AbortController();
+                    const tm = setTimeout(() => ac.abort(), 10000);
+                    let res;
+                    try {
+                        res = await fetch(Sw.Url.Root + "Api/auth/GetUser", { cache: "no-store", credentials: "same-origin", redirect: "manual", signal: ac.signal });
+                    }
+                    catch (e) {
+                        Sw.Net.NoteFailure();
+                        throw e;
+                    }
+                    finally {
+                        clearTimeout(tm);
+                    }
+                    if (res.status === 502 || res.status === 504)
+                        Sw.Net.NoteFailure();
+                    else
+                        Sw.Net.NoteSuccess();
+                    //  Only a clear answer counts: a 200 without a user, a 401 or a sign in redirect; 5xx and network errors don't
+                    let u;
+                    if (res.status === 200) {
+                        const txt = await res.text();
+                        u = txt ? JSON.parse(txt) : null;
+                    }
+                    else if (res.status === 401 || res.type === "opaqueredirect")
+                        u = null;
+                    else
+                        return;
+                    const now = u && u.Succeeded ? key(u) : "";
+                    if (now === mine)
+                        return;
+                    done = true;
+                    clearInterval(t.SessionWatch);
+                    //  (through Sw.Page.Reload: the touch Back guard entry goes first, as for Sign out; FD F8)
+                    if (now)
+                        Sw.Page.Reload();
+                    else
+                        t.SessionGone();
+                }
+                catch {
+                }
+                finally {
+                    busy = false;
+                }
+            };
+            //  (a periodic check only when Params.SessionCheckSeconds is set: the original shell sent no such request)
+            const every = Math.max(0, +t.Params.SessionCheckSeconds || 0);
+            t.SessionWatch = every > 0 ? setInterval(() => {
+                if (document.visibilityState === "visible")
+                    check();
+            }, every * 1000) : -1;
+            if (every > 0)
+                document.addEventListener("visibilitychange", () => {
+                    if (document.visibilityState === "visible")
+                        check();
+                });
+            Sw.InterOp.On("SysWeaver.AuthCheck", () => check());
+            /** Check the session now (WatchSession). @type {function():Promise<void>} */
+            t.CheckSession = check;
+            //  A sign out (here or in another window) reloads the whole shell at once (core/session.js: Sw.Session.SignedOut and the
+            //  server's "user.logout" push); the watch only finds a session that ended without either (ex: after a sleep)
+            //  Framed pages leave "not signed in" to the shell (core/net.js): the shell reloads (SessionGone)
+            Shell.SignIn = { SignedOut: false };
+        }
+
+        /**
+         * The signed in session ended on the server without a sign out message (WatchSession, the time-out warning): the whole shell
+         * reloads at once (the hash cleared, as a sign out does), so no menu, user data or page stays on screen; the page is blanked
+         * until the reload shows. The reloaded shell says "Your session has ended" once (Sw.Session.NoteSignedOut "ended",
+         * ShowSignedOutNotice). Never twice within a minute in a tab (sessionStorage "SysWeaver.ShellEndedAt"): a server that answers
+         * "signed in" at the load and "not signed in" at the next check can't make the shell reload over and over.
+         */
+        SessionGone() {
+            const t = this;
+            if (t.Gone)
+                return;
+            t.Gone = true;
+            clearInterval(t.SessionWatch);
+            if (Shell.SignIn)
+                Shell.SignIn.SignedOut = true;
+            const s = Sw.Storage.Session;
+            const last = +s.Get(EndedAtKey, 0) || 0;
+            if (Math.abs(Date.now() - last) < 60000)
+                return;
+            s.Set(EndedAtKey, String(Date.now()));
+            if (Sw.Session && typeof Sw.Session.NoteSignedOut === "function")
+                Sw.Session.NoteSignedOut("ended");
+            document.documentElement.style.visibility = "hidden";
+            setTimeout(() => document.documentElement.style.visibility = "", 5000);
+            Sw.Page.Reload(true, true);
+        }
+
+        /**
+         * After a sign out the shell loaded again (signed out): say so once, in a toast that closes by itself after SignedOutCloseMs.
+         * The note is taken from the tab (Sw.Session.TakeSignedOut: read and removed), so one sign out gives one notice, ever: another
+         * reload, the other tabs (they reload without a note) and later session checks never show it again.
+         */
+        ShowSignedOutNotice() {
+            const n = Sw.Session && typeof Sw.Session.TakeSignedOut === "function" ? Sw.Session.TakeSignedOut() : null;
+            if (!n || typeof Sw.Toast !== "function")
+                return;
+            const text = n.Kind === "ended"
+                ? _TF("Your session has ended. Sign in again to continue.", "Short message shown once on the start page after the signed in session ended on the server (an administrator ended it or it expired) and the application reloaded")
+                : _TF("You are signed out.", "Short message shown once on the start page after the user signed out and the application reloaded");
+            Sw.Toast(text, { Kind: "info", Duration: SignedOutCloseMs, NoCopy: true });
+        }
+
+
+        /**
+         * Remember the signed in user of this tab (sessionStorage "SysWeaver.ShellUser"). When it differs from the user of the previous
+         * shell in this tab (a sign in or sign out reloaded the shell), the current history entry becomes the back boundary
+         * (sessionStorage "SysWeaver.ShellBackFrom" = its Navigation API key): the back button never returns to the other user's pages.
+         * Without the Navigation API a reloaded shell starts without in-app history anyway.
+         * @param {string} key The user key ("" when nobody is signed in).
+         */
+        MarkUser(key) {
+            const s = Sw.Storage.Session;
+            const prev = s.Get(ShellUserKey, null);
+            if (prev !== null && prev !== key) {
+                const nav = window.navigation;
+                const cur = nav && nav.currentEntry;
+                if (cur && cur.key)
+                    s.Set(BackBoundaryKey, cur.key);
+            }
+            s.Set(ShellUserKey, key);
+            this.UpdateBack();
+        }
+
+        /**
+         * Show the back button only when there is an in-app page to go back to (on the first page it would leave the application).
+         */
+        UpdateBack() {
+            const b = this.BackBtn;
+            if (!b)
+                return;
+            const can = this.CanGoBack();
+            /* SwWeb:allow ux-inp-12 (the back button is hidden while it can't go back: sw-shell-noback, nothing to explain) */
+            b.disabled = !can;
+            b.classList.toggle("sw-shell-noback", !can);
+        }
+
+        /**
+         * Navigation started: closes the drawer (narrow screens: any page change, also by a link inside a page, back / forward or a hash
+         * change), shows the menu item name of the url as the title until the page is shown (none for urls without a menu item; url null:
+         * the page navigated by itself).
+         * @param {string|null} url The url.
+         */
+        OnContentStart(url) {
+            const t = this;
+            //  Any temporary menu (portrait drawer, the landscape phone / desktop overlay over the rail) closes: it must never cover the next page
+            if (t.Shown)
+                t.MenuHide();
+            const en = url ? t.FindEntry(url) : null;
+            t.SetTitle(en ? en.Item.Name : null, false, en);
+            //  A dialog of the previous page can not outlive it
+            t.SetFrameModal(0);
+            //  Nor its unsaved mark: the "●" of the tab title belongs to the page that was left (Leave, or a page replaced by itself)
+            if (t.ContentDirty) {
+                t.ContentDirty = false;
+                t.ApplyDocTitle();
+            }
+            const f = t.Style && t.Style.ExternalContentFn;
+            if (f)
+                f();
+        }
+
+        /**
+         * Frame dialogs cover the whole app: a modal Sw.Dialog in the content frame (or a frame nested in it) posts
+         * {Type: "SwDialogModal", Count} to the top window. While Count > 0 the shell dims its own chrome with the same scrim
+         * (body.sw-shell-modal: app-modalscrim over the top bar and the menu, the content frame raised above it, where the page's own
+         * scrim dims the page) and makes the chrome inert. A tap on the shell scrim is passed to the page ("SwDialogOutside"), which
+         * closes its top dialog when that is not modal. Only messages of this origin from the current content frame (or its nested
+         * frames) count; a navigation resets it.
+         */
+        BindFrameModal() {
+            const t = this;
+            t.FrameModalWin = null;
+            //  Escape while the focus is still in the shell (ex: a page opened a dialog by itself): the page's top dialog handles it
+            document.addEventListener("keydown", e => {
+                if (e.key === "Escape" && !e.defaultPrevented && document.body.classList.contains("sw-shell-modal")) {
+                    e.preventDefault();
+                    t.PostFrameModal({ Type: "SwDialogOutside", Key: "Escape" });
+                }
+            });
+            Sw.Frame.On("SwDialogModal", (d, ev) => {
+                const f = t.Host ? t.Host.Frame : null;
+                const cw = f ? f.contentWindow : null;
+                let w = ev.source;
+                //  The sender must be the content frame or a frame nested in it
+                for (let i = 0; w && cw && i < 10 && w !== cw; ++i)
+                    w = w.parent === w ? null : w.parent;
+                if (!cw || w !== cw)
+                    return;
+                t.FrameModalWin = ev.source;
+                t.SetFrameModal(+d.Count || 0);
+            });
+        }
+
+        /**
+         * Dim (count > 0) or restore the shell chrome for a dialog in the content frame (see BindFrameModal).
+         * @param {number} count The number of open dialogs in the frame.
+         */
+        SetFrameModal(count) {
+            const t = this;
+            const on = count > 0;
+            const b = document.body;
+            if (!b || b.classList.contains("sw-shell-modal") === on)
+                return;
+            b.classList.toggle("sw-shell-modal", on);
+            if (on) {
+                if (!t.ModalScrim) {
+                    const s = document.createElement("app-modalscrim");
+                    s.setAttribute("aria-hidden", "true");
+                    s.addEventListener("pointerdown", e => {
+                        e.preventDefault();
+                        t.PostFrameModal({ Type: "SwDialogOutside" });
+                    });
+                    t.ModalScrim = s;
+                }
+                (t.Content && t.Content.parentNode ? t.Content.parentNode : b).append(t.ModalScrim);
+            }
+            else if (t.ModalScrim)
+                t.ModalScrim.remove();
+            //  The chrome is inert while the page's dialog is open (no focus, no clicks, hidden from screen readers)
+            const chrome = new Set([...Array.from(b.children), ...(t.Content && t.Content.parentNode ? Array.from(t.Content.parentNode.children) : [])]);
+            for (const c of chrome) {
+                if (c === t.Content || c === t.ModalScrim || !c.tagName || !c.tagName.startsWith("APP-"))
+                    continue;
+                if (on)
+                    c.inert = true;
+                else
+                    c.inert = false;
+            }
+            if (!on)
+                t.FrameModalWin = null;
+            else {
+                //  The focus belongs to the page's dialog: a focus left in the (now inert) chrome moves into the content frame
+                const f = t.Host ? t.Host.Frame : null;
+                if (f && document.activeElement !== f)
+                    try {
+                        f.focus();
+                    }
+                    catch {
+                    }
+                //  A dialog of a frame nested in the content frame (ex: an app Home that frames a library page): the focus goes
+                //  down the frames to the dialog's window (its trap then focuses the dialog), so the keyboard works there too
+                try {
+                    const chain = [];
+                    const cw = f ? f.contentWindow : null;
+                    for (let w = t.FrameModalWin; w && w !== cw && chain.length < 10; w = w.parent)
+                        chain.unshift(w);
+                    for (const w of chain) {
+                        const fe = w.frameElement;
+                        if (fe && fe.ownerDocument.activeElement !== fe)
+                            fe.focus();
+                    }
+                }
+                catch {
+                    //  another origin: not reachable
+                }
+            }
+        }
+
+        /**
+         * Pass a message to the page whose dialog dims the shell (BindFrameModal).
+         * @param {object} m The message ({Type: "SwDialogOutside", Key}).
+         */
+        PostFrameModal(m) {
+            const w = this.FrameModalWin;
+            try {
+                if (w)
+                    w.postMessage(m, window.location.origin);
+            }
+            catch {
+                //  The frame is gone
+            }
+        }
+
+        /**
+         * Scroll the menu (tree, rail or drawer) so the current page's item is fully visible, when it is not: the scroll position is
+         * aligned to the top of an item row, so the first visible item is never cut in half (ex: the landscape phone rail of a deep
+         * Debug page). Nothing happens while the item is visible, so a menu the user scrolled stays where it is. Checked again
+         * shortly after (icons and fonts that load later change the row heights).
+         * @param {boolean} [again] Internal: a delayed re-check (schedules no further checks).
+         */
+        ShowSelected(again) {
+            const t = this;
+            if (!again) {
+                clearTimeout(t.ShowSelTimer);
+                t.ShowSelTimer = setTimeout(() => t.ShowSelected(true), 400);
+            }
+            const sc = t.MenuScroll;
+            const en = t.Menu && t.Menu.Selected;
+            if (!sc || !en || !en.E.isConnected)
+                return;
+            const row = en.E.querySelector(":scope > .sw-shell-row") || en.E;
+            const sr = sc.getBoundingClientRect();
+            if (!sr.height)
+                return;
+            const cs = getComputedStyle(sc);
+            const pad = parseFloat(cs.paddingTop) || 0;
+            const padB = parseFloat(cs.paddingBottom) || 0;
+            const r = row.getBoundingClientRect();
+            const top = r.top - sr.top + sc.scrollTop;
+            const bottom = r.bottom - sr.top + sc.scrollTop;
+            if (top >= sc.scrollTop + pad && bottom <= sc.scrollTop + sc.clientHeight - padB)
+                return;
+            //  Above the view: the item becomes the first one. Below: the lowest position that shows the item at the bottom, moved down
+            //  to the top of the first row that would be cut
+            const above = top < sc.scrollTop + pad;
+            let want = above ? top - pad : Math.max(0, bottom - sc.clientHeight + padB);
+            if (!above && want > 0) {
+                for (const x of sc.querySelectorAll(".sw-shell-row")) {
+                    if (!x.offsetHeight)
+                        continue;
+                    const xt = x.getBoundingClientRect().top - sr.top + sc.scrollTop - pad;
+                    if (xt >= want - 0.5) {
+                        want = Math.min(xt, top - pad);
+                        break;
+                    }
+                }
+            }
+            sc.scrollTop = Math.max(0, want);
+        }
+
+        /**
+         * Follow a page's document title after it is shown: a record page sets its title when its data has
+         * loaded (Sw.PageHeader with MenuTitle: false sets document.title from Title / SetTitle), after the reveal read the static
+         * <title>. When the shown title is the page's own document title (not a menu item name), a change of the page's <title> updates
+         * the breadcrumb, the document title and the frame's name. Same origin pages only; the previous watch ends.
+         * @param {string} url The page url.
+         * @param {string} title The shown title.
+         * @param {Window|null} win The page's window.
+         * @param {HTMLIFrameElement} frame The frame.
+         * @param {object|null} shown The menu entry of the page (the breadcrumb).
+         */
+        WatchPageTitle(url, title, win, frame, shown) {
+            const t = this;
+            if (t.TitleWatch) {
+                t.TitleWatch.disconnect();
+                t.TitleWatch = null;
+            }
+            let doc = null;
+            try {
+                doc = win ? win.document : null;
+            }
+            catch {
+                doc = null;
+            }
+            if (!doc || !doc.head || !title || doc.title !== title || !window.MutationObserver)
+                return;
+            let last = title;
+            const mo = new MutationObserver(() => {
+                let nt = "";
+                try {
+                    if (t.Host && t.Host.Frame !== frame)
+                        return;
+                    nt = doc.title;
+                }
+                catch {
+                    return;
+                }
+                if (!nt || nt === last)
+                    return;
+                last = nt;
+                const fromLink = t.IsLinkTitle(url, nt, win, frame);
+                const shownTitle = fromLink ? Sw.Page.LinkText(nt, 80) : nt;
+                if (frame)
+                    frame.title = shownTitle;
+                t.SetTitle(shownTitle, fromLink, shown);
+            });
+            mo.observe(doc.head, { childList: true, subtree: true, characterData: true });
+            t.TitleWatch = mo;
+        }
+
+        /**
+         * A page was revealed: select its menu item, show its title.
+         * @param {string} url The page url.
+         * @param {string} title The title.
+         * @param {Window|null} win The page window (same origin).
+         */
+        OnContentReveal(url, title, win, frame) {
+            const t = this;
+            /** The menu entry of the shown page (the breadcrumb). */
+            let shown = null;
+            if (t.Menu) {
+                const m = t.Menu;
+                const prev = m.Selected;
+                //  The best matching item (or none), ex: api.html opened by a link highlights nothing instead of the previous page
+                const en = t.FindEntry(url, frame, true);
+                shown = en;
+                m.Select(en);
+                t.ShowSelected();
+                //  Only exact menu pages count as visited
+                if (en && t.FindEntry(url, frame))
+                    t.RecordRecent(en);
+                //  A focus ring left on the previous page's item would look like the current page: move it along (or drop it)
+                const ae = document.activeElement;
+                if (prev && prev !== en && m.EntryOf(ae) === prev) {
+                    if (en && m.Visible().includes(en))
+                        en.E.focus({ preventScroll: true });
+                    else
+                        ae.blur();
+                }
+            }
+            //  A title the page took from its url (Sw.Page.SetLinkTitle, ex: the table `n` parameter) is shown as plain text, cut to
+            //  80 characters (never html, no caption: owner OWN3-Shell-2), so a crafted link can't fill the app header
+            const fromLink = t.IsLinkTitle(url, title, win, frame);
+            if (fromLink)
+                title = Sw.Page.LinkText(title, 80);
+            //  The frame's accessible name is the page title
+            if (frame && title)
+                frame.title = title;
+            t.SetTitle(title, fromLink, shown);
+            t.WatchPageTitle(url, title, win, frame, shown);
+            t.UpdateBack();
+            //  The hot keys also work while the focus is inside the page (same origin pages only)
+            if (win && t.Menu)
+                t.BindHotKeys(win);
+            //  F6 / the shell's FocusContent return to the element the user was in, never to the page's body (FOC-1)
+            if (win && t.Host && typeof t.Host.TrackFocus === "function")
+                t.Host.TrackFocus(win);
+            const f = t.Style && t.Style.ExternalContentFn;
+            if (f)
+                f(url, title);
+            //  UX guide FOC-6: screen readers hear the name of the page that was opened. The first page of the shell is read with the
+            //  document; a page that gets the focus is read by its frame's name (the title), so only a page shown while the focus stays
+            //  in the chrome (a menu item, Back) is announced.
+            const first = !t.RevealedOnce;
+            t.RevealedOnce = true;
+            if (t.FocusOnReveal) {
+                t.FocusOnReveal = false;
+                t.Host.Focus();
+            }
+            else if (!first && title)
+                Sw.Page.Announce(title);
+        }
+
+        /**
+         * Find the main menu entry of a shown page: by its current url, else by the url it was opened with (pages that rewrite their
+         * own url, ex: edit/text.html).
+         * @param {string} url The current page url.
+         * @param {HTMLIFrameElement} [frame] The frame (SwUrl: the requested url).
+         * @param {boolean} [best] Else the best matching item (Sw.Shell.MenuTree.FindBest: same page, all of the item's query parameters).
+         * @returns {object|null} The entry.
+         */
+        FindEntry(url, frame, best) {
+            const m = this.Menu;
+            if (!m)
+                return null;
+            const other = frame && frame.SwUrl && frame.SwUrl !== url ? frame.SwUrl : null;
+            const en = m.FindUrl(url) || (other ? m.FindUrl(other) : null);
+            if (en || !best || typeof m.FindBest !== "function")
+                return en;
+            return m.FindBest(url) || (other ? m.FindBest(other) : null);
+        }
+
+        /**
+         * True when a revealed page's title came from its url (Sw.Page.SetLinkTitle, Sw.Page.TitleFromLink of the page window) and is
+         * not the name of the page's (exact or best matching) main menu item.
+         * @param {string} url The page url.
+         * @param {string|null} title The title the shell is about to show.
+         * @param {Window|null} win The page window (same origin).
+         * @param {HTMLIFrameElement} [frame] The frame.
+         * @returns {boolean}
+         */
+        IsLinkTitle(url, title, win, frame) {
+            if (!title || !win)
+                return false;
+            let lt = null;
+            try {
+                lt = win.Sw && win.Sw.Page ? win.Sw.Page.TitleFromLink : null;
+            }
+            catch {
+                return false;
+            }
+            if (typeof lt !== "string" || !lt || lt !== title)
+                return false;
+            const en = this.FindEntry(url, frame, true);
+            return !(en && en.Item && en.Item.Name === title);
+        }
+
+        /**
+         * Render the breadcrumb before the title: the menu folders above the shown page's entry, and the entry itself when the title is
+         * not its name (ex: "Api's > debug/GetApiInfo"). A crumb with a page of its own is a link (a button that opens it), the others
+         * are text; hidden on phones (the top bar only has room for the title).
+         * @param {object|null} en The menu entry of the page (none: no crumbs, the title alone: legacy pages).
+         * @param {string} title The title.
+         */
+        SetCrumbs(en, title) {
+            const t = this;
+            const c = t.Crumbs;
+            if (!c)
+                return;
+            const list = (t.Menu && en) ? t.Menu.Ancestors(en) : [];
+            if (en && en.Item && en.Item.Name && en.Item.Name !== title)
+                list.push(en);
+            const parts = [];
+            for (const x of list) {
+                const name = x.Item.Name || "";
+                let e;
+                if (x.HasAction && !x.Disabled) {
+                    e = Sw.el("button.sw-shell-crumb.sw-shell-crumblink", {
+                        type: "button", text: name,
+                        title: _T("Open {0}", name, "Tool tip of a link in the breadcrumb of the top bar.{0} is replaced with the name of the page"),
+                    });
+                    e.addEventListener("click", ev => {
+                        if (Sw.BadClick(ev) || !t.Menu)
+                            return;
+                        //  Programmatic: it also opens the selected item (a best match, ex: Api's for an api.html page)
+                        t.Menu.Activate(x);
+                    });
+                }
+                else
+                    e = Sw.el("span.sw-shell-crumb", { text: name });
+                parts.push(e, Sw.Icon("right", "sw-shell-crumbsep"));
+            }
+            c.replaceChildren(...parts);
+            c.hidden = !parts.length;
+        }
+
+        /**
+         * Set the content title (top bar breadcrumb and document title).
+         * @param {string|null} title The title (falsy hides it).
+         * @param {boolean} [fromLink] The title is text from the page's url: shown like any title (plain text, cut to 80 characters,
+         * no caption; owner OWN3-Shell-2).
+         * @param {object|null} [en] The menu entry of the page (the breadcrumb, see SetCrumbs).
+         */
+        SetTitle(title, fromLink, en) {
+            const t = this;
+            t.ContentTitle = title || "";
+            if (!title) {
+                t.SetCrumbs(null, "");
+                t.Title.classList.add("Hidden");
+                return;
+            }
+            t.SetCrumbs(en || null, title);
+            if (fromLink)
+                title = Sw.Page.LinkText(title, 80);
+            t.DocTitle = t.AppTitle + " - " + title;
+            //  Plain text only (also a title from the url)
+            t.TitleText.textContent = title;
+            t.TitleText.title = title + "\n\n" + _TF("Copy the title", "Tool tip of the page title in the application header, a click copies it");
+            t.Title.classList.remove("Hidden");
+            t.ApplyDocTitle();
+            t.FitTitle();
+        }
+
+        /**
+         * Phones (the drawer layout): a title word wider than the title box ("GetLocalizedLanguages") must not break inside the word
+         * ("GetLocalizedLanguage" / "s"). The title is drawn a little smaller (down to 80 %) so the word fits, else it stays on one line
+         * and ends with an ellipsis (class sw-shell-title-fit; the full title is the tool tip). Titles of words that fit wrap at
+         * spaces as before. Checked again on resize.
+         */
+        FitTitle() {
+            const t = this;
+            const e = t.TitleText;
+            if (!e)
+                return;
+            if (!t.FitTitleBound) {
+                t.FitTitleBound = true;
+                window.addEventListener("resize", () => t.FitTitle());
+            }
+            e.style.fontSize = "";
+            e.classList.remove("sw-shell-title-fit");
+            if (!document.body.classList.contains("sw-shell-drawer") || !e.textContent)
+                return;
+            const cs = getComputedStyle(e);
+            //  a one line title (wider phones) ends with an ellipsis anyway
+            if (cs.whiteSpace === "nowrap")
+                return;
+            const avail = e.clientWidth - parseFloat(cs.paddingLeft || "0") - parseFloat(cs.paddingRight || "0");
+            if (!(avail > 0))
+                return;
+            const c = t.FitCtx || (t.FitCtx = document.createElement("canvas").getContext("2d"));
+            c.font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+            let widest = 0;
+            for (const w of e.textContent.split(/\s+/))
+                widest = Math.max(widest, c.measureText(w).width);
+            if (widest <= avail)
+                return;
+            const fs = parseFloat(cs.fontSize);
+            const scale = Math.max(0.8, avail / widest);
+            e.style.fontSize = (fs * scale).toFixed(2) + "px";
+            if (widest * scale > avail)
+                e.classList.add("sw-shell-title-fit");
+        }
+
+        // ------------------------------------------------------------------ menu state
+
+        /**
+         * True when the menu is a drawer (Design v2: windows below 760 css px wide or 500 px high, so phones in both orientations;
+         * also the core's narrow layout). Kept while the on screen keyboard is open (Sw.Layout.Keyboard): the lower window is not
+         * another device (a tablet in landscape would switch to the drawer).
+         * @returns {boolean} Drawer mode.
+         */
+        IsDrawer() {
+            const t = this;
+            if (Sw.Layout.Narrow)
+                return true;
+            if (Sw.Layout.Keyboard && (typeof t.DrawerBeforeKeyboard === "boolean"))
+                return t.DrawerBeforeKeyboard;
+            let d = false;
+            try {
+                d = window.matchMedia(DrawerQuery).matches;
+            }
+            catch {
+            }
+            if (!Sw.Layout.Keyboard)
+                t.DrawerBeforeKeyboard = d;
+            return d;
+        }
+
+        /**
+         * Pin or unpin the menu (desktop).
+         * @param {boolean} pin Pinned.
+         * @param {boolean} [store] Store the choice.
+         */
+        SetPinned(pin, store) {
+            const t = this;
+            t.WantPinned = !!pin;
+            if (store)
+                Sw.Storage.SetJson(PinnedKey, !!pin);
+            t.Shown = false;
+            t.ApplyMenuState();
+        }
+
+        /**
+         * Apply the menu state to the body classes, the backdrop and the aria attributes (also on layout changes).
+         */
+        ApplyMenuState() {
+            const t = this;
+            const bcl = document.body.classList;
+            const drawer = t.IsDrawer();
+            const pinned = !drawer && t.WantPinned;
+            const shown = !pinned && t.Shown;
+            t.Pinned = pinned;
+            bcl.toggle("SwPinned", pinned);
+            bcl.toggle("SwCollapsed", !pinned && !shown);
+            bcl.toggle("sw-shell-drawer", drawer);
+            bcl.toggle("sw-shell-overlay", shown);
+            const capture = t.Capture;
+            if (capture) {
+                if (shown && !capture.isConnected)
+                    document.body.append(capture);
+                else if (!shown && capture.isConnected)
+                    capture.remove();
+            }
+            const open = pinned || shown;
+            if (t.MenuButton) {
+                t.MenuButton.setAttribute("aria-expanded", open ? "true" : "false");
+                //  Short distinct names: the menu button shows / hides / collapses, the pin button is the "Keep the menu open" toggle
+                const tip = pinned
+                    ? _TF("Collapse the menu", "Name and tool tip of the header menu button while the main menu is kept open: a click collapses it to icons")
+                    : (shown
+                        ? _TF("Hide the menu", "Name and tool tip of the header menu button while the main menu is shown over the page")
+                        : _TF("Show the menu", "Name and tool tip of the header menu button while the main menu is hidden or collapsed"));
+                t.MenuTip = tip;
+                t.UpdateMenuAlert();
+            }
+            if (t.PinBtn) {
+                t.PinBtn.setAttribute("aria-pressed", pinned ? "true" : "false");
+                //  The accessible name stays "Keep the menu open" (aria-pressed tells the state), the tool tip says what a click does
+                const pt = pinned
+                    ? _TF("The menu is pinned open. Unpin it to let it fold away when not used", "Tool tip of the header pin button while the main menu is kept open")
+                    : _TF("Pin the menu: keep it open next to the page", "Tool tip of the header pin button while the main menu folds away when not used");
+                t.PinBtn.title = pt;
+            }
+            if (t.AppMenu) {
+                //  A hidden drawer is not reachable with the keyboard / screen readers; the rail stays usable
+                t.AppMenu.inert = drawer && !shown;
+                const rail = !drawer && !open;
+                t.AppMenu.classList.toggle("sw-shell-rail", rail);
+                //  The banner of the brand bar is read once the menu is shown expanded (CreateMenuHead), then kept for the crossfade
+                if (!rail && (!drawer || shown))
+                    t.AppMenu.classList.add("sw-shell-brandon");
+                if (t.Menu)
+                    t.Menu.SetRail(rail);
+                //  The menu tools that make sense in this mode: the pin on desktops (not in the phone drawer), the folder tools when the
+                //  menu has folders, except in the icon rail (no names to fold); none: no row. Without the pin (the drawer, touch screens)
+                //  the folder tools sit in the brand bar (sw-shell-toolsinbar, shell.css): one menu row more, and no row moves between the
+                //  rail and the full menu (LAY-9)
+                const pinOn = !!t.PinBtn && !drawer;
+                t.AppMenu.classList.toggle("sw-shell-toolsinbar", !pinOn);
+                if (t.MenuTools) {
+                    const foldOn = !rail && !!t.MenuHasFolders;
+                    if (t.PinBtn)
+                        t.PinBtn.hidden = !pinOn;
+                    t.MenuTools.querySelectorAll(".sw-shell-mtool-fold").forEach(b => b.hidden = !foldOn);
+                    t.MenuTools.hidden = !pinOn && !foldOn;
+                }
+                //  Design v2: the top bar's menu button is for the drawer (and for tablets without a pin); on desktops the pin (menu tools)
+                //  expands / collapses the menu
+                if (t.MenuButton)
+                    t.MenuButton.hidden = !drawer && pinOn;
+                //  A filtered rail would hide items without showing why: the filter applies to the shown menu only
+                if ((rail || (drawer && !shown)) && t.FilterInput && t.FilterInput.value)
+                    t.ClearMenuFilter();
+                //  The drawer has other row heights: keep the current page's item in view. Between the rail and the full menu every row
+                //  keeps its place (LAY-9), and so does the scroll position the user chose
+                if (t.WasDrawer !== drawer)
+                    t.ShowSelected();
+                t.WasDrawer = drawer;
+            }
+            if (t.Content)
+                t.Content.inert = shown;
+        }
+
+        /**
+         * Show the menu over the content (no-op when pinned or already shown).
+         * @param {boolean} [focus] Move the focus into the menu.
+         */
+        MenuShow(focus) {
+            const t = this;
+            if (t.Pinned || t.Shown) {
+                if (focus && t.Menu)
+                    t.Menu.Focus();
+                return;
+            }
+            t.Shown = true;
+            t.ApplyMenuState();
+            if (focus && t.Menu)
+                t.Menu.Focus();
+        }
+
+        /**
+         * Hide a temporary menu (no-op when pinned or not shown).
+         * @param {boolean} [focusButton] Return the focus to the menu button.
+         */
+        MenuHide(focusButton) {
+            const t = this;
+            if (!t.Shown)
+                return;
+            const hadFocus = t.AppMenu && t.AppMenu.contains(document.activeElement);
+            t.Shown = false;
+            t.NoAutoShowUntil = performance.now() + AutoShowPauseMs;
+            t.ApplyMenuState();
+            if ((focusButton || hadFocus) && !t.FocusOnReveal) {
+                //  The menu button, else (desktops: it is hidden, the rail stays) the pin of the rail, else the rail's current item
+                if (t.MenuButton && !t.MenuButton.hidden)
+                    t.MenuButton.focus({ preventScroll: true });
+                else if (t.PinBtn && !t.PinBtn.hidden)
+                    t.PinBtn.focus({ preventScroll: true });
+                else if (t.Menu)
+                    t.Menu.Focus();
+            }
+        }
+
+        /**
+         * The menu button: unpins a pinned menu, else shows / hides the temporary menu.
+         * @param {Event} [ev] The click.
+         */
+        MenuToggle(ev) {
+            const t = this;
+            //  Opened by a tap or a click (not Enter / Space): the focus moves into the menu for the keyboard, but without a focus ring
+            //  on the current item (it reads as a second selection); the first key press in the menu shows it again
+            if (t.AppMenu)
+                t.AppMenu.classList.toggle("sw-shell-pointeropen", !!(ev && ev.detail > 0));
+            if (t.Pinned) {
+                t.SetPinned(false, true);
+                return;
+            }
+            if (t.Shown)
+                t.MenuHide(true);
+            else
+                t.MenuShow(true);
+        }
+
+        /**
+         * Mouse, touch and keyboard handling of the menu panel and the backdrop.
+         * @param {HTMLElement} menu <app-menu>.
+         * @param {HTMLElement} capture <app-capture>.
+         */
+        BindMenuInput(menu, capture) {
+            const t = this;
+            //  A key press in the menu shows the focus ring again (see MenuToggle)
+            menu.addEventListener("keydown", () => menu.classList.remove("sw-shell-pointeropen"), true);
+            //  Mouse at the left edge of the rail shows the menu
+            const autoShow = () => {
+                if (t.Shown || t.Pinned || t.IsDrawer())
+                    return;
+                if (t.NoAutoShowUntil && performance.now() < t.NoAutoShowUntil)
+                    return;
+                t.MenuShow(false);
+            };
+            menu.addEventListener("pointermove", ev => {
+                if (ev.pointerType === "mouse" && ev.clientX < EdgeWidth)
+                    autoShow();
+            });
+            //  Mouse moving away (over the backdrop) hides a temporary menu; a tap / click on the backdrop too
+            capture.addEventListener("pointerover", ev => {
+                if (ev.pointerType === "mouse" && !t.IsDrawer())
+                    t.MenuHide();
+            });
+            capture.addEventListener("pointerdown", ev => {
+                ev.preventDefault();
+                t.MenuHide();
+            });
+            //  Leaving the window hides a temporary menu, except out of the left edge: a window that is not maximized has a border
+            //  there (and a fast move can skip the edge zone), moving the mouse all the way left shows the menu and keeps it shown
+            document.documentElement.addEventListener("mouseleave", ev => {
+                if ((ev.clientX < EdgeWidth) && (ev.clientY >= 0) && (ev.clientY < window.innerHeight)) {
+                    autoShow();
+                    return;
+                }
+                if (t.Shown && !t.IsDrawer())
+                    t.MenuHide();
+            });
+            //  Escape inside the menu (tree or empty filter box): clears an active filter (back to the box), else continues in the page
+            menu.addEventListener("keydown", ev => {
+                if (ev.key !== "Escape" || ev.defaultPrevented || ev.altKey || ev.ctrlKey || ev.metaKey || Sw.Popup.IsOpen())
+                    return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (t.FilterInput && t.FilterInput.value) {
+                    t.ClearMenuFilter();
+                    t.FilterInput.focus({ preventScroll: true });
+                    return;
+                }
+                if (t.Host)
+                    t.FocusContent();
+                else
+                    t.MenuHide(true);
+            });
+            //  Escape hides a temporary menu
+            document.addEventListener("keydown", ev => {
+                if (ev.key === "Escape" && t.Shown && !ev.defaultPrevented && !Sw.Popup.IsOpen()) {
+                    ev.preventDefault();
+                    t.MenuHide(true);
+                }
+            });
+            //  Rail (icons only): keyboard focus on an item shows its name in a hint bubble
+            menu.addEventListener("focusin", ev => {
+                const tree = t.Menu;
+                if (!tree || !tree.Rail || !Sw.Hint)
+                    return;
+                const en = tree.EntryOf(ev.target);
+                if (!en || ev.target !== en.E || !en.E.matches(":focus-visible"))
+                    return;
+                Sw.Hint.Show(en.Row, en.Item.Name || "", 0);
+                //  Next to the icon instead of below it (it would cover the next icon)
+                const hints = document.querySelectorAll("body > .sw-hint");
+                const h = hints[hints.length - 1];
+                if (h && Sw.Place)
+                    Sw.Place(h, en.Row, { Side: "right", Align: "center", Gap: 6 });
+            });
+            menu.addEventListener("focusout", () => {
+                if (Sw.Hint && t.Menu && t.Menu.Rail)
+                    Sw.Hint.Hide();
+            });
+            //  A click on a rail icon (collapsed menu) runs the item; the row handles it, nothing to do here.
+            //  Swipe to the left closes a temporary menu (touch)
+            let sx = 0, sy = 0, dx = 0, drag = false, id = null;
+            const panelWidth = () => menu.getBoundingClientRect().width || 1;
+            const onDown = ev => {
+                if (ev.pointerType === "mouse" || !t.Shown)
+                    return;
+                id = ev.pointerId;
+                sx = ev.clientX;
+                sy = ev.clientY;
+                dx = 0;
+                drag = false;
+            };
+            const onMove = ev => {
+                if (ev.pointerId !== id)
+                    return;
+                const mx = ev.clientX - sx, my = ev.clientY - sy;
+                if (!drag) {
+                    if (Math.abs(mx) < 12 || Math.abs(mx) < Math.abs(my) * 1.2)
+                        return;
+                    drag = true;
+                    menu.classList.add("sw-shell-dragging");
+                }
+                dx = Math.min(0, mx);
+                menu.style.transform = "translateX(" + dx + "px)";
+            };
+            const onUp = ev => {
+                if (ev.pointerId !== id)
+                    return;
+                id = null;
+                if (!drag)
+                    return;
+                drag = false;
+                menu.classList.remove("sw-shell-dragging");
+                menu.style.transform = "";
+                if (dx < -Math.min(80, panelWidth() * 0.3))
+                    t.MenuHide();
+            };
+            for (const e of [menu, capture]) {
+                e.addEventListener("pointerdown", onDown);
+                e.addEventListener("pointermove", onMove);
+                e.addEventListener("pointerup", onUp);
+                e.addEventListener("pointercancel", onUp);
+            }
+        }
+    }
+
+    /**
+     * Start the shell (index.html: <body onload="appMain()">).
+     * Never builds a shell inside another SysWeaver shell (a page in the content frame navigated to the site root, ex: after signing in):
+     * the top shell is reloaded instead (hash cleared). Shows the loading overlay until the menus are loaded and window.AppMain (an optional
+     * async hook, ex: from app/app.js) finished, then opens the initial page.
+     * @param {Params|object} [params] Options; else window.SysWeaverAppParams when defined.
+     * @returns {Promise<App|null>} The shell (null when the top shell was reloaded instead).
+     */
+    async function appMain(params) {
+        if (window.top !== window.self) {
+            try {
+                const top = window.top;
+                if (top.SysWeaverApp && (typeof top.ReloadAll === "function")) {
+                    top.ReloadAll(true, true);
+                    return null;
+                }
+            }
+            catch {
+                //  Cross-origin parent: build the shell as usual
+            }
+        }
+        if (!params || typeof params !== "object")
+            params = (window.SysWeaverAppParams && typeof window.SysWeaverAppParams === "object") ? window.SysWeaverAppParams : null;
+        const remove = Sw.Page.Loading({ Element: document.body });
+        let app = null;
+        try {
+            const C = Shell.AppClass || App;
+            app = await C.Create(params);
+            const f = window["AppMain"];
+            if (typeof f === "function")
+                await f();
+        }
+        catch (x) {
+            console.error("Shell: start failed: " + (x && x.stack ? x.stack : x));
+        }
+        finally {
+            remove(true);
+        }
+        await Sw.Util.Delay(1);
+        if (app)
+            app.InitPage();
+        return app;
+    }
+
+    Object.assign(Shell, {
+        Params,
+        App,
+        Main: appMain,
+        PinnedKey,
+        RecentKey,
+        HasKeyboard,
+    });
+
+    //  Permanent global (contract): index.html starts the shell with <body onload="appMain()">
+    if (typeof window.appMain !== "function")
+        window.appMain = appMain;
+})();

@@ -1,462 +1,366 @@
 ﻿/**
- * @file Script of the ServerManager "version info" page (versionInfo.html): details of one uploaded version
- * of a managed service, opened from the versions list of serviceInfo.html (`versionInfo.html?p=<svc>,<Uploaded>,<Name>`).
- * Loaded with a static `<script defer>` tag (after common.js and app/application.js) and started from
- * `<body onload="versionInfoMain()">`. Uses the static placeholders `<si-name>`, two `<si-values>` (version values
- * and action output) and `<si-actions>` of versionInfo.html.
+ * @file versionInfo.js - the ServerManager "version info" page (versionInfo.html, entry `versionInfoMain`): details of
+ * one uploaded version of a managed service, opened from the versions grid of serviceInfo.html
+ * (`versionInfo.html?p=<svc>,<Uploaded>,<Name>`).
+ * Classic script loaded with `<script defer>` after ../sw/core.js, ../sw/ui.js and smShared.js; started from
+ * `<body onload>`.
  *
- * Globals defined: `BeginElementChildUpdate` (identical copy of the one in serviceInfo.js) and `versionInfoMain`.
- * No immediately executed code; `versionInfoMain` ends in an endless polling loop (every 5 s).
+ * Design v2 page anatomy, built from the shared ui components (ui/page.js): Sw.PageLayout (page header: the version (service, upload
+ * time, folder), an "Active" status badge, the actions Activate, Touch, Verify, Expand, Compress and Delete (danger outline, confirmed)),
+ * Sw.Facts (the version values; a value copies on click) and a "Result" card (Sw.Card + Sw.Facts) with the statistics of Touch / Verify.
  *
- * Dependencies (globals from other files):
- * - common/common.js: `getUrlParams`, `sendRequest`, `Button`, `ValueFormat` (`getTimeStampTitle`, `copyOnClick`,
- *   `toString`, `formatByteSize`), `AbortHandler`, `delayWithAbort`, `Fail`, `PageLoaded`, `window.IsTop`.
- * - app/application.js: `Confirm`.
+ * Url parameter: `p` = the version key "<service>,<uploadedIso>,<folderName>" (sent to the server as is; the folder
+ * name changes when a version is activated, so the key is refreshed from the data).
  *
- * Server API (page-relative, i.e. `ServerManager/<name>`): `GetVersion`, `VersionActivate`, `VersionTouch`,
- * `VersionVerify`, `VersionExpand`, `VersionCompress`, `VersionDelete`; all take the version key string
- * `"<service>,<uploadedIso>,<folderName>"`.
+ * Server API (relative to ServerManager/, all take the version key): GetVersion (polled every 5 s), VersionActivate,
+ * VersionTouch / VersionVerify (-> SmCompFileStats), VersionExpand, VersionCompress, VersionDelete.
+ *
+ * Globals defined: `versionInfoMain`, `SmVersionInfo` (the page class).
  */
 
 /**
- * Starts an in-place reconciliation of the children of `targetElement`, so that polled lists only touch nodes
- * that actually changed (no flicker, focus is kept).
- * Usage: call `Add(e)` for every wanted child in order (use the returned node to attach handlers/expandos),
- * then `Complete()` to remove leftover children.
- * @param {HTMLElement} targetElement - The element whose children are reconciled.
- * @returns {{Target:HTMLElement, Add:function(HTMLElement):HTMLElement, Complete:function():void}} The updater.
+ * The version info page.
  */
-function BeginElementChildUpdate(targetElement) {
-    /** The target element. @type {HTMLElement} */
-    const el = targetElement;
-    /** Number of children the target had when the update began (decremented by `complete`). @type {number} */
-    let ccl = el.children?.length ?? 0;
-    /** Index of the next child position to fill. @type {number} */
-    let cindex = 0;
+class SmVersionInfo {
     /**
-     * Places `e` at the next child position. Past the original children it appends `e`. Otherwise it compares
-     * the existing child at that index with `e` by `outerHTML`: if equal the existing child is kept and returned,
-     * else it is replaced by `e`. Advances the index.
-     * @param {HTMLElement} e - The wanted child element.
-     * @returns {HTMLElement} The node now in place (the existing child or `e`); set handlers/expandos on this.
+     * @param {string} key - The version key "<service>,<uploaded>,<folder>".
      */
-    function add(e) {
-        if (cindex >= ccl) {
-            ++cindex;
-            el.appendChild(e);
-            return e;
-        }
-        const cc = el.children[cindex];
-        ++cindex;
-        if (cc.outerHTML === e.outerHTML)
-            return cc;
-        el.replaceChild(e, cc);
-        return e;
+    constructor(key) {
+        /** @type {string[]} The key parts [service, uploaded, folder]. */
+        this.Parts = key.split(",");
+        /** @type {?object} The last SmVersionDetail. */
+        this.Data = null;
+        /** @type {boolean} True while an action runs. */
+        this.Busy = false;
+        /** @type {Object<string, Sw.Button>} The action buttons. */
+        this.Buttons = null;
+        /** Page parts (Build). */
+        this.El = {};
     }
+
     /**
-     * Removes all original children at or after the current index (from the end backwards).
-     * @returns {void}
+     * Build the page: the header (title, status, actions added by BuildActions), the version facts and the hidden "Result" card.
      */
-    function complete() {
-        while (ccl > cindex) {
-            --ccl;
-            el.children[ccl].remove();
+    Build() {
+        const el = this.El;
+        this.Page = Sw.PageLayout({
+            Main: ".vi-page",
+            Type: "dash",
+            Title: "",
+            MenuTitle: false,
+            Description: _TF("An uploaded version of a managed service. Select a value to copy it.", "Description of the version details page"),
+        });
+        el.Values = Sw.Facts({ Label: _TF("Version", "Accessible name of the facts of the version details page") });
+        el.Output = Sw.Facts({ Card: false, Label: _TF("Result", "Accessible name of the statistics of the version details page") });
+        el.Result = Sw.Card({ Title: _TF("Result", "Title of the card with the statistics of Touch / Verify on the version details page"), Span: 12, Flush: true, Body: el.Output });
+        el.Result.E.hidden = true;
+        this.Page.Add(el.Values, Sw.Grid({ Content: [el.Result] }));
+    }
+
+    /**
+     * Empty and hide the "Result" card.
+     */
+    ClearOutput() {
+        const el = this.El;
+        const o = Sw.Facts({ Card: false, Label: _TF("Result", "Accessible name of the statistics of the version details page") });
+        el.Output.E.replaceWith(o.E);
+        el.Output = o;
+        el.Result.E.hidden = true;
+    }
+
+    /** @returns {string} The current version key. */
+    get Key() {
+        return this.Parts.join(",");
+    }
+
+    /**
+     * Show the title: the key parts joined with " - " (the time stamp short formatted). Before the server confirmed the version
+     * (fromLink: the parts are the url's `p` key) the title is untrusted url text: Sw.Page.SetLinkTitle (plain, at most 80
+     * characters, no caption in the shell); once confirmed it is the server's title.
+     * @param {boolean} [fromLink] The parts come from the url.
+     */
+    SetTitle(fromLink) {
+        const p = this.Parts.slice();
+        if (p[1])
+            p[1] = Sw.Format.TimeStamp(new Date(p[1]))[1];
+        const t = p.join(" - ");
+        if (fromLink) {
+            this.Page.Header.SetTitle(Sw.Page.SetLinkTitle(t));
+            return;
+        }
+        Sw.Page.TitleFromLink = null;
+        document.title = t;
+        this.Page.Header.SetTitle(t);
+    }
+
+    /**
+     * Create the action buttons (first data).
+     */
+    BuildActions() {
+        const t = this;
+        const d = t.Data;
+        const steps = [_TF("Activate this version.", "Tool tip of a button that activates a service version"), _TF("This will:", "Tool tip line before a list of steps")];
+        if (d.Comp)
+            steps.push("- " + _TF("Expand this version files", "Step of the activation of a service version"));
+        if (d.IsRunning)
+            steps.push("- " + _TF("Uninstall the current service", "Step of the activation of a service version"));
+        steps.push("- " + _TF("Swap folders (current and this)", "Step of the activation of a service version"));
+        steps.push("- " + _TF("Start this version of the service", "Step of the activation of a service version"));
+        if (d.IsCompressedService)
+            steps.push("- " + _TF("Compress the current version files", "Step of the activation of a service version"));
+        const b = (text, title, icon, action, kind) => new Sw.Button({ Text: text, Title: title, Icon: icon, Kind: kind, Disabled: _TF("Wait until the version is loaded", "Why a service version button (ex: Activate, Delete) is disabled before the version details are known"), OnClick: () => t.DoWork(action) });
+        t.Buttons = {
+            Activate: b(_TF("Activate", "Text of a button that activates a service version"), steps.join("\n"), "../icons/fav_on.svg",
+                () => Sw.Net.Send("VersionActivate", t.Key)),
+            Touch: b(_TF("Touch", "Text of a button that updates the last used time of a service version"),
+                SmShared.Lines(_TF("Set the last used timestamp to now.", "Tool tip of a button that updates the last used time of a service version"),
+                    _TF("This will prevent this version from being expired and removed for a bit longer.", "Tool tip of a button that updates the last used time of a service version")),
+                "../icons/rating_on.svg", () => t.Stats("VersionTouch")),
+            Verify: b(_TF("Verify", "Text of a button that verifies a compressed service version"),
+                _TF("Validate the integrity of the compressed version.", "Tool tip of a button that verifies a compressed service version"),
+                "../icons/keep.svg", () => t.Stats("VersionVerify")),
+            Expand: b(_TF("Expand", "Text of a button that expands a compressed service version"),
+                _TF("Expand the files in this compressed version.", "Tool tip of a button that expands a compressed service version"),
+                "../icons/table_log.svg", () => Sw.Net.Send("VersionExpand", t.Key)),
+            Compress: b(_TF("Compress", "Text of a button that compresses a service version"),
+                _TF("Compress the files.", "Tool tip of a button that compresses a service version"),
+                "../icons/table_compression.svg", () => Sw.Net.Send("VersionCompress", t.Key)),
+            Delete: b(_TF("Delete", "Text of a button that deletes a service version"),
+                _TF("Delete this version", "Tool tip of a button that deletes a service version"),
+                "../icons/close.svg", () => t.Delete(), "danger"),
+        };
+        for (const x of Object.values(t.Buttons))
+            t.Page.Header.AddAction(x);
+    }
+
+    /**
+     * Enable the buttons: only for a version that is not active and while no action runs.
+     */
+    UpdateButtons() {
+        const t = this;
+        const d = t.Data;
+        if (!t.Buttons || !d)
+            return;
+        const ok = !t.Busy && !d.IsActive;
+        const comp = !!d.Comp;
+        const why = t.Busy
+            ? _TF("Wait until the current action is done", "Why the service version buttons (ex: Activate, Delete) are disabled while an action runs")
+            : _TF("This is the active version of the service", "Why a service version button (ex: Activate, Delete) is disabled for the version that is in use");
+        const whyComp = ok ? _TF("This version is not compressed", "Why the verify or expand button of a service version is disabled") : why;
+        const whyNoComp = !ok ? why : comp
+            ? _TF("This version is already compressed", "Why the compress button of a service version is disabled")
+            : _TF("This service doesn't use compressed versions", "Why the compress button of a service version is disabled");
+        t.Buttons.Activate.SetDisabled(!ok, why);
+        t.Buttons.Touch.SetDisabled(!ok, why);
+        t.Buttons.Verify.SetDisabled(!(ok && comp), whyComp);
+        t.Buttons.Expand.SetDisabled(!(ok && comp), whyComp);
+        t.Buttons.Compress.SetDisabled(!(ok && !comp && d.IsCompressedService), whyNoComp);
+        t.Buttons.Delete.SetDisabled(!ok, why);
+    }
+
+    /**
+     * Run one action at a time (all buttons disabled), then refetch the version (its folder name may have changed).
+     * @param {function():Promise<*>} action - The action.
+     * @returns {Promise<void>}
+     */
+    async DoWork(action) {
+        const t = this;
+        if (t.Busy)
+            return;
+        t.Busy = true;
+        t.ClearOutput();
+        t.UpdateButtons();
+        try {
+            await action();
+        }
+        catch (e) {
+            Sw.Fail(e.message || String(e));
+        }
+        finally {
+            try {
+                const d = await Sw.Net.Send("GetVersion", t.Key);
+                if (d) {
+                    t.Data = d;
+                    t.Parts[2] = d.Name;
+                    t.SetTitle();
+                    t.Render();
+                }
+            }
+            catch (e) {
+                Sw.Fail(e.message || String(e));
+            }
+            t.Busy = false;
+            t.UpdateButtons();
         }
     }
-    return {
-        Target: el,
-        Add: add,
-        Complete: complete,
-    };
+
+    /**
+     * Run an action returning chunk statistics and show them.
+     * @param {string} api - VersionTouch or VersionVerify.
+     * @returns {Promise<void>}
+     */
+    async Stats(api) {
+        const r = await Sw.Net.Send(api, this.Key);
+        if (r)
+            this.ShowStats(r);
+    }
+
+    /**
+     * Confirm and delete this version, then go back.
+     * @returns {Promise<void>}
+     */
+    async Delete() {
+        //  The shared danger confirmation ("Cancel" focused, the danger button names the action)
+        const ok = await Sw.Cells.ConfirmDanger({
+            Title: SmShared.DangerTitle(_TF("Delete", "Verb in the title of a dialog asking to delete a service version (Delete <version folder>?)"), SmShared.BaseName(this.Data.FullPath), () => _TF("Delete this version?", "Title of a dialog asking to delete a service version")),
+            Item: this.Data.FullPath,
+            ItemLabel: _TF("Folder:", "Label before the folder name in a confirmation dialog"),
+            Warning: _TF("The folder will be permanently removed!", "Warning of a dialog asking to delete a service version"),
+            OkText: _TF("Delete version", "Text of the danger button that confirms deleting a service version"),
+            OkIcon: "../icons/close.svg",
+            OkTitle: _TF("Permanently delete the folder containing this version", "Tool tip of a button that confirms deleting a service version"),
+            CancelTitle: _TF("Keep this version", "Tool tip of a button that cancels deleting a service version"),
+        });
+        if (ok && await Sw.Net.Send("VersionDelete", this.Key))
+            history.back();
+    }
+
+    /**
+     * Fill a facts strip (Sw.Facts): a fact per row (created once, then only its value changes); a value copies on click.
+     * @param {object} target - The facts (Sw.Facts).
+     * @param {Array<{Name: string, Value: string, Title: (string|undefined), NameTitle: (string|undefined), Copy: *}>} rows - The rows.
+     */
+    static FillValues(target, rows) {
+        for (const r of rows) {
+            let f = target.Get(r.Name);
+            if (!f) {
+                const key = r.Name;
+                f = target.Add({ Key: key, Label: r.Name, Value: "", OnClick: () => Sw.Clipboard.Copy(String(target.Get(key).Copy ?? "")) });
+            }
+            f.Copy = r.Copy ?? r.Value;
+            f.Set(r.Value);
+            f.SetTitle(SmShared.Lines(...[r.NameTitle, r.Title].filter(x => x), _TF("Select to copy the value", "Tool tip line of a value on the version details page")));
+        }
+    }
+
+    /**
+     * Show chunk statistics (SmCompFileStats) in the output list.
+     * @param {object} r - The statistics.
+     */
+    ShowStats(r) {
+        const rows = [];
+        const count = (n, v, tip) => rows.push({ Name: n, Value: Sw.Format.Number(v, 0), NameTitle: tip, Copy: v });
+        const pct = (n, v, tip) => rows.push({ Name: n, Value: Sw.Format.Number(v, 2) + " %", NameTitle: tip, Copy: v });
+        const bytes = (n, v, tip) => rows.push({ Name: n, Value: Sw.Format.Bytes(v), NameTitle: tip, Copy: v });
+        count(_TF("Files", "Name of a statistic"), r.FileCount, _TF("Total number of files found in the compressed version", "Description of a statistic"));
+        count(_TF("Chunks", "Name of a statistic"), r.ChunkCount, _TF("Total number chunks used the compressed version", "Description of a statistic"));
+        count(_TF("Unique chunks", "Name of a statistic"), r.UniqueChunks, _TF("Total number unique chunks used the compressed version", "Description of a statistic"));
+        if (r.ChunkCount > 0)
+            pct(_TF("Chunk reuse", "Name of a statistic"), 100 - 100.0 * r.UniqueChunks / r.ChunkCount, _TF("How many chunks that is reused as a percentage", "Description of a statistic"));
+        const compSize = r.ChunkCompSize + r.FileSize;
+        bytes(_TF("Compressed size", "Name of a statistic"), compSize, _TF("The size of all compressed chunks + the size of the archive file", "Description of a statistic"));
+        if (r.ChunkExpSize > 0) {
+            bytes(_TF("Expanded size", "Name of a statistic"), r.ChunkExpSize, _TF("The size of all files after expansion", "Description of a statistic"));
+            pct(_TF("Compression ratio", "Name of a statistic"), 100.0 * compSize / r.ChunkExpSize, _TF("The effective compression ratio", "Description of a statistic"));
+        }
+        if (r.TotalMissing > 0) {
+            count(_TF("Broken files", "Name of a statistic"), r.BrokenFiles, _TF("Total number of files that have missing chunks", "Description of a statistic"));
+            count(_TF("Missing chunks", "Name of a statistic"), r.TotalMissing, _TF("Total number of missing chunks", "Description of a statistic"));
+        }
+        SmVersionInfo.FillValues(this.El.Output, rows);
+        this.El.Result.E.hidden = false;
+    }
+
+    /**
+     * Render the version values.
+     */
+    Render() {
+        const d = this.Data;
+        const yes = _TF("Yes", "Value of a yes / no field");
+        const no = _TF("No", "Value of a yes / no field");
+        const time = (n, v, tip) => {
+            const ts = Sw.Format.TimeStamp(new Date(v));
+            return { Name: n, Value: ts[1], Title: tip ? SmShared.Lines(tip, "", ts[0]) : ts[0], Copy: v };
+        };
+        const folderTip = _TF("Folder names change when activated / deactivated.", "Tool tip of a version folder name");
+        SmVersionInfo.FillValues(this.El.Values, [
+            time(_TF("Uploaded", "Name of a version field"), d.Uploaded, _TF("The time when this version was uploaded.", "Tool tip of a version field")),
+            { Name: _TF("Active", "Name of a version field"), Value: d.IsActive ? yes : no },
+            { Name: _TF("Folder", "Name of a version field"), Value: d.Name, Title: folderTip, NameTitle: folderTip },
+            { Name: _TF("User", "Name of a version field"), Value: d.User || "" },
+            { Name: _TF("Machine", "Name of a version field"), Value: d.Machine || "" },
+            { Name: _TF("Comment", "Name of a version field"), Value: d.Comment || "" },
+            time(_TF("Last used", "Name of a version field"), d.LastUsed, _TF("The time when this version was used last.", "Tool tip of a version field")),
+            { Name: _TF("Compressed", "Name of a version field"), Value: d.Comp ? yes : no },
+            { Name: _TF("Files", "Name of a version field"), Value: Sw.Format.Number(d.Count, 0), Copy: d.Count },
+            { Name: _TF("Size", "Name of a version field"), Value: Sw.Format.Bytes(d.Size), Copy: d.Size },
+            { Name: _TF("Path", "Name of a version field"), Value: d.FullPath || "" },
+        ]);
+        this.Page.Header.SetStatus(d.IsActive ? { Text: _TF("Active", "Status badge of the active version of a service"), Kind: "ok", Dot: true } : null);
+        this.UpdateButtons();
+    }
+
+    /**
+     * Fetch and render once.
+     * @returns {Promise<void>}
+     */
+    async Poll() {
+        const t = this;
+        if (t.Busy)
+            return;
+        try {
+            const d = await Sw.Net.Send("GetVersion", t.Key);
+            if (!d || t.Busy)
+                return;
+            const first = !t.Data;
+            t.Data = d;
+            if (first) {
+                t.Parts = [d.ServiceName, d.Uploaded, d.Name];
+                t.SetTitle();
+                t.BuildActions();
+            }
+            t.Render();
+        }
+        catch (e) {
+            Sw.Fail(e.message || String(e));
+        }
+    }
+
+    /**
+     * Poll every 5 s as long as the page lives.
+     * @returns {Promise<void>}
+     */
+    async Loop() {
+        for (; ;) {
+            await Sw.Util.Delay(5000);
+            await this.Poll();
+        }
+    }
 }
 
 /**
  * Entry point of versionInfo.html.
- * Reads the URL param `p` = version key `"<service>,<uploaded>,<folderName>"` (shows `Fail` and returns if missing)
- * and splits it into `versionParts`; adds `body.TopWindow` when `window.IsTop`. Sets the title, then polls forever:
- * `data = await sendRequest("GetVersion", version)`, `update(first)` (first = first successful fetch),
- * `await delayWithAbort(5000, abortWait)`; errors are shown with `Fail(e)`.
- * Note: nothing calls `abortWait.raise()` in this file, so the delay always runs the full 5 s.
- * @returns {Promise<void>} Never resolves (unless `p` is missing).
+ * @returns {Promise<void>}
  */
-async function versionInfoMain() {
-    /** URL parameters. @type {URLSearchParams} */
-    const p = getUrlParams();
-    /** Current version key string sent to the server; updated when the folder name changes. @type {string} */
-    let version = p.get("p");
-    if (!version) {
-        Fail("No version paramater supplied!");
-        return;
-    }
-    /** Comma-split parts of `version`: [service, uploaded timestamp, folder name]. @type {string[]} */
-    const versionParts = version.split(',');
-    if (window.IsTop)
-        document.body.classList.add("TopWindow");
-
-
-    /**
-     * Joins `versionParts` with " - ", with the uploaded timestamp replaced by its short form
-     * (`ValueFormat.getTimeStampTitle(...)[1]`), and writes it to `document.title` and `<si-name>`.
-     * @returns {void}
-     */
-    function setTitle() {
-        const o = versionParts[1];
-        versionParts[1] = ValueFormat.getTimeStampTitle(new Date(o))[1];
-        const t = versionParts.join(" - ");
-        versionParts[1] = o;
-        document.title = t;
-        name.innerText = t;
-    }
-
-
-    /** The `<si-name>` title bar. @type {HTMLElement} */
-    const name = document.body.getElementsByTagName("si-name")[0];
-    /** First `<si-values>` grid: the version's key/value pairs. @type {HTMLElement} */
-    const values = document.body.getElementsByTagName("si-values")[0];
-    /** The `<si-actions>` row holding the action buttons. @type {HTMLElement} */
-    const actions = document.body.getElementsByTagName("si-actions")[0];
-    /** Second `<si-values>` grid: output (chunk statistics) of the last action. @type {HTMLElement} */
-    const output = document.body.getElementsByTagName("si-values")[1];
-
-    /** False while `doWork` runs an action (all buttons disabled). @type {boolean} */
-    let buttonsEnabled = true;
-
-    /** Action buttons (common.js `Button` instances), created on the first `update`. @type {?Button} */
-    let activateButton = null;
-    /** @type {?Button} */
-    let touchButton = null;
-
-    /** "Verify" button. @type {?Button} */
-    let validateButton = null;
-    /** @type {?Button} */
-    let expandButton = null;
-
-    /** @type {?Button} */
-    let compressButton = null;
-    /** @type {?Button} */
-    let deleteButton = null;
-
-
-    /**
-     * Enables the action buttons from the current `data`, only when `buttonsEnabled` and the version is not
-     * active: Activate, Touch and Delete always; Verify and Expand if `data.Comp`; Compress if not `Comp` and
-     * `data.IsCompressedService`.
-     * @returns {void}
-     */
-    function updateButtonState() {
-        const isActive = data.IsActive;
-        const nonActive = !isActive;
-        const isComp = data.Comp;
-        activateButton.SetEnabled(buttonsEnabled && nonActive);
-        touchButton.SetEnabled(buttonsEnabled && nonActive);
-        validateButton.SetEnabled(buttonsEnabled && nonActive && isComp);
-        expandButton.SetEnabled(buttonsEnabled && nonActive && isComp);
-        compressButton.SetEnabled(buttonsEnabled && nonActive && (!isComp) && (data.IsCompressedService));
-        deleteButton.SetEnabled(buttonsEnabled && nonActive);
-    }
-
-    /**
-     * Runs one action at a time: returns immediately if `buttonsEnabled` is false; clears the output grid,
-     * disables all buttons, shows `button.StartWorking()` and awaits `action()` (an exception shows
-     * `Fail(e.message)`). In `finally` it
-     * re-fetches `sendRequest("GetVersion", version)`, updates `versionParts[2]` / `version` from `data.Name`
-     * (the folder name changes on activation), calls `setTitle()` and `update()`, re-enables the buttons and
-     * calls `button.StopWorking()`.
-     * @param {Button} button - The button that started the action.
-     * @param {function():Promise<void>} action - The work to run.
-     * @returns {Promise<void>}
-     */
-    async function doWork(button, action) {
-        if (!buttonsEnabled)
+function versionInfoMain() {
+    let page = null;
+    return Sw.Page.Main(async () => {
+        const key = Sw.Url.Get("p");
+        if (!key) {
+            Sw.PageLayout({ Main: ".vi-page", Type: "dash", MenuTitle: false, Title: _TF("Service", "Title of the version details page without a version in the link (the original page title: S5-B-1)") })
+                .Add(Sw.StateView({
+                    Kind: "error",
+                    Title: _TF("No version parameter supplied!", "Error message when the version key is missing in the url"),
+                    Text: _TF("Open a version from the Versions list of a service.", "Text of the error on the version page when the url names no version"),
+                }));
             return;
-        output.innerText = "";
-        buttonsEnabled = false;
-        updateButtonState();
-        button.StartWorking();
-        try {
-            await action();
-            //await delay(2000);
         }
-        catch (e) {
-            Fail(e.message);
-        }
-        finally {
-            data = await sendRequest("GetVersion", version);
-            versionParts[2] = data.Name;
-            version = versionParts.join(',');
-            setTitle();
-            update();
-            buttonsEnabled = true;
-            button.StopWorking();
-            updateButtonState();
-        }
-    }
-
-
-    setTitle();
-    /** Abort handle of the polling delay. @type {AbortHandler} */
-    const abortWait = new AbortHandler();
-
-    /**
-     * Last version DTO from `GetVersion` (fields used: ServiceName, Uploaded, Name, IsActive, Comp, IsRunning,
-     * IsCompressedService, User, Machine, Comment, LastUsed, Count, Size, FullPath).
-     * @type {?object}
-     */
-    let data = null;
-
-
-
-    /**
-     * Renders the latest `data`.
-     * On `first`: refreshes `versionParts` / `version` from `data.ServiceName`, `Uploaded` and `Name`, calls
-     * `setTitle()`, creates the action `Button`s in `<si-actions>` (Activate -> `VersionActivate`, with a tooltip
-     * listing the steps depending on `Comp` / `IsRunning` / `IsCompressedService`; Touch -> `VersionTouch` +
-     * `showStats`; Verify -> `VersionVerify` + `showStats`; Expand -> `VersionExpand`; Compress -> `VersionCompress`;
-     * Delete -> `Confirm`, `VersionDelete`, then `History.back()`), each wrapped in `doWork`, and calls `PageLoaded()`.
-     * Always: `updateButtonState()` and reconciles `si-values[0]` with Uploaded, Active, Folder, User, Machine,
-     * Comment, Last used, Compressed, Files, Size and Path.
-     * @param {boolean} [first] - True on the first successful poll.
-     * @returns {void}
-     */
-    function update(first) {
-
-        if (first) {
-            versionParts[0] = data.ServiceName;
-            versionParts[1] = data.Uploaded;
-            versionParts[2] = data.Name;
-            version = versionParts.join(',');
-            setTitle();
-
-            /** Tooltip text of the button being created. @type {string} */
-            let tt;
-            tt = "Click to activate this version.\nThis will: \n";
-            if (data.Comp)
-                tt = tt + "- Expand this version files\n";
-            if (data.IsRunning)
-                tt = tt + "- Uninstall the current service\n";
-            tt = tt + "- Swap folders (current and this)\n";
-            tt = tt + "- Start this version of the service\n";
-            if (data.IsCompressedService)
-                tt = tt + "- Compress the current version files\n";
-            activateButton = new Button(null, "Activate", tt, "../icons/fav_on.svg", false, () => doWork(activateButton, async () => {
-                await sendRequest("VersionActivate", version);
-            }));
-            actions.appendChild(activateButton.Element);
-
-            tt = "Set the last used timestamp to now.\nThis will prevent this version from being expired and removed for a bit longer.";
-            touchButton = new Button(null, "Touch", tt, "../icons/rating_on.svg", false, () => doWork(touchButton, async () => {
-                const r = await sendRequest("VersionTouch", version);
-                if (r)
-                    showStats(r);
-            }));
-            actions.appendChild(touchButton.Element);
-
-            tt = "Validate the integrity of the compressed version.";
-            validateButton = new Button(null, "Verify", tt, "../icons/keep.svg", false, () => doWork(validateButton, async () => {
-                const r = await sendRequest("VersionVerify", version);
-                if (r)
-                    showStats(r);
-            }));
-            actions.appendChild(validateButton.Element);
-
-            tt = "Expand the files in this compressed version.";
-            expandButton = new Button(null, "Expand", tt, "../icons/table_log.svg", false, () => doWork(expandButton, async () => {
-                await sendRequest("VersionExpand", version);
-            }));
-            actions.appendChild(expandButton.Element);
-
-            tt = "Compress the files.";
-            compressButton = new Button(null, "Compress", tt, "../icons/table_compression.svg", false, () => doWork(compressButton, async () => {
-                await sendRequest("VersionCompress", version);
-            }));
-            actions.appendChild(compressButton.Element);
-
-
-            tt = "Delete this version";
-            deleteButton = new Button(null, "Delete", tt, "../icons/close.svg", false, () => doWork(deleteButton, async () => {
-                if (await Confirm("Delete",
-                    "Delete this version:\n\n" +
-                    '"' + data.FullPath + '"\n\n' +
-                    "The folder will be permamently removed!\n" +
-                    "Are you sure ?",
-                    "Yes, Delete!",
-                    "No, Keep it!",
-                    "../icons/close.svg",
-                    "../icons/fav_on.svg",
-                    "Click to pemamently delete the folder containing this version",
-                    "Click to keep this version")) {
-                        if (await sendRequest("VersionDelete", version))
-                            History.back();
-                }
-            }));
-            actions.appendChild(deleteButton.Element);
-
-
-            PageLoaded();
-        }
-
-        updateButtonState();
-
-        /**
-         * The current child updater the Add* helpers write to (values grid by default; reassigned by `showStats`).
-         * @type {{Target:HTMLElement, Add:function(HTMLElement):HTMLElement, Complete:function():void}}
-         */
-        let updater = BeginElementChildUpdate(values);
-
-        /**
-         * Renders chunk statistics `r` (`SmCompFileStats`) into the output grid `si-values[1]`: Files, Chunks,
-         * Unique chunks, Chunk reuse % (if `ChunkCount > 0`), Compressed size (`ChunkCompSize + FileSize`),
-         * Expanded size and Compression ratio (if `ChunkExpSize > 0`), Broken files and Missing chunks
-         * (if `TotalMissing > 0`). Reassigns `updater` of the enclosing `update` call (the one that created the
-         * buttons, i.e. the first one).
-         * @param {{FileCount:number, ChunkCount:number, UniqueChunks:number, ChunkCompSize:number, FileSize:number, ChunkExpSize:number, TotalMissing:number, BrokenFiles:number}} r - The statistics.
-         * @returns {void}
-         */
-        function showStats(r) {
-            updater = BeginElementChildUpdate(output);
-            AddCount("Files", r.FileCount, null, "Total number of files found in the compressed version");
-            AddCount("Chunks", r.ChunkCount, null, "Total number chunks used the compressed version");
-            AddCount("Unique chunks", r.UniqueChunks, null, "Total number unique chunks used the compressed version");
-            if (r.ChunkCount > 0)
-                AddPercentage("Chunk reuse", 100 - 100.0 * r.UniqueChunks / r.ChunkCount, null, "How many chunks that is reused as a percentage");
-            const compSize = r.ChunkCompSize + r.FileSize;
-            AddByteSize("Compressed size", compSize, null, "The size of all compressed chunks + the size of the archive file");
-            if (r.ChunkExpSize > 0) {
-                AddByteSize("Expanded size", r.ChunkExpSize, null, "The size of all files after expansion");
-                AddPercentage("Compression ratio", 100.0 * compSize / r.ChunkExpSize, null, "The effective compression ratio");
-            }
-            if (r.TotalMissing > 0) {
-                AddCount("Broken files", r.BrokenFiles, null, "Total number of files that have missing chunks");
-                AddCount("Missing chunks", r.TotalMissing, null, "Total number of missing chunks");
-            }
-            updater.Complete();
-        }
-
-        /**
-         * Adds a `<si-value-name>` (text `key`, title `keyTitle`) and a `<si-value-value>` showing the short
-         * timestamp of `value`; its title is `valueTitle` plus the full timestamp; clicking copies the raw value.
-         * @param {string} key - Name cell text.
-         * @param {string} value - ISO timestamp.
-         * @param {?string} [valueTitle] - Extra tooltip of the value cell.
-         * @param {?string} [keyTitle] - Tooltip of the name cell.
-         * @returns {void}
-         */
-        function AddTime(key, value, valueTitle, keyTitle) {
-            let v = document.createElement("si-value-name");
-            v.innerText = key;
-            if (keyTitle)
-                v.title = keyTitle;
-            updater.Add(v);
-
-            v = document.createElement("si-value-value");
-            let dv = ValueFormat.getTimeStampTitle(new Date(value));
-            v.innerText = dv[1];
-            v.title = valueTitle ? (valueTitle + "\n\n" + dv[0]) : dv[0];
-            ValueFormat.copyOnClick(v, value, false, true);
-            updater.Add(v);
-        }
-
-        /**
-         * Adds a `<si-value-name>` / `<si-value-value>` pair through `updater`; clicking the value copies
-         * `copyValue` (or `value` when `copyValue` is falsy).
-         * @param {string} key - Name cell text.
-         * @param {*} value - Value cell text.
-         * @param {?string} [valueTitle] - Tooltip of the value cell.
-         * @param {?string} [keyTitle] - Tooltip of the name cell.
-         * @param {*} [copyValue] - Value copied on click instead of `value`.
-         * @returns {void}
-         */
-        function AddString(key, value, valueTitle, keyTitle, copyValue) {
-            let v = document.createElement("si-value-name");
-            v.innerText = key;
-            if (keyTitle)
-                v.title = keyTitle;
-            updater.Add(v);
-
-            v = document.createElement("si-value-value");
-            v.innerText = value;
-            if (valueTitle)
-                v.title = valueTitle;
-            ValueFormat.copyOnClick(v, copyValue || value, false, true);
-            updater.Add(v);
-        }
-
-        /**
-         * `AddString` with "Yes" / "No" for a truthy / falsy `value`.
-         * @param {string} key - Name cell text.
-         * @param {*} value - Flag.
-         * @param {?string} [valueTitle] - Tooltip of the value cell.
-         * @param {?string} [keyTitle] - Tooltip of the name cell.
-         * @returns {void}
-         */
-        function AddYesNo(key, value, valueTitle, keyTitle) {
-            AddString(key, value ? "Yes" : "No", valueTitle, keyTitle);
-        }
-
-        /**
-         * `AddString` with `ValueFormat.toString(value, 0)`; clicking copies the raw number.
-         * @param {string} key - Name cell text.
-         * @param {number} value - Count.
-         * @param {?string} [valueTitle] - Tooltip of the value cell.
-         * @param {?string} [keyTitle] - Tooltip of the name cell.
-         * @returns {void}
-         */
-        function AddCount(key, value, valueTitle, keyTitle) {
-            AddString(key, ValueFormat.toString(value, 0) , valueTitle, keyTitle, value);
-        }
-
-        /**
-         * `AddString` with `ValueFormat.toString(value, 2) + " %"`; clicking copies the raw number.
-         * @param {string} key - Name cell text.
-         * @param {number} value - Percentage (0-100).
-         * @param {?string} [valueTitle] - Tooltip of the value cell.
-         * @param {?string} [keyTitle] - Tooltip of the name cell.
-         * @returns {void}
-         */
-        function AddPercentage(key, value, valueTitle, keyTitle) {
-            AddString(key, ValueFormat.toString(value, 2) + " %", valueTitle, keyTitle, value);
-        }
-        /**
-         * `AddString` with `ValueFormat.formatByteSize(value)`; clicking copies the raw byte count.
-         * @param {string} key - Name cell text.
-         * @param {number} value - Size in bytes.
-         * @param {?string} [valueTitle] - Tooltip of the value cell.
-         * @param {?string} [keyTitle] - Tooltip of the name cell.
-         * @returns {void}
-         */
-        function AddByteSize(key, value, valueTitle, keyTitle) {
-            AddString(key, ValueFormat.formatByteSize(value), valueTitle, keyTitle, value);
-        }
-
-
-        AddTime("Uploaded", data.Uploaded, "The time when this version was uploaded.");
-        AddYesNo("Active", data.IsActive);
-        AddString("Folder", data.Name, "Folder names change when activated / deactivated.", "Folder names change when activated / deactivated.");
-        AddString("User", data.User);
-        AddString("Machine", data.Machine);
-        AddString("Comment", data.Comment);
-        AddTime("Last used", data.LastUsed, "The time when this version was used last.");
-        AddYesNo("Compressed", data.Comp);
-        AddCount("Files", data.Count);
-        AddByteSize("Size", data.Size);
-        AddString("Path", data.FullPath);
-
-        updater.Complete();
-
-    }
-    // Endless polling loop: fetch the version, render it, wait 5 s.
-    for (; ;) {
-        try {
-            const noOld = !data;
-            data = await sendRequest("GetVersion", version);
-            update(noOld && data);
-        }
-        catch (e)
-        {
-            Fail(e);
-        }
-        await delayWithAbort(5000, abortWait);
-    }
-
-
+        page = new SmVersionInfo(key);
+        page.Build();
+        page.SetTitle(true);
+        await page.Poll();
+    }, { Loading: true }).then(() => {
+        if (page)
+            page.Loop();
+    });
 }

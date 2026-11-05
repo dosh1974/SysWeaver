@@ -118,6 +118,9 @@ namespace SysWeaver.MicroService
                 if (!String.IsNullOrEmpty(v))
                     tokens.Add(v.FastToLower());
             }
+            //  A disabled account (DisableUser) has no authorization: no sign in in any way, its links don't work
+            if (tokens.Contains(DisabledToken(userId)))
+                return null;
             return new Authorization(this, user.UserName, tokens, false, MakeGuid(userId), mail?.Email, user.NickName, user, user.Domain, user.Language);
         }
 
@@ -204,6 +207,27 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
+        /// True if a stored password can be used to sign in at all: it exists and has a hash (the placeholder that <see cref="GetSaltAsync"/> stores
+        /// for a user without a password has an empty hash, it must never match).
+        /// </summary>
+        /// <param name="auth">The stored password, may be null</param>
+        /// <returns>True if it has a hash</returns>
+        static bool IsUsablePassword(DbAuthPassword auth)
+            => (auth != null) && !String.IsNullOrEmpty(auth.Pwd);
+
+        /// <summary>
+        /// Start the password change of a user that signed in with a password that must be changed (<see cref="ForcePasswordReset"/>):
+        /// the same as <see cref="ForgotPassword"/>, the reset link and a short code (valid in the session of the request) are sent to the
+        /// e-mail addresses and phone numbers of the user. The message says that an administrator required the new password
+        /// (<see cref="UserManagerComOps.ForcedResetPassword"/>).
+        /// </summary>
+        /// <param name="userName">The user</param>
+        /// <param name="context">The sign in request</param>
+        /// <returns>Where the instructions were sent</returns>
+        Task<String[]> StartPasswordChange(String userName, HttpServerRequest context)
+            => InternalStartPasswordChange(userName, context);
+
+        /// <summary>
         /// Authorize a user
         /// </summary>
         /// <param name="userName">The user name (email)</param>
@@ -222,9 +246,12 @@ namespace SysWeaver.MicroService
                 if (id == 0)
                     return null;
                 var auth = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
-                if (auth == null)
+                //  no password (the placeholder of GetSaltAsync has an empty hash) or a password that must be changed first never signs in
+                if (!IsUsablePassword(auth))
                     return null;
                 if (!IsSamePasswordHash(auth.Pwd, hash))
+                    return null;
+                if (auth.MustResetPassword)
                     return null;
                 var a = await InternalAuthUser(c, id).ConfigureAwait(false);
                 if (a == null)
@@ -253,14 +280,29 @@ namespace SysWeaver.MicroService
             if (id == 0)
                 return null;
             var auth = await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == id).ConfigureAwait(false);
-            if (auth == null)
+            //  no password (the placeholder of GetSaltAsync has an empty hash, before anyone could sign in as a passkey only user
+            //  with the hash of an empty string) never signs in
+            if (!IsUsablePassword(auth))
                 return null;
             var hh = AuthTools.ComputeHash(auth.Pwd, oneTimePad);
             if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hh, hash))
                 return null;
             var a = await InternalAuthUser(c, id).ConfigureAwait(false);
             if (a == null)
+            {
+                //  the password is right but an administrator disabled the account (DisableUser): no session, the sign in page says so
+                //  (only to someone who knows the password; anyone else gets the usual "wrong user ID or password")
+                if (await IsDisabled(c, id).ConfigureAwait(false))
+                    throw new AccountDisabledException((await c.FirstOrDefaultAsync<DbUser>(x => x.Id == id).ConfigureAwait(false))?.UserName ?? userName);
                 return null;
+            }
+            //  the password is right but must be changed first (ForcePasswordReset): no session, the login service sends
+            //  the user the reset instructions (StartPasswordChange) and tells the client
+            if (auth.MustResetPassword)
+            {
+                var signInName = a.Username;
+                throw new PasswordChangeRequiredException(signInName, context => StartPasswordChange(signInName, context));
+            }
             auth.LastUsed = DateTime.UtcNow;
             await c.UpdateAsync(auth, x => new { x.LastUsed }).ConfigureAwait(false);
             tr.Commit();

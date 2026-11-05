@@ -47,6 +47,25 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String[] Tokens { get; set; }
 
+        /// <summary>
+        /// Only set by a failed <see cref="LoginService.Login"/>: the user id and password were correct, but the user must choose a new password
+        /// first (ex: an administrator forced a password reset). No user is signed in; the instructions were sent to <see cref="SentTo"/>
+        /// (the short code works in this session, see auth/ResetPassword.html).
+        /// </summary>
+        public bool PasswordChangeRequired { get; set; }
+
+        /// <summary>
+        /// With <see cref="PasswordChangeRequired"/>: where the instructions to choose a new password were sent (e-mail addresses and / or phone numbers),
+        /// null or empty if they could not be sent (the user must ask an administrator).
+        /// </summary>
+        public String[] SentTo { get; set; }
+
+        /// <summary>
+        /// Only set by a failed <see cref="LoginService.Login"/>: the user id and password were correct, but an administrator disabled the account
+        /// (<see cref="AccountDisabledException"/>). No user is signed in. Only told to a caller that knows the password.
+        /// </summary>
+        public bool AccountDisabled { get; set; }
+
 
         public static readonly AuthInfo Failed = new AuthInfo();
 

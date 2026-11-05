@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SysWeaver messaging test</title>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <!--
+        Stand-alone test of the small messaging bundle sw/session.js (no framework css, no ui library): what a page that renders its own
+        UI gets; sessiontest_theme.html is the same page with the opt-in theme script sw/theme.js. Open it in two or three tabs: one is the master (polls
+        GetMessages), the others are children. The buttons change nothing on the server and act in this window only,
+        except "Post Test.Hello" (an InterOp message to every window of the site). Result: window.SwSessionTest = { Done, Problems, State }.
+    -->
+    <script src="../sw/session.js"></script>
+    <script src="sessiontest.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 16px;
+            font: 14px system-ui, sans-serif;
+            background: Canvas;
+            color: CanvasText;
+        }
+
+        .st-pre {
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            max-height: 40vh;
+            overflow: auto;
+            border: 1px solid GrayText;
+            padding: 8px;
+        }
+
+        .st-tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Messaging test (sw/session.js)</h1>
+        <p id="stChecks" role="status">Checking…</p>
+        <div class="st-tools">
+            <button type="button" id="stSubscribe">Subscribe test.message</button>
+            <button type="button" id="stUnsubscribe">Unsubscribe test.message</button>
+            <button type="button" id="stHello">Post Test.Hello</button>
+            <button type="button" id="stPause">Simulate server.pause (3 s, this window)</button>
+            <button type="button" id="stClear">Clear the log</button>
+        </div>
+        <h2>State</h2>
+        <pre id="stState" class="st-pre"></pre>
+        <h2>Messages</h2>
+        <pre id="stLog" class="st-pre"></pre>
+    </main>
+</body>
+</html>

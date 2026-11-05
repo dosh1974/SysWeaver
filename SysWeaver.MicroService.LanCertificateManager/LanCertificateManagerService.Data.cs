@@ -77,7 +77,7 @@ namespace SysWeaver.MicroService
             public long ExCount;
 
             /// <summary>
-            /// When the last exception occured
+            /// When the last exception occurred
             /// </summary>
             public DateTime ExLast;
 

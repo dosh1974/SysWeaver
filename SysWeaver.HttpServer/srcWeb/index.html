@@ -4,19 +4,66 @@
     <meta charset="utf-8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>${#EnvInfo.AppDisplayName}</title>
-    <script defer src="common/common.js"></script>
-    <script defer src="app/application.js"></script>
+    <meta name="sysweaver-optimized-send" content="${Client.OptimizedSend}" />
+    <script defer src="sw/core.js"></script>
+    <script defer src="sw/ui.js"></script>
+    <script defer src="sw/shell.js"></script>
     <script defer src="app/app.js"></script>
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="apple-touch-icon" type="image/png" href="apple-touch-icon.png">
     <link rel="manifest" href="app/manifest.json">
     <link rel="stylesheet" href="common/theme.css">
-    <link rel="stylesheet" href="app/application.css">
+    <link rel="stylesheet" href="sw/ui.css">
+    <link rel="stylesheet" href="sw/shell.css">
     <link rel="stylesheet" href="app/app.css">
 </head>
-<body onload="appMain()">
+<body onload="appMain()" data-appversion="${@EnvInfo.AppVersion}">
+    <!-- The shell's frame from the first paint (cold start: the scripts and the menus load meanwhile): the sidebar (or rail), the top
+         bar and a few skeleton lines, in the shell's geometry and colour tokens; hidden as soon as the shell shows its content
+         (app-content), so nothing moves when the real shell takes over. The frame's parts stay hidden until the script below has chosen the
+         sidebar (data-menu): the browser may paint before that script runs (it waits for the style sheets), and a rail painted first
+         and then widened to the pinned sidebar is a layout shift. -->
+    <style>
+        .sw-boot { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: var(--sw-canvas, var(--sw-bg)); }
+        .sw-boot:not([data-menu]) > * { visibility: hidden; }
+        .sw-boot-side { position: absolute; left: 0; top: 0; bottom: 0; width: var(--sw-rail-w, 3.5rem); box-sizing: border-box; background: var(--sw-nav, var(--sw-bg)); border-right: 1px solid var(--sw-border, transparent); }
+        .sw-boot[data-menu="pinned"] .sw-boot-side { width: var(--sw-side-w, 16.5rem); }
+        .sw-boot-top { position: absolute; top: 0; right: 0; left: var(--sw-rail-w, 3.5rem); height: var(--sw-top-h, 3.5rem); box-sizing: border-box; border-bottom: 1px solid var(--sw-border, transparent); }
+        .sw-boot[data-menu="pinned"] .sw-boot-top { left: var(--sw-side-w, 16.5rem); }
+        .sw-boot-main { position: absolute; top: calc(var(--sw-top-h, 3.5rem) + 2rem); left: calc(var(--sw-rail-w, 3.5rem) + 2rem); right: 2rem; display: flex; flex-direction: column; gap: 0.75rem; }
+        .sw-boot[data-menu="pinned"] .sw-boot-main { left: calc(var(--sw-side-w, 16.5rem) + 2rem); }
+        .sw-boot-main > span { display: block; width: 60%; height: 0.875rem; border-radius: var(--sw-radius, 4px); background: color-mix(in srgb, var(--sw-fg, gray) 8%, transparent); }
+        .sw-boot-main > span:first-child { width: 14rem; height: 1.25rem; }
+        .sw-boot-main > span:nth-child(3) { width: 75%; }
+        .sw-boot-main > span:nth-child(4) { width: 45%; }
+        @media (max-width: 759.98px), (max-height: 499.98px) {
+            .sw-boot .sw-boot-side { display: none; }
+            .sw-boot[data-menu] .sw-boot-top { left: 0; }
+            .sw-boot[data-menu] .sw-boot-main { left: 1rem; right: 1rem; }
+        }
+        body:has(> app-content) > .sw-boot { display: none; }
+        /* (the shell's top bar before its menu exists is a lone menu button over the whole width: the frame shows instead, at most 8 s) */
+        body:has(> .sw-boot):not(:has(> app-content)) > app-header { visibility: hidden; animation: sw-boot-show 0s 8s forwards; }
+        @keyframes sw-boot-show { to { visibility: visible; } }
+    </style>
+    <div class="sw-boot" aria-hidden="true">
+        <div class="sw-boot-side"></div>
+        <div class="sw-boot-top"></div>
+        <div class="sw-boot-main"><span></span><span></span><span></span><span></span></div>
+    </div>
+    <script>
+        //  (the sidebar as the shell will show it: the stored pinned choice, else unpinned like the original shell, Params.AutoPinWidth 0)
+        try {
+            const v = localStorage.getItem("SysWeaver.Pinned");
+            const pinned = v === "true";
+            document.querySelector(".sw-boot").dataset.menu = pinned ? "pinned" : "rail";
+        }
+        catch {
+            document.querySelector(".sw-boot").dataset.menu = "rail";
+        }
+    </script>
 </body>
 </html>

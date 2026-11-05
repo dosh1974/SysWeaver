@@ -327,7 +327,41 @@ namespace SysWeaver.Db
             foreach (var fti in type.GetCustomAttributes<FullTextSearchIndexAttribute>(true))
                 ftis.Add(fti.Name, fti.Props.Select(x => propInfos[x].Name).ToArray());
             FullTextIndexes = ftis.Freeze();
+            //  the columns of the plain text search (when the request has no full text index), the same members as the in-memory
+            //  tables search (TableDataTools.Get): stored string members that are public and not TableDataIgnore'd, or that have a positive
+            //  TableDataSearch weight; a weight of zero or less excludes a member. Highest weight first.
+            List<ValueTuple<double, String>> searchCols = new List<(double, string)>();
+            foreach (var f in dbType.FieldDefinitions)
+            {
+                if (f.FieldType != typeof(String))
+                    continue;
+                MemberInfo m = (MemberInfo)f.PropertyInfo ?? type.GetMember(f.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).FirstOrDefault();
+                if (m == null)
+                    continue;
+                var sa = m.GetCustomAttribute<TableDataSearchAttribute>(true);
+                if (sa == null)
+                {
+                    if (m.GetCustomAttribute<TableDataIgnoreAttribute>(true) != null)
+                        continue;
+                    var isPublic = m is PropertyInfo pi ? (pi.GetMethod?.IsPublic ?? false) : ((m as FieldInfo)?.IsPublic ?? false);
+                    if (!isPublic)
+                        continue;
+                }
+                var w = sa?.Weight ?? 1.0;
+                if (w <= 0)
+                    continue;
+                searchCols.Add((w, f.FieldName));
+            }
+            SearchColumns = searchCols.OrderByDescending(x => x.Item1).Select(x => x.Item2).ToArray();
         }
+
+        /// <summary>
+        /// The (database) column names that a plain text search (<see cref="TableDataRequest.SearchText"/> without a full text index) looks in:
+        /// the stored string members that are public and have no <see cref="TableDataIgnoreAttribute"/>, plus the ones with a positive
+        /// <see cref="TableDataSearchAttribute"/> weight (the same members as the in-memory table search), highest weight first.
+        /// Empty if the type has none (then the search text is ignored).
+        /// </summary>
+        public static readonly String[] SearchColumns;
 
 
 

@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
         /// <param name="title">The title (tool tip) to display</param>
         /// <param name="iconClass">A class name (maybe url supported later)</param>
         /// <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-        /// <param name="auth">The auth required for this item to be available in thew menu</param>
+        /// <param name="auth">The auth required for this item to be available in the menu</param>
         /// <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
         /// <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
         public WebMenuLinkExternalAttribute(String menu, String id, String name, String url, String title = null, String iconClass = null, float order = 0, String auth = null, bool noUserRequired = false, String dynamic = null)

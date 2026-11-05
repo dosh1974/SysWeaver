@@ -1,225 +1,188 @@
-﻿
-
-/**
- * @file Page script for translator/Edit.html, the editor for one cached translation of the Translations DB.
- * Edit.html is opened from the "Edit" row action of the Translations DB explorer table (defined in DbInput.cs as
- * "&../translator/Edit.html?id={0}", {0} = row key). It is a standalone page without the app shell.
- * Loaded with a static `<script defer>` after ../common/common.js; the page calls translatorEditMain() from
- * `<body onload>`.
- * Defines one global: translatorEditMain. Nothing else runs at load time.
- * Dependencies (common.js): AddLoading, getUrlParams, sendRequest, Button, Info, Fail, _T / _TF (every user-visible
- * string goes through these with a translator context string, so the page itself is translated).
- * Server API (both Roles.Debug, under Api/translator/): GetTranslation, SetTranslation.
- * Conventions: the DOM is built from custom SysWeaver-* elements (SysWeaver-Page, SysWeaver-Section, SysWeaver-Text,
- * SysWeaver-CenterBlock) styled by Translator.css / theme.css. PageLoaded() is not called.
+﻿/**
+ * @file Translator.js - the editor of one cached translation of the Translations DB (translator/Edit.html, entry
+ * `translatorEditMain`). Opened from the "Edit" row action of the Translations DB table (DbInput.cs:
+ * `&../translator/Edit.html?id={0}`, same tab).
+ * Classic script loaded with `<script defer>` after ../sw/core.js and ../sw/ui.js; started from `<body onload>`.
+ *
+ * Design v2 form page (Design v2, PORTING.md B10 / PORTING.md B14 / PORTING.md B11) built from the shared ui components: a page header (Sw.PageHeader), a facts
+ * strip with the read only facts (Sw.Facts: key, application, translator / auth, source and target language with flags), a card
+ * with the source text and its context, and a card with the editable translation and its form footer (Save, the primary action,
+ * right aligned). Errors are a state view (Sw.StateView) in the page plus a toast.
+ *
+ * Url parameter: `id` = the translation key (required).
+ * Server API (Roles.Debug): `Api/translator/GetTranslation` (id -> {ServiceName, UserName, IsManual, From, FromName,
+ * To, ToName, Text, Context, Translated}), `Api/translator/SetTranslation` ({Key, OriginalTranslation,
+ * NewTranslation} -> bool; the original text gives optimistic concurrency).
+ * All labels are translated (with context strings), so the page itself can be translated.
+ *
+ * Globals defined: `translatorEditMain`.
  */
 
 /**
- * Page entry point (called by `<body onload="translatorEditMain()">`).
- * Shows a loader (AddLoading), reads the URL param `id` (throws "No id supplied!" if missing) and appends a
- * `<SysWeaver-Page class="Wide">` to document.body. Adds a "Translation Key" section with the id, then calls
- * `sendRequest("../Api/translator/GetTranslation", id)` (response: {ServiceName, UserName, IsManual, From, FromName,
- * To, ToName, Text, Context, Translated}; a falsy result throws "No data for the supplied id").
- * Renders, in order: Application (ServiceName, if set); Translator (UserName, when IsManual) or Auth (UserName,
- * when automatic) if UserName is set; Source language (flag ../iso_data/language/<From>, FromName ?? From);
- * Text (bold); Context (if set); Target language (flag for To, ToName ?? To); Translation as an editable
- * `<textarea class="Translation">` holding data.Translated.
- * Below that a `SysWeaver-CenterBlock.Space` holds the "Save translation" Button (icon ../icons/disc.svg, initially
- * disabled). Its click handler makes the textarea read-only, calls StartWorking and sends
- * `sendRequest("../Api/translator/SetTranslation", {Key, OriginalTranslation, NewTranslation})` (OriginalTranslation
- * lets the server detect concurrent changes). A falsy result throws "Couldn't set translation (key no longer exist?)";
- * on success Info("Translation saved!") and data.Translated becomes the new baseline. Finally it re-validates, makes
- * the textarea editable and calls StopWorking. Errors thrown by the click handler are not caught there.
- * ta.oninput is set to the inner Validate. Errors in the main body are shown with Fail(e); the loader is always removed.
- * @returns {Promise<void>} Resolves when the page is built (or an error was shown).
+ * A language value for the facts strip: the flag and the name.
+ * @param {string} iso - The ISO code (the flag file name).
+ * @param {string} name - The language name.
+ * @returns {HTMLElement} The value.
  */
-async function translatorEditMain() {
-    const removeLoader = AddLoading();
-    try {
-        const ps = getUrlParams();
-        const id = ps.get('id');
-        if (!id)
-            throw new Error(_TF("No id supplied!", "Error message displayed when there is a missing query parameter"));
-        const page = document.createElement("SysWeaver-Page");
-        page.classList.add("Wide");
-        document.body.appendChild(page);
+function trLanguage(iso, name) {
+    return Sw.el("span.tr-lang", null,
+        iso ? Sw.el("img.tr-flag", { src: "../iso_data/language/" + iso, alt: "", title: _T('Language with the ISO code "{0}"', iso, "Tool tip description of a language name.{0} is replaced with the ISO code of the language") }) : null,
+        Sw.el("span", { text: name ?? iso ?? "" }));
+}
 
+/**
+ * A titled read only text block inside a card (the source text, the context).
+ * @param {string} title - Label.
+ * @param {string} tip - Label tool tip.
+ * @param {string} text - The text.
+ * @param {boolean} [bold] - Bold text (the text to translate).
+ * @returns {HTMLElement} The block.
+ */
+function trBlock(title, tip, text, bold) {
+    return Sw.el("div.tr-block", null,
+        Sw.el("h3.tr-label", { text: title, title: tip }),
+        Sw.el("div.tr-text.sw-selectable" + (bold ? ".tr-bold" : ""), { text: text ?? "" }));
+}
+
+/**
+ * Entry point of Edit.html.
+ * @returns {Promise<void>}
+ */
+function translatorEditMain() {
+    return Sw.Page.Main(async () => {
+        const page = Sw.PageLayout({
+            Main: ".tr-page",
+            Type: "form",
+            //  "Edit", as the original page (its document title; the shell top bar shows it)
+            Title: _TF("Edit", "Title of the page that shows a cached translation and lets a translator correct it"),
+            Description: _TF("Check the source text and correct the translation. Ctrl+Enter saves.", "One line description below the title of the translation editor page"),
+            //  A page about one record: keep its own title even when a menu item opens this page
+            MenuTitle: false,
+        });
+        //  The top bar shows the document title: the page title ("Edit" as Edit.html, translated)
+        document.title = page.Header.TitleE.textContent;
         /**
-         * Inner helper: appends a section heading (`<SysWeaver-Section>`) to the page.
-         * @param {string} name - Heading text (set as innerText).
-         * @param {string} [title] - Optional tooltip (element title).
-         * @returns {HTMLElement} The created SysWeaver-Section element.
+         * Show an error state in the page (the toast is shown too).
+         * @param {string} title What failed.
+         * @param {string} [details] Technical text.
          */
-        function AddSection(name, title) {
-            const s = document.createElement("SysWeaver-Section");
-            s.innerText = name;
-            if (title)
-                s.title = title;
-            page.appendChild(s);
-            return s;
+        const failed = (title, details) => {
+            Sw.Fail(details ? title + "\n" + details : title);
+            page.Add(Sw.Card({ Body: Sw.StateView({ Kind: "error", Title: title, Details: details || null }) }));
+        };
+        const id = Sw.Url.Get("id");
+        if (!id) {
+            failed(_TF("No id supplied!", "Error message displayed when there is a missing query parameter"));
+            return;
         }
+        const facts = Sw.Facts({ Label: _TF("Translation facts", "Accessible name of the facts strip of the translation editor") });
+        facts.Add({
+            Label: _TF("Translation Key", "Title text for a section of text that contains a key (guid) for a translation"),
+            Title: _TF("This is the translation key (guid) for this translation", "Tool tip description for a section of text that contains a key (guid) for a translation"),
+            Value: id, Mono: true,
+        });
+        page.Add(facts);
 
-        /**
-         * Inner helper: appends a selectable value block (`<SysWeaver-Text>`) to the page.
-         * @param {string} name - Text content (set as innerText).
-         * @param {string} [title] - Optional tooltip (element title).
-         * @returns {HTMLElement} The created SysWeaver-Text element (the caller adds class "Bold" to the source text).
-         */
-        function AddText(name, title) {
-            const s = document.createElement("SysWeaver-Text");
-            s.innerText = name;
-            if (title)
-                s.title = title;
-            page.appendChild(s);
-            return s;
+        let data = null;
+        try {
+            data = await Sw.Net.Send("../Api/translator/GetTranslation", id);
         }
-
-        /**
-         * Inner helper: appends a `<SysWeaver-Text class="Icon">` block with an image (a language flag) as inline
-         * background-image (positioned by the SysWeaver-Text.Icon rule in Translator.css).
-         * @param {string} icon - Image URL (e.g. ../iso_data/language/<iso>, without .svg extension).
-         * @param {string} name - Text content (set as innerText).
-         * @param {string} [title] - Optional tooltip (element title).
-         * @returns {void} Nothing (unlike AddSection/AddText).
-         */
-        function AddImgText(icon, name, title) {
-            const s = document.createElement("SysWeaver-Text");
-            s.style.backgroundImage = "url('" + icon + "')";
-            s.classList.add("Icon");
-            s.innerText = name;
-            if (title)
-                s.title = title;
-            page.appendChild(s);
+        catch (e) {
+            failed(_TF("The translation could not be loaded", "Title of the error state of the translation editor when the translation failed to load"), e.message || String(e));
+            return;
         }
-
-        AddSection(
-            _TF("Translation Key", "Title text for a section of text that contains a key (guid) for a translation"),
-            _TF("This is the translation key (guid) for this translation", "Tool tip description for a section of text that contains a key (guid) for a translation")
-        );
-        AddText(id);
-
-        const data = await sendRequest("../Api/translator/GetTranslation", id);
-        if (!data)
-            throw new Error(_TF("No data for the supplied id", "Error message displayed when a supplied id is unknown to the server"));
-
-        const sn = data.ServiceName;
-        if (sn) {
-            AddSection(
-                _TF("Application", "Title text for a section that displays the application that performed some action"),
-                _TF("The name of the application that requested this translation (first)", "Tool tip description for a section that displays the application that performed some action")
-            );
-            AddText(sn);
+        if (!data) {
+            failed(_TF("No data for the supplied id", "Error message displayed when a supplied id is unknown to the server"));
+            return;
         }
-
-        const un = data.UserName;
-        if (un) {
-            if (data.IsManual) {
-                AddSection(
-                    _TF("Translator", "Title text for a section that displays who translated some text"),
-                    _TF("The name of the user that manually translated this text", "Tool tip description for a section that displays who translated some text")
-                );
-                AddText(un);
-            } else {
-                AddSection(
-                    _TF("Auth", "Title text for a section that displays the name of the authentication used"),
-                    _TF("The name of the authentication user / API-key used for the automatic translation", "Tool tip description for a section that displays the name of the authentication used")
-                );
-                AddText(un);
-            }
+        if (data.ServiceName)
+            facts.Add({
+                Label: _TF("Application", "Title text for a section that displays the application that performed some action"),
+                Title: _TF("The name of the application that requested this translation (first)", "Tool tip description for a section that displays the application that performed some action"),
+                Value: data.ServiceName,
+            });
+        if (data.UserName) {
+            if (data.IsManual)
+                facts.Add({
+                    Label: _TF("Translator", "Title text for a section that displays who translated some text"),
+                    Title: _TF("The name of the user that manually translated this text", "Tool tip description for a section that displays who translated some text"),
+                    Value: data.UserName,
+                });
+            else
+                facts.Add({
+                    Label: _TF("Auth", "Title text for a section that displays the name of the authentication used"),
+                    Title: _TF("The name of the authentication user / API-key used for the automatic translation", "Tool tip description for a section that displays the name of the authentication used"),
+                    Value: data.UserName,
+                });
         }
+        facts.Add({
+            Label: _TF("Source language", "Title text for a section that displays the language used of a piece of text that will be translated to some other language"),
+            Title: _TF("The language that the original text (and prompt) was written in, typically 'en', 'en-US' or 'en-GB'", "Tool tip description for a section that displays the language used of a piece of text that will be translated to some other language"),
+            Value: trLanguage(data.From, data.FromName ?? data.From),
+        });
+        facts.Add({
+            Label: _TF("Target language", "Title text for a section that displays the language to translate some piece of text into"),
+            Title: _TF("The language that the translation should have", "Tool tip description for a section that displays the language to translate some piece of text into"),
+            Value: trLanguage(data.To, data.ToName ?? data.To),
+        });
 
-        AddSection(
-            _TF("Source language", "Title text for a section that displays the language used of a piece of text that will be translated to some other language"),
-            _TF("The language that the original text (and prompt) was written in, typically 'en', 'en-US' or 'en-GB'", "Tool tip description for a section that displays the language used of a piece of text that will be translated to some other language")
-        );
-        AddImgText("../iso_data/language/" + data.From, data.FromName ?? data.From,
-            _T('Language with the ISO code "{0}"', data.From, "Tool tip description of a language name.{0} is replaced with the ISO code of the language")
-        );
+        //  The source: the text and its optional context
+        const source = Sw.Card({ Span: 6, Title: _TF("Source", "Title of the card with the text to translate (and its context) in the translation editor") });
+        source.SetBody([
+            trBlock(_TF("Text", "Title text for a section that displays a piece of text, that will be translated to some other language"),
+                _TF("The text to translate", "Tool tip description for a section that displays a piece of text, that will be translated to some other language"),
+                data.Text, true),
+            data.Context ? trBlock(_TF("Context", "Title text for a section that displays the context that will be used when translating some text"),
+                _TF("An optional context that is used when translating", "Tool tip description for a section that displays the context that will be used when translating some text"),
+                data.Context) : null,
+        ]);
 
-        AddSection(
-            _TF("Text", "Title text for a section that displays a piece of text, that will be translated to some other language"),
-            _TF("The text to translate", "Tool tip description for a section that displays a piece of text, that will be translated to some other language")
-        );
-        AddText(data.Text).classList.add("Bold");
-
-        if (data.Context) {
-            AddSection(
-                _TF("Context", "Title text for a section that displays the context that will be used when translating some text"),
-                _TF("An optional context that is used when translating", "Tool tip description for a section that displays the context that will be used when translating some text")
-                );
-            AddText(data.Context);
-        }
-
-        AddSection(
-            _TF("Target language", "Title text for a section that displays the language to translate some piece of text into"),
-            _TF("The language that the translation should have", "Tool tip description for a section that displays the language to translate some piece of text into")
-        );
-        AddImgText("../iso_data/language/" + data.To, data.ToName ?? data.To,
-            _T('Language with the ISO code "{0}"', data.To, "Tool tip description of a language name.{0} is replaced with the ISO code of the language")
-        );
-
-        AddSection(
-            _TF("Translation", "Title text for a section that displays a translated text"),
-            _TF("The translated text", "Tool tip description for a section that displays a translated text")
-        );
-
-        const ta = document.createElement("textarea");
-        ta.classList.add("Translation");
-        ta.value = data.Translated;
-        page.appendChild(ta);
-
-        const br = document.createElement("SysWeaver-CenterBlock");
-        page.appendChild(br);
-        br.classList.add("Space");
-
-        const changeButton = new Button(null,
-            _TF("Save translation", "Text on a button that when pressed will save an updated version of a text translation"),
-            _TF("Click to save the new translation", "Tool tip description for a button that when pressed will save an updated version of a text translation"),
-            "../icons/disc.svg",
-            false,
-            async () => {
+        //  The translation: the editable text and the form footer (Save, primary, right aligned)
+        const label = _TF("Translation", "Title text for a section that displays a translated text");
+        const ta = Sw.el("textarea.tr-translation", { value: data.Translated ?? "", attrs: { "aria-label": label, rows: "4" } });
+        const save = new Sw.Button({
+            Text: _TF("Save translation", "Text on a button that when pressed will save an updated version of a text translation"),
+            Title: _TF("Save the new translation", "Tool tip description for a button that when pressed will save an updated version of a text translation"),
+            Icon: "save",
+            Kind: "primary",
+            Disabled: _TF("Change the translation first", "Why the save button of a translation is disabled: the text is the saved one"),
+            OnClick: async () => {
                 ta.readOnly = true;
-                changeButton.StartWorking();
                 try {
-                    const newData = ta.value;
-                    const res = await sendRequest("../Api/translator/SetTranslation",
-                        {
-                            Key: id,
-                            OriginalTranslation: data.Translated,
-                            NewTranslation: newData,
-                                
-                        });
-                    if (!res)
-                        throw Error(_TF("Couldn't set translation (key no longer exist?)", "Error message displayed when an API request failed"));
-                    Info(_TF("Translation saved!", "Message displayed when a new translation was successfully saved"));
-                    data.Translated = newData;
+                    const newText = ta.value;
+                    const res = await Sw.Net.Send("../Api/translator/SetTranslation", {
+                        Key: id,
+                        OriginalTranslation: data.Translated,
+                        NewTranslation: newText,
+                    });
+                    if (!res) {
+                        Sw.Fail(_TF("Couldn't set translation (key no longer exist?)", "Error message displayed when an API request failed"));
+                        return;
+                    }
+                    Sw.Info(_TF("Translation saved!", "Message displayed when a new translation was successfully saved"));
+                    data.Translated = newText;
                 }
                 finally {
-                    Validate();
                     ta.readOnly = false;
-                    changeButton.StopWorking();
+                    validate();
                 }
-            });
-        br.appendChild(changeButton.Element);
+            },
+        });
+        const card = Sw.Card({ Title: label, Class: "tr-edit", Span: 6 });
+        card.SetBody([ta, Sw.el("div.tr-buttons", null, save.E)]);
+        page.Add(Sw.Grid({ Content: [source, card] }));
 
-        /**
-         * Inner helper: enables the save button (changeButton.SetEnabled) only when the textarea is non-empty and
-         * differs from the last saved value (data.Translated). Used as ta.oninput and after each save attempt.
-         * @returns {void}
-         */
-        function Validate() {
-            const v = ta.value;
-            const ok = (v.length > 0) && (v !== data.Translated);
-            changeButton.SetEnabled(ok);
-        }
-
-        ta.oninput = Validate;
-    }
-    catch (e) {
-        Fail(e);
-    }
-    finally {
-        removeLoader();
-    }
-
+        /** Enable Save only for a non empty text that differs from the last saved one. */
+        const validate = () => save.SetDisabled(!(ta.value.length > 0 && ta.value !== data.Translated), ta.value.length > 0
+            ? _TF("Change the translation first", "Why the save button of a translation is disabled: the text is the saved one")
+            : _TF("Enter a translation first", "Why the save button of a translation is disabled: the text is empty"));
+        ta.addEventListener("input", validate);
+        //  Ctrl+Enter (Cmd+Enter) saves
+        ta.addEventListener("keydown", ev => {
+            if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey) && !save.E.disabled) {
+                ev.preventDefault();
+                save.Click();
+            }
+        });
+    }, { Loading: true });
 }

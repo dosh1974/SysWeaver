@@ -20,6 +20,7 @@ namespace SysWeaver
         /// <summary>
         /// The Api Key, optionally use the CredFile instead to read it from a file.
         /// </summary>
+        [EditPassword]
         public String ApiKey { get; set; }
 
         /// <summary>

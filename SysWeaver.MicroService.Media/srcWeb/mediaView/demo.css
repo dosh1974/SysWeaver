@@ -1,0 +1,148 @@
+﻿/*
+ * demo.css - styles of the developer demo pages TextDemo.html (textDemo.js, classes td-*) and MapDemo.html (mapDemo.js,
+ * classes md-*). Loaded after ../common/theme.css and ../sw/ui.css; uses the Sw ui tokens.
+ */
+
+/* ===== Shared card look ===== */
+
+/* The page is a Design v2 dashboard page (main.sw-page-dash, ui/page.css: page header, max width, padding) */
+.td-list, .md-list {
+    box-sizing: border-box;
+}
+
+.td-card, .md-card {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--sw-surface, var(--sw-surface));
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius-md, var(--sw-radius-lg));
+    overflow: hidden;
+}
+
+.td-title, .md-title {
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.25em 0.25em 0.25em 1em;
+    border-bottom: 1px solid var(--sw-border, var(--sw-border));
+    color: var(--sw-text, var(--sw-fg));
+    font-weight: 500;
+}
+
+/* The card titles (h2) keep the title row color (the text color), not the theme's heading accent */
+.td-name, .md-name {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    color: inherit;
+    font-family: var(--sw-sans);
+    font-size: var(--sw-text-md, 100%);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ===== TextDemo ===== */
+
+.td-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-gap, 12px);
+}
+
+/* The effect link buttons in two worded groups ("Effect:" image effects, "Collage:" collage effects), each button with its
+   effect name; neutral colors (accent 2 read as a warning). The rows wrap on phones. */
+.td-effects {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25em 1em;
+    padding: 0.25em 0.75em;
+}
+
+.td-fxgroup {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25em;
+}
+
+.td-fxlabel {
+    color: var(--sw-text-2, inherit);
+    font-size: 90%;
+    margin-right: 0.25em;
+}
+
+/* The rendered text (a.td-imgbox: a link to the plain text effect page). */
+.td-imgbox {
+    display: block;
+    padding: 0.5em;
+    cursor: pointer;
+    outline: none;
+}
+
+    .td-imgbox:focus-visible {
+        box-shadow: inset 0 0 0 3px var(--sw-focus, var(--ThemeAcc2));
+    }
+
+.td-img {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+    object-fit: scale-down;
+}
+
+/* ===== MapDemo ===== */
+
+/* Section titles: Design v2 section title (sentence case, no filled bar) */
+.md-section {
+    margin: var(--sw-space-8, 2em) 0 var(--sw-space-3, 0.75em) 0;
+    padding: 0;
+    color: var(--sw-text, var(--sw-fg));
+    font-family: var(--sw-sans);
+    font-size: var(--sw-text-lg, 100%);
+    font-weight: 500;
+}
+
+    .md-section:first-child {
+        margin-top: 0;
+    }
+
+/* Three cards per row on wide screens (min 22em each), one on phones. */
+.md-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22em), 1fr));
+    gap: var(--sw-space-4, 12px);
+}
+
+.md-map {
+    display: block;
+    width: 100%;
+    height: 20em;
+    border: none;
+}
+
+/* The map box (mapDemo.js LiveMaps): the frame, or while paused (too many maps on screen) a "Show this map" button of the same size */
+.md-mapbox {
+    min-height: 20em;
+}
+
+.md-paused {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 20em;
+    background: var(--sw-surface-sunken, var(--sw-surface-sunken));
+}
+
+    .md-paused[hidden] {
+        display: none;
+    }
+
+/* Note at the top (ex: no Google Maps key) */
+.md-note {
+    margin: 0 0 var(--sw-space-4, 8px);
+    color: var(--sw-text-2, var(--sw-text-2));
+}

@@ -42,6 +42,8 @@ flowchart TB
 - [`ChatService`](ChatService.cs) — the micro service: provider registry, web APIs, push delivery, storage and translation
 - [`IChatProvider`](IChatProvider.cs) / [`IChatController`](IChatController.cs) — the provider contract and the controller a provider uses to push changes
 - [`SimpleChatService`](SimpleChatService.cs) — a provider with rooms configured in the manifest (kept in memory)
+- [`ChatDataView`](ChatDataView.cs) — how a message's attached data is shown: `ChatMessage.DataViews` has one `{Raw, Viewer, Source}` per `Data` entry, filled by `ChatService` from the extension viewers / editors (`ChatDataViews.Fill`); providers may set their own
+- [`ChatMenuItem`](ChatMenuItem.cs) — a server menu item; `Checked` / `Radio` make check box / radio items
 - [`ChatSessionParams`](ChatSessionParams.cs) — permissions and options of a room / session
 
 ## Using it

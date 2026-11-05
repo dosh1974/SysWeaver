@@ -167,6 +167,41 @@ namespace SysWeaver.Data
 
 
     /// <summary>
+    /// Format a numeric value as an amount in a currency, the currency (an ISO 4217 code) is given per column or per row.
+    /// The value is sent as a number (sorting, filtering and exports work on the number), the web client formats it using the currency
+    /// information in "iso_data/currencies.js" (symbol and under units, ex: "$1 234.50", "1 234.50 kr"), with the same decimal and thousands separators
+    /// for all currencies so that a column reads the same on every row.
+    /// </summary>
+    /// <remarks>
+    /// The format is a <see cref="TableDataFormats.Number"/> format with a fifth option: the currency format, so renderers and exporters that
+    /// don't know about currencies show (and export) a plain number.
+    /// </remarks>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataCurrencyAttribute : TableDataRawFormatAttribute
+    {
+        /// <summary>
+        /// Format a numeric value as an amount in a currency.
+        /// </summary>
+        /// <param name="currencyFormat">The ISO 4217 currency code, ex: "USD", or a format of it where:
+        /// {0} = Formatted value.
+        /// {1} = Next value (must exist), ex: "{1}" when the next column is the currency code of the row.
+        /// {2} = Value before formatting.
+        /// </param>
+        /// <param name="decimals">The number of decimals, a negative value means the decimals of the currency (the web client) or -decimals (when the currency is unknown and in exports).</param>
+        /// <param name="titleFormat">
+        /// {0} = Formatted value (decimals and thousands separator applied)
+        /// {1} = Next value (must exist).
+        /// {2} = Value before formatting.
+        /// {3} = The text (after formatting).
+        /// </param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
+        public TableDataCurrencyAttribute(String currencyFormat, int decimals = -2,String titleFormat = "Raw: {2}", bool copyOnClick = true)
+            : base(TableDataFormats.Number, decimals, "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "True" : "", currencyFormat ?? "")
+        {
+        }
+    }
+
+    /// <summary>
     /// Format values as an amount in USD dollars.
     /// Ex: "$ 22.50"
     /// </summary>

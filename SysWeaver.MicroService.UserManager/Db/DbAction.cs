@@ -35,6 +35,8 @@ namespace SysWeaver.MicroService.Db
 
         public const string AddEmail = "AddEmail";
         public const string AddPhone = "AddPhone";
+        /// <summary>Undo an e-mail address change (the link in the notice to the old address)</summary>
+        public const string UndoEmail = "UndoMail";
     }
 
 

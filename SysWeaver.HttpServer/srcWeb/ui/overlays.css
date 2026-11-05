@@ -1,0 +1,1516 @@
+﻿/*
+ * ui/overlays.css - SysWeaver UI library (Sw) styles, part 3 of 6: everything that floats above the page (Design v2).
+ *
+ * Layers and popups (sw-layer, sw-popup), menus (sw-menu), dialogs (sw-dialog: centered on desktop, a bottom sheet on phones; selection and
+ * working dialogs), toasts (sw-toasts: bottom right, inverse surface), hints (sw-hint: tooltips), the loading overlay (sw-loader) and the
+ * server block (sw-serverblock, a dialog).
+ * Elevation: only these floating layers have shadows: --sw-elev-1 (popups, menus, select lists, hints), --sw-elev-2 (dialogs, toasts,
+ * the server block), always with a 1 px hairline; --sw-scrim behind dialogs.
+ * Stacking: loader 950, layers 1000, popups / dialogs 1001, toasts 1100, dialogs with Above (the session time-out warning) 1200 / 1201, hints 1300,
+ * the server block is a dialog with Above. While a dialog is open the toasts sit inside it (overlay.js refreshModal).
+ * Tokens: ui/tokens.css. Documentation: ui/README.md.
+ */
+
+/* ---------- Layers and popups ---------- */
+
+.sw-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+}
+
+.sw-layer.sw-dim {
+    background: var(--sw-scrim);
+    animation: sw-fade-in var(--sw-dur-2);
+}
+
+/* A dialog in a frame of this page (a nested frame, overlay.js onChildModal): this page is dimmed with the same scrim and the frame
+   is raised above it, so the whole app reads as one modal surface (the app shell dims its chrome) */
+iframe.sw-frame-modal.sw-frame-static {
+    position: relative;
+}
+
+iframe.sw-frame-modal {
+    /* above the scrim even when the page gave the frame its own z-index */
+    z-index: 1001 !important;
+}
+
+.sw-popup {
+    position: fixed;
+    z-index: 1001;
+    min-width: 10rem;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: auto;
+    background: var(--sw-surface-raised);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-md);
+    box-shadow: var(--sw-elev-1);
+    animation: sw-pop-in var(--sw-dur-2) var(--sw-ease);
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    outline: none;
+}
+
+/* Old pages read --sw-frame-bg for titles drawn on a border; floating layers are raised */
+.sw-popup, .sw-dialog {
+    --sw-frame-bg: var(--sw-surface-raised);
+}
+
+.sw-listpicker-popup {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ---------- Menus (Sw.Menu) ---------- */
+
+.sw-menu {
+    display: flex;
+    flex-direction: column;
+    padding: var(--sw-space-1);
+    min-width: 12rem;
+}
+
+.sw-menu-title {
+    padding: var(--sw-space-2) var(--sw-space-2) var(--sw-space-1);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-xs);
+    font-weight: var(--sw-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.sw-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    min-height: var(--sw-control-h);
+    padding: 0 var(--sw-space-2);
+    border: 0;
+    border-radius: var(--sw-radius-sm);
+    background: transparent;
+    color: var(--sw-text);
+    font: inherit;
+    font-size: var(--sw-text-md);
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+    white-space: nowrap;
+}
+
+.sw-menu-item > .sw-icon {
+    width: 1rem;
+    height: 1rem;
+    color: var(--sw-text-2);
+}
+
+.sw-menu-item:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: -2px;
+}
+
+/* Keyboard focus is also the hover look (one highlighted item) */
+.sw-menu-item:focus {
+    background: var(--sw-hover);
+}
+
+@media (hover: hover) {
+    .sw-menu-item:hover:not(:disabled) {
+        background: var(--sw-hover);
+    }
+}
+
+.sw-menu-item:active:not(:disabled) {
+    background: var(--sw-pressed);
+}
+
+.sw-menu-item[aria-expanded="true"] {
+    background: var(--sw-selected);
+}
+
+.sw-menu-item:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* A control row (overlay.js createControlItem): the label, then a slider (and its value) or a text box; no hover fill, the control shows
+   the focus */
+.sw-menu-item.sw-menu-control {
+    min-width: 18rem;
+    cursor: default;
+}
+
+    .sw-menu-item.sw-menu-control:hover,
+    .sw-menu-item.sw-menu-control:focus,
+    .sw-menu-item.sw-menu-control:active {
+        background: transparent;
+    }
+
+    .sw-menu-item.sw-menu-control:focus-within {
+        background: var(--sw-hover);
+    }
+
+    .sw-menu-item.sw-menu-control[aria-disabled="true"] {
+        opacity: 0.45;
+    }
+
+    /* The label keeps its words (no ellipsis): the control takes the rest of the row */
+    .sw-menu-control > .sw-menu-text {
+        flex: none;
+        overflow: visible;
+        white-space: nowrap;
+    }
+
+    .sw-menu-control > .sw-menu-slider {
+        flex: 1 1 8rem;
+        min-width: 6rem;
+        min-height: var(--sw-control-h-sm);
+    }
+
+    .sw-menu-control > .sw-menu-value {
+        flex: none;
+        min-width: 3.5em;
+        margin-left: 0;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .sw-menu-control > .sw-menu-input {
+        flex: 1 1 8rem;
+        min-width: 6rem;
+        min-height: var(--sw-control-h-sm);
+    }
+
+/* Checked items: a check mark (sw-menu-check) and full weight text; the check is the accent */
+.sw-menu-item.sw-checked {
+    font-weight: var(--sw-weight-medium);
+}
+
+.sw-menu-item.sw-checked > .sw-menu-check {
+    color: var(--sw-text-accent);
+}
+
+/* Destructive items: danger text and icon (put them last) */
+.sw-menu-item.sw-danger, .sw-menu-item.sw-danger > .sw-icon {
+    color: var(--sw-danger);
+}
+
+.sw-menu-noicon {
+    display: inline-block;
+    width: 1rem;
+    flex: none;
+}
+
+.sw-menu-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Items with a description (item option Desc): the text and a muted, wrapping second line */
+.sw-menu-item.sw-menu-hasdesc {
+    padding-top: var(--sw-space-1);
+    padding-bottom: var(--sw-space-1);
+}
+
+.sw-menu-texts {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.sw-menu-desc {
+    max-width: 30em;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-xs);
+    font-weight: normal;
+    white-space: normal;
+}
+
+/* Shortcut hints: right aligned, text-3 */
+.sw-menu-hint {
+    margin-left: var(--sw-space-4);
+    color: var(--sw-text-3);
+    font-size: var(--sw-text-xs);
+}
+
+.sw-menu-check {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-left: var(--sw-space-2);
+}
+
+.sw-menu-sub {
+    width: 1rem;
+    height: 1rem;
+    color: var(--sw-text-2);
+}
+
+.sw-menu-back {
+    color: var(--sw-text-2);
+    font-weight: var(--sw-weight-medium);
+    border-bottom: 1px solid var(--sw-border);
+    border-radius: 0;
+    margin-bottom: var(--sw-space-1);
+}
+
+.sw-menu-sep {
+    height: 1px;
+    margin: var(--sw-space-1) calc(-1 * var(--sw-space-1));
+    background: var(--sw-border);
+    flex: none;
+}
+
+/* ---------- Dialogs (Sw.Dialog): raised surface, elevation 2, scrim; phones: a bottom sheet ---------- */
+
+/* Centered by inset + auto margins (no transform: fixed descendants such as the toasts that move into an open dialog stay relative to
+   the viewport); a moved / resized dialog sets --sw-dlg-l / -t / -w / -h (overlay.js geometry, desktop layout only) */
+.sw-dialog {
+    position: fixed;
+    z-index: 1001;
+    inset: 0;
+    margin: auto;
+    width: min(32rem, calc(100vw - 32px));
+    height: fit-content;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--sw-surface-raised);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-lg);
+    box-shadow: var(--sw-elev-2);
+    animation: sw-fade-in var(--sw-dur-3) var(--sw-ease);
+    outline: none;
+}
+
+.sw-dialog.sw-wide {
+    width: min(70rem, calc(100vw - 32px));
+}
+
+.sw-dialog.sw-full {
+    height: calc(100vh - 64px);
+    height: calc(100dvh - 64px);
+}
+
+.sw-dialog-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    flex: none;
+    min-height: 3.5rem;
+    padding: var(--sw-space-3) var(--sw-space-3) var(--sw-space-1) var(--sw-space-5);
+}
+
+/* Wide / full dialogs scroll a lot of content: a hairline under the head */
+.sw-dialog.sw-wide > .sw-dialog-head, .sw-dialog.sw-full > .sw-dialog-head, .sw-select-dialog > .sw-dialog-head {
+    padding-bottom: var(--sw-space-3);
+    border-bottom: 1px solid var(--sw-border);
+}
+
+.sw-dialog-head.sw-no-title {
+    min-height: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.sw-dialog-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--sw-text-2);
+}
+
+/* The title (an h2) in the normal text color: the theme's global h2 accent 2 color (common/theme.css) read like an error */
+.sw-dialog-title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    color: var(--sw-text);
+    font-family: var(--sw-head);
+    font-weight: var(--sw-head-weight);
+    font-size: var(--sw-text-xl);
+    line-height: var(--sw-lh-tight);
+    /* a question that names its item ("Force a password reset for someone@example.com?") wraps instead of hiding the item; a long
+       word (an address) breaks only when it cannot fit a line */
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-wrap: pretty;
+}
+
+.sw-dialog-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sw-dialog-tools .sw-button {
+    color: var(--sw-text-2);
+}
+
+.sw-dialog-body {
+    padding: var(--sw-space-3) var(--sw-space-5) var(--sw-space-5);
+    /* One anatomy: the body reads left aligned, whatever the page styles say */
+    text-align: start;
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+}
+
+.sw-dialog.sw-wide > .sw-dialog-body, .sw-dialog.sw-full > .sw-dialog-body {
+    padding-top: var(--sw-space-4);
+}
+
+/* One row (LAY-1): the status slot shrinks with an ellipsis, buttons a busy dialog adds go left of the existing ones (overlay.js), so the
+   buttons never move. Buttons never shrink below their label (TXT-17: no ellipsis on a button; a label longer than the row wraps, buttons
+   that don't fit the row flow to the next one); when the status has too little room it takes its own row above the buttons
+   (sw-foot-stack, set by overlay.js; the buttons stay where they are: the box keeps its height, the body gives the room). Phones: see below */
+.sw-dialog-foot {
+    display: flex;
+    flex-wrap: wrap;
+    /* bottom aligned: a button whose label wraps grows up, its neighbours stay */
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: var(--sw-space-2);
+    flex: none;
+    padding: var(--sw-space-3) var(--sw-space-5);
+    border-top: 1px solid var(--sw-border);
+}
+
+.sw-dialog-foot > .sw-button {
+    flex-shrink: 0;
+    max-width: 100%;
+    white-space: normal;
+}
+
+/* A footer label wraps only between words, never inside one (TXT-17): the dialog sizes its slots for the labels it may show (Labels,
+   the short "Stop waiting"); a label longer than its kept slot gets one line with an ellipsis and its full text as the tool tip */
+.sw-dialog-foot .sw-button > .sw-button-text {
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.sw-dialog-foot .sw-button.sw-dialog-slot-ellip {
+    white-space: nowrap;
+}
+
+.sw-dialog-foot .sw-button.sw-dialog-slot-ellip > .sw-button-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sw-dialog-foot.sw-foot-stack > .sw-dialog-progress {
+    flex: 1 0 100%;
+    order: -2;
+}
+
+.sw-dialog-text {
+    color: var(--sw-text-2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sw-dialog-body .sw-input:not(.sw-number), .sw-dialog-body .sw-text, .sw-dialog-body .sw-field {
+    width: 100%;
+}
+
+.sw-dialog-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+}
+
+/* Text dialogs (json, long text, markdown cells) */
+.sw-text-dialog .sw-dialog-body {
+    padding: var(--sw-space-3) var(--sw-space-4);
+}
+
+/* Selection dialogs (Sw.Dialog.Select, Sw.SearchSelection) */
+.sw-select-dialog {
+    height: min(40rem, calc(100vh - 32px));
+    height: min(40rem, calc(100dvh - 32px));
+}
+
+.sw-select-dialog .sw-dialog-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.sw-select-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+    flex: 1;
+    min-height: 0;
+}
+
+.sw-select-results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+}
+
+.sw-select-result {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-3);
+    flex: none;
+    min-height: var(--sw-control-h);
+    padding: var(--sw-space-1) var(--sw-space-3);
+    border: 0;
+    border-radius: var(--sw-radius-sm);
+    background: transparent;
+    color: var(--sw-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sw-select-result:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: -2px;
+}
+
+@media (hover: hover) {
+    .sw-select-result:hover {
+        background: var(--sw-hover);
+    }
+}
+
+.sw-select-result-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sw-select-result-hint {
+    color: var(--sw-text-3);
+    font-size: var(--sw-text-xs);
+}
+
+.sw-select-recent {
+    color: var(--sw-text-2);
+}
+
+.sw-select-end {
+    padding: var(--sw-space-3);
+    text-align: center;
+    flex: none;
+}
+
+/* Working dialog (Sw.Dialog.Working) */
+.sw-working-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sw-space-4);
+    padding: var(--sw-space-3) 0;
+    text-align: center;
+}
+
+.sw-working-text {
+    white-space: pre-wrap;
+}
+
+.sw-working-icon {
+    width: 3rem;
+    height: 3rem;
+    color: var(--sw-text-2);
+}
+
+/* Phones (portrait): dialogs are bottom sheets (full width, top radius, 44 px buttons sharing the row, safe area). Touch only below
+   761 px: with a mouse (pointer: fine) the desktop dialog is used from 480 px, so a page in the shell's narrower content frame of a
+   desktop window gets a movable dialog (S7a-A1-4; the same queries: overlay.js deskMq / sheetMq) */
+@media (max-width: 760px) and (min-height: 501px) and (pointer: coarse), (max-width: 760px) and (min-height: 501px) and (pointer: none), (max-width: 479.98px) and (min-height: 501px) {
+    .sw-dialog, .sw-dialog.sw-wide {
+        inset: auto 0 0 0;
+        margin: 0;
+        width: 100%;
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        border-width: 1px 0 0;
+        border-radius: var(--sw-radius-lg) var(--sw-radius-lg) 0 0;
+        padding-bottom: env(safe-area-inset-bottom);
+        animation: sw-sheet-in var(--sw-dur-3) var(--sw-ease);
+    }
+
+    .sw-dialog.sw-full, .sw-select-dialog {
+        height: calc(100vh - 24px);
+        height: calc(100dvh - 24px);
+    }
+
+    .sw-dialog-head {
+        padding-left: var(--sw-space-4);
+    }
+
+    .sw-dialog-body {
+        padding-left: var(--sw-space-4);
+        padding-right: var(--sw-space-4);
+    }
+
+    .sw-dialog-foot {
+        padding: var(--sw-space-3) var(--sw-space-4);
+    }
+
+    .sw-dialog-foot > .sw-button {
+        flex: 1 1 auto;
+        min-height: 2.75rem;
+    }
+
+    /* the sheet keeps its height while busy (overlay.js hold): the status row above the buttons takes room from the body, nothing moves */
+    .sw-dialog-foot {
+        flex-wrap: wrap;
+    }
+
+    .sw-dialog-foot > .sw-dialog-progress {
+        flex: 1 0 100%;
+        order: -2;
+    }
+}
+
+@keyframes sw-sheet-in {
+    from {
+        transform: translateY(var(--sw-dist-3, 16px));
+        opacity: 0;
+    }
+}
+
+/* Phones in landscape: little height, the dialog fills the viewport width (not movable, no sheet) */
+@media (max-height: 500px) {
+    .sw-dialog {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 12px);
+        max-height: calc(100dvh - 12px);
+    }
+
+    .sw-dialog.sw-wide {
+        width: calc(100vw - 16px);
+    }
+
+    .sw-dialog.sw-full, .sw-select-dialog {
+        height: calc(100vh - 12px);
+        height: calc(100dvh - 12px);
+    }
+
+    .sw-dialog-head {
+        min-height: 0;
+        padding-top: var(--sw-space-1);
+        padding-bottom: var(--sw-space-1);
+    }
+
+    .sw-dialog-body {
+        padding-top: var(--sw-space-2);
+        padding-bottom: var(--sw-space-2);
+    }
+
+    .sw-dialog-foot {
+        padding: var(--sw-space-1) var(--sw-space-3);
+    }
+
+    /* Buttons that need more than one row in a low window (400 % zoom, a phone in landscape; S6-D1, WCAG 1.4.10 reflow): they wrap,
+       never scroll sideways, every button on screen (overlay.js footWrap, sw-foot-wrap). Compact rows (the small control height) with
+       one line per label, so the body keeps its room for the focused field; each row is filled, the primary action is last (bottom
+       right). Buttons that would need more than two rows share two (sw-foot-grid2: two per row); a label longer than its place is cut
+       with … and has its full text as the tool tip */
+    .sw-dialog-foot.sw-foot-wrap {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        column-gap: var(--sw-space-2);
+        row-gap: var(--sw-space-1);
+    }
+
+    .sw-dialog-foot.sw-foot-wrap > .sw-button {
+        flex: 1 1 auto;
+        min-height: var(--sw-control-h-sm);
+        max-width: 100%;
+        padding-top: 0;
+        padding-bottom: 0;
+        white-space: nowrap;
+    }
+
+    .sw-dialog-foot.sw-foot-wrap.sw-foot-grid2 > .sw-button {
+        flex: 1 1 calc(50% - var(--sw-space-2));
+        min-width: 0 !important;
+    }
+
+    .sw-dialog-foot.sw-foot-wrap > .sw-button > .sw-button-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+/* ---------- Dialog state, movable dialogs, busy dialogs (UX-POP-6, POP-7, FBK-4) ---------- */
+
+/* Above every other pop-up (Sw.Dialog option Above: the session time-out warning, UX-POP-5); below the server block */
+.sw-layer.sw-above {
+    z-index: 1200;
+}
+
+.sw-dialog.sw-above {
+    z-index: 1201;
+}
+
+/* The title bar is chrome (a drag handle on desktop) */
+.sw-dialog-head {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* The status slot (POP-6: "a line after the title"): a row between the title bar and the body, 0 high while empty; the rejection line
+   opens it in place (the footer stays where it is, overlay.js: the box keeps its height, the body gives the room), so it never covers the title, ⋮, ×, a field, the
+   focus or a button at any size or zoom; it wraps (translations, zoom), selectable, part of the dialog's description */
+.sw-dialog-status {
+    display: grid;
+    grid-template-rows: 0fr;
+    flex: none;
+    transition: grid-template-rows var(--sw-dur-2) var(--sw-ease);
+}
+
+.sw-dialog-status:has(> .sw-dialog-status-in > .sw-dialog-reject:not([hidden])) {
+    grid-template-rows: 1fr;
+}
+
+.sw-dialog-status-in {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sw-dialog-reject {
+    margin: 0 var(--sw-space-5) var(--sw-space-2);
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border: 1px solid color-mix(in srgb, var(--sw-warning) 60%, var(--sw-border));
+    border-radius: var(--sw-radius-md);
+    background: color-mix(in srgb, var(--sw-warning) 14%, var(--sw-surface-raised));
+    color: var(--sw-text);
+    font-size: var(--sw-text-sm);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+
+/* A low window where the line's own row would cover the focused field (overlay.js lineInHead, D1): the line takes the place of the title
+   text; the title row keeps its size (nothing in the title bar or the footer moves) and the body keeps its room */
+.sw-dialog.sw-dialog-line-head > .sw-dialog-status {
+    position: absolute;
+    z-index: 1;
+    left: var(--sw-lh-x, 0px);
+    top: var(--sw-lh-y, 0px);
+    width: var(--sw-lh-w, 100%);
+    height: var(--sw-lh-h, auto);
+    transition: none;
+}
+
+.sw-dialog.sw-dialog-line-head > .sw-dialog-status > .sw-dialog-status-in {
+    height: 100%;
+}
+
+.sw-dialog.sw-dialog-line-head > .sw-dialog-status .sw-dialog-reject {
+    box-sizing: border-box;
+    height: 100%;
+    margin: 0;
+    padding: 2px var(--sw-space-2);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    line-height: 1.25;
+}
+
+.sw-dialog.sw-dialog-line-head > .sw-dialog-head .sw-dialog-title {
+    visibility: hidden;
+}
+
+/* hidden: the row collapses with its transition, the text is gone at once (and out of the accessibility tree) */
+.sw-dialog-reject[hidden] {
+    display: block;
+    visibility: hidden;
+}
+
+@media (max-width: 760px), (max-height: 500px) {
+    .sw-dialog-reject {
+        margin-left: var(--sw-space-4);
+        margin-right: var(--sw-space-4);
+    }
+}
+
+/* A low window (a phone in landscape, 400 % zoom): the line stays compact so the body keeps its room */
+@media (max-height: 500px) {
+    .sw-dialog-reject {
+        margin-bottom: var(--sw-space-1);
+        padding: var(--sw-space-1) var(--sw-space-2);
+        line-height: 1.25;
+        /* one line (the full text is its tool tip, the dialog's description and announced) */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+/* After its entrance a dialog has no animation of its own: the end of the rejection pulse must not replay the entrance (a sheet slid in
+   again, 16 px, under the finger); set by overlay.js when the entrance ended */
+.sw-dialog.sw-shown:not(.sw-leaving) {
+    animation: none;
+}
+
+/* The pulse of the rejection cue: a ring in the warning colour, once (no pulse when the theme has no motion) */
+.sw-dialog.sw-reject-pulse:not(.sw-leaving) {
+    outline: 3px solid transparent;
+    outline-offset: 2px;
+    animation: sw-reject-pulse var(--sw-dur-2) var(--sw-ease);
+}
+
+@keyframes sw-reject-pulse {
+    40% {
+        outline-color: var(--sw-warning);
+    }
+}
+
+/* Busy dialogs: progress text (what it waits for, the time so far; not a live region) and the added ways out */
+.sw-dialog-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    /* basis 0: the status takes the room the buttons leave (it never pushes a button to the next row; overlay.js stacks it instead) */
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    margin-right: auto;
+    white-space: nowrap;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.sw-dialog-progress-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* The time so far: its own slot, never cut off (the text before it ellipsizes first, the full text is the tool tip) */
+.sw-dialog-progress-time {
+    flex: none;
+    margin-left: calc(-1 * var(--sw-space-1));
+}
+
+.sw-dialog-bar {
+    /* gives way to the text first (down to 3 rem) */
+    flex: 0 1 8rem;
+    min-width: 3rem;
+    height: 6px;
+    border-radius: var(--sw-radius-pill);
+    background: var(--sw-border);
+    overflow: hidden;
+}
+
+.sw-dialog-bar-fill {
+    height: 100%;
+    background: var(--sw-accent1);
+    transform-origin: left center;
+    transform: scaleX(0);
+    transition: transform var(--sw-dur-2) var(--sw-ease);
+}
+
+/* A footer Cancel that can't stop the running work is not offered; its slot stays (nothing moves) */
+.sw-dialog-foot > .sw-dialog-slot-off {
+    visibility: hidden;
+}
+
+/* The footer layout engine of a busy dialog (overlay.js, LAY-1 / TXT-17 / POP-6): computed from the idle footer, any number of buttons.
+   The box keeps its height (the body gives the room, reserved when the dialog opened), every footer button is pinned where it was
+   (absolute, its idle offset from the footer's bottom right and its idle width; the footer keeps their room: sw-dialog-foot-room), so
+   nothing the busy state adds can move it. "Stop waiting" takes Cancel's slot (sw-dialog-busyabs), an added button goes left of the
+   bottom row or into a row of its own above the buttons, the status shares the bottom row while it has room (sw-dialog-progress-inline),
+   else takes its own row above (sw-foot-stack) or shows the time only (sw-foot-tight: 400 % zoom, a low window). Rows are added above
+   the buttons only (the footer grows up). The idle footer comes back when the work ends. */
+.sw-dialog-foot.sw-foot-frozen {
+    position: relative;
+}
+
+.sw-dialog-foot-room {
+    flex: 1 0 100%;
+    order: 0;
+}
+
+.sw-dialog-foot > .sw-dialog-busyabs {
+    flex: none;
+    margin: 0;
+}
+
+/* The buttons the busy state adds: one line, measured (full label, short label, icon only: overlay.js busyLabel); never wrapped */
+.sw-dialog-foot .sw-dialog-busybtn {
+    white-space: nowrap;
+}
+
+.sw-dialog-foot .sw-dialog-busybtn > .sw-button-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sw-dialog-foot > .sw-dialog-progress.sw-dialog-progress-inline {
+    position: absolute;
+    flex: none;
+    order: 0;
+    margin: 0;
+}
+
+/* The room reserved when the dialog opened (overlay.js reserveRoom): the busy footer and the rejection line take it later, nothing grows */
+.sw-dialog-body.sw-dlg-reserved::after {
+    content: "";
+    display: block;
+    /* less what the held box took since (overlay.js useReserve: the status row, the line), so a short body never scrolls */
+    height: max(0px, calc(var(--sw-dlg-reserve, 0px) - var(--sw-dlg-used, 0px)));
+}
+
+/* Cancel replaced by Stop waiting in its place */
+.sw-dialog-foot .sw-dialog-slot-gone {
+    display: none;
+}
+
+/* A row of its own for buttons a busy dialog adds when the button row has no room (right aligned, above the buttons) */
+.sw-dialog-foot-extra {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--sw-space-2);
+    flex: 1 0 100%;
+    order: -1;
+    min-width: 0;
+}
+
+.sw-dialog-foot-extra > .sw-button {
+    flex-shrink: 0;
+    max-width: 100%;
+    white-space: normal;
+}
+
+/* No room for the status text: the time so far only (the full status is the tool tip and the dialog's description) */
+.sw-dialog-foot.sw-foot-tight > .sw-dialog-progress > .sw-dialog-progress-text {
+    display: none;
+}
+
+.sw-dialog-foot.sw-foot-tight > .sw-dialog-progress-time,
+.sw-dialog-foot.sw-foot-tight > .sw-dialog-progress > .sw-dialog-progress-time {
+    margin-left: 0;
+}
+
+/* While the work runs the fields are read only (FRM-5: nothing typed is lost; FRM-8: they read as text, not disabled) */
+.sw-dialog.sw-dialog-locked .sw-dialog-body :is(input, textarea)[readonly] {
+    cursor: default;
+}
+
+.sw-dialog.sw-dialog-locked .sw-dialog-body :is([role=switch], [role=checkbox], [role=radio], [role=slider], select, input[type=checkbox], input[type=radio], input[type=range]) {
+    cursor: default;
+}
+
+/* Sw.Dialog.Working reserves the room of its buttons (Cancel, the 10 s Close): no shift when they arrive */
+.sw-dialog-foot.sw-reserve {
+    min-height: calc(var(--sw-control-h) + 2 * var(--sw-space-3));
+    border-top: 0;
+    align-items: center;
+}
+
+/* The dialog menu (Move, Size, Maximize, Reset position) */
+.sw-dialog.sw-nomove .sw-dialog-menu {
+    display: none;
+}
+
+/* Move / Size mode: a tool bar over the title bar with step buttons, Revert and Done (WCAG 2.5.7) */
+.sw-dialog-modebar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 4;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2);
+    min-height: 3.5rem;
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border-bottom: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-lg) var(--sw-radius-lg) 0 0;
+    background: var(--sw-surface-raised);
+}
+
+.sw-dialog-modelabel {
+    margin-right: auto;
+    color: var(--sw-text);
+    font-weight: var(--sw-weight-medium);
+}
+
+.sw-dialog-steps {
+    display: flex;
+    gap: 2px;
+}
+
+:root[data-density="touch"] .sw-dialog-step {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+}
+
+@media (pointer: coarse) {
+    .sw-dialog-step {
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+    }
+}
+
+.sw-dialog.sw-mode {
+    outline: 2px dashed var(--sw-focus);
+    outline-offset: 2px;
+}
+
+/* Edge and corner resize handles (8 px; desktop layout only) */
+.sw-dialog-rz, .sw-sheet-handle {
+    display: none;
+}
+
+@media (min-width: 761px) and (min-height: 501px), (min-width: 480px) and (min-height: 501px) and (pointer: fine) {
+    .sw-dialog.sw-placed {
+        inset: auto;
+        left: var(--sw-dlg-l, 0px);
+        top: var(--sw-dlg-t, 0px);
+        margin: 0;
+    }
+
+    .sw-dialog.sw-placed.sw-sized {
+        width: var(--sw-dlg-w);
+        height: var(--sw-dlg-h);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+    }
+
+    .sw-dialog.sw-max {
+        inset: 8px;
+        margin: 0;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+    }
+
+    .sw-dialog:not(.sw-nomove):not(.sw-max):not(.sw-mode) > .sw-dialog-head {
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .sw-dialog.sw-dragging, .sw-dialog.sw-dragging > .sw-dialog-head {
+        cursor: grabbing;
+    }
+
+    .sw-dialog:not(.sw-nomove):not(.sw-max):not(.sw-mode) > .sw-dialog-rz {
+        display: block;
+        position: absolute;
+        z-index: 5;
+        touch-action: none;
+    }
+
+    .sw-rz-n, .sw-rz-s {
+        left: 12px;
+        right: 12px;
+        height: 8px;
+        cursor: ns-resize;
+    }
+
+    .sw-rz-n {
+        top: -4px;
+    }
+
+    .sw-rz-s {
+        bottom: -4px;
+    }
+
+    .sw-rz-e, .sw-rz-w {
+        top: 12px;
+        bottom: 12px;
+        width: 8px;
+        cursor: ew-resize;
+    }
+
+    .sw-rz-e {
+        right: -4px;
+    }
+
+    .sw-rz-w {
+        left: -4px;
+    }
+
+    .sw-rz-ne, .sw-rz-nw, .sw-rz-se, .sw-rz-sw {
+        width: 12px;
+        height: 12px;
+    }
+
+    .sw-rz-ne {
+        top: -4px;
+        right: -4px;
+        cursor: nesw-resize;
+    }
+
+    .sw-rz-sw {
+        bottom: -4px;
+        left: -4px;
+        cursor: nesw-resize;
+    }
+
+    .sw-rz-nw {
+        top: -4px;
+        left: -4px;
+        cursor: nwse-resize;
+    }
+
+    .sw-rz-se {
+        bottom: -4px;
+        right: -4px;
+        cursor: nwse-resize;
+    }
+}
+
+/* Sheets (phone portrait): a handle at the top (drag up: taller, drag down: a close attempt); sized by the handle or the menu's Size */
+@media (max-width: 760px) and (min-height: 501px) and (pointer: coarse), (max-width: 760px) and (min-height: 501px) and (pointer: none), (max-width: 479.98px) and (min-height: 501px) {
+    .sw-sheet-handle {
+        display: block;
+        flex: none;
+        height: 1.25rem;
+        margin-bottom: -0.5rem;
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .sw-sheet-handle::before {
+        content: "";
+        display: block;
+        width: 2.5rem;
+        height: 4px;
+        margin: 0.5rem auto 0;
+        border-radius: var(--sw-radius-pill);
+        background: var(--sw-text-3);
+    }
+
+    .sw-dialog > .sw-dialog-head {
+        touch-action: none;
+    }
+
+    .sw-dialog {
+        transition: transform var(--sw-dur-2) var(--sw-ease);
+    }
+
+    .sw-dialog.sw-sheet-drag {
+        transform: translateY(var(--sw-sheet-dy, 0px));
+        transition: none;
+        animation: none;
+    }
+
+    .sw-dialog.sw-sheet-sized {
+        height: var(--sw-sheet-h);
+    }
+}
+
+/* Low screens (landscape phones): dialogs fill the viewport, nothing to move: no dialog menu */
+@media (max-height: 500px) {
+    .sw-dialog-menu {
+        display: none;
+    }
+}
+
+@media (forced-colors: active) {
+    .sw-dialog-reject {
+        border-color: CanvasText;
+    }
+
+    .sw-dialog.sw-reject-pulse {
+        outline-color: Highlight;
+    }
+}
+
+/* ---------- Exit transitions (UX-MOT-1, Sw.Motion.Out): every overlay leaves with its theme duration (--sw-dur-*, 1 ms with reduced
+   motion); the element is inert while it leaves ---------- */
+
+.sw-layer.sw-leaving {
+    pointer-events: none;
+    animation: sw-fade-out var(--sw-dur-2) var(--sw-ease) forwards;
+}
+
+.sw-popup.sw-leaving {
+    pointer-events: none;
+    animation: sw-pop-out var(--sw-dur-2) var(--sw-ease) forwards;
+}
+
+.sw-dialog.sw-leaving {
+    pointer-events: none;
+    animation: sw-dialog-out var(--sw-dur-2) var(--sw-ease) forwards;
+}
+
+.sw-hint.sw-leaving {
+    pointer-events: none;
+    animation: sw-fade-out var(--sw-dur-2) var(--sw-ease) forwards;
+}
+
+/* Sheets slide out the way they came */
+@media (max-width: 760px) and (min-height: 501px) and (pointer: coarse), (max-width: 760px) and (min-height: 501px) and (pointer: none), (max-width: 479.98px) and (min-height: 501px) {
+    .sw-dialog.sw-leaving, .sw-dialog.sw-wide.sw-leaving {
+        animation: sw-sheet-out var(--sw-dur-3) var(--sw-ease) forwards;
+    }
+}
+
+@keyframes sw-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes sw-pop-out {
+    to {
+        opacity: 0;
+        transform: translateY(var(--sw-dist-1, 2px)) scale(var(--sw-zoom, 0.98));
+    }
+}
+
+@keyframes sw-dialog-out {
+    to {
+        opacity: 0;
+        transform: scale(var(--sw-zoom, 0.98));
+    }
+}
+
+@keyframes sw-sheet-out {
+    to {
+        opacity: 0;
+        transform: translateY(var(--sw-dist-3, 16px));
+    }
+}
+
+/* ---------- Toasts (Sw.Toast, Sw.Fail, Sw.Info): bottom right, inverse surface, status icon, optional action, close ---------- */
+
+.sw-toasts {
+    position: fixed;
+    z-index: 1100;
+    right: var(--sw-space-4);
+    /* --sw-toast-lift (set by Sw.Toast): the height of a bar at the bottom of the window (ex: a table pager) that toasts keep clear of */
+    bottom: calc(var(--sw-space-4) + var(--sw-toast-lift, 0px));
+    width: min(26rem, calc(100vw - 32px));
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sw-space-2);
+    pointer-events: none;
+    /* Status colors that read on the inverse surface (dark toast in light schemes, light toast in dark schemes) */
+    --sw-toast-ok: #3dd68c;
+    --sw-toast-danger: #ff7a7f;
+    --sw-toast-warning: #ffc53d;
+    --sw-toast-info: color-mix(in oklab, var(--sw-accent2), white 35%);
+}
+
+/* No room above a tall surface at the bottom (a sheet that fills most of a phone): the toasts sit at the top instead of covering it */
+.sw-toasts.sw-toasts-top {
+    top: calc(var(--sw-space-3) + env(safe-area-inset-top));
+    bottom: auto;
+}
+
+:root[data-sw-scheme="dark"] .sw-toasts {
+    --sw-toast-ok: #187a48;
+    --sw-toast-danger: #b4232f;
+    --sw-toast-warning: #8f5c00;
+    --sw-toast-info: color-mix(in oklab, var(--sw-accent2), black 40%);
+}
+
+.sw-toast {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-3);
+    max-width: 100%;
+    min-height: 3rem;
+    padding: var(--sw-space-2) var(--sw-space-2) var(--sw-space-2) var(--sw-space-4);
+    border-radius: var(--sw-radius-md);
+    background: var(--sw-surface-inverse);
+    color: var(--sw-on-inverse);
+    border: 1px solid transparent;
+    box-shadow: var(--sw-elev-2);
+    font-size: var(--sw-text-md);
+    animation: sw-pop-in var(--sw-dur-3) var(--sw-ease);
+    transition: opacity var(--sw-dur-3) var(--sw-ease), transform var(--sw-dur-3) var(--sw-ease);
+    touch-action: pan-y;
+    pointer-events: auto;
+    cursor: pointer;
+    outline: none;
+}
+
+.sw-toast:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+.sw-toast-text {
+    flex: 1;
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 30vh;
+    overflow: auto;
+}
+
+/* the folded technical details of an error toast (Sw.Fail of a failed request) */
+.sw-toast-details {
+    display: block;
+    margin-top: var(--sw-space-1);
+    font-size: var(--sw-text-sm);
+    opacity: 0.85;
+    cursor: default;
+}
+
+    .sw-toast-details > summary {
+        cursor: pointer;
+        width: max-content;
+    }
+
+    .sw-toast-details > pre {
+        margin: var(--sw-space-1) 0 0;
+        font-family: var(--sw-mono);
+        font-size: var(--sw-text-xs, 0.75rem);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        user-select: text;
+    }
+
+.sw-toast-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--sw-toast-info);
+}
+
+.sw-toast-count {
+    padding: 0 var(--sw-space-2);
+    border-radius: var(--sw-radius-pill);
+    background: color-mix(in srgb, var(--sw-on-inverse) 18%, transparent);
+    font-size: var(--sw-text-xs);
+    font-weight: 600;
+}
+
+/* Action (option Action: {Text, OnClick}, ex: "Undo") and close buttons: on the inverse surface */
+.sw-toast .sw-button.sw-ghost {
+    color: var(--sw-on-inverse);
+}
+
+@media (hover: hover) {
+    .sw-toast .sw-button.sw-ghost:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--sw-on-inverse) 14%, transparent);
+        color: var(--sw-on-inverse);
+    }
+}
+
+.sw-toast .sw-toast-action {
+    font-weight: 600;
+    color: color-mix(in oklab, var(--sw-accent1), var(--sw-on-inverse) 45%);
+}
+
+.sw-toast.sw-error .sw-toast-icon {
+    color: var(--sw-toast-danger);
+}
+
+.sw-toast.sw-ok .sw-toast-icon {
+    color: var(--sw-toast-ok);
+}
+
+.sw-toast.sw-warning .sw-toast-icon {
+    color: var(--sw-toast-warning);
+}
+
+.sw-toast.sw-hide {
+    opacity: 0;
+    transform: translateY(6px);
+    /* hidden once faded: no clicks, focus or reading (MOT-7) */
+    visibility: hidden;
+    transition: opacity var(--sw-dur-3) var(--sw-ease), transform var(--sw-dur-3) var(--sw-ease), visibility 0s linear var(--sw-dur-3);
+}
+
+/* Touch: a sideways swipe closes (overlay.js); the toast follows the finger */
+.sw-toast.sw-toast-swipe {
+    transform: translateX(var(--sw-toast-dx, 0px));
+    opacity: 0.75;
+    transition: none;
+}
+
+@media (forced-colors: active) {
+    .sw-toast {
+        border-color: CanvasText;
+    }
+}
+
+/* Phones: full width above a bottom bar */
+@media (max-width: 760px) {
+    .sw-toasts {
+        left: var(--sw-space-3);
+        right: var(--sw-space-3);
+        bottom: calc(var(--sw-space-3) + env(safe-area-inset-bottom) + var(--sw-toast-lift, 0px));
+        width: auto;
+    }
+}
+
+/* ---------- Hints (Sw.Hint: tooltips on long press / keyboard focus) ---------- */
+
+.sw-hint {
+    position: fixed;
+    /* above every pop-up level, also a dialog shown with Above (1201) */
+    z-index: 1300;
+    max-width: min(20rem, calc(100vw - 16px));
+    padding: var(--sw-space-1) var(--sw-space-2);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface-raised);
+    color: var(--sw-text);
+    font-size: var(--sw-text-sm);
+    line-height: 1.35;
+    box-shadow: var(--sw-elev-1);
+    pointer-events: none;
+    animation: sw-fade-in var(--sw-dur-2);
+    white-space: pre-wrap;
+}
+
+/* ---------- Loading overlay (Sw.Loader, the visual of Sw.Page.Loading) ---------- */
+
+.sw-loader {
+    --sw-loader-delay: 150ms;
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-4);
+    background: color-mix(in srgb, var(--sw-canvas) 70%, transparent);
+    cursor: progress;
+    outline: none;
+    animation: sw-fade-in var(--sw-dur-3) var(--sw-loader-delay) both;
+    transition: opacity var(--sw-dur-2);
+}
+
+.sw-loader.sw-opaque {
+    background: var(--sw-canvas);
+    animation: none;
+}
+
+.sw-loader.sw-local {
+    position: absolute;
+    z-index: 10;
+}
+
+.sw-loader-host {
+    position: relative;
+}
+
+.sw-loader.sw-hide {
+    opacity: 0;
+    /* hidden once faded: no clicks, focus or reading (MOT-7) */
+    visibility: hidden;
+    transition: opacity var(--sw-dur-2), visibility 0s linear var(--sw-dur-2);
+}
+
+.sw-loader-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--sw-accent1);
+}
+
+.sw-loader.sw-local .sw-loader-icon {
+    width: 2rem;
+    height: 2rem;
+}
+
+.sw-loader-text {
+    max-width: 90vw;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-lg);
+    font-weight: var(--sw-weight-medium);
+    text-align: center;
+}
+
+/* ---------- Server block (Sw.ServerBlock): an Sw.Dialog above every other pop-up (Above), movable, resizable, × closes (only hides) ---------- */
+
+.sw-serverblock-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sw-space-3);
+    padding: var(--sw-space-2) 0 var(--sw-space-3);
+    text-align: center;
+}
+
+.sw-serverblock-text {
+    color: var(--sw-text);
+    font-size: var(--sw-text-lg);
+}
+
+.sw-serverblock-wait {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+}
+
+.sw-serverblock-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.sw-serverblock-time {
+    color: var(--sw-text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.sw-serverblock-note {
+    max-width: 30rem;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+/* App shell: while a framed page shows a menu or pop-up, the rest of the app is covered around the frame by transparent press catchers
+   (overlay.js frameCatcher: one modal layer across frames, UX-POP-2): a press closes the page's pop-up and does nothing else */
+.sw-frame-catch {
+    position: fixed;
+    z-index: 1000;
+    background: transparent;
+    touch-action: none;
+}
+
+/* A held dialog whose body can't give more room (a busy footer or the status line at 400 % zoom): the body's padding gives some first */
+.sw-dialog.sw-dialog-squeezed > .sw-dialog-body {
+    padding-top: var(--sw-space-1);
+    padding-bottom: var(--sw-space-1);
+}
+
+/* A busy status without room in a low window (overlay.js placeStatus): not shown (the running button spins; the status stays the
+   dialog's description and the tool tip), so the body keeps its room for the focused field */
+.sw-dialog-foot > .sw-dialog-progress.sw-dialog-progress-off {
+    display: none;
+}

@@ -17,7 +17,7 @@ A counter shader gets the rendered digits as a texture (`tex`) together with per
 
 | Item | Description |
 |---|---|
-| [`index.html`](index.html) | Transparent page that runs `textEffectMain()` from [`../textEffect.js`](../textEffect.js) |
+| [`index.html`](index.html) | Transparent lean page (no SysWeaver core; `../../mediaPlayer/media_player.js` by a static tag) that runs `textEffectMain()` (body attribute `data-text-effect-main`) from [`../textEffect.js`](../textEffect.js) |
 | [`ScrollUp.glsl`](ScrollUp.glsl) | Digits scroll upwards and fade at the top and bottom edges |
 
 ## Limitations and considerations

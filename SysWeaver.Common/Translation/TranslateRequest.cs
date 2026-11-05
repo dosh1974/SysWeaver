@@ -24,7 +24,7 @@ namespace SysWeaver.Translation
 
         /// <summary>
         /// The text to translate.
-        /// Use <see cref="ContentType"/> to specify mark down or html.
+        /// Use <see cref="ContentType"/> to specify Markdown or html.
         /// Texts starting with <see cref="TranslationTools.NoTranslatePrefix"/> are not translated.
         /// </summary>
         [EditMin(1)]
@@ -48,7 +48,7 @@ namespace SysWeaver.Translation
         public TranslationCacheRetention Retention { get; set; } = TranslationCacheRetention.Medium;
 
         /// <summary>
-        /// The type of text (plain text, mark down or html)
+        /// The type of text (plain text, Markdown or html)
         /// </summary>
         public TranslationContentTypes ContentType { get; set; } = TranslationContentTypes.Text;
 

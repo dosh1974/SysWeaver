@@ -90,11 +90,13 @@ namespace SysWeaver.MicroService
         /// Wait for items newer than the cursor
         /// </summary>
         /// <param name="lastId">The id of the last item received, null to start</param>
-        /// <param name="system">If non-empty, only return items for this system</param>
+        /// <param name="system">null or "" for all items, else only the items of this system (ignoring the letter case and white space around it; a blank one matches only items without a system)</param>
         /// <returns>The items (oldest first), or null if no new items arrived before the time out</returns>
         public async Task<T[]> Poll(String lastId, String system)
         {
+            //  null or "" is any system (a blank one is not: it is trimmed and matches only items without a system)
             bool anySystem = String.IsNullOrEmpty(system);
+            system = system?.Trim();
             var cc = Block.Cc;
             for (; ; )
             {
@@ -123,7 +125,8 @@ namespace SysWeaver.MicroService
                             var v = n.Value.Value;
                             //  Everything up to here have been scanned (even if not returned due to the system filter)
                             lastId = GetId(v);
-                            if (!(anySystem || system.FastEquals(GetSystem(v))))
+                            //  The system name is matched ignoring the letter case and white space around it ("test" and "Test " are the same system)
+                            if (!(anySystem || String.Equals(system, GetSystem(v)?.Trim() ?? "", StringComparison.OrdinalIgnoreCase)))
                                 continue;
                             res ??= new List<T>();
                             res.Add(CloneFn(v));

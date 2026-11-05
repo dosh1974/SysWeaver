@@ -5,11 +5,12 @@ using System.Text;
 using System.Threading.Tasks;
 using SysWeaver.Data;
 using SysWeaver.MicroService;
+using SysWeaver.Net;
 
 namespace SysWeaver.TextMessage
 {
 
-    public sealed class FakeTextMessageService : ITextMessageSender, ITextMessageReceiverService, ITextMessageStatusService, ITextMessageEvents, IDisposable
+    public sealed class FakeTextMessageService : ITextMessageSender, ITextMessageReceiverService, ITextMessageStatusService, ITextMessageEvents, IDisposable, IRunTimeWebApiAuth
     {
         public FakeTextMessageService(FakeTextMessageParams p = null)
         {
@@ -25,6 +26,30 @@ namespace SysWeaver.TextMessage
             StatusDelay = Math.Max(0, p.StatusDelay);
             Incoming = new(x => x.Id, x => x.System, x => x.Clone(), Size, timeOut, maxPoll);
             Statuses = new(x => x.Id, x => x.System, x => x.Clone(), Size, timeOut, maxPoll);
+            MethodAuths = new Dictionary<String, String>(StringComparer.Ordinal)
+            {
+                { "*", p.Auth },
+            }.Freeze();
+        }
+
+        /// <summary>
+        /// The auth of all API's (and the menu items of the API's), from <see cref="FakeTextMessageParams.Auth"/>
+        /// </summary>
+        public IReadOnlyDictionary<String, String> MethodAuths { get; }
+
+        /// <summary>
+        /// Validate a phone number, an invalid number is a bad request (400)
+        /// </summary>
+        static void ValidatePhone(out String name, out String isoCountry, out String pre, out String num, String phone)
+        {
+            try
+            {
+                PhonePrefix.GetValidatedPhoneNumber(out name, out isoCountry, out pre, out num, phone);
+            }
+            catch (Exception ex)
+            {
+                throw new HttpResponseException(400, ex.Message);
+            }
         }
 
         public void Dispose()
@@ -75,10 +100,10 @@ namespace SysWeaver.TextMessage
         {
             var text = message.Text?.Trim();
             if (String.IsNullOrEmpty(text))
-                throw new Exception("No text supplied!");
-            var phone = message.PhoneNumber?.Trim() ?? throw new Exception("No phone number supplied!");
+                throw new HttpResponseException(400, "Write a text first");
+            var phone = message.PhoneNumber?.Trim() ?? throw new HttpResponseException(400, "Enter a phone number first");
 
-            PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, phone);
+            ValidatePhone(out var name, out var isoCountry, out var pre, out var num, phone);
             phone = String.Join(' ', pre, num);
             var ch = Channel;
             if (!message.Allows(ch))
@@ -166,9 +191,9 @@ namespace SysWeaver.TextMessage
         {
             var text = message.Text?.Trim();
             if (String.IsNullOrEmpty(text))
-                throw new Exception("No text supplied!");
-            var phone = message.PhoneNumber?.Trim() ?? throw new Exception("No phone number supplied!");
-            PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, phone);
+                throw new HttpResponseException(400, "Write a text first");
+            var phone = message.PhoneNumber?.Trim() ?? throw new HttpResponseException(400, "Enter a phone number first");
+            ValidatePhone(out var name, out var isoCountry, out var pre, out var num, phone);
             phone = String.Join(' ', pre, num);
 
             var m = new AnyTextMessage(true, phone, text, name, isoCountry, message.System)
@@ -201,7 +226,7 @@ namespace SysWeaver.TextMessage
             lock (Messages)
                 m = Messages.FirstOrDefault(x => (!x.Incoming) && (x.Id == request.MessageId));
             if (m == null)
-                throw new Exception("No sent message with the id " + request.MessageId.ToQuoted() + " found!");
+                throw new HttpResponseException(404, "No sent message with the id " + request.MessageId.ToQuoted() + " found!");
             SetStatus(m, request.Status, request.Status == TextMessageStatuses.Failed ? (request.Failure == TextMessageFailures.None ? TextMessageFailures.Other : request.Failure) : TextMessageFailures.None);
         }
 

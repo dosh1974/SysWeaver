@@ -41,6 +41,11 @@ namespace SysWeaver.Excel
 
         public bool RequireUser => false;
 
+        /// <summary>
+        /// Appended to the header of date time columns (table data date times are UTC by convention), the same text as the other exporters use.
+        /// </summary>
+        public const String UtcSuffix = " (UTC)";
+
 
         public Task<MemoryFile> Export(BaseTableData tableData, Object context, TableDataExportOptions options = null)
         {
@@ -80,7 +85,8 @@ namespace SysWeaver.Excel
                         c.Style.Font.Weight = ExcelFont.BoldWeight;
                         c.Style.Font.Size = 10 * 20;
                         c.Style.Borders.SetBorders(MultipleBorders.All, SpreadsheetColor.FromName(ColorName.Accent1Lighter40Pct), LineStyle.Thin);
-                        c.SetValue(col.Title);
+                        //  Date times are UTC by convention (servers often run in another time zone than the reader), so the zone is stated
+                        c.SetValue(ExcelTableDataFormat.IsUtcColumn(colType, col.Format) ? String.Concat(col.Title ?? col.Name, UtcSuffix) : (col.Title ?? col.Name));
                         ++colIndex;
                     }
                 }

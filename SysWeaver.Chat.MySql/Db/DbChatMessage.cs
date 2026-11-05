@@ -42,7 +42,7 @@ namespace SysWeaver.Chat.MySql
         public String Text { get; set; }
 
         /// <summary>
-        /// A link to an url with some data (typically images), can use have multiple data entries using semi colon as a separator
+        /// A link to an url with some data (typically images), can use have multiple data entries using semicolon as a separator
         /// </summary>
         [StringLength(2048)]
         public String Data { get; set; }

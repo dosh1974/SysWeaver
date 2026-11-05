@@ -575,6 +575,11 @@ namespace SysWeaver.Net
                 using var data = new AspHttpServerRequest(c, rawUrl, url, prefix, this, host, queryStart, didIndex);
                 await Handle(data).ConfigureAwait(false);
             }
+            catch (Exception ex) when (IsClientGone(ex))
+            {
+                //  The client closed the connection: not a problem of the server (counted as ClientGone, a debug line)
+                OnClientGone(ex, c.Request?.Path.Value);
+            }
             catch (HttpListenerException ex)
             {
                 ListenerExceptions.OnException(ex);

@@ -1,45 +1,12 @@
 ﻿/*
- * Styles of the ServerManager "Managed services" page (services.html), loaded by a <link> after
- * ../common/theme.css, ../app/application.css, ../explore/table.css and the edit/Edit*.css files.
- * Plain static CSS (not templated). Styles the page base and the add-service button container <ss-add>.
- * The table container <ss-table> is filled by Table.addTable and styled by explore/table.css.
- * No theme variables, @keyframes, @media or [data-theme] variants are used here.
+ * services.css - styles of the ServerManager "Managed services" page (services.html), loaded after ../common/theme.css,
+ * ../sw/ui.css, ../explore/table.css, the edit/*.css files and smShared.css. Plain static css.
+ * The page is a Design v2 fill page built by services.js from the shared components: main.ss-page.sw-page-fill (ui/page.css) with the
+ * page header (Sw.PageHeader, "Add service" for admins) and the live table in .sm-fill (SmShared.FillTable, smShared.css).
+ * .ss-edit is the content of the "Add new service" dialog.
  */
 
-/* ===== Page base ===== */
-
-/* --MaxW: maximum content width (100ch); declared for consistency with the other pages, not used in this file. */
-:root {
-    --MaxW: 100ch;
-}
-
-/* Border-box sizing for all elements. */
-*
-{
-    box-sizing: border-box;
-}
-
-/* Full-width body without padding or margin. */
-body {
-    padding: 0;
-    margin: 0;
-    width: 100%;
-}
-
-/* ===== Add-service button (ss-add) ===== */
-
-/*
- * Container of the 64px plus icon created by servicesMain. Hidden (display: none) until it gets Show.
- */
-ss-add {
-    width: 100%;
-    display: none;
-    margin: auto;
-    text-align: center;
-}
-
-/* ss-add.Show: block display; the class is added by servicesMain when the plus icon is inserted (user has Tokens). */
-ss-add.Show
-{
-    display: block;
+.ss-edit .sw-dialog-text {
+    white-space: pre-line;
+    margin-top: 0;
 }

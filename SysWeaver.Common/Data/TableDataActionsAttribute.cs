@@ -10,6 +10,16 @@ namespace SysWeaver.Data
     /// Each button is encoded as "text|title|url|icon", so the strings can't contain '|' (or ';', the format separator).
     /// The formats can use {0} (the current value), {1} (the next value) and {2} to {x} (populated from the value if it's a comma separated string).
     /// An invalid number of button strings throws an <see cref="ArgumentException"/> when the attribute is instantiated (i.e. when it's read using reflection).
+    /// Use <see cref="TableDataActionsExAttribute"/> to specify a confirmation question per action and/or to show an action only on some rows.
+    /// <para>The outcome of the API an action calls: the client shows a result once, by the row. Return true (or a value) when the work was done. When it can't be done
+    /// (the row is gone, already used, already ended, ...), throw a <see cref="SysWeaver.Net.HttpResponseException"/> with 409 (Conflict) and a reason for the user, ex:
+    /// "The invitation could not be withdrawn: it was already used, has expired or was withdrawn". The reason is shown in the row ("not done: reason"),
+    /// translated, and it is not counted as a failure of the server (Problems). Never return a bare false for "not done": a false result is shown as
+    /// "not done" without a reason. Use 403 with a reason for refusals (the token of the row is missing or expired, the row may not be changed).</para>
+    /// <para>Say what the refusal means, never let the client guess it from the status (the "X-Sw-Outcome" header, see <see cref="SysWeaver.Net.HttpOutcomes"/>):
+    /// <c>throw HttpResponseException.AlreadyDone("Process #12 has already ended")</c> when the goal is already met (the client shows "not needed"),
+    /// <c>HttpResponseException.Gone(...)</c> when the item of the row no longer exists, and a plain 409 / 403 (or <c>HttpResponseException.Refused(...)</c>)
+    /// for everything else (the client shows "not done" with the reason).</para>
     /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataActionsAttribute : TableDataRawFormatAttribute

@@ -481,7 +481,7 @@ namespace SysWeaver.TextMessage
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRequestCache(1)]
-        [WebMenuTable(null, "Messages", "AWS SMS", "The list of AWS SMS messages")]
+        [WebMenuTable(null, "AwsMessages", "AWS text messages", "The list of AWS SMS messages")]
         public TableData MessageTable(TableDataRequest request)
             => TableDataTools.Get(request, 2000, Messages, "AWS SMS messages");
 

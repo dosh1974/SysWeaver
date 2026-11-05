@@ -1,103 +1,88 @@
 ﻿/*
- * Translator.css - styles for translator/Edit.html, the standalone translation editor (no app shell).
- * Loaded by a static <link> after ../common/theme.css, which provides the theme variables used here
- * (--ThemeAcc1, --ThemeAcc2, --ThemeMain, --ThemeMainRGB, --ThemeFont, --ThemeFontSize, --ThemeRadInp,
- * --ThemeFadeDuration) and the base SysWeaver-Page / SysWeaver-Page.Wide and SysWeaver-CenterBlock layout,
- * which this file does not restyle. Not templated. All elements are created by translatorEditMain in Translator.js.
- * No animations, media queries or theme variants; the only motion is the outline transition on textarea.Translation.
+ * Translator.css - styles of translator/Edit.html (the translation editor). Loaded after ../common/theme.css and
+ * ../sw/ui.css. Plain static css, Sw tokens only. All elements are created by Translator.js.
+ * Design v2 form page: the anatomy (main.tr-page.sw-page-form, the page header, the facts strip .sw-facts, the grid and the cards
+ * .sw-card) comes from ui/page.css. Here: .tr-lang (a language with its img.tr-flag), .tr-block (h3.tr-label + .tr-text: a read only
+ * text in the source card; .tr-bold), textarea.tr-translation (the editable translation) and .tr-buttons (the form footer: Save
+ * right aligned). Flat: no shadows, no gradients.
  */
 
-/* ===== Page ===== */
-
-/* body, html: no padding or margin. */
-body, html{
-    padding: 0;
+body {
     margin: 0;
 }
 
-
-
-/* ===== Sections and text blocks ===== */
-
-/* SysWeaver-Section: section headings created by AddSection - uppercase, 80%, bold caption in the --ThemeAcc1 accent color. */
-SysWeaver-Section
-{
-    margin-top: 2em;
-    margin-bottom: 1em;
-    text-transform: uppercase;
-    font-size: 80%;
-    font-weight: bold;
-    color: var(--ThemeAcc1);
-    display: block;
-    padding: 0.25em;
+.tr-lang {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-2);
 }
 
+.tr-flag {
+    width: 24px;
+    height: auto;
+    flex: none;
+    border-radius: var(--sw-radius-sm);
+}
 
-/*
- * SysWeaver-Text: value blocks created by AddText / AddImgText - selectable, pre-wrap, horizontally scrollable,
- * on a faint tint of the main theme color (rgba(var(--ThemeMainRGB), 0.05)).
- */
-SysWeaver-Text {
-    user-select: text;
-    overflow-x: auto;
+.tr-block + .tr-block {
+    margin-top: var(--sw-space-4);
+}
+
+.tr-label {
+    margin: 0 0 var(--sw-space-1);
+    font-family: var(--sw-font);
+    font-size: var(--sw-text-xs);
+    font-weight: 500;
+    color: var(--sw-text-2);
+}
+
+.tr-text {
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border-radius: var(--sw-radius);
+    background-color: var(--sw-surface-sunken);
     white-space: pre-wrap;
-    display: block;
-    background-color: rgba(var(--ThemeMainRGB), 0.05);
-    padding: 0.25em;
+    overflow-wrap: anywhere;
+    user-select: text;
 }
 
-    /*
-     * SysWeaver-Text.Icon: language rows created by AddImgText (class Icon). The flag is the inline background-image
-     * set by JS; it is placed 8px from the left, vertically centered, 32px wide, not repeated, with 48px left padding.
-     */
-    SysWeaver-Text.Icon {
-        padding-left: 48px;
-        background-repeat: no-repeat;
-        background-origin: border-box;
-        background-position: 8px center;
-        background-size: 32px auto;
+.tr-bold {
+    font-weight: 600;
+}
 
-    }
-
-    /* SysWeaver-Text.Bold: bold text; translatorEditMain adds class Bold to the source-text block. */
-    SysWeaver-Text.Bold {
-        font-weight: bold;
-    }
-
-/* ===== Editor ===== */
-
-/*
- * textarea.Translation: the editable translation field (class Translation set in translatorEditMain).
- * Full width (border-box), vertical resize only, min 6em high, no border, bold theme font in --ThemeMain on a faint
- * tint. Input radius --ThemeRadInp with a square bottom-right corner for the resize grip. No outline by default;
- * outline changes are animated over --ThemeFadeDuration.
- */
-textarea.Translation {
+.tr-translation {
+    display: block;
     box-sizing: border-box;
     width: 100%;
-    padding: 0.2em;
+    min-height: 8rem;
+    padding: var(--sw-space-2) var(--sw-space-3);
     resize: vertical;
-    min-height: 6em;
-    border: none;
-    font: var(--ThemeFont);
-    font-size: var(--ThemeFontSize);
-    font-weight: bold;
-    color: var(--ThemeMain);
-    border-radius: var(--ThemeRadInp);
-    border-bottom-right-radius: 0;
-    background-color: rgba(var(--ThemeMainRGB), 0.05);
-    outline: none;
-    transition: outline linear var(--ThemeFadeDuration);
+    border: 1px solid var(--sw-border-input);
+    border-radius: var(--sw-radius);
+    background-color: var(--sw-surface);
+    color: var(--sw-text);
+    font: inherit;
+    font-weight: 600;
 }
 
-    /* Focused translation field: 2px solid --ThemeAcc2 outline. */
-    textarea.Translation:focus {
-        outline: 2px solid var(--ThemeAcc2);
+@media (hover: hover) {
+    .tr-translation:hover {
+        border-color: var(--sw-border-strong);
+    }
+}
+
+    .tr-translation:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 1px;
     }
 
-/* SysWeaver-CenterBlock.Space: the button row below the textarea (class Space added in translatorEditMain); 2em top, 4em bottom margin. */
-SysWeaver-CenterBlock.Space
-{
-    margin-top: 2em;
-    margin-bottom: 4em;
+    .tr-translation[readonly] {
+        opacity: 0.6;
+    }
+
+/* Form footer: the primary action at the right */
+.tr-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sw-space-2);
+    margin-top: var(--sw-space-3);
 }
