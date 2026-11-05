@@ -165,6 +165,7 @@ namespace SysWeaver.AI
         /// - Code, quoted text, tables, templates, tags, identifiers, urls, paths, numbers, UPPERCASE words and examples are kept verbatim.
         /// - Negations, conditions, modals and restricting words (not, never, unless, if, must, only, just..) are kept.
         /// The savings depends on how verbose the prompt is, a terse prompt is mostly left as is.
+        /// Results are cached for 5 minutes (from when the prompt was first minimized), reading doesn't extend the time.
         /// </summary>
         /// <param name="prompt">The prompt, null and empty strings are returned as is</param>
         /// <returns>The minimized prompt</returns>

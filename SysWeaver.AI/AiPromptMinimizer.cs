@@ -26,12 +26,19 @@ namespace SysWeaver.AI
     internal static class AiPromptMinimizer
     {
         /// <summary>
+        /// Prompt => minimized prompt, the same prompts tends to be used repeatedly.
+        /// </summary>
+        static readonly FastMemCache<String, String> Cache = new(TimeSpan.FromMinutes(5), StringComparer.Ordinal);
+
+        /// <summary>
         /// Minimize a prompt, see <see cref="AiTools.MinimizePrompt(string)"/>
         /// </summary>
         public static String Minimize(String prompt)
+            //  A null key isn't allowed in the cache, and there is nothing to gain from caching an empty string
+            => String.IsNullOrEmpty(prompt) ? prompt : Cache.GetOrUpdate(prompt, MinimizeUncached);
+
+        static String MinimizeUncached(String prompt)
         {
-            if (String.IsNullOrEmpty(prompt))
-                return prompt;
             //  The internal markers can't be told apart from the input if it contains them, extremely unlikely so just leave such a prompt as is
             if (prompt.AsSpan().IndexOfAnyInRange(SlotStart, CapNext) >= 0)
                 return prompt;
