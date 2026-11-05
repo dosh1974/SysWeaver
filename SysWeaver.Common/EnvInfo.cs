@@ -233,6 +233,72 @@ namespace SysWeaver
         static String InternalAppDescription = ExeAppDescription;
 
         /// <summary>
+        /// The default application version: the informational version of the entry assembly (ex: "1.2.3" or "1.2.3+3f2c1a9" with a source revision),
+        /// else its file version, else its assembly version, else "0.0.0".
+        /// </summary>
+        public static readonly String ExeAppVersion = GetExeAppVersion();
+
+        static String GetExeAppVersion()
+        {
+            try
+            {
+                var asm = Assembly.GetEntryAssembly();
+                if (asm == null)
+                    return "0.0.0";
+                var v = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                if (String.IsNullOrEmpty(v))
+                    v = asm.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
+                if (String.IsNullOrEmpty(v))
+                    v = asm.GetName()?.Version?.ToString();
+                return String.IsNullOrEmpty(v) ? "0.0.0" : v;
+            }
+            catch
+            {
+                return "0.0.0";
+            }
+        }
+
+        /// <summary>
+        /// The time (UTC) the application executable was built (the last write time of the entry assembly file), formatted using "yyyy-MM-dd HH:mm:ss".
+        /// Empty if unknown (ex: single file apps).
+        /// </summary>
+        public static readonly String AppBuildTime = GetAppBuildTime();
+
+        static String GetAppBuildTime()
+        {
+            try
+            {
+                var loc = Assembly.GetEntryAssembly()?.Location;
+                if (String.IsNullOrEmpty(loc) || !File.Exists(loc))
+                    return "";
+                return File.GetLastWriteTimeUtc(loc).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Application (build / deployment) version, defaults to <see cref="ExeAppVersion"/> (can be changed using <see cref="AppInfoParams.AppVersion"/>).
+        /// Shown to users (ex: on the home page) so that ops can tell which build is running.
+        /// Setting null or empty restores the default.
+        /// </summary>
+        public static String AppVersion
+        {
+            get => InternalAppVersion;
+            internal set
+            {
+                InternalAppVersion = String.IsNullOrEmpty(value) ? ExeAppVersion : value;
+                InternalTextVarsCaseInsensitive = null;
+                InternalTextVars = null;
+                StaticCache.Clear();
+                StaticCachInSens.Clear();
+            }
+        }
+        static String InternalAppVersion = ExeAppVersion;
+
+        /// <summary>
         /// The current process Id
         /// </summary>
         public static readonly int ProcessId = Process.GetCurrentProcess().Id;
@@ -281,6 +347,7 @@ namespace SysWeaver
         ///             "AppName" = Application name.
         ///             "AppDisplayName" = Application display name.
         ///             "AppDescription" = Application description name.
+        ///             "AppVersion" = Application version (see <see cref="AppVersion"/>), "AppBuildTime" = build time (UTC) of the executable.
         ///             "AppStart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "AppGuid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -306,6 +373,8 @@ namespace SysWeaver
                     { nameof(AppName), AppName },
                     { nameof(AppDisplayName), AppDisplayName },
                     { nameof(AppDescription), AppDescription },
+                    { nameof(AppVersion), AppVersion },
+                    { nameof(AppBuildTime), AppBuildTime },
                     { nameof(AppStart), AppStart.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) },
                     { nameof(AppAssemblyName), AppAssemblyName },
                     { nameof(AppGuid), AppGuid },
@@ -334,6 +403,7 @@ namespace SysWeaver
         ///             "appname" = Application name.
         ///             "appdisplayname" = Application display name.
         ///             "appdescription" = Application description name.
+        ///             "appversion" = Application version, "appbuildtime" = build time (UTC) of the executable.
         ///             "appstart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "appguid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -358,6 +428,8 @@ namespace SysWeaver
                     { nameof(AppName).FastToLower(), AppName },
                     { nameof(AppDisplayName).FastToLower(), AppDisplayName },
                     { nameof(AppDescription).FastToLower(), AppDescription },
+                    { nameof(AppVersion).FastToLower(), AppVersion },
+                    { nameof(AppBuildTime).FastToLower(), AppBuildTime },
                     { nameof(AppStart).FastToLower(), AppStart.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) },
                     { nameof(AppAssemblyName).FastToLower(), AppAssemblyName },
                     { nameof(AppGuid).FastToLower(), AppGuid },
@@ -387,6 +459,7 @@ namespace SysWeaver
         ///             $(AppName) = Application name.
         ///             $(AppDisplayName) = Application display name.
         ///             $(AppDescription) = Application description name.
+        ///             $(AppVersion) = Application version, $(AppBuildTime) = build time (UTC) of the executable.
         ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -401,6 +474,7 @@ namespace SysWeaver
         ///             $(AppName) = Application name.
         ///             $(AppDisplayName) = Application display name.
         ///             $(AppDescription) = Application description name.
+        ///             $(AppVersion) = Application version, $(AppBuildTime) = build time (UTC) of the executable.
         ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".

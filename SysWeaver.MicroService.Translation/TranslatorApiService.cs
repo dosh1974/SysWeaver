@@ -42,7 +42,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Translate some text to one or more languages
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <param name="context">Web context</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         [WebApi]
@@ -57,7 +57,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Translate multiple texts to one or more languages
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         [WebApi]
         [WebApiClientCache(ClientCache)]
@@ -70,7 +70,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Translate some text to a new language
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <param name="context">Web context</param>
         /// <returns>Translated text</returns>
         [WebApi]

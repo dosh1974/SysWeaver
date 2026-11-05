@@ -36,6 +36,7 @@ namespace SysWeaver.MicroService
             m[(int)UserManagerComOps.AddPhone] = new(p.AddPhone ?? "data.AddPhoneText.txt");
             m[(int)UserManagerComOps.ChangePhone] = new(p.ChangePhone ?? "data.ChangePhoneText.txt");
             m[(int)UserManagerComOps.DeletedPhone] = new(p.DeletedPhone ?? "data.DeletedPhoneText.txt");
+            m[(int)UserManagerComOps.ForcedResetPassword] = new(p.ForcedResetPassword ?? "data.ForcedResetPasswordText.txt");
 
 
             Footer = new(p.Footer ?? "data.FooterText.txt");
@@ -65,6 +66,9 @@ namespace SysWeaver.MicroService
         {
             bool haveLang = messages != null;
             var m = haveLang ? messages.GetText(ops) : Messages[(int)ops];
+            //  Localized message folders made before the forced reset template existed: use the reset template
+            if ((m == null) && haveLang && (ops == UserManagerComOps.ForcedResetPassword))
+                m = messages.GetText(UserManagerComOps.ResetPassword);
             if (m == null)
                 throw new Exception("Undefined text message " + ops);
             PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);

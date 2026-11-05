@@ -31,6 +31,7 @@ namespace SysWeaver.TextMessage
         /// Required to receive status updates (the status callback url is built from it), and used to validate webhook signatures (the signature includes the url).
         /// If not specified, no status callback url is sent (a status callback configured on a messaging service is still used), and signatures are validated using the url of the request.
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String PublicUrl;
 
         /// <summary>
@@ -39,6 +40,7 @@ namespace SysWeaver.TextMessage
         /// "[WebhookUrl]/status" is sent as the status callback of all messages.
         /// Default: "twilio".
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String WebhookUrl = "twilio";
 
         /// <summary>

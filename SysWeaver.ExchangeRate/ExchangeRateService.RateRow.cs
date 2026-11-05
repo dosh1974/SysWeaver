@@ -32,15 +32,16 @@ namespace SysWeaver.ExchangeRate
                 var toi = to.Iso4217;
                 var rate = rates.GetRate(fromi, toi);
                 Updated = rates.LastUpdated;
-                To = to.ToString(compMag * rate, CurrencyFormatOptions.ApplyThousandsSeparator | CurrencyFormatOptions.Symbol);
-                if (from == null)
-                    From = String.Join(' ', r.I, (compMag / rate).ToString("### ### ### ### ##0.00"));
-                else
-                    From = from.ToString(compMag / rate, CurrencyFormatOptions.ApplyThousandsSeparator | CurrencyFormatOptions.Symbol);
+                //  Numbers (sorted, filtered and exported as numbers), the client formats them using the currency (iso_data/currencies.js)
+                To = compMag * rate;
+                From = rate == 0 ? 0 : compMag / rate;
+                LocalCurrency = fromi;
             }
 
 
-
+            /// <summary>
+            /// The value of one reference unit in the local currency (a plain number, as before: the amount columns carry the currency)
+            /// </summary>
             [TableDataNumber(4)]
             public readonly decimal Rate;
 
@@ -56,9 +57,30 @@ namespace SysWeaver.ExchangeRate
             /// </summary>
             public readonly DateTime Updated;
 
-            public readonly String To;
+            /// <summary>
+            /// The value of a number of local units in the compare currency (the currency format is set per table)
+            /// </summary>
+            [TableDataCurrency("USD")]
+            public readonly decimal To;
 
-            public readonly String From;
+            /// <summary>
+            /// The value of a number of compare currency units in the local currency (the currency of the next column)
+            /// </summary>
+            [TableDataCurrency("{1}")]
+            public readonly decimal From;
+
+            /// <summary>
+            /// The ISO 4217 code of the local currency (the currency of the From amount)
+            /// </summary>
+            [TableDataHide]
+            public readonly String LocalCurrency;
+
+            /// <summary>
+            /// The format of an amount column in a currency
+            /// </summary>
+            /// <param name="iso4217">The ISO 4217 code of the currency</param>
+            /// <returns>The column format</returns>
+            internal static String CurrencyFormat(String iso4217) => new TableDataCurrencyAttribute(iso4217).Value;
 
 
             /// <summary>

@@ -628,7 +628,7 @@ namespace SysWeaver.TextMessage
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRequestCache(1)]
-        [WebMenuTable(null, "Messages", "Twilio", "The list of Twilio messages")]
+        [WebMenuTable(null, "TwilioMessages", "Twilio messages", "The list of Twilio messages")]
         public TableData MessageTable(TableDataRequest request)
             => TableDataTools.Get(request, 2000, Messages, "Twilio messages");
 

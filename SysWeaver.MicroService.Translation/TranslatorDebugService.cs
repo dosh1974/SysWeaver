@@ -9,6 +9,7 @@ namespace SysWeaver.MicroService
 {
 
 
+    [WebMenuPath(null, "Data/Translator", "Translation", "Languages and translations of the translation service", "IconTableTranslateTo", 30)]
     [WebApiUrl("translator/debug")]
     [RequiredDep(typeof(ITranslator))]
     public sealed class TranslatorDebugService : IRunTimeWebApiAuth
@@ -35,26 +36,26 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Return a list of supported source languages as a data table
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns>A list of supported source languages</returns>
         [WebApi]
         [WebApiClientCache(ClientCache)]
         [WebApiRequestCache(RequestCache)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Translator/{0}", "Source languages", null, "IconTableTranslateFrom")]
+        [WebMenuTable(null, "Data/Translator/{0}", "Source languages", null, "IconTableTranslateFrom", 1)]
         public async Task<TableData> SourceLanguagesTable(TableDataRequest r) => TableDataTools.Get(r, RefreshRate, (await T.GetSupportedSourceLanguages().ConfigureAwait(false)).Select(TranslatorDebugServiceData.FromString));
 
 
         /// <summary>
         /// Return a list of supported target languages as a data table
         /// </summary>
-        /// <param name="r">Paramaters</param>
+        /// <param name="r">Parameters</param>
         /// <returns>A list of supported target languages</returns>
         [WebApi]
         [WebApiClientCache(ClientCache)]
         [WebApiRequestCache(RequestCache)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Translator/{0}", "Target languages", null, "IconTableTranslateTo")]
+        [WebMenuTable(null, "Data/Translator/{0}", "Target languages", null, "IconTableTranslateTo", 2)]
         public async Task<TableData> TargetLanguagesTable(TableDataRequest r) => TableDataTools.Get(r, RefreshRate, (await T.GetSupportedTargetLanguages().ConfigureAwait(false)).Select(TranslatorDebugServiceData.FromString));
 
     }

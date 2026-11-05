@@ -34,6 +34,11 @@ namespace SysWeaver.MicroService
         public String ResetPassword;
 
         /// <summary>
+        /// An optional template to use for the reset texts when an administrator required a new password (if this is an existing file, content is read from that).
+        /// </summary>
+        public String ForcedResetPassword;
+
+        /// <summary>
         /// An optional template to use for add password texts (if this is an existing file, content is read from that).
         /// </summary>
         public String AddPassword;

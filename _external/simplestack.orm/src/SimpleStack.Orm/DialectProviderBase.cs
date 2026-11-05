@@ -10,7 +10,6 @@
 //
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -70,106 +69,9 @@ namespace SimpleStack.Orm
         /// <returns>The new connection.</returns>
         public OrmConnection CreateConnection(string connectionString, ILoggerFactory logger)
         {
-            return Caches.GetOrAdd((connectionString, logger), x => new ConnectionCache()).Get(CreateIDbConnection(connectionString), this, logger);
-            //return new OrmConnection(CreateIDbConnection(connectionString), this, logger);
+            //  No pool of our own: MySqlConnector (and the other ADO.NET drivers) pool the connections, and reset and check them when they are reused
+            return new OrmConnection(CreateIDbConnection(connectionString), this, logger);
         }
-
-        /// <summary>
-        /// Flush all connection caches
-        /// </summary>
-        public void FlushAllConnectionCaches()
-        {
-            var c = Caches;
-            var keys = c.Keys.ToList();
-            foreach (var key in keys)
-            {
-                if (c.TryRemove(key, out var cache))
-                    cache.Dispose();
-            }
-        }
-
-        public const int MaxCachedConnection = 128;
-
-        sealed class ConnectionCache : IDisposable
-        {
-
-            sealed class PooledConnection : OrmConnection
-            {
-                public PooledConnection(ConnectionCache cache, DbConnection connection, IDialectProvider dialectProvider, ILoggerFactory loggerFactory)
-                    : base(connection, dialectProvider, loggerFactory)
-                {
-                    Cache = cache;
-                }
-                readonly ConnectionCache Cache;
-
-                public void RealDispose()
-                {
-                    base.Dispose();
-                }
-                protected override void Dispose(bool disposing)
-                {
-                    if (disposing)
-                        Cache.Release(this);
-                }
-            }
-
-            public volatile int Max = MaxCachedConnection;
-
-            public int CachedConnections;
-
-            void Release(PooledConnection c)
-            {
-                if (!c.IsOpen)
-                {
-                    c.RealDispose();
-                    return;
-                }
-                if (c.Transaction != null)
-                    throw new Exception("Transaction must be Disposed before the connection is Disposed!");
-                var max = Max;
-                if (Interlocked.Increment(ref CachedConnections) > max)
-                {
-                    Interlocked.Decrement(ref CachedConnections);
-                    c.RealDispose();
-                    return;
-                }
-                Connections.Push(c);
-            }
-
-            public OrmConnection Get(DbConnection connection, IDialectProvider dialectProvider, ILoggerFactory loggerFactory)
-            {
-                var cache = Connections;
-                while (cache.TryPop(out var con))
-                {
-                    Interlocked.Decrement(ref CachedConnections);
-                    if (con.State == ConnectionState.Open)
-                        return con;
-                    con.RealDispose();
-                }
-                return new PooledConnection(this, connection, dialectProvider, loggerFactory);
-            }
-
-            readonly ConcurrentStack<PooledConnection> Connections = new ConcurrentStack<PooledConnection>();
-
-            public void Dispose()
-            {
-                Max = 0;
-                var p = Connections;
-                while (p.TryPop(out var conn))
-                {
-                    conn.RealDispose();
-                    Interlocked.Decrement(ref CachedConnections);
-                }
-                //  There is a small chance that another thread has added a connection to the stack after we emptied it, so we need to empty it again
-            }
-        }
-
-        readonly ConcurrentDictionary<(String, ILoggerFactory), ConnectionCache> Caches = new ConcurrentDictionary<(string, ILoggerFactory), ConnectionCache>();
-
-
-
-
-
 
         public string GetParameterName(int parameterCount)
         {

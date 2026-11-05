@@ -405,7 +405,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.Debug)]
         [WebApi]
         [WebApiRaw(HttpServerTools.JsonMime)]
-        [WebMenuChart(null, "Debug/MethodGraph", "Method graph", "A graph showing all active methods calls and peak", null, 0, "Debug")]
+        [WebMenuChart(null, "Monitoring/MethodGraph", "Method calls chart", "A chart showing all active method calls and their peak", null, 12)]
         public ReadOnlyMemory<Byte> PerformanceChart()
         {
             var p = Manager.GetPerformanceEntries().ToList();
@@ -890,11 +890,11 @@ namespace SysWeaver.MicroService
         [WebApi]
         public Task<MemoryFile> ExportChart(ExportChartRequest export, HttpServerRequest context)
         {
-            if (!ChartExporters.TryGetValue(export.ExportAs, out var exporter))
-                throw new Exception(export.ExportAs.ToQuoted() + " is not a reqistered chart exporter!");
+            if (!ChartExporters.TryGetValue(export?.ExportAs ?? "", out var exporter))
+                throw new HttpResponseException(400, String.Concat((export?.ExportAs ?? "").ToQuoted(), " is not an export format of this chart, use one of: ", String.Join(", ", ChartExporters.Keys.Order())));
             if (exporter.RequireUser)
                 if (context.Session?.Auth == null)
-                    throw new Exception("Session is not authorized to use the chart exporter: " + export.ExportAs.ToQuoted());
+                    throw new HttpResponseException(403, String.Concat("Sign in to export to ", export.ExportAs.ToQuoted()));
             switch (exporter.InputType)
             {
                 case ChartExportInputTypes.Data:

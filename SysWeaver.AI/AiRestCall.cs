@@ -3,7 +3,7 @@
 namespace SysWeaver.AI
 {
     /// <summary>
-    /// Paramaters for the REST API validation tool
+    /// Parameters for the REST API validation tool
     /// </summary>
     public sealed class AiRestCall
     {

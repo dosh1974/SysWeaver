@@ -299,20 +299,20 @@ namespace SysWeaver.Db
         }
 
         /// <summary>
-        /// Execute a custom command with paramaters
+        /// Execute a custom command with parameters
         /// </summary>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A reader</returns>
         public static Task<DbDataReader> ReaderCommandAsync(this OrmConnection con, String command, params object[] args)
             => ExecuteReaderAsync(CreateCommand(con, command, args));
 
         /// <summary>
-        /// Execute a custom command with paramaters
+        /// Execute a custom command with parameters
         /// </summary>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A reader</returns>
         public static Task<DbDataReader> ReaderCommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
@@ -336,19 +336,19 @@ namespace SysWeaver.Db
         }
 
         /// <summary>
-        /// Execute a custom command with paramaters
+        /// Execute a custom command with parameters
         /// </summary>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         public static Task CommandAsync(this OrmConnection con, String command, params object[] args)
             => ExecuteNonQueryAsync(CreateCommand(con, command, args));
 
         /// <summary>
-        /// Execute a custom command with paramaters
+        /// Execute a custom command with parameters
         /// </summary>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         public static Task CommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
             => ExecuteNonQueryAsync(CreateCommand(con, command, args));
@@ -361,20 +361,20 @@ namespace SysWeaver.Db
 
 
         /// <summary>
-        /// Execute a custom command with paramaters
+        /// Execute a custom command with parameters
         /// </summary>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A scale value</returns>
         public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params object[] args)
             => ExecuteScalarAsync(CreateCommand(con, command, args));
 
         /// <summary>
-        /// Execute a custom command with paramaters
+        /// Execute a custom command with parameters
         /// </summary>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns>A scale value</returns>
         public static Task<Object> ScaleCommandAsync(this OrmConnection con, String command, params ReadOnlySpan<object> args)
@@ -534,7 +534,7 @@ namespace SysWeaver.Db
         /// <typeparam name="T"></typeparam>
         /// <param name="con"></param>
         /// <param name="onResult">The function to run for every read object, return false to stop enumeration</param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params object[] args) where T : new()
@@ -557,7 +557,7 @@ namespace SysWeaver.Db
         /// <typeparam name="T"></typeparam>
         /// <param name="con"></param>
         /// <param name="onResult">The function to run for every read object, return false to stop enumeration</param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, bool> onResult, String command, params ReadOnlySpan<object> args) where T : new()
@@ -607,7 +607,7 @@ namespace SysWeaver.Db
         /// <typeparam name="T"></typeparam>
         /// <param name="con"></param>
         /// <param name="onResult">The task to perform on every read object, return false to stop enumeration</param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params object[] args) where T : new()
@@ -630,7 +630,7 @@ namespace SysWeaver.Db
         /// <typeparam name="T"></typeparam>
         /// <param name="con"></param>
         /// <param name="onResult">The task to perform on every read object, return false to stop enumeration</param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
         public static Task OnResultAsync<T>(this OrmConnection con, Func<T, Task<bool>> onResult, String command, params ReadOnlySpan<object> args) where T : new()
@@ -661,7 +661,7 @@ namespace SysWeaver.Db
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
         public static Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params object[] args) where T : new()
@@ -683,7 +683,7 @@ namespace SysWeaver.Db
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="con"></param>
-        /// <param name="command">The command to execute, first paramater can be inserted uisng @p0, second as @p1 and so on</param>
+        /// <param name="command">The command to execute, first parameter can be inserted using @p0, second as @p1 and so on</param>
         /// <param name="args">The parameters, first is named @p0, then @p1 and so on</param>
         /// <returns></returns>
         public static Task<List<T>> GetResultAsync<T>(this OrmConnection con, String command, params ReadOnlySpan<object> args) where T : new()

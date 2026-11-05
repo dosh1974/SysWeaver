@@ -19,11 +19,12 @@ namespace SysWeaver.MicroService
     [IsMicroService]
     [RequiredDep<UserManagerService>]
     [OptionalDep<IQrCodeService>]
+    //  Menu icons: svg urls of this module (srcWeb/icons), so the shell needs no passkey icon class (the classes stay in auth/Passkey.css for older shells).
     [WebApiUrl("auth/passkey")]
-    [WebMenuEmbedded("User", "User/AddPassKey", "Add passkey", "auth/AddPassKey.html", "Click to add a passkey for this device", "IconAddPasskey", 31, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanCreateLocalPassKey))]
+    [WebMenuEmbedded("User", "User/AddPassKey", "Add passkey", "auth/AddPassKey.html", "Click to add a passkey for this device", "icons/passkey_add.svg", 31, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanCreateLocalPassKey))]
     [WebMenuEmbedded("User", "User/AddPassKeyOther", "Add passkey (other device)", "auth/AddPassKeyOnOtherDevice.html", "Click to show a QR code that can be used to add a passkey on some other device", "IconAddPasskeyOther", 32, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanCreateRemotePassKey))]
-    [WebMenuEmbedded("User", "User/MyPassKeys", "My passkeys", "auth/MyPassKeys.html", "Click to see and manage your passkeys", "IconUsePasskey", 33, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanManagePassKeys))]
-    [WebMenuEmbedded("User", "User/UsePassKey", "Sign in with passkey", "auth/UsePassKey.html", "Click to sign in using a passkey", "IconUsePasskey", 2, null, true, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanSignInWithPassKey))]
+    [WebMenuEmbedded("User", "User/MyPassKeys", "My passkeys", "auth/MyPassKeys.html", "Click to see and manage your passkeys", "icons/passkey_use.svg", 33, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanManagePassKeys))]
+    [WebMenuEmbedded("User", "User/UsePassKey", "Sign in with passkey", "auth/UsePassKey.html", "Click to sign in using a passkey", "icons/passkey_use.svg", 2, null, true, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(PassKeyService) + "." + nameof(PassKeyService.CanSignInWithPassKey))]
     public sealed class PassKeyService
     {
 
@@ -265,7 +266,7 @@ namespace SysWeaver.MicroService
         {
             var qr = QR;
             if (qr == null)
-                throw new Exception("QR code generation support isn't added to the server");
+                throw new Exception("QR code generation support isn't added to the service");
             var token = await Um.GetShareDeviceToken(context).ConfigureAwait(false);
             if (token == null)
                 throw new NoUserLoggedInException();

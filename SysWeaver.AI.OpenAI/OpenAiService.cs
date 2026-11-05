@@ -96,7 +96,7 @@ namespace SysWeaver.AI
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Debug/AI/Models/LLM/" + ServiceName, ServiceName, "All available LLM models from this " + ServiceName + " service")]
+        [WebMenuTable(null, "Data/AiModels/Llm" + ServiceName, ServiceName + " LLM models", "All available LLM models from this " + ServiceName + " service")]
         public async Task<TypedTableData<AiLlmModel>> GetLlmModelTable(TableDataRequest req)
             => TableDataTools.GetTyped(req, await GetLlmModels().ConfigureAwait(false), ServiceName + " LLM models");
 
@@ -107,7 +107,7 @@ namespace SysWeaver.AI
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Debug/AI/Models/Image/" + ServiceName, ServiceName, "All available image models from this " + ServiceName + " service")]
+        [WebMenuTable(null, "Data/AiModels/Image" + ServiceName, ServiceName + " image models", "All available image models from this " + ServiceName + " service")]
         public async Task<TypedTableData<AiImageModel>> GetImageModelTable(TableDataRequest req)
             => TableDataTools.GetTyped(req, await GetImageModels().ConfigureAwait(false), ServiceName + " image models");
 

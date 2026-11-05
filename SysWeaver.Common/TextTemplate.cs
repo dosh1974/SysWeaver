@@ -25,8 +25,8 @@ namespace SysWeaver
     ///   £ = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
     ///   ¤ = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
     ///   * = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-    ///   ! = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-    ///   / = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+    ///   ! = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+    ///   / = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
     /// Only one of _ , ^ and ~ may be used.
     /// Only one of @, #, %, $, £, ¤, *, ! and / may be used.
     /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -63,8 +63,8 @@ namespace SysWeaver
         /// $(£Var) = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
         /// $(¤Var) = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
         /// $(*Var) = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-        /// $(!Var) = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-        /// $(/Var) = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+        /// $(!Var) = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+        /// $(/Var) = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
         /// Only one of _ , ^ and ~ may be used.
         /// Only one of @, #, %, $, £, ¤, *, ! and / may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -201,8 +201,8 @@ namespace SysWeaver
         /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
         /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-        /// [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-        /// [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+        /// [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+        /// [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
         /// Only one of _ , ^ and ~ may be used.
         /// Only one of @, #, %, $, £, ¤, *, ! and / may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -279,8 +279,8 @@ namespace SysWeaver
         /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
         /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-        /// [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-        /// [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+        /// [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+        /// [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
         /// Only one of _ , ^ and ~ may be used.
         /// Only one of @, #, %, $, £, ¤, *, ! and / may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -674,8 +674,8 @@ namespace SysWeaver
         /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
         /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-        /// [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-        /// [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+        /// [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+        /// [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
         /// Only one of _ , ^ and ~ may be used.
         /// Only one of @, #, %, $, £, ¤, *, ! and / may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -707,8 +707,8 @@ namespace SysWeaver
         /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
         /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-        /// [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-        /// [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+        /// [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+        /// [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
         /// Only one of _ , ^ and ~ may be used.
         /// Only one of @, #, %, $, £, ¤, *, ! and / may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 

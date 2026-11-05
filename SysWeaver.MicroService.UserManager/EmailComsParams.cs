@@ -42,6 +42,11 @@ namespace SysWeaver.MicroService
         public ResetPasswordMail ResetPassword;
 
         /// <summary>
+        /// An optional mail template to use for the reset instructions when an administrator required a new password (forced password reset).
+        /// </summary>
+        public ForcedResetPasswordMail ForcedResetPassword;
+
+        /// <summary>
         /// An optional mail template to use for add password emails.
         /// </summary>
         public AddPasswordMail AddPassword;
@@ -76,6 +81,11 @@ namespace SysWeaver.MicroService
         /// An optional mail template to use for delete email emails.
         /// </summary>
         public DeletedEmailMail DeletedEmail;
+
+        /// <summary>
+        /// An optional mail template to use for the notice sent to the old email address after the email address of an account was changed.
+        /// </summary>
+        public ChangedEmailMail ChangedEmail;
 
 
         /// <summary>
@@ -172,6 +182,17 @@ namespace SysWeaver.MicroService
     }
 
 
+    public sealed class ForcedResetPasswordMail : ManagedMailMessage
+    {
+        public ForcedResetPasswordMail()
+        {
+            Subject = "data.ForcedResetPasswordMail.txt";
+            Body = "data.ForcedResetPasswordMail.html";
+            IsHtml = true;
+        }
+    }
+
+
     public sealed class AddPasswordMail : ManagedMailMessage
     {
         public AddPasswordMail()
@@ -242,6 +263,22 @@ namespace SysWeaver.MicroService
         {
             Subject = "data.DeletedEmailMail.txt";
             Body = "data.DeletedEmailMail.html";
+            IsHtml = true;
+        }
+    }
+
+
+    public sealed class ChangedEmailMail : ManagedMailMessage
+    {
+        /// <summary>
+        /// The variables of the user manager templates besides the standard ones (<see cref="ManagedVars"/>): "[UndoLink]" (the undo link of the changed e-mail notice)
+        /// </summary>
+        public static readonly IReadOnlySet<String> UserManagerVars = ReadOnlyData.Set(StringComparer.OrdinalIgnoreCase, "[UndoLink]");
+
+        public ChangedEmailMail() : base(UserManagerVars)
+        {
+            Subject = "data.ChangedEmailMail.txt";
+            Body = "data.ChangedEmailMail.html";
             IsHtml = true;
         }
     }

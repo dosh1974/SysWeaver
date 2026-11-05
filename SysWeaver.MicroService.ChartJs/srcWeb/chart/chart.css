@@ -1,49 +1,46 @@
 ﻿/*
- * chart.css - styles for the standalone chart viewer page chart.html (linked after ../common/theme.css)
- * and for the chart popup menu that chart.js builds with app/application.js / application.css (loaded lazily
- * by CanvasChart.getChartExportMenu).
- * Dependencies: theme variables from common/theme.css (--ThemeBackgroundRGB); generic icon rendering of
- * ColorIcon (common.js), which paints the element background through mask-image, so the Icon* classes below
- * only set mask-image (classes that set background-image instead show multi-coloured file-type images).
- * Not templated. No @keyframes and no @media queries; the only theme variant is the html:not([data-theme])
- * rule for SysWeaver-Chart.
+ * chart.css - styles of the chart viewer page chart.html (linked after ../common/theme.css and ../sw/ui.css).
+ *
+ * Contents: page / container layout (SysWeaver-Chart, Transparent, ChartCenter, Embedded, FillScreen, ChartWithHead: the page header of a shell page), the menu button
+ * (ChartMenuButton: a visible framed button in every theme, the accent 1 text color, 85% opacity until hovered / focused, a 44 px touch target in the mobile layout), the chart menu
+ * (Sw.Menu popup with class ChartMenu) and the icon classes of the chart menu that ui/icons.css does not define
+ * (IconChartType*, IconChartSize*, IconColors, IconColored*, IconColor<mode>, IconColorGradient0-11, unselected order icons).
+ * Icon classes only set mask-image: Sw.IconClass elements (sw-icon-mask) draw them in the text color.
+ * Not templated.
  */
 
 /* ===== Page and chart container ===== */
 
-/* Page body: no padding/margin, forced 100% width and height, block display. */
+/* html: no page margin (--Margin of common/theme.css; with a unit: theme.css uses calc(100% - var(--Margin)) for html.Embedded,
+   and a unitless 0 made that calc invalid, so in the app shell the page grew taller than the frame and the bottom axis
+   labels were cut off), transparent behind the chart container. */
+html {
+    --Margin: 0px;
+    background-color: transparent;
+}
+
+/* body: no padding / margin, full size (the chart fills the frame). */
 body {
     padding: 0;
     margin: 0;
     width: 100% !important;
     height: 100% !important;
-    /*height: calc(100svh - 16px) !important;*/
     display: block;
+    background-color: transparent;
 }
 
-    /* body.FillScreen: full small-viewport height (100svh); class FillScreen is added to <html> and <body>
-       by common.js when the URL has a fillscreen parameter. */
+    /* body.FillScreen (url fillscreen, set by the core): full small viewport height. */
     body.FillScreen {
         height: 100svh !important;
     }
 
-/* html: custom property --Margin (page margin used by the theme.css body padding, theme default 24px)
-   is set to 0 so the chart fills the frame. */
-html {
-    --Margin: 0;
-}
-
-/* html.Embedded body: 16px top padding and reduced height in embedded documents (class Embedded is set
-   on <html> by app/application.js). */
+/* html.Embedded (set by the app shell on the frame document): 16 px top padding. */
 html.Embedded body {
     padding-top: 16px;
     height: calc(100% - 16px) !important;
 }
 
-
-
-/* SysWeaver-Chart: custom element created by CanvasChart.addChart (chart.js) holding the <canvas> and the
-   menu icon; positioned relative for the icon, 100% x 100%, 50% opaque theme background. */
+/* SysWeaver-Chart: the container (canvas + menu button), 50% opaque theme background. */
 SysWeaver-Chart {
     box-sizing: border-box;
     margin: 0;
@@ -52,71 +49,240 @@ SysWeaver-Chart {
     position: relative;
     width: 100% !important;
     height: 100% !important;
-    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
+    background-color: color-mix(in srgb, var(--sw-bg) 50%, transparent);
+    -webkit-touch-callout: none;
+    user-select: none;
 }
 
-    /* SysWeaver-Chart.ChartCenter canvas: centres the canvas horizontally; class ChartCenter is added by
-       chartMain for the URL parameter center=true. */
-    SysWeaver-Chart.ChartCenter canvas
-    {
+    /* Light schemes (no data-theme attribute, or a custom theme that declares a light scheme): 90% opaque background. */
+    html:not([data-theme]) SysWeaver-Chart, html[data-sw-scheme="light"] SysWeaver-Chart {
+        background-color: color-mix(in srgb, var(--sw-bg) 90%, transparent);
+    }
+
+    /* SysWeaver-Chart.Transparent (url transparent=true): no background. */
+    SysWeaver-Chart.Transparent {
+        background: none transparent !important;
+    }
+
+    /* The canvas fills the container (Chart.js runs responsive without aspect ratio). */
+    SysWeaver-Chart canvas {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    /* SysWeaver-Chart.ChartCenter (url center=true): the canvas is centered horizontally. */
+    SysWeaver-Chart.ChartCenter canvas {
         margin: 0 auto;
     }
 
-
-    /* Theme variant: without a data-theme attribute on <html> the SysWeaver-Chart background is 90% opaque. */
-    html:not([data-theme]) SysWeaver-Chart {
-        background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
-    }
-
-
-
-/* SysWeaver-Chart.Transparent: no background; class Transparent is added by addChart when
-   CanvasChartOptions.Transparent (URL parameter transparent=true). */
-SysWeaver-Chart.Transparent {
-    background: none transparent !important;
-}
-
-/* The chart canvas fills the SysWeaver-Chart element (Chart.js runs responsive with maintainAspectRatio off). */
-SysWeaver-Chart canvas {
+/* body.ChartWithHead (chart.js chartMain: a chart page in the app shell's content frame with its menu, ex: "Method calls chart"): the
+   Design v2 anatomy of a fill page: a compact page header (header.sw-ph.sw-ph-compact.ChartHead, ui/page.css), then the chart (and the
+   method graph's explanation) in a flat card that takes the rest of the height. Phones and low screens drop the header (the shell's top
+   bar shows the title). Embedded charts never get it. */
+body.ChartWithHead {
     box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    width: 100% !important;
+    display: flex;
+    flex-direction: column;
+    padding: var(--sw-space-6) var(--sw-page-px) var(--sw-space-6) !important;
     height: 100% !important;
 }
 
-    /* The 32x32 menu button: ColorIcon element icon-32x32 with the default button class IconButton,
-       placed 0.5em from the bottom-right corner at 10% opacity. */
-    SysWeaver-Chart icon-32x32.IconButton {
-        position: absolute;
-        right: 0.5em;
-        bottom: 0.5em;
-        opacity: 0.1;
+    body.ChartWithHead > .ChartHead {
+        flex: none;
     }
 
+    body.ChartWithHead > SysWeaver-Chart {
+        flex: 1 1 0;
+        min-height: 0;
+        height: auto !important;
+        padding: var(--sw-space-3);
+        border: 1px solid var(--sw-border);
+        border-radius: var(--sw-radius-md);
+        background-color: var(--sw-surface) !important;
+    }
 
-/* Chart popup menu: class Chart is added to the SysWeaver-PopupMenu element by the menu builder in
-   addChart; anchors the SysWeaver-PopupMenuBack element (created by PopUpMenu in application.js) at bottom 0. */
-SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
-    bottom: 0;
+    /* The method graph's explanation sits on top of the card (no separate band) */
+    body.ChartWithHead > .ChartNote {
+        padding: 0 0 var(--sw-space-3);
+    }
+
+@media (max-width: 760px), (max-height: 500px) {
+    body.ChartWithHead {
+        padding: var(--sw-space-2) var(--sw-space-2) var(--sw-space-2) !important;
+    }
+
+        body.ChartWithHead > .ChartHead {
+            display: none;
+        }
+
+        body.ChartWithHead > SysWeaver-Chart {
+            padding: var(--sw-space-1);
+        }
 }
 
-
-/* ===== Menu and chart type icons (mask-image) ===== */
-
-/* IconChartMenu: the menu button icon; IconChartExport: the Export sub-menu. */
-.IconChartMenu {
-    mask-image: url("../icons/menu.svg");
+/* body.ChartWithNote (the method graph, chart.js chartMain): an explanation (div.ChartNote: span.ChartNoteText, span.ChartNoteLog (the
+   automatic log scale note), span.ChartNoteCount, button.ChartNoteAll ("Show all"), button.ChartNoteMore (low screens only)) above the chart, the chart takes the rest of the height. */
+body.ChartWithNote {
+    display: flex;
+    flex-direction: column;
 }
 
-.IconChartExport {
-    mask-image: url("../icons/newtab.svg");
+    body.ChartWithNote > SysWeaver-Chart {
+        flex: 1 1 0;
+        min-height: 0;
+        height: auto !important;
+    }
+
+.ChartNote {
+    flex: none;
+    margin: 0;
+    /* a readable line length (the note ran about 1700 px wide on 2560 screens) */
+    max-width: 90ch;
+    padding: 6px 48px 6px 12px;
+    font-family: var(--sw-sans, sans-serif);
+    font-size: var(--sw-text-md, 15px);
+    line-height: 1.4;
+    color: var(--sw-text-2, var(--ThemeMain));
 }
 
+.ChartNoteMore {
+    display: none;
+}
 
-/* Type sub-menu (IconChartType) and its items IconChartTypeBar, IconChartTypeBarHorizontal,
-   IconChartTypeLine, IconChartTypeLineHorizontal, IconChartTypePie, IconChartTypeDoughnut,
-   IconChartTypePolarArea (icons from this folder's icons/). */
+/* "Show all" / "Show the n busiest" (button.ChartNoteMore.ChartNoteAll, after span.ChartNoteCount "Showing the 25 busiest."): on every
+   screen */
+.ChartNoteMore.ChartNoteAll {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--sw-control-h, 32px);
+    padding: 0 10px;
+    margin-left: 8px;
+    border: 1px solid var(--sw-border, currentColor);
+    border-radius: var(--sw-radius, 6px);
+    background: transparent;
+    color: var(--sw-text-accent, var(--ThemeAcc1));
+    font: inherit;
+    cursor: pointer;
+}
+
+    .ChartNoteMore.ChartNoteAll:focus-visible {
+        outline: 2px solid var(--sw-focus, var(--ThemeAcc1));
+        outline-offset: 1px;
+    }
+
+/* Low screens (phones in landscape): the explanation is one line (cut with "...") with a "More" button that shows all of it
+   (body.ChartNoteOpen; the chart takes the rest) */
+@media (max-height: 500px) {
+    .ChartNote {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+    }
+
+    body:not(.ChartNoteOpen) .ChartNoteText {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+
+    body:not(.ChartNoteOpen) .ChartNoteLog, body:not(.ChartNoteOpen) .ChartNoteCount {
+        display: none;
+    }
+
+    body.ChartNoteOpen .ChartNote {
+        display: block;
+    }
+
+    .ChartNoteMore {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+        min-height: var(--sw-control-h, 44px);
+        padding: 0 10px;
+        margin-left: 4px;
+        border: 1px solid var(--sw-border, currentColor);
+        border-radius: var(--sw-radius, 6px);
+        background: transparent;
+        color: var(--sw-text-accent, var(--ThemeAcc1));
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .ChartNoteMore:focus-visible {
+        outline: 2px solid var(--sw-focus, var(--ThemeAcc1));
+        outline-offset: 1px;
+    }
+}
+
+/* ===== Menu button ===== */
+
+/* The menu button: top right (beside the title; at the bottom right it covered the last category label), 32 px. Design v2: a flat
+   icon button (surface, 1 px hairline, secondary text color; copper is kept for data), 85% opacity until hovered / focused / open.
+   Charts without a title get room for it (chart.js Apply: layout padding). */
+.ChartMenuButton {
+    position: absolute;
+    right: 0.5em;
+    top: 0.5em;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--sw-border-strong, var(--sw-border-strong, currentColor));
+    border-radius: var(--sw-radius, 6px);
+    background: var(--sw-surface, var(--sw-bg));
+    color: var(--sw-text-2, var(--sw-text-2, var(--ThemeMain)));
+    opacity: 0.85;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity var(--sw-dur-2) linear, color var(--sw-dur-2) linear;
+}
+
+@media (hover: hover) {
+    .ChartMenuButton:hover {
+        color: var(--sw-text, var(--sw-fg));
+        opacity: 1;
+    }
+}
+
+    .ChartMenuButton:focus-visible,
+    .ChartMenuButton[aria-expanded="true"] {
+        opacity: 1;
+    }
+
+    .ChartMenuButton:focus-visible {
+        outline: 2px solid var(--sw-focus, var(--ThemeAcc2));
+        outline-offset: 1px;
+    }
+
+    /* the line kebab (Sw.Icon, one outline icon set; the old filled IconChartMenu read as a dark block) */
+    .ChartMenuButton .sw-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+/* Touch devices / mobile layout: a 44 px target that is easier to see. */
+.SwMobile .ChartMenuButton {
+    width: 44px;
+    height: 44px;
+}
+
+@media (pointer: coarse) {
+    .ChartMenuButton {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+/* ===== Chart menu icons (not in ui/icons.css) ===== */
+
 .IconChartType {
     mask-image: url("icons/chart_mixed.svg");
 }
@@ -149,293 +315,178 @@ SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
     mask-image: url("icons/chart_polar.svg");
 }
 
-/* IconChartSize: the "Export font size" sub-menu. */
+/* Export font size submenu and its items (pie icon of growing size). */
 .IconChartSize {
     mask-image: url("../icons/fullscreen_exit.svg");
 }
 
-/* Export font scale items: pie icon with growing mask-size - IconChartSize50 (12px), IconChartSize75 (14px),
-   IconChartSize100 (16px), IconChartSize125 (20px), IconChartSize150 (24px), IconChartSize200 (28x38px),
-   IconChartSize250 (default size). IconChartSize50 / IconChartSize75 are only referenced in commented-out JS. */
-.IconChartSize50 {
-    mask-image: url("icons/chart_pie.svg");
-    mask-size: 12px 12px;
-}
-
-.IconChartSize75 {
-    mask-image: url("icons/chart_pie.svg");
-    mask-size: 14px 14px;
-}
-
-
-.IconChartSize100 {
-    mask-image: url("icons/chart_pie.svg");
-    mask-size: 16px 16px;
-}
-
-.IconChartSize125 {
-    mask-image: url("icons/chart_pie.svg");
-    mask-size: 20px 20px;
-}
-
-.IconChartSize150 {
-    mask-image: url("icons/chart_pie.svg");
-    mask-size: 24px 24px;
-}
-
-.IconChartSize200 {
-    mask-image: url("icons/chart_pie.svg");
-    mask-size: 28px 38px;
-}
-
-.IconChartSize250 {
+.IconChartSize100, .IconChartSize125, .IconChartSize150, .IconChartSize200, .IconChartSize250 {
     mask-image: url("icons/chart_pie.svg");
 }
 
-/* ===== File type and exporter icons ===== */
-
-/* Full-colour background-image file icons: IconFilePng / IconFileSvg are used by the client-side export
-   items and PopUpWorking ("IconFile" + format); IconFilePdf / IconFileXlsx are IconClass values of server
-   exporters (ChartJsPdfExporter, ChartJsExcelExporter). */
-.IconFilePng {
-    background-color: transparent !important;
-    background-image: url("../icons/ext/png.svg");
+.sw-icon-mask.IconChartSize100 {
+    mask-size: 60%;
 }
 
-.IconFileSvg {
-    background-color: transparent !important;
-    background-image: url("../icons/ext/svg.svg");
+.sw-icon-mask.IconChartSize125 {
+    mask-size: 70%;
 }
 
-.IconFilePdf {
-    background-color: transparent !important;
-    background-image: url("../icons/ext/pdf.svg");
+.sw-icon-mask.IconChartSize150 {
+    mask-size: 80%;
 }
 
-.IconFileXlsx {
-    background-color: transparent !important;
-    background-image: url("../icons/ext/xlsx.svg");
+.sw-icon-mask.IconChartSize200 {
+    mask-size: 90%;
 }
 
-
-/* ===== Color menu icons ===== */
-
-/* IconColors: the Color sub-menu and the three fixed gradient sub-menus. */
+/* Color submenu, the gradient submenus and the toggles. */
 .IconColors {
     mask-image: url("../icons/color_palette.svg");
 }
 
-/* Toggles: IconColoredLabels (coloured labels, key t) and IconColoredValues (coloured values, key v). */
 .IconColoredLabels {
     mask-image: url("../icons/text.svg");
 }
-
 
 .IconColoredValues {
     mask-image: url("../icons/number.svg");
 }
 
-
-/* IconColorOriginal: "Original" colours (key o). */
 .IconColorOriginal {
     mask-image: url("../icons/home.svg");
 }
 
-
-/* Random gradient modes (class built as "IconColor" + mode name): IconColorRandomValueGradient (key g),
-   IconColorRandomSeriesGradient (key s), IconColorRandomMagnitudeGradient (key m). */
-.IconColorRandomValueGradient {
+.IconColorRandomValueGradient, .IconColorRandomSeriesGradient, .IconColorRandomMagnitudeGradient {
     mask-image: url("../icons/gradient.svg");
 }
 
-.IconColorRandomSeriesGradient {
-    mask-image: url("../icons/gradient.svg");
-}
-
-.IconColorRandomMagnitudeGradient {
-    mask-image: url("../icons/gradient.svg");
-}
-
-/* IconColorLabelText: label hash colour mode (key l). */
 .IconColorLabelText {
     mask-image: url("../icons/text.svg");
 }
 
+/* Unselected order items are dimmed (the selected ones use the *Sel classes of ui/icons.css). */
+.IconOrderOriginal, .IconOrderAscending, .IconOrderDescending {
+    opacity: 0.25;
+}
 
-/* Fixed gradient swatches IconColorGradient0, IconColorGradient1, IconColorGradient2, IconColorGradient3,
-   IconColorGradient4, IconColorGradient5, IconColorGradient6, IconColorGradient7, IconColorGradient8,
-   IconColorGradient9, IconColorGradient10, IconColorGradient11 ("IconColorGradient" + i in chart.js):
-   28x28 rounded swatches with a black outline and a linear-gradient in hsl from hue i*30 to i*30+60
-   (80% saturation, 70% lightness), matching the hue ranges i/12 .. (i+2)/12 of the FixedValue<i> /
-   FixedSeries<i> / FixedMag<i> colour modes. Hard-coded duplicates of the JS computation. */
-.IconColorGradient0 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
+/* Fixed gradient swatches IconColorGradient0-11: hue i*30 to i*30+60 (matches FixedValue/FixedSeries/FixedMag i). */
+.sw-icon-mask[class*="IconColorGradient"] {
+    mask-image: none;
+    border-radius: var(--sw-radius);
+    outline: 1px solid var(--sw-border-strong);
+    outline-offset: -1px;
     background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(0, 80%, 70%), hsl(60, 80%, 70%) );
 }
 
-.IconColorGradient1 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(30, 80%, 70%), hsl(90, 80%, 70%) );
+.IconColorGradient0 { background-image: linear-gradient(in hsl, hsl(0, 80%, 70%), hsl(60, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient1 { background-image: linear-gradient(in hsl, hsl(30, 80%, 70%), hsl(90, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient2 { background-image: linear-gradient(in hsl, hsl(60, 80%, 70%), hsl(120, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient3 { background-image: linear-gradient(in hsl, hsl(90, 80%, 70%), hsl(150, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient4 { background-image: linear-gradient(in hsl, hsl(120, 80%, 70%), hsl(180, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient5 { background-image: linear-gradient(in hsl, hsl(150, 80%, 70%), hsl(210, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient6 { background-image: linear-gradient(in hsl, hsl(180, 80%, 70%), hsl(240, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient7 { background-image: linear-gradient(in hsl, hsl(210, 80%, 70%), hsl(270, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient8 { background-image: linear-gradient(in hsl, hsl(240, 80%, 70%), hsl(300, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient9 { background-image: linear-gradient(in hsl, hsl(270, 80%, 70%), hsl(330, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient10 { background-image: linear-gradient(in hsl, hsl(300, 80%, 70%), hsl(360, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+.IconColorGradient11 { background-image: linear-gradient(in hsl, hsl(330, 80%, 70%), hsl(390, 80%, 70%)); } /* SwWeb:allow-design (a swatch of this gradient choice) */
+
+/* ===== No chart selected (chart.html without q) ===== */
+
+/* In-page explanation instead of a blank page (chartMain). */
+.ChartMissing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75em;
+    padding: 2em 1em;
+    text-align: center;
+    color: var(--sw-fg, var(--ThemeMain));
 }
 
-.IconColorGradient2 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(60, 80%, 70%), hsl(120, 80%, 70%) );
+.ChartMissingIcon {
+    width: 2.5em;
+    height: 2.5em;
+    color: var(--sw-accent1, var(--ThemeAcc1));
 }
 
-.IconColorGradient3 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(90, 80%, 70%), hsl(150, 80%, 70%) );
+.ChartMissingTitle {
+    margin: 0;
+    font-size: 1.4em;
 }
 
-.IconColorGradient4 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(120, 80%, 70%), hsl(180, 80%, 70%) );
+.ChartMissingText {
+    margin: 0;
+    max-width: 40em;
+    overflow-wrap: anywhere;
 }
 
-.IconColorGradient5 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(150, 80%, 70%), hsl(210, 80%, 70%) );
-}
-.IconColorGradient6 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(180, 80%, 70%), hsl(240, 80%, 70%) );
-}
-.IconColorGradient7 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(210, 80%, 70%), hsl(270, 80%, 70%) );
+/* ===== Table view (Design v2, chart.js ChartView.ToggleTable: key d / menu "Show as table" / url table=true) ===== */
+
+/* div.ChartTable: the chart data as a table over the chart (the canvas stays below, aria-hidden), scrolls on its own; the menu button
+   stays on top. Flat surface, hairline rows, sunken sticky header, numbers right aligned with tabular figures. */
+.ChartTable {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: auto;
+    padding: 8px 52px 8px 8px;
+    background: var(--sw-surface, var(--sw-bg));
+    color: var(--sw-text, var(--sw-fg));
+    font-family: var(--sw-sans, sans-serif);
+    font-size: var(--sw-text-sm, 13px);
+    user-select: text;
 }
 
-.IconColorGradient8 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(240, 80%, 70%), hsl(300, 80%, 70%) );
-}
+    .ChartTable:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: -2px;
+    }
 
-.IconColorGradient9 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(270, 80%, 70%), hsl(330, 80%, 70%) );
-}
+    .ChartTable table {
+        border-collapse: collapse;
+        min-width: min(100%, 24rem);
+        font-variant-numeric: tabular-nums;
+    }
 
-.IconColorGradient10 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(300, 80%, 70%), hsl(360, 80%, 70%) );
-}
+    .ChartTable caption {
+        padding: 4px 8px 8px;
+        text-align: start;
+        font-weight: 500;
+        font-size: var(--sw-text-md, 14px);
+    }
 
-.IconColorGradient11 {
-    border-radius: 8px;
-    margin: 2px;
-    width: 28px;
-    height: 28px;
-    outline: 1px solid black;
-    background-color: transparent !important;
-    background-image: linear-gradient(in hsl, hsl(330, 80%, 70%), hsl(390, 80%, 70%) );
-}
+    .ChartTable th, .ChartTable td {
+        padding: 4px 12px;
+        border-bottom: 1px solid var(--sw-border, var(--sw-border));
+        white-space: nowrap;
+    }
 
-/* Exporter icons of UserStorageChartExporter items ("IconShareLink" + scope index): IconShareLink0 (disc),
-   IconShareLink1 (user_check), IconShareLink2 (share). */
-.IconShareLink0 {
-    mask-image: url("../icons/disc.svg");
-}
+    .ChartTable thead th {
+        position: sticky;
+        top: -8px;
+        background: var(--sw-surface-sunken, var(--sw-surface-sunken));
+        color: var(--sw-text-2, var(--sw-text-2));
+        font-size: var(--sw-text-xs, 12px);
+        font-weight: 500;
+        text-align: end;
+    }
 
-.IconShareLink1 {
-    mask-image: url("../icons/user_check.svg");
-}
+        .ChartTable thead th:first-child, .ChartTable tbody th {
+            text-align: start;
+        }
 
-.IconShareLink2 {
-    mask-image: url("../icons/share.svg");
-}
+    .ChartTable tbody th {
+        font-weight: 400;
+        color: var(--sw-text-2, var(--sw-text-2));
+    }
 
-/* ===== Order menu icons ===== */
+    .ChartTable td {
+        text-align: end;
+    }
 
-/* IconOrder: the Order sub-menu. */
-.IconOrder {
-    mask-image: url("../icons/table_log.svg");
-}
-
-
-/* Selected order item icons (the Order menu builder appends "Sel" for the active order):
-   IconOrderOriginalSel, IconOrderAscendingSel, IconOrderDescendingSel. */
-.IconOrderOriginalSel {
-    mask-image: url("../icons/home.svg");
-}
-
-.IconOrderAscendingSel {
-    mask-image: url("../icons/m_sort_asc.svg");
-}
-
-.IconOrderDescendingSel {
-    mask-image: url("../icons/m_sort_desc.svg");
-}
-
-/* Unselected order item icons, same masks dimmed to 10% opacity: IconOrderOriginal, IconOrderAscending,
-   IconOrderDescending. */
-.IconOrderOriginal {
-    opacity: 0.1 !important;
-    mask-image: url("../icons/home.svg");
-}
-
-
-.IconOrderAscending {
-    opacity: 0.1 !important;
-    mask-image: url("../icons/m_sort_asc.svg");
-}
-
-.IconOrderDescending {
-    opacity: 0.1 !important;
-    mask-image: url("../icons/m_sort_desc.svg");
+/* The menu button stays above the table view */
+SysWeaver-Chart .ChartMenuButton {
+    z-index: 2;
 }

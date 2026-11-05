@@ -1,0 +1,512 @@
+﻿/*
+ * ui/cells.css - SysWeaver UI library (Sw) styles, part 4 of 6: value cells (Sw.Cells) and text popups.
+ *
+ * Classes set by the cell renderers (Sw.Cells.Classes, replaceable): sw-right / sw-left / sw-center (alignment), sw-mono, sw-null (zero),
+ * sw-false (negative / false / dark color), sw-cell-text (plain text; not sw-text, the Sw.TextBox root class), sw-cell-actions (Toggle / Actions), sw-capped (shortened text),
+ * sw-cell-link, sw-cell-dt (time stamps; sw-cell-dt-utc / sw-cell-dt-local show a marker), the kind class sw-fmt-<Format>.
+ * Inner elements: sw-link, sw-tag, sw-cell-toggle, sw-cell-action, sw-cell-img. Popups: sw-code-json, sw-longtext, sw-md.
+ * The flash class passed to Sw.Cells.Update is styled by the page (ex: sw-flash below).
+ */
+
+.sw-right {
+    text-align: right;
+}
+
+.sw-left {
+    text-align: left;
+}
+
+.sw-center {
+    text-align: center;
+}
+
+/* Zero values are muted by colour, not by half opacity (2.8-3.0:1, S7a-A1-3): the secondary text colour is >= 4.5:1 in every theme */
+.sw-null {
+    color: var(--sw-text-2);
+}
+
+.sw-false {
+    color: var(--sw-accent2);
+}
+
+.sw-cell-text, .sw-fmt-Json, .sw-fmt-Text, .sw-fmt-MD {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sw-fmt-Number, .sw-fmt-ByteSize, .sw-fmt-ByteSpeed, .sw-fmt-Duration, .sw-fmt-Uptime, .sw-cell-dt {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Shortened text: an accent ellipsis, click opens the full text */
+.sw-capped::after {
+    content: " \2026";
+    color: var(--sw-accent2);
+}
+
+/* WebColor cells: readable text on dark colors */
+.sw-fmt-WebColor {
+    color: #111;
+}
+
+.sw-fmt-WebColor.sw-false {
+    color: #fff;
+}
+
+/* Time stamps: a small marker for utc / local formats */
+.sw-cell-dt-utc::before, .sw-cell-dt-local::before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 4px;
+    vertical-align: -0.15em;
+    background-color: currentColor;
+    opacity: 0.5;
+    mask: url("../icons/table_country.svg") center / contain no-repeat;
+}
+
+.sw-cell-dt-local::before {
+    mask-image: url("../icons/home.svg");
+}
+
+/* Links */
+a.sw-link {
+    color: var(--sw-accent1-fg);
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 4px;
+    padding: 0;
+    background: none;
+    overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+    a.sw-link:hover {
+        text-decoration: underline;
+        background: none;
+        color: var(--sw-accent1-fg);
+    }
+}
+
+a.sw-link:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+/* Inline (not inline-block): images without intrinsic pixel sizes (svg with percentage width, ex: the iso flags) collapse to 0 x 0
+   inside a shrink-to-fit inline-block parent. */
+a.sw-link.sw-link-image {
+    display: inline;
+    line-height: 0;
+}
+
+/* A link to another site (Sw.Cells.External / ExternalLink): the external (or web search) icon after the text, so it is visibly not a
+   link of this application; it opens a new tab ("Opens <host> ..." tool tip) */
+a.sw-link.sw-link-ext .sw-link-ext-icon {
+    display: inline-block;
+    width: 0.85em;
+    height: 0.85em;
+    margin-left: 0.25em;
+    vertical-align: -0.05em;
+    opacity: 0.8;
+}
+
+/* The icon and the word next to it never wrap apart (cells.js ExternalLink) */
+a.sw-link.sw-link-ext .sw-link-keep {
+    white-space: nowrap;
+}
+
+a.sw-link.sw-link-ext .sw-link-search-icon {
+    margin-left: 0;
+    margin-right: 0.3em;
+}
+
+a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon {
+    vertical-align: middle;
+}
+
+/* The same link without internet: plain text (the address is in the tool tip) */
+.sw-link-off {
+    color: var(--sw-fg);
+    cursor: help;
+}
+
+/* Markdown image that is not loaded automatically (remote / api / query url, see Sw.Markdown): click, Enter or Space loads it */
+.sw-md-img-off {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--sw-touch);
+    padding: 2px 10px;
+    border: 1px dashed var(--sw-line-strong);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg-inset);
+    color: var(--sw-accent1-fg);
+    cursor: pointer;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+    @media (hover: hover) {
+        .sw-md-img-off:hover {
+            text-decoration: underline;
+        }
+    }
+
+    .sw-md-img-off:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+.sw-cell-img {
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+/* Tags (auth tokens, compression formats ...): as the original (owner report 4 #9), a filled pill in the first accent with bold text
+   in the page colour (the original: every span in a table cell, --ThemeAcc1 / --ThemeBackground, bold, the input radius); the text is
+   kept a little smaller so a row of several tags stays one line in the row height. Hacker: square, like every control there. */
+.sw-tag {
+    display: inline-block;
+    margin: 1px 4px 1px 0;
+    padding: 0 6px;
+    border-radius: var(--sw-radius-sm, 4px);
+    color: var(--sw-on-accent, var(--sw-bg));
+    background: var(--sw-accent1);
+    border: 1px solid transparent;
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.55;
+    white-space: nowrap;
+}
+
+/* The auth requirement tags (Sw.Cells.AuthTag, C# TableDataAuth): "Open" (anyone, no sign in) stands out in the second accent (the fill of
+   the checked toggle: >= 4.5:1 in every theme), "Any logged in user" is the outlined soft first accent (the token tags are filled) */
+.sw-tag.sw-tag-open {
+    background: color-mix(in oklab, var(--sw-accent2) 86%, var(--sw-fg));
+    color: var(--sw-on-accent, var(--sw-bg));
+}
+
+.sw-tag.sw-tag-signedin {
+    border-color: color-mix(in srgb, var(--sw-accent1) 55%, transparent);
+    background: var(--sw-accent1-soft, transparent);
+    color: var(--sw-text-accent, var(--sw-accent1));
+}
+
+@media (forced-colors: active) {
+    .sw-tag {
+        border-color: CanvasText;
+    }
+}
+
+/* Toggle and Actions buttons */
+.sw-cell-actions {
+    white-space: nowrap;
+}
+
+.sw-cell-toggle, .sw-cell-action {
+    transition: background-color var(--sw-dur-1) linear, color var(--sw-dur-1) linear, border-color var(--sw-dur-1) linear;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: var(--sw-control-h-sm); /* the small control height of the scale (was 0.75 x touch: 26 / 27 px) */
+    margin: 1px 4px 1px 0;
+    padding: 0 9px;
+    border: 1px solid var(--sw-line);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg-2);
+    color: var(--sw-fg);
+    font: inherit;
+    font-size: var(--sw-text-sm);
+    cursor: pointer;
+    vertical-align: middle;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.sw-cell-action .sw-icon {
+    width: 1.15em;
+    height: 1.15em;
+}
+
+/* Toggle cells: as the original (owner report 4 #8: "☑ Enabled" / "☐ Enabled" in a filled --ThemeAcc2 pill), polished: a check box and
+   the text in a pill of the second accent; checked = filled with the page colour text and a checked box, unchecked = a light tint of
+   the same accent with an empty box (the original showed both states in the same pill, the box alone told them apart; now the fill does
+   too). Hover / press darken the fill (the original lifted a 50 % pill to full strength). */
+.sw-cell-toggle {
+    gap: 6px;
+    padding: 0 8px 0 6px;
+    border-color: transparent;
+    /* (a touch towards the text colour: away from the page colour of the text, >= 4.5:1 in every theme; application was 4.2) */
+    background: color-mix(in oklab, var(--sw-accent2) 86%, var(--sw-fg));
+    color: var(--sw-on-accent, var(--sw-bg));
+    font-weight: 600;
+}
+
+.sw-cell-toggle[aria-checked="false"] {
+    border-color: color-mix(in srgb, var(--sw-accent2) 45%, transparent);
+    background: var(--sw-accent2-soft);
+    color: color-mix(in oklab, var(--sw-accent2), var(--sw-fg) 38%);
+}
+
+/* The check box of a Toggle cell (the original's ☐ / ☑): a box in the text colour, with a check mark when checked */
+.sw-cell-check {
+    position: relative;
+    flex: none;
+    width: 0.95em;
+    height: 0.95em;
+    border: 1.5px solid currentColor;
+    border-radius: min(3px, var(--sw-radius-sm, 3px));
+    box-sizing: border-box;
+}
+
+.sw-cell-toggle[aria-checked="true"] .sw-cell-check::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    width: 0.24em;
+    height: 0.5em;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* Read only booleans (Boolean cells) as the original: "☑ True" in the text colour, "☐ False" in the second accent (readable) */
+.sw-cell-bool-v {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    white-space: nowrap;
+}
+
+.sw-cell-bool-icon {
+    flex: none;
+    width: 1.1em;
+    height: 1.1em;
+}
+
+.sw-cell-bool.sw-cell-text .sw-cell-bool-icon {
+    color: var(--sw-accent1-fg, var(--sw-accent1));
+}
+
+.sw-cell-bool.sw-false {
+    color: color-mix(in oklab, var(--sw-accent2), var(--sw-fg) 25%);
+}
+
+@media (hover: hover) {
+    .sw-cell-toggle:hover:not(:disabled), .sw-cell-action:hover:not(:disabled) {
+        background: var(--sw-bg-3);
+        border-color: var(--sw-line-strong);
+    }
+
+    .sw-cell-toggle:hover:not(:disabled) {
+        background: color-mix(in oklab, var(--sw-accent2) 70%, var(--sw-fg));
+        border-color: transparent;
+    }
+
+    .sw-cell-toggle[aria-checked="false"]:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--sw-accent2) 26%, transparent);
+        border-color: color-mix(in srgb, var(--sw-accent2) 60%, transparent);
+    }
+}
+
+.sw-cell-toggle:focus-visible, .sw-cell-action:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 1px;
+}
+
+.sw-cell-toggle:disabled, .sw-cell-action:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* The confirmation of destructive actions (cells.js ConfirmDanger, dialog class sw-cell-confirm-dialog): the item, an optional text,
+   then the warning (p.sw-cell-confirm-warn) */
+.sw-cell-confirm > p {
+    margin: 0 0 0.6em;
+    overflow-wrap: anywhere;
+}
+
+.sw-cell-confirm-item > span {
+    color: var(--sw-muted);
+}
+
+/* Short facts of the row under the item (ConfirmDanger Facts: the address, agent and start of a session), so similar rows are told apart */
+.sw-cell-confirm-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px var(--sw-space-3, 12px);
+    margin: 0 0 0.6em;
+    font-size: var(--sw-text-sm, 13px);
+}
+
+.sw-cell-confirm-facts > dt {
+    color: var(--sw-muted);
+}
+
+.sw-cell-confirm-facts > dd {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The warning icon of the title in the danger color (the same on every destructive confirmation: Kill, Delete, Delete all) */
+.sw-cell-confirm-dialog .sw-dialog-icon {
+    color: var(--sw-danger);
+}
+
+/* A busy element (Sw.Work.Busy, table row actions): busy is not disabled, so no fading (FBK-2: label and colour kept, the spinner says it) */
+.sw-busy {
+    cursor: progress !important;
+}
+
+/* A flash class for changed values (pass "sw-flash" to Sw.Cells.Update) */
+.sw-flash {
+    animation: sw-flash calc(var(--sw-dur-3) * 4) ease-out;
+}
+
+@keyframes sw-flash {
+    from {
+        background-color: var(--sw-accent1-soft);
+    }
+}
+
+/* ---------- Text popups (json, long text, markdown) ---------- */
+
+.sw-code-json {
+    margin: 0;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    white-space: pre;
+    color: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 40%);
+}
+
+.sw-code-json .key {
+    color: var(--sw-fg);
+}
+
+.sw-code-json .string {
+    color: var(--sw-accent2);
+}
+
+.sw-code-json .number {
+    color: var(--sw-accent1-fg);
+}
+
+.sw-code-json .null {
+    color: var(--sw-accent2);
+    opacity: 0.5;
+}
+
+.sw-code-json .boolean {
+    color: var(--sw-accent1-fg);
+    font-style: italic;
+}
+
+.sw-longtext {
+    min-height: 4em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.sw-longtext.sw-mono {
+    white-space: pre;
+}
+
+.sw-md {
+    min-height: 4em;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.sw-md > :first-child {
+    margin-top: 0;
+}
+
+.sw-md h1, .sw-md h2, .sw-md h3, .sw-md h4, .sw-md h5 {
+    color: var(--sw-accent2);
+    margin: 0.8em 0 0.3em;
+    font-family: var(--sw-head);
+}
+
+.sw-md ul, .sw-md ol {
+    padding-inline-start: 24px;
+}
+
+.sw-md li::marker {
+    color: var(--sw-accent1);
+}
+
+/* Emphasis in the normal text color in every theme (the theme's global em color / an accent 2 read like an error or a warning):
+   em is italic and semi bold, strong is bold */
+.sw-md em {
+    color: inherit;
+    font-style: italic;
+    font-weight: 600;
+}
+
+.sw-md strong, .sw-md b {
+    color: inherit;
+    font-weight: 700;
+}
+
+.sw-md a {
+    color: var(--sw-accent1-fg);
+    padding: 0 2px;
+}
+
+.sw-md img {
+    max-width: 100%;
+}
+
+.sw-md code, .sw-md pre {
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    background: var(--sw-bg-inset);
+    border-radius: 4px;
+}
+
+.sw-md code {
+    padding: 1px 4px;
+}
+
+.sw-md pre {
+    padding: 8px 10px;
+    overflow: auto;
+}
+
+.sw-md pre code {
+    padding: 0;
+    background: none;
+}
+
+.sw-md blockquote {
+    margin: 0.5em 0;
+    padding: 2px 12px;
+    border-left: 3px solid var(--sw-accent2);
+    color: var(--sw-muted);
+}
+
+.sw-md table {
+    border-collapse: collapse;
+}
+
+.sw-md th, .sw-md td {
+    border: 1px solid var(--sw-line);
+    padding: 3px 8px;
+}
+
+/* Log level names (cells.js MessageLevelCell): warnings and errors stand out */
+.sw-level-warning {
+    color: color-mix(in srgb, var(--sw-danger) 55%, var(--sw-fg));
+}
+
+.sw-level-error {
+    color: var(--sw-danger);
+    font-weight: 600;
+}

@@ -40,7 +40,7 @@ Menu entries created with `[WebMenuTable]` point the UI's generic table page at 
 - A column change counter (`Cc`) so column definitions are only sent when the client doesn't already have them; refresh rate hints
 - Typed tables (`GetTyped`) as well as boxed rows (`Get`), and static tables from in-memory data or untyped `object[]` rows (`GetStaticTableFn`)
 - Translation of `[AutoTranslate]` columns through an `ITranslator` (`TableDataTools.Translate`, `TypeTranslator`)
-- Exporters: `CsvTableDataExporter` (comma, tab, semicolon), `HtmlTableDataExporter.Simple` and `MarkDownTableDataExporter`; JSON and Excel exporters live in other projects
+- Exporters: `CsvTableDataExporter` (comma, tab, semicolon), `HtmlTableDataExporter.Simple` and `MarkDownTableDataExporter`; JSON and Excel exporters live in other projects. Dates are exported as UTC in the invariant format `yyyy-MM-dd HH:mm:ss` and date time column headers end with " (UTC)" (`TableDataExporterTools.GetHeader`); CSV quotes values containing the separator, a quote or a line break (RFC 4180)
 - Data references (`DataReferenceStorage`, `TableDataReference`, `DataScopes`): server-side stored tables with a scope (global, signed-in users, session) and a sliding expiry, viewed, exported or edited through a reference id
 - Table editing (`TableDataEdit`, `TableDataOp`, `EditTableDataRequest`): select / remove columns, append tables, merge columns, add computed columns from expressions (`NewTableDataColumn`), filter / sort / limit; exposed to the web UI and AI tools by the HTTP server
 

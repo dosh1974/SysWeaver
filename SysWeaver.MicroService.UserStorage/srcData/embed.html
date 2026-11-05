@@ -1,154 +1,110 @@
 ﻿<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>${#Title Text}</title>
+    <script defer src="${@Base Url}sw/core.js"></script>
+    <script defer src="${@Base Url}sw/ui.js"></script>
+    <script defer src="${@Base Url}sw/shell.js"></script>
+    <link rel="icon" type="image/x-icon" href="${@Base Url}favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="${@Base Url}icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="${@Base Url}apple-touch-icon.png">
+    <link rel="manifest" href="${@Base Url}app/manifest.json">
+    <link rel="stylesheet" href="${@Base Url}common/theme.css">
+    <link rel="stylesheet" href="${@Base Url}sw/ui.css">
     <style>
         html, body {
             background-color: transparent;
         }
-    </style>
-    <title>${#Title Text}</title>
-    <script defer src="${@Base Url}common/common.js"></script>
-    <script defer src="${@Base Url}app/application.js"></script>
-    <link rel="icon" type="image/x-icon" href="${@Base Url}favicon.ico" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="${@Base Url}icon.svg">
-    <link rel="apple-touch-icon" type="image/png" href="${@Base Url}apple-touch-icon.png">
-    <link rel="manifest" href="${@Base Url}/app/manifest.json">
-    <link rel="stylesheet" href="${@Base Url}common/theme.css">
-    <link rel="stylesheet" href="${@Base Url}app/application.css">
-    <style type="text/css">
 
-
-        iframe {
-            height: 100%;
-            left: 0;
+        /* The linked page fills the window */
+        .us-frame {
             position: absolute;
-            top: 0;
+            inset: 0;
             width: 100%;
+            height: 100%;
+            border: 0;
             color-scheme: normal;
-            object-fit: contain;
-            object-position: center;
-        }
-        
-        iframe.T {
-            color-scheme: unset !important;
         }
 
+            .us-frame.T {
+                color-scheme: unset !important;
+            }
 
-        Settings-Menu {
-            background-color: rgba(var(--ThemeBackgroundRGB), 0.7);
-            box-sizing: border-box;
-            padding-top: 4px;
-            padding-left: 4px;
-            border-radius: 4px;
-            width: 40px;
-            height: 40px;
+        /* The settings button floats over the content: a floating layer (raised surface, hairline, elevation 1), quiet until used */
+        .us-tools {
             position: absolute;
-            top: 0.25em;
-            right: 0.25em;
-            display: block;
-            transition: opacity linear var(--ThemeFadeDuration);
-            opacity: 0.3;
+            top: var(--sw-space-2);
+            right: var(--sw-space-2);
+            background: var(--sw-surface-raised);
+            border: 1px solid var(--sw-border);
+            border-radius: var(--sw-radius-md);
+            box-shadow: var(--sw-elev-1);
+            opacity: 0.6;
+            transition: opacity var(--sw-dur-2) var(--sw-ease);
         }
 
-            Settings-Menu:hover {
+            .us-tools:focus-within {
                 opacity: 1;
             }
 
-            Settings-Menu:focus {
+        @media (hover: hover) {
+            .us-tools:hover {
                 opacity: 1;
             }
+        }
     </style>
     <script>
-        window.onload = async () => {
-            const f = document.body.getElementsByTagName("iframe")[0];
-            let delay = 100;
-            let i = 0;
-            const fn = () => {
-                try {
-                    const t = f.contentDocument.title;
-                    if (t !== document.title)
-                        document.title = t;
-                    delay = 5000;
-                }
-                catch {
-                    ++i;
-                    if (i > 50)
-                        delay = 5000;
-                }
-                setTimeout(fn, delay);
-            };
-            fn();
-
-
-            if (!window.IsTop)
+        //  A settings button over the content when the page is shown at top level: full screen and the server's Theme menu
+        //  (the server menu items become Sw.Menu items with Sw.Shell.ToMenuItems from sw/shell.js)
+        async function usSettings() {
+            if (!Sw.Page.IsTop)
                 return;
-            const settingMenus = "Theme";
-            const themeItems = WebMenu.From(await sendRequest("${$Base Url}Api/application/GetMenu", settingMenus)).Items;
-            const til = themeItems.length;
-            const expandEmbeddedIcon = new ColorIcon("IconSettings", "IconColorThemeMain", 32, 32, "Click to show settings", ev => {
-                if (badClick(ev))
-                    return;
-
-                PopUpMenu(expandEmbeddedIcon.Element, close => {
-
-                    const menu = new WebMenu();
-                    menu.Name = "AppSettings";
-                    if (FullScreen.IsFull()) {
-                        menu.Items.push(WebMenuItem.From({
-                            Name: "Exit full screen",
-                            Flags: 0,
-                            IconClass: "IconFullScreenExit",
-                            Title: "Exit full screen mode",
-                            Data: async () => {
-
-                                await FullScreen.Exit();
-                                close();
-                            },
-                        }));
-                    } else {
-                        menu.Items.push(WebMenuItem.From({
-                            Name: "Enter full screen",
-                            Flags: 0,
-                            IconClass: "IconFullScreenEnter",
-                            Title: "Enter full screen mode",
-                            Data: async () => {
-
-                                await FullScreen.Enter();
-                                close();
-                            },
-                        }));
-                    }
-
-                    for (let i = 0; i < til; ++i)
-                        menu.Items.push(themeItems[i]);
-
-                    /*                    menu.Items.push(WebMenuItem.From({
-                                            Name: "Open in new tab",
-                                            Flags: 0,
-                                            IconClass: "IconNewTab",
-                                            Title: "Open the content iframe in a new tab",
-                                            Data: async () => {
-                                                const contentUrl = f.src;
-                                                if (contentUrl)
-                                                    Open(contentUrl);
-                                                close();
-                                            },
-                                        }));
-                    */
-                    return menu;
-                }, true);
+            const theme = (await Sw.Shell.GetMenu("Theme")).Items || [];
+            const b = new Sw.Button({
+                Icon: "IconSettings", Kind: "ghost", Title: _TF("Settings", "Tool tip of the settings button over a stored link (full screen, theme)"),
+                OnClick: () => Sw.Menu.Show(b.E, [
+                    Sw.FullScreen.IsFull()
+                        ? { Text: _TF("Exit full screen", "Menu item of a stored link page"), Icon: "IconFullScreenExit", OnClick: () => Sw.FullScreen.Exit() }
+                        : { Text: _TF("Enter full screen", "Menu item of a stored link page"), Icon: "IconFullScreenEnter", OnClick: () => Sw.FullScreen.Enter() },
+                    "-",
+                    ...Sw.Shell.ToMenuItems(theme, {}, { Sections: true }),
+                ], { Align: "end" }),
             });
-            const sm = document.createElement("Settings-Menu");
-            sm.appendChild(expandEmbeddedIcon.Element);
-            document.body.appendChild(sm);
-        };
+            document.body.append(Sw.el("div.us-tools", null, b.E));
+        }
+
+        //  Called from <body onload>: copies the title of the linked page (same origin) to this page, then the settings button
+        function usMain() {
+            Sw.Page.Main(async () => {
+                const f = document.querySelector("iframe.us-frame");
+                let delay = 100;
+                let i = 0;
+                const fn = () => {
+                    try {
+                        const t = f.contentDocument.title;
+                        if (t && (t !== document.title))
+                            document.title = t;
+                        delay = 5000;
+                    }
+                    catch {
+                        ++i;
+                        if (i > 50)
+                            delay = 5000;
+                    }
+                    setTimeout(fn, delay);
+                };
+                fn();
+                await usSettings();
+            });
+        }
     </script>
 </head>
-<body>
-    <iframe class="${@Extre Themes}" src="${@Url Name}" frameborder="0" allowtransparency="true"></iframe>
+<!-- SwWeb:no-page-header (a full window viewer of a stored link) -->
+<body class="sw-root" onload="usMain()">
+    <iframe class="us-frame ${@Extre Themes}" src="${@Url Name}" title="${#Title Text}" allowtransparency="true"></iframe>
 </body>
 </html>

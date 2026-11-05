@@ -120,7 +120,7 @@ namespace SysWeaver.Data
 
 
     /// <summary>
-    /// Format some long multiline Mark Down (MD) text.
+    /// Format some long multiline Markdown (MD) text.
     /// Will show a capped version of the text (not formatted using MD).
     /// Will show the full version of the text on click.
     /// </summary>
@@ -128,7 +128,7 @@ namespace SysWeaver.Data
     public class TableDataMdAttribute : TableDataRawFormatAttribute
     {
         /// <summary>
-        /// Format some long multiline Mark Down (MD) text.
+        /// Format some long multiline Markdown (MD) text.
         /// Will show a capped version of the text (not formatted using MD).
         /// Will show the full version of the text on click.
         /// </summary>

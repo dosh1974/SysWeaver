@@ -1,349 +1,233 @@
 ﻿/**
- * @file Type handler for nested (complex) objects in the object editor.
+ * @file Type handler for nested object members (`Sw.Edit.Handlers.Object`, legacy global `EditTypeObject`).
  *
- * Loaded on demand by `Edit.Init()` (Edit.js) via `includeJs`. Defines the global class `EditTypeObject`.
- * A single shared instance is created lazily by `Edit.GetObjectTypeHandler()` and returned by `Edit.GetTypeHandler`
- * for members with `TypeMemberFlags.IsObject` (and no more specific handler).
- * Implements the duck-typed type-handler contract documented on class `Edit` (Edit.js).
- *
- * Dependencies (globals from other files): `Edit`, `EditOptions` (via `options.Clone()`), `TypeInfoCache`
- * (type.js), `TypeMemberFlags`, `ValueFormat`, `ColorIcon`, `isPureClick` (common.js).
- *
- * UI: the member row shows a 36 px expand icon and a `SysWeaver-EditInfo` summary; expanding builds a child `Edit`
- * (inside `SysWeaver-EditEntry` / `SysWeaver-EditEntryHeader` / `SysWeaver-EditEntryValue`) in the data row
- * created with `editContext.CreateData()`. Classes used: `EditObject`, `DataRow`, `EditorExpanded`.
- * Tooltip / undo texts in this file are not localized.
+ * Loaded by Edit.js. The value cell shows an expand button and a short summary of the object (live updated); expanding
+ * renders a child editor (no title row, sharing the undo stack) in the full width data row below. Expanding a null object
+ * creates a default object as an undoable step (not possible when read only).
  */
+(function () {
+    "use strict";
 
-/**
- * Type handler for nested objects. Stateless apart from per-editor closures created in `AddEditor`.
- */
-class EditTypeObject {
+    const E = Sw.Edit;
+    const F = E.Flags;
+    const Has = E.Util.Has;
 
     /**
-     * Value written into a new parent object for this member; same as `GetDefault`.
-     * @param {object} member - The `TypeMemberDesc`.
-     * @param {EditOptions} options - The editor options.
-     * @returns {?object} The default object (see `GetDefault`).
+     * Nested object handler.
      */
-    CreateDefault(member, options) {
-        return this.GetDefault(member, options);
-    }
-
-    /**
-     * Whether a pasted / dropped value is acceptable: `member` must not be primitive, `obj` must be an object and
-     * `obj.$type` must equal `member.TypeName` exactly (no comma/assembly stripping here).
-     * @param {*} obj - Candidate value.
-     * @param {object} member - The `TypeMemberDesc` (or `TypeDesc`).
-     * @param {EditOptions} [options] - Unused.
-     * @returns {boolean} True if acceptable.
-     */
-    IsOfType(obj, member, options) {
-        if (!Edit.IsPrimitive(member)) {
-            if (typeof (obj) !== "object")
+    class EditTypeObject extends E.Handler {
+        /**
+         * Accept objects with a matching $type, or without $type when every property is a member of the (loaded) type.
+         * @param {*} obj - Candidate.
+         * @param {object} member - The member.
+         * @returns {boolean} True when acceptable.
+         */
+        IsOfType(obj, member) {
+            if (E.IsPrimitive(member) || obj === null || typeof obj !== "object")
                 return false;
-            const tn = obj["$type"];
-            if (member.TypeName === tn)
-                return true;
+            if (obj.$type)
+                return obj.$type.split(",")[0] === member.TypeName;
+            //  No $type (json copied from a text, ex: the JSON tab of explore/api.html): every property must be a member of the type
+            const t = E.Types.get(member.TypeName);
+            return !!t && E.IsObjectOf(obj, t);
         }
-        return false;
-    }
-
-    /**
-     * Conditions an accepted pasted / dropped value before it is stored. Returns it unchanged (the `$type`
-     * property is kept; removing it is commented out).
-     * @param {*} obj - The accepted value.
-     * @returns {*} `obj`.
-     */
-    Condition(obj) {
-//        if (obj)
-//            delete obj["$type"];
-        return obj;
-    }
-
-    /**
-     * Validates an object value. Null/undefined is OK when the member has `AcceptNull`, else an error
-     * "<DisplayName>: Value is null and null is not allowed!" (not localized). Otherwise loads the member type with
-     * `Edit.GetType(member.TypeName, member.ElementInst)` and runs `Edit.ValidateType` on it.
-     * @param {?object} obj - The value to validate.
-     * @param {object} member - The `TypeMemberDesc`.
-     * @param {EditOptions} options - The editor options.
-     * @param {string} name - Path of the value (used as error path prefix).
-     * @returns {Promise<?Array<string>>} Null when valid, else `[path, message]` with path `name + "." + innerPath`
-     *   and message `DisplayName + "/" + innerMessage`.
-     */
-    async Validate(obj, member, options, name) {
-        if (obj == null) {
-            if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
-                return null;
-            return [name, member.DisplayName + ": Value is null and null is not allowed!"];
-        }
-        const objectType = await Edit.GetType(member.TypeName, member.ElementInst);
-        const err = await Edit.ValidateType(objectType, obj, options, null);
-        if (!err)
-            return null;
-        return [name + "." + err[0], member.DisplayName + "/" + err[1]];
-    }
-
-
-    /**
-     * Display text of an object value.
-     * @param {?object} obj - The value.
-     * @param {object} [member] - Unused.
-     * @param {EditOptions} [options] - Unused.
-     * @returns {?string} `JSON.stringify(obj)`, or null for a falsy value.
-     */
-    ToString(obj, member, options) {
-        return obj ? JSON.stringify(obj) : null;
-    }
-
-    /**
-     * Default described by the metadata: `{}` for a `"\t"` default (marker for "new instance"),
-     * `JSON.parse(member.Default)` when a default is defined, `null` when the member has `AcceptNull`, else `{}`
-     * (also `{}` when `member` is falsy).
-     * @param {?object} member - The `TypeMemberDesc`.
-     * @param {EditOptions} [options] - Unused.
-     * @returns {?object} The default value (a new object each call).
-     */
-    GetDefault(member, options) {
-        //  Default
-        if (member) {
-            let def = member.Default;
-            if (def === "\t")
-                return {};
-            if (Edit.IsValid(def))
-                return JSON.parse(def);
-            if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
-                return null;
-        }
-        return {};
-    }
-
-    /**
-     * JSON deep clone of a default value. Not used within this folder (`AddEditor` uses `Edit.CloneType`).
-     * @param {?object} def - Value to clone.
-     * @returns {?object} The clone, or null for a falsy `def`.
-     */
-    static CloneDef(def) {
-        if (!def)
-            return null;
-        return JSON.parse(JSON.stringify(def));
-        
-    }
-
-    /**
-     * Builds the editor of an object member (handler contract `AddEditor`).
-     * Resolves the member type (`Edit.GetType(member.TypeName, member.ElementInst)`) and clones the options for the
-     * child editor (`Title = false`, `ReadOnly` = member/options read only, `Name = member.Name`).
-     * If the metadata default is an empty object it is replaced by the server default instance
-     * (`TypeInfoCache.GetInstance`, errors ignored) or, failing that, by the object a temporary child `Edit` produces
-     * from `SetObject({})`; in the latter case a "Default value: <json>" line is added to the tooltip.
-     * Writes `Edit.CloneType(def)` into `obj[member.Name]` when that is undefined.
-     * DOM: adds class `EditObject` to the editor cell, creates a data row (`editContext.CreateData()`, class
-     * `DataRow`), a 36 px expand `ColorIcon` (inactive with "Can't expand null object" when read only and null) and a
-     * `SysWeaver-EditInfo` summary filled by `Edit.SetToString`. The child editor is created lazily on expand.
-     * @param {object} obj - The parent object; the value is `obj[member.Name]`.
-     * @param {Edit} editor - The parent editor.
-     * @param {{PrevRow:HTMLTableRowElement, Element:HTMLTableCellElement, CreateData:function():HTMLTableCellElement}} editContext
-     *   - Layout context (see `EditDesktop.AddMember`).
-     * @param {object} member - The `TypeMemberDesc`.
-     * @param {string} title - Member tooltip (unused here).
-     * @param {EditOptions} options - The editor options.
-     * @returns {Promise<object>} The item: `{ Title, DefValue, DefValueText, DataRow, SetValue, UpdateValue,
-     *   AddMenuItems, FindItem }` (no `Focus`).
-     */
-    async AddEditor(obj, editor, editContext, member, title, options) {
-        let typeTitle = null;
-        const mn = member.Name;
-        const cell = editContext.Element;
-
-        const isReadOnly = options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0);
-        const objectType = await Edit.GetType(member.TypeName, member.ElementInst);
-        const newOpt = options.Clone();
-        newOpt.Title = false;
-        newOpt.ReadOnly = isReadOnly;
-        newOpt.Name = mn;
-
-        let def = this.GetDefault(member, options);
-        let doInit = false;
-        if (def && (Object.keys(def).length === 0)) { 
-            doInit = true;
-            try {
-                const nd = await TypeInfoCache.GetInstance(member.TypeName);
-                if (nd) {
-                    def = nd;
-                    doInit = false;
-                }
-            }
-            catch
-            {
-            }
-        }
-        if (doInit) {
-            if (typeof (def) !== "undefined") {
-                if (def) {
-                    const itemEdit = new Edit(objectType, editor.Style, newOpt, editor, member);
-                    await itemEdit.SetObject({});
-                    def = itemEdit.GetObject();
-                }
-                typeTitle = ValueFormat.AddNonNullLine(typeTitle, "Default value", def ? JSON.stringify(def) : "null");
-            }
-            else
-                def = null;
-        }
-
-        if (typeof obj[mn] === "undefined")
-            obj[mn] = Edit.CloneType(def);
-
-
-        cell.classList.add("EditObject");
-        const data = editContext.CreateData();
-        const dataRow = data.parentElement;
-        dataRow.classList.add("DataRow");
-        const prevRow = editContext.PrevRow;
-        let isExpanded = false;
-        let expandIcon = null;
-        const countText = document.createElement("SysWeaver-EditInfo");
-        Edit.SetToString(countText, obj[mn]);
-
- 
-        let itemEdit = null;
-
-        let isInternal = false;
 
         /**
-         * Expands or collapses the nested object editor (inner function of `AddEditor`; click handler of the expand
-         * icon, also called without event from `UpdateValue` / `FindItem`). Ignores clicks with modifier keys.
-         * Expanding: clears the data cell, creates `SysWeaver-EditEntry` (header + value) holding a child
-         * `Edit(objectType, editor.Style, newOpt, editor, member)` set to `obj[mn]`; if the value was null/falsy, records
-         * an undoable "Create object" step (via `editor.Invoke`) that stores the child's newly created default object.
-         * Keeps the summary in sync on child `EditChange` events, switches the icon to collapse and adds class
-         * `EditorExpanded` to the data row and the previous (value) row.
-         * Collapsing: drops the child editor, clears the cell, switches the icon and removes `EditorExpanded`.
-         * @param {MouseEvent} [ev] - The click event (optional).
-         * @returns {Promise<void>}
+         * Validate: null only with AcceptNull; members recursively (path "member.sub", message "DisplayName/message").
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @param {object} options - Options.
+         * @param {string} name - Path.
+         * @returns {Promise<?Array<string>>} Null or [path, message].
          */
-        async function toggleExpand(ev) {
-            if (!isPureClick(ev))
-                return;
-            isExpanded ^= true;
-            if (isExpanded) {
-                data.innerHTML = "";
-
-                const arrayEntry = document.createElement("SysWeaver-EditEntry");
-                const arrayEntryHeader = document.createElement("SysWeaver-EditEntryHeader");
-                const arrayEntryValue = document.createElement("SysWeaver-EditEntryValue");
-                arrayEntry.appendChild(arrayEntryHeader);
-                arrayEntry.appendChild(arrayEntryValue);
-                isInternal = true;
-                const needNew = !obj[mn];
-                itemEdit = new Edit(objectType, editor.Style, newOpt, editor, member);
-                await itemEdit.SetObject(obj[mn]);
-                if (needNew) {
-                    const newObj = itemEdit.GetObject();
-                    await editor.Invoke(
-                        edit => {
-                            edit.SetValue(newObj);
-                        },
-                        edit => {
-                            edit.SetValue(null);
-                        },
-                        "Create object",
-                        mn);
-                    Edit.SetToString(countText, newObj);
-                }
-                itemEdit.Element.addEventListener("EditChange", ev => {
-                    Edit.SetToString(countText, obj[mn]);
-                });
-                isInternal = false;
-
-                arrayEntry.Edit = itemEdit;
-                arrayEntryValue.appendChild(itemEdit.Element);
-                arrayEntry.Edit = itemEdit;
-                data.appendChild(arrayEntry);
-                expandIcon.ChangeImage("SysWeaverEditIconCollapse");
-                expandIcon.SetTitle("Click to collapse object");
-                dataRow.classList.add("EditorExpanded");
-                prevRow.classList.add("EditorExpanded");
-            } else {
-                itemEdit = null;
-                data.innerHTML = "";
-                expandIcon.ChangeImage("SysWeaverEditIconExpand");
-                expandIcon.SetTitle("Click to expand object");
-                dataRow.classList.remove("EditorExpanded");
-                prevRow.classList.remove("EditorExpanded");
-            }
+        async Validate(obj, member, options, name) {
+            if (obj === null || obj === undefined)
+                return E.Handler.NullCheck(obj, member, name);
+            const type = await E.GetType(member.TypeName, member.ElementInst);
+            if (!type)
+                return null;
+            const err = await E.ValidateType(type, obj, options, null);
+            if (!err)
+                return null;
+            return [name + "." + err[0], (member.DisplayName || member.Name) + " › " + err[1]];
         }
-        const isNull = obj[mn] == null;
-        const canExpand = !(isReadOnly && isNull);
 
-        expandIcon = new ColorIcon(
-            isExpanded ? "SysWeaverEditIconCollapse" : "SysWeaverEditIconExpand",
-            "IconColorThemeMain", 36, 36,
-            canExpand ? (isExpanded ? "Click to collapse object" : (isNull ? "Click to create a new object and expand it" : "Click to expand object")) : "Can't expand null object", 
-            canExpand ? toggleExpand : null
-        );
-        cell.appendChild(expandIcon.Element);
-        cell.appendChild(countText);
-        //  The item returned to the engine (see the type-handler contract on class Edit).
-        return {
-            /** @type {?string} Constraint text prepended to the member tooltip ("Default value: ..." or null). */
-            Title: typeTitle,
-            /** @type {?object} Value used by the member menu's "Set default". */
-            DefValue: def,
-            /** @type {?string} JSON text of `DefValue` (null when there is no default). */
-            DefValueText: def == null ? null : JSON.stringify(def),
-            /** @type {HTMLTableRowElement} The data row holding the nested editor (toggled `Hide` by `Hide:` expressions). */
-            DataRow: dataRow,
-            /**
-             * Stores a new value into `obj[mn]` and dispatches `EditChange` (member, value, editor.Key/KeyName) on the
-             * parent editor element. Does not refresh the UI (the engine calls `UpdateValue` afterwards).
-             * @param {?object} newVal - New value.
-             * @returns {void}
-             */
-            SetValue: newVal => {
-                obj[mn] = newVal;
-                editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, newVal, null, editor.Key, editor.KeyName));
-            },
-            /**
-             * Refreshes the UI from `obj[mn]` (called after undo/redo). Skipped while the expand step itself is
-             * running. Refreshes the summary, collapses if expanded and then expands whenever the new value is
-             * non-null (so it also expands a previously collapsed editor).
-             * @returns {Promise<void>}
-             */
-            UpdateValue: async () => {
-                if (isInternal)
-                    return;
-                const newVal = obj[mn];
-                Edit.SetToString(countText, newVal);
-                if (isExpanded)
-                    await toggleExpand();
-                if (newVal != null)
-                    await toggleExpand();
-            },
-            /**
-             * Member-menu hook; adds nothing (placeholder).
-             * @param {WebMenu} menu - The menu being built.
-             * @param {function():void} close - Closes the menu.
-             * @returns {void}
-             */
-            AddMenuItems: (menu, close) => {
+        /**
+         * Display text (JSON).
+         * @param {*} obj - The value.
+         * @returns {?string} The text.
+         */
+        ToString(obj) {
+            return obj ? JSON.stringify(obj) : null;
+        }
 
-                if (isReadOnly)
-                    return;
-            },
-            /**
-             * Resolves an undo path below this member: expands if needed and delegates `name` (the remaining path,
-             * starting with this member's segment) to the child editor's `FindItem`.
-             * @param {string} name - Remaining dotted path.
-             * @returns {Promise<object|Edit|null>} The target item / editor.
-             */
-            FindItem: async name => {
-                if (!isExpanded)
-                    await toggleExpand();
-                return await itemEdit.FindItem(name);
+        /**
+         * The metadata default: JSON, `{}` for "\t", null with AcceptNull, else `{}`.
+         * @param {?object} member - The member.
+         * @returns {?object} The default.
+         */
+        GetDefault(member) {
+            if (member) {
+                const def = member.Default;
+                if (def === "\t")
+                    return {};
+                if (Has(def)) {
+                    try {
+                        return JSON.parse(def);
+                    }
+                    catch {
+                    }
+                }
+                if ((member.Flags & F.AcceptNull) !== 0)
+                    return null;
             }
-        };
+            return {};
+        }
+
+        /**
+         * JSON clone.
+         * @param {*} def - Value.
+         * @returns {*} Clone (null for falsy).
+         */
+        static CloneDef(def) {
+            return def ? JSON.parse(JSON.stringify(def)) : null;
+        }
+
+        /**
+         * Build the expand button, the summary and the data row.
+         * @param {object} obj - The object.
+         * @param {Sw.Edit} editor - The editor.
+         * @param {object} editContext - Layout context.
+         * @param {object} member - The member.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         * @returns {Promise<object>} The item (with FindItem for undo paths into the child editor).
+         */
+        async AddEditor(obj, editor, editContext, member, title, options) {
+            const mn = member.Name;
+            const cell = editContext.Element;
+            const type = await E.GetType(member.TypeName, member.ElementInst);
+            if (!type)
+                return await E.Shared("Default", () => new E.Handlers.Default()).AddEditor(obj, editor, editContext, member, title, options);
+            //  Read only: the options, the member, or the type (a read only type stays read only when nested)
+            const readOnly = E.IsReadOnly(member, options) || (type.Flags & F.ReadOnly) !== 0;
+            const childOpt = (options.Clone ? options.Clone() : Object.assign({}, options));
+            childOpt.Title = false;
+            childOpt.ReadOnly = readOnly;
+            childOpt.Name = mn;
+            //  Default: metadata, else the server default instance, else built from the member defaults.
+            let def = this.GetDefault(member);
+            let tip = null;
+            if (def && Object.keys(def).length === 0) {
+                let inst = null;
+                try {
+                    inst = await E.TypeInfo.GetInstance(member.TypeName);
+                }
+                catch {
+                }
+                def = inst || await E.CreateDefault(type, options);
+            }
+            tip = E.Util.AddLine(tip, _TF("Default value", "Header of a tool tip row with the default value of a property"), def ? JSON.stringify(def) : "null");
+            if (obj[mn] === undefined)
+                obj[mn] = EditTypeObject.CloneDef(def);
+            cell.classList.add("EditObject");
+            const data = editContext.CreateData();
+            data.classList.add("DataRow");
+            const row = editContext.Row || editContext.PrevRow;
+            const info = Sw.el("span.sw-edit-info");
+            E.SetToString(info, obj[mn], type);
+            const btn = new Sw.Button({ Kind: "ghost", Small: true, Icon: "right", Class: "sw-edit-expand" });
+            let expanded = false;
+            let child = null;
+            let internal = false;
+            /** @type {?Sw.Button} "Set a value" next to a null object (editable only). */
+            let setValueBtn = null;
+            const setBtn = () => {
+                const isNull = obj[mn] === null || obj[mn] === undefined;
+                if (setValueBtn)
+                    setValueBtn.E.hidden = !isNull;
+                const can = !(readOnly && isNull);
+                btn.SetDisabled(!can, _TF("The object is empty (null) and read only, so there is nothing to expand", "Why the expand button of a nested object in a read only editor is disabled"));
+                btn.SetIcon(expanded ? "down" : "right");
+                btn.E.setAttribute("aria-expanded", expanded ? "true" : "false");
+                btn.SetTitle(!can ? _TF("Can't expand null object", "Tool tip of a disabled button that would expand a nested object that doesn't exist")
+                    : expanded ? _TF("Collapse object", "Tool tip of a button that collapses (hides) a nested object")
+                        : isNull ? _TF("Create a new object and expand it", "Tool tip of a button that creates a nested object and shows it")
+                            : _TF("Expand object", "Tool tip of a button that expands (shows) a nested object"));
+            };
+            const toggle = async () => {
+                expanded = !expanded;
+                data.replaceChildren();
+                if (expanded) {
+                    internal = true;
+                    try {
+                        const needNew = obj[mn] === null || obj[mn] === undefined;
+                        child = new E(type, editor.ForcedStyle, childOpt, editor, member);
+                        await child.SetObject(needNew ? undefined : obj[mn]);
+                        if (needNew) {
+                            const n = child.GetObject();
+                            await editor.Invoke(it => it && it.SetValue(n), it => it && it.SetValue(null), _TF("Create object", "Command text stored in a log when a nested object was created"), mn);
+                        }
+                        child.Element.addEventListener("EditChange", () => E.SetToString(info, obj[mn], type));
+                        const entry = Sw.el("div.sw-edit-entry", null, Sw.el("div.sw-edit-entryvalue.SysWeaver-EditEntryValue", null, child.Element));
+                        entry.Edit = child;
+                        data.append(entry);
+                    }
+                    finally {
+                        internal = false;
+                    }
+                }
+                else
+                    child = null;
+                data.classList.toggle("EditorExpanded", expanded);
+                row.classList.toggle("EditorExpanded", expanded);
+                row.classList.toggle("sw-edit-expanded", expanded);
+                setBtn();
+                E.SetToString(info, obj[mn], type);
+            };
+            btn.O.OnClick = () => toggle();
+            setBtn();
+            info.addEventListener("click", ev => {
+                if (Sw.BadClick(ev)) return;
+                if (!btn.E.disabled && !Sw.HasSelectionIn(info))
+                    toggle();
+            });
+            cell.append(btn.E, info);
+            //  A null editable object: "Set a value" creates the default object (as the expand button does), Design v2 null token
+            setValueBtn = readOnly ? null : new Sw.Button({
+                Kind: "ghost", Small: true, Class: "sw-edit-setvalue", Text: _TF("Set a value", "Text of a button next to a null value that creates a value (the default object)"),
+                Title: _TF("Create a new object and expand it", "Tool tip of a button that creates a nested object and shows it"),
+                OnClick: () => expanded ? null : toggle(),
+            });
+            if (setValueBtn)
+                cell.append(setValueBtn.E);
+            setBtn();
+            const item = E.Handler.Item(obj, editor, member, { Focus: btn.E, Title: tip, DefValue: def, DefValueText: def === null ? "null" : JSON.stringify(def) });
+            item.DataRow = data;
+            item.UpdateValue = async () => {
+                if (internal)
+                    return;
+                E.SetToString(info, obj[mn], type);
+                if (expanded)
+                    await toggle();
+                if (obj[mn] !== null && obj[mn] !== undefined)
+                    await toggle();
+                setBtn();
+            };
+            item.FindItem = async name => {
+                if (!expanded)
+                    await toggle();
+                return child ? await child.FindItem(name) : null;
+            };
+            item.Expand = async on => {
+                if (!!on !== expanded)
+                    await toggle();
+            };
+            return item;
+        }
     }
 
-}
+    E.Handlers.Object = EditTypeObject;
+    if (!window.EditTypeObject)
+        window.EditTypeObject = EditTypeObject;
+})();

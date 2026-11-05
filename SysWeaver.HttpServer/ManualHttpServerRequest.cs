@@ -54,6 +54,40 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
+        /// Get a function that makes a detached copy of a request: the same method, url, prefix, host, session (so the same user) and client address, no body.
+        /// Work that runs after the request ended (a background job, see <see cref="BackgroundJobContext.Request"/>) uses the copy instead of the original request.
+        /// Call it while the request is alive (it reads the request at once); each call of the returned function makes a new copy (dispose it when done).
+        /// </summary>
+        /// <param name="request">The request (alive)</param>
+        /// <returns>A function that makes a copy</returns>
+        public static Func<ManualHttpServerRequest> Detacher(HttpServerRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            var method = request.Method;
+            var url = request.Url;
+            var prefix = request.Prefix;
+            var server = request.Server;
+            var host = request.Host;
+            var session = request.Session;
+            IPAddress ip = null;
+            try
+            {
+                ip = request.GetIP();
+            }
+            catch
+            {
+            }
+            return () =>
+            {
+                var r = new ManualHttpServerRequest(method ?? "POST", url, prefix, server, host, -1);
+                if (ip != null)
+                    r._IP = ip;
+                r.Init(session);
+                return r;
+            };
+        }
+
+        /// <summary>
         /// Dispose the custom data, the input stream and the output stream.
         /// </summary>
         public override void Dispose()

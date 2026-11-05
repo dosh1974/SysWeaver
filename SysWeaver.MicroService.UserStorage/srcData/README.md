@@ -13,7 +13,7 @@
 
 The `EmbedLocal` target in [`SysWeaver.MicroService.UserStorage.csproj`](../SysWeaver.MicroService.UserStorage.csproj) runs `Compress.exe -Methods br .\srcData\*+ .\data` before each build. The generated `data/**/*.br` files (not in git) are embedded as resources. [`UserStorageService`](../UserStorageService.cs) loads them as `<namespace>.data.embed.html` and `<namespace>.data.img.html` and parses them as text templates with `${...}` placeholders.
 
-When a stored link is requested, the service fills in `Base Url`, `Url Name` (the target URL, or the extension viewer for it), `Title Text` and `Extre Themes`. It then returns the result as an HTML page. Image targets use `img.html`. Everything else uses `embed.html`. Both pages load the shared application scripts and styles and, when shown at top level, add a small settings button with full screen and theme options.
+When a stored link is requested, the service fills in `Base Url`, `Url Name` (the target URL, or the extension viewer for it), `Title Text` and `Extre Themes`. It then returns the result as an HTML page. Image targets use `img.html`. Everything else uses `embed.html`. Both pages are new format pages (`sw/core.js`, `sw/ui.js`, `sw/shell.js` for `Sw.Shell.ToMenuItems`, `common/theme.css`, `sw/ui.css`, `<body class="sw-root" onload="usMain()">`) and, when shown at top level, add a small settings button (`Sw.Button` + `Sw.Menu`) with full screen and the server's Theme menu. The page code is inline (srcData templates are not served as files) and runs from `<body onload>`, after the deferred bundles.
 
 ## Contents
 
@@ -25,4 +25,4 @@ When a stored link is requested, the service fills in `Base Url`, `Url Name` (th
 ## Relationships
 
 - **Part of:** [SysWeaver.MicroService.UserStorage](../README.md)
-- **Uses:** shared web assets of [SysWeaver.HttpServer](../../SysWeaver.HttpServer/README.md) (`common/common.js`, `app/application.js`, theme styles)
+- **Uses:** shared web assets of [SysWeaver.HttpServer](../../SysWeaver.HttpServer/README.md) (`sw/core.js`, `sw/ui.js`, `sw/shell.js`, `common/theme.css`, `sw/ui.css`)

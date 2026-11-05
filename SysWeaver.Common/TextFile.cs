@@ -51,7 +51,7 @@ namespace SysWeaver
         /// <summary>
         /// Required auth
         /// </summary>
-        [TableDataTags]
+        [TableDataAuth]
         public String Auth;
 
         /// <summary>

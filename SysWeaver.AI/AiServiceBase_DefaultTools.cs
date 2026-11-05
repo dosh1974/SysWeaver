@@ -111,7 +111,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Get an url (svg) to a generated logo or icon for some given text.
         /// </summary>
-        /// <param name="logo">Paramaters for the generation</param>
+        /// <param name="logo">Parameters for the generation</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated svg image</returns>
         [AiTool("🏷️✨")]
@@ -135,7 +135,7 @@ namespace SysWeaver.AI
 
 
         /// <summary>
-        /// Get an url (svg) to a generated QR code with the specificed content encoded.
+        /// Get an url (svg) to a generated QR code with the specified content encoded.
         /// </summary>
         /// <param name="qrCodeContent">The text string to encode in the QR code</param>
         /// <param name="request"></param>
@@ -159,7 +159,7 @@ namespace SysWeaver.AI
                 /// <summary>
                 /// Use this function to convert some data (typically text based) into an URL.
                 /// </summary>
-                /// <param name="data">Data paramaters</param>
+                /// <param name="data">Data parameters</param>
                 /// <param name="request"></param>
                 /// <returns>An url to the data</returns>
                 [AiTool("🛢️✨")]
@@ -184,7 +184,7 @@ namespace SysWeaver.AI
         /// Use this function to convert some data (typically text based) into an URL and then display it.
         /// Works perfect for html files, text files etc.
         /// </summary>
-        /// <param name="data">Data paramaters</param>
+        /// <param name="data">Data parameters</param>
         /// <param name="request"></param>
         /// <returns>True when sucessful</returns>
         [AiTool("🛢️🖥️")]
@@ -404,7 +404,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Get an url (html) to some data as a table.
         /// </summary>
-        /// <param name="table">Data paramaters</param>
+        /// <param name="table">Data parameters</param>
         /// <param name="request"></param>
         /// <returns>An url (html) to the table</returns>
         [AiTool("📅✨")]
@@ -639,7 +639,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Use this function to display some data as a table.
         /// </summary>
-        /// <param name="table">Data paramaters</param>
+        /// <param name="table">Data parameters</param>
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
         [AiTool("📅🖥️")]

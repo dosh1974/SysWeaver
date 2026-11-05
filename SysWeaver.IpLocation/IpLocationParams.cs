@@ -8,7 +8,7 @@
         public int MaxCachedMinutes = 60 * 24;
 
         /// <summary>
-        /// Maximum number of retries
+        /// The maximum number of rounds (every source is tried once per round, a source that timed out is not tried again for that ip)
         /// </summary>
         public int MaxRetryCount = 10;
 

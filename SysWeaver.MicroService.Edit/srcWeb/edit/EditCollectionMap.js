@@ -1,132 +1,168 @@
 ﻿/**
- * @file `Map` container strategy for the collection editor.
+ * @file Collection strategy for dictionaries (`Sw.Edit.Collections.Map`, legacy global `EditCollectionMap`).
  *
- * Loaded on demand by `EditTypeCollection.Init()` (EditTypeCollection.js) via `includeJs`. Defines the global class
- * `EditCollectionMap`. No dependencies on other files.
- *
- * Same duck-typed container interface as `EditCollectionArray` (createVal, countVal, getVal, setVal, getKeyName,
- * íterate, onKeys, addVal, removeVal) but without the indexed operations insertAt / insertAfter / move.
+ * Loaded by Edit.js; used by EditTypeCollection.js for collections with a key type (`member.KeyTypeName`, ex:
+ * `Dictionary<String, Int32>`). The json value of a dictionary is a plain object (`{"key": value}`); JS `Map` instances are
+ * supported too. Keys are strings (numeric keys are stored as their text, like json does). Not indexed: no insert / move.
  */
-
-/**
- * Container strategy for dictionaries stored as JS `Map` (members with both `Key` and `Element` in their description).
- * Stateless; used through the singleton `EditCollectionMap.Inst` returned by `EditTypeCollection.GetContainer`.
- * In all methods `c` is the `Map` and `key` a map key.
- */
-class EditCollectionMap {
-
-
-    /** @type {EditCollectionMap} Shared singleton instance. */
-    static Inst = new EditCollectionMap();
+(function () {
+    "use strict";
 
     /**
-     * Creates a new empty collection value.
-     * @returns {Map} A new empty map.
+     * Dictionary strategy (stateless; the shared instance is `EditCollectionMap.Inst`).
      */
-    createVal() {
-        return new Map();
-    }
-
-    /**
-     * Counts the entries.
-     * @param {?Map} c - The map (may be null/undefined).
-     * @returns {number} `c.size`, or 0 for a falsy `c`.
-     */
-    countVal(c) {
-        if (!c)
-            return 0;
-        return c.size;
-    }
-
-    /**
-     * Gets a value.
-     * @param {Map} c - The map.
-     * @param {*} key - Map key.
-     * @returns {*} `c.get(key)`.
-     */
-    getVal(c, key) {
-        return c.get(key);
-    }
-
-    /**
-     * Sets a value.
-     * @param {Map} c - The map.
-     * @param {*} key - Map key.
-     * @param {*} newValue - Value to store.
-     * @returns {void}
-     */
-    setVal(c, key, newValue) {
-        c.set(key, newValue);
-    }
-
-    /**
-     * Display / path name of a key, used as item title and in undo paths.
-     * @param {*} key - Map key.
-     * @returns {string} `"[" + key + "]"`.
-     */
-    getKeyName(key) {
-        return "[" + key + "]";
-    }
-
-    /**
-     * Iterates the entries, awaiting the callback for each (note: the name uses a non-ASCII `í`).
-     * Stops at the first entry for which the callback returns a falsy value.
-     * Only used by `EditTypeCollection.Validate`.
-     * @param {?Map} c - The map.
-     * @param {function(*, *):Promise<boolean>} onKeyValue - Called with (key, value); return truthy to continue.
-     * @returns {Promise<boolean|undefined>} False if stopped early, true if all entries were visited,
-     *   undefined for a falsy `c`.
-     */
-    async íterate(c, onKeyValue) {
-        if (!c)
-            return;
-        const i = c.entries();
-        let r;
-        while (!(r = i.next()).done) {
-            const v = r.value;
-            if (!(await onKeyValue(v[0], v[1])))
-                return false;
+    class EditCollectionMap {
+        /** @type {boolean} Items are not ordered by index. */
+        get Indexed() {
+            return false;
         }
-        return true;
+
+        /** @returns {object} A new empty dictionary (plain object). */
+        createVal() {
+            return {};
+        }
+
+        /**
+         * Number of entries.
+         * @param {?(object|Map)} c - The dictionary.
+         * @returns {number} The count.
+         */
+        countVal(c) {
+            if (!c)
+                return 0;
+            return c instanceof Map ? c.size : Object.keys(c).filter(k => k !== "$type").length;
+        }
+
+        /**
+         * Get a value.
+         * @param {object|Map} c - The dictionary.
+         * @param {string} key - Key.
+         * @returns {*} The value.
+         */
+        getVal(c, key) {
+            return c instanceof Map ? c.get(key) : c[key];
+        }
+
+        /**
+         * Set a value.
+         * @param {object|Map} c - The dictionary.
+         * @param {string} key - Key.
+         * @param {*} v - The value.
+         */
+        setVal(c, key, v) {
+            if (c instanceof Map)
+                c.set(key, v);
+            else
+                c[key] = v;
+        }
+
+        /**
+         * Test if a key exists.
+         * @param {?(object|Map)} c - The dictionary.
+         * @param {string} key - Key.
+         * @returns {boolean} True if present.
+         */
+        hasKey(c, key) {
+            if (!c)
+                return false;
+            return c instanceof Map ? c.has(key) : Object.prototype.hasOwnProperty.call(c, key);
+        }
+
+        /**
+         * Display text of a key.
+         * @param {string} key - Key.
+         * @returns {string} "[key]".
+         */
+        getKeyName(key) {
+            return "[" + key + "]";
+        }
+
+        /**
+         * The keys (insertion order).
+         * @param {?(object|Map)} c - The dictionary.
+         * @returns {string[]} The keys.
+         */
+        keys(c) {
+            if (!c)
+                return [];
+            return c instanceof Map ? Array.from(c.keys()) : Object.keys(c).filter(k => k !== "$type");
+        }
+
+        /**
+         * Iterate the entries, awaiting the callback; stops when it returns falsy.
+         * @param {?(object|Map)} c - The dictionary.
+         * @param {function(string, *):Promise<boolean>} onKeyValue - Callback.
+         * @returns {Promise<boolean>} False when stopped early.
+         */
+        async iterate(c, onKeyValue) {
+            for (const k of this.keys(c))
+                if (!(await onKeyValue(k, this.getVal(c, k))))
+                    return false;
+            return true;
+        }
+
+        /**
+         * Old (misspelled, non ASCII) name of iterate.
+         * @param {?(object|Map)} c - The dictionary.
+         * @param {function(string, *):Promise<boolean>} fn - Callback.
+         * @returns {Promise<boolean>} See iterate.
+         */
+        íterate(c, fn) {
+            return this.iterate(c, fn);
+        }
+
+        /**
+         * Await a callback for each key.
+         * @param {?(object|Map)} c - The dictionary.
+         * @param {function(string):Promise<void>} onKey - Callback.
+         * @returns {Promise<void>}
+         */
+        async onKeys(c, onKey) {
+            for (const k of this.keys(c))
+                await onKey(k);
+        }
+
+        /**
+         * Add (or replace) an entry.
+         * @param {object|Map} c - The dictionary.
+         * @param {*} v - The value.
+         * @param {string} key - Key.
+         * @returns {string} The key.
+         */
+        addVal(c, v, key) {
+            this.setVal(c, key, v);
+            return key;
+        }
+
+        /**
+         * Remove an entry.
+         * @param {object|Map} c - The dictionary.
+         * @param {string} key - Key.
+         * @returns {boolean} False: other keys are unchanged.
+         */
+        removeVal(c, key) {
+            if (c instanceof Map)
+                c.delete(key);
+            else
+                delete c[key];
+            return false;
+        }
+
+        /**
+         * Re-insert an entry (undo of a remove; the position is not kept for plain objects).
+         * @param {object|Map} c - The dictionary.
+         * @param {*} v - The value.
+         * @param {string} key - Key.
+         * @returns {string} The key.
+         */
+        insertAt(c, v, key) {
+            return this.addVal(c, v, key);
+        }
     }
 
-
-    /**
-     * Awaits the callback for each key (in insertion order).
-     * @param {?Map} c - The map; nothing happens for a falsy value.
-     * @param {function(*):(Promise<void>|void)} onKey - Called with each key.
-     * @returns {Promise<void>}
-     */
-    async onKeys(c, onKey) {
-        if (!c)
-            return;
-        for (let i of c.keys())
-            await onKey(i);
-    }
-
-    /**
-     * Adds (or replaces) an entry with `c.set(key, newValue)`. When called without a key (as the collection
-     * "Add item" menu does) the entry is stored under the key `undefined`.
-     * @param {Map} c - The map.
-     * @param {*} newValue - Value to add.
-     * @param {*} key - Map key.
-     * @returns {*} `key`.
-     */
-    addVal(c, newValue, key) {
-        c.set(key, newValue);
-        return key;
-    }
-
-    /**
-     * Deletes an entry.
-     * @param {Map} c - The map.
-     * @param {*} key - Map key.
-     * @returns {boolean} Always false: other keys are unaffected, so no renumbering is needed.
-     */
-    removeVal(c, key) {
-        c.delete(key);
-        return false;
-    }
-
-
-}
+    /** @type {EditCollectionMap} Shared instance. */
+    EditCollectionMap.Inst = new EditCollectionMap();
+    Sw.Edit.Collections.Map = EditCollectionMap.Inst;
+    if (!window.EditCollectionMap)
+        window.EditCollectionMap = EditCollectionMap;
+})();

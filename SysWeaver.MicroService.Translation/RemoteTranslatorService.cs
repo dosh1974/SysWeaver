@@ -179,7 +179,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Translate some text to one or more languages
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> Translate(TranslateRequest request)
             => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
@@ -212,7 +212,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Translate multiple texts to one or more languages
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
             => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
@@ -257,7 +257,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Translate some text to a new language
         /// </summary>
-        /// <param name="request">Paramaters</param>
+        /// <param name="request">Parameters</param>
         /// <returns>Translated text</returns>
         public async ValueTask<string> TranslateOne(TranslateRequest request)
             => await TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType).ConfigureAwait(false);

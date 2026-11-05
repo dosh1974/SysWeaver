@@ -1,1050 +1,832 @@
 ﻿/**
- * @file Type handler for collections (arrays and dictionaries) in the object editor.
+ * @file Type handler for collections: arrays / lists and dictionaries (`Sw.Edit.Handlers.Collection`, legacy global
+ * `EditTypeCollection`).
  *
- * Loaded on demand by `Edit.Init()` (Edit.js) via `includeJs`. Defines the global class `EditTypeCollection`; on
- * evaluation runs `EditTypeCollection.Init()` (last statement, not awaited), which loads the container strategies
- * EditCollectionArray.js and EditCollectionMap.js relative to this script.
- * The shared instance is `Edit.CollectionTypeHandler`, created by `Edit.GetTypeHandler` for members with
- * `TypeMemberFlags.Collection`. Implements the duck-typed type-handler contract documented on class `Edit`.
+ * Loaded by Edit.js. The value cell shows an expand button, the item count ("null", "empty", "1 item", "{n} items") and, when
+ * editable, an add button. Expanded, every item is a child editor (title "[key]") in the data row below. Items of primitive
+ * types are single rows; object items have a title row. Item buttons: remove and (indexed collections) insert after; the
+ * item menu (title row menu, or the member menu of primitive items) has Remove item and, for indexed collections, Insert
+ * before / after and Move to top / up / down / bottom. The member menu has Clear collection (Make empty for null) and Add
+ * item. Every structural change is undoable and emits one EditChange for the collection.
  *
- * Dependencies (globals from other files): `Edit`, `EditOptions`, `EditCollectionArray`, `EditCollectionMap`,
- * `TypeMemberFlags`, `ValueFormat`, `ColorIcon`, `WebMenuItem`, `isPureClick`, `includeJs`, `_T` / `_TF` (common.js).
- *
- * Each element is edited by its own child `Edit` (with `Key` / `KeyName` / `ArrayEntry` set) inside a
- * `SysWeaver-EditEntry` (`SysWeaver-EditEntryHeader` + `SysWeaver-EditEntryValue`) in the data row created with
- * `editContext.CreateData()`. Element changes are written back into the collection with `container.setVal`.
- * All structural changes (add, clear, remove, insert, move) are undoable via `Edit.Invoke`.
+ * Strategies (EditCollectionArray.js / EditCollectionMap.js): members with a `KeyTypeName` (dictionaries) use the Map
+ * strategy (json objects; adding asks for the key), everything else the Array strategy. A collection is fixed (no
+ * structural changes) when read only or when Min >= Max. `Max: null` from the server means "no limit".
  */
+(function () {
+    "use strict";
 
-/**
- * Type handler for collections. Stateless apart from the per-editor closures created in `AddEditor`.
- */
-class EditTypeCollection {
-
-
-    /**
-     * Loads the two container strategy scripts in parallel with `includeJs(document.currentScript.src, ...)`.
-     * Called once while this script is being evaluated (so `document.currentScript` is this script).
-     * @returns {Promise<void>}
-     */
-    static async Init() {
-        const current = document.currentScript.src;
-        await Promise.all([
-            includeJs(current, "EditCollectionArray.js"),
-            includeJs(current, "EditCollectionMap.js")
-            ]
-        );
-    }
+    const E = Sw.Edit;
+    const F = E.Flags;
+    const Has = E.Util.Has;
+    const addLine = E.Util.AddLine;
+    /** @type {number} "No limit" maximum. */
+    const NoMax = 1000000000;
 
     /**
-     * Value written into a new parent object for this member. Returns element 0 of `GetDefault(...)`, i.e.
-     * `undefined` for an empty array or `Map`, and throws a TypeError when `GetDefault` returns null (`AcceptNull`).
-     * @param {object} member - The `TypeMemberDesc`.
-     * @param {EditOptions} options - The editor options.
-     * @returns {*} `GetDefault(member, options)[0]`.
+     * Collection handler (shared).
      */
-    CreateDefault(member, options) {
-        return this.GetDefault(member, options)[0];
-    }
+    class EditTypeCollection extends E.Handler {
+        /**
+         * The strategy of a member.
+         * @param {object} member - The member.
+         * @returns {object} Sw.Edit.Collections.Map for dictionaries, else Sw.Edit.Collections.Array.
+         */
+        GetContainer(member) {
+            return member && member.KeyTypeName ? E.Collections.Map : E.Collections.Array;
+        }
 
-    /**
-     * Whether a pasted / dropped value is acceptable: must be an array (so `Map` dictionaries never match) and, when
-     * `member` is given, its count must not exceed `member.Max` (default 1000000000). The `Min` check has no effect
-     * (both branches return true).
-     * @param {*} obj - Candidate value.
-     * @param {object} [member] - The `TypeMemberDesc`.
-     * @returns {boolean} True if acceptable.
-     */
-    IsOfType(obj, member) {
-        if (typeof (obj) !== "object")
-            return false;
-        if (!Array.isArray(obj))
-            return false;
-        if (member) {
-            let max = member.Max;
-            if (Edit.IsValid(max)) {
-                max = parseInt(max);
-            } else {
-                max = 1000000000;
-            }
-            const c = this.GetContainer(member);
-            const ol = c.countVal(obj);
-            if (ol > max)
+        /**
+         * Count limits of a member (null / missing / invalid Max = no limit).
+         * @param {object} member - The member.
+         * @returns {{Min: number, Max: number, HaveMin: boolean, HaveMax: boolean}} The limits.
+         */
+        static Limits(member) {
+            const min = E.GetIntParam(member.Min, 0);
+            const max = E.GetIntParam(member.Max, NoMax);
+            return { Min: Math.max(0, min), Max: max < 0 ? NoMax : max, HaveMin: min > 0, HaveMax: max !== NoMax && max >= 0 && Has(member.Max) };
+        }
+
+        /**
+         * Accept arrays (or json objects for dictionaries) within the maximum count.
+         * @param {*} obj - Candidate.
+         * @param {object} member - The member.
+         * @returns {boolean} True when usable.
+         */
+        IsOfType(obj, member) {
+            if (obj === null || typeof obj !== "object")
                 return false;
-
-            //  Min
-            let min = member.Min;
-            if (Edit.IsValid(min)) {
-                min = parseInt(min);
-            } else {
-                min = 0;
-            }
-            if ((min >= max) && (ol != max))
-                return true;
+            const c = this.GetContainer(member);
+            if (c === E.Collections.Array ? !Array.isArray(obj) : Array.isArray(obj))
+                return false;
+            return !member || c.countVal(obj) <= EditTypeCollection.Limits(member).Max;
         }
-        return true;
-    }
 
-    /**
-     * Conditions an accepted pasted / dropped value; returns it unchanged.
-     * @param {*} obj - The accepted value.
-     * @returns {*} `obj`.
-     */
-    Condition(obj) {
-        return obj;
-    }
-
-    /**
-     * Validates a collection value. Null: OK with `AcceptNull`, else "Value may not be null!". Then checks the count
-     * against `Max` ("To many items! ...") and `Min` ("To few items! ...") using `Edit.GetIntParam` and
-     * `ValueFormat.countSuffix`. Then validates the elements with `Edit.ValidateType(elementType, value, options,
-     * name + keyName)` via `container.íterate`, temporarily setting the element type's `DisplayName` to the key name.
-     * Iteration stops at the first failing element, whose error is reported.
-     * @param {?(Array|Map)} obj - The value to validate.
-     * @param {object} member - The `TypeMemberDesc`.
-     * @param {EditOptions} options - The editor options.
-     * @param {string} name - Path of the value (error path prefix).
-     * @returns {Promise<?Array<string>>} Null when valid, else `[path, message]`; element errors have the message
-     *   prefixed with `member.DisplayName` (no separator).
-     */
-    async Validate(obj, member, options, name) {
-        if (obj == null) {
-            if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
+        /**
+         * Validate: null only with AcceptNull, the count within Min / Max, every item (path "member[key]").
+         * @param {*} obj - The value.
+         * @param {object} member - The member.
+         * @param {object} options - Options.
+         * @param {string} name - Path.
+         * @returns {Promise<?Array<string>>} Null or [path, message].
+         */
+        async Validate(obj, member, options, name) {
+            const dn = member.DisplayName || member.Name;
+            if (obj === null || obj === undefined)
+                return E.Handler.NullCheck(obj, member, name);
+            const c = this.GetContainer(member);
+            const n = c.countVal(obj);
+            const l = EditTypeCollection.Limits(member);
+            if (n > l.Max)
+                return [name, dn + ": " + _T("Too many items: at most {0} allowed, there are {1}.", l.Max, n, "Error message displayed when a collection has more items than allowed.{0} is replaced with the maximum number of items allowed.{1} is replaced with the current number of items.")];
+            if (n < l.Min)
+                return [name, dn + ": " + _T("Too few items: at least {0} needed, there are {1}.", l.Min, n, "Error message displayed when a collection has fewer items than required.{0} is replaced with the minimum number of items.{1} is replaced with the current number of items.")];
+            const et = await EditTypeCollection.ItemType(member, null);
+            if (!et)
                 return null;
-            return [name, member.DisplayName + ": " +
-                _TF("Value may not be null!", "Error message displayed when trying to set a value to null that may not be null")
-            ];
+            let err = null;
+            await c.iterate(obj, async (key, value) => {
+                const kn = c.getKeyName(key);
+                const t = await EditTypeCollection.ItemType(member, kn);
+                err = await E.ValidateType(t, value, options, name + kn);
+                return !err;
+            });
+            return err ? [err[0], dn + err[1]] : null;
         }
-        const container = this.GetContainer(member);
-        const ol = container.countVal(obj);
-        const maxLength = Edit.GetIntParam(member.Max, 1000000000);
-        if (maxLength && (maxLength > 0) && (ol > maxLength))
-            return [name, member.DisplayName + ": " +
-                _T("To many items! Maximum allowed items are {0}, currently there are {1}", maxLength, ValueFormat.countSuffix(ol,
-                    _TF(" item!", "Suffix to a numerical text for a singlular value, ex: 'one item!'"),
-                    _TF(" items!", "Suffix to a numerical text for a multiple value, ex: 'three items!' or '42 items'")),
-                    "Error message displayed when trying to add more items that allowed to a collection.{0} is replaced with the maximum number of items allowed.{1] is replaced by a text with the current number of items, ex: 'one item!' or '32 items!' etc")];
-        const minLength = Edit.GetIntParam(member.Min, 0);
-        if (minLength && (minLength > 0) && (ol < minLength))
-            return [name, member.DisplayName + ": " +
-                _T("To few items! Minimum allowed items are {0}, currently there are {1}", minLength, ValueFormat.countSuffix(ol,
-                    _TF(" item!", "Suffix to a numerical text for a singlular value, ex: 'one item!'"),
-                    _TF(" items!", "Suffix to a numerical text for a multiple value, ex: 'three items!' or '42 items'")),
-                    "Error message displayed when trying to add more items that allowed to a collection.{0} is replaced with the maximum number of items allowed.{1] is replaced by a text with the current number of items, ex: 'one item!' or '32 items!' etc")];
-        const elementType = await Edit.GetType(member.ElementTypeName, member.ElementInst);
-        const temp = elementType.DisplayName;
-        let err = null;
-        await container.íterate(obj, async (key, value) => {
 
-            const keyName = container.getKeyName(key);
-            const ied = name + keyName;
-            elementType.DisplayName = keyName;
-            err = await Edit.ValidateType(elementType, value, options, ied);
-            return !err;
-        });
-        elementType.DisplayName = temp;
-        if (!err)
-            return null;
-        return [err[0], member.DisplayName + err[1]];
-    }
+        /**
+         * Display text.
+         * @param {*} obj - The value.
+         * @returns {string} The text.
+         */
+        ToString(obj) {
+            return obj ? JSON.stringify(obj) : "null";
+        }
 
-
-    /**
-     * Display text of a collection value.
-     * @param {*} obj - The value.
-     * @param {object} [member] - Unused.
-     * @param {EditOptions} [options] - Unused.
-     * @returns {string} `"" + obj`.
-     */
-    ToString(obj, member, options) {
-        return "" + obj;
-    }
-
-    /**
-     * Default described by the metadata: a new empty container for a `"\t"` default; otherwise `null` when the member
-     * has `AcceptNull`, else a new empty container (`GetContainer(member).createVal()`).
-     * @param {object} member - The `TypeMemberDesc`.
-     * @param {EditOptions} [options] - Unused.
-     * @returns {?(Array|Map)} The default collection.
-     */
-    GetDefault(member, options) {
-        let def = member.Default;
-        if (Edit.IsValid(def)) {
-            if (def === "\t")
+        /**
+         * The default: an empty collection ("\t" metadata or not null), else null with AcceptNull.
+         * @param {object} member - The member.
+         * @returns {?(Array|object)} The default.
+         */
+        GetDefault(member) {
+            const d = member.Default;
+            if (d === "\t")
                 return this.GetContainer(member).createVal();
-        }
-        if ((member.Flags & TypeMemberFlags.AcceptNull) !== 0)
-            return null;
-        return this.GetContainer(member).createVal();
-    }
-
-    /**
-     * Picks the container strategy for a collection member.
-     * @param {object} member - The `TypeMemberDesc`.
-     * @returns {?(EditCollectionArray|EditCollectionMap)} `EditCollectionMap.Inst` when `member.Key` and
-     *   `member.Element` are set, `null` when only `member.Key` is set (sets are not implemented), else
-     *   `EditCollectionArray.Inst`.
-     */
-    GetContainer(member) {
-        if (member.Key) {
-            if (member.Element)
-                return EditCollectionMap.Inst;
-
-            else
-                return null; // TODO: Set
-        } else {
-            return EditCollectionArray.Inst;
-        }
-    }
-
-    /**
-     * Builds the editor of a collection member (handler contract `AddEditor`).
-     * Reads `Min` / `Max` (tooltip lines "Minimum/Maximum allowed count"; defaults 0 / 1000000000), writes
-     * `GetDefault(...)` into `obj[member.Name]` when undefined and computes `isReadOnly` (`editContext.ReadOnly`, never
-     * set by the layouts, options or member flag), `isFixed` (`Min >= Max` or read only) and `isIndexed`
-     * (`TypeMemberFlags.Indexed`: enables insert/move operations).
-     * DOM: adds class `EditContainer` to the editor cell, a data row (`editContext.CreateData()`, class `DataRow`),
-     * a 36 px expand `ColorIcon` and a `SysWeaver-EditInfo` count (`Edit.SetCollectionCount`).
-     * Resolves the element type (`Edit.GetType(member.ElementTypeName, member.ElementInst)`) and its handler; elements
-     * are primitive when the type is primitive or the handler has `IgnoreMembers`. Item editors are created lazily on
-     * expand (immediately when `options.ExpandAllCollections`). `keyMap` maps `"" + key` to the item `Edit`.
-     * @param {object} obj - The parent object; the value is `obj[member.Name]`.
-     * @param {Edit} editor - The parent editor.
-     * @param {{PrevRow:HTMLTableRowElement, Element:HTMLTableCellElement, CreateData:function():HTMLTableCellElement}} editContext
-     *   - Layout context (see `EditDesktop.AddMember`).
-     * @param {object} member - The `TypeMemberDesc` (with `ElementTypeName`, `ElementInst`, `Min`, `Max`, `Key`, `Element`).
-     * @param {string} title - Member tooltip (unused here).
-     * @param {EditOptions} options - The editor options.
-     * @returns {Promise<object>} The item: `{ Title, DefValue, DefValueText, DataRow, Focus, UpdateValue, FindItem,
-     *   GetValue, SetValue, AddMenuItems }`.
-     */
-    async AddEditor(obj, editor, editContext, member, title, options) {
-        let typeTitle = null;
-        const mn = member.Name;
-        const cell = editContext.Element;
-        //  Min
-        let min = member.Min;
-        if (Edit.IsValid(min)) {
-            min = parseInt(min ?? "0");
-            if (!isNaN(min))
-                if (min > 0)
-                    typeTitle = ValueFormat.AddNonNullLine(typeTitle, _TF("Minimum allowed count", 'This is the header of a tool tip row that displays the minimum number of allowed items in a collection'), min);
-        } else {
-            min = 0;
-        }
-        //  Max
-        let max = member.Max;
-        if (Edit.IsValid(max)) {
-            max = parseInt(max);
-            if (!isNaN(max))
-                typeTitle = ValueFormat.AddNonNullLine(typeTitle, _TF("Maximum allowed count", 'This is the header of a tool tip row that displays the maximum number of allowed items in a collection'), max);
-        } else {
-            max = 1000000000;
-        }
-        // The server sends Max = null for "no limit", which parses to NaN: treat it as no limit too.
-        if (isNaN(max))
-            max = 1000000000;
-        const container = this.GetContainer(member);
-        const def = this.GetDefault(member, options);
-        if (typeof obj[mn] === "undefined")
-            obj[mn] = this.GetDefault(member, options);
-
-        let vals = obj[mn];
-        if (!vals)
-            vals = container.createVal();
-
-        const isReadOnly = editContext.ReadOnly || options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0);
-        const isFixed = (min >= max) || isReadOnly;
-        const isIndexed = (member.Flags & TypeMemberFlags.Indexed) != 0;
-
-        cell.classList.add("EditContainer");
-        const data = editContext.CreateData();
-        const dataRow = data.parentElement;
-        dataRow.classList.add("DataRow");
-        const prevRow = editContext.PrevRow;
-
-        let isExpanded = false;
-        let expandIcon = null;
-        const countText = document.createElement("SysWeaver-EditInfo");
-        Edit.SetCollectionCount(countText, obj[mn], container);
-
-
-        const keyMap = new Map();
-
-
-        /**
-         * Expands or collapses the item list (click handler of the expand icon; also called without event by the
-         * undo/redo steps, `FindItem`, `SetValue` and `ExpandAllCollections`). Ignores clicks with modifier keys and
-         * stops propagation. Re-reads `vals = obj[mn]`.
-         * Expanding: clears the data cell, calls `addItemEditor` for every key, switches the icon to collapse and adds
-         * `EditorExpanded` to the data row and the previous (value) row when the collection is non-empty.
-         * Collapsing: clears `keyMap` and the data cell, switches the icon and removes `EditorExpanded`.
-         * @param {MouseEvent} [ev] - The click event (optional).
-         * @param {function(*, Edit):void} [onEditor] - Optional callback receiving each created item editor.
-         * @returns {Promise<void>}
-         */
-        async function toggleExpand(ev, onEditor) {
-            if (!isPureClick(ev))
-                return;
-            if (ev)
-                ev.stopPropagation();
-            vals = obj[mn];
-            isExpanded ^= true;
-            if (isExpanded) {
-                data.innerHTML = "";
-                await container.onKeys(vals, async key => {
-                    const edit = await addItemEditor(vals, key);
-                    if (onEditor)
-                        onEditor(key, edit);
-                });
-                expandIcon.ChangeImage("SysWeaverEditIconCollapse");
-                expandIcon.SetTitle(
-                    _TF("Click to collapse collection", "Tool tip description of a button that when clicked will collapse (hide) the items in a collection")
-                );
-                if (container.countVal(vals) > 0) {
-                    dataRow.classList.add("EditorExpanded");
-                    prevRow.classList.add("EditorExpanded");
+            //  A json default (client registered types, EditDefault with a json text) of the right shape
+            if (typeof d === "string" && /^\s*[\[{]/.test(d)) {
+                try {
+                    const v = JSON.parse(d);
+                    if (this.IsOfType(v, member))
+                        return v;
                 }
-            } else {
-                keyMap.clear();
-                data.innerHTML = "";
-                expandIcon.ChangeImage("SysWeaverEditIconExpand");
-                expandIcon.SetTitle(
-                    _TF("Click to expand collection", "Tool tip description of a button that when clicked will expand (show) the items in a collection")
-                );
-                dataRow.classList.remove("EditorExpanded");
-                prevRow.classList.remove("EditorExpanded");
+                catch {
+                }
             }
+            if ((member.Flags & F.AcceptNull) !== 0)
+                return null;
+            return this.GetContainer(member).createVal();
         }
-        expandIcon = new ColorIcon(
-            isExpanded ? "SysWeaverEditIconCollapse" : "SysWeaverEditIconExpand",
-            "IconColorThemeMain", 36, 36,
-            isExpanded
-                ?
-                _TF("Click to collapse collection", "Tool tip description of a button that when clicked will collapse (hide) the items in a collection")
-                :
-                _TF("Click to expand collection", "Tool tip description of a button that when clicked will expand (show) the items in a collection")
-            ,
-            toggleExpand
-        );
-        cell.appendChild(expandIcon.Element);
-        cell.appendChild(countText);
-        const elementType = await Edit.GetType(member.ElementTypeName, member.ElementInst);
-        const th = Edit.GetTypeHandler(member.ElementTypeName, member.ElementInst);
-        const isPrimitive = Edit.IsPrimitive(elementType) || th.IgnoreMembers;
-
-        //  Note: this options clone is not used; addItemEditor creates its own `newOpt` (a fresh EditOptions).
-        const newOpt = options.Clone();
-        newOpt.Title = !Edit.IsPrimitive(elementType);
-        newOpt.ReadOnly |= isReadOnly;
 
         /**
-         * Renumbers the item editors after keys changed (removal, insertion, move): walks the `SysWeaver-EditEntry`
-         * children of the data cell in key order and, where an entry's editor has a different key, updates `keyMap`,
-         * the editor's `Key`, `ArrayEntry`, `KeyName` and title (`Edit.ChangeTitle`). Stale `keyMap` entries for
-         * keys no longer present are not removed.
-         * @param {Array|Map} values - The collection value.
-         * @returns {Promise<void>}
+         * The type description of an item: the element type with the element constraints (ElementInst) applied; primitive
+         * element types get the constraints on their member, titled with the key.
+         * @param {object} member - The collection member.
+         * @param {?string} keyName - Item title ("[3]").
+         * @returns {Promise<?object>} A fresh type description (or null for an unknown element type).
          */
-        async function reOrder(values) {
-            //  Need to change keys
-            const cs = data.childNodes;
-            let i = 0;
-            await container.onKeys(values, key => {
-                const ae = cs[i];
-                const cedit = ae.Edit;
-                ++i;
-                if (key === cedit.Key)
+        static async ItemType(member, keyName) {
+            let t = await E.GetType(member.ElementTypeName, member.ElementInst);
+            if (!t)
+                return null;
+            const th = E.GetTypeHandler(member.ElementTypeName, member.ElementInst);
+            if (E.IsPrimitive(t) || th.IgnoreMembers) {
+                if (!t.Members || !t.Members.length)
+                    t.Members = [{ Name: "Value", TypeName: member.ElementTypeName, Flags: t.Flags }];
+                const pm = t.Members[0];
+                for (const k of ["Min", "Max", "Default", "Flags", "Summary", "Remarks", "EditParams", "Type"])
+                    if (t[k] !== undefined)
+                        pm[k] = t[k];
+                pm.Flags |= F.IsPrimitive;
+                t.Flags |= F.IsPrimitive;
+                if (keyName)
+                    pm.DisplayName = keyName;
+            }
+            return t;
+        }
+
+        /**
+         * Build the collection editor.
+         * @param {object} obj - The object.
+         * @param {Sw.Edit} editor - The editor.
+         * @param {object} editContext - Layout context.
+         * @param {object} member - The member.
+         * @param {string} title - Tooltip.
+         * @param {object} options - Options.
+         * @returns {Promise<object>} The item.
+         */
+        async AddEditor(obj, editor, editContext, member, title, options) {
+            const mn = member.Name;
+            const cell = editContext.Element;
+            const C = this.GetContainer(member);
+            const lim = EditTypeCollection.Limits(member);
+            let tip = null;
+            if (lim.HaveMin)
+                tip = addLine(tip, _TF("Minimum allowed count", "This is the header of a tool tip row that displays the minimum number of allowed items in a collection"), lim.Min);
+            if (lim.HaveMax)
+                tip = addLine(tip, _TF("Maximum allowed count", "This is the header of a tool tip row that displays the maximum number of allowed items in a collection"), lim.Max);
+            const def = this.GetDefault(member);
+            if (obj[mn] === undefined)
+                obj[mn] = this.GetDefault(member);
+            const readOnly = !!editContext.ReadOnly || E.IsReadOnly(member, options);
+            const fixed = readOnly || (lim.HaveMax && lim.Min >= lim.Max);
+            const indexed = C.Indexed && (member.Flags & F.Indexed) !== 0;
+            const proto = await EditTypeCollection.ItemType(member, null);
+            const isPrimitive = !proto || E.IsPrimitive(proto);
+            //  The items are read only when the collection is, or when the element type / element constraints say so
+            const itemsReadOnly = readOnly || (!!proto && (proto.Flags & F.ReadOnly) !== 0);
+            /** @type {object} A token that identifies this list while one of its items is dragged (move instead of copy). */
+            const listToken = {};
+            /** @type {boolean} Focus the drag handle (not the first input) of the next refreshed item (keyboard moves). */
+            let focusGrip = false;
+            /** @type {*} The key of the item to show expanded after the next re-render (added, inserted, moved). */
+            let openKey = null;
+            cell.classList.add("EditContainer");
+            const data = editContext.CreateData();
+            data.classList.add("DataRow");
+            const row = editContext.Row || editContext.PrevRow;
+            const info = Sw.el("span.sw-edit-info");
+            const expBtn = new Sw.Button({ Kind: "ghost", Small: true, Icon: "right", Class: "sw-edit-expand" });
+            let expanded = false;
+            /** @type {Map<string, Sw.Edit>} Key text -> item editor. */
+            const keyMap = new Map();
+            const count = () => C.countVal(obj[mn]);
+            const setInfo = () => {
+                E.SetCollectionCount(info, obj[mn], C);
+                expBtn.SetIcon(expanded ? "down" : "right");
+                expBtn.E.setAttribute("aria-expanded", expanded ? "true" : "false");
+                expBtn.SetTitle(expanded
+                    ? _TF("Collapse collection", "Tool tip description of a button that when clicked will collapse (hide) the items in a collection")
+                    : _TF("Expand collection", "Tool tip description of a button that when clicked will expand (show) the items in a collection"));
+                const full = count() >= lim.Max;
+                if (addBtn)
+                    addBtn.SetDisabled(full, _T("The collection already has the maximum of {0} items", lim.Max, "Why the add or insert button of a collection editor is disabled.{0} is the maximum number of items allowed"));
+                if (setValueBtn)
+                    setValueBtn.E.hidden = !(obj[mn] === null || obj[mn] === undefined);
+                const open = expanded && count() > 0;
+                data.classList.toggle("EditorExpanded", open);
+                row.classList.toggle("EditorExpanded", open);
+                row.classList.toggle("sw-edit-expanded", open);
+            };
+            const changed = () => editor.Changed(member, obj[mn]);
+
+            /** Create the default value of a new item. */
+            const newItem = async () => {
+                const t = await EditTypeCollection.ItemType(member, null);
+                if (!t)
+                    return null;
+                if ((t.Flags & F.AcceptNull) !== 0 && !E.IsPrimitive(t))
+                    return null;
+                return await E.CreateDefault(t, options);
+            };
+
+            /**
+             * Run an undoable structural change on this collection (found by path, so it works after re-rendering).
+             * @param {function(object):Promise<*>} doFn - Change (gets the item, returns the key to focus).
+             * @param {function(object):Promise<*>} undoFn - Revert (returns the key to focus).
+             * @param {string} undoTitle - Title.
+             */
+            const structural = (doFn, undoFn, undoTitle) => editor.Invoke(
+                async it => it && it.Refresh(await doFn(it)),
+                async it => it && it.Refresh(await undoFn(it)),
+                undoTitle, mn);
+
+            //  The operations work on the item found by path (`it`), not on this closure, so they stay valid when the parent
+            //  editor was re-rendered with another object (undo / redo after a paste of the parent, etc.).
+            /** Remove an item. */
+            const removeItem = key => {
+                let old;
+                return structural(async it => {
+                    const c = it.GetValue();
+                    old = E.CloneValue(C.getVal(c, key));
+                    C.removeVal(c, key);
+                    return C === E.Collections.Array ? Math.min(key, C.countVal(c) - 1) : null;
+                }, async it => {
+                    C.insertAt(it.GetValue(), E.CloneValue(old), key);
+                    return key;
+                }, _T("Remove item: {0}", C.getKeyName(key), "Command text stored in a log when an item in a collection is removed.{0} is replaced with the name of the key of item."));
+            };
+            /** Insert a new item at an index. */
+            const insertItem = async (key, after) => {
+                const v = await newItem();
+                const at = after ? key + 1 : key;
+                return structural(async it => {
+                    C.insertAt(it.GetValue(), E.CloneValue(v), at);
+                    return at;
+                }, async it => {
+                    C.removeVal(it.GetValue(), at);
+                    return key;
+                }, after ? _TF("Insert item after", "Command text stored in a log when an item is inserted after the selected item")
+                    : _TF("Insert item before", "Command text stored in a log when an item is inserted before the selected item"));
+            };
+            /** Move an item. */
+            const moveItem = (from, to) => structural(async it => {
+                C.move(it.GetValue(), from, to);
+                return to;
+            }, async it => {
+                C.move(it.GetValue(), to, from);
+                return from;
+            }, _T("Move item from {0} to {1}", from, to, "Command text stored in a log when an item in a collection is moved from one position to another.{0} is the name the position it was moved from.{1} is the name of the position it was moved to."));
+            /** Insert a copy of an item after it (indexed collections). */
+            const duplicateItem = key => insertValue(E.CloneValue(C.getVal(obj[mn], key)), key + 1,
+                _T("Duplicate item: {0}", C.getKeyName(key), "Command text stored in a log when an item of a collection is duplicated.{0} is replaced with the name of the key of the item."));
+            /**
+             * Add an item at the end (dictionaries: asks for the key); creates the collection when null.
+             * @param {*} [value] - The value of the new item (a pasted / dropped item); undefined = a new default item.
+             * @param {string} [undoTitle] - Undo title (default "Add item to collection").
+             * @returns {Promise<boolean>} True when added.
+             */
+            const addItem = async (value, undoTitle) => {
+                if (count() >= lim.Max) {
+                    Sw.Fail(_TF("Maximum number of items already added", "Tool tip description of a menu item that when clicked will add a new item to a collection, displayed when the maximum allowed number of items is already in the collection"));
+                    return false;
+                }
+                let key;
+                if (C === E.Collections.Map) {
+                    key = await Sw.Dialog.Prompt(_TF("Add item", "Text on a menu item that when clicked will add a new item to a collection"), "", _TF("Key", "Placeholder of a text box where the key of a new dictionary item is entered"), {
+                        Text: _TF("Enter the key of the new item", "Text in a dialog that asks for the key of a new dictionary item"),
+                        Validate: k => {
+                            if (!k)
+                                return _TF("A key is required", "Validation error when the key of a new dictionary item is empty");
+                            if (C.hasKey(obj[mn], k))
+                                return _TF("The key already exists", "Validation error when the key of a new dictionary item is already used");
+                            const kt = member.KeyTypeName;
+                            if (kt && kt !== "System.String") {
+                                const kh = E.GetTypeHandler(kt, Object.assign({ TypeName: kt, Flags: F.IsPrimitive }, member.KeyInst || {}));
+                                if (!kh.IsOfType(k, { TypeName: kt, Flags: F.IsPrimitive }, options))
+                                    return _TF("Invalid key", "Validation error when the key of a new dictionary item has the wrong type");
+                            }
+                            return null;
+                        },
+                    });
+                    if (key === null || key === undefined)
+                        return false;
+                }
+                const v = value === undefined ? await newItem() : value;
+                let wasNull = false;
+                await structural(async it => {
+                    let c = it.GetValue();
+                    wasNull = c === null || c === undefined;
+                    if (wasNull) {
+                        c = C.createVal();
+                        it.SetRaw(c);
+                    }
+                    const k = C.addVal(c, E.CloneValue(v), key);
+                    await it.Expand(true);
+                    return k;
+                }, async it => {
+                    const c = it.GetValue();
+                    if (wasNull)
+                        it.SetRaw(null);
+                    else
+                        C.removeVal(c, C === E.Collections.Map ? key : C.countVal(c) - 1);
+                    return null;
+                }, undoTitle || _TF("Add item to collection", "Command text stored in a log when an new item is added to a collection"));
+                return true;
+            };
+            /** Insert a value (a pasted / dropped item) at an index (indexed collections). */
+            const insertValue = (v, at, undoTitle) => structural(async it => {
+                C.insertAt(it.GetValue(), E.CloneValue(v), at);
+                return at;
+            }, async it => {
+                C.removeVal(it.GetValue(), at);
+                return Math.max(0, at - 1);
+            }, undoTitle);
+            /**
+             * Interpret a pasted / dropped text as new items: one value of the element type, or (paste) an array of them.
+             * @param {?string} text - The text.
+             * @param {boolean} allowMany - Accept an array of items.
+             * @returns {Promise<{Ok: boolean, Values: Array, Reason: ?string}>} The values.
+             */
+            const parseItems = async (text, allowMany) => {
+                const bad = { Ok: false, Values: [], Reason: _TF("The clipboard holds no item of this collection", "Tool tip of a menu item that adds the clipboard content as new items of a collection, when the clipboard holds nothing usable") };
+                const t = await EditTypeCollection.ItemType(member, null);
+                if (!t || text === null || text === undefined || text === "")
+                    return bad;
+                let parsed;
+                let json = true;
+                try {
+                    parsed = JSON.parse(text);
+                }
+                catch {
+                    parsed = text;
+                    json = false;
+                }
+                const list = allowMany && json && Array.isArray(parsed) ? parsed : [parsed];
+                const out = [];
+                if (E.IsPrimitive(t)) {
+                    const pm = t.Members[0];
+                    const h = E.GetTypeHandler(pm.TypeName, pm);
+                    //  A raw text for a string element (a copied text that happens to be json stays that text unless it is a list)
+                    if (pm.TypeName === "System.String" && !(allowMany && Array.isArray(parsed)))
+                        list[0] = text;
+                    for (const x of list) {
+                        let ok = false;
+                        try {
+                            ok = h.IsOfType(x, pm, options) || (x === null && (pm.Flags & F.AcceptNull) !== 0);
+                        }
+                        catch {
+                        }
+                        if (!ok)
+                            return bad;
+                        out.push(x === null ? null : h.Condition(x, pm, options));
+                    }
+                }
+                else {
+                    for (const x of list) {
+                        if (!E.IsObjectOf(x, t) && !(x === null && (t.Flags & F.AcceptNull) !== 0))
+                            return bad;
+                        out.push(x);
+                    }
+                }
+                if (!out.length)
+                    return bad;
+                if (count() + out.length > lim.Max)
+                    return { Ok: false, Values: [], Reason: _TF("Maximum number of items already added", "Tool tip description of a menu item that when clicked will add a new item to a collection, displayed when the maximum allowed number of items is already in the collection") };
+                //  New items keep the read only parts of the element type (a read only element type gives default items) and lose the
+                //  `$type` marker of copied objects (the element type is fixed); one toast names what was kept
+                const kept = [];
+                for (let i = 0; i < out.length; ++i)
+                    out[i] = await E.KeepReadOnlyItem(t, E.CloneValue(out[i]), options, _T("{0} (new item)", member.DisplayName || mn, "Name of a new item of a collection in a toast about read only values.{0} is replaced with the name of the collection"), kept);
+                E.ReportKept(kept);
+                return { Ok: true, Values: out, Reason: null };
+            };
+            /**
+             * Add parsed items at the end (each one undoable; dictionaries ask for every key).
+             * @param {Array} values - The values.
+             * @param {string} undoTitle - Undo title.
+             * @returns {Promise<boolean>} True when at least one was added.
+             */
+            const addValues = async (values, undoTitle) => {
+                let any = false;
+                for (const v of values)
+                    if (await addItem(E.CloneValue(v), undoTitle))
+                        any = true;
+                    else
+                        break;
+                return any;
+            };
+            const addBtn = fixed ? null : new Sw.Button({
+                Small: true, Icon: "plus", Class: "sw-edit-add", Text: _TF("Add", "Text of the button that adds a new item to a collection"),
+                Title: _TF("Add a new item to the collection", "Tool tip description of a menu item that when clicked will add a new item to a collection"),
+                Label: _T("Add an item to {0}", member.DisplayName || mn, "Accessible name of the add button of a collection.{0} is replaced with the name of the collection"),
+                OnClick: () => addItem(),
+            });
+            /** "Set a value" next to a null collection (Design v2 null token): makes it an empty collection (undoable). */
+            const setValueBtn = readOnly || !fixed ? null : new Sw.Button({ // editable collections have "+ Add" (also creates a null collection)
+                Kind: "ghost", Small: true, Class: "sw-edit-setvalue", Text: _TF("Set a value", "Text of a button next to a null value that creates a value (the default object)"),
+                Title: _TF("Make an empty collection instead of null", "Tool tip description of a menu item that when clicked will make a collection empty istead of non-existent"),
+                OnClick: () => editor.Invoke(it => it && it.SetValue(C.createVal()), it => it && it.SetValue(null),
+                    _TF("Make empty collection", "Command text stored in a log when a collection is made empty instead of non-existent (null)"), mn),
+            });
+            /** The "Add item" button below the items of an expanded collection (the end of the list is where new items appear). */
+            const addRowBtn = fixed ? null : new Sw.Button({
+                Small: true, Kind: "ghost", Icon: "plus", Class: "sw-edit-addrow",
+                Text: _TF("Add item", "Text on a menu item that when clicked will add a new item to a collection"),
+                Title: _TF("Add a new item to the collection", "Tool tip description of a menu item that when clicked will add a new item to a collection"),
+                OnClick: () => addItem(),
+            });
+            if (addRowBtn) {
+                //  Dropping an item (copied / dragged from this or another list) on it adds it
+                E.DropTarget(addRowBtn.E, async text => {
+                    const r = await parseItems(text, true);
+                    if (!r.Ok) {
+                        Sw.Fail(r.Reason);
+                        return;
+                    }
+                    await addValues(r.Values, _T("Dropped: {0}", text, "Command text stored in a log when a property value was replaced by drag and drop.{0} is replaced with the value that was dragged onto the property."));
+                });
+            }
+            /**
+             * Move an item with the keyboard / the drag handle and keep the focus on its handle.
+             * @param {number} from - Index.
+             * @param {number} to - New index (clamped).
+             */
+            const moveTo = async (from, to) => {
+                const n = count();
+                to = Math.max(0, Math.min(n - 1, to));
+                if (to === from || fixed || !indexed)
                     return;
-                keyMap.set("" + key, cedit);
-                cedit.Key = key;
-                cedit.ArrayEntry = ae;
-                const kn = container.getKeyName(key);
-                cedit.KeyName = kn;
-                cedit.ChangeTitle(kn);
+                focusGrip = true;
+                await moveItem(from, to);
+            };
+            /**
+             * Drag handle of an item: pointer drag (mouse, touch, pen) re-orders the list, a line shows where the item goes; the
+             * arrow keys (Up / Down, Home / End) move it too.
+             * @param {Sw.Edit} ie - The item editor.
+             * @returns {HTMLElement} The handle.
+             */
+            const grip = ie => {
+                const g = new Sw.Button({
+                    Kind: "ghost", Small: true, Icon: "drag", Class: "sw-edit-grip",
+                    Title: _TF("Drag to move the item, or use the arrow keys (Alt+Up / Alt+Down in the item)", "Tool tip of the drag handle of a collection item"),
+                    Label: _T("Move item {0}", C.getKeyName(ie.Key), "Accessible name of the drag handle of a collection item.{0} is replaced with the item index, ex: [3]"),
+                });
+                g.E.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown Home End");
+                //  The title row around it is a native drag source (copy): while the handle is pressed the row is not draggable,
+                //  so a drag on the handle re-orders with pointer events instead
+                g.E.addEventListener("pointerdown", () => {
+                    const rows = [];
+                    for (let p = g.E.parentElement; p && p !== data; p = p.parentElement)
+                        if (p.draggable) {
+                            p.draggable = false;
+                            rows.push(p);
+                        }
+                    const restore = () => {
+                        rows.forEach(r => r.draggable = true);
+                        window.removeEventListener("pointerup", restore, true);
+                        window.removeEventListener("pointercancel", restore, true);
+                    };
+                    window.addEventListener("pointerup", restore, true);
+                    window.addEventListener("pointercancel", restore, true);
+                });
+                g.E.addEventListener("keydown", ev => {
+                    const k = ev.key;
+                    const n = count();
+                    const to = k === "ArrowUp" ? ie.Key - 1 : k === "ArrowDown" ? ie.Key + 1 : k === "Home" ? 0 : k === "End" ? n - 1 : null;
+                    if (to === null || ev.ctrlKey || ev.metaKey)
+                        return;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    moveTo(ie.Key, to);
+                });
+                let line = null;
+                let target = -1;
+                const others = () => Array.from(data.children).filter(x => x.classList.contains("sw-edit-entry") && x !== ie.ArrayEntry);
+                Sw.Drag(g.E, {
+                    Threshold: 0, // capture at once: a quick drag leaves the small handle before any threshold
+                    OnStart: () => {
+                        ie.ArrayEntry.classList.add("sw-edit-dragging");
+                        line = Sw.el("div.sw-edit-dropline", { attrs: { "aria-hidden": "true" } });
+                        data.append(line);
+                        target = ie.Key;
+                    },
+                    OnMove: ev => {
+                        const os = others();
+                        let i = 0;
+                        while (i < os.length) {
+                            const r = os[i].getBoundingClientRect();
+                            if (ev.clientY < r.top + r.height / 2)
+                                break;
+                            ++i;
+                        }
+                        target = i;
+                        const ref = i < os.length ? os[i] : os[os.length - 1];
+                        const top = !ref ? ie.ArrayEntry.offsetTop : (i < os.length ? ref.offsetTop - 3 : ref.offsetTop + ref.offsetHeight + 1);
+                        line.style.top = top + "px";
+                        //  Scroll the page / container while dragging near the top or bottom edge of the window
+                        if (ev.clientY < 48)
+                            window.scrollBy(0, -12);
+                        else if (ev.clientY > window.innerHeight - 48)
+                            window.scrollBy(0, 12);
+                    },
+                    OnEnd: (ev, st, cancelled) => {
+                        ie.ArrayEntry.classList.remove("sw-edit-dragging");
+                        if (line)
+                            line.remove();
+                        line = null;
+                        if (!cancelled && target >= 0 && target !== ie.Key)
+                            moveTo(ie.Key, target);
+                    },
+                });
+                return g.E;
+            };
+
+            /**
+             * Create the editor of one item.
+             * @param {*} key - The key.
+             * @returns {Promise<Sw.Edit>} The editor.
+             */
+            const addItemEditor = async key => {
+                const kn = C.getKeyName(key);
+                const t = await EditTypeCollection.ItemType(member, kn);
+                const o = new E.Options();
+                o.KeyName = kn;
+                o.Name = mn;
+                o.Title = !isPrimitive;
+                o.Dev = options.Dev;
+                o.ReadOnly = itemsReadOnly;
+                o.ExpandAllCollections = options.ExpandAllCollections;
+                o.MenuIcon = options.MenuIcon;
+                o.TypeHints = options.TypeHints;
+                //  Object items: a one line summary in the title row; long lists start collapsed (the item just added / moved is open)
+                o.Summary = !isPrimitive;
+                o.IsExpanded = count() <= 3 || (openKey !== null && openKey !== undefined && "" + openKey === "" + key);
+                const headButtons = target => {
+                    if (fixed)
+                        return;
+                    if (indexed)
+                        target.append(grip(ie));
+                    const rb = new Sw.Button({
+                        Kind: "ghost", Small: true, Icon: "editClear", Class: "sw-edit-itembtn EditFloatRight",
+                        Title: _TF("Remove the item from the collection", "Tool tip description for a menu item that when clicked will remove an item from a collection"),
+                        OnClick: () => removeItem(ie.Key),
+                    });
+                    target.append(rb.E);
+                    if (indexed) {
+                        const ib = new Sw.Button({
+                            Kind: "ghost", Small: true, Icon: "plus", Class: "sw-edit-itembtn",
+                            Title: _TF("Insert a new item after this item", "Tool tip description on a menu item that when clicked will insert a new item after the selected item"),
+                            OnClick: () => insertItem(ie.Key, true),
+                        });
+                        ib.SetDisabled(count() >= lim.Max, _T("The collection already has the maximum of {0} items", lim.Max, "Why the add or insert button of a collection editor is disabled.{0} is the maximum number of items allowed"));
+                        target.append(ib.E);
+                    }
+                };
+                if (!isPrimitive)
+                    o.AddToHeader = headButtons;
+                const ie = new E(t || { TypeName: member.ElementTypeName, Flags: F.IsPrimitive, Members: [{ Name: "Value", DisplayName: kn, TypeName: member.ElementTypeName, Flags: F.ReadOnly }] },
+                    editor.ForcedStyle, o, editor, member.ElementInst || member, ev => {
+                        const det = ev.detail;
+                        if (!det.Next && (isPrimitive || !det.Member))
+                            C.setVal(obj[mn], ie.Key, det.Value);
+                    });
+                ie.Key = key;
+                ie.KeyName = kn;
+                ie.AddMenuItems = items => EditTypeCollection.ItemMenu(items, ie, { C, fixed, readOnly, indexed, lim, count, removeItem, insertItem, moveItem, duplicateItem });
+                await ie.SetObject(C.getVal(obj[mn], key));
+                if (isPrimitive) {
+                    const ic = ie.Body.querySelector(".sw-edit-icon");
+                    if (ic)
+                        headButtons(ic);
+                }
+                const entry = Sw.el("div.sw-edit-entry", { dataset: { key: "" + key } }, Sw.el("div.sw-edit-entryvalue.SysWeaver-EditEntryValue", null, ie.Element));
+                entry.Edit = ie;
+                ie.ArrayEntry = entry;
+                if (indexed && !fixed) {
+                    //  Alt+Up / Alt+Down (Alt+Home / Alt+End) anywhere in the item moves it (not inside a nested collection's item)
+                    entry.addEventListener("keydown", ev => {
+                        if (!ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.target.closest(".sw-edit-entry") !== entry)
+                            return;
+                        const k = ev.key;
+                        const to = k === "ArrowUp" ? ie.Key - 1 : k === "ArrowDown" ? ie.Key + 1 : k === "Home" ? 0 : k === "End" ? count() - 1 : null;
+                        if (to === null)
+                            return;
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        moveTo(ie.Key, to);
+                    });
+                }
+                keyMap.set("" + key, ie);
+                data.append(entry);
+                return ie;
+            };
+
+            /** Render the items (expanded) or nothing (collapsed). */
+            const render = async () => {
+                keyMap.clear();
+                data.replaceChildren();
+                if (expanded) {
+                    for (const k of C.keys(obj[mn]))
+                        await addItemEditor(k);
+                    if (addRowBtn)
+                        data.append(Sw.el("div.sw-edit-addrowwrap", null, addRowBtn.E));
+                }
+                setInfo();
+            };
+            const toggle = async () => {
+                expanded = !expanded;
+                await render();
+            };
+            expBtn.O.OnClick = () => toggle();
+            info.addEventListener("click", ev => {
+                if (Sw.BadClick(ev)) return;
+                if (!Sw.HasSelectionIn(info))
+                    toggle();
+            });
+            cell.append(expBtn.E, info);
+            if (addBtn)
+                cell.append(addBtn.E);
+            if (setValueBtn)
+                cell.append(setValueBtn.E);
+            if (options.ExpandAllCollections)
+                expanded = true;
+            await render();
+
+            const item = E.Handler.Item(obj, editor, member, {
+                Focus: expBtn.E, Title: tip, DefValue: def,
+                DefValueText: def === null ? "null" : _TF("empty", "Text used to indicate that a list of items is empty"),
+            });
+            item.DataRow = data;
+            /**
+             * Re-render after a change and focus an item.
+             * @param {*} [focusKey] - Key of the item to focus.
+             */
+            item.Refresh = async focusKey => {
+                openKey = focusKey;
+                await render();
+                changed();
+                if (focusKey !== null && focusKey !== undefined) {
+                    const ie = keyMap.get("" + focusKey);
+                    if (ie) {
+                        //  The value input of the item (ready for typing after "+ Add"), else its first control; keyboard moves keep the handle
+                        const f = (focusGrip && ie.ArrayEntry.querySelector(".sw-edit-grip"))
+                            || ie.Element.querySelector(".sw-edit-body input:not([type=hidden]):not(:disabled):not([readonly]), .sw-edit-body textarea:not(:disabled):not([readonly]), .sw-edit-body select:not(:disabled)")
+                            || ie.Element.querySelector("input,textarea,button,[tabindex='0']");
+                        if (f)
+                            f.focus({ preventScroll: false });
+                    }
+                }
+                focusGrip = false;
+            };
+            /**
+             * Take a pasted / dropped text that is not a whole collection: one item of the element type is added at the end.
+             * @param {string} text - The text.
+             * @param {string} undoTitle - Undo title.
+             * @returns {Promise<boolean>} True when consumed.
+             */
+            item.AcceptText = async (text, undoTitle) => {
+                if (fixed)
+                    return false;
+                const r = await parseItems(text, false);
+                return r.Ok ? await addValues(r.Values, undoTitle) : false;
+            };
+            item.SetRaw = v => {
+                obj[mn] = v;
+            };
+            item.SetValue = async v => {
+                obj[mn] = v;
+                await render();
+                changed();
+            };
+            item.UpdateValue = async () => {
+                setInfo();
+            };
+            item.FindItem = async name => {
+                const first = name.split(".")[0];
+                const b = first.indexOf("[");
+                const key = b >= 0 ? first.substring(b + 1, first.lastIndexOf("]")) : "";
+                if (!expanded) {
+                    expanded = true;
+                    await render();
+                }
+                const ie = keyMap.get(key);
+                return ie ? await ie.FindItem(name) : null;
+            };
+            item.Expand = async on => {
+                if (!!on !== expanded)
+                    await toggle();
+            };
+            item.AddMenuItems = menu => {
+                if (readOnly)
+                    return;
+                const cur = obj[mn];
+                const isNull = cur === null || cur === undefined;
+                const n = count();
+                const canClear = isNull || n > 0;
+                menu.Items.push({
+                    Text: isNull ? _TF("Make empty", "Text on a menu item that when clicked will make a collection empty istead of non-existent (null)")
+                        : _TF("Clear collection", "Text on a menu item that when clicked will clear a collection (remove all items)"),
+                    Icon: "editClear", Disabled: !canClear || (fixed && !isNull),
+                    Title: canClear ? (isNull ? _TF("Make an empty collection instead of null", "Tool tip description of a menu item that when clicked will make a collection empty istead of non-existent")
+                        : _TF("Remove all items from the collection", "Tool tip description of a menu item that when clicked will clear a collection (remove all items)"))
+                        : _TF("Collection is already empty", "Tool tip description of a menu item that when clicked will clear a collection, displayed when the collection is already empty"),
+                    OnClick: () => {
+                        const old = E.CloneValue(obj[mn]);
+                        return editor.Invoke(it => it && it.SetValue(C.createVal()), it => it && it.SetValue(E.CloneValue(old)),
+                            isNull ? _TF("Make empty collection", "Command text stored in a log when a collection is made empty instead of non-existent (null)")
+                                : _TF("Clear collection", "Command text stored in a log when a collection is cleared (all items removed)"), mn);
+                    },
+                });
+                const canAdd = !fixed && n < lim.Max;
+                menu.Items.push({
+                    Text: _TF("Add item", "Text on a menu item that when clicked will add a new item to a collection"), Icon: "plus", Disabled: !canAdd,
+                    Title: canAdd ? _TF("Add a new item to the collection", "Tool tip description of a menu item that when clicked will add a new item to a collection")
+                        : _TF("Maximum number of items already added", "Tool tip description of a menu item that when clicked will add a new item to a collection, displayed when the maximum allowed number of items is already in the collection"),
+                    OnClick: () => addItem(),
+                });
+                menu.Items.push({
+                    Text: _TF("Paste as new item", "Text on a menu item that adds the item (or the list of items) on the clipboard to the end of a collection"), Icon: "editPaste", Disabled: !canAdd,
+                    Title: canAdd ? _TF("Add the item (or the list of items) on the clipboard to the end of the collection", "Tool tip of a menu item that adds the item (or the list of items) on the clipboard to the end of a collection")
+                        : _TF("Maximum number of items already added", "Tool tip description of a menu item that when clicked will add a new item to a collection, displayed when the maximum allowed number of items is already in the collection"),
+                    OnClick: async () => {
+                        const [text, err] = await E.Util.ReadClipboard();
+                        const r = err ? { Ok: false, Reason: err } : await parseItems(text, true);
+                        if (!r.Ok) {
+                            Sw.Fail(r.Reason);
+                            return;
+                        }
+                        await addValues(r.Values, _T("Paste: {0}", text, "Command text stored in a log when a property value was replaced with the value on the clip board.{0} is replaced with the value on the clip board."));
+                    },
+                });
+            };
+            return item;
+        }
+
+        /**
+         * Add the item operations to an item menu.
+         * @param {Array} items - Menu items (Sw.Menu items are pushed).
+         * @param {Sw.Edit} ie - The item editor.
+         * @param {object} s - State and operations of the collection.
+         */
+        static ItemMenu(items, ie, s) {
+            const key = ie.Key;
+            const n = s.count();
+            const ro = _TF("Can't move item, collection is read only", "Tool tip description of a menu item that when clicked will move an item, displayed when the collection is read only");
+            items.push({
+                Text: _TF("Remove item", "Text of a menu item that when clicked will remove an item from a collection"), Icon: "editClear", Disabled: s.fixed,
+                Title: s.fixed ? (s.readOnly ? _TF("Can't remove, collection is read only", "Tool tip description for a menu item that when clicked will remove an item from a collection when the collection is read only")
+                    : _TF("Can't remove, collection is fixed size", "Tool tip description for a menu item that when clicked will remove an item from a collection when the collection is of a fixed length"))
+                    : _TF("Remove the item from the collection", "Tool tip description for a menu item that when clicked will remove an item from a collection"),
+                OnClick: () => s.removeItem(ie.Key),
+            });
+            if (!s.indexed)
+                return;
+            const isMax = n >= s.lim.Max;
+            const isTop = key <= 0;
+            const isBottom = key + 1 >= n;
+            const insTitle = t => s.readOnly ? _TF("Can't insert item, collection is read only", "Tool tip description on a menu item that when pressed would insert an item into a collection, displayed when the collection is read only")
+                : isMax ? _TF("Can't insert item, the collections is maxed out", "Tool tip description on a menu item that when pressed would insert an item into a collection, displayed when the collection is full (have reached the maximum number of allowed items)") : t;
+            items.push({
+                Text: _TF("Insert before", "Text of a menu item that when clicked will insert a new item before the selected item"), Icon: "editAddBefore", Disabled: s.fixed || isMax,
+                Title: insTitle(_TF("Insert a new item before this item", "Tool tip description on a menu item that when clicked will insert a new item before the selected item")),
+                OnClick: () => s.insertItem(ie.Key, false),
+            });
+            items.push({
+                Text: _TF("Insert after", "Text of a menu item that when clicked will insert a new item after the selected item"), Icon: "editAddAfter", Disabled: s.fixed || isMax,
+                Title: insTitle(_TF("Insert a new item after this item", "Tool tip description on a menu item that when clicked will insert a new item after the selected item")),
+                OnClick: () => s.insertItem(ie.Key, true),
+            });
+            items.push({
+                Text: _TF("Duplicate", "Text of a menu item that inserts a copy of the selected item after it"), Icon: "copy", Disabled: s.fixed || isMax,
+                Title: insTitle(_TF("Insert a copy of this item after it", "Tool tip of a menu item that inserts a copy of the selected item after it")),
+                OnClick: () => s.duplicateItem(ie.Key),
+            });
+            const top = _TF("Can't move item, already at the top", "Tool tip description of a menu item that when clicked will move an item to the top, displayed when the item is already at the top");
+            const bottom = _TF("Can't move item, already at the bottom", "Tool tip description of a menu item that when clicked will move an item to the bottom, displayed when the item is already at the bottom");
+            items.push({
+                Text: _TF("Move to top", "Text for a menu item that when clicked will move the selected item to the top of a list"), Icon: "editTop", Disabled: s.fixed || isTop,
+                Title: s.readOnly ? ro : isTop ? top : _TF("Move this item to the top", "Tool tip description on a menu item that when clicked will move the selected item to the top of a list"),
+                OnClick: () => s.moveItem(key, 0),
+            });
+            items.push({
+                Text: _TF("Move up", "Text for a menu item that when clicked will move the selected item up one position in the list"), Icon: "up", Disabled: s.fixed || isTop,
+                Title: s.readOnly ? ro : isTop ? top : _TF("Move this item one step up", "Tool tip description of a menu item that when clicked will move the selected item up one position in the list"),
+                OnClick: () => s.moveItem(key, key - 1),
+            });
+            items.push({
+                Text: _TF("Move down", "Text for a menu item that when clicked will move the selected item down one position in the list"), Icon: "down", Disabled: s.fixed || isBottom,
+                Title: s.readOnly ? ro : isBottom ? bottom : _TF("Move this item one step down", "Tool tip description of a menu item that when clicked will move the selected item down one position in the list"),
+                OnClick: () => s.moveItem(key, key + 1),
+            });
+            items.push({
+                Text: _TF("Move to bottom", "Text for a menu item that when clicked will move the selected item to the bottom of a list"), Icon: "editBottom", Disabled: s.fixed || isBottom,
+                Title: s.readOnly ? ro : isBottom ? bottom : _TF("Move this item to the bottom", "Tool tip description of a menu item that when clicked will move the selected item to the bottom of a list"),
+                OnClick: () => s.moveItem(key, n - 1),
             });
         }
-
-
-
-        /**
-         * Creates the value for a new element: `null` when the element type has `AcceptNull` and the element handler's
-         * `GetDefault(member, options)` (called with the collection member) is falsy, else `Edit.CreateDefault(elementType, options)`.
-         * @returns {Promise<*>} The new element value.
-         */
-        async function CreateNewDefault() {
-            if ((elementType.Flags & TypeMemberFlags.AcceptNull) != 0) {
-                if (!th.GetDefault(member, options))
-                    return null;
-            }
-            return await Edit.CreateDefault(elementType, options);
-        }
-
-        /**
-         * Focuses the root element of the item editor for `key` (throws if the key is not in `keyMap`).
-         * @param {*} key - Item key.
-         * @returns {void}
-         */
-        function focus(key) {
-            keyMap.get("" + key).Element.focus();
-        }
-
-        /**
-         * Removes the item's `SysWeaver-EditEntry` from the DOM (the `keyMap` entry is kept).
-         * @param {*} key - Item key.
-         * @returns {void}
-         */
-        function remove(key) {
-            keyMap.get("" + key).ArrayEntry.remove();
-        }
-
-        /**
-         * Dispatches an `EditChange` for the whole collection (`member`, `obj[mn]`, no key) on the parent editor element.
-         * @returns {void}
-         */
-        function colChanged() {
-            editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, obj[mn]));
-        }
-
-        /**
-         * Creates the editor for one element: a `SysWeaver-EditEntry` (header + value) holding a child
-         * `Edit(elementType, editor.Style, newOpt, editor, member.ElementInst, evListener)` set to `values[key]`.
-         * `newOpt` is a fresh `EditOptions` (defaults, so not inheriting ReadOnly etc.) with `KeyName = "[key]"`,
-         * `Name = mn` and an `AddToHeader` hook adding remove / insert-after icons.
-         * For primitive elements it copies `Min/Max/Default/Flags/Summary/Remark` of the element type onto its first
-         * member and sets that member's `DisplayName` to the key name.
-         * The `evListener` writes the child's top-level value back with `container.setVal(obj[mn], key, value)`
-         * (for objects only when the event has no member, i.e. whole-object replacements).
-         * Registers the editor in `keyMap`, sets `Key`, `KeyName`, `ArrayEntry` and `AddMenuItems`, then inserts the
-         * entry with `relativeTo.insertAdjacentElement(relation, entry)` or appends it to the data cell.
-         * Note: the child is filled with `values[key]`, which only works for arrays (for a `Map` it is undefined, so
-         * a default is created).
-         * @param {Array|Map} values - The collection value.
-         * @param {*} key - Element key / index.
-         * @param {Element} [relativeTo] - Existing entry to insert relative to.
-         * @param {InsertPosition} [relation] - `"beforebegin"` / `"afterend"` etc.
-         * @returns {Promise<Edit>} The item editor.
-         */
-        async function addItemEditor(values, key, relativeTo, relation) {
-            const arrayEntry = document.createElement("SysWeaver-EditEntry");
-            const arrayEntryHeader = document.createElement("SysWeaver-EditEntryHeader");
-            const arrayEntryValue = document.createElement("SysWeaver-EditEntryValue");
-            arrayEntry.appendChild(arrayEntryHeader);
-            arrayEntry.appendChild(arrayEntryValue);
-            const keyName = container.getKeyName(key);
-            const newOpt = new EditOptions();
-            newOpt.KeyName = keyName;
-            newOpt.Name = mn;
-            if (isPrimitive) {
-                const pm = elementType.Members[0];
-                pm.Min = elementType.Min;
-                pm.Max = elementType.Max;
-                pm.Default = elementType.Default;
-                pm.Flags = elementType.Flags;
-                pm.Summary = elementType.Summary;
-                pm.Remark = elementType.Remark;
-                //pm.Name = newOpt.KeyName;
-                pm.DisplayName = newOpt.KeyName;
-            }
-            /**
-             * `EditChange` listener of the item editor (registered by the `Edit` constructor): writes the item's new
-             * top-level value back into the collection with `container.setVal(obj[mn], evKey, value)` when the event
-             * is not a nested one (`detail.Next` null); for object elements additionally only when `detail.Member` is
-             * null (whole-object replacement). `evKey` is the key at creation time (not updated by `reOrder`).
-             * @type {function(CustomEvent):void}
-             */
-            let evListener;
-            const evKey = key;
-            if (isPrimitive) {
-                evListener = ev => {
-                    const det = ev.detail;
-                    if (!det.Next)
-                        container.setVal(obj[mn], evKey, det.Value);
-                };
-            } else {
-                evListener = ev => {
-                    const det = ev.detail;
-                    if (!det.Next)
-                        if (!det.Member)
-                            container.setVal(obj[mn], evKey, det.Value);
-                };
-            }
-
-
-            /**
-             * Undoable removal of this item (click handler of the remove icon and the "Remove item" menu entry).
-             * Do: `container.removeVal(values, key)`, removes the DOM entry and renumbers (`reOrder`) when needed, or
-             * expands when collapsed; then `colChanged()` and count update.
-             * Undo: re-inserts the old value with `container.insertAt` (arrays only) and a new item editor at the
-             * original DOM position (or expands), renumbers, focuses it, `colChanged()` and count update.
-             * Registered on the parent editor (`editor.Invoke`, path name `mn`).
-             * @returns {Promise<void>}
-             */
-            async function Remove() {
-                const currentKey = itemEdit.Key;
-                const currentKeyName = itemEdit.KeyName;
-                const oldVal = container.getVal(vals, currentKey);
-                const parent = arrayEntry.parentNode;
-                const rel = Array.prototype.indexOf.call(parent.children, arrayEntry);
-                let doReorder;
-                await editor.Invoke(async () => {
-                    doReorder = container.removeVal(values, currentKey);
-                    if (isExpanded) {
-                        remove(currentKey);
-                        if (doReorder)
-                            await reOrder(values);
-                    } else
-                        await toggleExpand();
-                    colChanged();
-                    Edit.SetCollectionCount(countText, vals, container);
-                }, async () => {
-                    const newKey = container.insertAt(values, oldVal, currentKey);
-                    if (isExpanded) {
-                        await addItemEditor(values, newKey, parent.children[rel], "beforebegin");
-                        if (doReorder)
-                            await reOrder(values);
-                    }
-                    else
-                        await toggleExpand();
-                    focus(newKey);
-                    colChanged();
-                    Edit.SetCollectionCount(countText, vals, container);
-                },
-                    _T("Remove item: {0}", currentKeyName, "Command text stored in a log when an item in a collection is removed.{0} is replaced with the name of the key of item.")
-                    , mn);
-            }
-
-            /**
-             * Undoable insertion of a new element (`CreateNewDefault()`) after this item (click handler of the plus
-             * icon and the "Insert after" menu entry; indexed collections). Do: `container.insertAfter`, adds the item
-             * editor after this entry (or expands), `reOrder`, focuses the new item, `colChanged()`, count update.
-             * Undo: `container.removeVal`, removes the entry, renumbers, focuses this item.
-             * Registered through the item editor (`itemEdit.Invoke`), so the undo path includes the item key.
-             * @returns {Promise<void>}
-             */
-            async function InsertAfter() {
-                const currentKey = itemEdit.Key;
-                const currentKeyName = itemEdit.KeyName;
-                const defNew = await CreateNewDefault();
-                let newKey;
-                await itemEdit.Invoke(
-                    async edit => {
-                        newKey = container.insertAfter(values, defNew, currentKey);
-                        if (isExpanded)
-                            await addItemEditor(values, newKey, keyMap.get("" + currentKey).ArrayEntry, "afterend");
-                        else
-                            await toggleExpand();
-                        await reOrder(values);
-                        focus(newKey);
-                        colChanged();
-                        Edit.SetCollectionCount(countText, vals, container);
-                    },
-                    async edit => {
-
-                        const doReorder = container.removeVal(values, newKey);
-                        if (isExpanded)
-                            remove(newKey);
-                        else
-                            await toggleExpand();
-                        if (doReorder)
-                            await reOrder(values);
-                        focus(currentKey);
-                        colChanged();
-                        Edit.SetCollectionCount(countText, vals, container);
-                    },
-                    _TF("Insert item after", "Command text stored in a log when an item is inserted after the selected item"),
-                    mn);
-            }
-
-            /**
-             * Title-row hook of the item editor (called by `Edit.SetTypeInfo`; only when the item editor has a title
-             * row, i.e. `Title` option true which is the `EditOptions` default). Unless fixed / read only, adds a remove
-             * icon (`ColorIcon("../icons/clear.svg")`, class `EditFloatRight`, runs `Remove`) and, for indexed
-             * collections, an insert-after icon (`ColorIcon("../icons/plus.svg")`, runs `InsertAfter`).
-             * @param {HTMLElement} toElement - The title cell.
-             * @returns {void}
-             */
-            newOpt.AddToHeader = toElement => {
-                if (!(isFixed || isReadOnly)) {
-                    let ri;
-
-                    ri = new ColorIcon("../icons/clear.svg", "IconColorThemeAcc2", 24, 24,
-                        _TF("Remove the item from the collection", "Tool tip description for a menu item that when clicked will remove an item from a collection"),
-                        Remove);
-                    ri.Element.classList.add("EditFloatRight");
-                    toElement.appendChild(ri.Element);
-                    if (isIndexed) {
-                        ri = new ColorIcon("../icons/plus.svg", "IconColorThemeAcc2", 24, 24,
-                            _TF("Insert a new item after this item", "Tool tip description on a menu item that when clicked will insert a new item after the selected item"),
-                            InsertAfter);
-                        toElement.appendChild(ri.Element);
-                       
-
-                    } else {
-
-                    }
-
-
-                    
-
-                }
-            };
-
-
-            const itemEdit = new Edit(elementType, editor.Style, newOpt, editor, member.ElementInst, evListener);
-            await itemEdit.SetObject(values[key]);
-            keyMap.set("" + key, itemEdit);
-            itemEdit.Key = key;
-            itemEdit.KeyName = keyName;
-            itemEdit.ArrayEntry = arrayEntry;
-            arrayEntry.Edit = itemEdit;
-
-            /**
-             * Adds the item operations to the item editor's object menu (and member menu of primitive item editors):
-             * "Remove item" (`Id: "Remove"`, disabled when fixed) and, for indexed collections, "Insert before",
-             * "Insert after" (disabled when fixed or at `Max`), "Move to top", "Move up", "Move down", "Move to bottom"
-             * (`Id`s `InsertBefore`, `InsertAfter`, `MoveTop`, `MoveUp`, `MoveDown`, `MoveBottom`; disabled when fixed or
-             * already at that end). Icons use the `SysWeaverEditIcon*` classes. "Insert before" is undoable through
-             * `itemEdit.Invoke` (`container.insertAt`, mirror of `InsertAfter`).
-             * @param {WebMenuItem[]} menuItems - The menu item array to append to.
-             * @param {function():void} close - Closes the menu.
-             * @returns {void}
-             */
-            itemEdit.AddMenuItems = (menuItems, close) => {
-                const currentKey = itemEdit.Key;
-                const currentKeyName = itemEdit.KeyName;
-                menuItems.push(WebMenuItem.From({
-                    Id: "Remove",
-                    Name: _TF("Remove item", "Text of a menu item that when clicked will remove an item from a collection"),
-                    IconClass: "SysWeaverEditIconClearCollection",
-                    Title: isFixed ? (isReadOnly
-                        ?
-                        _TF("Can't remove, collection is read only", "Tool tip description for a menu item that when clicked will remove an item from a collection when the collection is read only")
-                        :
-                        _TF("Can't remove, collection is fixed size", "Tool tip description for a menu item that when clicked will remove an item from a collection when the collection is of a fixed length")
-                    ) :
-                        _TF("Remove the item from the collection", "Tool tip description for a menu item that when clicked will remove an item from a collection")
-                    ,
-                    Data: async () => {
-                        await Remove();
-                        close();
-                    },
-                    Flags: isFixed ? 1 : 0,
-                }));
-
-                if (isIndexed) {
-                    const valCount = container.countVal(values);
-                    const isMax = valCount >= max;
-                    const isTop = currentKey <= 0;
-                    const isBottom = (currentKey + 1) >= valCount;
-
-                    /**
-                     * Undoable move of an element (indexed collections): `container.move(values, from, to)`, moves the
-                     * DOM entry accordingly (or expands when collapsed), `reOrder`, `colChanged()`, count update; undo
-                     * moves it back. Registered on the parent editor (`editor.Invoke`, path name `mn`).
-                     * @param {number} from - Current index.
-                     * @param {number} to - Target index.
-                     * @returns {Promise<void>}
-                     */
-                    async function Move(from, to) {
-                    // TODO Undos!
-                        await editor.Invoke(async () => {
-                            container.move(values, from, to);
-                            if (isExpanded) {
-                                const src = data.children[from];
-                                src.remove();
-                                if (to >= data.children.length)
-                                    data.appendChild(src);
-                                else
-                                    data.insertBefore(src, data.children[to]);
-                                await reOrder(values);
-                            } else {
-                                await toggleExpand();
-                            }
-                            colChanged();
-                            Edit.SetCollectionCount(countText, values, container);
-                        },
-                        async () => {
-                            container.move(values, to, from);
-                            if(isExpanded) {
-                                const src = data.children[to];
-                                src.remove();
-                                if (from >= data.children.length)
-                                    data.appendChild(src);
-
-                                else
-                                    data.insertBefore(src, data.children[from]);
-                                await reOrder(values);
-                            } else {
-                                await toggleExpand();
-                            }
-                            colChanged();
-                            Edit.SetCollectionCount(countText, values, container);
-                            },
-                            _T("Move item from {0} to {1}", from, to, "Command text stored in a log when an item in a collection is moved from one position to another.{0} is the name the position it was moved from.{1} is the name of the position it was moved to.")
-                            , mn);
-                    }
-
-                    menuItems.push(WebMenuItem.From({
-                        Id: "InsertBefore",
-                        Name:
-                            _TF("Insert before", "Text of a menu item that when clicked will insert a new item before the selected item")
-                        ,
-                        IconClass: "SysWeaverEditIconAddItemBefore",
-                        Title: isReadOnly ?
-                                _TF("Can't insert item, collection is read only", "Tool tip description on a menu item that when pressed would insert an item into a collection, displayed when the collection is read only")
-                            : (isMax ?
-                                _TF("Can't insert item, the collections is maxed out", "Tool tip description on a menu item that when pressed would insert an item into a collection, displayed when the collection is full (have reached the maximum number of allowed items)")
-                                :
-                                _TF("Insert a new item before this item", "Tool tip description on a menu item that when clicked will insert a new item before the selected item")
-                            ),
-                        Data: async () => {
-
-                            const defNew = await CreateNewDefault();
-                            let newKey;
-                            await itemEdit.Invoke(
-                                async edit => {
-                                    newKey = container.insertAt(values, defNew, currentKey);
-                                    if (isExpanded)
-                                        await addItemEditor(values, newKey, keyMap.get("" + currentKey).ArrayEntry, "beforebegin");
-                                    else
-                                        await toggleExpand();
-                                    await reOrder(values);
-                                    focus(newKey);
-                                    colChanged();
-                                    Edit.SetCollectionCount(countText, vals, container);
-                                },
-                                async edit => {
-
-                                    const doReorder = container.removeVal(values, newKey);
-                                    if (isExpanded)
-                                        remove(newKey);
-                                    else
-                                        await toggleExpand();
-                                    if (doReorder)
-                                        await reOrder(values);
-                                    focus(currentKey);
-                                    colChanged();
-                                    Edit.SetCollectionCount(countText, vals, container);
-                                },
-                                _TF("Insert item before", "Command text stored in a log when an item is inserted before the selected item"),
-                                mn);
-                            close();
-                        },
-                        Flags: (isFixed || isMax) ? 1 : 0,
-                    }));
-                    menuItems.push(WebMenuItem.From({
-                        Id: "InsertAfter",
-                        Name:
-                            _TF("Insert after", "Text of a menu item that when clicked will insert a new item after the selected item")
-                        ,
-                        IconClass: "SysWeaverEditIconAddItemAfter",
-                        Title: isReadOnly ?
-                            _TF("Can't insert item, collection is read only", "Tool tip description on a menu item that when pressed would insert an item into a collection, displayed when the collection is read only")
-                            : (isMax ?
-                                _TF("Can't insert item, the collections is maxed out", "Tool tip description on a menu item that when pressed would insert an item into a collection, displayed when the collection is full (have reached the maximum number of allowed items)")
-                                :
-                                _TF("Insert a new item after this item", "Tool tip description on a menu item that when clicked will insert a new item after the selected item")
-                            ),
-                        Data: async () => {
-                            await InsertAfter();
-                            close();
-                        },
-                        Flags: (isFixed || isMax) ? 1 : 0,
-                    }));
-
-
-
-                    menuItems.push(WebMenuItem.From({
-                        Id: "MoveTop",
-                        Name:
-                            _TF("Move to top", "Text for a menu item that when clicked will move the selected item to the top of a list")
-                        ,
-                        IconClass: "SysWeaverEditIconMoveItemTop",
-                        Title: isReadOnly ?
-                            _TF("Can't move item, collection is read only", "Tool tip description of a menu item that when clicked will move an item, displayed when the collection is read only")
-                            : (isTop ?
-                                _TF("Can't move item, already at the top", "Tool tip description of a menu item that when clicked will move an item to the top, displayed when the item is already at the top")
-                                :
-                                _TF("Move this item to the top", "Tool tip description on a menu item that when clicked will move the selected item to the top of a list")
-                            ),
-                        Data: async () => {
-                            await Move(currentKey, 0);
-                            close();
-                        },
-                        Flags: (isFixed || isTop) ? 1 : 0,
-                    }));
-
-
-                    menuItems.push(WebMenuItem.From({
-                        Id: "MoveUp",
-                        Name:
-                            _TF("Move up", "Text for a menu item that when clicked will move the selected item up one position in the list")
-                        ,
-                        IconClass: "SysWeaverEditIconMoveItemUp",
-                        Title: isReadOnly ?
-                            _TF("Can't move item, collection is read only", "Tool tip description of a menu item that when clicked will move an item, displayed when the collection is read only")
-                            : (isTop ?
-                                _TF("Can't move item, already at the top", "Tool tip description of a menu item that when clicked will move an item to the top, displayed when the item is already at the top")
-                                :
-                                _TF("Move this item one step up", "Tool tip description of a menu item that when clicked will move the selected item up one position in the list")
-                            ),
-                        Data: async () => {
-                            await Move(currentKey, currentKey - 1);
-                            close();
-                        },
-                        Flags: (isFixed || isTop) ? 1 : 0,
-                    }));
-
-                    menuItems.push(WebMenuItem.From({
-                        Id: "MoveDown",
-                        Name:
-                            _TF("Move down", "Text for a menu item that when clicked will move the selected item down one position in the list")
-                        ,
-                        IconClass: "SysWeaverEditIconMoveItemDown",
-                        Title: isReadOnly ?
-                            _TF("Can't move item, collection is read only", "Tool tip description of a menu item that when clicked will move an item, displayed when the collection is read only")
-                            : (isBottom ?
-                                _TF("Can't move item, already at the bottom", "Tool tip description of a menu item that when clicked will move an item to the bottom, displayed when the item is already at the bottom")
-                                :
-                                _TF("Move this item one step down", "Tool tip description of a menu item that when clicked will move the selected item down one position in the list")
-                            ),
-                        Data: async () => {
-                            await Move(currentKey, currentKey + 1);
-                            close();
-                        },
-                        Flags: (isFixed || isBottom) ? 1 : 0,
-                    }));
-
-                    menuItems.push(WebMenuItem.From({
-                        Id: "MoveBottom",
-                        Name:
-                            _TF("Move to bottom", "Text for a menu item that when clicked will move the selected item to the bottom of a list")
-                        ,
-                        IconClass: "SysWeaverEditIconMoveItemBottom",
-                        Title: isReadOnly ?
-                            _TF("Can't move item, collection is read only", "Tool tip description of a menu item that when clicked will move an item, displayed when the collection is read only")
-                            : (isBottom ?
-                                _TF("Can't move item, already at the bottom", "Tool tip description of a menu item that when clicked will move an item to the bottom, displayed when the item is already at the bottom")
-                                :
-                                _TF("Move this item to the bottom", "Tool tip description of a menu item that when clicked will move the selected item to the bottom of a list")
-                            ),
-                        Data: async () => {
-                            await Move(currentKey, valCount - 1);
-                            close();
-                        },
-                        Flags: (isFixed || isBottom) ? 1 : 0,
-                    }));
-
-                }
-
-            };
-            arrayEntryValue.appendChild(itemEdit.Element);
-            arrayEntry.Edit = itemEdit;
-            if (relativeTo)
-                relativeTo.insertAdjacentElement(relation, arrayEntry);
-
-            else
-                data.appendChild(arrayEntry);
-            return itemEdit;
-        }
-
-        if (options.ExpandAllCollections && (!isExpanded))
-            await toggleExpand();
-        //  The item returned to the engine (see the type-handler contract on class Edit).
-        return {
-            /** @type {?string} Constraint text ("Minimum/Maximum allowed count") prepended to the member tooltip. */
-            Title: typeTitle,
-            /** @type {?(Array|Map)} Default collection used by "Set default" (shared instance, not cloned). */
-            DefValue: def,
-            /** @type {?string} Localized "empty", or null when the default is null. */
-            DefValueText: def == null ? null : _TF("empty", "Text used to indicate that a list of items is empty"),
-            /** @type {HTMLTableRowElement} The data row holding the item editors. */
-            DataRow: dataRow,
-            /** @type {HTMLElement} Element focused when validation fails here (the expand icon). */
-            Focus: expandIcon.Element,
-            /**
-             * Refreshes the UI from `obj[mn]` after undo/redo: only updates the count text (re-rendering expanded
-             * items is commented out).
-             * @returns {Promise<void>}
-             */
-            UpdateValue: async () => {
-                Edit.SetCollectionCount(countText, obj[mn], container);
-//                if (isExpanded) {
-//                    await toggleExpand();
-//                    await toggleExpand();
-//                }
-            },
-            /**
-             * Resolves an undo path into an item: takes the text between the first `[` and the last character of the
-             * first path segment (e.g. `"Items[3]"` -> `"3"`), expands if needed and delegates the full `name` to that
-             * item editor's `FindItem`.
-             * @param {string} name - Remaining dotted path, first segment `"<member>[<key>]"`.
-             * @returns {Promise<object|Edit|null>} The target, or null when the key has no item editor.
-             */
-            FindItem: async name => {
-                const ps = name.split('.');
-                let findKey = ps[0];
-                const fki = findKey.indexOf('[');
-                findKey = findKey.substr(fki + 1, findKey.length - 2 - fki);
-                if (!isExpanded)
-                    await toggleExpand();
-                const ie = keyMap.get(findKey);
-                if (typeof ie === "undefined")
-                    return null;
-//                if (ps.length <= 1)
-//                    return ie;
-                return await ie.FindItem(name);
-            },
-            /**
-             * Current collection value.
-             * @returns {?(Array|Map)} `obj[mn]`.
-             */
-            GetValue: () => obj[mn],
-            /**
-             * Replaces the collection value: stores into `obj[mn]`, re-renders the items when expanded (collapse +
-             * expand) and dispatches `EditChange` via `colChanged()`.
-             * @param {?(Array|Map)} newVal - New collection.
-             * @returns {Promise<void>}
-             */
-            SetValue: async newVal => {
-                obj[mn] = newVal;
-                if (isExpanded) {
-                    await toggleExpand();
-                    await toggleExpand();
-                }
-                colChanged();
-                //editor.Element.dispatchEvent(Edit.CreateChangeEvent(member, newVal, null, editor.Key, editor.KeyName));
-
-            },
-            /**
-             * Adds collection operations to the member menu (nothing when read only):
-             * "Make empty" (when null) / "Clear collection" (`Id: "Clear"`, replaces the value with a new empty
-             * container via `SetValue`; undo restores the old value and expands) and "Add item" (`Id: "Add"`: creates
-             * `CreateNewDefault()`, adds it with `container.addVal` (creating the container when null), adds an item
-             * editor / renumbers when expanded, expands afterwards; undo removes it or restores null). Both are undoable
-             * via `editor.Invoke` with path name `mn`.
-             * "Add item" is enabled while the item count is below `max` (the parsed `member.Max`, default
-             * 1000000000 when it is missing, null or not a number) or when `max <= 0`.
-             * @param {WebMenu} menu - The menu being built (items are pushed to `menu.Items`).
-             * @param {function():void} close - Closes the menu.
-             * @returns {void}
-             */
-            AddMenuItems: (menu, close) => {
-
-                if (isReadOnly)
-                    return;
-                const currentValue = obj[mn];
-                const isNull = currentValue === null;
-                const valLen = isNull ? 0 : container.countVal(currentValue);
-                const canClear = isNull || (valLen > 0);
-                menu.Items.push(WebMenuItem.From({
-                    Id: "Clear",
-                    Name: isNull ?
-                        _TF("Make empty", "Text on a menu item that when clicked will make a collection empty istead of non-existent (null)")
-                        :
-                        _TF("Clear collection", "Text on a menu item that when clicked will clear a collection (remove all items)")
-                    ,
-                    IconClass: "SysWeaverEditIconClearCollection",
-                    Title: canClear ? (isNull ?
-                        _TF("Make an empty collection instead of null", "Tool tip description of a menu item that when clicked will make a collection empty istead of non-existent")
-                        :
-                        _TF("Remove all items from the collection", "Tool tip description of a menu item that when clicked will clear a collection (remove all items)")
-                    ) :
-                        _TF("Collection is already empty", "Tool tip description of a menu item that when clicked will clear a collection, displayed when the collection is already empty")
-                    ,
-                    Data: async () => {
-                        const oldVals = obj[mn];
-                        const newVals = container.createVal();
-                        await editor.Invoke(
-                            async edit => {
-                                await edit.SetValue(newVals);
-                            },
-                            async edit => {
-                                await edit.SetValue(oldVals);
-                                if (!isExpanded)
-                                    await toggleExpand();
-                            },
-                            isNull ?
-                                _TF("Make empty collection", "Command text stored in a log when a collection is made empty instead of non-existent (null)")
-                                :
-                                _TF("Clear collection", "Command text stored in a log when a collection is cleared (all items removed)")
-                            ,
-                            mn);
-                        close();
-                    },
-                    Flags: canClear ? 0 : 1,
-                }));
-
-                const canAdd = max <= 0 || (valLen < max);
-                menu.Items.push(WebMenuItem.From({
-                    Id: "Add",
-                    Name:
-                        _TF("Add item", "Text on a menu item that when clicked will add a new item to a collection")
-                    ,
-                    IconClass: "SysWeaverEditIconAddItem",
-                    Title: canAdd ?
-                        _TF("Add a new item to the collection", "Tool tip description of a menu item that when clicked will add a new item to a collection")
-                        :
-                        _TF("Maximum number of items already added", "Tool tip description of a menu item that when clicked will add a new item to a collection, displayed when the maximum allowed number of items is already in the collection")
-                    ,
-                    Data: async () => {
-
-                        let newKey = null;
-                        let wasNull = false;
-                        await editor.Invoke(
-                            async edit => {
-                                const defNew = await CreateNewDefault();
-                                let newVals = edit.GetValue();
-                                wasNull = (newVals == null) || (typeof (newVals) === "undefined");
-                                if (wasNull)
-                                    newVals = container.createVal();
-                                newKey = container.addVal(newVals, defNew);
-                                if (wasNull) {
-                                    await edit.SetValue(newVals);
-                                } else {
-                                    if (isExpanded) {
-                                        await addItemEditor(newVals, newKey);
-                                        await reOrder(newVals);
-                                    }
-                                    colChanged();
-                                    Edit.SetCollectionCount(countText, newVals, container);
-
-                                }
-                                if (!isExpanded)
-                                    await toggleExpand();
-                            },
-                            async edit => {
-                                let vals = edit.GetValue();
-                                if (wasNull) {
-                                    vals = null;
-                                    await edit.SetValue(vals);
-                                } else {
-                                    container.removeVal(vals, newKey);
-                                    if (isExpanded) {
-                                        remove(newKey);
-                                        await reOrder(vals);
-                                    }
-                                    colChanged();
-                                    Edit.SetCollectionCount(countText, vals, container);
-                                }
-                                if (!isExpanded)
-                                    await toggleExpand();
-                            }, 
-                            _TF("Add item to collection", "Command text stored in a log when an new item is added to a collection")
-                            ,
-                            mn
-                        );
-                        close();
-                    },
-                    Flags: canAdd ? 0 : 1,
-                }));
-
-
-            },
-        };
     }
-}
 
-//  Start loading the container strategies (EditCollectionArray.js, EditCollectionMap.js); not awaited.
-EditTypeCollection.Init();
+    E.Handlers.Collection = EditTypeCollection;
+    if (!window.EditTypeCollection)
+        window.EditTypeCollection = EditTypeCollection;
+})();

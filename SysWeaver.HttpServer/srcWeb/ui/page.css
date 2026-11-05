@@ -1,0 +1,1510 @@
+/*
+ * ui/page.css - SysWeaver UI library (Sw) styles, part 7: the Design v2 page anatomy (Design v2, ui/README.md Page anatomy / PORTING.md B10 / PORTING.md B13 / PORTING.md B11).
+ *
+ * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css, page.css.
+ * Built by pages (static markup) and by ui/layout.js (Sw.PageHeader, Sw.EmptyState) and ui/page.js (Sw.Card, Sw.Facts, Sw.Kpi,
+ * Sw.ListCard, Sw.StateView, Sw.Meter, Sw.Section, Sw.Grid). Every app gets the same anatomy from these classes:
+ *  - Page containers by type: .sw-page-dash (dashboards, max 100rem), .sw-page-form (forms, max 75rem), .sw-page-read (text, max 45rem),
+ *    .sw-page-fill (tables, logs, chat: full width and height; the .sw-fill child (or the last child) takes the rest of the height).
+ *  - Page header .sw-ph: .sw-ph-text (.sw-ph-titlerow > h1.sw-ph-title + .sw-ph-status, p.sw-ph-desc), .sw-ph-actions (right aligned);
+ *    .sw-ph-compact (alias .is-compact) for fill pages (hidden on phones, where the shell's top bar shows the title).
+ *  - 12 column grid .sw-grid with .sw-span-3/4/6/8/12 (3 -> 6 below 1280 px, 6 -> 12 below 900 px, 3 -> 6 on phones for KPI tiles).
+ *  - Cards .sw-card (flat surface, hairline, no shadow) with .sw-card-head (h2/h3 or .sw-card-title, .sw-card-sub, .sw-push or .sw-card-tools)
+ *    and .sw-card-body (.sw-flush: no padding); .sw-section-title (h2 + span) between grids, .sw-section (32 px apart).
+ *  - KPI tiles .sw-kpi (.sw-kpi-label, .sw-kpi-value with a small unit, .sw-kpi-sub; button.sw-kpi opens a page) and meters .sw-meter
+ *    (.is-warn, .is-danger); facts strip .sw-facts (div > dt + dd; button.sw-fact-value opens a page); text link .sw-linkbtn.
+ *  - Shortcut tiles .sw-tiles / .sw-tile (.sw-tile-ico, .sw-tile-text); row lists .sw-rows (li, .sw-rows-text, .sw-rows-meta, a badge,
+ *    button.sw-rows-link).
+ *  - Empty state .sw-empty (.sw-empty-icon, -title, -text, -actions; .sw-error) and the state view .sw-state (.is-empty, .is-loading,
+ *    .is-error, .is-small) with skeleton lines .sw-skel (static with reduced motion).
+ * Flat: no box shadows, no gradients (structure by hairlines and tone; the only gradient is the skeleton shimmer).
+ */
+
+/* ---------- Page containers ---------- */
+
+/*
+ * The page's main element. Padding --sw-page-px (32 px desktop, 24 px compact, 16 px phones; ui/tokens.css).
+ * Inside the shell html.Embedded (common/theme.css) pads old pages; a page with a Design v2 container gets its padding from the container only.
+ */
+html.Embedded:has(> body > :is(.sw-page-dash, .sw-page-form, .sw-page-read, .sw-page-fill)) {
+    padding: 0;
+    height: 100%;
+    min-height: 100%;
+}
+
+    html.Embedded:has(> body > .sw-page-fill) > body {
+        height: 100%;
+    }
+
+/* A fill page opened stand alone (a bookmark, a new tab): the window is the frame, so the table card still fills it
+   (without this the fill chain had no height and a table collapsed to its toolbar and footer) */
+html:has(> body > .sw-page-fill) {
+    height: 100%;
+}
+
+    html:has(> body > .sw-page-fill) > body {
+        height: 100%;
+        margin: 0;
+        box-sizing: border-box;
+    }
+
+/*
+ * One page edge: every page type starts at the same left edge (the page padding), so the title never moves sideways
+ * between pages (Users -> Invite user, a table -> a form). Fill pages use the full width; dash / form / read pages stop at their
+ * measure (--sw-page-max / --sw-form-max / --sw-read-max) and leave the rest of a wide window empty on the right. A page that wants
+ * to be centred (a sign in card on the canvas) centres its own card, never the page container.
+ */
+.sw-page-fill, .sw-page-dash, .sw-page-form, .sw-page-read {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: var(--sw-space-6) var(--sw-page-px) var(--sw-space-8);
+}
+
+.sw-page-dash {
+    max-width: calc(var(--sw-page-max) + 2 * var(--sw-page-px));
+}
+
+.sw-page-form {
+    max-width: calc(var(--sw-form-max) + 2 * var(--sw-page-px));
+}
+
+.sw-page-read {
+    max-width: calc(var(--sw-read-max) + 2 * var(--sw-page-px));
+}
+
+.sw-page-fill {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    padding-bottom: var(--sw-space-6);
+}
+
+/* The fill page's main content (a table card) takes the remaining height */
+.sw-page-fill > .sw-fill {
+    flex: 1;
+    min-height: 0;
+}
+
+/* ---------- Grid ---------- */
+
+/* 12 column grid, 16 px gap; spans: 3 (KPI tiles: 6 below 1280 px), 4, 6 (charts: 12 below 900 px), 8, 12 */
+.sw-grid {
+    display: grid;
+    gap: var(--sw-space-4);
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.sw-span-3 {
+    grid-column: span 3;
+}
+
+.sw-span-4 {
+    grid-column: span 4;
+}
+
+.sw-span-6 {
+    grid-column: span 6;
+}
+
+.sw-span-8 {
+    grid-column: span 8;
+}
+
+.sw-span-12 {
+    grid-column: span 12;
+}
+
+@media (max-width: 1280px) {
+    .sw-span-3 {
+        grid-column: span 6;
+    }
+
+    .sw-span-4, .sw-span-8 {
+        grid-column: span 12;
+    }
+}
+
+@media (max-width: 900px) {
+    .sw-span-6 {
+        grid-column: span 12;
+    }
+}
+
+@media (max-width: 560px) {
+    .sw-span-3 {
+        grid-column: span 12;
+    }
+}
+
+/* Sections of a page: 32 px apart */
+.sw-section + .sw-section {
+    margin-top: var(--sw-space-8);
+}
+
+/* ---------- Page header (Sw.PageHeader): title, description, status, actions ---------- */
+
+/* Phones in portrait: KPI tiles two per row (they are short) */
+@media (max-width: 560px) {
+    .sw-grid {
+        gap: var(--sw-space-3);
+    }
+
+        .sw-grid > .sw-kpi.sw-span-3 {
+            grid-column: span 6;
+        }
+}
+
+/* Stacked blocks of a page (grid, card, facts strip, tiles) are 16 px apart; never inside a grid or tile list (the gap spaces those) */
+:not(.sw-grid, .sw-tiles) > :is(.sw-grid, .sw-card, .sw-facts, .sw-tiles) + :is(.sw-grid, .sw-card, .sw-facts, .sw-tiles) {
+    margin-top: var(--sw-space-4);
+}
+
+.sw-ph {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--sw-space-3) var(--sw-space-6);
+    margin-bottom: var(--sw-space-6);
+}
+
+.sw-ph-text {
+    flex: 1 1 20rem;
+    min-width: 0;
+}
+
+.sw-ph-titlerow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2) var(--sw-space-3);
+}
+
+.sw-ph-title {
+    margin: 0;
+    color: var(--sw-text);
+    font-family: var(--sw-head);
+    font-weight: var(--sw-head-weight);
+    font-size: var(--sw-text-2xl);
+    line-height: var(--sw-lh-tight);
+    letter-spacing: 0.005em;
+    overflow-wrap: anywhere;
+}
+
+.sw-ph-desc {
+    margin: var(--sw-space-1) 0 0;
+    max-width: 60rem;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-md);
+    line-height: var(--sw-lh);
+}
+
+.sw-ph-desc:empty {
+    display: none;
+}
+
+.sw-ph-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2);
+    flex: none;
+    max-width: 100%;
+}
+
+.sw-ph-actions:empty {
+    display: none;
+}
+
+/* Sw.PageHeader overflow (ui/layout.js FitActions): one line of actions; the ones that do not fit are in the "More actions" kebab menu */
+.sw-ph-actions.sw-ph-fit {
+    flex-wrap: nowrap;
+}
+
+    /* (the actions keep their natural width: they move into the menu instead of being squeezed) */
+    .sw-ph-actions.sw-ph-fit > * {
+        flex-shrink: 0;
+    }
+
+    .sw-ph-actions > .sw-ph-overflowed, .sw-ph-actions > .sw-ph-more[hidden] {
+        display: none !important;
+    }
+
+.sw-ph-actions.sw-ph-actions-none {
+    display: none;
+}
+
+/* Compact header of fill pages (tables): smaller title, less space */
+.sw-ph.sw-ph-compact, .sw-ph.is-compact {
+    margin-bottom: var(--sw-space-4);
+}
+
+.sw-ph.sw-ph-compact .sw-ph-title, .sw-ph.is-compact .sw-ph-title {
+    font-size: var(--sw-text-xl);
+}
+
+@media (max-width: 760px) {
+    .sw-ph {
+        margin-bottom: var(--sw-space-4);
+    }
+
+    .sw-ph-title {
+        font-size: var(--sw-text-xl);
+    }
+
+    /* Fill pages drop their header on phones (the top bar shows the title) */
+    .sw-page-fill > .sw-ph.sw-ph-compact, .sw-page-fill > .sw-ph.is-compact {
+        display: none;
+    }
+
+        /* ... but a header with page actions (Upload, Delete, Download ...) keeps them as one row: only the text goes */
+        .sw-page-fill > .sw-ph:is(.sw-ph-compact, .is-compact):has(> .sw-ph-actions:not(.sw-ph-actions-none) > :not([hidden], .sw-ph-more)) {
+            display: flex;
+            margin-bottom: var(--sw-space-3);
+        }
+
+            .sw-page-fill > .sw-ph:is(.sw-ph-compact, .is-compact):has(> .sw-ph-actions:not(.sw-ph-actions-none) > :not([hidden], .sw-ph-more)) > .sw-ph-text {
+                display: none;
+            }
+
+            .sw-page-fill > .sw-ph:is(.sw-ph-compact, .is-compact) > .sw-ph-actions {
+                flex: 1 1 100%;
+                justify-content: flex-start;
+            }
+
+                /* (the actions start at the left as on other pages, the "More actions" kebab sits at the right end) */
+                .sw-page-fill > .sw-ph:is(.sw-ph-compact, .is-compact) > .sw-ph-actions > .sw-ph-more {
+                    margin-left: auto;
+                }
+}
+
+/* Sw.PageHeader of ui/page.js puts the status next to the text (not in the title row) */
+.sw-ph > .sw-ph-status {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    align-self: center;
+}
+
+    .sw-ph > .sw-ph-status:empty, .sw-ph-status[hidden] {
+        display: none;
+    }
+
+/* Low screens (landscape phones): one line header */
+@media (max-height: 500px) {
+    .sw-ph {
+        margin-bottom: var(--sw-space-3);
+    }
+
+    .sw-ph-title {
+        font-size: var(--sw-text-xl);
+    }
+
+    .sw-ph-desc {
+        display: none;
+    }
+}
+
+/* ---------- Cards ---------- */
+
+.sw-card {
+    position: relative;
+    min-width: 0;
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-md);
+    background: var(--sw-surface);
+    color: var(--sw-text);
+}
+
+.sw-card-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sw-space-2) var(--sw-space-3);
+    min-height: 3rem;
+    padding: var(--sw-space-2) var(--sw-space-4);
+    border-bottom: 1px solid var(--sw-border);
+}
+
+    .sw-card-head h2, .sw-card-head h3, .sw-card-title {
+        margin: 0;
+        color: var(--sw-text);
+        font-family: var(--sw-font);
+        font-size: var(--sw-text-md);
+        font-weight: var(--sw-weight-medium);
+        line-height: var(--sw-lh-tight);
+        overflow-wrap: anywhere;
+    }
+
+    .sw-card-head .sw-card-sub {
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-sm);
+        overflow-wrap: anywhere;
+    }
+
+        .sw-card-head .sw-card-sub:empty {
+            display: none;
+        }
+
+.sw-card-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sw-space-1) var(--sw-space-2);
+    margin-left: auto;
+}
+
+    .sw-card-tools:empty {
+        display: none;
+    }
+
+.sw-push {
+    margin-left: auto;
+}
+
+.sw-card-body {
+    min-width: 0;
+    padding: var(--sw-space-4);
+}
+
+    .sw-card-body.sw-flush {
+        padding: 0;
+    }
+
+/* A card without a body padding (lists, charts edge to edge) */
+.sw-card.sw-flush > .sw-card-body {
+    padding: 0;
+}
+
+/* ---------- Section title, link button ---------- */
+
+.sw-section-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--sw-space-1) var(--sw-space-3);
+    margin: var(--sw-space-8) 0 var(--sw-space-3);
+}
+
+    .sw-section-title h2 {
+        margin: 0;
+        font-family: var(--sw-font);
+        font-size: var(--sw-text-lg);
+        font-weight: var(--sw-weight-medium);
+        color: var(--sw-text);
+    }
+
+    .sw-section-title > span {
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-sm);
+    }
+
+/* A text link styled button (card heads: "Open the log", "Clear") */
+.sw-linkbtn {
+    min-height: var(--sw-control-h);
+    padding: 0 var(--sw-space-2);
+    border: 0;
+    border-radius: var(--sw-radius);
+    background: transparent;
+    color: var(--sw-text-accent);
+    font: inherit;
+    font-size: var(--sw-text-sm);
+    font-weight: var(--sw-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--sw-dur-1) linear, color var(--sw-dur-1) linear;
+}
+
+    @media (hover: hover) {
+        .sw-linkbtn:hover {
+            background: var(--sw-hover);
+            text-decoration: underline;
+        }
+    }
+
+    .sw-linkbtn:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+/* ---------- KPI tiles and meters ---------- */
+
+.sw-kpi {
+    display: grid;
+    gap: var(--sw-space-1);
+    align-content: start;
+    padding: var(--sw-space-4) var(--sw-space-5);
+    font: inherit;
+    text-align: start;
+    color: var(--sw-text);
+}
+
+/* A KPI tile that opens a page (button.sw-kpi) */
+button.sw-kpi {
+    width: 100%;
+    cursor: pointer;
+    transition: border-color var(--sw-dur-1), background-color var(--sw-dur-1);
+}
+
+    @media (hover: hover) {
+        button.sw-kpi:hover {
+            border-color: var(--sw-border-strong);
+            background: color-mix(in srgb, var(--sw-surface), var(--sw-fg) 2.5%);
+        }
+    }
+
+    button.sw-kpi:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+.sw-kpi-label {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    min-width: 0;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+    .sw-kpi-label > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sw-kpi-label .sw-icon, .sw-kpi-label .sw-icon-mask {
+        flex: none;
+        width: 1rem;
+        height: 1rem;
+        color: var(--sw-text-3);
+    }
+
+.sw-kpi-value {
+    font-family: var(--sw-head);
+    font-weight: var(--sw-head-weight);
+    font-size: var(--sw-text-3xl);
+    line-height: 1.1;
+    color: var(--sw-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+    .sw-kpi-value small {
+        margin-left: 4px;
+        font-family: var(--sw-font);
+        font-size: var(--sw-text-md);
+        font-weight: 400;
+        color: var(--sw-text-2);
+    }
+
+.sw-kpi-sub {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sw-space-2);
+    min-height: 1.25rem;
+    min-width: 0;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+/* Meter: a 6 px track with the value bar (chart color 1; warning / danger, with the status also in text) */
+.sw-meter {
+    height: 6px;
+    margin-top: var(--sw-space-2);
+    border-radius: 3px;
+    background: var(--sw-surface-sunken);
+    outline: 1px solid var(--sw-border);
+    outline-offset: -1px;
+    overflow: hidden;
+}
+
+    .sw-meter > i {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: 3px;
+        background: var(--sw-chart-1);
+        /* SwWeb:allow ux-mot-4 (the meter fill sits inside its fixed size track: nothing else is laid out again) */
+        transition: width var(--sw-dur-2) var(--sw-ease, ease-out);
+    }
+
+    .sw-meter.is-warn > i {
+        background: var(--sw-warning);
+    }
+
+    .sw-meter.is-danger > i {
+        background: var(--sw-danger);
+    }
+
+@media (max-width: 599px), (max-height: 500px) {
+    .sw-kpi {
+        padding: var(--sw-space-3) var(--sw-space-4);
+    }
+
+    .sw-kpi-value {
+        font-size: var(--sw-text-xl);
+    }
+}
+
+/* ---------- Facts strip (definition list; one card, cells divided by hairlines) ---------- */
+
+/* Wrapped rows: the cells of a short last row share its whole width (flex, Designer D28): no empty cell with a half drawn hairline
+   (5 facts in 2 columns left "Drives" next to a hole). A page that wants one column sets flex-basis: 100% on the cells. */
+.sw-facts {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+}
+
+.sw-facts > div {
+    flex: 1 1 11rem;
+    min-width: 0;
+    padding: var(--sw-space-3) var(--sw-space-4);
+    border-left: 1px solid var(--sw-border);
+    margin-left: -1px;
+    /* Wrapped rows get a hairline between them too (the card clips the lines at its outer edges) */
+    border-top: 1px solid var(--sw-border);
+    margin-top: -1px;
+}
+
+.sw-facts dt {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-xs);
+    font-weight: var(--sw-weight-medium);
+}
+
+.sw-facts dd {
+    margin: 2px 0 0;
+    color: var(--sw-text);
+    overflow-wrap: anywhere;
+}
+
+.sw-facts button.sw-fact-value {
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: var(--sw-weight-medium);
+    text-align: start;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+    transition: color var(--sw-dur-1) linear, text-decoration-color var(--sw-dur-1) linear;
+}
+
+    @media (hover: hover) {
+        .sw-facts button.sw-fact-value:hover {
+            color: var(--sw-text-accent);
+            text-decoration: underline;
+        }
+    }
+
+    .sw-facts button.sw-fact-value:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+.sw-facts dd {
+    font-weight: var(--sw-weight-medium);
+}
+
+/* The facts strip in one card clips the hairline of its first column */
+.sw-card.sw-facts {
+    overflow: hidden;
+}
+
+@media (max-width: 599px) {
+    /* two per row (an odd last cell takes the whole row) */
+    .sw-facts > div {
+        flex-basis: 40%;
+    }
+}
+
+/*
+ * A facts strip inside a card (no box in a box): it drops its own frame (border, radius, surface; also when it was made
+ * with Card: true) and keeps only the hairlines between its cells. Directly in a card body it spans the body edge to edge (the cells
+ * have their own padding), with a hairline under it when more content follows.
+ */
+.sw-card .sw-facts {
+    overflow: hidden;
+}
+
+    .sw-card .sw-facts.sw-card {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+.sw-card-body > .sw-facts {
+    margin: var(--sw-space-4) calc(-1 * var(--sw-space-4));
+}
+
+    .sw-card-body > .sw-facts:first-child {
+        margin-top: calc(-1 * var(--sw-space-4));
+    }
+
+    .sw-card-body > .sw-facts:last-child {
+        margin-bottom: calc(-1 * var(--sw-space-4));
+    }
+
+    .sw-card-body > .sw-facts:not(:last-child) {
+        border-bottom: 1px solid var(--sw-border);
+    }
+
+    .sw-card-body > .sw-facts:not(:first-child) {
+        border-top: 1px solid var(--sw-border);
+    }
+
+.sw-card-body.sw-flush > .sw-facts {
+    margin: 0;
+}
+
+/* ---------- Upload button / fill table (Sw.UploadButton, Sw.FillTable, ui/page.js) ---------- */
+
+/* An upload button that is also a drop target (classes from common/fileUploader.js) */
+.sw-button.sw-dropbtn.Dragging {
+    border-style: dashed;
+    border-color: var(--sw-accent1);
+    background: var(--sw-selected);
+}
+
+.sw-button.sw-dropbtn:is(.Selecting, .Uploading) {
+    opacity: 0.7;
+    cursor: progress;
+}
+
+/* A live table in a fill page: the table frame takes the free height of the page */
+.sw-fill-table {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* The table's refresh line under the page description (moved there by Sw.FillTable) */
+.sw-ph-text > .sw-table-ph-desc {
+    margin-top: var(--sw-space-1);
+}
+
+/* ---------- Shortcut tiles ---------- */
+
+.sw-tiles {
+    display: grid;
+    gap: var(--sw-space-3);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sw-tile {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-3);
+    width: 100%;
+    height: 100%;
+    min-height: max(var(--sw-touch), 3.5rem);
+    padding: var(--sw-space-3) var(--sw-space-4);
+    background: var(--sw-surface);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-md);
+    color: var(--sw-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: border-color var(--sw-dur-1), background-color var(--sw-dur-1);
+}
+
+    @media (hover: hover) {
+        .sw-tile:hover {
+            border-color: var(--sw-border-strong);
+            background: color-mix(in srgb, var(--sw-surface), var(--sw-fg) 2.5%);
+        }
+    }
+
+    .sw-tile:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+.sw-tile-ico {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--sw-radius);
+    background: var(--sw-accent1-soft);
+    color: var(--sw-text-accent);
+}
+
+    .sw-tile-ico > * {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
+.sw-tile-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+    .sw-tile-text > b {
+        font-weight: var(--sw-weight-medium);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sw-tile-text > span {
+        font-size: var(--sw-text-sm);
+        color: var(--sw-text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+/* ---------- Row lists (recent pages, problems, services) ---------- */
+
+.sw-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .sw-rows > li {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-3);
+        min-width: 0;
+        min-height: var(--sw-row-h);
+        padding: var(--sw-space-2) var(--sw-space-4);
+        border-top: 1px solid var(--sw-border);
+    }
+
+        .sw-rows > li:first-child {
+            border-top: 0;
+        }
+
+    .sw-rows .sw-rows-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sw-rows .sw-icon, .sw-rows .sw-icon-mask {
+        flex: none;
+        width: 1.125rem;
+        height: 1.125rem;
+        color: var(--sw-text-3);
+    }
+
+    .sw-rows .sw-rows-meta {
+        flex: none;
+        margin-left: auto;
+        padding-left: var(--sw-space-2);
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-sm);
+        white-space: nowrap;
+    }
+
+    .sw-rows .sw-badge {
+        flex: none;
+    }
+
+    /* A whole row as a button (opens a page) */
+    .sw-rows > li:has(> button.sw-rows-link) {
+        padding: 0;
+    }
+
+    .sw-rows > li > button.sw-rows-link {
+        display: flex;
+        align-items: center;
+        gap: var(--sw-space-3);
+        width: 100%;
+        min-width: 0;
+        min-height: var(--sw-row-h);
+        padding: var(--sw-space-2) var(--sw-space-4);
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: start;
+        cursor: pointer;
+    }
+
+        @media (hover: hover) {
+            .sw-rows > li > button.sw-rows-link:hover {
+                background: var(--sw-hover);
+            }
+        }
+
+        .sw-rows > li > button.sw-rows-link:focus-visible {
+            outline: 2px solid var(--sw-focus);
+            outline-offset: -2px;
+        }
+
+/* ---------- Empty state (Sw.EmptyState, sw-empty): icon in a sunken circle, title, one sentence, an action ---------- */
+
+.sw-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sw-space-2);
+    padding: var(--sw-space-10) var(--sw-space-4);
+    color: var(--sw-text-2);
+    text-align: center;
+}
+
+.sw-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: var(--sw-space-1);
+    border-radius: 50%;
+    background: var(--sw-surface-sunken);
+    color: var(--sw-text-2);
+}
+
+.sw-empty-icon .sw-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.sw-empty.sw-error .sw-empty-icon {
+    background: var(--sw-danger-soft);
+    color: var(--sw-danger);
+}
+
+.sw-empty-title {
+    margin: 0;
+    color: var(--sw-text);
+    font-family: var(--sw-font);
+    font-size: var(--sw-text-lg);
+    font-weight: var(--sw-weight-medium);
+}
+
+.sw-empty-text {
+    margin: 0;
+    max-width: 32rem;
+}
+
+.sw-empty-text:empty {
+    display: none;
+}
+
+.sw-empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sw-space-2);
+    margin-top: var(--sw-space-2);
+}
+
+.sw-empty-actions:empty {
+    display: none;
+}
+
+/* ---------- State view (Sw.StateView, sw-state): empty, loading, error ---------- */
+
+.sw-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-2);
+    padding: var(--sw-space-8) var(--sw-space-4);
+    text-align: center;
+    color: var(--sw-text-2);
+}
+
+.sw-state-icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: var(--sw-space-1);
+    border-radius: 50%;
+    background: var(--sw-surface-sunken);
+    border: 1px solid var(--sw-border);
+    color: var(--sw-text-3);
+}
+
+    .sw-state-icon > .sw-icon, .sw-state-icon > .sw-icon-mask {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+.sw-state.is-error .sw-state-icon {
+    background: var(--sw-danger-soft);
+    border-color: transparent;
+    color: var(--sw-danger);
+}
+
+.sw-state-title {
+    margin: 0;
+    font-size: var(--sw-text-lg);
+    font-weight: var(--sw-weight-medium);
+    color: var(--sw-text);
+}
+
+.sw-state-text {
+    margin: 0;
+    max-width: 52ch;
+    font-size: var(--sw-text-sm);
+    overflow-wrap: anywhere;
+}
+
+.sw-state-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sw-space-2);
+    margin-top: var(--sw-space-2);
+}
+
+.sw-state details {
+    max-width: min(100%, 70ch);
+    font-size: var(--sw-text-sm);
+    text-align: start;
+}
+
+    .sw-state details pre {
+        margin: var(--sw-space-2) 0 0;
+        padding: var(--sw-space-2) var(--sw-space-3);
+        border-radius: var(--sw-radius);
+        background: var(--sw-surface-sunken);
+        font-family: var(--sw-mono);
+        font-size: var(--sw-mono-size);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        user-select: text;
+    }
+
+/* Compact state inside a card or list */
+.sw-state.is-small {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: var(--sw-space-3) var(--sw-space-4);
+    text-align: start;
+}
+
+    .sw-state.is-small .sw-state-icon {
+        width: 2rem;
+        height: 2rem;
+        margin: 0;
+    }
+
+        .sw-state.is-small .sw-state-icon > .sw-icon, .sw-state.is-small .sw-state-icon > .sw-icon-mask {
+            width: 1rem;
+            height: 1rem;
+        }
+
+    .sw-state.is-small .sw-state-title {
+        font-size: var(--sw-text-md);
+    }
+
+/* ---------- State variants (Sw.StateView on top of .sw-empty) ---------- */
+
+/* Compact state inside a card or list: icon left, text right */
+.sw-empty.sw-state-small {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sw-space-3);
+    padding: var(--sw-space-3) var(--sw-space-4);
+    text-align: start;
+}
+
+    .sw-empty.sw-state-small .sw-empty-icon {
+        flex: none;
+        width: 2rem;
+        height: 2rem;
+        margin: 0;
+    }
+
+        .sw-empty.sw-state-small .sw-empty-icon .sw-icon {
+            width: 1rem;
+            height: 1rem;
+        }
+
+    .sw-empty.sw-state-small .sw-empty-title {
+        font-size: var(--sw-text-md);
+    }
+
+    .sw-empty.sw-state-small .sw-empty-text {
+        font-size: var(--sw-text-sm);
+    }
+
+.sw-state-body {
+    min-width: 0;
+}
+
+/* Loading: skeleton lines in place of the icon */
+.sw-state-skel {
+    width: min(100%, 28rem);
+}
+
+.sw-skel {
+    display: block;
+    height: 0.9em;
+    min-width: 3em;
+    margin: 6px 0;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--sw-surface-sunken) 25%, color-mix(in oklab, var(--sw-surface-sunken), var(--sw-fg) 6%) 50%, var(--sw-surface-sunken) 75%);
+    background-size: 300% 100%;
+    animation: sw-skel 1.4s linear infinite;
+}
+
+@keyframes sw-skel {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw-skel {
+        animation: none;
+    }
+}
+
+/* Technical details of an error (selectable) */
+.sw-empty details {
+    max-width: min(100%, 70ch);
+    font-size: var(--sw-text-sm);
+    text-align: start;
+}
+
+    .sw-empty details pre {
+        margin: var(--sw-space-2) 0 0;
+        padding: var(--sw-space-2) var(--sw-space-3);
+        border-radius: var(--sw-radius);
+        background: var(--sw-surface-sunken);
+        font-family: var(--sw-mono);
+        font-size: var(--sw-mono-size);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        user-select: text;
+    }
+
+/* Forced colors: keep the frames and the meter visible */
+@media (forced-colors: active) {
+    .sw-meter > i {
+        background: Highlight;
+    }
+
+    .sw-card, .sw-tile, .sw-kpi {
+        border-color: CanvasText;
+    }
+}
+
+/* ---------- Selectable list (Sw.SelectList) ---------- */
+
+/* A listbox: rows on hairlines (like the grid), hover tint, the selected row in --sw-selected with a 2 px accent edge, the active
+   (keyboard) row with the focus ring while the list has the focus; multi lists show a check box per row */
+.sw-selectlist {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+}
+
+.sw-selectlist-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    outline: none;
+}
+
+.sw-selectlist-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-3);
+    min-height: var(--sw-touch, var(--sw-control-h));
+    padding: var(--sw-space-2) var(--sw-space-4) var(--sw-space-2) calc(var(--sw-space-4) - 2px);
+    border-bottom: 1px solid var(--sw-border);
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--sw-dur-1) var(--sw-ease);
+}
+
+@media (hover: hover) {
+    .sw-selectlist-row:hover {
+        background: var(--sw-hover);
+    }
+}
+
+.sw-selectlist-row.sw-selected {
+    background: var(--sw-selected);
+    border-left-color: var(--sw-accent1);
+}
+
+.sw-selectlist-list:focus-visible .sw-selectlist-row.sw-active {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: -2px;
+}
+
+.sw-selectlist-row[aria-disabled="true"] {
+    color: var(--sw-text-3);
+    cursor: default;
+}
+
+.sw-selectlist-row > .sw-icon {
+    flex: none;
+    color: var(--sw-text-3);
+}
+
+.sw-selectlist-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sw-selectlist-title, .sw-selectlist-sub {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.sw-selectlist-sub, .sw-selectlist-meta {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+.sw-selectlist-meta {
+    flex: none;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Multi select: a 16 px check box, filled when the row is selected */
+.sw-selectlist-check {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--sw-border-strong);
+    border-radius: var(--sw-radius-sm, 4px);
+    background: var(--sw-surface);
+    color: transparent;
+}
+
+    .sw-selectlist-check .sw-icon {
+        width: 12px;
+        height: 12px;
+    }
+
+.sw-selected > .sw-selectlist-check {
+    border-color: var(--sw-accent1);
+    background: var(--sw-accent1);
+    color: var(--sw-on-accent);
+}
+
+.sw-selectlist-empty {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sw-space-6) var(--sw-space-4);
+}
+
+    .sw-selectlist-empty[hidden] {
+        display: none;
+    }
+
+/* ---------- List / detail (Sw.ListDetail) ---------- */
+
+/* Wide: the list in a fixed column (--sw-ld-list-w) with a hairline, the detail takes the rest; both panes scroll on their own.
+   Narrow (.sw-ld-narrow, measured on the element): one pane at a time (data-show), the detail with a Back bar. */
+.sw-ld {
+    display: grid;
+    grid-template-columns: var(--sw-ld-list-w, clamp(17rem, 34%, 26rem)) minmax(0, 1fr);
+    min-height: 0;
+    min-width: 0;
+    height: 100%;
+}
+
+.sw-ld-list, .sw-ld-detail {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.sw-ld-list {
+    border-right: 1px solid var(--sw-border);
+}
+
+.sw-ld-detail {
+    outline: none;
+}
+
+.sw-ld-backbar {
+    display: none;
+}
+
+.sw-ld.sw-ld-narrow {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+    .sw-ld.sw-ld-narrow .sw-ld-list {
+        border-right: 0;
+    }
+
+    .sw-ld.sw-ld-narrow[data-show="list"] > .sw-ld-detail,
+    .sw-ld.sw-ld-narrow[data-show="detail"] > .sw-ld-list {
+        display: none;
+    }
+
+    .sw-ld.sw-ld-narrow .sw-ld-backbar {
+        display: flex;
+        align-items: center;
+        flex: none;
+        padding: var(--sw-space-1) var(--sw-space-2);
+        border-bottom: 1px solid var(--sw-border);
+    }
+
+/* ---------- Wizard (Sw.Steps) ---------- */
+
+/* The step list (numbered marks on a hairline, done = check in the accent tone, current = filled accent mark + text weight), the
+   step heading, the content and a footer with Cancel left and Back / Next right. Narrow containers: "Step 2 of 4" + a progress line. */
+.sw-steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-5, 20px);
+    container-type: inline-size;
+    min-width: 0;
+}
+
+.sw-steps-list {
+    display: flex;
+    gap: var(--sw-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sw-steps-item {
+    display: flex;
+    align-items: center;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: var(--sw-space-2);
+}
+
+    .sw-steps-item:last-child {
+        flex: 0 1 auto;
+    }
+
+    /* the hairline between steps */
+    .sw-steps-item:not(:last-child)::after {
+        content: "";
+        flex: 1 1 auto;
+        min-width: var(--sw-space-3);
+        height: 1px;
+        background: var(--sw-border-strong);
+    }
+
+    .sw-steps-item.sw-steps-done:not(:last-child)::after {
+        background: var(--sw-accent1);
+    }
+
+.sw-steps-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    min-width: 0;
+    min-height: var(--sw-control-h);
+    padding: 0 var(--sw-space-1);
+    border: 0;
+    border-radius: var(--sw-radius);
+    background: transparent;
+    color: var(--sw-text-2);
+    font: inherit;
+    font-size: var(--sw-text-sm);
+    white-space: nowrap;
+}
+
+button.sw-steps-link {
+    cursor: pointer;
+}
+
+@media (hover: hover) {
+    button.sw-steps-link:hover {
+        background: var(--sw-hover);
+        color: var(--sw-text);
+    }
+}
+
+button.sw-steps-link:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+.sw-steps-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sw-steps-mark {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--sw-border-strong);
+    border-radius: 50%;
+    font-size: var(--sw-text-xs);
+    font-weight: var(--sw-head-weight);
+    font-variant-numeric: tabular-nums;
+}
+
+    .sw-steps-mark .sw-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+.sw-steps-done .sw-steps-mark {
+    border-color: transparent;
+    background: var(--sw-accent1-soft);
+    color: var(--sw-text-accent, var(--sw-accent1));
+}
+
+.sw-steps-current .sw-steps-link {
+    color: var(--sw-text);
+    font-weight: var(--sw-weight-medium);
+}
+
+.sw-steps-current .sw-steps-mark {
+    border-color: var(--sw-accent1);
+    background: var(--sw-accent1);
+    color: var(--sw-on-accent);
+}
+
+.sw-steps-count {
+    display: none;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+.sw-steps-progress {
+    display: none;
+    height: 4px;
+    border-radius: var(--sw-radius-pill, 999px);
+    background: var(--sw-surface-strong);
+    overflow: hidden;
+}
+
+    .sw-steps-progress > span {
+        display: block;
+        height: 100%;
+        background: var(--sw-accent1);
+        /* SwWeb:allow ux-mot-4 (the progress line sits inside its fixed size track: nothing else is laid out again) */
+        transition: width var(--sw-dur-2) var(--sw-ease);
+    }
+
+.sw-steps-title {
+    margin: 0;
+    font-size: var(--sw-text-lg, 1.125rem);
+    outline: none;
+}
+
+.sw-steps-sub {
+    margin: var(--sw-space-1) 0 0;
+    color: var(--sw-text-2);
+}
+
+    .sw-steps-sub[hidden] {
+        display: none;
+    }
+
+.sw-steps-body {
+    margin-top: var(--sw-space-4);
+    min-width: 0;
+}
+
+/* The step content uses the full step width (an editor gets its desktop layout, facts their columns, phone fields the
+   whole card); only a bare button, segmented control, toggle, select, number box, swatch, chip or button row keeps its
+   own width (as in Sw.Field) */
+.sw-steps-pane {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sw-space-4);
+    min-width: 0;
+}
+
+    .sw-steps-pane > :is(button, .sw-seg, .sw-toggle, .sw-select, .sw-number, .sw-swatch, .sw-chip, .sw-row) {
+        align-self: flex-start;
+        max-width: 100%;
+    }
+
+.sw-steps-error {
+    margin-top: var(--sw-space-3);
+}
+
+    .sw-steps-error[hidden] {
+        display: none;
+    }
+
+.sw-steps-foot {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    padding-top: var(--sw-space-4);
+    border-top: 1px solid var(--sw-border);
+}
+
+.sw-steps-grow {
+    flex: 1 1 auto;
+}
+
+/* Narrow (phones, small dialogs): the count and the progress line instead of the step list */
+@container (max-width: 560px) {
+    .sw-steps-list {
+        display: none;
+    }
+
+    .sw-steps-count, .sw-steps-progress {
+        display: block;
+    }
+
+    .sw-steps-head {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sw-space-2);
+    }
+}
+
+/* A form error line added by Sw.Form for controls without their own (the TextBox look: danger text with the alert icon) */
+.sw-form-error[hidden] {
+    display: none;
+}
+
+.sw-field.sw-invalid :is(.sw-input, .sw-select) {
+    border-color: var(--sw-danger);
+}
+
+/* Plain inputs checked by Sw.Form (aria-invalid) get the invalid border too (Sw inputs have it in components.css) */
+:is(input, textarea, select)[aria-invalid="true"] {
+    border-color: var(--sw-danger);
+}

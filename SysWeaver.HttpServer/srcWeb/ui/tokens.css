@@ -1,0 +1,840 @@
+﻿/*
+ * ui/tokens.css - SysWeaver UI library (Sw) styles, part 1 of 6: design tokens and base helpers (Design v2).
+ *
+ * Bundle order (sw/ui.css): tokens.css, components.css, overlays.css, cells.css, code.css, icons.css. Link it after common/theme.css.
+ *
+ * Theme: the 4 base colors come from the SysWeaver theme (common/theme.css, templated by the server):
+ *     --sw-bg = --ThemeBackground, --sw-fg = --ThemeMain, --sw-accent1 = --ThemeAcc1, --sw-accent2 = --ThemeAcc2.
+ * Sw.Theme (core/theme.js) sets data-theme on html ("light" = no attribute) and data-sw-scheme ("light" / "dark", from what the theme
+ * declares: a registered theme's Scheme, else its css color-scheme, else the lightness of its background), and writes custom
+ * (Sw.Theme.Register) themes as inline base colors, so every derived token below follows automatically.
+ * The scheme never depends on the mere presence of data-theme: a custom light theme ([data-theme="brand"] with color-scheme: light, or
+ * Register with Scheme "light") gets the light intermediates. Before the script ran (no data-sw-scheme yet) the built in dark themes
+ * (dark, hacker, application, pro) are dark.
+ *
+ * Design v2 roles (everything computed from the 4 colors with color-mix; see ui/README.md "Theming" for the full list):
+ *  - Surfaces (tonal layering, no shadows on permanent chrome): --sw-canvas (page, top bar), --sw-nav (sidebar), --sw-surface (cards,
+ *    tables, forms, buttons, inputs), --sw-surface-sunken (table head, wells, code, tracks), --sw-surface-raised (menus, dialogs,
+ *    tooltips), --sw-surface-strong (a visible neutral fill: neutral badges, pressed), --sw-surface-inverse / --sw-on-inverse (toasts).
+ *  - Lines: --sw-border (every hairline), --sw-border-strong (button borders, hover), --sw-border-input (inputs, >= 3:1).
+ *  - Text: --sw-text, --sw-text-2 (secondary, >= 4.5:1), --sw-text-3 (icons, placeholders, axis; >= 3:1, never essential text),
+ *    --sw-text-accent (links, current item), --sw-on-accent (text on accent fills), --sw-on-danger.
+ *  - Interaction layers painted over any surface: --sw-hover, --sw-pressed, --sw-selected, --sw-selected-strong; focus: --sw-focus
+ *    (a fixed blue per scheme, distinct from --sw-danger; a theme may set --ThemeFocus) and --sw-focus-ring (a soft halo for inputs).
+ *  - Status (always with an icon + text): --sw-ok, --sw-warning, --sw-danger, --sw-info and their -soft fills.
+ *  - Elevation (only for what floats): --sw-elev-0 (none), --sw-elev-1 (menus, popovers, tooltips), --sw-elev-2 (dialogs, drawers,
+ *    toasts), --sw-scrim (behind dialogs).
+ *  - Type: --sw-text-xs 12, -sm 13, -md 14 (body, controls; density), -lg 16, -xl 20, -2xl 26, -3xl 32 (rem; Saira from -xl up),
+ *    --sw-lh, --sw-lh-tight; weights --sw-sans-weight 400, --sw-weight-medium 500 (labels, buttons, values; Hacker 400),
+ *    --sw-head-weight 600; dark schemes draw text in --sw-text (a step below the main colour); fonts --sw-font (= --sw-sans), --sw-font-head (= --sw-head), --sw-font-mono (= --sw-mono).
+ *  - Space (4 px grid): --sw-space-1 .. -12; radii --sw-radius-sm 4, --sw-radius 6, -md 8, -lg 12, -pill (Pro 3/4/6/8, Hacker 0).
+ *  - Density (html[data-density] = compact | comfortable | touch, set by Sw.Theme.Density, core/theme.js): --sw-control-h, --sw-control-h-sm (the two control heights: default and small), --sw-row-h,
+ *    --sw-nav-row-h, --sw-icon, --sw-cell-px, --sw-text-md. Defaults: comfortable with a mouse, touch on touch screens / mobile, compact
+ *    for Pro.
+ *  - Layout: --sw-side-w, --sw-rail-w, --sw-top-h, --sw-page-px, --sw-page-max, --sw-form-max, --sw-read-max, --sw-label-w.
+ *  - Motion: --sw-ease, --sw-dur-1 (hover, 50 ms), --sw-dur-2 (menus, switches, 100 ms), --sw-dur-3 (drawers, dialogs, 150 ms), each
+ *    times the theme's scale --sw-motion (1 = normal, Pro 0.25; Hacker 4 while testing), slide distances --sw-dist-1 (small shifts),
+ *    --sw-dist-2 (menus, tool tips, toasts), --sw-dist-3 (dialogs, sheets, drawers); reduced motion wins over every theme: no slide or
+ *    zoom (distances 0, --sw-zoom 1), the fades and colour changes keep their durations.
+ * Old names stay as aliases (pages and apps keep working): --sw-bg-1 (= surface), --sw-bg-2 (= sunken), --sw-bg-3 (= surface-strong),
+ * --sw-bg-inset (= sunken), --sw-line, --sw-line-strong, --sw-muted, --sw-faint, --sw-accent1-fg (= text-accent), --sw-shadow (= elev-1),
+ * --sw-backdrop (= scrim), --sw-touch (= control-h), --sw-size (= text-md), --sw-mono-size, --sw-speed (= dur-2), --sw-gap (= space-2).
+ * Large high resolution screens scale the html font size (rem tokens follow), see --sw-scale below.
+ */
+
+/* The motion durations are times (they compute from the theme's --sw-motion scale to "0.1s", also for scripts that read them) */
+@property --sw-dur-1 {
+    syntax: "<time>";
+    inherits: true;
+    initial-value: 50ms;
+}
+
+@property --sw-dur-2 {
+    syntax: "<time>";
+    inherits: true;
+    initial-value: 100ms;
+}
+
+@property --sw-dur-3 {
+    syntax: "<time>";
+    inherits: true;
+    initial-value: 150ms;
+}
+
+:root {
+    /* Base colors (the server templated SysWeaver theme; the fallbacks are the light theme) */
+    --sw-bg: var(--ThemeBackground, #F5F7F9);
+    --sw-fg: var(--ThemeMain, #1D2A33);
+    --sw-accent1: var(--ThemeAcc1, #A85724);
+    --sw-accent2: var(--ThemeAcc2, #4E6B80);
+    /* Fonts: the theme font (brand: Barlow), else system fonts; headings: the theme heading font (brand: Saira Semi Condensed) */
+    --sw-sans: var(--ThemeFont, system-ui), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --sw-head: var(--ThemeFontHead, var(--sw-sans));
+    --sw-mono: var(--ThemeFontMono, ui-monospace), ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, "Courier New", monospace;
+    --sw-serif: Georgia, "Times New Roman", serif;
+    --sw-font: var(--sw-sans);
+    --sw-font-head: var(--sw-head);
+    --sw-font-mono: var(--sw-mono);
+    --sw-sans-weight: 400;
+    --sw-head-weight: 600;
+    /* Emphasis weight of labels, buttons and fact values (Barlow Medium); the Hacker theme uses the regular weight */
+    --sw-weight-medium: 500;
+
+    /* Type scale (rem: the html font size carries the large screen step); --sw-text-md follows the density */
+    --sw-text-xs: 0.75rem;
+    --sw-text-sm: 0.8125rem;
+    --sw-text-md: 0.875rem;
+    --sw-text-lg: 1rem;
+    --sw-text-xl: 1.25rem;
+    --sw-text-2xl: 1.625rem;
+    --sw-text-3xl: 2rem;
+    --sw-lh: 1.45;
+    --sw-lh-tight: 1.2;
+    --sw-size: var(--sw-text-md);
+    --sw-mono-size: 0.8125rem;
+    --sw-serif-size: 1rem;
+
+    /* Space (4 px grid) */
+    --sw-space-1: 0.25rem;
+    --sw-space-2: 0.5rem;
+    --sw-space-3: 0.75rem;
+    --sw-space-4: 1rem;
+    --sw-space-5: 1.25rem;
+    --sw-space-6: 1.5rem;
+    --sw-space-8: 2rem;
+    --sw-space-10: 2.5rem;
+    --sw-space-12: 3rem;
+    --sw-gap: var(--sw-space-2);
+
+    /* Radii */
+    --sw-radius-sm: 4px;
+    --sw-radius: 6px;
+    --sw-radius-md: 8px;
+    --sw-radius-lg: 12px;
+    --sw-radius-pill: 999px;
+
+    /* Density: comfortable (the default with a mouse; see the density blocks below) */
+    --sw-control-h: 2.125rem;
+    /* the one small control height (small buttons, chips, cell actions): the scale is small / default / touch, nothing in between */
+    --sw-control-h-sm: 1.75rem;
+    --sw-row-h: 2.5rem;
+    --sw-nav-row-h: 2rem;
+    --sw-icon: 1.125rem;
+    --sw-cell-px: 0.75rem;
+    --sw-touch: var(--sw-control-h);
+
+    /* Layout: shell and page containers */
+    --sw-side-w: 16.5rem;
+    --sw-rail-w: 3.5rem;
+    --sw-top-h: 3.5rem;
+    --sw-page-px: var(--sw-space-8);
+    --sw-page-max: 100rem;
+    --sw-form-max: 75rem;
+    --sw-read-max: 45rem;
+    --sw-label-w: clamp(8.5rem, 34%, 13rem);
+
+    /* Motion (UX guide MOT-2): short transitions, 50 / 100 / 150 ms at the normal speed, times the theme's motion scale --sw-motion
+       (1 = normal; Pro 0.25, faster; a theme or app/app.css sets its own). The durations are registered <time> properties (@property
+       below), so they compute to a time ("0.1s") that scripts read (Sw.FadeSrc, Sw.Motion). Reduced motion overrides every theme
+       (end of this file) */
+    --sw-ease: cubic-bezier(0.2, 0, 0, 1);
+    --sw-motion: 1;
+    --sw-dur-1: calc(50ms * var(--sw-motion));
+    --sw-dur-2: calc(100ms * var(--sw-motion));
+    --sw-dur-3: calc(150ms * var(--sw-motion));
+    --sw-speed: var(--sw-dur-2);
+    /* Slide distances: dist-1 small shifts (a pressed card, a hint nudge), dist-2 menus, tool tips and toasts, dist-3 dialogs,
+       sheets and drawers */
+    --sw-dist-1: 2px;
+    --sw-dist-2: 4px;
+    --sw-dist-3: 16px;
+
+    /* Status colors that do not depend on the scheme */
+    --sw-info: var(--sw-accent2);
+    /* Focus rings: a clear blue, never the accent2 / danger red (light accent2 read as an error); a theme may set --ThemeFocus */
+    --sw-focus-ring: 0 0 0 3px color-mix(in srgb, var(--sw-focus) 28%, transparent);
+
+    /* Aliases of the Design v1 names (zero cost; pages and apps written against them keep working) */
+    --sw-bg-1: var(--sw-surface);
+    --sw-bg-2: var(--sw-surface-sunken);
+    --sw-bg-3: var(--sw-surface-strong);
+    --sw-bg-inset: var(--sw-surface-sunken);
+    --sw-line: var(--sw-border);
+    --sw-line-strong: var(--sw-border-strong);
+    --sw-muted: var(--sw-text-2);
+    --sw-faint: var(--sw-text-3);
+    --sw-accent1-fg: var(--sw-text-accent);
+    --sw-shadow: var(--sw-elev-1);
+    --sw-backdrop: var(--sw-scrim);
+}
+
+/* Light scheme roles: the defaults, and every theme whose declared scheme is light (also on top of a dark base theme) */
+:root, :root[data-sw-scheme="light"] {
+    --sw-canvas: var(--sw-bg);
+    --sw-nav: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 2.5%);
+    --sw-surface: color-mix(in oklab, var(--sw-bg), white 80%);
+    --sw-surface-sunken: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 3.5%);
+    --sw-surface-raised: var(--sw-surface);
+    --sw-surface-strong: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 9%);
+    --sw-surface-inverse: var(--sw-fg);
+    --sw-on-inverse: var(--sw-bg);
+    --sw-border: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 12%);
+    --sw-border-strong: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 26%);
+    --sw-border-input: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 52%);
+    --sw-text: var(--sw-fg);
+    --sw-text-2: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 30%);
+    --sw-text-3: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 48%);
+    --sw-text-accent: color-mix(in oklab, var(--sw-accent1), var(--sw-fg) 12%);
+    --sw-on-accent: var(--sw-bg);
+    --sw-hover: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    --sw-pressed: color-mix(in srgb, var(--sw-fg) 9%, transparent);
+    --sw-selected: color-mix(in srgb, var(--sw-accent1) 11%, transparent);
+    --sw-selected-strong: color-mix(in srgb, var(--sw-accent1) 18%, transparent);
+    --sw-accent1-soft: color-mix(in srgb, var(--sw-accent1) 12%, transparent);
+    --sw-accent2-soft: color-mix(in srgb, var(--sw-accent2) 14%, transparent);
+    --sw-focus: var(--ThemeFocus, #1a66d6);
+    --sw-danger: #b4232f;
+    --sw-on-danger: #ffffff;
+    --sw-danger-soft: color-mix(in srgb, #e5484d 12%, transparent);
+    --sw-ok: #187a48;
+    --sw-ok-soft: color-mix(in srgb, #30a46c 14%, transparent);
+    --sw-warning: #8f5c00;
+    --sw-warning-soft: color-mix(in srgb, #e5a000 16%, transparent);
+    --sw-chart-grid: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 9%);
+    --sw-chart-axis: var(--sw-text-3);
+    --sw-elev-0: none;
+    --sw-elev-1: 0 1px 2px rgb(16 24 32 / 0.06), 0 4px 12px rgb(16 24 32 / 0.08);
+    --sw-elev-2: 0 2px 6px rgb(16 24 32 / 0.08), 0 16px 40px rgb(16 24 32 / 0.18);
+    --sw-scrim: rgb(16 24 32 / 0.32);
+}
+
+/* Dark scheme roles: the built in dark themes and every theme whose declared scheme is dark (data-sw-scheme, set by Sw.Theme).
+   Wells go darker, raised layers lighter ("closer"); shadows get a 1 px dark ring because a blur is invisible on a dark page. */
+:root[data-theme="dark"], :root[data-theme="hacker"], :root[data-theme="application"], :root[data-theme="pro"], :root[data-sw-scheme="dark"] {
+    --sw-canvas: var(--sw-bg);
+    --sw-nav: color-mix(in oklab, var(--sw-bg), black 16%);
+    --sw-surface: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 4%);
+    --sw-surface-sunken: color-mix(in oklab, var(--sw-bg), black 14%);
+    --sw-surface-raised: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 9%);
+    --sw-surface-strong: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 15%);
+    --sw-surface-inverse: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 88%);
+    --sw-on-inverse: var(--sw-bg);
+    --sw-border: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 13%);
+    --sw-border-strong: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 24%);
+    --sw-border-input: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 50%);
+    /* Light on dark reads heavier than dark on light: body text a step below the theme main colour (Mist 50 -> about #E4E8EB) */
+    --sw-text: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 8%);
+    /* (secondary text 20 %, not 26 %: >= 4.5:1 also on the strong surface of badges and pills in Hacker and Pro, S7a-A1-3) */
+    --sw-text-2: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 20%);
+    --sw-text-3: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 46%);
+    --sw-text-accent: color-mix(in oklab, var(--sw-accent1), var(--sw-fg) 15%);
+    --sw-on-accent: var(--sw-bg);
+    --sw-hover: color-mix(in srgb, var(--sw-fg) 6%, transparent);
+    --sw-pressed: color-mix(in srgb, var(--sw-fg) 11%, transparent);
+    --sw-selected: color-mix(in srgb, var(--sw-accent1) 16%, transparent);
+    --sw-selected-strong: color-mix(in srgb, var(--sw-accent1) 24%, transparent);
+    --sw-accent1-soft: color-mix(in srgb, var(--sw-accent1) 18%, transparent);
+    --sw-accent2-soft: color-mix(in srgb, var(--sw-accent2) 18%, transparent);
+    --sw-focus: var(--ThemeFocus, #6cb6ff);
+    --sw-danger: #ff7a7f;
+    --sw-on-danger: var(--sw-bg);
+    --sw-danger-soft: color-mix(in srgb, #e5484d 22%, transparent);
+    --sw-ok: #3dd68c;
+    --sw-ok-soft: color-mix(in srgb, #30a46c 22%, transparent);
+    --sw-warning: #ffc53d;
+    --sw-warning-soft: color-mix(in srgb, #ffb224 20%, transparent);
+    --sw-chart-grid: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 11%);
+    --sw-chart-axis: var(--sw-text-3);
+    --sw-elev-0: none;
+    --sw-elev-1: 0 0 0 1px rgb(0 0 0 / 0.2), 0 6px 16px rgb(0 0 0 / 0.32);
+    --sw-elev-2: 0 0 0 1px rgb(0 0 0 / 0.25), 0 20px 48px rgb(0 0 0 / 0.5);
+    --sw-scrim: rgb(0 0 0 / 0.55);
+}
+
+/* A light declared scheme wins over the dark built in base (Sw.Theme.Register with Scheme "light" and Base "pro") */
+:root[data-sw-scheme="light"][data-theme] {
+    --sw-nav: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 2.5%);
+    --sw-surface: color-mix(in oklab, var(--sw-bg), white 80%);
+    --sw-surface-sunken: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 3.5%);
+    --sw-surface-raised: var(--sw-surface);
+    --sw-surface-strong: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 9%);
+    --sw-surface-inverse: var(--sw-fg);
+    --sw-border: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 12%);
+    --sw-border-strong: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 26%);
+    --sw-border-input: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 52%);
+    --sw-text: var(--sw-fg);
+    --sw-text-2: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 30%);
+    --sw-text-3: color-mix(in oklab, var(--sw-fg), var(--sw-bg) 48%);
+    --sw-text-accent: color-mix(in oklab, var(--sw-accent1), var(--sw-fg) 12%);
+    --sw-hover: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    --sw-pressed: color-mix(in srgb, var(--sw-fg) 9%, transparent);
+    --sw-selected: color-mix(in srgb, var(--sw-accent1) 11%, transparent);
+    --sw-selected-strong: color-mix(in srgb, var(--sw-accent1) 18%, transparent);
+    --sw-accent1-soft: color-mix(in srgb, var(--sw-accent1) 12%, transparent);
+    --sw-accent2-soft: color-mix(in srgb, var(--sw-accent2) 14%, transparent);
+    --sw-focus: var(--ThemeFocus, #1a66d6);
+    --sw-danger: #b4232f;
+    --sw-on-danger: #ffffff;
+    --sw-danger-soft: color-mix(in srgb, #e5484d 12%, transparent);
+    --sw-ok: #187a48;
+    --sw-ok-soft: color-mix(in srgb, #30a46c 14%, transparent);
+    --sw-warning: #8f5c00;
+    --sw-warning-soft: color-mix(in srgb, #e5a000 16%, transparent);
+    --sw-chart-grid: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 9%);
+    --sw-elev-1: 0 1px 2px rgb(16 24 32 / 0.06), 0 4px 12px rgb(16 24 32 / 0.08);
+    --sw-elev-2: 0 2px 6px rgb(16 24 32 / 0.08), 0 16px 40px rgb(16 24 32 / 0.18);
+    --sw-scrim: rgb(16 24 32 / 0.32);
+}
+
+/*
+ * App marks: every application has its own icon and logo, generated by the server from the app name / seed (HttpServerBase_Favicon.cs:
+ * icon.svg, square; logo.svg, 4:3; banner.svg, 9:2, 1260 x 280) in the application colours (HashColors.AppColors), unless the app serves its own
+ * files of the same names. --sw-brand-icon / --sw-brand-small: the square icon (../icon.svg), --sw-brand-logo / --sw-brand-stacked: the
+ * 4:3 logo (../logo.svg), --sw-brand-banner: the 9:2 banner (../banner.svg, its width / height in --sw-brand-banner-ratio; the shell's expanded menu, crossfaded with --sw-brand-small
+ * placed on the banner's left square). Never point these at a fixed (SysWeaver) brand file: an app is never branded as SysWeaver. An app may point them at
+ * other files of its own in app/app.css (write "../app/x.svg": a url in a custom property resolves against the style sheet that uses
+ * it, and every user is one folder below the root), see _docs/WebBranding.md. Used by .sw-brand-mark / .sw-brand-logo below, the
+ * shell brand bar, the Welcome page and the sign-in card. Zero specificity (:where), so a plain :root rule in app/app.css wins.
+ */
+:where(:root) {
+    --sw-brand-icon: url("../icon.svg");
+    --sw-brand-logo: url("../logo.svg");
+    --sw-brand-stacked: url("../logo.svg");
+    --sw-brand-small: url("../icon.svg");
+    --sw-brand-banner: url("../banner.svg");
+    /* the width / height of the banner: the generated banner.svg is 1260 x 280 (9:2); an app with a banner of another shape sets its own */
+    --sw-brand-banner-ratio: 4.5;
+}
+
+/*
+ * Chart series palette (--sw-chart-1 .. 7, used by the chart viewer's default "Theme colors" mode and by any page that colors
+ * series): slot 1 is Accent 1 (brand copper), the steel slot is Accent 2, so an app brand or theme changes them; the hues between
+ * (blue, green, violet, magenta, ochre) are the brand's extra hues, stepped per scheme and checked as a set (adjacent pairs: color
+ * vision deficiency separation >= 11, normal vision >= 18 OKLab dE; >= 3:1 against Mist 50 / Slate 900). Status colors (--sw-danger,
+ * --sw-ok, --sw-warning) are never series colors. Zero specificity, so app/app.css can replace any slot.
+ * Every scheme keeps the same hue per slot (1 accent, 2 blue, 3 green, 4 violet, 5 magenta, 6 steel = Accent 2, 7 ochre): a series or
+ * a module keeps its color family in light and dark, only the shade changes. Only one warm accent (slot 1) among the first six slots.
+ */
+:where(:root) {
+    --sw-chart-1: var(--sw-accent1);
+    --sw-chart-2: #2A78D6;
+    --sw-chart-3: #138A60;
+    --sw-chart-4: #6250D6;
+    --sw-chart-5: #C4507E;
+    --sw-chart-6: var(--sw-accent2);
+    --sw-chart-7: #A87400;
+}
+
+:where(:root[data-theme="dark"], :root[data-theme="hacker"], :root[data-theme="application"], :root[data-theme="pro"], :root[data-sw-scheme="dark"]) {
+    --sw-chart-1: var(--sw-accent1);
+    --sw-chart-2: #3987E5;
+    --sw-chart-3: #199E70;
+    --sw-chart-4: #9085E9;
+    --sw-chart-5: #D55181;
+    --sw-chart-6: var(--sw-accent2);
+    --sw-chart-7: #C98500;
+}
+
+:where(:root[data-sw-scheme="light"]) {
+    --sw-chart-1: var(--sw-accent1);
+    --sw-chart-2: #2A78D6;
+    --sw-chart-3: #138A60;
+    --sw-chart-4: #6250D6;
+    --sw-chart-5: #C4507E;
+    --sw-chart-6: var(--sw-accent2);
+    --sw-chart-7: #A87400;
+}
+
+/*
+ * Theme palettes: Hacker and Application have their own series hues, so a chart never shows the brand blue / violet /
+ * magenta on a green terminal or on an app's own colours. Hacker: the phosphor set (amber Acc1, green, teal Acc2, terminal blue, khaki,
+ * orange, mint; >= 4.5:1 on #050A06). Application: the app's two accents, then Acc1 turned in OKLCH by 150, 270, 90, 210 and 330 degrees
+ * (same lightness, so the contrast of Acc1 carries over; at least 0.1 chroma; adjacent slots far apart). After the scheme blocks above (same zero specificity).
+ */
+:where(:root[data-theme="hacker"]) {
+    --sw-chart-1: var(--sw-accent1);
+    --sw-chart-2: #3FBF6A;
+    --sw-chart-3: var(--sw-accent2);
+    --sw-chart-4: #6FA8DC;
+    --sw-chart-5: #C8C35A;
+    --sw-chart-6: #E07B3A;
+    --sw-chart-7: #A3E6BE;
+}
+
+:where(:root[data-theme="application"]) {
+    --sw-chart-1: var(--sw-accent1);
+    --sw-chart-2: var(--sw-accent2);
+    --sw-chart-3: oklch(from var(--sw-accent1) l max(c, 0.1) calc(h + 150));
+    --sw-chart-4: oklch(from var(--sw-accent1) l max(c, 0.1) calc(h + 270));
+    --sw-chart-5: oklch(from var(--sw-accent1) l max(c, 0.1) calc(h + 90));
+    --sw-chart-6: oklch(from var(--sw-accent1) l max(c, 0.1) calc(h + 210));
+    --sw-chart-7: oklch(from var(--sw-accent1) l max(c, 0.1) calc(h + 330));
+}
+
+/*
+ * Application theme text (S7a-A1-2): the server generated main colour (HashColors, owned by the generator: never replaced) is a
+ * saturated mid colour (ex: #675BE5, OKLCH L 0.53) on an almost black background, so text mixed from it was 2.3-3.5:1. The text roles keep
+ * its hue and get a lightness floor (and less chroma, so a light colour stays in gamut): the foreground at least L 0.9, secondary
+ * text 85 % and quiet text 74 % of it (>= 4.5:1 on every surface, also the raised ones). An app whose main colour is already lighter keeps
+ * it. --sw-fg is lifted too, so everything mixed from it (headers, borders, the shell) follows.
+ */
+@supports (color: oklch(from red l c h)) {
+    :root[data-theme="application"] {
+        --sw-fg: oklch(from var(--ThemeMain, #E6ECF0) max(l, 0.9) min(c, 0.09) h);
+        --sw-text: var(--sw-fg);
+        --sw-text-2: oklch(from var(--sw-fg) calc(l * 0.85) min(c, 0.1) h);
+        --sw-text-3: oklch(from var(--sw-fg) calc(l * 0.74) min(c, 0.1) h);
+        --sw-text-accent: oklch(from var(--sw-accent1) max(l, 0.78) c h);
+        /* Text on the accent fill (a primary button): black or white by the accent's lightness, the crossover at OKLCH L 0.565 (either
+           gives >= 4.6:1 there); the background colour gave 4.29:1 on a mid accent (8202 fake email "Compose", S8) */
+        --sw-on-accent: oklch(from var(--sw-accent1) clamp(0, calc((0.565 - l) * 1000), 1) 0 0);
+    }
+}
+
+/* An element showing a brand mark (a decorative background image; give it a size, or role="img" + aria-label when it means something) */
+.sw-brand-mark, .sw-brand-logo, .sw-brand-stacked {
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+/* The app icon: square */
+.sw-brand-mark {
+    background-image: var(--sw-brand-icon);
+    aspect-ratio: 1 / 1;
+}
+
+/* The app logo: 4:3 */
+.sw-brand-logo {
+    background-image: var(--sw-brand-logo);
+    aspect-ratio: 4 / 3;
+}
+
+.sw-brand-stacked {
+    background-image: var(--sw-brand-stacked);
+    aspect-ratio: 4 / 3;
+}
+
+/*
+ * The brand weave (from the brand kit's weave.css, local data urls): tone-on-tone plain weave, backgrounds only. Put text and logos on
+ * a solid .sw-weave-panel (theme background) on top of it, never directly on the pattern. Scale with --sw-weave-scale (0.75 .. 1.5).
+ */
+.sw-weave {
+    --sw-weave-scale: 1;
+    background-color: var(--sw-bg);
+    background-repeat: repeat;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' width='64' height='64'%3E%3Cpath d='M11.5,39.5 L20.5,39.5 L20.5,0 L11.5,0ZM11.5,64 L20.5,64 L20.5,56.5 L11.5,56.5ZM43.5,7.5 L52.5,7.5 L52.5,0 L43.5,0ZM43.5,24.5 L43.5,64 L52.5,64 L52.5,24.5Z' fill='%231D2A33' fill-opacity='0.06'/%3E%3Cpath d='M0,11.5 L0,20.5 L7.5,20.5 L7.5,11.5ZM0,43.5 L0,52.5 L39.5,52.5 L39.5,43.5ZM24.5,11.5 L24.5,20.5 L64,20.5 L64,11.5ZM56.5,43.5 L56.5,52.5 L64,52.5 L64,43.5Z' fill='%231D2A33' fill-opacity='0.04'/%3E%3C/svg%3E");
+    background-size: calc(64px * var(--sw-weave-scale)) calc(64px * var(--sw-weave-scale));
+}
+
+:root[data-sw-scheme="dark"] .sw-weave {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' width='64' height='64'%3E%3Cpath d='M11.5,39.5 L20.5,39.5 L20.5,0 L11.5,0ZM11.5,64 L20.5,64 L20.5,56.5 L11.5,56.5ZM43.5,7.5 L52.5,7.5 L52.5,0 L43.5,0ZM43.5,24.5 L43.5,64 L52.5,64 L52.5,24.5Z' fill='%23FFFFFF' fill-opacity='0.075'/%3E%3Cpath d='M0,11.5 L0,20.5 L7.5,20.5 L7.5,11.5ZM0,43.5 L0,52.5 L39.5,52.5 L39.5,43.5ZM24.5,11.5 L24.5,20.5 L64,20.5 L64,11.5ZM56.5,43.5 L56.5,52.5 L64,52.5 L64,43.5Z' fill='%23FFFFFF' fill-opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* A solid panel in the theme background for text or a logo on top of the weave */
+.sw-weave-panel {
+    background-color: var(--sw-bg);
+    border-radius: var(--sw-radius-lg);
+}
+
+
+/* Theme specific tweaks: radii, heading weight, focus */
+:root[data-theme="hacker"] {
+    --sw-focus: var(--ThemeFocus, #66b3ff);
+    /* The input border needs more of the (green) text color on the dark green to reach 3:1 (WCAG 1.4.11) */
+    --sw-border-input: color-mix(in oklab, var(--sw-bg), var(--sw-fg) 68%);
+    --sw-radius-sm: 0;
+    --sw-radius: 0;
+    --sw-radius-md: 0;
+    --sw-radius-lg: 0;
+    /* The terminal font (Cascadia Mono, variable) is heavy at 500 / 700 on the dark green: regular text, semibold headings */
+    --sw-head-weight: 600;
+    --sw-weight-medium: 400;
+    /* TESTING (owner request 2026-10-28): motion 4x slower, so every transition (and every change without one) is easy to see.
+       Was the "no animation" theme (0 ms, no slide distances); set it back to 0 (or a normal 1) when the motion review is done */
+    --sw-motion: 4;
+}
+
+:root[data-theme="pro"] {
+    --sw-focus: var(--ThemeFocus, #7cc4ff);
+    --sw-radius-sm: 3px;
+    --sw-radius: 4px;
+    --sw-radius-md: 6px;
+    --sw-radius-lg: 8px;
+    /* Legacy body text stays smaller in Pro; Sw text follows the (compact) density instead of a smaller root */
+    --ThemeFontSize: 87.5%;
+    --ThemeIconSize: 0.85;
+    /* Pro is a clean working interface: fast, flatter motion (MOT-2): a quarter of the normal durations (12 / 25 / 38 ms) */
+    --sw-motion: 0.25;
+    --sw-dist-1: 1px;
+    --sw-dist-2: 2px;
+    --sw-dist-3: 8px;
+}
+
+/*
+ * Density (html[data-density], set by Sw.Theme.Density in core/theme.js from localStorage "SysWeaver.Density", else automatic):
+ * compact (Pro default), comfortable (default with a mouse), touch (touch screens and the mobile layout). Without the attribute (before the
+ * script ran) the same automatic defaults apply through the :not([data-density]) rules. Sizes in rem, so the large screen step scales them.
+ * Compact keeps every target >= 24 px (WCAG 2.5.8); touch gives 44 px targets.
+ */
+:root[data-density="compact"], :root[data-theme="pro"]:not([data-density]) {
+    --sw-control-h: 1.75rem;
+    --sw-control-h-sm: 1.5rem;
+    --sw-row-h: 2rem;
+    --sw-nav-row-h: 1.75rem;
+    --sw-icon: 1rem;
+    --sw-cell-px: 0.5rem;
+    --sw-text-md: 0.8125rem;
+    --sw-mono-size: 0.75rem;
+    --sw-gap: 0.375rem;
+    --sw-page-px: var(--sw-space-6);
+}
+
+:root[data-density="touch"], html.SwMobile:not([data-density]) {
+    --sw-control-h: 2.75rem;
+    --sw-control-h-sm: 2.25rem;
+    --sw-row-h: 3rem;
+    --sw-nav-row-h: 2.75rem;
+    --sw-icon: 1.25rem;
+    --sw-cell-px: 0.75rem;
+    --sw-text-md: 0.9375rem;
+}
+
+@media (pointer: coarse) {
+    :root:not([data-density]) {
+        --sw-control-h: 2.75rem;
+        --sw-control-h-sm: 2.25rem;
+        --sw-row-h: 3rem;
+        --sw-nav-row-h: 2.75rem;
+        --sw-icon: 1.25rem;
+        --sw-text-md: 0.9375rem;
+    }
+}
+
+/* Phones: 16 px page padding */
+@media (max-width: 760px) {
+    :root {
+        --sw-page-px: var(--sw-space-4);
+    }
+}
+
+/*
+ * Large high resolution screens: the html font size grows in two steps (16 -> 18 -> 22 px), so every rem token (text, space, density,
+ * shell sizes) follows and a 2560 screen reads like 1920; --sw-scale (1, 1.125, 1.375) tells pages the current step for their own px
+ * sizes (calc(20px * var(--sw-scale))); --ThemeIconSize scales the legacy icons. Condition: the screen (device-width; equal in the shell
+ * and its content frames) and a window wide enough for larger text, or a window that wide by itself. Desktop 1920 is unchanged.
+ * The text size the user chose (html data-text-size, Sw.Theme.TextSize in core/theme.js, the shell's settings menu: 80 | 110 | 125 | 150
+ * percent, none = 100) multiplies the html font size and --sw-scale (--sw-text-scale): every rem size follows and the layout reflows.
+ */
+:root {
+    --sw-text-scale: 1;
+    --sw-scale: var(--sw-text-scale);
+    font-size: calc(100% * var(--sw-text-scale));
+}
+
+:root[data-text-size="80"] {
+    --sw-text-scale: 0.8;
+}
+
+:root[data-text-size="110"] {
+    --sw-text-scale: 1.1;
+}
+
+:root[data-text-size="125"] {
+    --sw-text-scale: 1.25;
+}
+
+:root[data-text-size="150"] {
+    --sw-text-scale: 1.5;
+}
+
+@media (min-device-width: 2200px) and (min-width: 1400px), (min-width: 2200px) {
+    :root {
+        --sw-scale: calc(1.125 * var(--sw-text-scale));
+        --ThemeIconSize: 1.125;
+        font-size: calc(112.5% * var(--sw-text-scale));
+    }
+
+    :root[data-theme="pro"] {
+        --ThemeIconSize: 1;
+    }
+}
+
+@media (min-device-width: 3200px) and (min-width: 2000px), (min-width: 3200px) {
+    :root {
+        --sw-scale: calc(1.375 * var(--sw-text-scale));
+        --ThemeIconSize: 1.375;
+        font-size: calc(137.5% * var(--sw-text-scale));
+    }
+
+    :root[data-theme="pro"] {
+        --ThemeIconSize: 1.2;
+    }
+}
+
+/* Touch screens and the mobile layout keep readable legacy text and full size icons in Pro */
+@media (pointer: coarse) {
+    :root[data-theme="pro"] {
+        --ThemeFontSize: 100%;
+        --ThemeIconSize: 1;
+    }
+}
+
+html.SwMobile[data-theme="pro"] {
+    --ThemeFontSize: 100%;
+    --ThemeIconSize: 1;
+}
+
+/* A page framed by another page of this site (not the shell; core/layout.js adds html.SwNested): the host page has the page padding
+   already, so this page has none (one padding level, not 32 px inside 32 px) */
+:root.SwNested {
+    --sw-page-px: 0px !important;
+}
+
+/* Numbers align in tables and counters do not jitter (Barlow has tabular figures) */
+:where(body) {
+    font-variant-numeric: tabular-nums;
+}
+
+/* One font stack for every control: form elements take the page font, not the browser's (Arial 13.33 px on buttons without a Sw
+   class, ex: table tool buttons, tab close, icon buttons); zero specificity, so any class rule (and app/app.css) still wins */
+:where(button, input, select, textarea) {
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+}
+
+/* Dark schemes: the page text in --sw-text (a step below the theme main colour, see the dark roles); the same specificity as the
+   body rule of common/theme.css and later in the cascade, so app/app.css still wins */
+:where(:root[data-theme="dark"], :root[data-theme="hacker"], :root[data-theme="application"], :root[data-theme="pro"], :root[data-sw-scheme="dark"]) body {
+    color: var(--sw-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Base helpers ---------- */
+
+.sw-root, .sw-root *, .sw-root *::before, .sw-root *::after {
+    box-sizing: border-box;
+}
+
+/* sw-root: the Sw font and text color (popups, dialogs and pages built with Sw) */
+.sw-root {
+    color: var(--sw-text);
+    font-family: var(--sw-sans);
+    font-size: var(--sw-size);
+    font-weight: var(--sw-sans-weight);
+    line-height: var(--sw-lh);
+    font-variant-numeric: tabular-nums;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* sw-page: an opaque page background (pages that don't use the patterned theme body); page containers: components.css "Page layout" */
+.sw-page {
+    background-color: var(--sw-canvas);
+}
+
+.sw-mono {
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+}
+
+.sw-serif {
+    font-family: var(--sw-serif);
+    font-size: var(--sw-serif-size);
+}
+
+.sw-head {
+    font-family: var(--sw-head);
+    font-weight: var(--sw-head-weight);
+    letter-spacing: 0.01em;
+}
+
+/* Headings of Sw pages use the heading font (brand: Saira Semi Condensed SemiBold); zero specificity, so page css wins */
+:where(.sw-root) :where(h1, h2, h3, h4) {
+    font-family: var(--sw-head);
+    font-weight: var(--sw-head-weight);
+}
+
+.sw-muted {
+    color: var(--sw-muted);
+}
+
+.sw-faint {
+    color: var(--sw-faint);
+}
+
+.sw-noselect {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Text that may be selected and copied (the theme body disables selection) */
+.sw-selectable {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sw-scroll {
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sw-line-strong) transparent;
+    overscroll-behavior: contain;
+}
+
+/* A wrapping, centered row of buttons (Sw.ButtonRow, the old SysWeaver-CenterBlock) */
+.sw-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-gap);
+}
+
+.sw-row.sw-start {
+    justify-content: flex-start;
+}
+
+.sw-row.sw-end {
+    justify-content: flex-end;
+}
+
+.sw-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-gap);
+}
+
+/* Elements made keyboard clickable (Sw.KeyClick) and click to copy elements (Sw.Clipboard.CopyOnClick) */
+.sw-keyclick, .sw-copyable {
+    cursor: pointer;
+}
+
+.sw-keyclick:focus-visible, .sw-copyable:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+/* The "Draft restored (saved 10:42)" line with its "Discard draft" button under a text field (Sw.Draft, core/draft.js); it never
+   pushes the button row out of reach: it wraps */
+.sw-draft-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-1) var(--sw-space-2);
+    margin-block: var(--sw-space-1);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+    animation: sw-fade-in var(--sw-dur-2) var(--sw-ease);
+    max-width: 100%;
+    min-width: 0;
+}
+
+    /* The text takes its own line when a picker and buttons follow; the picker (Sw.Select, or a native select without the ui
+       library) never grows wider than the field: it shrinks and its label ends with an ellipsis (no page scroll at 320 px) */
+    .sw-draft-notice > .sw-draft-notice-text {
+        flex: 1 1 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .sw-draft-notice > .sw-draft-pick {
+        flex: 1 1 14rem;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+        .sw-draft-notice > .sw-draft-pick .sw-select-label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .sw-draft-notice > .sw-draft-pick-native {
+        min-height: var(--sw-control-h);
+        padding-inline: var(--sw-space-2);
+        border: 1px solid var(--sw-border);
+        border-radius: var(--sw-radius-sm);
+        background: var(--sw-bg-1);
+        color: var(--sw-fg);
+        font: inherit;
+        text-overflow: ellipsis;
+    }
+
+/* Touch: the picker is a 44 px target (INP-24; the small draft buttons get their 44 px hit area from the touch rule of the buttons) */
+@media (pointer: coarse) {
+    .sw-draft-notice > .sw-draft-pick {
+        min-height: 44px;
+    }
+}
+
+/* Focus trap sentinels (Sw.Focus.Sentinel) */
+.sw-tabblock {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Visually hidden, still read by screen readers */
+.sw-sr-only {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+@keyframes sw-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes sw-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(var(--sw-dist-2, 4px)) scale(var(--sw-zoom, 0.98));
+    }
+}
+
+@keyframes sw-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Reduced motion wins over every theme (MOT-3): important, so a theme's own values (Pro, an app theme) never bring motion back.
+   Only MOVEMENT is reduced (owner 2026-10-28: with Windows "Animation effects" off nothing faded at all, the app felt dead): every
+   slide takes its distance from --sw-dist-* (0 here), so nothing slides or eases in, and the shell's width animation is off
+   (shell.css); the short fades and colour changes keep their theme durations (--sw-dur-*: opacity and colour are not motion, WCAG
+   2.3.3); the endless indicators have their own rules (slower spinner,
+   static skeletons). There is deliberately no rule on every element: forcing a duration on elements that declare no transition
+   gives them a 1 ms transition of "all" (the default property), which showed every scripted change one frame late (drag, Sw.Place,
+   splitters) and made getComputedStyle return the old value (charts read grey colours, S7a-A1-1). A colour fade in place with its
+   own fixed duration (the table change highlight, the auth attention outline) is not motion and keeps its duration. */
+@media (prefers-reduced-motion: reduce) {
+    :root, :root[data-theme] {
+        --sw-zoom: 1 !important;
+        --sw-dist-1: 0px !important;
+        --sw-dist-2: 0px !important;
+        --sw-dist-3: 0px !important;
+    }
+
+    /* Spinners keep turning, slowly (they signal activity) */
+    .sw-spinner {
+        animation-duration: 2.4s !important;
+    }
+}

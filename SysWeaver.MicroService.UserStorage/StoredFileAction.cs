@@ -38,7 +38,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Actions that can be performed, some files are maintained by other mechanics and can't be deleted manually
         /// </summary>
-        [TableDataActions("Delete", "Click to delete this file.\nWarning!\nThis operation can NOT be undone.", "../Api/UserStorage/" + nameof(UserStorageService.DeleteStoredFile) + "?\"{0}\"", "IconDbRemove")]
+        //  Delete is final (G47): the web table keeps the row muted without actions until the user refreshes
+        [TableDataActionsFull(new[] { TableDataActionFlags.Final }, "Delete", "Click to delete this file.\nWarning!\nThis operation can NOT be undone.", "../Api/UserStorage/" + nameof(UserStorageService.DeleteStoredFile) + "?\"{0}\"", "IconDbRemove", "", "", "")]
         [TableDataOrder(1)]
         public String Actions;
     }

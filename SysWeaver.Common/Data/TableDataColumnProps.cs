@@ -100,6 +100,13 @@ namespace SysWeaver.Data
         /// </summary>
         WordWrap = 8192,
 
+        /// <summary>
+        /// Don't show the column title in the header (hint), typically for narrow icon only columns (ex: a "📊" chart link).
+        /// The title (and description) is still used for tool tips, accessibility, phone card labels and exports; sorting and filtering are not affected.
+        /// Set using <see cref="TableDataNoTitleAttribute"/>.
+        /// </summary>
+        NoTitle = 16384,
+
 
         //  Computed
         /// <summary>

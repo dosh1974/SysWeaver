@@ -393,7 +393,7 @@ namespace SysWeaver.EmailReader
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRequestCache(1)]
-        [WebMenuTable(null, "Emails", "IMAP emails", "The list of emails received using IMAP")]
+        [WebMenuTable(null, "ImapEmails", "IMAP emails", "The list of emails received using IMAP")]
         public TableData MessageTable(TableDataRequest request)
             => TableDataTools.Get(request, 2000, Messages, "IMAP emails");
 

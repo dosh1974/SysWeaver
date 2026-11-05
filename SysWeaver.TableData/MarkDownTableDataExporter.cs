@@ -47,7 +47,7 @@ namespace SysWeaver.Data
         public String Name => "Mark down";
 
         /// <inheritdoc/>
-        public String Desc => "A mark down (MD) formatted text file";
+        public String Desc => "A Markdown (MD) formatted text file";
 
         /// <inheritdoc/>
         public String Icon => "IconFileMD";
@@ -175,7 +175,7 @@ namespace SysWeaver.Data
                         hide[i] = true;
                         continue;
                     }
-                    var title = col.Title;
+                    var title = String.IsNullOrEmpty(col.Title) ? col.Title : TableDataExporterTools.GetHeader(col);
                     if (String.IsNullOrEmpty(title))
                         title = (visible + 1).ToString();
                     colTitles[visible] = title;

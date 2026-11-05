@@ -30,12 +30,13 @@ The manager is normally created by `AuthManagerService` in [SysWeaver.MicroServi
 - Multiple authorizers behind one manager, each with a unique user guid prefix; supported methods are basic auth, bearer tokens, one-time-pad secure login and one-time tokens
 - A successful login yields an `Authorization`: user identity, guid and the set of lower case *tokens* (roles) that `[WebApiAuth]` checks against, plus shared per-user data
 - Cache of successful `Authorization` header results, invalidated when an authorizer reports a change
-- Client-side salted hashing: clients send `SHA256(password|salt)`, the secure login additionally binds the hash to a one-time pad so it can't be replayed
+- Client-side salted hashing: clients send `SHA256(password|salt)`, the secure login additionally binds the hash to a one-time pad so it can't be replayed. An unknown user gets a fake salt that looks like a real one: keyed (HMAC with a random key per process), so nobody can compute it and tell an unknown user from a real one (it was an unkeyed hash of the user name; it changes when the process restarts)
 - `SimpleAuthorizer`: users defined as `user:password[:tokens[:domain]]` lines (clear text or pre-computed hash) in the parameters or a monitored file, optional basic auth, and API keys (usable as bearer tokens) managed from the web UI
 - Debug pages to generate password hashes and manage API keys
 - Password policies (length and character classes) reported to clients so the UI can validate early
 - Managed texts: localizable text, mail and Markdown templates with variables, loaded from files, embedded resources or literal text and reloaded when files change (used by the account flows)
 - `NameGen`: random, human friendly nick names (deterministic per user guid)
+- `IAuthorizedRequest`: the caller of a web api for services that can't reference the http server; an api method may take it as its trailing parameter instead of `HttpServerRequest` (ex: `SimpleAuthorizer` logs who created an API key)
 
 ## Key components
 

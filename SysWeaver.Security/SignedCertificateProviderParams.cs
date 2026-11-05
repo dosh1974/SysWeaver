@@ -53,6 +53,7 @@ namespace SysWeaver.Security
         ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
         ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </summary>
+        [EditPassword]
         public string RootPassword;
 
 

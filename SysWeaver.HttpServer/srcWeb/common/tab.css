@@ -1,33 +1,34 @@
-﻿
-
-/*
- * tab.css - styles for the tab bar control implemented by common/tab.js (class Tab).
- * Loaded with <link rel="stylesheet" href="../common/tab.css"> together with tab.js by explore/api.html
- * (SysWeaver.HttpServer.ExploreModule) and edit/type.html (SysWeaver.MicroService.Edit).
- * Not templated. Depends on theme variables from common/theme.css: --ThemeBackground, --ThemeMain, --ThemeAcc1,
- * --ThemeAcc1RGB, --ThemeRad, --ThemeFontMono. Defines no custom properties, no @keyframes and no @media rules.
- * Selection state: Tab.Select (tab.js) adds/removes the class "tabactive" on the tab header and its content element.
+﻿/*
+ * tab.css - styles of the LEGACY tab bar control common/tab.js (class Tab), for pages of other projects that still link it with
+ * tab.js (no SysWeaver page does any more; new code uses Sw.Tabs, sw/ui.css).
+ * Design v2 underline tabs (like Sw.Tabs): a hairline under the bar, headers in the secondary text colour, the selected one in the text
+ * colour with a 2 px accent bar; no boxed tabs; the panel is a flat surface with a hairline.
+ * Not templated. Theme variables from common/theme.css (--ThemeMain, --ThemeAcc1, --ThemeRad, --ThemeFontMono) and the Sw tokens of
+ * sw/ui.css when linked (--sw-*, each with a fallback).
+ * Selection state: Tab.Select adds / removes the class "tabactive" on the header and its content element.
  */
 
 /* ===== Tab bar ===== */
 
 /*
- * <SysWeaver-TabBar>: the bar element created by the Tab constructor (Tab.Element).
- * Full-width block; overflow hidden + nowrap so the tab headers stay on one line and never wrap.
+ * <SysWeaver-TabBar>: the bar (Tab.Element, role tablist). Headers stay on one line; the bar scrolls horizontally
+ * (thin scrollbar) when they don't fit (they were clipped before).
  */
 SysWeaver-TabBar {
     display: block;
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
     white-space: nowrap;
+    border-bottom: 1px solid var(--sw-border, rgba(var(--ThemeMainRGB), 0.15));
 }
-
 
 /* ===== Tab headers ===== */
 
-/* First and last <SysWeaver-Tab> get a 16px outer margin so the row of tabs is inset from the bar edges. */
+/* First and last header get a 16px outer margin so the row of tabs is inset from the bar edges. */
 SysWeaver-Tab:first-child {
     margin-left: 16px;
 }
@@ -36,85 +37,77 @@ SysWeaver-Tab:last-child {
     margin-right: 16px;
 }
 
-
 /*
- * <SysWeaver-Tab>: a tab header created by Tab.AddTab. Inline-block, pointer cursor, bold uppercase 80% text,
- * 1px --ThemeAcc1 border on left/top/right only; top corners use --ThemeRad, bottom corners are square so the
- * tab visually sits on the content panel. Colours fade over 0.1s.
+ * <SysWeaver-Tab>: a header (role tab). Sentence case 500 text in the secondary text colour, a transparent 2 px bottom bar; 44 px high
+ * (at least the control height of the density).
  */
 SysWeaver-Tab {
     box-sizing: border-box;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    min-height: max(var(--sw-control-h, var(--sw-control-h, 32px)), 2.75rem);
     cursor: pointer;
-    padding: 8px;
+    padding: 0 12px;
     margin-right: 4px;
-    background-color: var(--ThemeBackground);
-    color: var(--ThemeMain);
-    border-radius: var(--ThemeRad);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    border-left: 1px solid var(--ThemeAcc1);
-    border-top: 1px solid var(--ThemeAcc1);
-    border-right: 1px solid var(--ThemeAcc1);
-    transition: background-color linear 0.1s, color linear 0.1s;
-    font-size: 80%;
-    font-weight: bold;
-    text-transform: uppercase;
+    margin-bottom: -1px;
+    background-color: transparent;
+    color: var(--sw-text-2, var(--ThemeMain));
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: var(--ThemeRadInp) var(--ThemeRadInp) 0 0;
+    transition: background-color linear var(--sw-dur-1, 0.1s), color linear var(--sw-dur-1, 0.1s), border-color linear var(--sw-dur-1, 0.1s);
+    font-size: var(--sw-text-md, 90%);
+    font-weight: 500;
+    outline: none;
 }
 
-    /* Hover on an unselected tab: tints the background with --ThemeAcc1 at 10% alpha (via --ThemeAcc1RGB). */
+    /* Hover on an unselected tab: the neutral hover layer and the text colour. */
     SysWeaver-Tab:hover {
-        background-color: rgba(var(--ThemeAcc1RGB), 0.1);
+        background-color: var(--sw-hover, rgba(var(--ThemeMainRGB), 0.06));
+        color: var(--sw-text, var(--ThemeMain));
     }
 
-    /*
-     * Selected tab (class "tabactive", toggled by Tab.Select): solid --ThemeAcc1 fill with background-coloured
-     * text and the default cursor; the :hover variant keeps the same fill so hover has no effect.
-     */
-    SysWeaver-Tab.tabactive {
+    /* Keyboard focus ring (the Sw focus blue, inside the header so the scrolling bar does not clip it). */
+    SysWeaver-Tab:focus-visible {
+        outline: 2px solid var(--sw-focus, var(--ThemeFocus, #1a66d6));
+        outline-offset: -2px;
+    }
+
+    /* Selected tab (class "tabactive"): text colour with the 2 px accent bar. */
+    SysWeaver-Tab.tabactive,
+    SysWeaver-Tab.tabactive:hover {
         cursor: default;
-        background-color: var(--ThemeAcc1);
-        color: var(--ThemeBackground);
+        background-color: transparent;
+        color: var(--sw-text, var(--ThemeMain));
+        border-bottom-color: var(--ThemeAcc1);
     }
-
-        SysWeaver-Tab.tabactive:hover {
-            background-color: var(--ThemeAcc1);
-        }
-
 
 /* ===== Tab content panels ===== */
 
-/*
- * <SysWeaver-TabContent>: a tab panel created by page scripts (e.g. explore/api.js) and passed to Tab.AddTab as
- * onActivate or element. 1px --ThemeAcc1 border, --ThemeRad radius, 4px padding; hidden (display:none) by default.
- */
+/* <SysWeaver-TabContent>: a panel created by page scripts; a flat surface with a hairline; hidden unless "tabactive". */
 SysWeaver-TabContent {
     box-sizing: border-box;
     width: 100%;
     padding: 4px;
     display: none;
-    border: 1px solid var(--ThemeAcc1);
-    border-radius: var(--ThemeRad);
+    background-color: var(--sw-surface, transparent);
+    border: 1px solid var(--sw-border, rgba(var(--ThemeMainRGB), 0.15));
+    border-top: none;
+    border-radius: 0 0 var(--ThemeRad) var(--ThemeRad);
 }
 
-    /*
-     * Class "CODE" (added by explore/api.js to its JSON / result panels): monospace (--ThemeFontMono) 80% text,
-     * 16px padding, white-space:pre and selectable text (overrides the body's user-select:none).
-     */
+    /* Class "CODE" (explore/api.js JSON / result panels): selectable monospace pre text. */
     SysWeaver-TabContent.CODE {
         font-family: var(--ThemeFontMono);
         padding: 16px;
         word-wrap: break-word;
-        font-size: 80%;
+        font-size: var(--sw-mono-size, 80%);
         user-select: text;
         white-space: pre;
+        overflow: auto;
     }
 
-    /* The panel of the selected tab (class "tabactive", toggled by Tab.Select) is shown as a block. */
+    /* The panel of the selected tab. */
     SysWeaver-TabContent.tabactive {
         display: block;
     }
-
-
-
-

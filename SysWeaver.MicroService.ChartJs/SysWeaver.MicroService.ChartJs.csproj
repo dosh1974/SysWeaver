@@ -21,7 +21,10 @@
 		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveFill -RemoveSize .\srcWeb\chart\icons\*.svg .\srcWeb\chart\icons\.opt\" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\chart\icons\.opt\*.svg+ .\web\chart\icons" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\chart\* .\web\chart" />
-		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\chart\external\*+ .\web\chart\external" />
+		<!-- Vendored libraries ship already minified: do not minify them again (like edit\external). minify v2.24.19 moves a destructuring
+		     declaration in front of the one its default value uses ("const s=t.length,{end:o=s-1}=i" became "const{end:a=o-1}=n,o=e.length"),
+		     which broke Chart.js filled line charts with "ReferenceError: Cannot access 'o' before initialization" in pathSegment. -->
+		<Exec Command="..\_tools\compress\Compress.exe -OptimizeWebFiles false -Methods br .\srcWeb\chart\external\*+ .\web\chart\external" />
 		<ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />
 		</ItemGroup>

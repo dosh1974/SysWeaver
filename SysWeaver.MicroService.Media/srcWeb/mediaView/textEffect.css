@@ -1,14 +1,14 @@
 ﻿/*
  * textEffect.css - page styles of the counter effect demo (`counterEffects/index.html`, booted by
  * `textEffectMain()` in textEffect.js).
- * Loaded with <link rel="stylesheet"> as `../textEffect.css` after `../../common/theme.css`
- * (theme variables are not used directly). Not templated; no custom properties, animations or media queries.
+ * Loaded with <link rel="stylesheet"> as `../textEffect.css` (the page is lean: no theme.css; theme variables are not used). Not templated; no custom properties, animations or media queries.
  */
 
 /* ===== Page ===== */
 
 /* Page body: compact line height, content vertically middle aligned. */
 body {
+    margin: 0;
     line-height: 100%;
     vertical-align: middle;
 }

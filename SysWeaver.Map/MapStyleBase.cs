@@ -21,6 +21,7 @@ namespace SysWeaver.Map
         /// The target CSS color to use for shadowed part of any extrusion, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
         [AiOptional]
+        [EditColor(EditColorFormat.Css, true)]
         public string ShadowColor = "#001";
 
         /// <summary>

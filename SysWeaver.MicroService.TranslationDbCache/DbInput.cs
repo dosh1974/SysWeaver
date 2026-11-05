@@ -75,9 +75,10 @@ namespace SysWeaver.MicroService
         [StringLength(128)]
         [Ascii]
         [PrimaryKey]
-        [TableDataActions(
-            "Edit", "Click to edit the translated text", "&../translator/Edit.html?id={0}", "../icons/edit.svg",
-            "Remove", "Click to remove the translated text (will need a new translation)", "../Api/translator/DeleteTranslation?'{0}'", "../icons/close.svg"
+        //  Remove is final (G47, declared, never guessed from the words), Edit is not
+        [TableDataActionsFull(new[] { TableDataActionFlags.None, TableDataActionFlags.Final },
+            "Edit", "Click to edit the translated text", "&../translator/Edit.html?id={0}", "../icons/edit.svg", "", "", "",
+            "Remove", "Click to remove the translated text (will need a new translation)", "../Api/translator/DeleteTranslation?'{0}'", "../icons/close.svg", "", "", ""
 
             )]
         public String Hash { get; set; }

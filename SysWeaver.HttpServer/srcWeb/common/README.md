@@ -17,16 +17,27 @@ Almost every page in the framework loads `common/common.js` and `common/theme.cs
 
 | Item | Description |
 |---|---|
-| [`common.js`](common.js) | Core library (about 7800 lines): requests to the web API (`sendRequest`, `getRequest`), dynamic script and style loading (`includeJs`, `includeCss`), translation helpers, `SessionManager`, cross-window messaging (`InterOp`), buttons, value formatting, colour icons, full screen, progress bars, image loading and caching |
+| [`common.js`](common.js) | **GENERATED legacy compatibility bundle** (`SwWeb bundle`, entry in `sw/bundles.json`; do not edit): `core/*.js` + `core/legacy_session.js` (the legacy messaging names: `SessionManager`, `InterOp`, `SysWeaverInit` ...) + `ui/*.js` (the Sw library) + `ui/compat_common.js`, which defines every other global of the old library (`sendRequest`, `getRequest`, `includeJs`, `includeCss`, `SessionManager`, `InterOp`, `ValueFormat`, `ColorIcon`, `Button`, `Fail`, `Info`, `AddLoading`, `FullScreen`, `PendingImages` ...) on top of `Sw`, and links `sw/ui.css` + `ui/compat_common.css`. Old pages, other projects and srcData templates keep loading it unchanged; new pages load `sw/core.js` (+ `sw/ui.js`). A page that renders its own UI and only needs the messaging of common.js (`SessionManager.Create(); SysWeaverInit();`) loads the small `sw/session.js` (+ `sw/theme.js` for the theme; core/README.md "Messaging only"). The bundle is built load once (each source runs once per page, also next to `sw/session.js` or `sw/core.js`). The descriptions of the old globals below still describe the kept behavior |
 | [`theme.css`](theme.css) | Theme variables and theme variants (template) |
-| [`common.css`](common.css) | Theme variable defaults and base styles; no reference to this file by name was found in the repositories |
-| [`tab.js`](tab.js), [`tab.css`](tab.css) | Tab bar control (`Tab`, a `SysWeaver-TabBar` element, optionally remembering the selected tab in local storage) |
-| [`anim.js`](anim.js) | Animation and interpolation helpers (`MathTools`, cubic Hermite interpolation, `SmoothValue`, spring, projectile and bounce motions), used by the media viewer pages |
+| [`common.css`](common.css) | LEGACY, unreferenced old copy of `theme.css` (verified: no page, script, server registration or srcData template in SysWeaver, SysWeaver.Services or EffectWeaver references it); kept untouched for compatibility, do not use |
+| [`tab.js`](tab.js), [`tab.css`](tab.css) | LEGACY tab bar control `Tab` (old code: `explore/api.js`, `edit/type.html`; new code uses `Sw.Tabs`). Standalone (no common.js / Sw dependency), keyboard operable (tablist / tab roles, Left / Right / Home / End, Enter / Space), touch sized headers, selection remembered in `localStorage["SysWeaver.Tabs.<key>"]` |
+| [`anim.js`](anim.js) | Animation and interpolation maths (`Smoothness`, `MathTools`, cubic Hermite interpolation, `SmoothValue`, `SmoothBool`, `SpringAnimation`, `ProjectileMotion`, `BounceMotion`, `BounceAnimation`); global names kept, also available as `Sw.Anim.<Name>`; no DOM, no dependencies |
 | [`marked.js`](marked.js) | Vendored *marked* v15.0.3 Markdown parser (MIT, minified) |
 | [`UZIP.js`](UZIP.js) | Vendored UZIP JavaScript zip / deflate library, used with `md5.js` by upload pages |
 | [`md5.js`](md5.js) | Vendored YaMD5 MD5 hasher |
 | [`racing-stripes.svg`](racing-stripes.svg), [`moroccan.svg`](moroccan.svg), [`glamorous.svg`](glamorous.svg), [`graph-paper.svg`](graph-paper.svg), [`Hacker.png`](Hacker.png) | Background patterns used by the themes in `theme.css` (`Hacker.png` is a 32×32 tile for the hacker theme) |
 | [`hexagons.svg`](hexagons.svg), [`floating-cogs.svg`](floating-cogs.svg), [`plus.svg`](plus.svg) | Further patterns / images; no reference to them by name was found in the repositories |
+
+## Differences of the compatibility bundle
+
+`common/common.js` keeps every old global name, signature and result (verified against the old library), but the visual parts are now drawn by the Sw ui library, so the element names and a few behaviors in the old descriptions further down this file no longer apply:
+
+- **Toasts** (`Fail`, `Info`, `Message`): `Sw.Toast` elements (`div.sw-toast` inside `div.sw-toasts`) instead of one reused `<SysWeaver-Fail>`. Several messages can be stacked (up to 4), identical ones are merged with a counter, and hovering pauses the timer. Duration (5 s, `true` = 24 h), click-to-copy (unless `noCopyOnClick`) and console logging are unchanged.
+- **Loading overlay** (`AddLoading`): `Sw.Loader` (`div.sw-loader`) instead of `<SysWeaver-Loading>`. The remover contract is unchanged (PageLoaded / LoaderRemoved / WindowLoaded posts and scroll restore unless called with `true`; no overlay with the `noloader` url flag).
+- **Server block overlay**: `Sw.ServerBlock` (a small dialog `.sw-dialog.sw-serverblock` above every pop-up) instead of the full page `<SysWeaver-ServerBlock>`. The same texts and the elapsed time; no reload button (the page reloads by itself when a new server instance answers, never after a drop of the same instance); movable, resizable, × / Escape hide it until the server is back (`_docs/WebMessaging.md` §4).
+- **Cells** (`ValueFormat.update`): Type and Url cells render a real `<a class="sw-link" href>` (old: `<SysWeaver-Link>` without href); Toggle and Actions render `<button>` elements (old: `<SysWeaver-toggle>` / `<SysWeaver-action>`); Json / Text / MD open a `Sw.Dialog` (`pre.sw-code-json` for Json) instead of `PopUp`; the DateTime classes are `sw-cell-dt` / `sw-cell-dt-<fmt>` (old `ValueFormatDt` / `ValueFormatDt<fmt>`, not used by any style sheet). The old cell classes `Right`, `Monospaced`, `Null`, `False`, `Text`, `Toggle`, `Capped`, `ValueFormat<Kind>`, `MouseClick`, `KeyClick` are still set.
+- **Fixed old bugs**: `sendRequest` retries requested by `errHandler` work (the old code re-sent an already used Request and threw), concurrent `includeJs` callers all get `loaded: true`, and `EditUrl` / `ViewUrl` / `EditOrOpenUrl` resolve the api against the site root.
+- **Pro theme**: the Google Fonts import was removed (no internet resources); pro uses the brand fonts (Barlow, Saira Semi Condensed), compact sizes (ui/tokens.css) and a mid dark slate (_docs/WebBranding.md "The built-in themes").
 
 ## Relationships
 
@@ -267,7 +278,7 @@ Utility members (widely used directly):
 | `getTimeStampTitle(date, onlyDate, prefix, tab, fmt)` | Returns `[tooltip, "yyyy-mm-dd hh:mm:ss"]`; `fmt` is `"utc"` or `"local"`. Related: `convertLocalDateToUTCDate`, `convertUTCDateToLocalDate`. |
 | `setElementText(el, text)` | Preserves leading and trailing spaces with `&nbsp;`. |
 | `updateText(el, text, title, flashClass)`, `updateHtml(el, html, title, flashClass)` | Update only on change, optionally adding a flash class for about 1 s. Return whether the content changed. |
-| `readFromClipboard()`, `copyToClipboard(v)`, `copyToClipboardInfo(v, generic)`, `copyOnClick(el, value, addKeyboard, addTitle)` | Clipboard helpers. `copyToClipboardInfo` shows `Info`/`Fail`. `copyOnClick` adds class `MouseClick` and returns the tooltip text. |
+| `readFromClipboard()`, `copyToClipboard(v)`, `copyToClipboardInfo(v, generic)`, `copyOnClick(el, value, addKeyboard, addTitle)` | Clipboard helpers. `copyToClipboardInfo` shows `Info`/`Fail`. `copyOnClick` adds class `MouseClick` and returns the tooltip text; it keeps the original contract exactly: the copy is `el.onclick` (assigning `onclick` replaces or removes it), a click on an inner link copies and doesn't navigate, a right click shows the browser menu, `addKeyboard` = `keyboardClick` (Enter / Space copy) + `el.oncopy`. New code: `Sw.Clipboard.CopyOnClick` (ui/README). |
 | `createLink(url, text, target, title, isImage, useAttr, useEdit, useView)` | Creates `<SysWeaver-Link tabindex=0>`. With `useAttr` it writes an inline `onclick="onLink(event,'url','target')"` attribute, which survives `outerHTML` copies. `getUrlTarget(url)` maps prefixes `+`→`_blank`, `*`→`_self`, `^`→`_top`, `-`→`_parent`. |
 | `jsonToHtml(json)` | Syntax highlighting with spans `key/string/number/boolean/null`, styled by `.SysWeaverCode`. |
 | `async MarkDownToHTML(text)`, `async SetMarkDown(el, text)` | Lazily calls `includeJs(null, "marked.js")` and installs a `marked` renderer, then returns `marked.parse(text)`. The renderer opens links and images in a new tab with tooltips and `appendTheme`. Raw HTML is kept only for an allow-list of inline tags and `<img>`. |
@@ -307,7 +318,7 @@ The format strings are produced on the server (table and explorer metadata). The
 
 #### [`theme.css`](theme.css)
 
-Served as a template, registered with `AddTemplateMatch("common/theme.css")` in `HttpServerBase.cs`. It imports the *Nunito* font from Google Fonts and defines:
+Served as a template, registered with `AddTemplateMatch("common/theme.css")` in `HttpServerBase.cs`. It loads no external resources (the Google Fonts `@import` of *Nunito* was removed; every theme uses the local brand fonts, hacker a local monospace font) and defines:
 
 - **`:root` defaults** (the *light* theme) for all theme variables, plus placeholders for the derived `*R/*G/*B/*RGB/*25/*50/*75` variables that `applyTheme` overwrites.
 - **Theme blocks** selected by `[data-theme=...]`. Each non-light theme sets `color-scheme: dark` on `:root` and `textarea`, and has its own body background (pattern SVG + radial gradients).
@@ -316,8 +327,8 @@ Served as a template, registered with `AddTemplateMatch("common/theme.css")` in 
   |---|---|
   | `dark` | Dark colours. |
   | `hacker` | Also `--ThemePos`, a monospace font, and a fixed `body::before` overlay using `Hacker.png`. |
-  | `application` | Colours from `${Color.Background}`, `${Color.Color}`, `${Color.Acc1}`, `${Color.Acc2}`. |
-  | `pro` | Nunito, 14 px, `--ThemeIconSize: 0.75`, asymmetric radii. |
+  | `application` | Colours from `${Color.Background}`, `${Color.Color}`, `${Color.Acc1}`, `${Color.Acc2}` (the per application colours from the app name / `AppSeed`, see _docs/WebBranding.md "Application colors"). |
+  | `pro` | Compact (smaller text, controls and icons in ui/tokens.css), mid dark brand slate, small radii, no pattern. |
 
 - **Base element styles**:
   - `html` (`--Margin: 24px`) and `body` (theme background, colour and font, `graph-paper.svg` pattern, `user-select:none`).
@@ -333,7 +344,7 @@ Served as a template, registered with `AddTemplateMatch("common/theme.css")` in 
   - Pop-up content: `SysWeaver-Code` / `.SysWeaverCode` (JSON highlighting), `SysWeaver-LongText` (`.Mono`), `SysWeaver-MdText`.
 - **Icon mask classes** used by `common.js` itself: `.IconWorking` (animated spinner), `.IconPaused`, `.IconPower`, `.IconWarning` and `.IconReload` (inline SVG data URIs). Also `.IconLogo` (`../icon.svg`) and `.IconCurrentUser` / `.IconCurrentUserFill` (`../auth/UserImages/Current/small`).
 
-#### [`common.css`](common.css)
+$1**LEGACY, unreferenced** (verified by a search of all repositories and srcData templates). Kept in place unchanged; new and old pages use `theme.css`.
 
 An older, non-templated subset of `theme.css`. Its `:root` uses the *dark* colours as defaults, with the same variable set. It has the same `SysWeaver-*` element styles and icon classes, but no themes, no fonts and no base `html`/`body`/`a` rules. There are minor differences, such as a `SysWeaver-Button` radius of `15px` and no `--ThemeIconSize` scaling. No page references it.
 
@@ -348,7 +359,8 @@ An older, non-templated subset of `theme.css`. Its `:root` uses the *dark* colou
 | `Select(index)` | Moves class `tabactive` between the tab elements and their associated content `element`. `onActivate` may be a function `(tabEl, index)` or an element that receives `tabactive`. `onDeactivate(tabEl, index)` is called on the previous tab. The index is saved when selected explicitly. |
 | `RemoveTab(index)` | Adjusts the selection and removes the tab. |
 
-`tab.css` styles `SysWeaver-TabBar`, `SysWeaver-Tab` (`.tabactive`) and `SysWeaver-TabContent`, which is hidden unless `.tabactive` and has a `.CODE` variant. The tab control is used by `edit/type.html` and `explore/api.html`.
+$1
+Rewrite notes: `tab.js` no longer needs `common.js` (`badClick` was its only dependency); the bar is a `tablist` with a roving tab stop (`tab` headers with `aria-selected`, content elements get `role=tabpanel`), Left / Right / Home / End move and select, Enter / Space select; `RemoveTab` deactivates a removed selected tab (its content no longer keeps `tabactive`); out of range `Select` indices are ignored instead of throwing. `tab.css`: the bar scrolls horizontally instead of clipping, headers are at least `--sw-touch` high and show a focus ring.
 
 #### [`anim.js`](anim.js)
 
@@ -367,7 +379,8 @@ Standalone (no dependency on `common.js`); all declarations are global:
 | `BounceMotion` | Period-based bounce maths: `Period`, `RestAfterPeriod`, `RestTime`, `PeriodVelocity`, `PeriodDuration`, `PeriodEndTime`, `Displacement`, `Displacement2`, `Velocity`, `Velocity2`. |
 | `BounceAnimation(v0, g, restitution, restVelocity, normalize, startAtPeak)` | `ValueAt(timeMs)`. |
 
-Used by the media viewer and effect pages of [SysWeaver.MicroService.Media](../../../SysWeaver.MicroService.Media/README.md) (`SmoothBool`, `Smoothness`, `SpringAnimation`, `BounceAnimation`).
+$1
+Rewrite notes: same API and results (verified numerically); C# leftovers removed, shared helpers (`#ease`, `#segmentTime`, `#inPeriod`) instead of duplicated code, `CubicHermiteInterpolator.DerivativeAt` added as a correctly spelled alias of `DerivativAt`; `Sw.Anim` exposes the same objects.
 
 ### Server interaction
 
@@ -407,7 +420,7 @@ Callers use `try/catch` + `Fail(...)` for user-visible errors.
 | Endpoint | Caller | Notes |
 |---|---|---|
 | `Api/application/GetMessages` (relative to `common.js`) | `SessionManager` master | Long poll, see below. |
-| `serverTime` (relative to `common.js`, server root) | `SessionManager` master | Forced endpoint that returns Unix ms as text. The first call passes `?<IANA time zone>;<navigator.language>`, which the server stores as `HttpSession.ClientTimeZone`. |
+| `serverTime` (relative to `common.js`, server root) | `SessionManager` master | Forced endpoint that returns `<Unix ms>;<server UTC offset in minutes>` as text (old clients parse only the ms). The first call passes `?<IANA time zone>;<navigator.language>`, which the server stores as `HttpSession.ClientTimeZone`. |
 | `/Api/GetExtensionEditor`, `/Api/GetExtensionViewer` | `EditUrl`, `ViewUrl`, `EditOrOpenUrl` | `ServiceManager` endpoints that map a file URL to a registered editor or viewer page URL. |
 | `../edit/type.html?q=<type>` | `ValueFormat.updateType` | Link into the Edit micro service. |
 | arbitrary URLs | `ValueFormat` `Toggle` / `Actions` formatters | `getRequest(url, true)` with URLs built from server-provided format strings. |
@@ -444,7 +457,7 @@ Callers use `try/catch` + `Fail(...)` for user-visible errors.
 | `Theme.Changed` | all | If it came from another window: clear `UseTheme` and call `applyTheme()`. |
 | `color.scheme`, `theme.set`, `theme.use` | child frames only, and only when started with `colorscheme` / `settheme` / `usetheme` | Update the color-scheme meta, the stored theme or the forced theme. |
 
-**Templated values**: only `theme.css` is a template (`${Color.Background}`, `${Color.Color}`, `${Color.Acc1}`, `${Color.Acc2}`, defined in `HttpServerBase_Vars.cs`). `common.js` is not templated, but it passes through the JS translation transformer (`_T`/`_TF`… literals).
+**Templated values**: only `theme.css` is a template (`${Color.Background}`, `${Color.Color}`, `${Color.Acc1}`, `${Color.Acc2}`, set in `HttpServerBase.cs` from `HashColors.AppColors`). `common.js` is not templated, but it passes through the JS translation transformer (`_T`/`_TF`… literals).
 
 ### State and persistence
 
@@ -542,7 +555,7 @@ Built-in names are `light`, `dark`, `hacker`, `application` and `pro`; the menu 
 - **`PopUp`**: `PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveCloseButton)` from [`app/application.js`](../app/application.js), for the `Json`/`Text`/`MD` cell pop-ups.
 - **Icon CSS classes**: classes not defined here (`IconCopy`, `IconTheme*`, …) come from consumer stylesheets such as `app/application.css`, `explore/table.css` and `chat/chat.css`.
 - **`iso_data/currencies.js`**: supplies the inputs for `ValueFormat.toAmount`.
-- **External**: Google Fonts (*Nunito*) from `theme.css`.
+- **External**: none (the former Google Fonts import of `theme.css` was removed).
 - **Shared `common/` folder**: other projects also publish into the served `common/` folder. For example, [`SysWeaver.MicroService.FileUploader/srcWeb/common/fileUploader.js`](../../../SysWeaver.MicroService.FileUploader/srcWeb/common/fileUploader.js) is loaded as `common/fileUploader.js` / `includeJs(null, "fileUploader.js")`.
 
 **Consumed by**: usage counts across other `srcWeb` folders (occurrences / files, excluding this folder and vendored code):
@@ -1047,7 +1060,7 @@ Static-only utility class (never instantiated) holding the value formatting / di
 | Member | Kind | Signature | Description |
 |---|---|---|---|
 | `updateBoolean` | static method | `(el, value, formats, nextValue, flash, type, onRefresh)` → `el` | Shows translated `"☑ True"` / `"☐ False"`; on change sets class `Text` (true) or `False` (false). Click copies the value. |
-| `formatByteSize` | static method | `(value)` → `string` | `formatSuffix(value, "b", "bytes", 1024)`, e.g. `"12.5 kb"`. |
+| `formatByteSize` | static method | `(value)` → `string` | `Sw.Format.Bytes(value, decimals)`, e.g. `"12.5 KB"` (upper case "B"; older versions wrote `"12.5 kb"`). |
 | `updateByteSize` | static method | `(el, value, formats, nextValue, flash, type, onRefresh)` → `el` | Format `"ByteSize"` (classes `Right`, `Monospaced`): text = `formats[2]` template over `formatByteSize(value)` (`{0}` formatted, `{1}` next, `{2}` raw), title = `formats[3]` (default `"Raw: {2}"`); always click-to-copy the raw value. |
 | `updateByteSpeed` | static method | `(el, value, formats, nextValue, flash, type, onRefresh)` → `el` | Format `"ByteSpeed"`: like `updateByteSize` with suffixes `"b/s"` / `"bytes/s"` (registers itself under the format name `"ByteSize"` in `updateFormat`). |
 | `TagSpanNode` | static field | `HTMLSpanElement` | Reusable `<span>` template for tag rendering. |
@@ -1446,12 +1459,12 @@ The global stylesheet of the framework. About 54 pages load it with `<link rel="
 
 | Template variable | Value supplied by the server (`HttpServerBase.cs`) | Used for |
 |---|---|---|
-| `${Color.Background}` | `HashColors.AppColors.Background`: a lower-case `#rrggbb` from the application's hash colours (complement hue, value 0.1) | `--ThemeBackground` in `[data-theme="application"]` |
-| `${Color.Color}` | `HashColors.AppColors.Acc1` (accent hue 1, value 0.9) | `--ThemeMain` in `[data-theme="application"]` |
-| `${Color.Acc1}` | `HashColors.AppColors.Acc3` (hue + 30°, value 0.7) | `--ThemeAcc1` in `[data-theme="application"]` |
-| `${Color.Acc2}` | `HashColors.AppColors.Acc4` (hue + 330°, value 0.7) | `--ThemeAcc2` in `[data-theme="application"]` |
+| `${Color.Background}` | `HashColors.AppColors.Background` (a lower-case `#rrggbb`, the complement hue, very dark) | `--ThemeBackground` in `[data-theme="application"]` |
+| `${Color.Color}` | `HashColors.AppColors.Acc1` | `--ThemeMain` in `[data-theme="application"]` |
+| `${Color.Acc1}` | `HashColors.AppColors.Acc3` (main hue + 30°) | `--ThemeAcc1` in `[data-theme="application"]` |
+| `${Color.Acc2}` | `HashColors.AppColors.Acc4` (main hue - 30°) | `--ThemeAcc2` in `[data-theme="application"]` |
 
-`HashColors.AppColors` is derived from `EnvInfo.AppName` and `EnvInfo.AppSeed`, so the `application` theme has a stable colour set per application. The values are always 7-character hex, which is the format `applyTheme` in common.js can split into R, G and B.
+`HashColors.AppColors` is derived from `EnvInfo.AppName` and `EnvInfo.AppSeed` only (to change the colours, change `AppSeed`; see _docs/WebBranding.md). The same colours are used by the generated icon and logo and by the e-mail templates (UserManager `[Background]`, `[Color]`, `[Acc1]`, `[Acc2]`), so the `application` theme has a stable colour set per application. The values are always 7-character hex, which is the format `applyTheme` in common.js can split into R, G and B.
 
 **Theme selection (common.js).** `getTheme()` returns `window.UseTheme` if set. Otherwise it starts from `"dark"`, switches to `"light"` if the OS reports `prefers-color-scheme: light`, and is overridden by `localStorage["SysWeaver.Theme"]`. `applyTheme()` removes `data-theme` from `<html>` for `"light"` and sets `data-theme="<name>"` for every other theme. A name of the form `name@url` first loads the extra stylesheet `url` with `includeCss`. `applyTheme()` then reads the computed `--ThemeBackground`, `--ThemeMain`, `--ThemeAcc1` and `--ThemeAcc2` and writes the derived properties (`…R`, `…G`, `…B`, `…RGB`, `…25`, `…50`, `…75`) as inline styles on `<html>`. It sets `window.IsDarkMode` from the body's computed `color-scheme`, and registers `window[name + "ThemeAnimate"]` (only `hackerThemeAnimate` exists) with `Animator`. `setTheme`, `toggleTheme` and `resetTheme` write or clear the storage key and post the InterOp message `"Theme.Changed"`.
 
@@ -1461,9 +1474,9 @@ The global stylesheet of the framework. About 54 pages load it with `<link rel="
 |---|---|
 | `:root` (no `data-theme`) = **light** | Default property values (see Custom properties), `color-scheme: light`, and `body` with the `graph-paper.svg` background. |
 | `[data-theme="dark"]`, `:root[data-theme="dark"]`, `html[data-theme="dark"] textarea`, `html[data-theme="dark"] body` | **dark**: background `#242226`, main `#aaaaaa`, Acc1 `#D0BF2F`, Acc2 `#5ecad6`. `color-scheme: dark` on the root and on `textarea`. The body background is `racing-stripes.svg` over a radial gradient of `rgba(--ThemeAcc1RGB, 0.1)` from the bottom centre. |
-| `[data-theme="hacker"]`, `:root[data-theme="hacker"]`, `html[data-theme="hacker"] textarea`, `html[data-theme="hacker"] body::before` | **hacker**: background `#041004`, main `#22cc22`, Acc1 `#bb8822`, Acc2 `#22bbaa`. The font is the monospace stack and all radii are 1px. Dark color-scheme. `body::before` is a fixed, non-interactive overlay (`z-index: 10000000`, 100vw × 200vh) tiled with `Hacker.png` at 64px. Its vertical `background-position` is `var(--ThemePos)`, which `hackerThemeAnimate(time)` in common.js updates every animation frame (`-round((time·0.01) % 16)·4` px) to scroll the pattern. |
-| `[data-theme="application"]`, `:root[data-theme="application"]`, `html[data-theme="application"] textarea`, `html[data-theme="application"] body` | **application**: the four colours come from the template variables above. Dark color-scheme. The body has a fixed `moroccan.svg` pattern plus three fixed radial gradients: Main at 20% from the bottom centre, Acc2 at 10% from the left, and Acc1 at 10% from the right. |
-| `[data-theme="pro"]`, `html[data-theme="pro"] body`, `:root[data-theme="pro"]`, `html[data-theme="pro"] textarea` | **pro**: background `#171c2e`, main `#ffffff`, Acc1 `#bedbff`, Acc2 `#FFE2BE`. The font is `"Nunito", sans-serif` at `14px`, `--ThemeIconSize: 0.75`, and the radii are asymmetric (`4px 2px 16px 2px`, `3px 1px 12px 1px`, `2px 1px 8px 1px`). The body has `glamorous.svg` over an Acc1 radial gradient and `font-optical-sizing: auto`. Dark color-scheme. |
+| `[data-theme="hacker"]`, `:root[data-theme="hacker"]`, `html[data-theme="hacker"] textarea`, `html[data-theme="hacker"] body::before` | **hacker**: background `#050A06`, main `#3FBF6A`, Acc1 `#D9A441`, Acc2 `#4CB8A8`, focus `#66B3FF` (all at least 8:1). The font is a local monospace stack, all radii are 1px, the body has a faint green radial glow and a soft text glow. Dark color-scheme. `body::before` is a fixed, non-interactive overlay (`z-index: 10000000`, 100vw × 200vh, opacity 0.5) tiled with `Hacker.png` at 64px (kept still with `prefers-reduced-motion`). Its vertical `background-position` is `var(--ThemePos)`, which `hackerThemeAnimate(time)` in common.js updates every animation frame (`-round((time·0.01) % 16)·4` px) to scroll the pattern. |
+| `[data-theme="application"]`, `:root[data-theme="application"]`, `html[data-theme="application"] textarea`, `html[data-theme="application"] body` | **application**: the colours come from the template variables above; the focus ring is `--ThemeMain` (`--ThemeFocus: var(--ThemeMain)`); the color-scheme is `dark`. The body has a fixed soft Acc1 glow from the top (no pattern). The shell adds an Acc1 bar on top of the header (shell/shell.css). |
+| `[data-theme="pro"]`, `html[data-theme="pro"] body`, `:root[data-theme="pro"]`, `html[data-theme="pro"] textarea` | **pro**: background `#22303A`, main `#E6ECF0`, Acc1 `#EE9050`, Acc2 `#9FB6C8`, focus `#7CC4FF`; brand fonts, radii 6/4/3px, no pattern (`font-optical-sizing: auto`). The compact sizes (smaller html font size, `--sw-size`, `--sw-touch`, `--ThemeIconSize`) are in ui/tokens.css. Dark color-scheme. |
 | `html [data-theme] body` | Sets `scrollbar-color: --ThemeBackground --ThemeMain`. The selector has a descendant space (`html [data-theme] body`), so it only matches a `body` inside a descendant element with `data-theme`. With `data-theme` on `<html>` itself, it does not match. |
 | `html[data-theme] body::-webkit-scrollbar-thumb`, `html[data-theme] body::-webkit-scrollbar-track` | WebKit scrollbar colours (thumb = background, track = main) for any non-light theme. |
 
@@ -1571,10 +1584,10 @@ The colour-derived properties are placeholders (`0`) in the stylesheet. `applyTh
 | `--ThemeMain` | `#444`. dark `#aaaaaa`, hacker `#22cc22`, application `${Color.Color}`, pro `#ffffff`. | Body text colour, `.ThemeMain` variants, scrollbars. |
 | `--ThemeAcc1` | `#234D9C`. dark `#D0BF2F`, hacker `#bb8822`, application `${Color.Acc1}`, pro `#bedbff`. | Links, `em`, titles, progress fill, hover outlines, active tabs. |
 | `--ThemeAcc2` | `#6A1834`. dark `#5ecad6`, hacker `#22bbaa`, application `${Color.Acc2}`, pro `#FFE2BE`. | Buttons, focus outlines, markdown headings, JSON strings. |
-| `--ThemeFont` | `Verdana, Geneva, Tahoma, sans-serif`. hacker uses the mono stack, pro uses `"Nunito", sans-serif`. | `body`, `SysWeaver-LongText`, `SysWeaver-MdText`. |
+| `--ThemeFont` | `Verdana, Geneva, Tahoma, sans-serif`. hacker uses a local monospace stack. | `body`, `SysWeaver-LongText`, `SysWeaver-MdText`. |
 | `--ThemeFontMono` | `'Roboto Mono', 'Lucida Console', monospace` | `SysWeaver-Code`, `.SysWeaverCode`, `SysWeaver-LongText.Mono`, `SysWeaver-TabContent.CODE` (tab.css). |
-| `--ThemeFontSize` | `100%`. pro `14px`. | `body` font size. |
-| `--ThemeIconSize` | `1.0`. pro `0.75`. | A multiplier for button line height and for the `icon-WxH` rules that `ColorIcon` generates in common.js. |
+| `--ThemeFontSize` | `100%` (all themes). | `body` font size. |
+| `--ThemeIconSize` | `1.0` (ui/tokens.css: larger on large screens, pro 0.85 with a mouse). | A multiplier for button line height and for the `icon-WxH` rules that `ColorIcon` generates in common.js. |
 | `--ThemeRad`, `--ThemeRadInp`, `--ThemeRadInp2` | `12px`, `8px`, `5px`. hacker `1px` each, pro `4px 2px 16px 2px` / `3px 1px 12px 1px` / `2px 1px 8px 1px`. | Corner radii: large containers and buttons (`--ThemeRad`, also tabs), inputs and links (`--ThemeRadInp`), small inputs (`--ThemeRadInp2`). The last is not used in this file; it is available to page CSS. |
 | `--ThemeFadeDuration` | `0.1s` | Transition durations (`SysWeaver-MdText li`). Also available to page CSS. |
 | `--ThemeOk`, `--ThemeError`, `--ThemeWarning` | `#0b0`, `#c00`, `#ba0` | Status colours for page CSS and scripts. Not referenced inside this file. |

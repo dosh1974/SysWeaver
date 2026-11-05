@@ -7,7 +7,7 @@ namespace SysWeaver.AI
 
 
     /// <summary>
-    /// Paramaters used to generate a logo for some text string, typically a company-, user- or product-name.
+    /// Parameters used to generate a logo for some text string, typically a company-, user- or product-name.
     /// </summary>
     sealed class AiLogo
     {

@@ -4,64 +4,26 @@
     <meta charset="utf-8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
-    <style>
-        html, body {
-            background-color: transparent;
-        }
-    </style>
+    <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover" />
     <title>Service</title>
-    <script defer src="../common/common.js"></script>
+    <script defer src="../sw/core.js"></script>
+    <script defer src="../sw/ui.js"></script>
     <script defer src="../common/md5.js"></script>
     <script defer src="../common/UZIP.js"></script>
     <script defer src="../common/fileUploader.js"></script>
-    <script defer src="../app/application.js"></script>
+    <script defer src="smShared.js"></script>
     <script defer src="serviceInfo.js"></script>
     <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="../icon.svg">
     <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
     <link rel="manifest" href="../app/manifest.json">
     <link rel="stylesheet" href="../common/theme.css">
-    <link rel="stylesheet" href="../app/application.css">
+    <link rel="stylesheet" href="../sw/ui.css">
+    <link rel="stylesheet" href="smShared.css">
+    <link rel="stylesheet" href="server.css">
     <link rel="stylesheet" href="serviceInfo.css">
 </head>
-<body onload="serviceInfoMain()">
-    <si-bg></si-bg>
-    <si-name>
-    </si-name>
-    <si-stats>
-        <si-state title="Status of the service">
-        </si-state>
-        <si-state title="Process ID">
-        </si-state>
-        <si-state title="Current cpu usage.&#10;&#10;Click to show details.">
-        </si-state>
-        <si-state title="Current memory usage.&#10;&#10;Click to show details.">
-        </si-state>
-        <si-state title="Total cpu time">
-        </si-state>
-    </si-stats>
-    <si-servicebuttons>
-    </si-servicebuttons>
-    <si-graphs>
-        <si-graph title="Click to show memory usage details">
-            <iframe></iframe>
-        </si-graph>
-        <si-graph title="Click to show cpu usage details">
-            <iframe></iframe>
-        </si-graph>
-    </si-graphs>
-    <si-debugbuttons>
-    </si-debugbuttons>
-    <si-configs>
-    </si-configs>
-    <si-uploads title="Click to upload config files into the current version">
-    </si-uploads>
-    <si-configs>
-    </si-configs>
-    <si-uploads title="Click to upload config files into the master configs">
-    </si-uploads>
-    <si-versions>
-    </si-versions>
+<body class="sw-root" onload="serviceInfoMain()">
+    <main class="si-page"></main>
 </body>
 </html>

@@ -14,6 +14,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// The ComfyUI end point (base url), ex: "http://127.0.0.1:8188"
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String EndPoint = "http://127.0.0.1:8188";
 
         /// <summary>
@@ -25,6 +26,7 @@ namespace SysWeaver.AI
         /// Optional ComfyUI token, sent as "_token" in the payload.
         /// ComfyUI-Connect uses this token when talking to ComfyUI (needed if ComfyUI requires a token, ex: comfyui-login).
         /// </summary>
+        [EditPassword]
         public String ComfyUiToken;
 
         /// <summary>

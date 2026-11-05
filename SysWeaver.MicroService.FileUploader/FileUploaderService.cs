@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
     [WebApiUrl("../upload")]
     [IsMicroService]
     [OptionalDep<FileHttpServerModule, IFileRepo>]
-    [WebMenuEmbedded(null, "Debug/FileUploader", "Upload file", "upload/Example.html", "Manually upload a file to some file repository", "IconUpload", -8, "debug,dev")]
+    [WebMenuEmbedded(null, "Debug/FileUploader", "File upload test", "upload/Example.html", "Manually upload a file to some file repository", "IconUpload", 20, Roles.Dev)]
     public sealed class FileUploaderService : IHttpServerModule, IDisposable, IHaveStats
     {
         public FileUploaderService(ServiceManager manager, FileUploaderParams p = null)

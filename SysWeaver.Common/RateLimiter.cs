@@ -98,6 +98,69 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Test if a call would be over the limit, without registering it (use <see cref="Add"/> to register a call)
+        /// </summary>
+        /// <param name="ticksToNextFree">If at the limit, the number of <see cref="TimeSpan"/> ticks until the oldest registered call leaves the window (a slot is free), else zero</param>
+        /// <returns>True if a call now would exceed the limit</returns>
+        public bool IsAtLimit(out long ticksToNextFree)
+        {
+            ticksToNextFree = 0;
+            var h = History;
+            lock (h)
+            {
+                var maxAge = DateTime.UtcNow.Ticks - LimitDuration;
+                long t;
+                while (h.TryPeek(out t))
+                {
+                    if (t > maxAge)
+                        break;
+                    h.Dequeue();
+                }
+                if (h.Count < MaxCount)
+                    return false;
+                ticksToNextFree = t - maxAge;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Register a call, also when over the limit (use with <see cref="IsAtLimit"/>, when only some calls should count, ex: wrong tries)
+        /// </summary>
+        public void Add()
+        {
+            var h = History;
+            lock (h)
+            {
+                var tickUtcNow = DateTime.UtcNow.Ticks;
+                var maxAge = tickUtcNow - LimitDuration;
+                while (h.TryPeek(out var t) && (t <= maxAge))
+                    h.Dequeue();
+                h.Enqueue(tickUtcNow);
+                //  Never more than MaxCount entries (only the newest matter)
+                while (h.Count > MaxCount)
+                    h.Dequeue();
+            }
+        }
+
+        /// <summary>
+        /// True if no call is registered within the time window (the limiter can be dropped)
+        /// </summary>
+        public bool IsIdle
+        {
+            get
+            {
+                var h = History;
+                lock (h)
+                {
+                    var maxAge = DateTime.UtcNow.Ticks - LimitDuration;
+                    while (h.TryPeek(out var t) && (t <= maxAge))
+                        h.Dequeue();
+                    return h.Count == 0;
+                }
+            }
+        }
+
+        /// <summary>
         /// Maximum number of requests within the time window
         /// </summary>
         public readonly int MaxCount;

@@ -1,8 +1,14 @@
 {
-  "start_url": "${$Request.Prefix}",
+  "start_url": "../",
+  "scope": "../",
   "short_name": "${$EnvInfo.AppName}",
   "name": "${$EnvInfo.AppDisplayName}",
   "icons": [
+    {
+      "src": "../icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
     {
       "src": "../icon-180.png",
       "sizes": "180x180",
@@ -11,6 +17,11 @@
     {
       "src": "../icon-192.png",
       "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "../icon-512.png",
+      "sizes": "512x512",
       "type": "image/png"
     }
   ],
@@ -25,5 +36,6 @@
       "sizes": "1024x768",
       "type": "image/svg+xml"
     }
-  ]
+  ],
+  "sysweaver_optimized_send": "${Client.OptimizedSend}"
 }

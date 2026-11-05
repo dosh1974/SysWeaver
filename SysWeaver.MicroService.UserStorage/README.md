@@ -53,6 +53,7 @@ Without `Folders`, a `UserStorage` folder in the application data folder is used
 - File system based; capacity and backups are the operator's responsibility
 - Public and protected items are reachable by anyone holding the link — enable public uploads deliberately
 - Files are spread over the folders by a hash or at random, not by free space
+- Stored files that can run scripts (html, xhtml, svg, xml) are served with `Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation` (`UserStorageService.SandboxPolicy`): uploads and LLM generated pages look the same, so they all run in a unique (opaque) origin, also when opened directly in a tab. Scripts, forms and popups still work (interactive LLM pages stay useful), but the page can't read the site's cookies or storage, can't call its APIs as the signed in user and can't reach the page that shows it. Trade-off: no localStorage / sessionStorage / IndexedDB / cookies inside the page, and requests it makes to the site are cross site (no session cookie), so only public resources load (a relative image in a private or protected folder doesn't). The chat shows html attachments in an iframe with the same sandbox.
 
 ## Folder layout
 

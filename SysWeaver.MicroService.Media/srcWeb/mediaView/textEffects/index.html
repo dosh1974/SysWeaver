@@ -1,174 +1,23 @@
 ﻿<!doctype html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8" />
+    <!-- SwWeb:no-framework (a transparent render surface of the media player: no page chrome, themes or texts) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+        Text effect: ?Text=<text> (image effect, default DistortedTv) or ?Texts=<a,b,c> (collage effect, default Stripes) + text style params; rendered by ../MediaPreview.html.
+        Shared logic and parameters: ../effectPage.js (url keys are case sensitive member names; other keys are shader variables).
+        A lean page on purpose (no SysWeaver core): a transparent, non-interactive full window host for backgrounds and embeds.
+    -->
     <script defer src="../parseTools.js"></script>
     <script defer src="../../common/anim.js"></script>
-    <script defer>
-        /*
-            Parameters (basic):
-                Effect = 	Name of the effect file to use.
-                Text = 		The text to show.
-
-            Effects:
-                    "Rain"
-                    "OldMovie"
-                    "DistortedTv"
-                    "BadVHS"
-                    "VHS"
-        */
-
-        async function main() {
-
-            const href = window.location.href;
-            const p = new URL(href).searchParams;
-            const isCollage = p.has("Texts");
-  
-            // MediaPlayerParamsText
-            const props = isCollage ?
-                {
-                    EffectSizeFromImage: false,
-                    AdaptiveSize: true,
-                    Crop: null,
-                    Duration: 10,
-                    Transparent: true,
-                    Font: 'bold 80px Tahoma',
-                    FontUrl: null,
-                    FontUrlName: null,
-                    LetterSpacing: 0,
-                    Fill: "#15b",
-                    FillGradient: null,
-                    Stroke: "#fd4",
-                    StrokeGradient: null,
-                    StrokeWidth: 3,
-                    StrokeCap: "round",
-                    ShadowFill: "#000c",
-                    ShadowStroke: null,
-                    ShadowX: 0,
-                    ShadowY: 0,
-                    ShadowBlur: 6,
-                    MarginLeft: 1,
-                    MarginTop: 1,
-                    MarginRight: 1,
-                    MarginBottom: 1,
-                    StrokeFirst: true,
-                    AttachTo: null,
-                    Texts: "Hello,World,SysWeaver",
-                    CollageSeparator: ',',
-                    CollageColumns: 2,  
-                    DebugImage: false,
-                }
-                : 
-                {
-                    EffectSizeFromImage: true,
-                    Crop: null,
-                    Duration: 10,
-                    Transparent: true,
-                    AdaptiveSize: false,
-                    Font: 'bold 300px Tahoma',
-                    LetterSpacing: 0,
-                    Fill: "#15b",
-                    FillGradient: null,
-                    Stroke: "#fd4",
-                    StrokeGradient: null,
-                    StrokeWidth: 8,
-                    StrokeCap: "round",
-                    ShadowFill: "#000c",
-                    ShadowStroke: null,
-                    ShadowX: 3,
-                    ShadowY: 5,
-                    ShadowBlur: 12,
-                    MarginLeft: 16,
-                    MarginTop: 8,
-                    MarginRight: 16,
-                    MarginBottom: 8,
-                    StrokeFirst: true,
-                    AttachTo: null,
-                    Text: "SysWeaver",
-                    DebugImage: false,
-                };
-            // MediaPlayerParamsEffect
-            const ep =
-            {
-                Width: 1920,
-                Height: 1080,
-                Speed: 1,
-                LimitSize: false,
-                DpiAdjust: false,
-                DpiScale: 1,
-                Static: false,
-                AdaptiveSize: true,
-                WrapU: false,
-                WrapY: false,
-                WebGL2: false,
-                MipMap: false,
-                AntiAlias: false,
-                ScrollId: null,
-                MouseId: null,
-                MouseEnable: false,
-                ImageSize: false,
-                ShowVars: false,
-                ForceMode: null,
-                DarkModeSwitch: 200,
-                CustomX: 0,
-                CustomY: 0,
-                CustomZ: 0,
-                CustomAnimX: null,
-                CustomAnimY: null,
-                CustomAnimZ: null,
-            };
-
-
-            //  Effect paramaters
-            const fxParams =
-            {
-
-            };
-
-            let effect = p.get("Effect") ?? (isCollage ? "Stripes" : "DistortedTv");
-            if (!effect.endsWith(".glsl"))
-                effect = (isCollage ? "collageEffects/" : "imageEffects/") + effect + ".glsl";
-
-            //  Load parameters
-            const subP = effect.indexOf('://') < 0 ? "../" : "";
-            await ParseTools.FileToObject(subP + effect.substring(0, effect.lastIndexOf('.')) + ".json", props, (k, v) =>
-                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
-                    fxParams[k1] = ParseTools.DecodeObject(v1)));
-
-            //  Parse parameters
-            ParseTools.ParamsToObject(p, props, (k, v) =>
-                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
-                    fxParams[k1] = ParseTools.DecodeObject(v1)));
-
-            //  Fix parameters
-            props.Effect = effect;
-
-            const text = (isCollage ? props.Texts : props.Text) ?? "SysWeaver";
-            delete props.Text;
-            delete props.Texts;
-            props.EffectParams = ep;
-            ep.FxProps = fxParams;
-            ep.Transparent = props.Transparent;
-            ep.AdaptiveSize = props.AdaptiveSize;
-            if (props.EffectSizeFromImage)
-                ep.AdaptiveSize = false;
-
-            //  Build url
-            url = '../MediaPreview.html?transparent=true&link=' + text + '&type=5&props=' + encodeURIComponent(JSON.stringify(props));
-            if (p.has("ShaderDebug") && (p.get("ShaderDebug") === "true"))
-                url += "&ShaderDebug=true";
-
-            console.log(url);
-            const c = document.createElement("iframe");
-            ParseTools.MessageProxy(c);
-            c.src = url;
-            document.body.appendChild(c);
-        }
-    </script>
+    <script defer src="../effectPage.js"></script>
     <style>
         :root {
             color-scheme: normal !important;
         }
 
+        /* SwWeb:allow-element-css (a full window effect renderer without Sw components: the canvas fills the window) */
         html, body {
             background: none transparent !important;
             margin: 0;
@@ -178,7 +27,12 @@
             overflow: hidden;
         }
 
+            body > * {
+                pointer-events: none;
+            }
+
         iframe {
+            display: block;
             border: none;
             width: 100%;
             height: 100%;
@@ -186,6 +40,6 @@
         }
     </style>
 </head>
-    <body onload="main()">
-    </body>
+<body data-effect-page="text">
+</body>
 </html>

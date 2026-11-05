@@ -125,10 +125,12 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Actions that can be performed
         /// </summary>
-        [TableDataActions(
+        //  Remove is final (G47, declared, never guessed from the words): the service leaves the list
+        [TableDataActionsFull(new[] { TableDataActionFlags.Final },
             "Remove",
             "Remove management of the service, this will not Stop or Disable the service, nor remove any files",
-            "../ServerManager/RemoveService?\"{0}\"", "../icons/close.svg"
+            "../ServerManager/RemoveService?\"{0}\"", "../icons/close.svg",
+            "", "", ""
             )]
         [TableDataOrder(10)]
         public String Actions => Name;

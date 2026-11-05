@@ -162,7 +162,7 @@ namespace SysWeaver.Net
                 if (s.Length <= 0)
                     continue;
                 if (HaveDotSegment(s))
-                    throw new HttpResponseException(400, "Bad Request - Relative path segments are not allowed [400]");
+                    throw new HttpResponseException(400, "The path may not contain \".\" or \"..\" segments");
                 parts[i] = Uri.EscapeDataString(s);
             }
             return String.Join('/', parts);

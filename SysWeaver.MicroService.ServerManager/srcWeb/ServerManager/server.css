@@ -1,254 +1,48 @@
 ﻿/*
- * Styles of the ServerManager "Server" page (server.html, after theme.css and application.css) and of the metric
- * detail page (server_metrics.html, after theme.css only). Plain static CSS (not templated).
- * All styled elements are created by server.js: square chart tiles (<server-charts>, <server-item> with an iframe and
- * a <server-itemclick> click overlay), the stat pills (<server-stats>, <server-stat>, <server-text>), the command
- * pills (<server-commands>, <server-command>) and the stacked three-chart layout of body.Dual (metrics page).
- * Classes: Click / Disabled (set by addStats), Dual (set by serverMetricsMain).
- * Theme variables used (from common/theme.css): --ThemeMain, --ThemeMainRGB, --ThemeMain25, --ThemeAcc1,
- * --ThemeAcc1RGB, --ThemeAcc2, --ThemeAcc225, --ThemeBackground, --ThemeRad, --ThemeRadInp, --ThemeFadeDuration.
- * No @keyframes, @media or [data-theme] variants; sizes come from viewport units (svw / svh) in custom properties.
+ * server.css - styles of the ServerManager "Server" dashboard (server.html) and of the metric detail page (server_metrics.html,
+ * body.Dual). Loaded after ../common/theme.css and ../sw/ui.css. Plain static css.
+ *
+ * The page anatomy (page container .sw-page-dash, header .sw-ph, facts strip .sw-facts, grid .sw-grid, KPI tiles .sw-kpi with
+ * .sw-meter, cards .sw-card) comes from the shared ui library (ui/page.css, built by ui/page.js: Sw.PageLayout, Sw.Facts,
+ * Sw.Kpi, Sw.Card). Here only the chart sizes:
+ *  - .sm-linecard: a chart card (the CPU / memory charts of serviceInfo.html, which loads this file); its body holds an .sm-chart
+ *    (SmShared.ChartTile) of a fixed height, so new data never moves the page,
+ *  - .sm-metric (server_metrics.html): the "Now" card (.sm-metric-now) and the two history cards (.sm-metric-hist).
+ * Flat: no shadows, no gradients (Design v2, PORTING.md B5).
  */
 
-/* ===== Page base ===== */
+/* ===== Line chart cards ===== */
 
-/* Empty rule. */
-:root {
+.sm-linecard .sm-chart,
+.sm-metric .sm-chart {
+    height: 15rem;
+    margin: var(--sw-space-2) var(--sw-space-3) var(--sw-space-3);
 }
 
-/* Border-box sizing for all elements. */
-*
-{
-    box-sizing: border-box;
-}
-
-/* --Margin: set to 0 on html (overrides the margin variable of the theme / application styles). */
-html
-{
-    --Margin: 0;
-}
-
-/*
- * Tile size custom properties (defined on body, redefined for body.Dual below):
- * --pad: body padding and hover glow size (8px).
- * --mw: max tile width, half the viewport width minus --pad (two tiles per row).
- * --w: tile width, --mw capped at 400px.
- * --h: tile height, --w + 2em (roughly square, room for the chart label).
- */
-body {
-    --pad: 8px;
-    --mw: calc(50svw - var(--pad));
-    --w: min(var(--mw), 400px);
-    --h: calc(var(--w) + 2em);
-    padding: var(--pad);
-    margin: 0;
-}
-
-
-/* ===== Charts ===== */
-
-/* server-charts: wrapping flex row of chart tiles (created by serverMain / serverMetricsMain). */
-server-charts {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-evenly;
-    align-items: center;
-}
-
-/* server-item: one --w x --h chart tile (created by addChart in server.js). */
-server-item {
-    position: relative;
-    width: var(--w);
-    height: var(--h);
-    display: inline-flex;
-    border-radius: var(--ThemeRad);
-}
-
-    /* The chart iframe (../chart/chart.html); pointer-events none so clicks reach the overlay above it. */
-    server-item iframe {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: var(--w);
-        height: var(--h);
-        border: none;
-        pointer-events: none;
+/* Large screens: taller charts (the dashboard is centered at 100rem) */
+@media (min-height: 1000px) {
+    .sm-linecard .sm-chart {
+        height: 18rem;
     }
-
-    /*
-     * server-itemclick: transparent full-size click overlay on top of the iframe (click handler and keyboardClick
-     * from addChart); hover shows a --ThemeAcc1RGB glow of size --pad, focus a --ThemeAcc2 outline.
-     */
-    server-item server-itemclick {
-        position: absolute;
-        left: 0;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        border-radius: var(--ThemeRad);
-        cursor: pointer;
-        outline: 1px solid transparent;
-        transition: box-shadow linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-    }
-
-        server-item server-itemclick:hover {
-            box-shadow: 0 0 var(--pad) rgba(var(--ThemeAcc1RGB), 0.5);
-        }
-
-        server-item server-itemclick:focus {
-            outline: 1px solid var(--ThemeAcc2);
-        }
-
-
-/* ===== Metrics page layout (body.Dual, class added by serverMetricsMain) ===== */
-
-/*
- * Stacks the three charts vertically and redefines the size properties from the viewport:
- * --pad2: spacing between charts (2 x --pad).
- * --mh: available height (100svh minus 4 x --pad2).
- * --mw: full width (100svw minus --pad2).
- * --mmh: 20% of the available height.
- * --h: height of the first (current value) chart, min(--mmh, --mw).
- * --h2: height of the 2nd and 3rd (history) charts, half of the remaining height.
- */
-body.Dual server-charts{
-    --pad2: calc(var(--pad) * 2);
-    --mh: calc(100svh - var(--pad2) * 4);
-    --mw: calc(100svw - var(--pad2));
-    --mmh: calc(var(--mh) * 0.2);
-    --h: calc(min(var(--mmh), var(--mw)));
-    --h2: calc((var(--mh) - var(--h)) / 2);
-    display: block;
 }
 
-
-    /* First chart (current value): full width, --h high, no background (higher specificity than the rule below for these properties). */
-    body.Dual server-item:first-child {
-        background: none;
-        width: var(--mw);
-        height: var(--h);
+/* Phones: lower charts */
+@media (max-width: 599px), (max-height: 500px) {
+    .sm-linecard .sm-chart,
+    .sm-metric .sm-chart {
+        height: 12rem;
+        margin: var(--sw-space-1) var(--sw-space-2) var(--sw-space-2);
     }
-
-     
-        /* Iframe of the first chart, sized like its tile. */
-        body.Dual server-item:first-child iframe {
-            width: var(--mw);
-            height: var(--h);
-        }
-
-    /* Other charts (history): full width, --h2 high, --ThemeBackground, block layout with --pad2 top margin. */
-    body.Dual server-item {
-        background-color: var(--ThemeBackground);
-        display: block;
-        margin-top: var(--pad2);
-        width: var(--mw);
-        height: var(--h2);
-    }
-
-        /* Iframes of the history charts, sized like their tiles. */
-        body.Dual server-item iframe {
-            width: var(--mw);
-            height: var(--h2);
-        }
-
-
-/* ===== Stats ===== */
-
-/* server-stats: wrapping flex row of stat pills with a faint bottom border (created by serverMain). */
-server-stats {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-evenly;
-    align-items: center;
-    padding-bottom: 0.5em;
-    border-bottom: 1px solid rgba(var(--ThemeMainRGB), 0.15);
 }
 
-/*
- * server-stat: rounded pill (icon + server-text) with a --ThemeMain25 border (created by addStats).
- * .Click (set by addStats when the stat has a link) gets a --ThemeMain border and pointer on hover; focus outline
- * in --ThemeAcc1. Note: the Disabled class that addStats sets while a function link runs has no stat style here.
- */
-server-stat {
-    position: relative;
-    display: inline-flex;
-    border-radius: var(--ThemeRadInp);
-    padding: 4px 1em;
-    border: 1px solid var(--ThemeMain25);
-    transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
-    margin: 4px;
+/* ===== Metrics page ===== */
+
+.sm-metric-now .sm-chart {
+    height: 13rem;
 }
 
-    server-stat.Click:hover {
-        border: 1px solid var(--ThemeMain);
-        cursor: pointer;
+@media (min-height: 900px) {
+    .sm-metric-hist .sm-chart {
+        height: 20rem;
     }
-
-
-    server-stat:focus {
-        outline: 1px solid var(--ThemeAcc1);
-    }
-
-
-
-    /* server-text: the label next to the icon in stats and commands (24px line height, left padding). */
-    server-text {
-        line-height: 24px;
-        vertical-align: middle;
-        padding-left: 1em;
-    }
-
-
-/* ===== Commands ===== */
-
-/* server-commands: wrapping flex row of command pills with a faint top border and --ThemeAcc2 text (created by serverMain). */
-server-commands {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-evenly;
-    align-items: center;
-    padding-top: 0.5em;
-    padding-bottom: 0.5em;
-    border-top: 1px solid rgba(var(--ThemeMainRGB), 0.15);
-    margin-top: 0.5em;
-    color: var(--ThemeAcc2);
 }
-
-
-/* Command label: larger text matching the 32px command icon. */
-server-command server-text {
-    line-height: 32px;
-    font-size: 150%;
-}
-
-/* server-command: larger pill with a --ThemeAcc225 border and pointer (Reboot, Deleted; created by addStats with isCommand). */
-server-command {
-    position: relative;
-    display: inline-flex;
-    border-radius: var(--ThemeRadInp);
-    padding: 8px 1em;
-    border: 1px solid var(--ThemeAcc225);
-    transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration);
-    margin: 4px;
-    cursor: pointer;
-}
-
-    /* server-command.Disabled: faded, default cursor, no outline while its async action runs (class swapped with Click by addStats). */
-    server-command.Disabled{
-        opacity: 0.25;
-        cursor: default;
-        outline: none !important;
-    }
-
-    /* Hover: --ThemeAcc2 border; focus: --ThemeAcc1 outline. */
-    server-command:hover {
-        border: 1px solid var(--ThemeAcc2);
-    }
-
-    server-command:focus {
-        outline: 1px solid var(--ThemeAcc1);
-    }
-

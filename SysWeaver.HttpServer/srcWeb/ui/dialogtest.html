@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SysWeaver dialog self-test</title>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="stylesheet" href="../common/theme.css">
+    <script>
+        /*
+         * Self-test of the dialog footer layout engine (ui/overlay.js, UX guide LAY-1, POP-6, TXT-17, FRM-5): opens every dialog state
+         * (generated footers of 1 to 4 buttons with short and long labels, bodies of one or three fields or text; idle, busy with Stop waiting,
+         * busy with Cancel, the rejection line, the 10 s way out, typing while busy, the framework's own dialogs) in frames of 320x180 (1280x720
+         * at 400 %), 390x844 (phone sheet), 844x390 (phone in landscape) and 1920x1080, in all 5 themes, and FAILS on every
+         * footer / title bar control that moved, overlaps, is covered or off screen, a focused field not fully visible, lost input, a label
+         * broken inside a word. A gate: window.SwDialogSelfTest.Passed is true only with 0 problems (or written waivers); the title says
+         * PASSED / FAILED.
+         * Loads the source files (like gallery.html); ?bundle loads the bundles. The frames load this page with ?fixture.
+         */
+        (function () {
+            "use strict";
+            var bundle = /[?&]bundle\b/i.test(location.search);
+            var css = bundle ? ["../sw/ui.css"] : ["tokens.css", "components.css", "overlays.css", "cells.css", "code.css", "icons.css", "page.css"];
+            var js = bundle
+                ? ["../sw/core.js", "../sw/ui.js"]
+                : ["../core/kernel.js", "../core/base.js", "../core/i18n.js", "../core/url.js", "../core/storage.js", "../core/include.js", "../core/format.js",
+                    "../core/net.js", "../core/interop.js", "../core/session.js", "../core/layout.js", "../core/session_start.js",
+                    "../core/theme.js", "../core/page.js", "../core/activity.js", "../core/draft.js",
+                    "../core/access.js", "../core/init.js",
+                    "base.js", "controls.js", "overlay.js", "layout.js", "editors.js", "cells.js", "page.js"];
+            js.push("dialogtest.js");
+            css.forEach(function (h) {
+                var l = document.createElement("link");
+                l.rel = "stylesheet";
+                l.href = h;
+                document.head.appendChild(l);
+            });
+            js.forEach(function (s) {
+                var e = document.createElement("script");
+                e.src = s;
+                e.async = false;
+                document.head.appendChild(e);
+            });
+        })();
+    </script>
+    <style>
+        body.dt-host {
+            margin: 0;
+            padding: 16px;
+        }
+
+        .dt-frames {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .dt-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .dt-clip {
+            overflow: hidden;
+            border: 1px solid var(--sw-border);
+            border-radius: var(--sw-radius-md);
+        }
+
+        .dt-clip iframe {
+            border: 0;
+            transform-origin: 0 0;
+        }
+
+        .dt-ok {
+            color: var(--sw-ok);
+        }
+
+        .dt-bad {
+            color: var(--sw-danger);
+        }
+
+        .dt-list {
+            margin: 4px 0 0;
+            padding-left: 20px;
+            font-size: var(--sw-text-sm);
+        }
+
+        .dt-fixture-page {
+            margin: 0;
+            padding: 16px;
+        }
+    </style>
+</head>
+<body class="sw-root">
+</body>
+</html>

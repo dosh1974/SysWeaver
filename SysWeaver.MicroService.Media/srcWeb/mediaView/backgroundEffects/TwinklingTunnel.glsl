@@ -30,7 +30,9 @@ void mainImage(out vec4 o,vec2 C) {
       o.y-=.2;
       z+=d=5E-4+abs(abs(dot(sin(o*=8.),cos(o.zxwy))-1.)-abs(dot(sin(o*=3.),cos(o.zxwy))-1.)/3.)/32.;
       o=1.+cos(.7*U+5.*Z);
-      O+=(s<0.?d*=d*d,.1:1.)*o.w/max(d,5E-4)*o;
+      // (was "(s<0.?d*=d*d,.1:1.)": the build's shader_minifier can't parse a comma expression inside ?:, the built shader was empty)
+      if (s<0.) d*=d*d;
+      O+=(s<0.?.1:1.)*o.w/max(d,5E-4)*o;
       o=vec4(z*normalize(vec3(C-.5*r,r.y)),.2);
       Z=o.z+=t/3E1;
 	  o.y=abs(s=o.y+.1);

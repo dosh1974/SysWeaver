@@ -30,10 +30,10 @@ Everything in this folder is in the `SysWeaver.MicroService` namespace. The two 
 | [`TextMessageExt.cs`](TextMessageExt.cs) | Extension methods: `Send`, `Reply`, `Failed`, `Allows` |
 | [`OutgoingTextMessage.cs`](OutgoingTextMessage.cs) | A text message to send: phone number, text, system, allowed channels |
 | [`IncomingTextMessage.cs`](IncomingTextMessage.cs) | A received text message |
-| [`GetIncomingTextMessageRequest.cs`](GetIncomingTextMessageRequest.cs) | Request for incoming text messages after `LastId`, optionally for one `System` |
+| [`GetIncomingTextMessageRequest.cs`](GetIncomingTextMessageRequest.cs) | Request for incoming text messages after `LastId`, optionally for one `System` (matched ignoring the letter case and the spaces around it; null or "" is any system) |
 | [`IEmailReceiverService.cs`](IEmailReceiverService.cs) | Interface for services that receive e-mails |
 | [`IncomingEmail.cs`](IncomingEmail.cs) | A received e-mail |
-| [`GetIncomingEmailRequest.cs`](GetIncomingEmailRequest.cs) | Request for incoming e-mails after `LastId`, optionally for one `System` |
+| [`GetIncomingEmailRequest.cs`](GetIncomingEmailRequest.cs) | Request for incoming e-mails after `LastId`, optionally for one `System` (matched ignoring the letter case and the spaces around it; null or "" is any system) |
 
 ## Limitations and considerations
 

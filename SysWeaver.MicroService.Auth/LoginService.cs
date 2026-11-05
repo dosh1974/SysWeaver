@@ -70,7 +70,41 @@ namespace SysWeaver.MicroService
             if (!Manager.TryConsumeOneTimePad(login.OneTimePad, out var username))
                 return AuthInfo.Failed;
             var am = Am.Auth;
-            var auth = await am.UserHash(username, login.Hash ?? "", login.OneTimePad).ConfigureAwait(false);
+            Authorization auth;
+            try
+            {
+                auth = await am.UserHash(username, login.Hash ?? "", login.OneTimePad).ConfigureAwait(false);
+            }
+            catch (PasswordChangeRequiredException ex)
+            {
+                //  the password was right but must be changed first (ex: a forced password reset): no session,
+                //  send the instructions to choose a new password (the short code works in this session)
+                String[] sentTo = null;
+                try
+                {
+                    var sc = ex.StartChange;
+                    if (sc != null)
+                        sentTo = await sc(context).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+                await TaskExt.RandomDelay().ConfigureAwait(false);
+                return new AuthInfo
+                {
+                    PasswordChangeRequired = true,
+                    SentTo = sentTo,
+                };
+            }
+            catch (AccountDisabledException)
+            {
+                //  the password was right but an administrator disabled the account: no session, the page says so
+                await TaskExt.RandomDelay().ConfigureAwait(false);
+                return new AuthInfo
+                {
+                    AccountDisabled = true,
+                };
+            }
             await TaskExt.RandomDelay().ConfigureAwait(false);
             if (auth == null)
                 return AuthInfo.Failed;

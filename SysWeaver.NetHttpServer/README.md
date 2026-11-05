@@ -29,6 +29,7 @@ flowchart LR
 - Validates each prefix and, with `IgnoreBadPrefixes` (default), skips prefixes that fail (invalid, or HTTPS without a certificate) instead of failing the server.
 - Binds certificates from SysWeaver certificate providers to HTTPS ports and re-binds them when a provider reports a new certificate.
 - Optional firewall rule per prefix (`AddToFirewall`).
+- Local only prefixes stay local: http.sys listens on every interface and routes a request by its `Host` header, so a remote client sending `Host: localhost` would reach a `http://localhost:port/` prefix. Requests that match a prefix whose host is `localhost` (or `*.localhost`, `127.x.x.x`, `[::1]`) are refused with 400 unless the connection comes from a loopback address (counted in the `LocalOnlyRefused.` stats).
 - Pause mode answering requests with 503, and graceful shutdown waiting up to `SecondsToWait` for pending requests.
 
 ## Key components

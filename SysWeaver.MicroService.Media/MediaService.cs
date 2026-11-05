@@ -8,7 +8,7 @@ namespace SysWeaver.MicroService
    
 
     [WebApiUrl("../mediaView/Api/")]
-    [WebMenuPath(null, "Debug/Media", "Media", "Media previews etc", "../icons/display.svg")]
+    [WebMenuPath(null, "Debug/Media", "Media demos", "Media effect libraries and demos", "../icons/display.svg", 30)]
     [WebMenuEmbedded(null, "Debug/Media/BackgroundEffects", "Background effects", "mediaView/BackgroundEffectsLib.html", "Show all background effects available", "../icons/computer.svg", 1, Roles.Dev)]
     [WebMenuEmbedded(null, "Debug/Media/ImageEffects", "Image effects", "mediaView/ImageEffectsLib.html", "Show all image effects available", "../icons/image.svg", 2, Roles.Dev)]
     [WebMenuEmbedded(null, "Debug/Media/CollageEffects", "Collage effects", "mediaView/CollageEffectsLib.html", "Show all collage effects available", "../icons/brick.svg", 3, Roles.Dev)]

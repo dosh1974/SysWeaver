@@ -19,7 +19,7 @@ namespace SysWeaver.Remote
     /// Callback function for monitoring remote api calls, called when a remote api call end
     /// </summary>
     /// <param name="id">A unique id for the request (incremental counter), this is matched in the request end callbacks</param>
-    /// <param name="ex">The exception if an error occured, else null</param>
+    /// <param name="ex">The exception if an error occurred, else null</param>
     /// <param name="statusCode">The HTTP response code or 0 when an exception happened</param>
     /// <param name="responsePayloadSerizlier">The name of the serializer used to deserialize the response payload (null for errors and methods without a return value)</param>
     /// <param name="responsePayload">The response payload (empty when an exception happened and for successful methods without a return value).

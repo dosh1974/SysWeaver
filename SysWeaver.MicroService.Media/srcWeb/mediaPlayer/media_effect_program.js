@@ -3,7 +3,7 @@
  * GLSL effect source parsing and WebGL program compilation for MediaPlayerEffect.
  *
  * Loading: included by MediaPlayer.Init (only when window.MediaLoadAll is set) or lazily by
- * MediaPlayer.Create (together with media_player_effect.js) through common.js includeJs; also loaded with
+ * MediaPlayer.Create (together with media_player_effect.js) through MediaPlayer.Include; also loaded with
  * static <script defer> tags by the mediaView/*Effects/index.html and *EffectsLib.html pages.
  *
  * Globals defined: EffectProgram, EffectProgramData; window.ShaderDebug is set by the first
@@ -879,3 +879,12 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         return typeMap;
     })();
 }
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.EffectProgram = EffectProgram;
+    m.EffectProgramData = EffectProgramData;
+})();

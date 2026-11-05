@@ -151,9 +151,9 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Append Mark Down documentation (a heading, the description and a member table per type) for a type and all types that it references.
+        /// Append Markdown documentation (a heading, the description and a member table per type) for a type and all types that it references.
         /// </summary>
-        /// <param name="sb">The string builder to append the Mark Down to</param>
+        /// <param name="sb">The string builder to append the Markdown to</param>
         /// <param name="type">The type to document</param>
         /// <param name="seenTypes">Optional set of types that have already been documented, types in the set are skipped and newly documented types are added to it.
         /// Use this to avoid duplicates when documenting multiple types into the same output</param>

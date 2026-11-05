@@ -170,7 +170,7 @@ namespace SysWeaver.Data
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>
         /// <param name="order">The column names to sort by in priority order (names are trimmed and case sensitive), a '-' prefix reverses the order.
-        /// Unknown names are ignored. Columns with a <see cref="TableDataSortDescAttribute"/> sort descending by default (ascending with '-').</param>
+        /// Unknown names are ignored. "-" always means descending (a <see cref="TableDataSortDescAttribute"/> is only a client hint). A null or empty order uses the <see cref="TableDataDefaultOrderAttribute"/> of the row type, if any.</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
         /// <remarks>
@@ -272,7 +272,8 @@ namespace SysWeaver.Data
         /// <see cref="TableDataSearchAttribute"/>, ordered by descending <see cref="TableDataSearchAttribute"/> weight (weight zero or less excludes a member).
         /// The rank of each member is multiplied by its weight (default 1) times 0.95 per preceding searched member (in that order).
         /// Compiler generated members (auto property backing fields) are never searched, a member is only searched once.
-        /// Rows without a match are removed and the result is ordered by rank (after filtering and sorting, so the rank order wins).
+        /// A row matches only when every word and number of the search text is found (AND, each in any searched member); rows without a match are removed
+        /// and the result is ordered by rank (after filtering and sorting, so the rank order wins).
         /// <see cref="CommonTableData.RowCount"/> is the start row plus the number of returned rows plus the number of look ahead rows found.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1937,6 +1938,20 @@ namespace SysWeaver.Data
             data.Cols = cols;
             if (title != null)
                 data.Title = title;
+            return data;
+        }
+
+        /// <summary>
+        /// Set <see cref="CommonTableData.DefaultOrder"/> when the columns are included (sent), see <see cref="TableDataDefaultOrderAttribute"/>.
+        /// </summary>
+        /// <typeparam name="X">The table type.</typeparam>
+        /// <param name="data">The table to update (in place).</param>
+        /// <param name="order">The default order of the row type, may be null.</param>
+        /// <returns>The source table data.</returns>
+        internal static X WithDefaultOrder<X>(this X data, String[] order) where X : CommonTableData
+        {
+            if ((data != null) && (data.Cols != null))
+                data.DefaultOrder = order;
             return data;
         }
 

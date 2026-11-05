@@ -49,7 +49,7 @@ Stands in for [SysWeaver.TextMessage.Twilio](../SysWeaver.TextMessage.Twilio/REA
 
 ## Limitations and considerations
 
-- Development only: its endpoints declare no authentication of their own, so on a server with anonymous API defaults message contents would be public.
+- Development only. `Auth` (FakeTextMessageParams) protects its APIs and menu items. The default `null` leaves them open, as the original: the services that send through it and the testers call it without signing in. Set it (ex: `"Ops,Dev,Debug"`, or `""` = any signed in user) when others can reach the service: the messages can hold sign in codes.
 - Messages are kept in memory only, and nothing is actually delivered.
 - No web UI of its own (use the message table, or the [FakeTextService](https://github.com/dosh1974/SysWeaver.Services/blob/main/FakeTextService/README.md) application).
 

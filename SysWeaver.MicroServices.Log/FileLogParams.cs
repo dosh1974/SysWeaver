@@ -37,6 +37,13 @@ namespace SysWeaver.MicroService
         public long MaxSize = 2 << 20;
 
         /// <summary>
+        /// If true (the default), deleting the log file ("Api/logFile/DeleteLogFile") needs a one time token from "Api/logFile/GetDeleteLogFileToken" (valid for 5 minutes, for the same session),
+        /// so the delete must be confirmed by the user (the page shows the facts and the warning of the token first) and a crafted link or a plain request can't delete the log.
+        /// If false, a call without a token deletes the file (the behaviour before the token).
+        /// </summary>
+        public bool DeleteNeedsToken = true;
+
+        /// <summary>
         /// If true, dump stats tables on exit.
         /// The extension of the file name is removed and then stats names are appended.
         /// </summary>

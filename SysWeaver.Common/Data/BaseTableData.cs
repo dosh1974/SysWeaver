@@ -41,6 +41,13 @@ namespace SysWeaver.Data
         public String Title;
 
         /// <summary>
+        /// The default sort order of the table (<see cref="TableDataDefaultOrderAttribute"/> of the row type), used by the server when a request has no order.
+        /// Column names in priority order, a '-' prefix = descending. Only sent with the columns, null if the table has no default order.
+        /// </summary>
+        [AiIgnore]
+        public String[] DefaultOrder;
+
+        /// <summary>
         /// Copy the common values from another instance (shallow copy).
         /// </summary>
         /// <param name="s">The instance to copy from</param>
@@ -49,6 +56,7 @@ namespace SysWeaver.Data
             RowCount = s.RowCount;
             Cols = s.Cols;
             Title = s.Title;
+            DefaultOrder = s.DefaultOrder;
         }
 
     }

@@ -28,6 +28,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// The service endpoint that the client will send requests to. If not set, the default endpoint will be used.
         /// </summary>
+        [EditType(EditTypes.Url)]
         public String EndPoint;
 
         /// <summary>

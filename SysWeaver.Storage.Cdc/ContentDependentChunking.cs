@@ -907,7 +907,7 @@ namespace SysWeaver
 
             String[] files;
             using (var _ = await l.Lock().ConfigureAwait(false))
-                files = Directory.GetFiles(folder);
+                files = Directory.Exists(folder) ? Directory.GetFiles(folder) : [];  //  A missing folder (nothing stored yet, ex: a fresh install) is empty
             await files.ProcessAsyncValue(async file =>
             {
                 using var _ = await l.Lock().ConfigureAwait(false);
@@ -958,7 +958,7 @@ namespace SysWeaver
 
             String[] files;
             using (var _ = await l.Lock().ConfigureAwait(false))
-                files = Directory.GetFiles(folder);
+                files = Directory.Exists(folder) ? Directory.GetFiles(folder) : [];  //  A missing folder (nothing stored yet, ex: a fresh install) is empty
             await files.ProcessAsyncValue(async file =>
             {
                 using var _ = await l.Lock().ConfigureAwait(false);

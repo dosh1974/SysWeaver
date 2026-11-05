@@ -13,6 +13,8 @@
 
 A service declares its menu entries with `[WebMenu*]` attributes. Each attribute has a menu name, an id/path (e.g. `"Debug/Media/ImageEffects"`), a display name, a title, an icon, an order, the required auth and kind-specific data. An optional "dynamic" member name lets the service decide at run time whether the entry is shown, e.g. `PassKeyService.CanSignInWithPassKey`. The `WebMenuService` in [SysWeaver.MicroService.HttpServer](../../SysWeaver.MicroService.HttpServer/README.md) collects the attributes and returns the resulting `WebMenu` / `WebMenuItem` tree to the browser.
 
+The main menu folders (Monitoring, Operations, Administration, Data, Development), naming rules and the menu auth rule (a menu item must use the auth of the page / api it opens) are described in [`_docs/Web.md`](../../_docs/Web.md) "Main menu structure".
+
 ## Contents
 
 | Item | Description |

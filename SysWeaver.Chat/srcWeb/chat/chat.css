@@ -1,1119 +1,1460 @@
 ﻿/**
- * chat.css - styles of the SysWeaver chat UI built by chat.js (Chat.addChat / chatMain).
+ * chat.css - styles of the SysWeaver chat (chat.js: Sw.Chat.Add / Chat.html).
  *
- * Loaded by Chat.html (after ../common/theme.css and ../app/application.css); any other page that
- * calls Chat.addChat must include it too. Not templated.
+ * Loaded by Chat.html after ../common/theme.css and ../sw/ui.css (the Sw tokens --sw-* and components, the SysWeaver icon classes
+ * incl. the IconChat* classes). Any other page that creates a chat must include it too. Not templated.
  *
- * Dependencies:
- * - Theme variables from common/theme.css: --ThemeMain, --ThemeMainRGB, --ThemeMain25, --ThemeAcc1(RGB),
- *   --ThemeAcc2(RGB), --ThemeBackground(RGB), --ThemeRad, --ThemeRadInp, --ThemeRadInp2, --ThemeIconSize,
- *   --ThemeFadeDuration, --ThemeFont, --ThemeFontMono. No [data-theme] variants or media queries here;
- *   theming comes entirely from these variables.
- * - ColorIcon elements from common.js (custom elements named icon-WxH, e.g. icon-64x64, with classes
- *   IconButton, IconDisabled, IconWorking plus a mask-image class from the .Icon* rules below).
- * - PopUpMenu from application.js (SysWeaver-PopupMenu / SysWeaver-PopupMenuBack).
- *
- * Layout uses custom elements only (SysWeaver-Chat, -ChatMain, -ChatInput, -ChatRow, -ChatMsg, -ChatHeader,
- * -ChatLanguage, -ChatName, -ChatTime, -ChatIcon, -ChatContent, -ChatData, -ChatHolder, -ChatExpand,
- * -ChatLabel, -ChatLangItem). State classes are toggled by chat.js (see the individual rules).
- * Mask icon urls are relative to chat/: ../icons/ is the shared HttpServer icon set, icons/ the chat-local set.
+ * Elements (all created by chat.js, prefix chat-):
+ *   .chat-page (Chat.html root, .chat-nobackground, .chat-page-message > .chat-message-box: no id / failed) > .chat-root (any container given to Sw.Chat.Add, .chat-nopost without input)
+ *     .chat-list (role log; .chat-stick flash) > .chat-row (.chat-mine, .chat-preview, .chat-hide, .chat-hidden, .chat-working)
+ *        > .chat-msg > .chat-header (.chat-toggle) [> .chat-lang (.chat-translating, .chat-translated)] > .chat-who (.chat-name,
+ *          .chat-time) > .chat-icon ; .chat-content ; .chat-data > .chat-att (.chat-att-image [.chat-att-blocked: a "Show image" placeholder], .chat-att-file, .chat-att-html)
+ *     .chat-menu-button (only without input: a bar above the list), .chat-split (the list / input splitter),
+ *     .chat-input (.chat-labels, .chat-pad-row) > .chat-write-box (.chat-write textarea: .chat-listening, .chat-dragging)
+ *        + .chat-input-pad (.chat-attach, .chat-input-flag, .chat-mic (.chat-recording), .chat-send) + .chat-menu-button
+ *   Chat root states (set by chat.js): .chat-autosize (automatic split, the text box sized to its text), .chat-compact (low chat), .chat-tight (very low chat: one input row),
+ *     .chat-drop-files (files dragged over the chat: the drop frame, data-drop; .chat-drop-full: no more files fit).
+ * Custom properties: --chat-ics (set by JS on the icon buttons from the options: icon size), --chat-si (sender image size),
+ * --chat-fi (flag width).
  */
 
-/* ===== Page and container ===== */
+/* ===== Page ===== */
 
-/*
- * Chat.html body (class ChatMain) when the page runs inside the app shell (application.js adds class
- * Embedded to <html>): 8px shorter than the viewport. Written with CSS nesting.
- */
-html.Embedded {
-    body.ChatMain {
-        height: calc(100svh - 8px);
-    }
-}
-
-/* --Margin: overrides the shared theme page margin (common/theme.css) with 0 for the chat page. */
-html
-{
-    --Margin: 0;
-}
-
-
-/* body.ChatMain: the Chat.html body (class ChatMain in the markup); full viewport (100svh), no margins, no text selection, no vertical scroll. */
-body.ChatMain{
-    display: block;
-    width: 100%;
-    height: 100svh;
-    padding: 0;
+html:has(body.ChatMain), body.ChatMain {
+    height: 100%;
     margin: 0;
-    user-select: none;
-    overflow-y: hidden;
+    padding: 0;
+    overflow: hidden;
+    background-color: transparent;
 }
 
+/* The Chat.html root: centered, at most min(125vh, 100vw) wide, framed by hairlines (Design v2: no glow / shadow on permanent surfaces) */
+.chat-page {
+    box-sizing: border-box;
+    height: 100%;
+    width: 100%;
+    max-width: min(125vh, 100vw);
+    min-width: min(320px, 100vw);
+    margin: 0 auto;
+    background-color: color-mix(in srgb, var(--sw-bg) 50%, transparent);
+    border-inline: 1px solid var(--sw-border);
+}
 
-    /* The SysWeaver-Chat root on Chat.html: width limited to min(125vh, 100vw) (min 320px), soft accent glow. */
-    body.ChatMain SysWeaver-Chat {
-        max-width: calc(min(125vh, 100vw));
-        min-width: 320px;
-        box-shadow: 0 0 64px rgba(var(--ThemeAcc1RGB), 0.15);
+    /* Low screens (phone landscape): the width limit would leave only the middle half, use the whole width */
+    @media (max-height: 540px) {
+        .chat-page {
+            max-width: none;
+        }
     }
 
-        /* NoBackground: added by chatMain when the ?nobackground URL flag is present; transparent, no shadow, no max width. */
-        body.ChatMain SysWeaver-Chat.NoBackground {
-            background: none transparent;
-            box-shadow: unset;
-            max-width: unset;
+    /* ?transparent (html.Transparent, core/layout.js; also a child frame unless transparent=false): no tint, the page owning the
+       iframe is responsible for a background that suits the theme (the bubbles and the input keep their own surfaces) */
+    html.Transparent .chat-page {
+        background: none transparent;
+    }
+
+        /* ...so on the host page (not in the app shell, html.Embedded): messages scrolled out at the top fade out instead of being
+           cut (only while scrolled, .chat-scrolled from MessageList.OnScroll), the dashed separators between the rows and the
+           splitter line are left out, and the Send / Speak words get the input's surface */
+        html.Transparent:not(.Embedded) .chat-page .chat-list.chat-scrolled {
+            /* SwWeb:allow-design (a mask that fades the scrolled out messages at the top edge, not a surface) */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1em);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 1em);
         }
 
-/*
- * SysWeaver-Chat: root container (created by chatMain, passed to Chat.addChat as chatBackground).
- * Flex column holding SysWeaver-ChatMain and SysWeaver-ChatInput; semi-transparent background.
- * Defines --ics: size of the input icons (send / mic), in px; reserves space in the list height
- * and the textarea width. Constant here (not set by JS).
- */
-SysWeaver-Chat {
-    --ics: 48px;
-    font-size: 125%;
-    position: relative;
-    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
-    color: var(--ThemeMain);
-    width: 100%;
-    height: 100%;
-    margin: 0 auto 0 auto;
+        html.Transparent:not(.Embedded) .chat-page .chat-row {
+            border-bottom-color: transparent;
+        }
+
+        html.Transparent:not(.Embedded) .chat-page .chat-split {
+            background: transparent;
+            border-top-color: transparent;
+        }
+
+        html.Transparent:not(.Embedded) .chat-page .chat-input > .chat-menu-button,
+        html.Transparent:not(.Embedded) .chat-page .chat-input > .chat-input-pad {
+            border-radius: var(--sw-radius-lg);
+            background-color: color-mix(in srgb, var(--sw-bg) 85%, transparent);
+        }
+
+    /* ?fillscreen (html.FillScreen, core/layout.js): an embedding asked the page to fill its frame, so no width limit and no side
+       hairlines (the frame is the edge) */
+    html.FillScreen .chat-page {
+        max-width: none;
+        border-inline: 0;
+    }
+
+        /* ...but the bubbles keep a reading measure (about 75 characters a line) in a wide frame */
+        html.FillScreen .chat-page .chat-msg {
+            max-width: min(95%, 36em);
+        }
+
+        /* ...and keep off the frame edges */
+        html.FillScreen .chat-page .chat-list {
+            padding-inline: 0.5em;
+        }
+
+        html.FillScreen .chat-page .chat-input {
+            padding-inline: 0.5em;
+        }
+
+    /* ?nobackground: transparent, no shadow, full width */
+    .chat-page.chat-nobackground {
+        background: none transparent;
+        border: 0;
+        max-width: none;
+    }
+
+/* A message instead of the chat (Chat.html without id, or the chat failed to open): centered, scrolls when too small */
+.chat-page.chat-page-message {
     display: flex;
-    flex-flow: column;
-    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: auto;
 }
 
+.chat-message-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 36em;
+    text-align: center;
+    color: var(--sw-fg);
+}
 
+.chat-message-icon {
+    width: 3em;
+    height: 3em;
+    color: var(--sw-accent1);
+}
+
+.chat-message-box[role=alert] .chat-message-icon {
+    color: var(--sw-danger);
+}
+
+.chat-message-title {
+    margin: 0;
+    font-size: 1.4em;
+}
+
+.chat-message-text {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ===== Chat root ===== */
+
+.chat-root {
+    --chat-si: calc(var(--sw-scale, 1) * 40px);
+    --chat-fi: calc(var(--sw-scale, 1) * 32px);
+    /* A size container: attachments are at least half as wide as the chat (50cqw) */
+    container-type: inline-size;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    font-size: 125%;
+    color: var(--sw-fg);
+    box-sizing: border-box;
+}
+
+@media (pointer: coarse) {
+    .chat-root {
+        --chat-si: 44px;
+    }
+}
+
+/* Files dragged over the chat (Composer.InitDrop): a dashed frame over the whole chat with "Drop files to attach" (data-drop);
+   it never takes the pointer, so the drop lands on the chat (or the text box) below */
+.chat-root.chat-drop-files::after {
+    content: attr(data-drop);
+    position: absolute;
+    inset: 4px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1em;
+    text-align: center;
+    font-weight: 600;
+    color: var(--sw-fg);
+    background-color: color-mix(in srgb, var(--sw-bg) 80%, transparent);
+    border: 2px dashed var(--sw-accent1);
+    border-radius: var(--sw-radius-lg);
+    pointer-events: none;
+}
+
+    /* ...the message has the maximum number of files: nothing is attached (the reason instead) */
+    .chat-root.chat-drop-files.chat-drop-full::after {
+        color: var(--sw-text-2);
+        border-color: var(--sw-border-input);
+    }
 
 /* ===== Message list ===== */
 
-/*
- * SysWeaver-ChatMain: the scrolling message list created by addChat. resize: vertical makes it the
- * splitter against the input area; a ResizeObserver in chat.js saves the height fraction
- * (SysWeaver.Chat.Size<s>) and restores it on load. Height leaves room for the input (max(4.5em, --ics)).
- */
-SysWeaver-ChatMain {
-    font-size: 125%;
-    display: block;
-    width: 100%;
-    overflow-y: auto;
+.chat-list {
+    position: relative;
     flex: 0 1 auto;
+    height: calc(100% - 7.5em);
+    min-height: min(10%, 80px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     box-sizing: border-box;
     padding-bottom: 0.5em;
-    resize: vertical;
-    height: calc(100% - max(4.5em, var(--ics)));
-    min-height: 10%;
-    max-height: calc(100% - max(max(104px, 2.5em), var(--ics)));
 }
 
-    /* Non-interactive overlay (pointer-events: none) drawing an inset shadow at the top of the list. */
-    SysWeaver-ChatMain::after {
-        content: '';
+    /* An empty chat: a quiet hint in the middle instead of a blank area (the hidden preview row does not count) */
+    .chat-list:not(:has(> .chat-row:not(.chat-preview)))::before {
+        content: attr(data-empty);
         position: absolute;
-        left: 0;
-        top: 0;
-        right: 0;
-        bottom: 0;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-md);
         pointer-events: none;
-        box-shadow: inset 0 1em 1em -1em rgba(0, 0, 0, 0.5);
     }
 
-    /* NoPost: added by addChat when the Join response has CanPost false (no input area); full height, not resizable. */
-    SysWeaver-ChatMain.NoPost {
-        height: 100%;
-        max-height: 100%;
-        resize: none;
+    /* Without input: the whole height below the menu bar */
+    .chat-nopost .chat-list {
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 0;
     }
 
-    /* icon-64x64: the 64x64 IconWorking ColorIcon spinner shown while older messages load (StickToBottom onTop); fades in via LoadingFade. */
-    SysWeaver-ChatMain icon-64x64 {
-        opacity: 0.5;
-        margin: auto;
+    /* The automatic split (until the user drags the splitter): the list takes everything the input (sized to its text) leaves */
+    .chat-autosize > .chat-list {
+        flex: 1 1 0;
+        height: auto;
+    }
+
+    /* Flashes a bottom accent when the list sticks to the bottom again: a strip kept at the visible bottom (sticky) that fades out
+       (opacity only, no repaint of the list) */
+    .chat-list.chat-stick::after {
+        content: "";
+        position: sticky;
+        bottom: 0;
         display: block;
-        animation: var(--ThemeFadeDuration) linear LoadingFade;
+        height: 32px;
+        margin-top: -32px;
+        pointer-events: none;
+        /* SwWeb:allow-design (a short flash of the bottom edge when the list sticks to the newest message; fades to none) */
+        background: linear-gradient(to top, color-mix(in srgb, var(--sw-accent1) 35%, transparent), transparent);
+        opacity: 0;
+        animation: calc(var(--sw-dur-3) * 2) var(--sw-ease, ease-out) chat-stick;
     }
 
-
-    /* Stick: added/removed by the StickToBottom callbacks in addChat when the list (un)sticks to the bottom; flashes SysWeaver_ChatStick. */
-    SysWeaver-ChatMain.Stick {
-        animation: 0.5s linear SysWeaver_ChatStick;
-    }
-
-/* ===== Input area ===== */
-
-/*
- * SysWeaver-ChatInput: input container (only when CanPost). JS sets its background-image to the current
- * input language flag (../iso_data/language/<lang>.svg), drawn bottom-right left of the icons.
- */
-SysWeaver-ChatInput {
-    box-sizing: border-box;
-    display: block;
-    flex: 1 1 auto;
-    width: 100%;
-    padding: 0.25em;
-    box-shadow: 0 -0.5em 1.5em rgba(0, 0, 0, 0.5);
-    position: relative;
-
-    background-repeat: no-repeat;
-    background-position: right 72px bottom 16px;
-    background-size: auto 32px;
+/* The spinner shown while older messages load */
+.chat-loading {
+    display: flex;
+    justify-content: center;
+    padding: 0.5em;
+    opacity: 0.5;
+    animation: var(--sw-dur-2, 0.2s) var(--sw-ease, ease) chat-fade;
 }
 
+/* ===== Rows ===== */
 
-
-
-
-    /* Input ColorIcon buttons (IconButton; send = IconSend, mic = IconChatMicOn): absolute top-right. */
-    SysWeaver-ChatInput > *.IconButton {
-        position: absolute;
-        top: 0.25em;
-        right: 0.25em;
-    }
-
-        /* The mic button, identified positionally as the 3rd child (after textarea and send): bottom-right, --ThemeAcc2 background. */
-        SysWeaver-ChatInput > *.IconButton:nth-child(3) {
-            top: auto;
-            bottom: 0.25em;
-            transition: background-color linear 0.15s;
-            background-color: var(--ThemeAcc2) !important;
-        }
-
-            /* Mic IconDisabled (open mic listening, ColorIcon SetEnabled(false)): mask swapped to icons/ChatInput.svg, dimmed. */
-            SysWeaver-ChatInput > *.IconButton:nth-child(3).IconDisabled {
-                mask-image: url(icons/ChatInput.svg);
-                opacity: 0.6;
-            }
-
-
-
-            /* Mic IconWorking (ColorIcon StartWorking() while speech is active): mask swapped to icons/ChatRecording.svg. */
-            SysWeaver-ChatInput > *.IconButton:nth-child(3).IconWorking {
-                mask-image: url(icons/ChatRecording.svg);
-                opacity: 1.0;
-            }
-
-
-    /* The message textarea; width leaves room for the icon column (--ics). Placeholder (set by markDownChanged / Send) is faint italic. */
-    SysWeaver-ChatInput textarea {
-        box-sizing: border-box;
-        width: calc(100% - var(--ics) - 0.25em);
-        height: 100%;
-        resize: none;
-        background-color: rgba(var(--ThemeBackgroundRGB), 0.85);
-        color: var(--ThemeMain);
-        border-radius: var(--ThemeRad);
-        padding: 0.5em 0.75em;
-        border: 2px solid rgba(var(--ThemeAcc1RGB), 0.05);
-        outline: none !important;
-        transition: color linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
-        font: var(--ThemeFont);
-        position: relative;
-    }
-
-        SysWeaver-ChatInput textarea::placeholder {
-            color: var(--ThemeMain);
-            opacity: 0.25;
-            font-size: 80%;
-            font-style: italic;
-        }
-
-        /* Listening: set by startListening's onActivate while speech recognition is active; Dragging: set on dragenter, removed on dragleave/drop. */
-        SysWeaver-ChatInput textarea.Listening {
-            border: 2px solid var(--ThemeAcc2);
-        }
-
-        SysWeaver-ChatInput textarea.Dragging {
-            border: 2px dashed var(--ThemeAcc1);
-        }
-
-
-
-
-
-/* ===== Message rows and header ===== */
-
-/*
- * SysWeaver-ChatRow: one row per message (addMessage). Defines:
- * --si: sender icon size (px, scaled by --ThemeIconSize); header grid column and image size.
- * --fi: language flag width (px, scaled by --ThemeIconSize); header grid column.
- * Dashed divider below each row.
- */
-SysWeaver-ChatRow {
-    --si: calc(var(--ThemeIconSize) * 40px);
-    --fi: calc(var(--ThemeIconSize) * 32px);
-    font-size: 80%;
+.chat-row {
     box-sizing: border-box;
-    display: block;
     width: 100%;
     padding: 1em 0.5em;
     text-align: left;
-    border-bottom: 1px dashed rgba(var(--ThemeMainRGB), 0.1);
+    border-bottom: 1px dashed color-mix(in srgb, var(--sw-fg) 10%, transparent);
 }
 
-/* First row: 48px top margin leaves room for the top-right menu icon; last row (the preview row when posting): no divider. */
-SysWeaver-ChatRow:first-child {
-    margin-top: 48px;
-}
+    /* Room for the top right menu button */
+    .chat-row:first-child {
+        margin-top: 48px;
+    }
 
-    SysWeaver-ChatRow:last-child {
-        margin-bottom: 0;
+    .chat-row:last-child,
+    .chat-row:has(+ .chat-row.chat-hide:last-child) {
         border-bottom: none;
     }
 
-    /* Hide: toggled by previewChanged on the preview row when it has nothing to show. */
-    SysWeaver-ChatRow.Hide {
+    .chat-row.chat-hide {
         display: none;
     }
 
-    /* Preview: the draft preview row (class added in addChat); dashed accent top border, a centered "Preview" label via :before, header not clickable. */
-    SysWeaver-ChatRow.Preview {
-        border-top: 2px dashed var(--ThemeAcc1);
+    .chat-row.chat-mine {
+        text-align: right;
+    }
+
+    /* The draft preview row */
+    .chat-row.chat-preview {
+        border-top: 2px dashed var(--sw-accent1);
         padding-top: 0;
         padding-bottom: 0.25em;
     }
 
+.chat-preview-label {
+    text-align: center;
+    font-size: 80%;
+    padding: 0.25em 0 0.5em 0;
+    color: var(--sw-text-2);
+}
 
-        SysWeaver-ChatRow.Preview:before {
-            padding-top: 0.25em;
-            content: "Preview";
-            display: block;
-            text-align: center;
-            font-size: 80%;
-            margin-bottom: 0.5em;
-        }
+/* The bubble (the border color is per sender with the UserColor option) */
+.chat-msg {
+    display: inline-block;
+    box-sizing: border-box;
+    max-width: 95%;
+    min-width: min(16em, 95%);
+    background-color: var(--sw-bg);
+    border: 2px solid color-mix(in srgb, var(--sw-fg) 10%, transparent);
+    border-radius: var(--sw-radius-lg);
+    border-top-left-radius: calc(var(--sw-radius-sm) / 2);
+}
 
-    SysWeaver-ChatRow.Preview SysWeaver-ChatHeader {
-        cursor: default;
-    }
+.chat-mine .chat-msg {
+    border-top-left-radius: var(--sw-radius-lg);
+    border-top-right-radius: calc(var(--sw-radius-sm) / 2);
+}
 
-    /* SysWeaver-ChatMsg: the message bubble; square top-left corner; border color is overridden per sender by JS (Chat.chatColor) when UserColor. */
-    SysWeaver-ChatMsg {
-        background-color: var(--ThemeBackground);
-        display: inline-block;
-        border: 2px solid rgba(var(--ThemeMainRGB), 0.1);
-        border-radius: var(--ThemeRad);
-        border-top-left-radius: 2px;
-        box-sizing: border-box;
-        max-width: 95%;
-    }
+/* ===== Header: sender image | name + time | language flag (mirrored for own messages) ===== */
 
-/*
- * Mine: added by addMessage for the current user's own messages. Right aligned, square corner moves to
- * the top-right and the header grid is mirrored (flag left, icon right). The ChatName / ChatTime rules are empty.
- */
-SysWeaver-ChatRow.Mine {
+.chat-header {
+    display: grid;
+    grid-template-columns: var(--chat-si) minmax(0, 1fr) auto auto;
+    grid-template-areas: "icon who lang more";
+    align-items: center;
+    gap: 0 0.5em;
+    padding: 2px 0.5em 2px 2px;
+    background-color: var(--sw-accent2-soft);
+    text-align: left;
+    /* The bubble does not clip (the sender image zooms out of it on hover), so the header rounds its own top corners */
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
+}
+
+.chat-mine .chat-header {
+    grid-template-columns: auto auto minmax(0, 1fr) var(--chat-si);
+    grid-template-areas: "more lang who icon";
+    padding: 2px 2px 2px 0.5em;
     text-align: right;
 }
 
-    SysWeaver-ChatRow.Mine SysWeaver-ChatMsg {
-        border-radius: var(--ThemeRad);
-        border-top-right-radius: 2px;
-    }
-
-
-    SysWeaver-ChatRow.Mine SysWeaver-ChatLanguage {
-        grid-column: 1 / 1;
-    }
-
-    SysWeaver-ChatRow.Mine SysWeaver-ChatName {
-    }
-
-    SysWeaver-ChatRow.Mine SysWeaver-ChatTime {
-    }
-
-    SysWeaver-ChatRow.Mine SysWeaver-ChatIcon {
-        grid-column: 3 / 3;
-    }
-
-SysWeaver-ChatRow.Mine SysWeaver-ChatHeader {
-    grid-template-columns: var(--fi) auto var(--si);
-    padding: 2px 2px 2px 0.5em;
+/* The message menu button (also on the sender image): quiet, in the header's own area */
+.chat-msg-more {
+    grid-area: more;
+    color: var(--sw-text-2);
 }
 
-/*
- * SysWeaver-ChatHeader: 3x2 grid (icon --si | name/time | flag --fi). Background is overridden per sender
- * by JS when UserColor. Click toggles hide/show of the sender's messages, contextmenu opens the message menu.
- */
-SysWeaver-ChatHeader {
-    display: block;
-    background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-    padding: 2px 0.5em 2px 2px;
+.chat-header.chat-toggle {
     cursor: pointer;
-    display: grid;
-    grid-template-columns: var(--si) auto var(--fi);
-    grid-template-rows: auto auto;
 }
 
-/* SysWeaver-ChatLanguage: language flag cell (only when CanTranslate), spans both header rows; its mask/background show the loading icon while translating. */
-SysWeaver-ChatLanguage {
-    grid-column: 3 / 3;
-    grid-row: 1 / span 2;
-    background-color: transparent;
-    transition: background-color linear var(--ThemeFadeDuration);
-    mask-position: center center;
+.chat-who {
+    grid-area: who;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Name and time use the size tokens (they grow with --sw-scale on large screens). The time is as large as the name (at least 13 px) and in
+   the normal text color (not the pale user color of the header), so "3 hours ago" reads clearly at 2560 too */
+/* The name and the "AI" tag on one line (the name is shortened with an ellipsis first, the tag stays) */
+.chat-name-line {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    min-width: 0;
+}
+
+.chat-mine .chat-name-line {
+    justify-content: flex-end;
+}
+
+/* The "AI" tag (ChatMessageFlags.FromAi): a small outlined pill in the text color, readable in every theme */
+.chat-ai-tag {
+    flex: none;
+    padding: 0 0.4em;
+    border: 1px solid currentColor;
+    border-radius: var(--sw-radius-pill);
+    color: var(--sw-fg);
+    font-size: max(12px, calc(var(--sw-text-md) * 0.8));
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: 0.04em;
+}
+
+    .chat-ai-tag[hidden] {
+        display: none;
+    }
+
+.chat-name {
+    min-width: 0;
+    font-size: max(13px, calc(var(--sw-text-md) * 0.95));
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-time,
+.chat-time.sw-right,
+.chat-time.sw-mono {
+    font-family: inherit;
+    font-size: max(13px, calc(var(--sw-text-md) * 0.95));
+    font-weight: 500;
+    color: var(--sw-fg);
+    white-space: nowrap;
+    text-align: inherit;
+}
+
+/* The sender image: a button opening the message menu */
+.chat-icon {
+    grid-area: icon;
+    display: block;
+    width: var(--chat-si);
+    height: var(--chat-si);
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: none;
+    color: var(--sw-accent1);
+    cursor: pointer;
+    border-radius: calc(var(--chat-si) * 0.1);
+}
+
+    .chat-icon img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: inherit;
+        transform-origin: 20% center;
+        /* SwWeb:allow ux-mot-2 (owner: a fixed time as in the original, not the theme's motion scale; the zoom is a quick preview) */
+        transition: transform ease-in-out 0.15s;
+    }
+
+    .chat-mine .chat-icon img {
+        transform-origin: 80% center;
+    }
+
+    .chat-icon .chat-icon-fallback {
+        width: 80%;
+        height: 80%;
+    }
+
+    .chat-icon:focus-visible,
+    .chat-lang:focus-visible,
+    .chat-input-flag:focus-visible,
+    .chat-content:focus-visible,
+    .chat-split:focus-visible,
+    .chat-att img:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+@media (hover: hover) {
+    .chat-icon:hover img {
+        transform: scale(2);
+        position: relative;
+        z-index: 1;
+    }
+}
+
+/* The language flag (translation): click translates, or selects the input language on the preview row */
+.chat-lang {
+    grid-area: lang;
+    display: block;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    min-width: var(--chat-fi);
+    height: var(--chat-si);
+    border-radius: var(--sw-radius-sm);
+    mask-position: center;
     mask-repeat: no-repeat;
     mask-size: contain;
 }
 
-
-    /* The flag image (../iso_data/language/<iso>.svg); click translates (or opens selectLanguage on the preview row). */
-    SysWeaver-ChatLanguage img {
-        width: var(--fi);
-        height: var(--si);
+    .chat-lang img {
+        width: var(--chat-fi);
+        height: var(--chat-si);
         object-fit: contain;
-        border: none;
-        cursor: pointer;
-        border-radius: calc(var(--fi) * 0.1);
-        transition: opacity linear var(--ThemeFadeDuration), filter linear var(--ThemeFadeDuration);
+        transition: opacity var(--sw-dur-2) var(--sw-ease, ease), filter var(--sw-dur-2) var(--sw-ease, ease);
     }
 
-    /* Translating: set by row.UpdateLang during the Translate request; mask technique shows ../icons/Loading.svg in --ThemeMain and hides the flag. */
-    SysWeaver-ChatLanguage.Translating {
-        background-color: var(--ThemeMain);
+    .chat-lang.chat-translating {
+        background-color: var(--sw-fg);
         mask-image: url("../icons/Loading.svg");
     }
 
-    SysWeaver-ChatLanguage.Translating img {
-        opacity: 0;
+        .chat-lang.chat-translating img {
+            opacity: 0;
+        }
+
+    .chat-lang.chat-translated img {
+        outline: 2px solid var(--sw-accent1);
+        outline-offset: 1px;
+        border-radius: var(--sw-radius-pill);
     }
 
-    /* Translated: set by row.UpdateLang while the translation is shown; accent glow on the flag. */
-    SysWeaver-ChatLanguage.Translated img {
-        filter: drop-shadow(0 0 5px var(--ThemeAcc1));
-    }
+/* ===== Content (text / markdown / html) ===== */
 
-/* SysWeaver-ChatName: sender name, bold, header row 1 column 2. */
-SysWeaver-ChatName {
-    font-size: calc(max(12px, 75%));
-    font-weight: bold;
-    grid-column: 2 / 2;
-    grid-row: 1 / 1;
-    padding: 0 0.75em 0 0.75em;
-    white-space: nowrap;
+.chat-content {
+    display: block;
+    padding: 0.5em;
+    text-align: left;
+    user-select: text;
+    -webkit-user-select: text;
     overflow: hidden;
+    overflow-wrap: anywhere;
+    max-height: 60vh;
+    cursor: text;
 }
 
-/* SysWeaver-ChatTime: time stamp or live "x ago" (row.UpdateFormat), small and faded, header row 2 column 2. */
-SysWeaver-ChatTime {
-    font-size: calc(max(11px, 60%));
-    opacity: 0.75;
-    grid-column: 2 / 2;
-    grid-row: 2 / 2;
-    padding: 0 0.75em 0 0.75em;
-    white-space: nowrap;
-}
-
-/* SysWeaver-ChatIcon: sender image cell (or IconMenu ColorIcon fallback) spanning both header rows; click opens the message menu. */
-SysWeaver-ChatIcon {
-    grid-column: 1 / 1;
-    grid-row: 1 / span 2;
-}
-
-    /* Sender image (--si square); zooms 2x on hover, from the left (or from the right for .Mine rows). */
-    SysWeaver-ChatIcon img {
-        width: var(--si);
-        height: var(--si);
-        object-fit: contain;
-        border: none;
-        cursor: pointer;
-        border-radius: calc(var(--si) * 0.1);
-        transform-origin: 20% center;
-        transition: transform ease-in-out 0.15s;
+    /* A reading measure for running text (about 80 characters a line): paragraphs, lists, quotes and folds, and plain text
+       messages (no child elements); tables, code and images keep the bubble's width */
+    .chat-content :is(p, li, h1, h2, h3, h4, h5, h6):not(:has(table, pre, img)),
+    .chat-content:not(:has(> *)) {
+        max-width: 80ch;
     }
 
-
-    SysWeaver-ChatRow.Mine SysWeaver-ChatIcon img {
-        transform-origin: 80% center;
-    }
-
-    SysWeaver-ChatIcon img:hover
-    {
-        transform: scale(2.0);
-
-    }
-
-    /* ===== Message content (text / markdown / HTML output of row.UpdateBody) ===== */
-
-    /* SysWeaver-ChatContent: message body; selectable, max 60vh; scrollable only while focused (JS sets tabIndex 0). */
-    SysWeaver-ChatContent {
-        display: block;
-        padding: 0.5em;
-        text-align: left;
-        user-select: text;
-        overflow: hidden;
-        cursor: text;
-        max-height: 60vh;
-        /*white-space: pre-wrap;*/
-    }
-
-    SysWeaver-ChatContent:focus
-    {
+    /* Scrollable while focused (long messages) */
+    .chat-content:focus {
         overflow: auto;
     }
 
+    /* A message with a fold (ex: the privacy notice of a welcome message) is never cut at the height limit: the fold stays visible
+       (also on phones) and shows all of its text when opened */
+    .chat-content:has(details) {
+        max-height: none;
+    }
 
-    /* Hidden: set by row.Hide (hidden sender / hide content) on content and data. */
-    SysWeaver-ChatContent.Hidden {
+    .chat-content:empty {
         display: none;
     }
 
-
-    /* Markdown headings h1-h6 and strong: accent-1 colored, headings with tight margins. */
-    SysWeaver-ChatContent h1 {
-        margin-top: 0.25em;
-        margin-bottom: 0.5em;
-        color: var(--ThemeAcc1);
-    }
-
-    SysWeaver-ChatContent h2 {
-        margin-top: 0.25em;
-        margin-bottom: 0.5em;
-        color: var(--ThemeAcc1);
-    }
-
-    SysWeaver-ChatContent h3 {
-        margin-top: 0.25em;
-        margin-bottom: 0.5em;
-        color: var(--ThemeAcc1);
-    }
-
-    SysWeaver-ChatContent h4 {
-        margin-top: 0.25em;
-        margin-bottom: 0.5em;
-        color: var(--ThemeAcc1);
-    }
-
-    SysWeaver-ChatContent h5 {
-        margin-top: 0.25em;
-        margin-bottom: 0.5em;
-        color: var(--ThemeAcc1);
-    }
-
-    SysWeaver-ChatContent h6 {
-        margin-top: 0.25em;
-        margin-bottom: 0.5em;
-        color: var(--ThemeAcc1);
-    }
-
-
-    SysWeaver-ChatContent strong {
-        color: var(--ThemeAcc1);
-    }
-
-
-    /* Paragraph margins, inline-block links, accent-2 emphasis, highlighted mark, dashed hr. */
-    SysWeaver-ChatContent p {
-        margin-top: 0.25em;
-        margin-bottom: 0.75em;
-    }
-
-    SysWeaver-ChatContent a {
-        display: inline-block;
-    }
-
-
-    SysWeaver-ChatContent em
-    {
-        color: var(--ThemeAcc2);
-    }
-
-
-    SysWeaver-ChatContent mark {
-        padding: 0 0.3em;
-        border-radius: var(--ThemeRadInp);
-        background-color: rgba(var(--ThemeAcc1RGB), 0.5);
-        color: rgba(var(--ThemeBackgroundRGB), 0.95);
-    }
-
-    SysWeaver-ChatContent hr {
-        border: none;
-        border-top: 1px dashed rgba(var(--ThemeMainRGB), 0.4);
-        border-bottom: 1px dashed rgba(var(--ThemeMainRGB), 0.6);
-    }
-
-
-    /*
-     * Lists: note the selector list "SysWeaver-ChatContent ol,ul" - the ul part is unscoped and matches every
-     * ul on the page. li items get a hover background and accent markers.
-     */
-    SysWeaver-ChatContent ol,ul {
-        margin: 0.5em 0 0 0;
-        color: var(--ThemeMain);
-    }
-
-    SysWeaver-ChatContent li {
-        margin: 0.25em 0 0 0;
-        border-radius: var(--ThemeRadInp);
-        transition: background-color linear var(--ThemeFadeDuration);
-    }
-
-        SysWeaver-ChatContent li:hover {
-            background-color: rgba(var(--ThemeMainRGB), 0.05);
-        }
-
-        SysWeaver-ChatContent li::marker {
-            color: var(--ThemeAcc1);
-            font-size: 75%;
-        }
-
-    /* Images (incl. inside links and paragraphs, below), blockquote with a left bar, wrapped pre, monospace accent-2 code. */
-    SysWeaver-ChatContent img {
-        max-height: 35vw;
-        background-color: rgba(var(--ThemeMainRGB), 0.05);
-        border-radius: 3px;
-        padding: 2px;
-    }
-
-    SysWeaver-ChatContent blockquote {
-        margin-inline-start: 0.25em;
-        margin-inline-end: 0;
-        padding-top: 0.25em;
-        background-color: rgba(var(--ThemeMainRGB), 0.05);
-        padding-bottom: 0.25em;
-        padding-left: 0.5em;
-        border-left: 0.5em solid rgba(var(--ThemeMainRGB), 0.25);
-    }
-
-    SysWeaver-ChatContent a img {
-        padding: 5px;
-    }
-
-    SysWeaver-ChatContent pre {
-        margin: 0;
-        background-color: rgba(var(--ThemeMainRGB), 0.05);
-        padding: 0.5em 0.25em 0.5em 0.25em;
-        border-radius: var(--ThemeRadInp2);
-        white-space: pre-wrap;
-    }
-
-    SysWeaver-ChatContent code {
-        font: var(--ThemeFontMono);
-        color: var(--ThemeAcc2);
-        white-space: pre-wrap;
-    }
-
-    /* Tables (with th/tr/td below): collapsed borders, accent headers, zebra rows with hover highlight, accent-2 even columns. */
-    SysWeaver-ChatContent table {
-        border-collapse: collapse;
-        border-color: rgba(var(--ThemeMainRGB), 0.15);
-        border: 1px solid rgba(0, 0, 0, 0.3);
-    }
-
-    SysWeaver-ChatContent p img {
-        display: inline;
-        max-height: 35vw;
-    }
-
-
-    SysWeaver-ChatContent th {
-        color: var(--ThemeAcc1);
-        font-weight: bold;
-        white-space: nowrap;
-        font-size: 75%;
-        padding: 0.125em 0.25em 0.125em 0.25em;
-    }
-
-    SysWeaver-ChatContent tr {
-        transition: background-color linear 0.2s;
-    }
-
-        SysWeaver-ChatContent tr:hover {
-            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-        }
-
-        SysWeaver-ChatContent tr:nth-child(2n) {
-            background-color: rgba(0,0,0, 0.1);
-        }
-
-            SysWeaver-ChatContent tr:nth-child(2n):hover {
-                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
-            }
-
-
-    SysWeaver-ChatContent td:nth-child(2n) {
-        color: var(--ThemeAcc2);
-    }
-
-    SysWeaver-ChatContent td {
-        padding: 0.125em 0.25em 0.125em 0.25em;
-        border-right: 1px solid rgba(0, 0, 0, 0.3);
-    }
-
-    SysWeaver-ChatContent td:last-child {
-        border: none;
-    }
-
-
-/* ===== Attachments ===== */
-
-/*
- * Working: set on the row by row.UpdateBody while the message has Chat.FlagIsWorking (still streaming);
- * attachments shrink (max 32px, images 64px, no background) and the attachment menus (ChatExpand) are hidden.
- */
-SysWeaver-ChatRow.Working SysWeaver-ChatData > * {
-    max-height: 32px;
-    background: none;
-}
-
-SysWeaver-ChatRow.Working SysWeaver-ChatData img {
-    max-height: 64px;
-    background: none;
-}
-
-
-SysWeaver-ChatRow.Working SysWeaver-ChatExpand
-{
+.chat-hidden .chat-content,
+.chat-hidden .chat-data {
     display: none;
 }
 
+.chat-content :is(h1, h2, h3, h4, h5, h6) {
+    margin: 0.25em 0 0.5em 0;
+    color: var(--sw-text-accent);
+}
 
+/* Bold in the message text color (the accent made bold words look like links), like ui/cells.css .sw-md strong */
+.chat-content strong,
+.chat-content b {
+    color: inherit;
+    font-weight: 700;
+}
 
-/* SysWeaver-ChatData: attachment list built by row.UpdateData; centered; Hidden like ChatContent; children resizable (resize: both). */
-SysWeaver-ChatData
-{
+.chat-content p {
+    margin: 0.25em 0 0.75em 0;
+}
+
+    .chat-content p:last-child {
+        margin-bottom: 0.25em;
+    }
+
+.chat-content a {
+    display: inline-block;
+}
+
+/* Emphasis in the message text color (accent 2 read like an error): italic and semi bold, like ui/cells.css .sw-md em */
+.chat-content em,
+.chat-content i {
+    color: inherit;
+    font-style: italic;
+    font-weight: 600;
+}
+
+.chat-content mark {
+    padding: 0 0.3em;
+    border-radius: var(--sw-radius-sm);
+    background-color: color-mix(in srgb, var(--sw-accent1) 50%, transparent);
+    color: var(--sw-bg);
+}
+
+.chat-content hr {
+    border: none;
+    border-top: 1px dashed color-mix(in srgb, var(--sw-fg) 40%, transparent);
+    border-bottom: 1px dashed color-mix(in srgb, var(--sw-fg) 60%, transparent);
+}
+
+.chat-content :is(ol, ul) {
+    margin: 0.5em 0 0 0;
+}
+
+.chat-content li {
+    margin: 0.25em 0 0 0;
+    border-radius: var(--sw-radius-sm);
+}
+
+    .chat-content li::marker {
+        color: var(--sw-accent1);
+        font-size: 75%;
+    }
+
+.chat-content img {
+    max-width: 100%;
+    max-height: 35vw;
+    background-color: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    border-radius: var(--sw-radius-sm);
+    padding: 2px;
+}
+
+.chat-content a img {
+    padding: 5px;
+}
+
+.chat-content p img {
+    display: inline;
+}
+
+/* Folded sections in markdown (<details> / <summary>, ex: a privacy notice): a clickable heading line with the marker, the
+   markdown paragraph inside the summary stays on the marker's line */
+.chat-content details {
+    margin: 0.5em 0;
+    padding: 0.25em 0.5em;
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-sm);
+}
+
+.chat-content summary {
+    cursor: pointer;
+    color: var(--sw-text-accent);
+}
+
+@media (pointer: coarse) {
+    /* A 44 px touch target (WCAG 2.5.5) */
+    .chat-content summary {
+        min-height: 44px;
+        line-height: 44px;
+    }
+}
+
+    .chat-content summary > p {
+        display: inline;
+        margin: 0;
+    }
+
+    .chat-content summary:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+.chat-content details[open] > summary {
+    margin-bottom: 0.5em;
+}
+
+/* The fold's marker: an arrow that turns (not the browser's marker that swaps in place) */
+.chat-content summary {
+    list-style: none;
+}
+
+    .chat-content summary::-webkit-details-marker {
+        display: none;
+    }
+
+    /* A drawn chevron (two borders of a small square, the same weight as the line icons): right when closed, down when open */
+    .chat-content summary::before {
+        content: "";
+        display: inline-block;
+        width: 0.45em;
+        height: 0.45em;
+        margin: 0 0.6em 0.1em 0.15em;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform var(--sw-dur-2) var(--sw-ease, ease);
+    }
+
+.chat-content details[open] > summary::before {
+    transform: rotate(45deg);
+}
+
+/* The fold opens and closes smoothly where the browser can animate the details content (::details-content, interpolate-size);
+   elsewhere it opens at once */
+@supports selector(::details-content) {
+    .chat-content details {
+        interpolate-size: allow-keywords;
+    }
+
+        .chat-content details::details-content {
+            block-size: 0;
+            overflow: clip;
+            /* SwWeb:allow ux-mot-4 (the markdown fold has no wrapper for grid rows: ::details-content is the only hook; one short expand of text) */
+            transition: block-size var(--sw-dur-3) var(--sw-ease, ease), content-visibility var(--sw-dur-3) allow-discrete;
+        }
+
+        .chat-content details[open]::details-content {
+            block-size: auto;
+        }
+}
+
+.chat-content blockquote {
+    margin: 0.25em 0 0.25em 0.25em;
+    padding: 0.25em 0 0.25em 0.5em;
+    background-color: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    border-left: 0.5em solid color-mix(in srgb, var(--sw-fg) 25%, transparent);
+}
+
+.chat-content pre {
+    margin: 0;
+    padding: 0.5em 0.25em;
+    background-color: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    border-radius: var(--sw-radius);
+    white-space: pre-wrap;
+}
+
+.chat-content code {
+    font-family: var(--sw-mono);
+    color: var(--sw-accent2);
+    white-space: pre-wrap;
+}
+
+.chat-content table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--sw-border-strong);
+    border-radius: var(--sw-radius-sm);
+    overflow: hidden;
+}
+
+.chat-content th {
+    color: var(--sw-text-accent);
+    /* A header band, so the header row stands apart in dark themes too */
+    background-color: color-mix(in srgb, var(--sw-fg) 8%, transparent);
+    font-weight: bold;
+    white-space: nowrap;
+    font-size: 75%;
+    padding: 0.125em 0.25em;
+}
+
+.chat-content tr:nth-child(2n) {
+    background-color: color-mix(in srgb, var(--sw-fg) 8%, transparent);
+}
+
+.chat-content td {
+    padding: 0.125em 0.25em;
+    border-right: 1px solid color-mix(in srgb, var(--sw-fg) 30%, transparent);
+}
+
+    .chat-content td:nth-child(2n) {
+        color: var(--sw-accent2);
+    }
+
+    .chat-content td:last-child {
+        border-right: none;
+    }
+
+@media (hover: hover) {
+    .chat-content li:hover {
+        background-color: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    }
+
+    .chat-content tr:hover {
+        background-color: var(--sw-accent2-soft);
+    }
+}
+
+/* ===== Attachments ===== */
+
+.chat-data {
     display: block;
     width: 100%;
     text-align: center;
 }
 
-
-    SysWeaver-ChatData.Hidden {
+    .chat-data:empty {
         display: none;
     }
 
+/* One attachment: resizable box (40vh by default, a small box for other files) with a menu button at the top right */
+.chat-att {
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    width: calc(100% - 4px);
+    height: 40vh;
+    min-height: calc(var(--sw-scale, 1) * 32px + 12px);
+    max-width: calc(100% - 4px);
+    max-height: 100vh;
+    margin: 0 2px 2px 2px;
+    padding: 2px;
+    resize: both;
+    overflow: hidden;
+    border: 2px solid color-mix(in srgb, var(--sw-fg) 5%, transparent);
+    border-radius: var(--sw-radius-sm);
+    vertical-align: top;
+}
 
-    SysWeaver-ChatData > * {
-        resize: both;
-        min-width: 100%;
-        min-height: calc(var(--ThemeIconSize) * 32px + 12px);
-        max-width: 100%;
-        max-height: 100vh;
-    }
-
-
-
-
-    /*
-     * SysWeaver-ChatHolder: one attachment box. Defines --size: max holder height (80vh here; 6em for .Extension,
-     * 4em for its img); the holder is half of it high and images are limited to --size - 4px.
-     */
-    SysWeaver-ChatData SysWeaver-ChatHolder {
-        --size: 80vh;
-        border: 2px solid rgba(var(--ThemeMainRGB), 0.05);
-        border-radius: 4px;
-        margin: 0 2px 2px 2px;
+    .chat-att img {
         box-sizing: border-box;
         display: inline-block;
-        width: 100%;
-        height: calc(0.5 * var(--size));
-        max-width: calc(100% - 4px);
-        max-height: var(--size);
-        position: relative;
-        padding: 2px;
-        overflow: hidden;
-    }
-
-
-        /* Clickable: set by row.UpdateData on holders whose image / extension icon opens or downloads; pointer and accent border on hover/focus. */
-        SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child{
-            cursor: pointer;
-            border: 1px solid transparent;
-            transition: border linear var(--ThemeFadeDuration);
-            box-sizing: border-box;
-            outline: none;
-        }
-
-            SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child:hover {
-                border: 1px solid var(--ThemeAcc1);
-            }
-
-            SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child:focus {
-                border: 1px solid var(--ThemeAcc1);
-            }
-
-
-        /* Sandboxed iframe for .html/.htm attachments: fills the holder, no border. */
-        SysWeaver-ChatData SysWeaver-ChatHolder iframe {
-            outline: none;
-            border: none;
-            margin: 0;
-            box-sizing: border-box;
-            width: 100%;
-            height: 100%;
-        }
-
-        /* SysWeaver-ChatExpand: 32x32 attachment menu button (IconMenu ColorIcon) at the top-right of the holder; faded until hovered. */
-        SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatExpand
-        {
-            position: absolute;
-            top: 4px;
-            right: 5px;
-            width: 32px;
-            height: 32px;
-            background-color: rgba(var(--ThemeBackgroundRGB), 0.6);
-            border-radius: 4px;
-            transition: opacity linear 0.1s;
-            opacity: 0.25;
-        }
-
-            SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatExpand:hover {
-                opacity: 1.0;
-            }
-
-        /* Extension: set by row.UpdateData for files that are neither images nor HTML; small 6em box with the ../icons/ext/<ext>.svg icon. */
-        SysWeaver-ChatData SysWeaver-ChatHolder.Extension {
-            --size: 6em;
-            height: 6em;
-        }
-
-            SysWeaver-ChatData SysWeaver-ChatHolder.Extension img {
-                --size: 4em;
-                display: inline-block;
-                width: auto;
-            }
-
-        /* SysWeaver-ChatLabel: file name label under the extension icon (click copies the URL); selectable. */
-        SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatLabel {
-            display: block;
-            font-size: 70%;
-            user-select: text;
-        }
-
-
-    /* Attachment images: contained, limited to the holder's --size minus 4px. */
-    SysWeaver-ChatData img {
-        background-color: rgba(var(--ThemeMainRGB), 0.05);
-        border-radius: 3px;
-        padding: 2px;
-        display: inline-block;
-        margin: 0;
-        box-sizing: border-box;
         max-width: 100%;
-        max-height: calc(var(--size) - 4px);
-        width: 100%;
         height: 100%;
         object-fit: contain;
-        
-        display: inline-block;
+        padding: 2px;
+        border: 1px solid transparent;
+        border-radius: var(--sw-radius-sm);
+        background-color: color-mix(in srgb, var(--sw-fg) 5%, transparent);
+        cursor: pointer;
+        transition: border-color var(--sw-dur-2) var(--sw-ease, ease);
+    }
+
+@media (hover: hover) {
+    .chat-att img:not(.chat-att-view):hover {
+        border-color: var(--sw-accent1);
+    }
+}
+
+/* Images and embedded pages: at least half as wide as the chat (the chat root is a size container), and at least 16:9 high
+   (Attachments.KeepAspect sets the min-height from the width, also after the user resized the box) */
+.chat-att.chat-att-image,
+.chat-att.chat-att-html,
+.chat-att.chat-att-file {
+    min-width: 50cqw;
+}
+
+.chat-att.chat-att-file {
+    height: 6em;
+}
+
+    .chat-att.chat-att-file img {
+        height: 4em;
         width: auto;
     }
 
-
-
-
-/* ===== Top-right menu and popups ===== */
-
-/* The top-right menu ColorIcon (IconMenu) added by addChat directly under SysWeaver-Chat: 0.25 opacity, 0.6 focused, 1 hovered. */
-SysWeaver-Chat > *.IconButton {
+.chat-att-label {
     display: block;
-    position: absolute;
-    top: 0.5em;
-    right: 1em;
-    opacity: 0.25 !important;
+    font-size: 70%;
+    user-select: text;
+    -webkit-user-select: text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-    SysWeaver-Chat > *.IconButton:focus {
-        opacity: 0.6 !important;
+.chat-att iframe {
+    display: block;
+    box-sizing: border-box;
+    min-width: 70%;
+    width: 100%;
+    height: 100%;
+    border: none;
+    margin: 0;
+}
+
+/* An embedded page: the info bar (Attachments.InfoBar) above the frame, as wide as it, so no button covers the page */
+.chat-att.chat-att-html {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+    .chat-att.chat-att-html .chat-att-view {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
     }
 
-        SysWeaver-Chat > *.IconButton:hover {
-            opacity: 1 !important;
-        }
+    /* An image under the bar: fills the content area, no click (the bar has "open in a new tab") */
+    .chat-att.chat-att-html img.chat-att-view {
+        width: 100%;
+        max-width: 100%;
+        cursor: default;
+    }
 
-        SysWeaver-Chat > *.IconButton:focus:hover {
-            opacity: 1 !important;
-        }
-
-/* SysWeaver-PopupMenu / SysWeaver-PopupMenuBack (application.js PopUpMenu): class Chat is added by JS for the main and message menus (JS sets left). */
-SysWeaver-PopupMenu.Chat SysWeaver-PopupMenuBack{
-    position: absolute;
-    font-size: 100%;
-}
-
-/* Class ChatData is added by row.UpdateData for attachment menus: shifted right by 32px. */
-SysWeaver-PopupMenu.ChatData SysWeaver-PopupMenuBack {
-    position: absolute;
-    right: -32px;
-    font-size: 100%;
-}
-
-/* SysWeaver-ChatLangItem: entries of the selectLanguage PopUpSelection; JS sets the flag as left background image; rounded pill, accent on hover. */
-SysWeaver-ChatLangItem {
-    background-repeat: no-repeat;
-    background-position: 0.75em center;
-    background-size: auto 70%;
-    display: block;
-    margin: 0.5em 4px;
-    padding: 0.5em 0.5em 0.5em 4em;
-    border-radius: var(--ThemeRadInp);
-    border: 1px solid var(--ThemeMain25);
-    transition: border linear var(--ThemeFadeDuration), background-color linear var(--ThemeFadeDuration), color linear var(--ThemeFadeDuration);
+.chat-att-bar {
+    flex: none;
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 0 2px;
+    border-radius: var(--sw-radius-sm);
+    background-color: color-mix(in srgb, var(--sw-fg) 6%, transparent);
 }
 
-    SysWeaver-ChatLangItem:hover {
-        color: var(--ThemeAcc2);
-        background-color: rgba(var(--ThemeMainRGB), 0.075);
-        border: 1px solid var(--ThemeAcc1);
+    .chat-att-bar .sw-button {
+        flex: none;
     }
 
+        /* The focus ring inside the button: the attachment box clips (overflow: hidden, for resizing), the framework ring
+           (2px offset outside the button) would be cut off at the bar's edges */
+        .chat-att-bar .sw-button:focus-visible {
+            outline-offset: -2px;
+        }
 
-/* ===== Icon classes (mask-image, used with ColorIcon / WebMenuItem icon classes) ===== */
+    /* The menu button sits in the bar here (not over the content). Relative, not static: on touch screens the larger hit area of a
+       small button (the framework's absolute ::after) must stay around the button, else it covers the whole bar */
+    .chat-att .chat-att-bar .chat-att-menu {
+        position: relative;
+        top: auto;
+        right: auto;
+        opacity: 1;
+        background-color: transparent;
+    }
 
-/* IconSend: send button and auto-send; IconMenu: top-right menu, message icon fallback, attachment menu. */
-.IconSend {
-    mask-image: url('../icons/send.svg');
+.chat-att-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 0.25em;
+    text-align: start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: max(13px, calc(var(--sw-text-md) * 0.9));
+    font-weight: 600;
+    color: var(--sw-fg);
 }
 
-.IconMenu {
-    mask-image: url('../icons/menu.svg');
+/* Collapsed: only the bar (the height the user resized the box to comes back when expanding) */
+.chat-att.chat-att-html.chat-att-collapsed {
+    /* SwWeb:allow-design (overrides the inline height of a user resized box while collapsed) */
+    height: auto !important;
+    min-height: 0 !important;
+    resize: none;
 }
 
+    /* The view that is not shown (the page or its source view, Attachments.Framed keeps both once made) */
+    .chat-att .chat-att-view[hidden] {
+        display: none;
+    }
 
-/*
- * Attachment menu: IconChatSave (Download), IconChatStore (Store file), IconChatLink (Create link) and the
- * scope items IconChatLink0 (Private), IconChatLink1 (Protected), IconChatLink2 (Public).
- */
-.IconChatSave {
-    mask-image: url('../icons/disc.svg');
+    .chat-att.chat-att-collapsed .chat-att-view {
+        display: none;
+    }
+
+.chat-att .chat-att-menu {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    color: var(--sw-accent2);
+    background-color: color-mix(in srgb, var(--sw-bg) 60%, transparent);
+    opacity: 0.4;
+    transition: opacity var(--sw-dur-1) var(--sw-ease, ease);
 }
 
+    .chat-att .chat-att-menu:focus-visible {
+        opacity: 1;
+    }
 
-.IconChatStore {
-    mask-image: url('../icons/db_add.svg');
+@media (hover: hover) {
+    .chat-att .chat-att-menu:hover {
+        opacity: 1;
+    }
 }
 
-.IconChatLink {
-    mask-image: url("../icons/share.svg");
+@media (hover: none) {
+    .chat-att .chat-att-menu {
+        opacity: 0.8;
+    }
 }
 
-
-.IconChatLink0 {
-    mask-image: url("../icons/keep.svg");
+/* The status image of a message that is still being produced (ex: the AI's working indicator): plain, small, not an attachment */
+.chat-att-status {
+    display: inline-block;
+    margin: 0 2px 2px 2px;
+    vertical-align: top;
 }
 
-.IconChatLink1 {
-    mask-image: url("../icons/user_check.svg");
+    .chat-att-status img {
+        display: block;
+        height: calc(var(--sw-scale, 1) * 32px);
+        width: auto;
+    }
+
+    /* Reduced motion: the status as a quiet text (Attachments.Status) */
+    .chat-att-status.chat-att-status-text {
+        padding: 0.25em 0.5em;
+        color: var(--sw-text-2);
+        font-style: italic;
+    }
+
+/* A message that is still being produced: small attachments, no attachment menus */
+.chat-working .chat-att {
+    max-height: 32px;
+    /* SwWeb:allow-design (overrides the 16:9 minimum height that Attachments.KeepAspect sets inline) */
+    min-height: 0 !important;
+    min-width: 0;
+    background: none;
 }
 
-.IconChatLink2 {
-    mask-image: url("../icons/table_country.svg");
+    .chat-working .chat-att img {
+        max-height: 64px;
+    }
+
+.chat-working .chat-att-menu {
+    display: none;
 }
 
+/* ===== Chat menu button (never over the messages) ===== */
 
-/*
- * IconChatClear (Remove ALL messages), IconChatRemove (Remove message), IconChatKeep (keep button of the
- * confirm dialogs), IconChatTop / IconChatBottom (scroll), IconChatAge / IconChatTime (age vs time toggle).
- */
-.IconChatClear {
-    mask-image: url('../icons/trash.svg');
+/* With input: right of the button square, as high as the square (a larger icon); one cell at the end of the row in a narrow input */
+.chat-input > .chat-menu-button {
+    --chat-ics: var(--chat-pad-cell);
+    grid-area: menu;
+    align-self: end;
+    box-sizing: border-box;
+    width: var(--chat-pad-cell);
+    height: calc(2 * var(--chat-pad-cell) + var(--chat-pad-gap));
+    border-radius: var(--sw-radius-sm);
+    color: var(--sw-accent2);
 }
 
-.IconChatRemove {
-    mask-image: url('../icons/trash.svg');
+.chat-pad-row > .chat-menu-button {
+    height: var(--chat-pad-cell);
 }
 
-.IconChatKeep {
-    mask-image: url('../icons/fav_on.svg');
+/* Without input: a slim bar above the list */
+.chat-root > .chat-menu-button {
+    flex: none;
+    align-self: flex-end;
+    margin: 0.125em 0.5em 0 0;
+    padding: 0;
+    color: var(--sw-accent2);
 }
 
-.IconChatTop {
-    mask-image: url('../icons/MoveTop.svg');
+/* Icon buttons sized by the options (--chat-ics) */
+.chat-menu-button .sw-icon {
+    width: calc(var(--chat-ics, 48px) * 0.75);
+    height: calc(var(--chat-ics, 48px) * 0.75);
 }
 
-.IconChatBottom {
-    mask-image: url('../icons/MoveBottom.svg');
-}
-
-.IconChatAge {
-    mask-image: url('../icons/hour_glass.svg');
-}
-
-.IconChatTime {
-    mask-image: url('../icons/clock.svg');
-}
-
-/*
- * IconDebug (declared twice, identical), IconDebugNone, IconDebugStats, IconDebugOverview, IconDebugParameters,
- * IconDebugDetails: not referenced in chat.js; used by server-defined menu items (ChatMenuItem.Icon, e.g. AI debug options).
- */
-.IconDebug {
-    mask-image: url('../icons/table_api.svg');
-}
-
-.IconDebug {
-    mask-image: url('../icons/table_api.svg');
-}
-
-.IconDebugNone {
-    mask-image: url('../icons/minus.svg');
-}
-
-.IconDebugStats {
-    mask-image: url('../icons/fingerprint.svg');
-}
-
-
-.IconDebugOverview {
-    mask-image: url('../icons/rating_off.svg');
-}
-
-.IconDebugParameters {
-    mask-image: url('../icons/rating_half.svg');
-}
-
-.IconDebugDetails {
-    mask-image: url('../icons/rating_on.svg');
-}
-
-/*
- * IconChatMicOn (mic button, enable open mic) / IconChatMicOff (disable open mic); IconCopy (copy items);
- * IconChatShow / IconChatHide (show/hide content, show all); IconChatExpand (open in new tab).
- */
-.IconChatMicOn {
-    mask-image: url('../icons/mic_on.svg');
-}
-
-.IconChatMicOff {
-    mask-image: url('../icons/mic_off.svg');
-}
-
-.IconCopy {
-    mask-image: url('../icons/copy.svg');
-}
-
-.IconChatShow {
-    mask-image: url('../icons/eye.svg');
-}
-
-.IconChatHide {
-    mask-image: url('../icons/eye_off.svg');
-}
-
-.IconChatExpand {
-    mask-image: url('../icons/newtab.svg');
-}
-
-/*
- * Speech synthesis: IconChatSpeechGenEnable / IconChatSpeechGenDisable toggle, IconChatSpeechVolume submenu,
- * IconChatSpeechVolume25 / IconChatSpeechVolume50 / IconChatSpeechVolume75 / IconChatSpeechVolume100 volume items.
- */
-.IconChatSpeechGenEnable {
-    mask-image: url('../icons/preview_vol_loud.svg');
-}
-
-.IconChatSpeechGenDisable {
-    mask-image: url('../icons/preview_mute.svg');
-}
-
-.IconChatSpeechVolume {
-    mask-image: url('../icons/preview_unmute.svg');
-}
-
-.IconChatSpeechVolume25 {
-    mask-image: url('../icons/preview_vol_low.svg');
-}
-
-.IconChatSpeechVolume50 {
-    mask-image: url('../icons/preview_vol_low.svg');
-}
-
-.IconChatSpeechVolume75 {
-    mask-image: url('../icons/preview_vol_loud.svg');
-}
-
-.IconChatSpeechVolume100 {
-    mask-image: url('../icons/preview_vol_loud.svg');
+.chat-menu-button,
+.chat-send,
+.chat-mic,
+.chat-attach {
+    min-width: var(--chat-ics, 48px);
+    min-height: var(--chat-ics, 48px);
+    padding: 0;
 }
 
 /*
- * IconChatHelp (markdown help link), IconProfile (View profile); chat-local icons: IconChatText / IconChatMD
- * (text vs markdown toggle), IconChatHidePreview / IconChatShowPreview (preview toggle).
+ * Short words of the icon buttons (span.chat-tlabel in .chat-labelled buttons: Menu, the language code of the flag, Attach, Send,
+ * Speak), below the icons (.chat-labels on the input, Composer.WatchSize; also the slim menu bar without input on touch devices);
+ * the buttons keep their tool tips and accessible names.
  */
-.IconChatHelp {
-    mask-image: url('../icons/help.svg');
+.chat-tlabel {
+    display: none;
 }
 
-.IconProfile {
-    mask-image: url('../icons/user.svg');
+.chat-labels .chat-labelled {
+    flex-direction: column;
+    gap: 1px;
 }
+
+.chat-labels .chat-tlabel {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 1.1;
+    font-weight: 600;
+    color: var(--sw-fg);
+}
+
+.chat-labels.chat-input > .chat-menu-button .sw-icon {
+    width: calc(var(--chat-ics, 48px) * 0.75);
+    height: calc(var(--chat-ics, 48px) * 0.75);
+}
+
+.chat-labels.chat-pad-row > .chat-menu-button .sw-icon {
+    width: calc(var(--chat-ics, 48px) * 0.48);
+    height: calc(var(--chat-ics, 48px) * 0.48);
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .chat-root > .chat-menu-button.chat-labelled {
+        gap: 1px;
+    }
+
+    .chat-root > .chat-menu-button .chat-tlabel {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        line-height: 1.1;
+        font-weight: 600;
+        color: var(--sw-fg);
+    }
+}
+
+/* The disabled send / attach button keeps its word readable, only the icon fades */
+.chat-labelled.chat-send:is(:disabled, [aria-disabled="true"]),
+.chat-labelled.chat-attach:is(:disabled, [aria-disabled="true"]) {
+    opacity: 1;
+}
+
+.chat-labelled.chat-send .sw-icon,
+.chat-labelled.chat-attach .sw-icon {
+    transition: opacity var(--sw-dur-1) var(--sw-ease, ease);
+}
+
+    .chat-labelled.chat-send:is(:disabled, [aria-disabled="true"]) .sw-icon,
+    .chat-labelled.chat-attach:is(:disabled, [aria-disabled="true"]) .sw-icon {
+        opacity: 0.45;
+    }
+
+    .chat-labelled.chat-send:is(:disabled, [aria-disabled="true"]) .chat-tlabel,
+    .chat-labelled.chat-attach:is(:disabled, [aria-disabled="true"]) .chat-tlabel {
+        color: var(--sw-text-2);
+    }
+
+/* ===== Splitter ===== */
+
+.chat-split {
+    flex: none;
+    user-select: none;
+    -webkit-user-select: none;
+    position: relative;
+    height: 12px;
+    cursor: row-resize;
+    touch-action: none;
+    background: color-mix(in srgb, var(--sw-fg) 4%, transparent);
+    border-top: 1px solid var(--sw-border);
+    z-index: 1;
+}
+
+    /* A 24 px grab area around the 12 px bar (WCAG 2.5.8) */
+    .chat-split::before {
+        content: "";
+        position: absolute;
+        inset: -6px 0;
+    }
+
+    /* The grip */
+    .chat-split::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 4px;
+        width: 48px;
+        height: 4px;
+        margin-left: -24px;
+        border-radius: var(--sw-radius-pill);
+        background: var(--sw-border-strong);
+    }
+
+    .chat-split.sw-dragging::after,
+    .chat-split:focus-visible::after {
+        background: var(--sw-accent1);
+    }
+
+@media (pointer: coarse) {
+    .chat-split {
+        height: 20px;
+    }
+
+        .chat-split::after {
+            top: 8px;
+        }
+}
+
+/* ===== Input ===== */
+
+/* [text box] [2 x 2 buttons] [Menu]; a narrow input (.chat-pad-row): the text box over [buttons][Menu] (nothing over the text) */
+.chat-input {
+    --chat-pad-cell: calc(var(--sw-scale, 1) * 46px);
+    --chat-pad-gap: 2px;
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "write pad menu";
+    align-items: end;
+    gap: 0.25em;
+    min-height: 5em;
+    box-sizing: border-box;
+    padding: 0.25em;
+}
+
+.chat-write-box {
+    position: relative;
+    grid-area: write;
+    align-self: stretch;
+    min-width: 0;
+    min-height: 0;
+}
+
+.chat-input.chat-pad-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "write write" "pad menu";
+}
+
+.chat-write {
+    box-sizing: border-box;
+    /* A block: an inline textarea leaves a line gap below it in its box */
+    display: block;
+    width: 100%;
+    height: 100%;
+    resize: none;
+    padding: 0.5em 0.75em;
+    background-color: color-mix(in srgb, var(--sw-bg) 85%, transparent);
+    color: var(--sw-fg);
+    border: 2px solid var(--sw-border-input);
+    border-radius: var(--sw-radius-lg);
+    outline: none;
+    font: inherit;
+    font-size: 100%;
+    transition: border-color var(--sw-dur-2) var(--sw-ease, ease);
+}
+
+    /* Focus: the framework focus color as a full 2 px border (WCAG 2.4.7 / 2.4.13; the same color as the menus and buttons) */
+    .chat-write:focus {
+        border-color: var(--sw-focus);
+        transition-duration: 0s;
+    }
+
+    /* The hint keeps the secondary text color (4.5:1), italic and smaller marks it as a hint */
+    .chat-write::placeholder {
+        color: var(--sw-text-2);
+        opacity: 1;
+        font-size: 80%;
+        font-style: italic;
+    }
+
+    /* Speech is being recorded */
+    .chat-write.chat-listening {
+        border: 2px solid var(--sw-accent2);
+    }
+
+    /* Something is dragged over the input */
+    .chat-write.chat-dragging {
+        border: 2px dashed var(--sw-accent1);
+    }
+
+/*
+ * The buttons beside the text box (Composer.Pad): a 2 x 2 square right of it, at the bottom, [Attach][Language] over [Speak][Send] (Send in
+ * the corner, where the eye ends), every cell a 46 px touch target with a short word below the icon; a row of four below it, at the right
+ * (before Menu) in a narrow input (.chat-pad-row). A missing button (no speech input, no uploads) leaves its cell empty.
+ */
+.chat-input-pad {
+    grid-area: pad;
+    justify-self: end;
+    display: grid;
+    grid-template-columns: repeat(2, var(--chat-pad-cell));
+    grid-template-areas: "attach flag" "mic send";
+    gap: var(--chat-pad-gap);
+}
+
+.chat-pad-row .chat-input-pad {
+    grid-template-columns: repeat(4, var(--chat-pad-cell));
+    grid-template-areas: "attach flag mic send";
+}
+
+    .chat-input-pad > .chat-attach {
+        grid-area: attach;
+    }
+
+    .chat-input-pad > .chat-input-flag {
+        grid-area: flag;
+    }
+
+    .chat-input-pad > .chat-mic {
+        grid-area: mic;
+    }
+
+    .chat-input-pad > .chat-send {
+        grid-area: send;
+    }
+
+    .chat-input-pad > .chat-labelled,
+    .chat-input-pad > .chat-input-flag {
+        box-sizing: border-box;
+        width: var(--chat-pad-cell);
+        min-width: 0;
+        height: var(--chat-pad-cell);
+        min-height: 0;
+        padding: 2px;
+        border-radius: var(--sw-radius-sm);
+    }
+
+    .chat-input-pad .sw-icon {
+        width: calc(var(--chat-pad-cell) * 0.48);
+        height: calc(var(--chat-pad-cell) * 0.48);
+    }
+
+    .chat-input-pad > .chat-send {
+        transition: background-color var(--sw-dur-1) var(--sw-ease, ease), color var(--sw-dur-1) var(--sw-ease, ease);
+    }
+
+    /* Send is the main action: a filled accent button once there is something to send (faded and outlined only while empty) */
+    .chat-input-pad > .chat-send:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--sw-accent1);
+        color: var(--sw-on-accent);
+    }
+
+        .chat-input-pad > .chat-send:not(:disabled):not([aria-disabled="true"]) .chat-tlabel {
+            color: var(--sw-on-accent);
+        }
+
+@media (hover: hover) {
+    .chat-input-pad > .chat-send:not(:disabled):not([aria-disabled="true"]):hover {
+        background-color: color-mix(in oklab, var(--sw-accent1), var(--sw-fg) 15%);
+    }
+}
+
+.chat-input-pad > .chat-send:not(:disabled):not([aria-disabled="true"]):active {
+    background-color: color-mix(in oklab, var(--sw-accent1), var(--sw-fg) 25%);
+}
+
+/* The input language flag (a pad button: the flag and the language code) */
+.chat-input-flag {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    border: none;
+    background: transparent;
+    color: var(--sw-fg);
+    cursor: pointer;
+    transition: background-color var(--sw-dur-1) var(--sw-ease, ease);
+}
+
+    .chat-input-flag img {
+        display: block;
+        width: calc(var(--chat-pad-cell) * 0.52);
+        height: calc(var(--chat-pad-cell) * 0.36);
+        object-fit: contain;
+    }
+
+@media (hover: hover) {
+    .chat-input-flag:hover {
+        background-color: color-mix(in srgb, var(--sw-fg) 8%, transparent);
+    }
+}
+
+/* The automatic split: the input is as high as its content (the text box is sized by Composer.AutoGrow) */
+.chat-autosize > .chat-input {
+    flex: none;
+    min-height: 0;
+}
+
+/* Compact (low chat, phone landscape): less padding around the text box */
+.chat-compact .chat-input {
+    padding: 2px 0.25em;
+}
+
+.chat-compact .chat-write {
+    padding-top: 0.3em;
+}
+
+.chat-compact .chat-row:first-child {
+    margin-top: 0;
+}
+
+/* Tight (a very low chat, ex: a phone with the on screen keyboard open; Composer.WatchSize): one row, the text box (one line, it
+   grows while typing) beside Send and Menu, always in view; the messages get the rest. Attach, the language and Speak step aside
+   (Speak stays while recording: it stops it), the splitter too (a user split is not applied, it is back with the height) */
+.chat-tight > .chat-list {
+    flex: 1 1 0;
+    height: auto !important;
+    min-height: 0;
+}
+
+.chat-tight > .chat-split {
+    display: none;
+}
+
+.chat-tight > .chat-input {
+    flex: none;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto;
+    grid-template-areas: "write pad menu";
+    border-top: 1px solid var(--sw-border);
+}
+
+.chat-tight .chat-input-pad {
+    grid-template-columns: var(--chat-pad-cell);
+    grid-template-areas: "send";
+}
+
+    .chat-tight .chat-input-pad:has(> .chat-mic.chat-recording) {
+        grid-template-columns: repeat(2, var(--chat-pad-cell));
+        grid-template-areas: "mic send";
+    }
+
+    .chat-tight .chat-input-pad > :is(.chat-attach, .chat-input-flag, .chat-mic:not(.chat-recording)) {
+        display: none;
+    }
+
+.chat-tight > .chat-input > .chat-menu-button {
+    height: var(--chat-pad-cell);
+}
+
+    /* one cell high: the icon as small as in the row layout, so its word fits below it */
+    .chat-tight > .chat-labels.chat-input > .chat-menu-button .sw-icon {
+        width: calc(var(--chat-ics, 48px) * 0.48);
+        height: calc(var(--chat-ics, 48px) * 0.48);
+    }
+
+.chat-send {
+    color: var(--sw-accent1);
+}
+
+.chat-mic {
+    color: var(--sw-accent2);
+    transition: color var(--sw-dur-2) var(--sw-ease, ease), opacity var(--sw-dur-1) var(--sw-ease, ease);
+}
+
+    .chat-mic:is(:disabled, [aria-disabled="true"]) {
+        opacity: 0.6;
+    }
+
+    .chat-mic.chat-recording {
+        color: var(--sw-accent1);
+        /* SwWeb:allow ux-mot-2 (owner: the live recording indicator pulses at a fixed 1 s; off with reduced motion) */
+        animation: 1s ease-in-out infinite alternate chat-pulse;
+    }
+
+/* ===== Chat local icon classes (the other IconChat* classes are in sw/ui.css) ===== */
 
 .IconChatText {
-    mask-image: url('icons/ChatFormatText.svg');
+    mask-image: url("icons/ChatFormatText.svg");
 }
 
 .IconChatMD {
-    mask-image: url('icons/ChatFormatMD.svg');
+    mask-image: url("icons/ChatFormatMD.svg");
 }
 
 .IconChatHidePreview {
-    mask-image: url('icons/ChatHidePreview.svg');
+    mask-image: url("icons/ChatHidePreview.svg");
 }
 
 .IconChatShowPreview {
-    mask-image: url('icons/ChatShowPreview.svg');
+    mask-image: url("icons/ChatShowPreview.svg");
 }
-
-
-/*
- * Preview attachment menu: IconChatCopyImage (Copy image Mark Down), IconChatCopy (Copy url), IconChatDeleteFile,
- * IconChatHideFile, IconChatAttachFile (attach file). Main menu: IconChatLanguage (set input language),
- * IconChatClearCurrent (clear draft), IconChatAutoSendOn / IconChatAutoSendOff (auto-send toggle).
- */
-.IconChatCopyImage {
-    mask-image: url('../icons/image.svg');
-}
-
-.IconChatCopy {
-    mask-image: url('../icons/copy.svg');
-}
-
-.IconChatDeleteFile {
-    mask-image: url('../icons/db_remove.svg');
-}
-
-.IconChatHideFile {
-    mask-image: url('../icons/eye_off.svg');
-}
-
-.IconChatAttachFile {
-    mask-image: url('../icons/db_add.svg');
-}
-
-.IconChatLanguage {
-    mask-image: url('../icons/table_language.svg');
-}
-
-.IconChatClearCurrent {
-    mask-image: url('../icons/clear.svg');
-}
-
-.IconChatAutoSendOn {
-    mask-image: url('../icons/send.svg');
-}
-
-.IconChatAutoSendOff {
-    mask-image: url('../icons/edit.svg');
-}
-
-
 
 /* ===== Animations ===== */
 
-/* @keyframes SysWeaver_ChatStick: inset bottom accent shadow fading out; 0.5s on SysWeaver-ChatMain.Stick. */
-@keyframes SysWeaver_ChatStick {
+@keyframes chat-stick {
     from {
-        box-shadow: inset 0 -32px 20px -20px rgba(var(--ThemeAcc1RGB), 0.5);
+        opacity: 1;
     }
 
     to {
-        box-shadow: inset 0 -32px 20px -20px transparent;
+        opacity: 0;
     }
 }
 
-/* @keyframes LoadingFade: opacity 0 to 0.5, for the history loading spinner (SysWeaver-ChatMain icon-64x64). */
-@keyframes LoadingFade {
+@keyframes chat-fade {
     from {
         opacity: 0;
     }
@@ -1123,3 +1464,31 @@ SysWeaver-ChatLangItem {
     }
 }
 
+@keyframes chat-pulse {
+    from {
+        transform: scale(1);
+    }
+
+    to {
+        transform: scale(1.12);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* The fold opens at once (an expanding height is motion, not a fade) */
+    .chat-content details::details-content {
+        transition: none;
+    }
+
+    .chat-content summary::before {
+        transition: none;
+    }
+
+    .chat-mic.chat-recording {
+        animation: none;
+    }
+
+    .chat-icon img {
+        transition: none;
+    }
+}

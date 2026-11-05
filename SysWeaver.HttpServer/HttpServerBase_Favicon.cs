@@ -166,24 +166,7 @@ namespace SysWeaver.Net
         /// Optional end point "icon_debug.svg", a generated favicon using the color seed in the query string (requires the "debug" token).
         /// </summary>
         ValueTask<IHttpRequestHandler> HandleFaviconDebugSvg(HttpServerRequest data, HttpSession session)
-        {
-            var auth = session?.Auth?.Tokens;
-            if (auth == null)
-                return HttpServerTools.NullHttpRequestHandlerValueTask;
-            if (!auth.Contains("debug"))
-                return HttpServerTools.NullHttpRequestHandlerValueTask;
-            int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
-            var enc = Encoding.UTF8;
-            var svgS = new SvgScene(IconWidth, IconHeight);
-            //svgS.AddFavIcon(EnvInfo.AppName, null, new HashColors(EnvInfo.AppName, seed));
-            svgS.AddAppIcon(EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
-            var svgText = svgS.ToSvg();
-            var svgData = enc.GetBytes(svgText);
-            var cmp = Comp;
-            var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("icon_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
-            return ValueTask.FromResult((IHttpRequestHandler)svgHandler);
-        }
+            => HandleDebugSvg(data, session, "icon_debug.svg", IconWidth, IconHeight, (s, c) => s.AddAppIcon(EnvInfo.AppDisplayName, c));
 
         #endregion//Auto gen
 
@@ -311,22 +294,34 @@ namespace SysWeaver.Net
         /// Optional end point "logo_debug.svg", a generated logo using the color seed in the query string (requires the "debug" token).
         /// </summary>
         ValueTask<IHttpRequestHandler> HandleLogoDebugSvg(HttpServerRequest data, HttpSession session)
+            => HandleDebugSvg(data, session, "logo_debug.svg", LogoWidth, LogoHeight, (s, c) => s.AddAppLogo(EnvInfo.AppDisplayName, EnvInfo.AppDescription, c));
+
+        /// <summary>
+        /// A generated brand mark (icon, logo or banner) for the color seed in the query string (the app seed if none), requires the "debug" token.
+        /// Used by the logo designer and its theme preview (explore/logo.html, explore/themepreview.html).
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="session">The session</param>
+        /// <param name="name">The end point name</param>
+        /// <param name="width">The scene width</param>
+        /// <param name="height">The scene height</param>
+        /// <param name="draw">Draws the mark with the colors of the seed</param>
+        /// <returns>The handler, or null (not found) without the "debug" token</returns>
+        ValueTask<IHttpRequestHandler> HandleDebugSvg(HttpServerRequest data, HttpSession session, String name, int width, int height, Action<SvgScene, HashColors> draw)
         {
             var auth = session?.Auth?.Tokens;
             if (auth == null)
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
             if (!auth.Contains("debug"))
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
-            int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
-            var enc = Encoding.UTF8;
-            var svgS = new SvgScene(LogoWidth, LogoHeight);
-            //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
-            svgS.AddAppLogo(EnvInfo.AppDisplayName, EnvInfo.AppDescription, new HashColors(EnvInfo.AppName, seed));
-            var svgText = svgS.ToSvg();
-            var svgData = enc.GetBytes(svgText);
+            if (!int.TryParse(data.GetQuery(EnvInfo.AppSeed.ToString()), out var seed))
+                seed = EnvInfo.AppSeed;
+            var svgS = new SvgScene(width, height);
+            draw(svgS, new HashColors(EnvInfo.AppName, seed));
+            var svgData = Encoding.UTF8.GetBytes(svgS.ToSvg());
             var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("logo_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
+            var svgHandler = new StaticMemoryHttpRequestHandler(name, "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
             return ValueTask.FromResult((IHttpRequestHandler)svgHandler);
         }
 
@@ -442,24 +437,7 @@ namespace SysWeaver.Net
         /// Optional end point "banner_debug.svg", a generated Banner using the color seed in the query string (requires the "debug" token).
         /// </summary>
         ValueTask<IHttpRequestHandler> HandleBannerDebugSvg(HttpServerRequest data, HttpSession session)
-        {
-            var auth = session?.Auth?.Tokens;
-            if (auth == null)
-                return HttpServerTools.NullHttpRequestHandlerValueTask;
-            if (!auth.Contains("debug"))
-                return HttpServerTools.NullHttpRequestHandlerValueTask;
-            int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
-            var enc = Encoding.UTF8;
-            var svgS = new SvgScene(BannerWidth, BannerHeight);
-            //svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
-            svgS.AddAppBanner(EnvInfo.AppDisplayName, EnvInfo.AppDescription, new HashColors(EnvInfo.AppName, seed));
-            var svgText = svgS.ToSvg();
-            var svgData = enc.GetBytes(svgText);
-            var cmp = Comp;
-            var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("banner_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
-            return ValueTask.FromResult((IHttpRequestHandler)svgHandler);
-        }
+            => HandleDebugSvg(data, session, "banner_debug.svg", BannerWidth, BannerHeight, (s, c) => s.AddAppBanner(EnvInfo.AppDisplayName, EnvInfo.AppDescription, c));
 
         #endregion//Auto gen
 

@@ -38,9 +38,10 @@ namespace SysWeaver.AI
                 return new Chat.ChatMenuItem
                 {
                     Id = "ShowMessageStats",
-                    Name = "Stats",
+                    Name = "Answer details",
                     Value = x,
-                    Icon = "IconDebug" + x,
+                    //  The framework's line "info" icon (the menus resolve Sw icon names), not the debug fingerprint
+                    Icon = "info",
                     Desc = et,
                 };
             }

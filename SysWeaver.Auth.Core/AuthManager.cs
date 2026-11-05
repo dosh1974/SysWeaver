@@ -276,7 +276,9 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Get a deterministic fake salt for an unknown user.
         /// If all authorizers are <see cref="SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
-        /// else a 24 char salt is returned (the format used by random salts, <see cref="AuthTools.GetRandomSalt"/>).
+        /// else a 24 char salt is returned (the format used by random salts, <see cref="AuthTools.GetRandomSalt"/>), keyed with
+        /// <see cref="FakeSaltKey"/> so that nobody can compute it (an unkeyed hash of the user name told who has an account: a salt that
+        /// differs from the computed one is a real one). It is the same for the life time of the process.
         /// </summary>
         /// <param name="username">The user name</param>
         /// <returns>A fake salt</returns>
@@ -286,8 +288,13 @@ namespace SysWeaver.Auth
             var a = OrderdAuths;
             if ((a != null) && (a.Length > 0) && a.All(x => x is SimpleAuthorizer))
                 return AuthTools.ComputeSimpleSalt(username ?? "");
-            return Convert.ToBase64String(SHA256.HashData(MemoryMarshal.Cast<Char, Byte>(username.AsSpan())), 0, 18);
+            return Convert.ToBase64String(HMACSHA256.HashData(FakeSaltKey, MemoryMarshal.Cast<Char, Byte>((username ?? "").AsSpan())), 0, 18);
         }
+
+        /// <summary>
+        /// The secret key of the fake salts (random per process: a fake salt changes when the process restarts, a real one doesn't)
+        /// </summary>
+        static readonly byte[] FakeSaltKey = RandomNumberGenerator.GetBytes(32);
 
 
         /// <summary>

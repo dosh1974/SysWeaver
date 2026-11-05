@@ -12,7 +12,7 @@ namespace SysWeaver.ExchangeRate
 
     [RequiredDep<IRateSource>]
     [WebApiUrl("ExchangeRates")]
-    [WebMenuPath(null, "Debug/ExchangeRate", "Exchange rate", "Debug data for the Exchange Rate Service", "IconRefund", 10)]
+    [WebMenuPath(null, "Data/ExchangeRates", "Exchange rates", "Exchange rates and their sources", "IconRefund", 10)]
     public sealed partial class ExchangeRateService : IDisposable, IPerfMonitored, IHaveStats
     {
         public ExchangeRateService(ServiceManager manager, ExchangeRateParams p = null)
@@ -84,10 +84,13 @@ namespace SysWeaver.ExchangeRate
 
         public PerfMonitor PerfMon { get; } = new PerfMonitor(SystemName);
 
+        /// <summary>
+        /// The source currently used for rates, or a note when no source has any rates yet (a fresh install without a cache, all sources failing).
+        /// </summary>
         public override string ToString()
         {
             GetSourceRates(out var x);
-            return x.S?.ToString();
+            return x?.S?.ToString() ?? "No rates available yet";
         }
 
         /// <summary>
@@ -149,7 +152,7 @@ namespace SysWeaver.ExchangeRate
         /// <returns></returns>
         [WebApi]
         [WebApiAuth]
-        [WebMenuTable(null, "Debug/ExchangeRate/RatesTable", "Current rates", null, "IconCashBill", 1, "Debug,Ops")]
+        [WebMenuTable(null, "Data/ExchangeRates/RatesTable", "Current rates", null, "IconCashBill", 1)]
         [WebApiClientCache(10)]
         [WebApiRequestCache(14)]
         public TableData RatesTable(TableDataRequest request)
@@ -182,6 +185,7 @@ namespace SysWeaver.ExchangeRate
                 col.Title = "One " + from.Iso4217;
                 col.Desc = "Value of " + from.ToString(1, CurrencyFormatOptions.ApplyThousandsSeparator | CurrencyFormatOptions.Symbol) + " (one " + from.Iso4217 + ") in local currency";
                 col = cols[ToColumn];
+                col.Format = RateRow.CurrencyFormat(comp);
                 col.Title = compMag + " local in " + comp;
                 col.Desc = "Value of " + compMag + " local units in " + compI.Name + " (" + comp + ")";
                 col = cols[FromColumn];
@@ -199,7 +203,7 @@ namespace SysWeaver.ExchangeRate
         /// <returns></returns>
         [WebApi]
         [WebApiAuth]
-        [WebMenuTable(null, "Debug/ExchangeRate/SourceTables", "Sources", null, "IconTableCountry", 2, "Debug,Ops")]
+        [WebMenuTable(null, "Data/ExchangeRates/SourceTables", "Sources", null, "IconTableCountry", 2)]
         [WebApiClientCache(10)]
         [WebApiRequestCache(14)]
         public TableData SourcesTable(TableDataRequest request)
@@ -215,7 +219,7 @@ namespace SysWeaver.ExchangeRate
         /// <returns></returns>
         [WebApi]
         [WebApiAuth]
-        [WebMenuTable(null, "Debug/ExchangeRate/AllRatesTable", "All rates", null, "IconCashBills", 3, "Debug,Ops")]
+        [WebMenuTable(null, "Data/ExchangeRates/AllRatesTable", "All rates", null, "IconCashBills", 3)]
         [WebApiClientCache(10)]
         [WebApiRequestCache(14)]
         public TableData AllRatesTable(TableDataRequest request)
@@ -255,6 +259,7 @@ namespace SysWeaver.ExchangeRate
                 col.Title = "One reference";
                 col.Desc = "Value of one reference unit in local currency";
                 col = cols[SToColumn];
+                col.Format = RateRow.CurrencyFormat(comp);
                 col.Title = compMag + " local in " + comp;
                 col.Desc = "Value of " + compMag + " local units in " + compI.Name + " (" + comp + ")";
                 col = cols[SFromColumn];

@@ -29,7 +29,7 @@ flowchart LR
 - Log file path from a path template such as `$(CommonApplicationData)` (defaults to `<executable base name>.log`)
 - Message detail style and sync/async write mode selectable
 - Automatic truncation when the file grows beyond a size limit (2 MiB by default)
-- Log file exposed as a viewable text file (admin/ops), as an embedded web page under *Debug / Log file* and as raw text through the `logFile` API; admins can delete the file from the UI
+- Log file exposed as a viewable text file (admin/ops), as an embedded web page under *Debug / Log file* and as raw text through the `logFile` API; admins can delete the file from the UI, after a confirmation: `Api/logFile/GetDeleteLogFileToken` (Admin) returns `{Token, Expires, Name, Exists, Size, LastWrite, Warning}` (a one time token, 5 minutes, this session only, a new one revokes the older one of the session; show the facts and the `Warning` in the confirmation), `Api/logFile/DeleteLogFile {Token}` deletes (409 with the reason without a valid token; extra body fields such as `{Url, Name}` are ignored), logs "The log file ... was deleted by <user> from <address>" as the first line of the new log and is audited. `FileLogParams.DeleteNeedsToken` (default true) false restores the one call delete
 - Optional dump of all statistics tables next to the log file when the service shuts down (on by default in debug builds)
 
 ## Key components

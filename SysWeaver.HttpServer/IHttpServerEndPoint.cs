@@ -29,6 +29,12 @@ namespace SysWeaver.Net
         /// A file upload end point.
         /// </summary>
         FileUpload,
+        /// <summary>
+        /// An API like end point handled by the http server itself, outside the <see cref="ApiHttpServerModule"/>
+        /// (ex: "login", "logout", "basic_auth", "serverTime", "auth/redirect", "auth/logout_user").
+        /// The response is small dynamic data (or a redirect), it has no meaningful size.
+        /// </summary>
+        Builtin,
     }
 
     /// <summary>

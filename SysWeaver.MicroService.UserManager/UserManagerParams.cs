@@ -46,6 +46,17 @@ namespace SysWeaver.MicroService
         public int ShortCodeDigits = 6;
 
         /// <summary>
+        /// The wrong short code tries allowed per account, from all browsers together (every limit must allow a try; a right code is never counted).
+        /// Kept in memory only (a restart forgets them). Null or empty for no limit per account (each code still allows 10 tries).
+        /// Default: 3 per 5 minutes and 50 per day
+        /// </summary>
+        public RateLimiterParams[] CodeTriesPerUser =
+        [
+            new RateLimiterParams { Count = 3, Duration = 5 * 60 },
+            new RateLimiterParams { Count = 50, Duration = 24 * 60 * 60 },
+        ];
+
+        /// <summary>
         /// If true (and the server accepts basic auth, then users are allowed to login using basic auth)
         /// </summary>
         public bool AllowBasicAuth;

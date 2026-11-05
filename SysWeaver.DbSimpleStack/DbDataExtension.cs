@@ -163,9 +163,80 @@ namespace SysWeaver.Db
                     q.Where(mn + ">0");
                     first = false;
                 }
+                else
+                {
+                    if (AddTextSearch<T>(q, dp, fullTextSearch))
+                        first = false;
+                }
             }
             q.Sort(sort, first);
             return q;
+        }
+
+        /// <summary>
+        /// The most words of a search text that a plain text search uses (the rest are ignored).
+        /// </summary>
+        const int MaxSearchWords = 8;
+
+        /// <summary>
+        /// the plain text search of a <see cref="TableDataRequest.SearchText"/> when the row type has no matching full text index
+        /// (before, the search text was silently ignored, ex: the Users table of the UserManager).
+        /// The same semantics as the in-memory tables (<see cref="TableDataTools.Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>, SimpleTextSearch):
+        /// the search text is split into words and numbers (<see cref="StringExt.ExtractWordsAndNumbers(string)"/>, at most <see cref="MaxSearchWords"/>),
+        /// a row matches if every word is found (AND; case insensitive, as a sub string) in any of the <see cref="DbDataType{T}.SearchColumns"/>,
+        /// and the rows are ordered by a rank (the sum over the found words of the weight of the first column it's found in, columns by descending
+        /// weight, 0.95 per preceding column) before the requested sort order.
+        /// The words are passed as parameters (never as SQL text), a word only has letters, digits and '.', so it has no LIKE wild cards.
+        /// </summary>
+        /// <typeparam name="T">The row type</typeparam>
+        /// <param name="q">The query to add the condition and the rank order to</param>
+        /// <param name="dialect">The dialect of the connection</param>
+        /// <param name="searchText">The (trimmed, non empty) search text</param>
+        /// <returns>True if a search was added (an order by was added), false if the type has no searchable column or the text has no words</returns>
+        static bool AddTextSearch<T>(TypedSelectStatement<T> q, IDialectProvider dialect, String searchText)
+        {
+            var cols = DbDataType<T>.SearchColumns;
+            var cl = cols.Length;
+            if (cl <= 0)
+                return false;
+            var words = searchText.ExtractWordsAndNumbers().Select(x => x.FastToLower()).Distinct(StringComparer.Ordinal).Take(MaxSearchWords).ToArray();
+            var wl = words.Length;
+            if (wl <= 0)
+                return false;
+            var dp = q.Statement.Parameters;
+            var lowerCols = cols.Select(x => "LOWER(" + dialect.GetQuotedColumnName(x) + ")").ToArray();
+            var where = new StringBuilder("((");
+            var rank = new StringBuilder("(");
+            for (int w = 0; w < wl; ++w)
+            {
+                var pn = "SwSearch" + w;
+                dp.Add(new SimpleStack.Orm.Expressions.Statements.StatementParameter(pn, typeof(String), String.Concat("%", words[w], "%")));
+                if (w > 0)
+                {
+                    //  Every word must be found (AND), each in any column (OR)
+                    where.Append(") AND (");
+                    rank.Append(" + ");
+                }
+                rank.Append("(CASE");
+                double weight = 1.0;
+                for (int c = 0; c < cl; ++c)
+                {
+                    if (c > 0)
+                        where.Append(" OR ");
+                    where.Append(lowerCols[c]).Append(" LIKE @").Append(pn);
+                    rank.Append(" WHEN ").Append(lowerCols[c]).Append(" LIKE @").Append(pn).Append(" THEN ")
+                        .Append((Math.Round(weight * 10000.0) / 10000.0).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    weight *= 0.95;
+                }
+                rank.Append(" ELSE 0 END)");
+            }
+            where.Append("))");
+            rank.Append(')');
+            q.Where(where.ToString());
+            var rname = dialect.GetQuotedColumnName("SwSearchRank");
+            q.Statement.Columns.Add(rank.Append(" AS ").Append(rname).ToString());
+            q.OrderByDescendingColumn(rname);
+            return true;
         }
 
 

@@ -1,0 +1,306 @@
+﻿/*
+ * explore/themepreview.css - styles of the theme preview explore/themepreview.html (explore/themepreview.js): a demo app drawn with the
+ * Design v2 tokens of ui/tokens.css only, so it shows any theme (the logo designer opens it with the theme of a seed).
+ * Classes: tp-app (the whole demo), tp-marks (the generated icon, logo and banner of the seed), tp-top (the top bar: tp-brand (the icon), tp-crumb / tp-crumbcur / tp-crumbsep, tp-avatar), tp-body, tp-side (the
+ * side menu: tp-filter, tp-mrow / tp-sel (the current item) / tp-micon / tp-mtext / tp-mbadge, tp-msection), tp-content, tp-main (the
+ * page, main.sw-page-dash), tp-kpis (a .sw-grid) / tp-kpi (tp-kpi-label, tp-kpi-value, tp-kpi-note), tp-grid, tp-card / tp-wide / tp-head, tp-row, tp-slider,
+ * tp-text / tp-text2, tp-tablewrap (the host of the demo Sw.Table: explore/table.js + table.css, local rows).
+ */
+
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+.tp-app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--sw-canvas, var(--sw-bg));
+    color: var(--sw-text);
+}
+
+/* ---------- Top bar ---------- */
+
+.tp-top {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2, 8px);
+    flex: none;
+    height: var(--sw-top-h, 3.5rem);
+    padding: 0 var(--sw-space-3, 12px);
+    border-bottom: 1px solid var(--sw-border);
+    background: var(--sw-canvas, var(--sw-bg));
+    box-sizing: border-box;
+}
+
+.tp-brand {
+    width: 28px;
+    height: 28px;
+    margin-right: var(--sw-space-3, 12px);
+}
+
+/* The generated icon, logo and banner of the seed (icon_debug.svg, logo_debug.svg, banner_debug.svg), side by side, 96 px high */
+.tp-marks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-4, 16px) var(--sw-space-6, 24px);
+    padding: var(--sw-space-4, 16px);
+}
+
+    .tp-marks img {
+        display: block;
+        height: 96px;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+    }
+
+.tp-crumb {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-md, 0.875rem);
+}
+
+.tp-crumbcur {
+    color: var(--sw-text);
+    font-weight: var(--sw-weight-medium, 500);
+}
+
+.tp-crumbsep {
+    color: var(--sw-text-3);
+}
+
+.tp-avatar {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--sw-accent1);
+    color: var(--sw-on-accent, var(--sw-bg));
+    font-weight: 600;
+}
+
+/* ---------- Side menu (the shell's look) ---------- */
+
+.tp-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.tp-side {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: none;
+    width: 14rem;
+    padding: var(--sw-space-3, 12px) var(--sw-space-2, 8px);
+    border-right: 1px solid var(--sw-border);
+    background: var(--sw-nav, var(--sw-surface));
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.tp-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--sw-control-h, 2.125rem);
+    margin-bottom: var(--sw-space-2, 8px);
+    padding: 0 10px;
+    border: 1px solid var(--sw-border-input, var(--sw-border));
+    border-radius: var(--sw-radius, 6px);
+    background: var(--sw-surface);
+    color: var(--sw-text-3);
+    font-size: var(--sw-text-md, 0.875rem);
+}
+
+    .tp-filter .sw-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+.tp-mrow {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-3, 12px);
+    min-height: var(--sw-nav-row-h, 2rem);
+    padding: 2px 8px 2px 11px;
+    border-radius: var(--sw-radius, 6px);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-md, 0.875rem);
+}
+
+@media (hover: hover) {
+    .tp-mrow:hover {
+        background: var(--sw-hover);
+        color: var(--sw-text);
+    }
+}
+
+.tp-mrow.tp-sel {
+    background: var(--sw-selected);
+    color: var(--sw-text);
+    font-weight: var(--sw-weight-medium, 500);
+}
+
+    .tp-mrow.tp-sel::before {
+        content: "";
+        position: absolute;
+        left: -8px;
+        top: 6px;
+        bottom: 6px;
+        width: 3px;
+        border-radius: 0 var(--sw-radius-sm, 4px) var(--sw-radius-sm, 4px) 0;
+        background: var(--sw-accent1);
+    }
+
+.tp-micon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    color: var(--sw-text-3);
+}
+
+.tp-sel .tp-micon {
+    color: var(--sw-text-accent, var(--sw-accent1));
+}
+
+.tp-mtext {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tp-mbadge {
+    min-width: 1.25rem;
+    padding: 0 0.375rem;
+    border-radius: var(--sw-radius-pill, 999px);
+    background: var(--sw-danger);
+    color: var(--sw-on-danger, #fff);
+    font-size: var(--sw-text-xs, 0.75rem);
+    font-weight: 600;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.tp-msection {
+    margin: var(--sw-space-3, 12px) 0 2px;
+    padding: 0 8px;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-xs, 0.75rem);
+    font-weight: var(--sw-weight-medium, 500);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* ---------- The page ---------- */
+
+.tp-content {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+}
+
+.tp-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: var(--sw-space-3, 12px);
+}
+
+.tp-kpi {
+    padding: var(--sw-space-3, 12px) var(--sw-space-4, 16px);
+}
+
+.tp-kpi-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 0.8125rem);
+}
+
+    .tp-kpi-label .sw-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+.tp-kpi-value {
+    margin: 4px 0 2px;
+    font-family: var(--sw-font-heading, inherit);
+    font-size: 1.75rem;
+    font-weight: 600;
+}
+
+.tp-kpi-note {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 0.8125rem);
+}
+
+.tp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+    gap: var(--sw-space-3, 12px);
+}
+
+.tp-head {
+    margin: 0;
+    font-size: var(--sw-text-md, 0.875rem);
+    font-weight: 600;
+}
+
+.tp-card .sw-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3, 12px);
+}
+
+.tp-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2, 8px);
+}
+
+    .tp-row .sw-tag {
+        margin: 0;
+    }
+
+.tp-slider {
+    flex: 1;
+    min-width: 8rem;
+}
+
+.tp-text, .tp-text2 {
+    margin: 0;
+}
+
+.tp-text2 {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 0.8125rem);
+}
+
+/* ---------- Table ---------- */
+
+/* The host of the demo Sw.Table (explore/table.js, local rows) */
+.tp-tablewrap {
+    box-sizing: border-box;
+    padding-top: var(--sw-space-2, 8px);
+}
+
+/* Phones: the side menu is left out (the shell shows it as a drawer there) */
+@media (max-width: 700px) {
+    .tp-side {
+        display: none;
+    }
+}
+
+/* The table card takes the whole width of the grid (the grid layout of the table, not its phone cards) */
+.tp-grid > .tp-wide {
+    grid-column: 1 / -1;
+}

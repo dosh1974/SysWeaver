@@ -1,142 +1,596 @@
-﻿
-
-/**
- * @file Passkey.js - client side WebAuthn (passkey) support for the SysWeaver.MicroService.PassKey service.
+﻿/**
+ * @file Passkey.js - the UI-less WebAuthn (passkey) client of SysWeaver.MicroService.PassKey (served as auth/Passkey.js).
  *
- * Served as auth/Passkey.js (compressed into web/auth of SysWeaver.MicroService.PassKey, the same virtual folder
- * as the other auth services). Loaded with a deferred script tag, after ../common/common.js
- * (and ../app/application.js on MyPassKeys.html), Auth.js and AuthUi.js, by:
- *  - this project's pages: UsePassKey.html (usePassKeyMain), AddPassKey.html (addPassKeyMain),
- *    AddPassKeyOnOtherDevice.html (addPassKeyOtherMain), MyPassKeys.html (myPassKeysMain), called from body onload;
- *  - Login.html (SysWeaver.MicroService.Auth) and ChoosePassword.html / ResetPassword.html
- *    (SysWeaver.MicroService.UserManager). Those pages test `typeof PassKey !== "undefined"`, so this file is an
- *    optional plug-in: AuthUi.js uses PassKey.Autofill, PassKey.SignIn, PassKey.HaveHint, PassKey.ErrorText and the
- *    IconPasskeyKey / PasskeyIconButton classes from Passkey.css; UserManagerUi.js uses PassKey.AttachUsingToken /
- *    PassKey.NewAccount.
+ * Purpose: ceremonies against PassKeyService (Api/auth/passkey/*) with navigator.credentials.get / create:
+ *  - class PassKeyChallenge: one pre-fetchable ceremony (challenge api + submit api). Fetch() early (the challenge is
+ *    cached for publicKey.timeout - 15 s, else 60 s), then Run() from a click so the browser prompt opens directly in
+ *    the user gesture (Safari). A challenge is single use; Fetch() again for a retry.
+ *  - class PassKey (static): support detection (IsSupported, IsAvailable: the service runs), server error codes 0..11 (+ client side Cancelled -1, AlreadyOnDevice -2)
+ *    and their translated texts, Get / Create wrappers (base64 <-> ArrayBuffer, browser error mapping,
+ *    signalUnknownCredential), conditional mediation autofill (Autofill), device hints in localStorage, factories
+ *    SignIn / Attach / AttachUsingToken / NewAccount, GetPassKeys / Rename / Remove, GetLoggedInUser.
+ *  - Sw.PassKey = PassKey, Sw.PassKeyChallenge = PassKeyChallenge.
  *
- * Globals defined:
- *  - class PassKeyChallenge: one pre-fetchable WebAuthn ceremony (challenge API + submit API).
- *  - class PassKey: static-only helper (API calls, error codes/texts, navigator.credentials.get/create wrappers,
- *    device hints in localStorage, ceremony factories).
- *  - addPassKeyMain, usePassKeyMain, addPassKeyOtherMain, myPassKeysMain: page entry points.
+ * Loading: classic `defer` script after ../sw/core.js (or common/common.js) and Auth.js. An optional plug-in of the
+ * Login (MicroService.Auth), ChoosePassword / ResetPassword (MicroService.UserManager) pages: they test
+ * `typeof PassKey`. The passkey pages load PasskeyUi.js after it.
  *
- * Dependencies (globals from other files):
- *  - common/common.js (SysWeaver.HttpServer): sendRequest, getRequest, RemoveNulls, base64ToArray, bufferToBase64,
- *    delay, getUrlParams, makeHtmlSafe, Fail, ValueFormat, _T, _TF.
- *  - app/application.js (SysWeaver.HttpServer, only loaded by MyPassKeys.html): Confirm, PopUp (used by myPassKeysMain).
- *  - Auth.js / AuthUi.js (SysWeaver.MicroService.Auth, same auth/ folder): AuthPage, CreateAuthWrapper, AuthLabel,
- *    AuthText, AuthButtonRow, AuthButton, AuthInput, AuthHr, AuthTrim, AuthStartPage.
- *
- * Server API: POST ../Api/auth/passkey/{name} (PassKeyService), GET ../Api/auth/GetUser (MicroService.Auth),
- * image ../Api/auth/passkey/GetQR.svg.
- *
- * Storage: sessionStorage "SysWeaver.User" (signed in AuthInfo, written after a successful ceremony);
- * localStorage "SysWeaver.PassKey.Hint", "SysWeaver.PassKey.Local" (credential ids used/created here),
- * "SysWeaver.PassKey.UserOnDevice" (user guids the browser reported a passkey for).
- *
- * Conventions: results of ceremonies are objects with an Error member (0 = success, see PassKey.Errors), an
- * optional Message and an optional User. Challenges are fetched before the click so navigator.credentials.* is
- * invoked directly inside the user gesture (Safari requirement).
+ * Globals: PassKey, PassKeyChallenge (classes, also on window and Sw).
+ * Server: POST Api/auth/passkey/{GetAuthChallenge, GetUserAuthChallenge, GetCreateChallenge, GetResetChallenge,
+ * GetNewChallenge, Auth, Create, New, GetPassKeys, RenamePassKey, DeletePassKey, GetQRLifeTime}, Api/auth/GetUser.
+ * DTOs use lowercase WebAuthn names, byte[] as standard base64.
+ * Storage: sessionStorage "SysWeaver.User" (AuthInfo after a ceremony that signed in), localStorage
+ * "SysWeaver.PassKey.Hint" ("1" once a platform passkey was created / used here), "SysWeaver.PassKey.Local" (JSON array,
+ * max 64, base64url credential ids created / used here), "SysWeaver.PassKey.UserOnDevice" (JSON array of user guids the
+ * browser already holds a passkey for).
  */
+(function () {
+    "use strict";
 
-//https://github.com/passwordless-lib/fido2-net-lib?tab=readme-ov-file#examples
-//https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredentialCreationOptions#pubkeycredparams
+    const Sw = window.Sw;
+    if (!Sw || !Sw.Net)
+        throw new Error("auth/Passkey.js requires sw/core.js (or common/common.js)");
 
-/**
- * A server challenge that is fetched before the user starts the ceremony, so that navigator.credentials.get / create is called directly from the user gesture (required by Safari).
- *
- * Instances are created by the PassKey factories (PassKey.SignIn, Attach, AttachUsingToken, NewAccount).
- * Lifecycle: optionally call Fetch() early (e.g. on page load) to cache the options, then call Run() from a click
- * handler. Run() consumes the cached options (a challenge is single use); call Fetch() again to pre-fetch a new
- * one for a retry.
- */
-class PassKeyChallenge {
+    /** localStorage keys. */
+    const HintKey = "SysWeaver.PassKey.Hint";
+    const LocalKey = "SysWeaver.PassKey.Local";
+    const UserOnDeviceKey = "SysWeaver.PassKey.UserOnDevice";
 
     /**
-     * Create a ceremony description (no request is sent until Fetch / Run).
-     * @param {string} challengeName - API name (under PassKey.ApiPrefix) that returns the WebAuthn options, e.g. "GetAuthChallenge".
-     * @param {*} arg - Argument posted to the challenge API (user identifier, token or null).
-     * @param {string} submitName - API name that the browser response is posted to ("Auth", "Create" or "New").
-     * @param {boolean} isCreate - True for a registration (navigator.credentials.create), false for an assertion (get).
+     * Read a JSON array from localStorage.
+     * @param {string} key The key.
+     * @returns {string[]} The list ([] when missing or invalid).
      */
-    constructor(challengeName, arg, submitName, isCreate) {
-        this.ChallengeName = challengeName;
-        this.Arg = arg;
-        this.SubmitName = submitName;
-        this.IsCreate = isCreate;
-        /** @type {object|null} Cached server options ({challengeId, publicKey, error?}), null when none/consumed. */
-        this.Options = null;
-        /** @type {number} Date.now() when Options was fetched (used for the freshness check). */
-        this.Fetched = 0;
+    function getList(key) {
+        const v = Sw.Storage.Local.GetJson(key, []);
+        return Array.isArray(v) ? v : [];
     }
 
     /**
-     * Fetch a challenge (if there isn't a fresh one).
-     * Cached options without an error are reused while younger than publicKey.timeout - 15 s (60 s when the timeout
-     * is missing or <= 20 s). Otherwise posts to PassKey.ApiPrefix + ChallengeName with Arg and applies RemoveNulls.
-     * @returns {Promise<object>} The options from the server (check the error member)
-     * @throws {Error} When the server returned nothing.
+     * Write a list (at most the 64 newest entries) as JSON to localStorage.
+     * @param {string} key The key.
+     * @param {string[]} list Entries, oldest first.
      */
-    async Fetch() {
-        const o = this.Options;
-        if (o && (!o.error)) {
-            const t = o.publicKey.timeout;
-            const maxAge = (t && (t > 20000)) ? (t - 15000) : 60000;
-            if ((Date.now() - this.Fetched) < maxAge)
-                return o;
-        }
-        this.Options = null;
-        const c = await PassKey.Call(this.ChallengeName, this.Arg);
-        if (!c)
-            throw new Error(_TF("Failed to get a challenge from the server", "Error message shown when a passkey challenge couldn't be fetched from the server"));
-        RemoveNulls(c);
-        this.Options = c;
-        this.Fetched = Date.now();
-        return c;
+    function setList(key, list) {
+        Sw.Storage.Local.SetJson(key, list.slice(-64));
     }
 
     /**
-     * Run the ceremony (fetches a challenge if needed).
-     * Returns NotSupported without any request if PassKey.IsSupported() is false. Clears the cached options, returns
-     * {Error: options.error} if the server refused, else delegates to PassKey.Create or PassKey.Get with SubmitName.
-     * @returns {Promise<object>} The result, with an Error member (0 = success, see PassKey.Errors) and a User member if a user was signed in
+     * Standard base64 (server) to base64url without padding (browser credential ids).
+     * @param {string} s Base64.
+     * @returns {string} Base64url.
      */
-    async Run() {
-        if (!PassKey.IsSupported())
-            return { Error: PassKey.Errors.NotSupported };
-        const c = await this.Fetch();
-        this.Options = null;
-        if (c.error)
-            return { Error: c.error };
-        return this.IsCreate ? await PassKey.Create(c, this.SubmitName) : await PassKey.Get(c, this.SubmitName);
+    function toBase64Url(s) {
+        return (s ?? "").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
 
     /**
-     * The user name (when creating a passkey), or null
-     * Read from the cached Options (publicKey.user.name), so it is only available after Fetch() and before Run().
+     * Bytes (ArrayBuffer / view) to standard base64, null stays null.
+     * @param {ArrayBuffer|ArrayBufferView|null} b The bytes.
      * @returns {string|null}
      */
-    get UserName() {
-        const o = this.Options;
-        return o?.publicKey?.user?.name ?? null;
+    function b64(b) {
+        return b ? Sw.Util.Base64Encode(b instanceof ArrayBuffer ? new Uint8Array(b) : new Uint8Array(b.buffer, b.byteOffset, b.byteLength)) : null;
     }
-}
-
-
-/**
- * Static-only passkey helper (never instantiated): server API calls, error codes and texts, wrappers around
- * navigator.credentials.get / create, device "hints" kept in localStorage, passkey autofill and factories that
- * create PassKeyChallenge ceremonies. Used by the page entry points below and by AuthUi.js / UserManagerUi.js.
- */
-class PassKey {
-
-    /** @type {string} Relative base url of the PassKeyService API (pages are served from auth/). */
-    static ApiPrefix = "../Api/auth/passkey/";
 
     /**
-     * The error codes (same as PassKeyErrors on the server), Cancelled and AlreadyOnDevice are client side only
+     * A server challenge fetched before the user starts the ceremony (navigator.credentials is then called directly from
+     * the user gesture, as Safari requires).
      */
-    static Errors = {
+    class PassKeyChallenge {
+        /**
+         * @param {string} challengeName Api returning the WebAuthn options (ex: "GetAuthChallenge").
+         * @param {*} arg Argument of the challenge api (user id, token or null).
+         * @param {string} submitName Api the browser response is posted to ("Auth", "Create", "New").
+         * @param {boolean} isCreate True for a registration (create), false for an assertion (get).
+         */
+        constructor(challengeName, arg, submitName, isCreate) {
+            this.ChallengeName = challengeName;
+            this.Arg = arg;
+            this.SubmitName = submitName;
+            this.IsCreate = isCreate;
+            /** @type {object|null} Cached options ({challengeId, publicKey, error?}). */
+            this.Options = null;
+            /** @type {number} When Options were fetched (Date.now()). */
+            this.Fetched = 0;
+        }
+
+        /**
+         * Fetch a challenge unless a fresh one is cached.
+         * @returns {Promise<object>} The options (check the error member).
+         */
+        async Fetch() {
+            const o = this.Options;
+            if (o && !o.error && (Date.now() - this.Fetched) < PassKey.MaxAge(o))
+                return o;
+            this.Options = null;
+            const c = await PassKey.Call(this.ChallengeName, this.Arg);
+            if (!c)
+                throw new Error(_TF("Failed to get a challenge from the service", "Error message shown when a passkey challenge couldn't be fetched from the service"));
+            Sw.Util.RemoveNulls(c);
+            this.Options = c;
+            this.Fetched = Date.now();
+            return c;
+        }
+
+        /**
+         * Run the ceremony (fetches a challenge if needed; consumes the cached one).
+         * @returns {Promise<object>} {Error (0 = success, see PassKey.Errors), User?, Message?}.
+         */
+        async Run() {
+            if (!PassKey.IsSupported())
+                return { Error: PassKey.Errors.NotSupported };
+            const c = await this.Fetch();
+            this.Options = null;
+            if (c.error)
+                return { Error: c.error };
+            return this.IsCreate ? await PassKey.Create(c, this.SubmitName) : await PassKey.Get(c, this.SubmitName);
+        }
+
+        /**
+         * The user name of a registration (after Fetch, before Run), or null.
+         * @returns {string|null}
+         */
+        get UserName() {
+            return this.Options?.publicKey?.user?.name ?? null;
+        }
+    }
+
+    /**
+     * Static passkey helpers (see the file header).
+     */
+    class PassKey {
+        /**
+         * The api prefix.
+         * @returns {string} "<root>Api/auth/passkey/".
+         */
+        static get ApiPrefix() {
+            return Sw.Url.Root + "Api/auth/passkey/";
+        }
+
+        /**
+         * Usable age of a challenge.
+         * @param {object} c The options.
+         * @returns {number} Milliseconds (publicKey.timeout - 15 s, or 60 s when missing / <= 20 s).
+         */
+        static MaxAge(c) {
+            const t = c?.publicKey?.timeout;
+            return (t && t > 20000) ? (t - 15000) : 60000;
+        }
+
+        /**
+         * True if passkeys can be used (PublicKeyCredential, navigator.credentials and a secure context).
+         * @returns {boolean}
+         */
+        static IsSupported() {
+            return (!!window.PublicKeyCredential) && (!!navigator.credentials) && window.isSecureContext;
+        }
+
+        /**
+         * True if passkeys can be used here: supported by the browser (IsSupported). This script is only loaded where the
+         * PassKeyService runs (Sw.AuthUi.LoadPassKeys asks Api/HaveService first, and the passkey pages belong to the service), so
+         * no other request is made: as before the pages fetch their challenge directly, and a failing challenge hides the passkey
+         * button.
+         * @param {boolean} [refresh] Ignored (kept for the signature).
+         * @returns {Promise<boolean>}
+         */
+        static IsAvailable(refresh) {
+            void refresh;
+            return Promise.resolve(PassKey.IsSupported());
+        }
+
+        /**
+         * A user friendly text for a result.
+         * @param {object} result The result ({Error}).
+         * @returns {string} The translated text ("" for None).
+         */
+        static ErrorText(result) {
+            const e = PassKey.Errors;
+            switch (result?.Error) {
+                case e.None:
+                    return "";
+                case e.NotSupported:
+                    return _TF("Passkeys can't be used here, a secure connection (https) and a browser that supports passkeys is required.", "Error message shown when passkeys can't be used on the current site or browser");
+                case e.AlreadySignedIn:
+                    return _TF("A user is already signed in, please sign out first.", "Error message shown when a passkey operation requires that no user is signed in");
+                case e.NotSignedIn:
+                    return _TF("No user is signed in, please sign in first.", "Error message shown when a passkey operation requires a signed in user");
+                case e.ChallengeExpired:
+                    return _TF("The request took too long, please try again.", "Error message shown when a passkey challenge has expired");
+                case e.UnknownCredential:
+                    return _TF("This passkey isn't valid for this site any more, please select another one or sign in with your password.", "Error message shown when a passkey that the server doesn't know was used");
+                case e.NoPassKeys:
+                    return _TF("No passkey was found for this user.", "Error message shown when a user that have no passkeys tried to sign in using a passkey");
+                case e.VerificationFailed:
+                    return _TF("The passkey couldn't be verified.", "Error message shown when a passkey failed verification on the server");
+                case e.AlreadyRegistered:
+                case e.AlreadyOnDevice:
+                    return _TF("A passkey for this account already exists on this device.", "Error message shown when trying to add a passkey to a device that already have one for the account");
+                case e.TokenExpired:
+                    return _TF("The link or QR code has expired or was already used.", "Error message shown when a passkey link or QR code is no longer valid");
+                case e.AccountExists:
+                    return _TF("The account already exists.", "Error message shown when trying to create an account that already exists");
+                case e.LastSignInMethod:
+                    return _TF("The last way to sign in can't be removed.", "Error message shown when trying to remove the last passkey of a user that have no password");
+                case e.Cancelled:
+                    return _TF("Cancelled.", "Message shown when the user cancelled a passkey operation");
+            }
+            return _TF("The passkey operation failed.", "Generic error message for a failed passkey operation");
+        }
+
+        /**
+         * Call a PassKeyService api (POST json, no cache, a redirect throws).
+         * @param {string} name Method name, ex: "GetAuthChallenge".
+         * @param {*} arg Argument (may be null).
+         * @returns {Promise<*>} The response.
+         */
+        static async Call(name, arg) {
+            return await Sw.Net.Send(PassKey.ApiPrefix + name, arg ?? null, { Post: true, Reload: true, NoNavigate: true });
+        }
+
+        /**
+         * The signed in user (GET Api/auth/GetUser, as the old Passkey.js getRequest).
+         * @returns {Promise<object|null>} AuthInfo when signed in, else null.
+         */
+        static async GetLoggedInUser() {
+            const u = await Sw.Net.Get(Sw.Url.Root + "Api/auth/GetUser", { Reload: true, NoNavigate: true });
+            return u && u.Succeeded ? u : null;
+        }
+
+        /**
+         * Store the user of a successful result in sessionStorage "SysWeaver.User" and note the sign in for the sign in page
+         * (Sw.Auth.NoteSignedIn, when auth/Auth.js is loaded).
+         * @param {object} r The result.
+         */
+        static SetUser(r) {
+            if (r && r.Error == 0 && r.User) {
+                Sw.Storage.Session.SetJson("SysWeaver.User", r.User);
+                Sw.Auth?.NoteSignedIn?.(true);
+            }
+        }
+
+        /**
+         * True if a passkey was created or used in this browser before (only a hint).
+         * @returns {boolean}
+         */
+        static HaveHint() {
+            return !!Sw.Storage.Local.Get(HintKey);
+        }
+
+        /**
+         * Remember a platform passkey on this device (nothing for cross-platform authenticators).
+         * @param {string} attachment The authenticatorAttachment.
+         * @param {string} credentialId The credential id (base64url).
+         */
+        static SetHint(attachment, credentialId) {
+            if (attachment === "cross-platform")
+                return;
+            Sw.Storage.Local.Set(HintKey, "1");
+            if (credentialId) {
+                const ids = getList(LocalKey).filter(x => x !== credentialId);
+                ids.push(credentialId);
+                setList(LocalKey, ids);
+            }
+        }
+
+        /**
+         * True if the passkey was created or used on this device.
+         * @param {string} id Credential id (standard base64, PassKeyInfo.Id).
+         * @returns {boolean}
+         */
+        static IsOnDevice(id) {
+            return getList(LocalKey).includes(toBase64Url(id));
+        }
+
+        /**
+         * True if the browser reported a passkey of the user on this device.
+         * @param {string} userGuid User guid.
+         * @returns {boolean}
+         */
+        static IsUserOnDevice(userGuid) {
+            return !!userGuid && getList(UserOnDeviceKey).includes(userGuid);
+        }
+
+        /**
+         * Remember that the browser holds a passkey of the user (it refused to add another one).
+         * @param {string} userGuid User guid.
+         */
+        static SetUserOnDevice(userGuid) {
+            if (!userGuid)
+                return;
+            const list = getList(UserOnDeviceKey).filter(x => x !== userGuid);
+            list.push(userGuid);
+            setList(UserOnDeviceKey, list);
+        }
+
+        /**
+         * Forget the device hints of a removed passkey (and the user's "on device" flag).
+         * @param {string} id Credential id (standard base64).
+         * @param {string} [userGuid] User guid.
+         */
+        static ForgetOnDevice(id, userGuid) {
+            const u = toBase64Url(id);
+            setList(LocalKey, getList(LocalKey).filter(x => x !== u));
+            if (userGuid)
+                setList(UserOnDeviceKey, getList(UserOnDeviceKey).filter(x => x !== userGuid));
+        }
+
+        /**
+         * True if passkey autofill (conditional mediation) is available.
+         * @returns {Promise<boolean>}
+         */
+        static async IsAutofillSupported() {
+            try {
+                return PassKey.IsSupported() && !!PublicKeyCredential.isConditionalMediationAvailable && await PublicKeyCredential.isConditionalMediationAvailable();
+            }
+            catch {
+                return false;
+            }
+        }
+
+        /**
+         * Start passkey autofill: the site's passkeys are offered in the autofill list of inputs with
+         * autocomplete="username webauthn". The request is restarted before the challenge expires and after failures
+         * (1 s pause); a cancelled request restarts at once. Only one WebAuthn request may run: Stop() before another
+         * request, Start() afterwards.
+         * @param {function(object):*} onResult Called with the result when a passkey was picked (Error 0 = signed in).
+         * @returns {{Start:function():void, Stop:function():void}} The controller (already started).
+         */
+        static Autofill(onResult) {
+            const state = { Run: 0, Abort: null };
+            /**
+             * One loop instance.
+             * @param {number} runId Id of this loop (superseded when state.Run changes).
+             * @returns {Promise<void>}
+             */
+            async function run(runId) {
+                while (state.Run === runId) {
+                    let c;
+                    try {
+                        c = await PassKey.Call("GetAuthChallenge", null);
+                    }
+                    catch {
+                        return;
+                    }
+                    if (!c || c.error || state.Run !== runId)
+                        return;
+                    Sw.Util.RemoveNulls(c);
+                    const ac = new AbortController();
+                    state.Abort = ac;
+                    const refresh = setTimeout(() => ac.abort(), PassKey.MaxAge(c));
+                    let r;
+                    try {
+                        r = await PassKey.Get(c, "Auth", { mediation: "conditional", signal: ac.signal });
+                    }
+                    catch (e) {
+                        r = { Error: PassKey.Errors.VerificationFailed, Message: "" + e };
+                    }
+                    finally {
+                        clearTimeout(refresh);
+                        if (state.Abort === ac)
+                            state.Abort = null;
+                    }
+                    if (state.Run !== runId)
+                        return;
+                    if (r.Error == PassKey.Errors.Cancelled)
+                        continue;
+                    await onResult(r);
+                    if (r.Error == 0)
+                        return;
+                    await Sw.Util.Delay(1000);
+                }
+            }
+            const ctl = {
+                /** (Re)start the loop. */
+                Start() {
+                    run(++state.Run);
+                },
+                /** Stop the loop and abort the pending request. */
+                Stop() {
+                    ++state.Run;
+                    const a = state.Abort;
+                    state.Abort = null;
+                    if (a)
+                        a.abort();
+                },
+            };
+            ctl.Start();
+            return ctl;
+        }
+
+        /**
+         * Map a navigator.credentials exception to a result (others are re-thrown).
+         * @param {Error} e The exception.
+         * @returns {{Error:number, Message?:string}}
+         */
+        static FromBrowserError(e) {
+            const n = e?.name;
+            if (n === "NotAllowedError" || n === "AbortError")
+                return { Error: PassKey.Errors.Cancelled };
+            if (n === "InvalidStateError")
+                return { Error: PassKey.Errors.AlreadyOnDevice };
+            if (n === "SecurityError")
+                return { Error: PassKey.Errors.NotSupported, Message: "" + e };
+            throw e;
+        }
+
+        /**
+         * Decode the base64 ids of credential descriptors in place.
+         * @param {Array<{id:string}>} [list] The descriptors.
+         */
+        static DecodeIds(list) {
+            if (list)
+                list.forEach(x => x.id = Sw.Util.Base64Decode(x.id));
+        }
+
+        /**
+         * Run navigator.credentials.get with server options and submit the assertion.
+         * @param {object} c The options ({challengeId, publicKey}); decoded in place.
+         * @param {string} submitName Submit api.
+         * @param {object} [extra] More get() options, ex: {mediation: "conditional", signal}.
+         * @returns {Promise<object>} The result.
+         */
+        static async Get(c, submitName, extra) {
+            const pk = c.publicKey;
+            pk.challenge = Sw.Util.Base64Decode(pk.challenge);
+            PassKey.DecodeIds(pk.allowCredentials);
+            let cc;
+            try {
+                cc = await navigator.credentials.get(Object.assign({ publicKey: pk }, extra));
+            }
+            catch (e) {
+                return PassKey.FromBrowserError(e);
+            }
+            if (!cc)
+                return { Error: PassKey.Errors.Cancelled };
+            const res = cc.response;
+            const r = await PassKey.Call(submitName, {
+                challengeId: c.challengeId,
+                authenticatorAttachment: cc.authenticatorAttachment,
+                id: cc.id,
+                rawId: b64(cc.rawId),
+                response: res ? {
+                    authenticatorData: b64(res.authenticatorData),
+                    clientDataJSON: b64(res.clientDataJSON),
+                    signature: b64(res.signature),
+                    userHandle: b64(res.userHandle),
+                } : null,
+                type: cc.type,
+            });
+            if (!r)
+                throw new Error(_TF("No response from the service", "Error message shown when the service didn't respond to a passkey request"));
+            if (r.Error == PassKey.Errors.UnknownCredential && PublicKeyCredential.signalUnknownCredential) {
+                //  Let the passkey provider remove (or hide) the passkey
+                try {
+                    await PublicKeyCredential.signalUnknownCredential({ rpId: pk.rpId, credentialId: cc.id });
+                }
+                catch {
+                }
+            }
+            if (r.Error == 0)
+                PassKey.SetHint(cc.authenticatorAttachment, cc.id);
+            PassKey.SetUser(r);
+            return r;
+        }
+
+        /**
+         * Run navigator.credentials.create with server options and submit the attestation.
+         * @param {object} c The options ({challengeId, publicKey}); decoded in place.
+         * @param {string} submitName Submit api ("Create" or "New").
+         * @returns {Promise<object>} The result.
+         */
+        static async Create(c, submitName) {
+            const pk = c.publicKey;
+            pk.challenge = Sw.Util.Base64Decode(pk.challenge);
+            pk.user.id = Sw.Util.Base64Decode(pk.user.id);
+            PassKey.DecodeIds(pk.excludeCredentials);
+            let cc;
+            try {
+                cc = await navigator.credentials.create({ publicKey: pk });
+            }
+            catch (e) {
+                return PassKey.FromBrowserError(e);
+            }
+            if (!cc)
+                return { Error: PassKey.Errors.Cancelled };
+            const res = cc.response;
+            let transports = null;
+            try {
+                transports = res && res.getTransports ? res.getTransports() : null;
+            }
+            catch {
+            }
+            const r = await PassKey.Call(submitName, {
+                challengeId: c.challengeId,
+                authenticatorAttachment: cc.authenticatorAttachment,
+                id: cc.id,
+                rawId: b64(cc.rawId),
+                response: res ? {
+                    attestationObject: b64(res.attestationObject),
+                    clientDataJSON: b64(res.clientDataJSON),
+                    transports,
+                } : null,
+                type: cc.type,
+            });
+            if (!r)
+                throw new Error(_TF("No response from the service", "Error message shown when the service didn't respond to a passkey request"));
+            if (r.Error == 0)
+                PassKey.SetHint(cc.authenticatorAttachment, cc.id);
+            PassKey.SetUser(r);
+            return r;
+        }
+
+        /**
+         * Sign in with a passkey.
+         * @param {string} [userIdentifier] Only passkeys of this user (else any passkey of the site).
+         * @returns {PassKeyChallenge}
+         */
+        static SignIn(userIdentifier) {
+            return userIdentifier
+                ? new PassKeyChallenge("GetUserAuthChallenge", userIdentifier, "Auth", false)
+                : new PassKeyChallenge("GetAuthChallenge", null, "Auth", false);
+        }
+
+        /**
+         * Add a passkey to the signed in user.
+         * @returns {PassKeyChallenge}
+         */
+        static Attach() {
+            return new PassKeyChallenge("GetCreateChallenge", null, "Create", true);
+        }
+
+        /**
+         * Add a passkey to the user of a token (QR code, reset / add password link) and sign in.
+         * @param {string} token The token.
+         * @returns {PassKeyChallenge}
+         */
+        static AttachUsingToken(token) {
+            return new PassKeyChallenge("GetResetChallenge", token, "New", true);
+        }
+
+        /**
+         * Create a new account with a passkey from a sign up token and sign in.
+         * @param {string} token The token.
+         * @returns {PassKeyChallenge}
+         */
+        static NewAccount(token) {
+            return new PassKeyChallenge("GetNewChallenge", token, "New", true);
+        }
+
+        /**
+         * The passkeys of the signed in user.
+         * @returns {Promise<object[]>} PassKeyInfo: Id, Name, Created, LastUsed, Synced, ThisDevice.
+         */
+        static async GetPassKeys() {
+            return await PassKey.Call("GetPassKeys", null);
+        }
+
+        /**
+         * Rename a passkey.
+         * @param {string} id Credential id.
+         * @param {string} name New name.
+         * @returns {Promise<boolean>} Falsy if the passkey doesn't exist (any more).
+         */
+        static async Rename(id, name) {
+            return await PassKey.Call("RenamePassKey", { Id: id, Name: name });
+        }
+
+        /**
+         * Remove a passkey (forgets its device hints on success).
+         * @param {string} id Credential id.
+         * @param {string} [userGuid] Guid of the signed in user.
+         * @returns {Promise<object>} The result (Error LastSignInMethod when it can't be removed).
+         */
+        static async Remove(id, userGuid) {
+            const r = await PassKey.Call("DeletePassKey", id);
+            if (r && r.Error == 0)
+                PassKey.ForgetOnDevice(id, userGuid);
+            return r;
+        }
+    }
+
+    /** The error codes (server PassKeyErrors; Cancelled and AlreadyOnDevice are client side). */
+    PassKey.Errors = Object.freeze({
         None: 0,
         NotSupported: 1,
         AlreadySignedIn: 2,
@@ -151,995 +605,10 @@ class PassKey {
         LastSignInMethod: 11,
         Cancelled: -1,
         AlreadyOnDevice: -2,
-    };
-
-    /**
-     * Check if the browser supports passkeys
-     * @returns {boolean} True if passkeys can be used
-     */
-    static IsSupported() {
-        return (!!window.PublicKeyCredential) && (!!navigator.credentials) && window.isSecureContext;
-    }
-
-    /**
-     * Get a user friendly text for a result
-     * @param {object} result The result of a passkey operation
-     * @returns {string} The text (translated with _TF; "" for None, a generic failure text for unknown codes)
-     */
-    static ErrorText(result) {
-        const e = PassKey.Errors;
-        switch (result?.Error) {
-            case e.None:
-                return "";
-            case e.NotSupported:
-                return _TF("Passkeys can't be used here, a secure connection (https) and a browser that supports passkeys is required.", "Error message shown when passkeys can't be used on the current site or browser");
-            case e.AlreadySignedIn:
-                return _TF("A user is already signed in, please sign out first.", "Error message shown when a passkey operation requires that no user is signed in");
-            case e.NotSignedIn:
-                return _TF("No user is signed in, please sign in first.", "Error message shown when a passkey operation requires a signed in user");
-            case e.ChallengeExpired:
-                return _TF("The request took too long, please try again.", "Error message shown when a passkey challenge has expired");
-            case e.UnknownCredential:
-                return _TF("This passkey isn't valid for this site any more, please select another one or sign in with your password.", "Error message shown when a passkey that the server doesn't know was used");
-            case e.NoPassKeys:
-                return _TF("No passkey was found for this user.", "Error message shown when a user that have no passkeys tried to sign in using a passkey");
-            case e.VerificationFailed:
-                return _TF("The passkey couldn't be verified.", "Error message shown when a passkey failed verification on the server");
-            case e.AlreadyRegistered:
-            case e.AlreadyOnDevice:
-                return _TF("A passkey for this account already exists on this device.", "Error message shown when trying to add a passkey to a device that already have one for the account");
-            case e.TokenExpired:
-                return _TF("The link or QR code has expired or was already used.", "Error message shown when a passkey link or QR code is no longer valid");
-            case e.AccountExists:
-                return _TF("The account already exists.", "Error message shown when trying to create an account that already exists");
-            case e.LastSignInMethod:
-                return _TF("The last way to sign in can't be removed.", "Error message shown when trying to remove the last passkey of a user that have no password");
-            case e.Cancelled:
-                return _TF("Cancelled.", "Message shown when the user cancelled a passkey operation");
-        }
-        return _TF("The passkey operation failed.", "Generic error message for a failed passkey operation");
-    }
-
-    /**
-     * Call a PassKeyService API method (POST via common.js sendRequest, reload on auth failure, as JSON post).
-     * @param {string} name - API method name relative to ApiPrefix, e.g. "GetAuthChallenge".
-     * @param {*} arg - Request argument (serialized as JSON), may be null.
-     * @returns {Promise<*>} The deserialized server response.
-     */
-    static async Call(name, arg) {
-        return await sendRequest(PassKey.ApiPrefix + name, arg, true, null, false, null, true);
-    }
-
-    /**
-     * Get the signed in user from ../Api/auth/GetUser (SysWeaver.MicroService.Auth).
-     * @returns {Promise<object|null>} The AuthInfo (Username, Guid, ...) when Succeeded, otherwise null.
-     */
-    static async GetLoggedInUser() {
-        const u = await getRequest(PassKey.ApiPrefix + "../GetUser", true);
-        if (!u)
-            return null;
-        return u.Succeeded ? u : null;
-    }
-
-    /**
-     * Store the signed in user of a successful result in sessionStorage "SysWeaver.User" (JSON), like a password login does.
-     * @param {object} result - Ceremony result ({Error, User}); ignored unless Error is 0 and User is set.
-     */
-    static #SetUser(result) {
-        if (result && (result.Error == 0) && result.User)
-            sessionStorage.setItem("SysWeaver.User", JSON.stringify(result.User));
-    }
-
-    /** @type {string} localStorage key set to "1" once a platform passkey was created or used in this browser. */
-    static #HintKey = "SysWeaver.PassKey.Hint";
-
-    /**
-     * True if a passkey was created or used on this device (browser) before.
-     * This is only a hint, browsers doesn't tell if there are any passkeys (synced passkeys created on other devices aren't known).
-     * @returns {boolean} True if a passkey is likely to be available on this device
-     */
-    static HaveHint() {
-        try {
-            return !!localStorage.getItem(PassKey.#HintKey);
-        }
-        catch {
-            return false;
-        }
-    }
-
-    /**
-     * Remember that a passkey is available on this device (if the passkey was on this device and not on a phone or security key)
-     * @param {string} authenticatorAttachment The authenticatorAttachment of the credential
-     * @param {string} credentialId The credential id (base64url, as in PublicKeyCredential.id)
-     * Side effects: sets localStorage #HintKey and appends the id to the #LocalKey list (moved to the end if present);
-     * nothing is stored for "cross-platform" authenticators; storage errors are swallowed.
-     */
-    static #SetHint(authenticatorAttachment, credentialId) {
-        if (authenticatorAttachment === "cross-platform")
-            return;
-        try {
-            localStorage.setItem(PassKey.#HintKey, "1");
-            if (credentialId) {
-                const ids = PassKey.#GetList(PassKey.#LocalKey).filter(x => x !== credentialId);
-                ids.push(credentialId);
-                PassKey.#SetList(PassKey.#LocalKey, ids);
-            }
-        }
-        catch {
-        }
-    }
-
-    /**
-     * Credential ids (base64url) that was created or used on this device
-     */
-    static #LocalKey = "SysWeaver.PassKey.Local";
-
-    /**
-     * User guids where the browser reported that a passkey for the user already exists on this device (but it's unknown which one)
-     */
-    static #UserOnDeviceKey = "SysWeaver.PassKey.UserOnDevice";
-
-    /**
-     * Read a JSON array from localStorage.
-     * @param {string} key - localStorage key (#LocalKey or #UserOnDeviceKey).
-     * @returns {string[]} The list, or [] when missing, not an array or storage/JSON fails.
-     */
-    static #GetList(key) {
-        try {
-            const v = JSON.parse(localStorage.getItem(key) ?? "[]");
-            return Array.isArray(v) ? v : [];
-        }
-        catch {
-            return [];
-        }
-    }
-
-    /**
-     * Write a list as JSON to localStorage, dropping the oldest entries so at most 64 remain (mutates list).
-     * Storage errors are swallowed.
-     * @param {string} key - localStorage key.
-     * @param {string[]} list - Entries, oldest first.
-     */
-    static #SetList(key, list) {
-        try {
-            //  Keep it small
-            while (list.length > 64)
-                list.shift();
-            localStorage.setItem(key, JSON.stringify(list));
-        }
-        catch {
-        }
-    }
-
-    /**
-     * Convert a standard base64 string (as used by the server) to base64url (as used by the browser)
-     * @param {string} s - Standard base64 (null/undefined treated as "").
-     * @returns {string} base64url without padding.
-     */
-    static #ToBase64Url(s) {
-        return (s ?? "").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    }
-
-    /**
-     * Check if a passkey is known to be available on this device (it was created or used on this device)
-     * @param {string} id The credential id (standard base64, as PassKeyInfo.Id from the server)
-     * @returns {boolean} True if the passkey is known to be on this device
-     */
-    static IsOnDevice(id) {
-        const u = PassKey.#ToBase64Url(id);
-        return PassKey.#GetList(PassKey.#LocalKey).includes(u);
-    }
-
-    /**
-     * Check if the browser reported that a passkey for a user is available on this device (when trying to add another one)
-     * @param {string} userGuid The guid of the user
-     * @returns {boolean} True if a passkey of the user is on this device
-     */
-    static IsUserOnDevice(userGuid) {
-        return (!!userGuid) && PassKey.#GetList(PassKey.#UserOnDeviceKey).includes(userGuid);
-    }
-
-    /**
-     * Remember that a passkey for a user is available on this device (the browser refused to add another one)
-     * @param {string} userGuid The guid of the user
-     */
-    static SetUserOnDevice(userGuid) {
-        if (!userGuid)
-            return;
-        const list = PassKey.#GetList(PassKey.#UserOnDeviceKey).filter(x => x !== userGuid);
-        list.push(userGuid);
-        PassKey.#SetList(PassKey.#UserOnDeviceKey, list);
-    }
-
-    /**
-     * Forget what is known about passkeys on this device for a removed passkey
-     * @param {string} id The credential id (standard base64, as PassKeyInfo.Id from the server)
-     * @param {string} userGuid The guid of the user
-     */
-    static #ForgetOnDevice(id, userGuid) {
-        const u = PassKey.#ToBase64Url(id);
-        PassKey.#SetList(PassKey.#LocalKey, PassKey.#GetList(PassKey.#LocalKey).filter(x => x !== u));
-        //  It's unknown which passkey the browser found, so it could have been the removed one
-        if (userGuid)
-            PassKey.#SetList(PassKey.#UserOnDeviceKey, PassKey.#GetList(PassKey.#UserOnDeviceKey).filter(x => x !== userGuid));
-    }
-
-    /**
-     * Check if the browser supports passkey autofill (conditional mediation)
-     * @returns {Promise<boolean>} True if passkey autofill is supported
-     */
-    static async IsAutofillSupported() {
-        try {
-            return PassKey.IsSupported() && (!!PublicKeyCredential.isConditionalMediationAvailable) && (await PublicKeyCredential.isConditionalMediationAvailable());
-        }
-        catch {
-            return false;
-        }
-    }
-
-    /**
-     * Start passkey autofill: passkeys of this site are listed in the autofill drop down of inputs with autocomplete="username webauthn".
-     * The request is restarted with a new challenge before the challenge expires and after a failed sign in.
-     * Only one WebAuthn request can be active, so call Stop() before starting another request, and Start() again when it's done.
-     * @param {function(object)} onResult Called with the result when a user selected a passkey (the user is signed in if the Error member is 0)
-     * @returns {{Start:function():void, Stop:function():void}} An object with Start() and Stop() methods, the autofill is started
-     * Used by AuthUi.js (login page). Requests GetAuthChallenge and submits to "Auth".
-     */
-    static Autofill(onResult) {
-        /** Shared state: Run is the id of the active loop (incremented to cancel), Abort the AbortController of the pending get. */
-        const state = {
-            Run: 0,
-            Abort: null,
-        };
-        /**
-         * The autofill loop: fetch a challenge, run a conditional-mediation PassKey.Get, and repeat.
-         * Aborts and restarts the request before the challenge expires (timeout - 15 s, or 60 s), restarts on Cancelled,
-         * calls onResult for other results, stops on success, waits 1 s after a failure, and exits silently if the
-         * challenge can't be fetched or the loop was superseded (state.Run !== runId).
-         * @param {number} runId - Id of this loop instance.
-         * @returns {Promise<void>}
-         */
-        async function run(runId) {
-            while (state.Run === runId) {
-                let c;
-                try {
-                    c = await PassKey.Call("GetAuthChallenge", null);
-                }
-                catch {
-                    return;
-                }
-                if ((!c) || c.error || (state.Run !== runId))
-                    return;
-                RemoveNulls(c);
-                const ac = new AbortController();
-                state.Abort = ac;
-                //  Restart with a new challenge before the challenge expires
-                const t = c.publicKey.timeout;
-                const refresh = setTimeout(() => ac.abort(), (t && (t > 20000)) ? (t - 15000) : 60000);
-                let r;
-                try {
-                    r = await PassKey.Get(c, "Auth", { mediation: "conditional", signal: ac.signal });
-                }
-                catch (e) {
-                    r = { Error: PassKey.Errors.VerificationFailed, Message: "" + e };
-                }
-                finally {
-                    clearTimeout(refresh);
-                    if (state.Abort === ac)
-                        state.Abort = null;
-                }
-                if (state.Run !== runId)
-                    return;
-                if (r.Error == PassKey.Errors.Cancelled)
-                    continue;
-                await onResult(r);
-                if (r.Error == 0)
-                    return;
-                await delay(1000);
-            }
-        }
-        /** The returned controller. */
-        const ctl = {
-            /**
-             * (Re)start the autofill loop with a new run id (a previous loop exits at its next check).
-             * @returns {void}
-             */
-            Start() {
-                const id = ++state.Run;
-                run(id);
-            },
-            /**
-             * Stop the autofill loop and abort the pending navigator.credentials.get (so another WebAuthn request can run).
-             * @returns {void}
-             */
-            Stop() {
-                ++state.Run;
-                const a = state.Abort;
-                state.Abort = null;
-                if (a)
-                    a.abort();
-            },
-        };
-        ctl.Start();
-        return ctl;
-    }
-
-    /**
-     * Map an exception thrown by navigator.credentials.get / create to a result.
-     * NotAllowedError / AbortError -> Cancelled, InvalidStateError -> AlreadyOnDevice (create with an excluded
-     * credential), SecurityError -> NotSupported (with Message); any other exception is re-thrown.
-     * @param {Error} e - The DOMException.
-     * @returns {{Error:number, Message?:string}}
-     */
-    static #FromBrowserError(e) {
-        const n = e?.name;
-        if ((n === "NotAllowedError") || (n === "AbortError"))
-            return { Error: PassKey.Errors.Cancelled };
-        if (n === "InvalidStateError")
-            return { Error: PassKey.Errors.AlreadyOnDevice };
-        if (n === "SecurityError")
-            return { Error: PassKey.Errors.NotSupported, Message: "" + e };
-        throw e;
-    }
-
-    /**
-     * Decode the base64 id of each credential descriptor in place to an ArrayBuffer view (base64ToArray).
-     * @param {Array<{id:string}>|null} list - allowCredentials / excludeCredentials (may be null).
-     */
-    static #Ids(list) {
-        if (list)
-            list.forEach(x => x.id = base64ToArray(x.id));
-    }
-
-    /**
-     * Get the transports of a new credential (AuthenticatorAttestationResponse.getTransports) if the browser supports it.
-     * @param {AuthenticatorAttestationResponse} res - The attestation response.
-     * @returns {string[]|null} e.g. ["internal","hybrid"], or null when unavailable or it throws.
-     */
-    static #Transports(res) {
-        try {
-            return res.getTransports ? res.getTransports() : null;
-        }
-        catch {
-            return null;
-        }
-    }
-
-    /**
-     * Run a navigator.credentials.get ceremony with options from the server and submit the response
-     * @param {object} c The options from the server
-     * @param {string} submitName The api to submit the response to
-     * @param {object} extra Optional additional options to navigator.credentials.get, ex: { mediation: "conditional", signal: abortSignal }
-     * @returns {Promise<object>} Server result ({Error, User?, Message?}) or a client side result from #FromBrowserError / Cancelled.
-     * @throws {Error} When the server doesn't respond, or for unmapped browser exceptions.
-     * Side effects: decodes c.publicKey in place; posts the assertion (base64) to submitName; on UnknownCredential
-     * calls PublicKeyCredential.signalUnknownCredential (if available); on success records the device hint and
-     * stores the user in sessionStorage.
-     */
-    static async Get(c, submitName, extra) {
-        const pk = c.publicKey;
-        pk.challenge = base64ToArray(pk.challenge);
-        PassKey.#Ids(pk.allowCredentials);
-        let cc;
-        try {
-            cc = await navigator.credentials.get(Object.assign({ publicKey: pk }, extra));
-        }
-        catch (e) {
-            return PassKey.#FromBrowserError(e);
-        }
-        if (!cc)
-            return { Error: PassKey.Errors.Cancelled };
-        const res = cc.response;
-        const r = await PassKey.Call(submitName, {
-            challengeId: c.challengeId,
-            authenticatorAttachment: cc.authenticatorAttachment,
-            id: cc.id,
-            rawId: await bufferToBase64(cc.rawId),
-            response: res == null ? null :
-                {
-                    authenticatorData: await bufferToBase64(res.authenticatorData),
-                    clientDataJSON: await bufferToBase64(res.clientDataJSON),
-                    signature: await bufferToBase64(res.signature),
-                    userHandle: await bufferToBase64(res.userHandle),
-                },
-            type: cc.type,
-        });
-        if (!r)
-            throw new Error(_TF("No response from the server", "Error message shown when the server didn't respond to a passkey request"));
-        if ((r.Error == PassKey.Errors.UnknownCredential) && PublicKeyCredential.signalUnknownCredential) {
-            //  Let the passkey provider remove (or hide) the passkey
-            try {
-                await PublicKeyCredential.signalUnknownCredential({ rpId: pk.rpId, credentialId: cc.id });
-            }
-            catch {
-            }
-        }
-        if (r.Error == 0)
-            PassKey.#SetHint(cc.authenticatorAttachment, cc.id);
-        PassKey.#SetUser(r);
-        return r;
-    }
-
-    /**
-     * Run a navigator.credentials.create ceremony with options from the server and submit the response
-     * Decodes challenge, user.id and excludeCredentials ids in place, then posts {challengeId, authenticatorAttachment,
-     * id, rawId, response:{attestationObject, clientDataJSON, transports}, type} to submitName.
-     * On success records the device hint and stores the user (if any) in sessionStorage.
-     * @param {object} c The options from the server ({challengeId, publicKey})
-     * @param {string} submitName The api to submit the response to ("Create" or "New")
-     * @returns {Promise<object>} Server result ({Error, User?, Message?}) or a client side result (Cancelled, AlreadyOnDevice, NotSupported).
-     * @throws {Error} When the server doesn't respond, or for unmapped browser exceptions.
-     */
-    static async Create(c, submitName) {
-        const pk = c.publicKey;
-        pk.challenge = base64ToArray(pk.challenge);
-        pk.user.id = base64ToArray(pk.user.id);
-        PassKey.#Ids(pk.excludeCredentials);
-        let cc;
-        try {
-            cc = await navigator.credentials.create({ publicKey: pk });
-        }
-        catch (e) {
-            return PassKey.#FromBrowserError(e);
-        }
-        if (!cc)
-            return { Error: PassKey.Errors.Cancelled };
-        const res = cc.response;
-        const r = await PassKey.Call(submitName, {
-            challengeId: c.challengeId,
-            authenticatorAttachment: cc.authenticatorAttachment,
-            id: cc.id,
-            rawId: await bufferToBase64(cc.rawId),
-            response: res == null ? null :
-                {
-                    attestationObject: await bufferToBase64(res.attestationObject),
-                    clientDataJSON: await bufferToBase64(res.clientDataJSON),
-                    transports: PassKey.#Transports(res),
-                },
-            type: cc.type,
-        });
-        if (!r)
-            throw new Error(_TF("No response from the server", "Error message shown when the server didn't respond to a passkey request"));
-        if (r.Error == 0)
-            PassKey.#SetHint(cc.authenticatorAttachment, cc.id);
-        PassKey.#SetUser(r);
-        return r;
-    }
-
-    /**
-     * Sign in using a passkey
-     * @param {string} userIdentifier Optional user id (user name, email or phone), if not supplied any passkey for this site can be used
-     * @returns {PassKeyChallenge} Call Run() to sign in
-     */
-    static SignIn(userIdentifier) {
-        return userIdentifier
-            ? new PassKeyChallenge("GetUserAuthChallenge", userIdentifier, "Auth", false)
-            : new PassKeyChallenge("GetAuthChallenge", null, "Auth", false);
-    }
-
-    /**
-     * Add a passkey to the signed in user
-     * @returns {PassKeyChallenge} Call Run() to add the passkey
-     */
-    static Attach() {
-        return new PassKeyChallenge("GetCreateChallenge", null, "Create", true);
-    }
-
-    /**
-     * Add a passkey to the user of a token (from a QR code, a reset password or an add password link) and sign in
-     * @param {string} token The token
-     * @returns {PassKeyChallenge} Call Run() to add the passkey
-     */
-    static AttachUsingToken(token) {
-        return new PassKeyChallenge("GetResetChallenge", token, "New", true);
-    }
-
-    /**
-     * Create a new account with a passkey using a sign up token and sign in
-     * @param {string} token The sign up token
-     * @returns {PassKeyChallenge} Call Run() to create the account
-     */
-    static NewAccount(token) {
-        return new PassKeyChallenge("GetNewChallenge", token, "New", true);
-    }
-
-    /**
-     * Get the passkeys of the signed in user
-     * @returns {Promise<object[]>} The passkeys (PassKeyInfo: Id, Name, Created, LastUsed, Synced, ThisDevice)
-     */
-    static async GetPassKeys() {
-        return await PassKey.Call("GetPassKeys", null);
-    }
-
-    /**
-     * Rename a passkey of the signed in user
-     * @param {string} id The credential id (PassKeyInfo.Id)
-     * @param {string} name The new name
-     * @returns {Promise<boolean>} Truthy if renamed, falsy if the passkey doesn't exist (any more)
-     */
-    static async Rename(id, name) {
-        return await PassKey.Call("RenamePassKey", { Id: id, Name: name });
-    }
-
-    /**
-     * Remove a passkey of the signed in user
-     * @param {string} id The credential id (PassKeyInfo.Id)
-     * @param {string} userGuid Optional guid of the signed in user (to forget that a passkey of the user is on this device)
-     * @returns {Promise<object>} The result (Error = LastSignInMethod if it can't be removed)
-     * On success the local device hints for the id (and the user's "on device" flag) are forgotten.
-     */
-    static async Remove(id, userGuid) {
-        const r = await PassKey.Call("DeletePassKey", id);
-        if (r && (r.Error == 0))
-            PassKey.#ForgetOnDevice(id, userGuid);
-        return r;
-    }
-
-}
-
-
-
-/**
- * Entry point of AddPassKey.html (body onload): add a passkey on this device.
- * With a ?token= url parameter (link / QR code from AddPassKeyOnOtherDevice, reset or add password links) it uses
- * PassKey.AttachUsingToken and requires that no user is signed in; without a token it uses PassKey.Attach and
- * requires a signed in user. The challenge is pre-fetched, the label shows the account name, and an "Add passkey"
- * button runs the ceremony. On success navigates with AuthStartPage() when a token was used or a user was returned;
- * TokenExpired / AlreadyRegistered / AlreadyOnDevice end the page with a warning; other errors (except Cancelled)
- * are shown with Fail().
- * @returns {Promise<void>}
- */
-async function addPassKeyMain()
-{
-    await AuthPage("IconAddPasskey", async (target, img) => {
-
-        const ps = getUrlParams();
-        const token = ps.get('token');
-
-        const label = AuthLabel(target, "");
-        const text = AuthText(target, "");
-        const buttons = AuthButtonRow(target);
-        let button = null;
-
-        /**
-         * Show a final message (Info style), optionally change the page icon and hide the add button.
-         * @param {string} message - Text to show.
-         * @param {string} [icon] - Icon class for the page image (e.g. "IconWarning").
-         * @returns {void}
-         */
-        function done(message, icon) {
-            if (icon)
-                img.ChangeImage(icon);
-            text.classList.remove("Fail");
-            text.classList.add("Info");
-            text.innerText = message;
-            if (button)
-                button.Element.classList.add("Hide");
-        }
-
-        if (!PassKey.IsSupported())
-            return done(PassKey.ErrorText({ Error: PassKey.Errors.NotSupported }), "IconWarning");
-        const user = await PassKey.GetLoggedInUser();
-        if (token) {
-            if (user)
-                return done(_TF("A user is already signed in!\nPlease sign out before adding a passkey using a link or QR code.", "Message shown when a user is signed in while trying to add a passkey using a link or QR code"), "IconWarning");
-        } else {
-            if (!user)
-                return done(_TF("No user is signed in!\nPlease sign in before adding a passkey.", "Message shown when no user is signed in while trying to add a passkey"), "IconWarning");
-        }
-        const ceremony = token ? PassKey.AttachUsingToken(token) : PassKey.Attach();
-        //  Get the challenge before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
-        const c = await ceremony.Fetch();
-        if (c.error)
-            return done(PassKey.ErrorText({ Error: c.error }), "IconWarning");
-        const name = ceremony.UserName ?? user?.Username;
-        if (name)
-            label.innerText = _T("Add a passkey for {0}", name, "Label on the add passkey page, {0} is replaced with the user name of the account that the passkey is added to");
-        text.classList.add("Info");
-        text.innerText = _TF("Click the button to add a passkey on this device.", "Instruction shown on the add passkey page");
-
-        button = AuthButton(buttons,
-            _TF("Add passkey", "Text of a button that when pressed will add a passkey"),
-            _TF("Click to add a passkey on this device", "Tool tip of a button that when pressed will add a passkey"),
-            "IconAddPasskey", async b => {
-                b.StartWorking();
-                text.classList.remove("Fail");
-                text.classList.add("Info");
-                text.innerText = _TF("Follow the instructions of your browser or device..", "Message shown while a passkey is being added");
-                try {
-                    const r = await ceremony.Run();
-                    if (r.Error == 0) {
-                        done(_TF("Passkey added!", "Message shown when a passkey was added"), "IconAddPasskey");
-                        if (token || r.User)
-                            await AuthStartPage();
-                        return;
-                    }
-                    text.innerText = PassKey.ErrorText(r);
-                    if ((r.Error == PassKey.Errors.TokenExpired) || (r.Error == PassKey.Errors.AlreadyRegistered) || (r.Error == PassKey.Errors.AlreadyOnDevice)) {
-                        done(PassKey.ErrorText(r), "IconWarning");
-                        return;
-                    }
-                    if (r.Error != PassKey.Errors.Cancelled)
-                        Fail(PassKey.ErrorText(r) + (r.Message ? "\n" + r.Message : ""));
-                }
-                catch (e) {
-                    const m = _TF("Failed to add the passkey.", "Error message shown when a passkey couldn't be added") + "\n" + e;
-                    text.innerText = m;
-                    Fail(m);
-                }
-                finally {
-                    b.StopWorking();
-                }
-                text.classList.remove("Info");
-                text.classList.add("Fail");
-            });
     });
 
-}
-
-
-
-/**
- * Entry point of UsePassKey.html (body onload): sign in with any passkey of this site (PassKey.SignIn()).
- * Shows a warning if passkeys aren't supported or a user is already signed in, pre-fetches the challenge and adds a
- * "Sign in with passkey" button. On success calls AuthStartPage(); errors other than Cancelled are shown with Fail().
- * @returns {Promise<void>}
- */
-async function usePassKeyMain() {
-    await AuthPage("IconUsePasskey", async (target, img) => {
-
-        const text = AuthText(target, "");
-        const buttons = AuthButtonRow(target);
-
-        /**
-         * Show a message (Info style) and optionally change the page icon.
-         * @param {string} message - Text to show.
-         * @param {string} [icon] - Icon class for the page image.
-         * @returns {void}
-         */
-        function done(message, icon) {
-            if (icon)
-                img.ChangeImage(icon);
-            text.classList.add("Info");
-            text.innerText = message;
-        }
-
-        if (!PassKey.IsSupported())
-            return done(PassKey.ErrorText({ Error: PassKey.Errors.NotSupported }), "IconWarning");
-        const user = await PassKey.GetLoggedInUser();
-        if (user)
-            return done(_T("The user {0} is already signed in!\nPlease sign out before signing in with another user.", user.Username, "Message shown when trying to sign in with a passkey while a user is signed in, {0} is replaced with the user name"), "IconWarning");
-
-        const ceremony = PassKey.SignIn();
-        //  Get the challenge before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
-        const c = await ceremony.Fetch();
-        if (c.error)
-            return done(PassKey.ErrorText({ Error: c.error }), "IconWarning");
-        done(_TF("Click the button to sign in with a passkey, a passkey on your phone or a security key can also be used.", "Instruction shown on the sign in with passkey page"));
-
-        const button = AuthButton(buttons,
-            _TF("Sign in with passkey", "Text of a button that when pressed will sign in using a passkey"),
-            _TF("Click to sign in using a passkey", "Tool tip of a button that when pressed will sign in using a passkey"),
-            "IconUsePasskey", async b => {
-                b.StartWorking();
-                text.classList.remove("Fail");
-                text.classList.add("Info");
-                text.innerText = _TF("Select your passkey..", "Message shown while the user should select a passkey");
-                try {
-                    const r = await ceremony.Run();
-                    if (r.Error == 0) {
-                        button.Element.classList.add("Hide");
-                        text.innerText = _TF("Signed in!", "Message shown when a user signed in successfully");
-                        await AuthStartPage();
-                        return;
-                    }
-                    text.innerText = PassKey.ErrorText(r);
-                    if (r.Error != PassKey.Errors.Cancelled)
-                        Fail(PassKey.ErrorText(r) + (r.Message ? "\n" + r.Message : ""));
-                }
-                catch (e) {
-                    const m = _TF("Failed to sign in.", "Error message shown when a passkey sign in failed") + "\n" + e;
-                    text.innerText = m;
-                    Fail(m);
-                }
-                finally {
-                    b.StopWorking();
-                }
-                text.classList.remove("Info");
-                text.classList.add("Fail");
-            });
-    });
-
-}
-
-
-/**
- * Entry point of AddPassKeyOnOtherDevice.html (body onload): show a single use QR code (../Api/auth/passkey/GetQR.svg
- * as the page image) that opens AddPassKey.html with a token on another device.
- * Requires a signed in user (else shows a warning). The life time text comes from GetQRLifeTime (minutes, default 15).
- * @returns {Promise<void>}
- */
-async function addPassKeyOtherMain() {
-    const user = await PassKey.GetLoggedInUser();
-    if (!user) {
-        await AuthPage("IconWarning", async target => {
-            AuthText(target, _TF("No user is signed in!\nPlease sign in before adding a passkey.", "Message shown when no user is signed in while trying to add a passkey"));
-        });
-        return;
-    }
-    let minutes = 15;
-    try {
-        minutes = await PassKey.Call("GetQRLifeTime", null) ?? minutes;
-    }
-    catch {
-    }
-    await AuthPage(PassKey.ApiPrefix + "GetQR.svg", async target => {
-        AuthLabel(target, _T('Allow {0} to sign in on another device using a passkey, by scanning the QR code and following the link.', '<em>' + makeHtmlSafe(user.Username) + '</em>', "Instruction shown next to a QR code used to add a passkey on another device, {0} is replaced with the user name"), null, true);
-        AuthText(target, _T("The QR code may only be used once and expires in {0} minutes.", minutes, "Information about a QR code used to add a passkey on another device, {0} is replaced with the number of minutes"));
-    }, true);
-}
-
-
-/**
- * Entry point of MyPassKeys.html (body onload): list the signed in user's passkeys in a SysWeaver-AuthList with
- * created / last used / type info and Rename / Remove buttons, plus an "Add passkey" button (only if passkeys are
- * supported; disabled when a passkey of the user is known to be on this device).
- * Requires app/application.js (Confirm, PopUp). Shows a warning when no user is signed in.
- * @returns {Promise<void>}
- */
-async function myPassKeysMain() {
-    await AuthPage("IconUsePasskey", async (target, img) => {
-
-        const user = await PassKey.GetLoggedInUser();
-        if (!user) {
-            img.ChangeImage("IconWarning");
-            AuthText(target, _TF("No user is signed in!\nPlease sign in to see your passkeys.", "Message shown when no user is signed in on the my passkeys page"));
-            return;
-        }
-
-        AuthLabel(target, _T("Passkeys of {0}", user.Username, "Title of the my passkeys page, {0} is replaced with the user name"));
-        const list = document.createElement("SysWeaver-AuthList");
-        target.appendChild(list);
-        const agoFormat = [null, null, _TF("{0} ago", "Text describing how long ago something happened, {0} is replaced with a time span, ex: 5 minutes")];
-
-        const buttons = PassKey.IsSupported() ? AuthButtonRow(target) : null;
-        if (buttons)
-            buttons.classList.add("NoMargin");
-
-        /**
-         * Add a "label value" text line (NoMargin) to parent.
-         * @param {HTMLElement} parent - Container.
-         * @param {string} label - Label text.
-         * @param {*} value - Value; for dates it's kept live updated with ValueFormat.updateDateTimeLive ("{0} ago").
-         * @param {boolean} isDate - True if value is a date/time.
-         * @param {string} [title] - Optional tool tip.
-         * @returns {HTMLElement} The created text element.
-         */
-        function stat(parent, label, value, isDate, title) {
-            const e = AuthText(parent, "");
-            e.classList.add("NoMargin");
-            e.appendChild(document.createTextNode(label + " "));
-            const s = document.createElement("span");
-            e.appendChild(s);
-            if (isDate)
-                ValueFormat.updateDateTimeLive(s, value, agoFormat);
-            else
-                s.innerText = value;
-            if (title)
-                e.title = title;
-            return e;
-        }
-
-        /**
-         * Ask for confirmation (Confirm dialog) and remove a passkey via PassKey.Remove, then rebuild the list.
-         * LastSignInMethod and other failures are shown with Fail().
-         * @param {object} key - The PassKeyInfo.
-         * @param {object} button - The Remove button (StartWorking / StopWorking).
-         * @returns {Promise<void>}
-         */
-        async function remove(key, button) {
-            const name = key.Name || _TF("Passkey", "Default name of a passkey without a name");
-            if (!await Confirm(
-                _TF("Remove passkey", "Title of a confirmation dialog shown when a user wants to remove a passkey"),
-                _T("The passkey \"{0}\" will be removed from your account, it can't be used to sign in any more.\nThe passkey isn't deleted from the device or passkey provider, you can remove it there.\n\nAre you sure?", name, "Text of a confirmation dialog shown when a user wants to remove a passkey, {0} is replaced with the name of the passkey"),
-                _TF("Yes, remove it!", "Text of a button on a confirmation dialog that when pressed will remove a passkey"),
-                _TF("No, keep it!", "Text of a button on a confirmation dialog that when pressed will close the dialog without removing the passkey"),
-                "IconDelete", "IconOk",
-                _TF("Remove the passkey from your account", "Tool tip of a button on a confirmation dialog that when pressed will remove a passkey"),
-                _TF("Keep the passkey", "Tool tip of a button on a confirmation dialog that when pressed will close the dialog without removing the passkey")))
-                return;
-            button.StartWorking();
-            try {
-                const r = await PassKey.Remove(key.Id, user.Guid);
-                if (r && (r.Error == 0)) {
-                    await rebuild();
-                    return;
-                }
-                Fail(r?.Error == PassKey.Errors.LastSignInMethod
-                    ? _TF("This is the last way you can sign in, add a password or another passkey before removing it.", "Error message shown when trying to remove the last passkey of a user that have no password")
-                    : PassKey.ErrorText(r));
-            }
-            catch (e) {
-                Fail(_TF("Failed to remove the passkey.", "Error message shown when a passkey couldn't be removed") + "\n" + e);
-            }
-            finally {
-                button.StopWorking();
-            }
-        }
-
-        /**
-         * Open a pop up (PopUp, blocking) with an auth box (class SysWeaver-PassKeyPopUp) containing a name input
-         * (max 64 chars) and a Rename button; saving calls PassKey.Rename, closes the pop up and rebuilds the list.
-         * @param {object} key - The PassKeyInfo to rename.
-         * @returns {Promise<void>}
-         */
-        async function rename(key) {
-            const oldName = key.Name ?? "";
-            await PopUp(async (el, closeFn) => {
-                const box = CreateAuthWrapper();
-                box.classList.add("SysWeaver-PassKeyPopUp");
-                el.appendChild(box);
-                AuthLabel(box, _TF("Name", "Label of an input field where the user enters a new name of a passkey"));
-
-                /**
-                 * The trimmed (AuthTrim) value of the name input.
-                 * @returns {string}
-                 */
-                function newName() {
-                    return AuthTrim(inp.value);
-                }
-
-                /**
-                 * True if the new name is non-empty and differs from the current name.
-                 * @returns {boolean}
-                 */
-                function canSave() {
-                    const n = newName();
-                    return (n.length > 0) && (n !== oldName);
-                }
-
-                /**
-                 * Save the new name (if canSave): input is read only while working; on success closes the pop up and
-                 * rebuilds the list, otherwise shows Fail() and re-enables the input.
-                 * @returns {Promise<void>}
-                 */
-                async function save() {
-                    if (!canSave())
-                        return;
-                    button.StartWorking();
-                    inp.readOnly = true;
-                    try {
-                        if (await PassKey.Rename(key.Id, newName())) {
-                            await closeFn();
-                            await rebuild();
-                            return;
-                        }
-                        Fail(_TF("The passkey doesn't exist any more.", "Error message shown when trying to rename a passkey that was removed"));
-                    }
-                    catch (e) {
-                        Fail(_TF("Failed to rename the passkey.", "Error message shown when a passkey couldn't be renamed") + "\n" + e);
-                    }
-                    finally {
-                        button.StopWorking();
-                    }
-                    inp.readOnly = false;
-                }
-
-                const inp = AuthInput(box,
-                    _TF("Passkey name", "Place holder of an input field where the user enters a new name of a passkey"),
-                    _TF("Enter a name that helps you identify the passkey, ex: the device or passkey provider", "Tool tip of an input field where the user enters a new name of a passkey"),
-                    "off", () => button.SetEnabled(canSave()), save);
-                inp.maxLength = 64;
-                inp.value = oldName;
-                const button = AuthButton(AuthButtonRow(box),
-                    _TF("Rename", "Text of a button that when pressed will save the new name of a passkey"),
-                    _TF("Click to save the new name of the passkey", "Tool tip of a button that when pressed will save the new name of a passkey"),
-                    "IconPasskeyRename", save, true);
-                inp.focus();
-                inp.select();
-            }, true);
-        }
-
-        /**
-         * (Re)build the passkey list from PassKey.GetPassKeys(): one block per passkey (name marked "(this device)"
-         * when ThisDevice or PassKey.IsOnDevice, stats, Rename / Remove buttons) and the Add passkey button row.
-         * The add ceremony (PassKey.Attach) is pre-fetched; the button is disabled when any passkey of the user is
-         * known to be on this device. AlreadyOnDevice / AlreadyRegistered results call PassKey.SetUserOnDevice.
-         * @returns {Promise<void>}
-         */
-        async function rebuild() {
-            const keys = (await PassKey.GetPassKeys()) ?? [];
-            list.innerHTML = "";
-            if (keys.length <= 0) {
-                AuthText(list, _TF("You don't have any passkeys.", "Message shown on the my passkeys page when the user don't have any passkeys"));
-            }
-            //  Browsers doesn't tell what passkeys are on the device, a passkey is known to be on this device if it was created here, created or used in this browser or if the browser refused to add another one
-            const onDevice = key => key.ThisDevice || PassKey.IsOnDevice(key.Id);
-            const anyOnDevice = keys.some(onDevice) || PassKey.IsUserOnDevice(user.Guid);
-
-            let first = true;
-
-            //for (let i = 0; i < 5; ++ i)
-            for (const key of keys) {
-                if (!first)
-                    AuthHr(list).classList.add("NoMargin");
-                first = false;
-                const name = key.Name || _TF("Passkey", "Default name of a passkey without a name");
-                //  Highlighted passkey name, suffixed with "(this device)" when known to be on this device
-                AuthLabel(list, onDevice(key)
-                    ? _T("{0} (this device)", name, "Name of a passkey that is available on the current device, {0} is replaced with the name of the passkey")
-                    : name).classList.add("Highlight");
-                stat(list, _TF("Created:", "Label of the time when a passkey was created"), key.Created, true);
-                stat(list, _TF("Last used:", "Label of the time when a passkey was last used to sign in"), key.LastUsed, true);
-                stat(list,
-                    _TF("Type:", "Label of the type of a passkey (synced or device bound)"),
-                    key.Synced
-                        ? _TF("Synced", "Type of a passkey that is synced between the users devices by the passkey provider")
-                        : _TF("Device bound", "Type of a passkey that only exists on one device or security key"),
-                    false,
-                    key.Synced
-                        ? _TF("The passkey is synced by your passkey provider and can be used on your other devices", "Tool tip of a synced passkey")
-                        : _TF("The passkey only exists on one device or security key", "Tool tip of a device bound passkey"));
-                const row = AuthButtonRow(list);
-                AuthButton(row,
-                    _TF("Rename", "Text of a button that when pressed will rename a passkey"),
-                    _TF("Click to change the name of this passkey", "Tool tip of a button that when pressed will rename a passkey"),
-                    "IconPasskeyRename", async () => await rename(key));
-                AuthButton(row,
-                    _TF("Remove", "Text of a button that when pressed will remove a passkey"),
-                    _TF("Click to remove this passkey from your account", "Tool tip of a button that when pressed will remove a passkey"),
-                    "IconDelete", async button => await remove(key, button));
-            }
-
-            if (buttons) {
-                buttons.innerText = "";
-                const row = buttons;
-                //  The add button is placed on the same row as the buttons of the last passkey
-                const add = anyOnDevice ? null : PassKey.Attach();
-                //  Get the challenge before the user clicks, so that the browser prompt is opened directly by the click (required by some browsers)
-                add?.Fetch().catch(() => { });
-                const addButton = AuthButton(row,
-                    _TF("Add passkey", "Text of a button that when pressed will add a passkey"),
-                    anyOnDevice
-                        ? _TF("A passkey for your account is already available on this device", "Tool tip of a disabled button that would add a passkey, when there already is a passkey on the device")
-                        : _TF("Click to add a passkey on this device", "Tool tip of a button that when pressed will add a passkey"),
-                    "IconAddPasskey", async button => {
-                        button.StartWorking();
-                        try {
-                            const r = await add.Run();
-                            if (r.Error == 0) {
-                                await rebuild();
-                                return;
-                            }
-                            if ((r.Error == PassKey.Errors.AlreadyOnDevice) || (r.Error == PassKey.Errors.AlreadyRegistered)) {
-                                //  Remember it, so that the button is disabled the next time
-                                PassKey.SetUserOnDevice(user.Guid);
-                                Fail(PassKey.ErrorText(r));
-                                await rebuild();
-                                return;
-                            }
-                            if (r.Error != PassKey.Errors.Cancelled)
-                                Fail(PassKey.ErrorText(r) + (r.Message ? "\n" + r.Message : ""));
-                            add.Fetch().catch(() => { });
-                        }
-                        catch (e) {
-                            Fail(_TF("Failed to add the passkey.", "Error message shown when a passkey couldn't be added") + "\n" + e);
-                        }
-                        finally {
-                            button.StopWorking();
-                        }
-                    }, anyOnDevice);
-                //  Disabled buttons have no tool tip, explain why it's disabled
-                if (anyOnDevice)
-                    addButton.Element.title = _TF("A passkey for your account is already available on this device", "Tool tip of a disabled button that would add a passkey, when there already is a passkey on the device");
-            }
-
-
-
-
-
-        }
-
-        await rebuild();
-    });
-}
+    window.PassKey = PassKey;
+    window.PassKeyChallenge = PassKeyChallenge;
+    Sw.PassKey = PassKey;
+    Sw.PassKeyChallenge = PassKeyChallenge;
+})();

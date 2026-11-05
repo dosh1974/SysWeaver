@@ -30,7 +30,7 @@ namespace SysWeaver.ReverseProxy
         /// "https://www.example.com/ReverseProxyFiles/TestClient/Data/Logo.png" will read from "http://localhost/publicData/Logo.png"
         /// If not the data will be requested from the service that hosts this proxy, ex: "publicData"
         /// "https://www.example.com/ReverseProxyFiles/TestClient/Data/Logo.png" will read from this service at "publicData/Logo.png"
-        /// If no end points are specificed, "name" will be empty and data will be empty, mapping the root of to the root of this service.
+        /// If no end points are specified, "name" will be empty and data will be empty, mapping the root of to the root of this service.
         /// "name" must be unique among the end points.
         /// "name" can't be empty for multiple end points.
         /// </summary>
@@ -38,10 +38,19 @@ namespace SysWeaver.ReverseProxy
 
 
         /// <summary>
-        /// Max number of concurrent requests, dont make this too low.
-        /// This is also the number of active connections to the server.
+        /// Number of connections (long polls) that wait for requests from the server, dont make this too low.
+        /// A request that one of them gets is handled on its own task (see <see cref="MaxRequestsInProgress"/>), so it never blocks the polls.
         /// </summary>
         public int MaxConcurrentRequests = 8;
+
+        /// <summary>
+        /// Max number of requests that are handled on their own task while the connection that got them polls for the next one at once
+        /// (the task sends the response with a poll of its own). A slow request (ex: a long poll such as Api/application/GetMessages,
+        /// held up to 90 s) then never holds up the requests behind it, even with few connections.
+        /// When this many are in progress, a connection handles its request itself (one at a time, as with 0).
+        /// The remote connection's MaxConcurrency is raised to at least MaxConcurrentRequests + MaxRequestsInProgress.
+        /// </summary>
+        public int MaxRequestsInProgress = 32;
 
         /// <summary>
         /// The local server path to the revers proxy, this should match the BaseUrl of the ReverseProxyServerParams.

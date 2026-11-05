@@ -15,6 +15,7 @@ namespace SysWeaver.AI
     /// Derived classes implements the creation of sessions (and other API specific functionality).
     /// Note: WebApi methods must be declared in the derived classes (the url is based on the declaring type).
     /// </summary>
+    [WebMenuPath(null, "Data/AiModels", "AI models", "The models available from the AI services", "icons/brain.svg", 40)]
     [AiToolPrefix("")]
     public abstract partial class AiServiceBase : IAiService, IDisposable
     {

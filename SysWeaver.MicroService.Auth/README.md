@@ -36,6 +36,7 @@ flowchart LR
 - E-mail address and international phone number validation APIs (backed by ISO phone prefix data)
 - User images under `auth/UserImages/[Guid]/[Size]`, served by any registered `IUserImageHandler` (for example [CustomUserImage](../SysWeaver.MicroService.CustomUserImage/README.md)), falling back to an `IDefaultUserImageHandler` (for example [Avatar](../SysWeaver.MicroService.Avatar/README.md)) or a generated SVG
 - Login calls are audited (with the password hash filtered out)
+- Forced password change: an authorizer throws `PasswordChangeRequiredException` (only after the password was verified, ex: `UserManagerService.ForcePasswordReset`); `Login` then creates no session and answers `AuthInfo.PasswordChangeRequired` with `SentTo` (where the link and code to choose a new password were sent), the sign in page shows that
 
 ## Key components
 

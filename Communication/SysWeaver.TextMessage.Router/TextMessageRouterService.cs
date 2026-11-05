@@ -91,13 +91,15 @@ namespace SysWeaver.TextMessage
                 Channels = p.Channels;
                 Countries = ToSet(p.Countries);
                 ExcludeCountries = ToSet(p.ExcludeCountries);
-                Systems = p.Systems?.Length > 0 ? new HashSet<String>(p.Systems, StringComparer.Ordinal) : null;
+                //  Systems are matched ignoring the letter case and white space around them, as the incoming queues do (TextMessageQueue)
+                Systems = ToSet(p.Systems);
                 CanSend = p.Send;
                 CanReceive = p.Receive;
             }
 
             static IReadOnlySet<String> ToSet(String[] v)
-                => v?.Length > 0 ? new HashSet<String>(v.Select(x => x.Trim()), StringComparer.OrdinalIgnoreCase) : null;
+                //  Blank entries are skipped; a list with only blank entries matches nothing (a filter that was set never matches everything)
+                => v?.Length > 0 ? new HashSet<String>(v.Where(x => !String.IsNullOrWhiteSpace(x)).Select(x => x.Trim()), StringComparer.OrdinalIgnoreCase) : null;
 
             public override string ToString() => String.Concat(Name, " (", Channels, Sender == null ? ", not found)" : ")");
 
@@ -125,7 +127,7 @@ namespace SysWeaver.TextMessage
                     return false;
                 if ((ExcludeCountries != null) && (isoCountry != null) && ExcludeCountries.Contains(isoCountry))
                     return false;
-                if ((Systems != null) && !((msg.System != null) && Systems.Contains(msg.System)))
+                if ((Systems != null) && !((msg.System != null) && Systems.Contains(msg.System.Trim())))
                     return false;
                 return true;
             }

@@ -1,452 +1,733 @@
 ﻿/*
  * Auth.css - styles of the auth pages (SysWeaver.MicroService.Auth, served as auth/Auth.css).
  *
- * Styles: the centered page body, the floating box form.SysWeaver-AuthBox (built by AuthPage / CreateAuthWrapper in
- * AuthUi.js), the SysWeaver-Auth* custom elements created by the Auth* factories in AuthUi.js, inputs and the icons
- * placed inside them, the phone input, the tab bar and the auth icon mask classes.
+ * Styles the page frame and widgets of AuthUi.js (Sw.AuthUi): the centered card (form.auth-box, also class
+ * SysWeaver-AuthBox for old css hooks), the page icon, fields (Sw.TextBox based .auth-field, phone flag), the status
+ * line, headings, texts, button rows, the segment selector and popups, the login product header and sizing. Used by every auth/ page of the four
+ * contributing projects (MicroService.Auth, Auth.Core, MicroService.PassKey, MicroService.UserManager).
  *
- * Loaded by: auth/Login.html and auth/Logout.html (this folder) and by every page of the other auth/ contributions:
- * SysWeaver.MicroService.PassKey (together with Passkey.css), SysWeaver.MicroService.UserManager (together with
- * UserManager.css) and SysWeaver.Auth.Core (together with SimpleAuth.css). Always after ../common/theme.css.
- *
- * Dependencies: all colors, radii and durations are --Theme* custom properties from common/theme.css (--ThemeBackgroundRGB,
- * --ThemeMainRGB, --ThemeBackground, --ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc2, --ThemeAcc225, --ThemeAcc250,
- * --ThemeError, --ThemeWarning, --ThemeOk, --ThemeRad, --ThemeRadInp, --ThemeFadeDuration). Icon classes are combined with
- * common.js ColorIcon elements (icon-<w>x<h> custom elements) which supply size, color and mask setup; this file only
- * sets mask-image (icons from the global ../icons/ folder).
- * Not templated. No @keyframes, no @media queries and no [data-theme] rules (theming comes from the variables).
- * Icon classes IconUsePasskey, IconPasskeyKey and PasskeyIconButton used by loginMain are defined in Passkey.css.
+ * Load after ../common/theme.css and ../sw/ui.css. Colors come from the Sw tokens (--sw-*), which follow the five
+ * themes; icon classes (IconAuth*, IconRetry ...) are defined in sw/ui.css. Responsive: desktop, phone portrait
+ * (full width card, 44px touch targets from the Sw tokens) and phone landscape (small icon, the page scrolls).
+ * Not templated.
  */
 
-/* ===== Page and box ===== */
+/* ===== Page ===== */
 
-/* Document root: no padding. */
-html {
-    padding: 0;
-    display: block;
-}
-
-/* Page body: full-size, centered wrapping flex container holding the auth box; text selection disabled. */
-body {
-    user-select: none;
+/* The page body: centered card, the page itself scrolls (no clipped content in landscape), safe areas respected. */
+body.auth-body {
     margin: 0;
-    padding: 0;
-    min-width: 100%;
-    min-height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    box-sizing: border-box;
     display: flex;
-    flex-flow: row wrap;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    user-select: none;
+    -webkit-user-select: none;
 }
-    /* body.Top: aligns the box to the top instead of the center; set statically by Auth.Core KeyMan.html (<body class="Top">). */
-    body.Top {
-        align-items: start;
+
+    /* Inside the app shell (html.Embedded, common/theme.css) the html element has the page margin (--Margin, top only on narrow
+       screens): the body fills the rest, not the whole frame, so a card that fits gets no scroll bar (it was --Margin x 2 too tall) */
+    html.Embedded body.auth-body {
+        min-height: calc(100vh - 2 * var(--Margin, 0px));
+        min-height: calc(100dvh - 2 * var(--Margin, 0px));
     }
 
+    html.Embedded.SwNarrow body.auth-body {
+        min-height: calc(100vh - var(--Margin, 0px));
+        min-height: calc(100dvh - var(--Margin, 0px));
+    }
 
-/*
- * The floating auth box (<form class="SysWeaver-AuthBox">, created by CreateAuthWrapper / AuthPage in AuthUi.js):
- * absolute, at most 600 px wide and 80vh high, semi-transparent theme background, thin main-color border, large shadow.
- * Defines the custom properties:
- *   --TM        vertical spacing unit (2em); top margins of texts, labels, tabs, lists, hr, button rows (quarter above inputs).
- *   --boxWidth  box width: min(100vw - 2em, 600px); also used for the page icon size.
- */
-form.SysWeaver-AuthBox {
-    --TM: calc(2em);
-    --boxWidth: calc(min(100vw - 2em, 600px));
+    /* body.Top: the card is aligned to the top (pages with long content, ex: the API key list). */
+    body.auth-body.Top {
+        align-items: flex-start;
+    }
+
+/* The page element (holds the card). */
+.auth-page {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* ===== Card ===== */
+
+/* The card (Design v2 sign in card): a form, max 28rem wide, a flat solid surface drawn with a hairline (no shadow, no blur). */
+form.auth-box {
+    --auth-gap: 14px;
+    width: min(100%, 28rem);
     box-sizing: border-box;
-    background: rgba(var(--ThemeBackgroundRGB), 0.6);
-    width: var(--boxWidth);
-    max-height: 80vh;
     margin: 0;
-    padding: 1em;
-    border: 1px solid rgba(var(--ThemeMainRGB), 0.5);
-    display: block;
-    position: absolute;
-    /*left: 50%;
-    top: 50%;
-    transform: translateX(-50%) translateY(-50%);*/
-    text-align: left;
-    border-radius: var(--ThemeRad);
-    box-shadow: rgba(0,0,0,0.5) 0 0 2em;
+    padding: clamp(16px, 4vw, 32px);
+    display: flex;
+    flex-direction: column;
+    gap: var(--auth-gap);
+    background: var(--sw-surface, var(--sw-surface));
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius-md, var(--sw-radius-lg));
+    color: var(--sw-fg);
 }
 
-    /*
-     * The page icon added by AuthPage (128x128 ColorIcon, custom element Icon-128x128), rescaled and centered.
-     * --size: rendered icon size = min(20vh, 15vw, 70% of --boxWidth); used for width, height and mask-size.
-     */
-    form.SysWeaver-AuthBox > Icon-128x128 {
-        --size: calc(min(20vh, min(15vw, var(--boxWidth) * 0.7)));
-        box-sizing: border-box;
-        width: var(--size);
-        height: var(--size);
-        mask-size: var(--size) var(--size);
-        margin: auto;
-        display: block;
+    /* Wide content (passkey list, API keys). */
+    .auth-wide form.auth-box {
+        width: min(100%, 40rem);
     }
 
-/* ===== Text elements ===== */
+/* Phones in portrait: the card uses the full width with less padding. */
+html.SwNarrow form.auth-box {
+    padding: 16px;
+    --auth-gap: 12px;
+}
 
-/* SysWeaver-AuthText (AuthText in AuthUi.js): centered block text with top margin --TM. */
-SysWeaver-AuthText {
-    margin-top: var(--TM);
+/* ===== Form page layout (auth-tool: account and tool pages, AuthPage.SetHeader / Page option Account) =====
+   Design v2 form page (Design v2, ui/README.md Page anatomy / PORTING.md B10): main.auth-page.sw-page-form with a left aligned page header (Sw.PageHeader,
+   ui/page.css) above a start aligned card, the column at the top of the window; the texts in the card are start aligned. Sign in
+   style pages (no auth-tool) keep the centered card with the page icon. */
+body.auth-body:has(.auth-tool) {
     display: block;
-    width: 100%;
-    text-align: center;
-    overflow: hidden;
+    padding: 0;
 }
 
-/* .Highlight: accent color --ThemeAcc1; added by Passkey.js (SysWeaver.MicroService.PassKey) to passkey names in lists. */
-.Highlight
-{
-    color: var(--ThemeAcc1);
+html:not(.Embedded) body.auth-body:has(.auth-tool) {
+    padding: max(0px, env(safe-area-inset-top)) max(0px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom)) max(0px, env(safe-area-inset-left));
 }
 
-/* .NoMargin: resets margin-top; added by Passkey.js (PassKey) to list rows and AuthHr separators. */
-.NoMargin{
-    margin-top: initial;
-}
-
-/* SysWeaver-AuthError (AuthError in AuthUi.js): italic centered status line, min height 2.5em, scrolls vertically. */
-SysWeaver-AuthError {
-    margin-top: var(--TM);
-    font-style: italic;
+.auth-page.auth-tool {
     display: block;
-    width: 100%;
-    text-align: center;
-    overflow: hidden;
-    min-height: 2.5em;
-    overflow-y: auto;
 }
 
-    /*
-     * Status colors of SysWeaver-AuthError: .Error (--ThemeError), .Warning (--ThemeWarning), .Good (--ThemeOk).
-     * Classes set by CheckPassword (Auth.js) and AuthSetError (AuthUi.js); cleared by AuthSetText.
-     */
-    SysWeaver-AuthError.Error {
-
-        color: var(--ThemeError);
+    /* The card under the header: start aligned, a comfortable form width (wide pages, ex: the key list, set their own) */
+    .auth-page.auth-tool form.auth-box {
+        width: min(100%, 36rem);
     }
 
-    SysWeaver-AuthError.Warning {
-        color: var(--ThemeWarning);
+    .auth-page.auth-tool.auth-wide form.auth-box {
+        width: min(100%, 48rem);
     }
 
-    SysWeaver-AuthError.Good {
-        color: var(--ThemeOk);
+    .auth-page.auth-tool :is(.auth-heading, .auth-text, .auth-status) {
+        text-align: start;
     }
 
+    .auth-page.auth-tool .auth-heading {
+        font-family: var(--sw-font);
+        font-size: var(--sw-text-lg, 1rem);
+        font-weight: 500;
+    }
 
-/* SysWeaver-AuthLabel (AuthLabel in AuthUi.js): bold --ThemeAcc2 block label above inputs. */
-SysWeaver-AuthLabel {
-    margin-top: var(--TM);
-    color: var(--ThemeAcc2);
-    font-weight: bold;
-    display: block;
-    width: 100%;
-    overflow: hidden;
-}
+    .auth-page.auth-tool :is(.auth-buttons, .auth-segments) {
+        justify-content: flex-start;
+    }
 
+    .auth-page.auth-tool .auth-icon-wrap.auth-has-image {
+        justify-content: flex-start;
+    }
 
-/* State classes inside the box: .Fail (--ThemeAcc1) and .Info (--ThemeAcc2) status text, toggled by logoutMain. */
-form.SysWeaver-AuthBox *.Fail {
-    color: var(--ThemeAcc1);
-}
-
-form.SysWeaver-AuthBox *.Info {
-    color: var(--ThemeAcc2);
-}
-
-/* .Hide: display none; used by logoutMain (*Retry* button) and loginMain (passkey button when unsupported). */
-form.SysWeaver-AuthBox *.Hide {
-    display: none;
-}
-
-/* ===== Inputs and buttons ===== */
-
-/* Button rows (SysWeaver-CenterBlock created by AuthButtonRow): top padding --TM. */
-form.SysWeaver-AuthBox SysWeaver-CenterBlock {
-    padding-top: var(--TM);
-}
-
-/*
- * All inputs in the box: full width, large bold text, theme colors, rounded; a 2 px outline (25% main color,
- * !important to beat browser focus styles) animated on :hover (75%) and :focus (--ThemeAcc1).
- */
-form.SysWeaver-AuthBox input {
-    margin-top: calc(var(--TM) * 0.25);
-    width: 100%;
-    padding: 0.75em;
-    display: block;
-    color: var(--ThemeMain);
-    background-color: var(--ThemeBackground);
+/* A box inside a dialog (legacy CreateAuthWrapper): no card styling. */
+form.auth-box.auth-inline {
+    width: auto;
+    padding: 0;
+    background: none;
     border: none;
+}
+
+/* ===== Page icon ===== */
+
+/* Icon row (centered). */
+.auth-icon-wrap {
+    display: flex;
+    justify-content: center;
+}
+
+/* The page icon (mask icon in the accent color, or an image such as the passkey QR code). */
+.auth-icon {
+    --auth-icon: clamp(40px, min(10vh, 16vw), 72px);
+    width: var(--auth-icon);
+    height: var(--auth-icon);
+    color: var(--sw-text-accent, var(--sw-text-accent));
+}
+
+/* Image icons (QR codes) are bigger, on a white plate so they scan in dark themes. */
+img.auth-image {
+    --auth-icon: clamp(140px, min(42vh, 60vw), 260px);
+    background: #ffffff; /* SwWeb:allow-design (QR codes need a white plate to scan, in every theme) */
+    padding: 8px;
+    border-radius: var(--sw-radius);
     box-sizing: border-box;
-    font-size: 125%;
-    font-weight: bold;
-    border-radius: var(--ThemeRad);
-    outline: 2px solid rgba(var(--ThemeMainRGB), 0.25) !important;
-    transition: outline linear 0.1s, box-shadow linear 0.1s;
 }
 
-    form.SysWeaver-AuthBox input:hover {
-        outline: 2px solid rgba(var(--ThemeMainRGB), 0.75) !important;
+/* Low screens (phones in landscape): small icon. */
+@media (max-height: 480px) {
+    .auth-icon {
+        --auth-icon: 40px;
     }
 
-    form.SysWeaver-AuthBox input:focus {
-        outline: 2px solid var(--ThemeAcc1) !important;
+    img.auth-image {
+        --auth-icon: min(70vh, 220px);
     }
-
-    /* Invalid input: red glow (--ThemeError box shadow); class Error set by AuthSetError. */
-    form.SysWeaver-AuthBox input.Error {
-        box-shadow: var(--ThemeError) 0 0 0.75em;
-    }
-
-/* Same red glow for any input inside an element with class Error (e.g. the SysWeaver-AuthPhone group). */
-form.SysWeaver-AuthBox *.Error input {
-    box-shadow: var(--ThemeError) 0 0 0.75em;
 }
 
+/* ===== Product header (login page) ===== */
 
-    /* Input placeholder: faint, italic, smaller. */
-    form.SysWeaver-AuthBox input::placeholder {
-        color: var(--ThemeMain);
-        opacity: 0.3;
-        font-weight: normal;
-        font-style: italic;
-        font-size: 80%;
+/* The icon row holding the product header: the app banner. */
+.auth-icon-wrap.auth-brand {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+/* The app banner at the top of the sign in card (OWN4-Auth-1): the img src ../banner.svg (9:2, 1260 x 280: the app icon in its left
+   square and the app name; generated by the server from the app name / seed unless the app serves its own; an app may point
+   --sw-brand-banner of ui/tokens.css at another file, and --sw-brand-banner-ratio at its shape, as for the shell's menu head). The box
+   has the banner's shape (48-72 px high, 216-324 px wide; narrower on a small card, never letterboxed), the picture is contained. A
+   quarter of its height between it and the form (with the 6 px gap). */
+.auth-brand-banner {
+    --auth-banner-h: clamp(48px, min(9vh, 12vw), 72px);
+    content: var(--sw-brand-banner, url("../banner.svg"));
+    width: min(100%, calc(var(--auth-banner-h) * var(--sw-brand-banner-ratio, 4.5)));
+    height: auto;
+    aspect-ratio: var(--sw-brand-banner-ratio, 4.5);
+    margin-bottom: calc(var(--auth-banner-h) / 4 - 6px);
+    object-fit: contain;
+}
+
+@media (max-height: 480px) {
+    .auth-icon-wrap.auth-brand {
+        flex-direction: row;
+        gap: 12px;
     }
 
+    /* Low screens (phones in landscape): the banner 40 px high */
+    .auth-brand-banner {
+        --auth-banner-h: 40px;
+        margin-bottom: 0;
+    }
+}
 
-/* ===== Tabs ===== */
+/* Stand-alone sign in page (not in the shell): the brand weave behind the card, the card on a solid panel (no text on the pattern). */
+body.auth-body.sw-weave form.auth-box {
+    background: var(--sw-surface, var(--sw-bg));
+}
 
-/* SysWeaver-AuthTab (AuthTab in AuthUi.js): bold block tab bar with an opacity transition. */
-SysWeaver-AuthTab {
-    margin-top: var(--TM);
-    font-weight: bold;
-    display: block;
+/* ===== Login page sizing (Granny friendly: large text and targets on every device) ===== */
+
+.auth-login form.auth-box {
+    --sw-control-h: 2.75rem;  /* 44 px targets (the components read --sw-control-h; --sw-touch is its old alias) */
+    font-size: max(16px, var(--sw-text-md));
+    width: min(100%, 28rem);
+}
+
+/* Big screens: the 28rem reading card (Design v2, ui/README.md Page anatomy) grows with the root size step of ui/tokens.css (the extra
+   19 px / 32rem step on top made the sign in type larger than the rest of the console); only the targets get taller. */
+@media (min-width: 1800px) and (min-height: 1000px) {
+    .auth-login form.auth-box {
+        --sw-control-h: 3rem;
+        padding: 32px;
+    }
+}
+
+/* The heading of the login page ("You are already signed in"). */
+.auth-login .auth-heading {
+    font-size: 1.2em;
+}
+
+/* The primary action (Sign in / Continue) fills the row and is tall. */
+.auth-login .auth-buttons .sw-button.sw-primary {
+    flex: 1 1 auto;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+/* The sign in hint / status next to Sign in: one box model for every kind (the same size, padding and border; only the colours
+   change), so a hint that comes or goes while typing moves nothing (UX guide LAY-9; AuthUi.js LoginForm reserves its cell). */
+.auth-status.auth-login-status {
+    font-size: 1em;
+    padding: 8px 10px;
+    border-radius: var(--sw-radius);
+    border: 1px solid transparent;
+}
+
+/* The sign in error (wrong password ...): clearly visible, with a tinted background. */
+.auth-status.auth-login-status.auth-error {
+    border-color: color-mix(in srgb, var(--sw-danger) 55%, transparent);
+    background: color-mix(in srgb, var(--sw-danger) 12%, transparent);
+}
+
+/* The rule the password doesn't meet, next to the disabled Sign in button: a visible hint, not an error. */
+.auth-status.auth-login-status.auth-warning {
+    border-color: color-mix(in srgb, var(--sw-warning) 55%, transparent);
+    background: color-mix(in srgb, var(--sw-warning) 12%, transparent);
+}
+
+/* The reserved cell of the hint and the leak line (Sw.Reserve.Stack): its own place in the card; the sizer copy is the longest hint */
+.auth-msg-slot {
+    min-width: 0;
+}
+
+    .auth-msg-slot > .auth-status.auth-leak {
+        margin-top: 0;
+        align-self: start;
+    }
+
+    /* a failed sign in shows its reason for a while: the leak result (checked again meanwhile) waits in its place, opacity only */
+    .auth-msg-slot.auth-failing > .auth-status.auth-leak {
+        visibility: hidden;
+        opacity: 0;
+    }
+
+/* Sign in blocked by an unmet rule: looks disabled but stays focusable (aria-disabled); activating it explains why. */
+.auth-buttons .sw-button.auth-blocked {
+    opacity: 0.45;
+    cursor: default;
+}
+
+    .auth-buttons .sw-button.sw-primary.auth-blocked:active {
+        background: var(--sw-accent1);
+        border-color: var(--sw-accent1);
+        transform: none;
+    }
+
+@media (hover: hover) {
+    .auth-buttons .sw-button.sw-primary.auth-blocked:hover {
+        background: var(--sw-accent1);
+        border-color: var(--sw-accent1);
+        transform: none;
+    }
+}
+
+/* The hint pulses once when the blocked Sign in is activated (no motion when reduced motion is preferred). */
+.auth-status.auth-attention {
+    animation: auth-attention calc(var(--sw-dur-3) * 2.5) ease-in-out 1;
+}
+
+@keyframes auth-attention {
+    0%, 100% {
+        transform: none;
+    }
+
+    25% {
+        transform: translateX(-4px);
+    }
+
+    75% {
+        transform: translateX(4px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-status.auth-attention {
+        animation: auth-attention-still 1.2s linear 1;
+    }
+}
+
+@keyframes auth-attention-still {
+    0%, 70% {
+        outline: 2px solid var(--sw-warning);
+        outline-offset: 1px;
+    }
+
+    100% {
+        outline: 2px solid transparent;
+        outline-offset: 1px;
+    }
+}
+
+/* The password rules reminder below the password: a checklist, met rules ticked, unmet ones highlighted. At least the body text size
+   (--sw-size, which grows on large screens), so it is never tiny. */
+.auth-rules {
+    list-style: none;
+    margin: calc(var(--auth-gap) * -0.6) 0 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    font-size: max(var(--sw-text-md), 0.95em);
+    color: var(--sw-text-2);
+}
+
+    .auth-rules[hidden] {
+        display: none;
+    }
+
+/* The reserved cell of a rule checklist (Sw.Reserve.Stack, LAY-9): as high as the longest list, it takes the list's place */
+.auth-rules-slot {
+    margin: calc(var(--auth-gap) * -0.6) 0 0 0;
+}
+
+    .auth-rules-slot > .auth-rules {
+        margin: 0;
+    }
+
+.auth-rule {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+}
+
+.auth-rule-mark {
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    font-weight: 700;
+}
+
+.auth-rule.auth-rule-met .auth-rule-mark {
+    color: var(--sw-ok);
+}
+
+/* Unmet rules: the colour only (a bolder text is wider and could wrap the list to another line while typing, LAY-9) */
+.auth-rule.auth-rule-missing {
+    color: var(--sw-warning);
+}
+
+/* The password leak check line below the password (the sign in page): shown while it has a result, as the old info line
+   ("Checking password ..", safe, leaked, failed); empty it is hidden. */
+.auth-status.auth-leak {
+    min-height: 0;
+    margin-top: calc(var(--auth-gap) * -0.6);
+    font-size: 0.85em;
+    text-align: left;
+}
+
+    .auth-status.auth-leak:not(.auth-ok, .auth-error, .auth-warning, .auth-info) {
+        display: none;
+    }
+
+    /* in a reserved cell (the sign in page): hidden by opacity, its place stays (LAY-9) */
+    .auth-msg-slot > .auth-status.auth-leak:not(.auth-ok, .auth-error, .auth-warning, .auth-info) {
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+    }
+
+/* ===== Texts ===== */
+
+/* Headings (page title / instructions): the heading font (Saira), like Design v2 card / dialog titles. */
+.auth-heading {
+    margin: 0;
+    font-family: var(--sw-font-head, var(--sw-head));
+    font-size: 1.25em;
+    line-height: 1.2;
+    font-weight: var(--sw-head-weight);
+    text-align: center;
+    color: var(--sw-fg);
+    overflow-wrap: anywhere;
+}
+
+/* Text blocks (click copies). */
+.auth-text {
+    margin: 0;
+    text-align: center;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+    line-height: 1.45;
+}
+
+    /* Emphasized values (user names, e-mail addresses). */
+    .auth-text em, .auth-status em, .auth-heading em {
+        font-style: normal;
+        font-weight: 600;
+        color: var(--sw-text, var(--sw-fg));
+    }
+
+/* Muted helper text. */
+.auth-muted {
+    color: var(--sw-text-2);
+    font-size: 0.92em;
+}
+
+/* Status line: validation errors, progress and results; kinds color it. */
+.auth-status {
+    min-height: 1.45em;
+    text-align: center;
+    color: var(--sw-text-2);
+    font-size: 0.95em;
+    line-height: 1.45;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+    .auth-status.auth-ok {
+        color: var(--sw-ok);
+    }
+
+    .auth-status.auth-error {
+        color: var(--sw-danger);
+    }
+
+    .auth-status.auth-warning {
+        color: var(--sw-warning);
+    }
+
+    .auth-status.auth-info {
+        color: var(--sw-text-accent);
+    }
+
+    /* A big status (the logout page). */
+    .auth-status.auth-big {
+        font-size: 1.15em;
+    }
+
+/* A text shown in a popup (password policy). */
+.auth-popup-text {
+    white-space: pre-line;
+    max-width: min(22rem, 86vw);
+    padding: 12px 14px;
+    line-height: 1.45;
+}
+
+/* Separators. */
+.auth-hr {
     width: 100%;
-    overflow: hidden;
-    transition: opacity linear var(--ThemeFadeDuration);
+    border: none;
+    border-top: 1px solid var(--sw-border, var(--sw-border));
+    margin: 0;
 }
 
-    /* .Disabled tab bar: 50% opacity, no pointer events; toggled by UserManagerUi.js (UserManager) while a request runs. */
-    SysWeaver-AuthTab.Disabled
-    {
-        opacity: 0.5;
-        pointer-events: none;
+/* ===== Fields ===== */
+
+/* A field (Sw.TextBox) spans the card. */
+.auth-field {
+    display: flex;
+    width: 100%;
+}
+
+    .auth-field .sw-text-label {
+        color: var(--sw-fg);
+        font-weight: 600;
+        font-size: 0.95em;
     }
 
-/* SysWeaver-AuthTabHeader (created by AuthTab .Add): inline-flex rounded pill with --ThemeAcc250 border and --ThemeAcc2 text. */
-SysWeaver-AuthTabHeader {
+    .auth-field .sw-input {
+        font-size: max(16px, 1.05em);
+    }
+
+    /* Read only while a request runs. */
+    .auth-field .sw-input:read-only {
+        opacity: 0.75;
+    }
+
+/* The label row when it holds an extra button (the policy "?" button). */
+.auth-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 1.5em;
+}
+
+    .auth-label-row .sw-button {
+        min-height: 28px;
+        min-width: 28px;
+        margin: -4px -6px -4px 0;
+        color: var(--sw-text-2);
+    }
+
+html.SwMobile .auth-label-row .sw-button {
+    min-height: 40px;
+    min-width: 40px;
+    margin: -10px -10px -10px 0;
+}
+
+/* Three buttons in a field (reveal, generate, copy): the third sits left of the second. */
+.auth-field .sw-text-field > .sw-button + .sw-button + .sw-button {
+    right: calc(var(--sw-control-h) * 2 - 4px);
+}
+
+.auth-field .sw-text-field:has(> .sw-button + .sw-button + .sw-button) .sw-text-input {
+    padding-right: calc(var(--sw-control-h) * 3);
+}
+
+/* Phone field: the country flag inside the input's left edge. */
+.auth-flag {
+    position: absolute;
+    left: 10px;
+    width: 28px;
+    height: 20px;
+    object-fit: cover;
+    border-radius: var(--sw-radius-sm);
+    pointer-events: auto;
+}
+
+    .auth-flag.auth-unknown {
+        opacity: 0.45;
+    }
+
+.auth-phone .sw-text-input {
+    padding-left: 48px;
+}
+
+/* ===== Buttons ===== */
+
+/* Button rows. */
+.auth-buttons {
+    justify-content: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+    .auth-buttons .sw-button:not(.sw-icon-only) {
+        min-width: 9rem;
+    }
+
+/* Phones: full width buttons, easy to hit. */
+html.SwNarrow .auth-buttons .sw-button:not(.sw-icon-only) {
+    flex: 1 1 100%;
+}
+
+/* The small passkey key icon button on the login page. */
+.auth-passkey-icon {
+    align-self: center;
+}
+
+/* ===== Segments (sign up methods) ===== */
+
+/* Design v2 segmented control (Design v2, PORTING.md B12): a sunken track with a hairline, the selected segment raised (surface + 1 px
+   ring); no pills, no solid accent fill. */
+.auth-segments {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-self: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius, 6px);
+    background: var(--sw-surface-sunken, var(--sw-surface));
+}
+
+.auth-page.auth-tool .auth-segments {
+    align-self: flex-start;
+}
+
+.auth-segment {
     display: inline-flex;
     align-items: center;
-    margin: 2px;
-    padding: 0.125em 0.5em 0.125em 0.5em;
-    border-radius: var(--ThemeRadInp);
-    border: 1px solid var(--ThemeAcc250);
+    justify-content: center;
+    gap: 8px;
+    min-height: calc(var(--sw-control-h) - 6px);
+    padding: 0 16px;
+    border: 0;
+    border-radius: calc(var(--sw-radius, 6px) - 2px);
+    background: transparent;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font: inherit;
+    font-weight: 500;
     cursor: pointer;
-    color: var(--ThemeAcc2);
-    outline: 2px solid transparent;
-    transition: color linear var(--ThemeFadeDuration), background-color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+    transition: background var(--sw-dur-2), color var(--sw-dur-2);
 }
 
-
-
-    /* The optional 24x24 header ColorIcon (icon-24x24 element) gets a left margin. */
-    SysWeaver-AuthTabHeader > icon-24x24
-    {
-        margin-left: 0.5em;
+@media (hover: hover) {
+    .auth-segment:hover {
+        background: var(--sw-hover);
+        color: var(--sw-text, var(--sw-fg));
     }
-
-
-    /* Header :hover (--ThemeAcc225 background) and :focus (--ThemeAcc1 outline); no outline on the selected header. */
-    SysWeaver-AuthTabHeader:hover {
-        background-color: var(--ThemeAcc225);
-    }
-
-    SysWeaver-AuthTabHeader:focus {
-        outline: 2px solid var(--ThemeAcc1);
-    }
-
-    SysWeaver-AuthTabHeader.Selected:focus {
-        outline: 2px solid transparent;
-    }
-
-
-    /* Selected header (class Selected set by AuthTab activateIndex): filled --ThemeAcc2, background-colored text, not clickable. */
-    SysWeaver-AuthTabHeader.Selected {
-        cursor: default;
-        pointer-events: none;
-        background-color: var(--ThemeAcc2);
-        color: var(--ThemeBackground);
-    }
-
-/* SysWeaver-AuthTabContent: 64 px high relative block for the active tab's content; created by UserManagerUi.js (UserManager). */
-SysWeaver-AuthTabContent {
-    display: block;
-    width: 100%;
-    position: relative;
-    padding: 0;
-    height: 64px;
-    transition: opacity linear var(--ThemeFadeDuration);
-}
-    /* .Disabled tab content: 50% opacity, no pointer events (set by UserManagerUi.js). */
-    SysWeaver-AuthTabContent.Disabled {
-        pointer-events: none;
-        opacity: 0.5;
-    }
-
-
-/* Inside-input 32x32 icons (Icon-32x32, from AuthAddIcon) in tab content: forced absolute at top 10px (overrides the inline top). */
-SysWeaver-AuthTabContent Icon-32x32
-{
-    position: absolute !important;
-    top: 10px;
 }
 
-/* ===== Phone input and lists ===== */
-
-/* Phone input (class Phone added by AuthInputPhone): 64 px left padding to make room for the flag. */
-form.SysWeaver-AuthBox input.Phone {
-    padding-left: 64px;
-}
-
-/* SysWeaver-AuthPhone: relative wrapper of the phone input and its flag (AuthInputPhone). */
-SysWeaver-AuthPhone {
-    display: block;
-    position: relative;
-}
-
-/*
- * SysWeaver-AuthPhoneCc: 48x40 flag button at the input's left edge; the background-image
- * (../iso_data/country/<ISO>.svg) is set inline by setCountry in AuthInputPhone.
- */
-SysWeaver-AuthPhoneCc {
-    position: absolute !important;
-    left: 6px;
-    top: 6px;
-    width: 48px;
-    height: 40px;
-    box-sizing: border-box;
-    background-color: transparent;
-    display: block;
-    border-radius: 8px;
-    vertical-align: middle;
-    background-repeat: no-repeat;
-    background-size: 40px 32px;
-    background-position: center center;
-    cursor: pointer;
-    transition: background-color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-    outline: 2px solid transparent;
-}
-
-    /* Flag :hover (--ThemeAcc1 background) and :focus (--ThemeAcc2 outline). */
-    SysWeaver-AuthPhoneCc:hover {
-        background-color: var(--ThemeAcc1);
-        
+    .auth-segment:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 0;
     }
 
-    SysWeaver-AuthPhoneCc:focus {
-        outline: 2px solid var(--ThemeAcc2);
+    .auth-segment[aria-selected="true"] {
+        background: var(--sw-surface-raised, var(--sw-bg));
+        color: var(--sw-text, var(--sw-fg));
+        outline: 1px solid var(--sw-border-strong, var(--sw-border));
+        outline-offset: -1px;
     }
 
-
-/* SysWeaver-AuthList: scrollable (max 50vh) bordered list box; created by Passkey.js (PassKey) for the passkey list. */
-SysWeaver-AuthList {
-    position: relative;
-    margin-top: var(--TM);
-    border-radius: var(--ThemeRadInp);
-    border: 1px solid var(--ThemeMain25);
-    max-height: 50vh;
-    overflow: auto;
-    display: block;
-    padding: 0.5em;
-    background-color: rgba(var(--ThemeMainRGB), 0.05);
-}
-
-    /* Button rows inside a list: 1em top margin, no top padding. */
-    SysWeaver-AuthList SysWeaver-CenterBlock {
-        margin-top: 1em;
-        padding-top: 0 !important;
-    }
-
-    /* ===== Inside-input icons ===== */
-
-    /* .InsideInput: icons placed inside inputs by AuthAddIcon; relative positioning, offsets set inline. */
-    .InsideInput {
-        position: relative;
-    }
-
-    /* Disabled inside-input icon (IconDisabled is applied by common.js ColorIcon.SetEnabled(false)): 10% opacity, also on :hover. */
-    .InsideInput.IconDisabled {
-        opacity: 0.1;
-    }
-
-        .InsideInput.IconDisabled:hover {
-            opacity: 0.1;
+        .auth-segment[aria-selected="true"]:focus-visible {
+            outline: 2px solid var(--sw-focus);
+            outline-offset: 0;
         }
 
-/* Horizontal rules (AuthHr): top margin --TM. */
-hr {
-    margin-top: var(--TM);
+    .auth-segment:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+/* Busy form: the choices keep their look; a click is absorbed (AuthUi Segments) and the pointer says it is working. */
+.auth-busy .auth-segments {
+    cursor: progress;
 }
 
-/* ===== Icon mask classes (used with common.js ColorIcon; images from ../icons/) ===== */
+/* ===== Lists (passkeys, API keys) ===== */
 
-/* IconRetry: reload.svg, *Retry* button of logoutMain. */
-.IconRetry {
-    mask-image: url("../icons/reload.svg");
+.auth-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
-/* IconWarning: warning.svg, used by Passkey.js (PassKey) error pages and common.js. */
-.IconWarning {
-    mask-image: url("../icons/warning.svg");
+.auth-item {
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface-sunken, var(--sw-surface));
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-/* IconAuthPassword: lock.svg, *Sign in* button of loginMain. */
-.IconAuthPassword {
-    mask-image: url("../icons/lock.svg");
+.auth-item-name {
+    font-weight: 600;
+    color: var(--sw-text, var(--sw-fg));
+    overflow-wrap: anywhere;
 }
 
-/* IconAuthPost: send.svg, UserManager submit buttons. */
-.IconAuthPost {
-    mask-image: url("../icons/send.svg");
+.auth-item-line {
+    color: var(--sw-text-2);
+    font-size: 0.92em;
 }
 
-/* IconAuthLogin / IconAuthLogout: user.svg / user_logout.svg, page icons of loginMain / logoutMain. */
-.IconAuthLogin {
-    mask-image: url("../icons/user.svg");
+.auth-item .auth-buttons {
+    justify-content: flex-end;
+    margin-top: 6px;
 }
 
-.IconAuthLogout {
-    mask-image: url("../icons/user_logout.svg");
+    .auth-item .auth-buttons .sw-button:not(.sw-icon-only) {
+        min-width: 0;
+    }
+
+html.SwNarrow .auth-item .auth-buttons .sw-button:not(.sw-icon-only) {
+    flex: 1 1 0;
 }
 
-/* IconAuthCopy: copy.svg, default copy icon of AuthInput / AuthInputPhone. */
-.IconAuthCopy {
-    mask-image: url("../icons/copy.svg");
+/* ===== Dialog content (rename passkey, create API key) ===== */
+
+.auth-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: min(22rem, 80vw);
 }
 
-/* IconAuthRandom: dice.svg, password generator icon of AuthNewPassword. */
-.IconAuthRandom {
-    mask-image: url("../icons/dice.svg");
+    .auth-dialog .auth-field {
+        width: 100%;
+    }
+
+/* ===== Dialog layout (AuthPage.AsDialog): the card of a sign in style page is the body of an Sw.Dialog =====
+   The dialog is the frame (title bar, border, padding, move / resize), so the form drops its own card look; the empty page behind it
+   keeps the page background. */
+body.auth-dialog-page {
+    display: block;
+    padding: 0;
 }
 
-/* IconAuthView / IconAuthViewOff: eye.svg / eye_off.svg, show/hide toggle of AuthPassword. */
-.IconAuthView {
-    mask-image: url("../icons/eye.svg");
+.auth-dialog form.auth-box {
+    width: auto;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
 }
 
-.IconAuthViewOff {
-    mask-image: url("../icons/eye_off.svg");
-}
-
-/* IconAuthEmail / IconAuthPhone: email.svg / phone.svg, UserManager e-mail / phone buttons and tabs. */
-.IconAuthEmail {
-    mask-image: url("../icons/email.svg");
-}
-
-.IconAuthPhone {
-    mask-image: url("../icons/phone.svg");
-}
+    /* The page icon: smaller in the dialog (the title bar names the page) */
+    .auth-dialog form.auth-box .auth-icon:not(img) {
+        --auth-icon: 48px;
+    }

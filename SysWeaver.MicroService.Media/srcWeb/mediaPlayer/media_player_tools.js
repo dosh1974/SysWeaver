@@ -1,15 +1,15 @@
 ﻿/**
  * @file media_player_tools.js - Shared static helpers for all media players (MediaPlayerTools).
  *
- * Loading: included by MediaPlayer.Init() (media_player.js) via common's includeJs, and by direct
- * `<script defer>` tags on the effect pages (mediaView/backgroundEffects|imageEffects/index.html and the
- * *EffectsLib.html thumbnail pages) together with media_effect_program.js and media_player_effect.js.
+ * Loading: included by MediaPlayer.Init() (media_player.js), and by direct `<script defer>` tags on the effect
+ * pages (hosted by mediaView/effectPage.js) and the *EffectsLib.html galleries together with media_effect_program.js
+ * and media_player_effect.js. Needs no SysWeaver core (uses it when present: Sw.Page.SignalLoaded, Sw.Util.HashString).
  *
- * Globals defined: MediaPlayerTools (static-only class).
+ * Globals defined: MediaPlayerTools (static-only class), also published as `Sw.Media.Tools`.
  *
  * Responsibilities: default player members (InitBase), dark mode detection and change events (observing
  * window.top), crop/clip computation (Crop margins -> CSS clip-path inset), sizing/alignment of a player
- * element inside a target (UpdateSize), blob caching of urls, autoplay-unmute detection (CanUnMute),
+ * element inside a target (UpdateSize), blob caching of urls, safe web font loading (LoadFont), autoplay-unmute detection (CanUnMute),
  * "PageLoaded" and "Media*" postMessage protocol with the parent/opener window, and error reporting to a
  * hosting CefSharp / WebView2 application (SetError).
  *
@@ -182,9 +182,28 @@ class MediaPlayerTools {
 	 */
 	static IsDarkMode()
 	{
-		const w = window.top;
-		const c = w.getComputedStyle(w.document.body);
-		return c.getPropertyValue("color-scheme") === "dark";
+		const w = MediaPlayerTools.ThemeWindow();
+		const c = w.getComputedStyle(w.document.body ?? w.document.documentElement);
+		return c.getPropertyValue("color-scheme").trim() === "dark";
+	}
+
+	/**
+	 * The window whose theme the players follow: window.top when it is readable (same origin), else this window
+	 * (a page embedded by another origin used to throw a SecurityError in the effect constructor).
+	 * @returns {Window} The window.
+	 */
+	static ThemeWindow()
+	{
+		try
+		{
+			const w = window.top;
+			if (w && w.document && w.document.documentElement)
+				return w;
+		}
+		catch
+		{
+		}
+		return window;
 	}
 
 	/**
@@ -232,12 +251,13 @@ class MediaPlayerTools {
         };
 
 
-        const w = window.top;
+        const w = MediaPlayerTools.ThemeWindow();
 
         const od = new MutationObserver(onChange);
         const ob = new MutationObserver(onChange);
         od.observe(w.document.documentElement, op);
-        ob.observe(w.document.body, op);
+        if (w.document.body)
+            ob.observe(w.document.body, op);
 
         /**
          * Disconnects both dark mode observers and deletes itself (static, only defined while observing).
@@ -335,7 +355,7 @@ class MediaPlayerTools {
     /**
      * Apply the crop of a player to its element as a CSS clip-path "inset(t r b l)" (via ComputeClip).
      * Removes an existing clip-path when no crop applies. Calls i.OnClipChanged() (if defined) only when
-     * the clip-path actually changed. The block comment below is the older implementation, kept as is.
+     * the clip-path actually changed.
      * @param {object} i The player instance
      * @param {object} [params=i.Params] Params holding Crop
      * @returns {void}
@@ -357,75 +377,6 @@ class MediaPlayerTools {
         e.style.clipPath = newP;
         if (i.OnClipChanged)
             i.OnClipChanged();
-/*
-        function NoClip() {
-            e.style.clipPath = null;
-            if (i.OnClipChanged)
-                i.OnClipChanged();
-        }
-        const ow = i.Width;
-        const oh = i.Height;
-        i.ClipX = 0;
-        i.ClipY = 0;
-        i.ClipWidth = ow;
-        i.ClipHeight = oh;
-        params = params ?? i.Params;
-        if (!params)
-            return;
-        const crop = params.Crop;
-        if (typeof crop === "undefined")
-            return;
-        const e = i.Element;
-        function NoClip() {
-            e.style.clipPath = null;
-            if (i.OnClipChanged)
-                i.OnClipChanged();
-        }
-        if (!crop) {
-            NoClip();
-            return;
-        }
-        if (typeof params.Stream !== "undefined")
-            if (params.Stream === 2) {
-                NoClip();
-                return;
-            }
-
-        let t = crop.MarginTop;
-        let r = crop.MarginRight;
-        let b = crop.MarginBottom;
-        let l = crop.MarginLeft;
-        if (crop.MarginAsPercentage) {
-            t = crop.MarginTopP;
-            r = crop.MarginRightP;
-            b = crop.MarginBottomP;
-            l = crop.MarginLeftP;
-            t = Math.round(t * oh / 100);
-            r = Math.round(r * ow / 100);
-            b = Math.round(b * oh / 100);
-            l = Math.round(l * ow / 100);
-        }
-        if ((t <= 0) && (r <= 0) && (b <= 0) && (l <= 0)) {
-            NoClip();
-            return;
-        }
-        let w = ow - l - r;
-        if (w < 0)
-            w = 0;
-        let h = oh - t - b;
-        if (h < 0)
-            h = 0;
-        const newP = "inset(" + t + "px " + r + "px " + b + "px " + l + "px)";
-        if (newP === e.style.clipPath)
-            return;
-        e.style.clipPath = newP;
-        i.ClipX = l;
-        i.ClipY = t;
-        i.ClipWidth = w;
-        i.ClipHeight = h;
-        if (i.OnClipChanged)
-            i.OnClipChanged();
-*/
     }
 
     /**
@@ -441,6 +392,90 @@ class MediaPlayerTools {
         }
         catch (e) {
             return null;
+        }
+    }
+
+    /**
+     * Load a web font and add it to document.fonts (the FontUrl / FontUrlName of a text player or a text effect).
+     * Security: the url often comes from a page url, so it is never pasted into CSS as is (a quote in it would close the
+     * CSS string and add a second `url()` of any site). It is parsed relative to the document, must be a http(s) url (or
+     * a blob: url of this origin), and only its normalized href is used, as an escaped CSS string (JSON.stringify).
+     * Same-site rules are up to the page (mediaView: MediaLinkProblem / ParseTools.UrlProblem).
+     * @param {string} name The font family name (FontUrlName).
+     * @param {string} url The font url (FontUrl).
+     * @returns {Promise<FontFace>} The loaded font face.
+     * @throws {Error} When the url is not a web address or the font can't be loaded; the error has `FontLoad = true` (a
+     * page can show "The font could not be loaded" for it).
+     */
+    static async LoadFont(name, url) {
+        let u = null;
+        try {
+            u = new URL(String(url ?? ""), document.baseURI);
+        }
+        catch {
+            u = null;
+        }
+        let ok = !!u && (u.protocol === "http:" || u.protocol === "https:");
+        if (!ok && u && u.protocol === "blob:") {
+            try {
+                ok = new URL(u.pathname).origin === window.location.origin;
+            }
+            catch {
+                ok = false;
+            }
+        }
+        /**
+         * @param {string} why The reason (logged, not shown).
+         * @returns {Error} The font error.
+         */
+        const fail = why => {
+            const err = new Error("The font could not be loaded: " + why);
+            err.FontLoad = true;
+            return err;
+        };
+        if (!ok)
+            throw fail("the font address is not a web address");
+        const ff = new FontFace(String(name ?? ""), "url(" + JSON.stringify(u.href) + ")");
+        try {
+            await ff.load();
+        }
+        catch (e) {
+            throw fail(u.href + " (" + (e && e.message ? e.message : e) + ")");
+        }
+        document.fonts.add(ff);
+        return ff;
+    }
+
+    /**
+     * Load the web font of a text style (FontUrl / FontUrlName, with LoadFont) and fall back to a default font when it
+     * fails: the failure is logged, the css font of the style gets the families "Verdana, sans-serif" appended (else the
+     * canvas would use the browser's default serif font for the missing family) and rendering goes on. The text players
+     * keep the returned error (`FontError`), and the window gets the event "MediaFontFallback" (detail: the error; a text
+     * texture inside an effect player is not reachable from the page), so a page can show a notice (media.js FontNotice).
+     * @param {object} style The text style (TextStyle / MediaPlayerParamsText): FontUrl, FontUrlName and Font are used;
+     * Font is changed on a failure.
+     * @returns {Promise<Error|null>} null when the font loaded (or the style has no FontUrl), else the error (FontLoad = true).
+     */
+    static async LoadFontOrFallback(style) {
+        if (!style || !style.FontUrl)
+            return null;
+        try {
+            await MediaPlayerTools.LoadFont(style.FontUrlName, style.FontUrl);
+            return null;
+        }
+        catch (e) {
+            console.warn("Media: " + (e && e.message ? e.message : e) + ", using a default font");
+            const f = String(style.Font ?? "").trim();
+            if (f && !/(^|[\s,])(sans-serif|serif|monospace)\s*$/i.test(f))
+                style.Font = f + ", Verdana, sans-serif";
+            const err = e instanceof Error ? e : new Error("" + e);
+            err.FontLoad = true;
+            try {
+                window.dispatchEvent(new CustomEvent("MediaFontFallback", { detail: err }));
+            }
+            catch {
+            }
+            return err;
         }
     }
 
@@ -463,12 +498,17 @@ class MediaPlayerTools {
      * MediaPlayerAudio.LoadAudio, then tries to play it unmuted at volume 0.01. On success dispatches an
      * "AudioEnabled" CustomEvent on document.body. On failure installs one-shot keydown/mousedown/click
      * listeners on document.body that set Result = true and dispatch "AudioEnabled" on the first user gesture.
+     * media_player_audio.js is loaded first when needed (MediaPlayer.Include).
      * @returns {Promise<boolean>} True if unmuted playback works now; false if blocked, the audio failed to
-     * load, or MediaPlayerAudio is not loaded
+     * load, or MediaPlayerAudio can't be loaded
      */
     static async CanUnMute() {
         if (MediaPlayerTools.HaveTested)
             return MediaPlayerTools.Result;
+        //  The test needs the audio player: load it (a video / YouTube / effect page loads only its own player, so the test
+        //  always failed there and the "click once to get audio" overlay showed even when the browser allows sound)
+        if ((typeof MediaPlayerAudio !== "function") && (typeof MediaPlayer === "function"))
+            await MediaPlayer.Include("media_player_audio.js");
         if (typeof MediaPlayerAudio !== "function")
             return false;
         const e = document.createElement("audio");
@@ -521,20 +561,73 @@ class MediaPlayerTools {
     }
 
     /**
-     * Notify the hosting window that the page is loaded: posts `{ Type: "PageLoaded" }` (target origin "*")
-     * to window.parent, or to window.opener when not framed. Errors are ignored.
+     * Notify the hosting windows that the page is loaded. With the SysWeaver core present this is
+     * `Sw.Page.SignalLoaded()`; otherwise the same protocol by hand: `{ Type: "PageLoaded" }` to window.parent, or to
+     * window.opener when not framed, plus `{ Type: "LoaderRemoved" }` to window.top when framed (the app shell reveals its
+     * content frame on it instead of waiting for its 1 s fallback). Security: posted to this page's origin only ("/"), a
+     * foreign window framing the page receives nothing. Errors are ignored.
      * @returns {void}
      */
     static PostPageLoaded() {
-        const p = window.parent;
-        const wt = p === window ? window.opener : p;
-        if (wt) {
-            try {
-                wt.postMessage({ Type: "PageLoaded" }, "*");
-            }
-            catch {
-            }
+        const sw = window.Sw;
+        if (sw && sw.Page && sw.Page.SignalLoaded) {
+            sw.Page.SignalLoaded();
+            return;
         }
+        const p = window.parent;
+        const framed = p !== window;
+        const wt = framed ? p : window.opener;
+        try {
+            if (wt)
+                wt.postMessage({ Type: "PageLoaded" }, "/");
+            if (framed)
+                window.top.postMessage({ Type: "LoaderRemoved" }, "/");
+        }
+        catch {
+        }
+    }
+
+    /**
+     * Hash a string like the core (`Sw.Util.HashString`: base64 of the SHA-256 of the UTF-8 bytes), so cache keys stay
+     * the same as with the old common.js hash helper. Without the core: crypto.subtle, or (insecure context, no
+     * crypto.subtle) a 53 bit text hash.
+     * @param {string} s The text.
+     * @returns {Promise<string>} The hash.
+     */
+    static async HashString(s) {
+        const sw = window.Sw;
+        if (sw && sw.Util && sw.Util.HashString)
+            return await sw.Util.HashString(s);
+        try {
+            const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+            let b = "";
+            for (const x of d)
+                b += String.fromCharCode(x);
+            return btoa(b);
+        }
+        catch {
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < s.length; ++i) {
+                const c = s.charCodeAt(i);
+                h1 = Math.imul(h1 ^ c, 2654435761);
+                h2 = Math.imul(h2 ^ c, 1597334677);
+            }
+            return "" + ((h2 >>> 0) * 4294967296 + (h1 >>> 0));
+        }
+    }
+
+    /**
+     * Convert a Blob to a data: url.
+     * @param {Blob} blob The data.
+     * @returns {Promise<string>} The data url.
+     */
+    static BlobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(blob);
+        });
     }
 
     /**
@@ -614,7 +707,8 @@ class MediaPlayerTools {
      * whose data.Type is one of: MediaPlay, MediaPause, MediaStop, MediaOnce, MediaLoop, MediaMute,
      * MediaUnMute, MediaSetVolume (data.Volume ?? data.Value ?? 0), MediaSeek (data.Time ?? data.Position ??
      * data.Value ?? 0), and, when the player implements them, MediaDebugLoseContext, MediaCustomX/Y/Z
-     * (the whole data object is passed to SetCustomX/Y/Z). The message origin is not checked.
+     * (the whole data object is passed to SetCustomX/Y/Z). Security: only messages from this origin, sent by the parent,
+     * the opener, the top window or this window, are accepted (a foreign page framing or opening the player can't control it).
      * @param {object} obj The player instance
      * @returns {function():void} Function that removes the message listener
      */
@@ -645,6 +739,11 @@ class MediaPlayerTools {
          * @returns {void}
          */
         function h(ev) {
+            if (ev.origin !== window.location.origin)
+                return;
+            const s = ev.source;
+            if (!s || (s !== window.parent && s !== window.opener && s !== window.top && s !== window))
+                return;
             const data = ev.data;
             if (!data)
                 return;
@@ -752,3 +851,10 @@ class MediaPlayerTools {
 
 }
 
+
+/** Publish the new API name (MediaPlayerTools stays the public legacy global). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    (Sw.Media = Sw.Media || {}).Tools = MediaPlayerTools;
+})();

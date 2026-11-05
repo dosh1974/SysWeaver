@@ -1,102 +1,150 @@
 ﻿/*
- * logo.css - styles of explore/logo.html (logo seed tiles built by logo.js / logoMain()).
- * Loaded by logo.html after common/theme.css; uses the theme variables --ThemeMain50, --ThemeAcc1,
- * --ThemeAcc2 and --ThemeRad. Not templated. Near copy of icons.css (plus first-tile highlight and
- * the .IconDice mask icon). Sizes adapt to the viewport through svw / svh units (no media queries).
+ * explore/logo.css - styles of the logo seed generator explore/logo.html (explore/logo.js), linked after explore/icons.css (the tiles).
+ * Design v2 page (ui/page.css): main.sw-page-dash.logo-page > header.sw-ph (title, description), two cards (.sw-card with .sw-card-head /
+ * .sw-card-body): section.logo-brand (the app icon and logo in use) and section.logo-gen (the generator; the Randomize button is the card head
+ * action). Classes: logo-brand-marks / logo-brand-mark / logo-brand-logo / logo-brand-banner (the app icon, logo and banner, .sw-brand-mark /
+ * .sw-brand-logo of ui/tokens.css, the banner an img), logo-note, logo-head (card titles), logo-intro (the generator introduction),
+ * logo-list (the tile list of logo-cell: a tile .icons-item and its floating preview button logo-previewbtn; the first cell is the selected
+ * seed), logo-seed (the seed line under a tile title), logo-palette / logo-swatch (the four base colours of the seed's theme),
+ * logo-preview / logo-preview-frame (the theme preview dialog and its frame). Flat: hairlines and tone, no shadows.
  */
 
-/* ===== Page ===== */
+/* Page background: common/theme.css (the theme background stand-alone, transparent in the shell or a frame) */
 
-/* Whole page: disable text selection (tiles are click-to-copy). */
-body {
-    user-select: none;
+/* The app icon and logo in use: the icon 96 px (square), the logo 192 px wide (144 px high, 4:3). */
+.logo-brand {
+    margin-bottom: var(--sw-space-4, 16px);
 }
 
-/* SysWeaver-CenterBlock: centered block element from common code (e.g. the Button.CreateRow row); 1em bottom padding. */
-SysWeaver-CenterBlock {
-    padding-bottom: 1em;
+.logo-brand-marks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px 40px;
+    padding: 18px 0;
 }
 
-/* ===== Seed tiles ===== */
-
-/* SysWeaver-IconList: container of the 10 seed tiles; centered inline-block, bold 125% text. */
-SysWeaver-IconList {
-    text-align: center;
-    display: inline-block;
-    font-weight: bold;
-    font-size: 125%;
+.logo-brand-mark {
+    width: 96px;
 }
 
-/*
- * First tile = the selected seed: 2px --ThemeAcc2 border. Declared before the generic
- * SysWeaver-IconItem rule but wins by specificity (pseudo-class).
- */
-SysWeaver-IconItem:first-child {
-    border: 2px solid var(--ThemeAcc2);
+.logo-brand-logo {
+    width: 192px;
+    max-width: 100%;
 }
 
-/*
- * SysWeaver-IconItem: one square seed tile (click copies the seed and makes it the first tile).
- * Custom properties defined here:
- *   --s  tile / image width: half of the smaller of viewport width and (viewport height - 64px - 1em),
- *        minus 3em, so roughly two tiles fit per row and column.
- *   --h  tile height: --s plus 1.5em for the caption.
- */
-SysWeaver-IconItem {
-    --s: calc(min(100svw, 100svh - 64px - 1em) / 2 - 3em);
-    --h: calc(var(--s) + 1.5em);
-    display: inline-block;
+/* The banner: as high as the icon (96 px; its own aspect ratio, 9:2 for the generated banner.svg: 432 px wide) */
+.logo-brand-banner {
+    display: block;
+    height: 96px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.logo-note, .logo-intro {
+    margin: 0;
+    max-width: 75ch;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-size: var(--sw-text-sm, 0.9em);
+}
+
+.logo-intro {
+    margin-bottom: var(--sw-space-4, 16px);
+}
+
+/* Large logos as in the original page (S5-B-2): about half of the smaller of the view width and height, so about two tiles fit
+   per row and column (the original's tile size), at least 120 px. Sets the tile image size --s of icons.css directly (no
+   --sw-scale: the size already follows the view). */
+.logo-list {
+    --s: max(120px, calc(min(100svw, 100svh - 64px - 1em) / 2 - 3em));
+    font-size: 1em;
+}
+
+/* The logos always lie on the transparency checkerboard, as in the original page (judging a logo's transparent parts is what
+   the page is for; the icon gallery shows it only on hover). The logo is the real file in every scheme (no dark inversion). */
+.logo-list .icons-item img {
+    background-color: transparent;
+    background-position: 0 0, var(--C) var(--C);
+    background-size: var(--R) var(--R);
+    background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%), linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
+    filter: none;
+}
+
+/* The selected seed (the logo in use): the accent marks the current item, never the maroon accent2 that reads as an error */
+.logo-list .logo-cell:first-child > .icons-item {
+    border: 2px solid var(--sw-accent1);
+    background: var(--sw-selected, var(--sw-accent1-soft));
+}
+
+/* A cell: the tile and its floating preview button at the top right (a sibling: a button is never inside the tile button) */
+.logo-cell {
     position: relative;
-    width: var(--s);
-    height: var(--h);
-    border: 1px solid var(--ThemeMain50);
-    margin: 0.5em;
-    border-radius: var(--ThemeRad);
-    cursor: pointer;
-    transition: box-shadow linear 0.1s;
+    display: grid;
+    min-width: 0;
+}
+
+.logo-cell > .sw-button.logo-previewbtn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    background: var(--sw-surface, var(--sw-bg));
+    border: 1px solid var(--sw-border-strong, var(--sw-border));
+    box-shadow: var(--sw-elev-1, none);
+}
+
+/* The palette of the seed's application theme: background, main, accent 1, accent 2 */
+.logo-palette {
+    display: flex;
+    gap: 4px;
+    min-height: 16px;
+    margin-top: 2px;
+}
+
+.logo-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: var(--sw-radius-sm, 4px);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sw-fg) 25%, transparent);
+}
+
+/* The theme preview dialog: the demo app fills the body */
+.logo-preview > .sw-dialog-body {
+    padding: 0;
     overflow: hidden;
 }
 
+.logo-preview-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
 
-    /* Hovered tile: 10px --ThemeAcc1 glow. */
-    SysWeaver-IconItem:hover{
-        box-shadow: var(--ThemeAcc1) 0 0 10px;
+/* The seed in the window bar of the preview (copy and make it current) between Prev and Next */
+.logo-preview-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-right: var(--sw-space-2, 8px);
+}
+
+    .logo-preview-nav .logo-preview-seed {
+        font-family: var(--sw-mono);
+        font-variant-numeric: tabular-nums;
     }
 
-    /*
-     * Logo preview image (--s x --s, from ../logo_debug.svg?<seed>) on a checkerboard background.
-     * Custom properties defined here (checkerboard):
-     *   --D  dark square color (#666), --B  light square color (#aaa),
-     *   --C  offset of the second gradient layer (10px), --R  background tile size (20px).
-     * Technique: two 45deg linear-gradients, the second offset by --C, both sized --R.
-     */
-    SysWeaver-IconItem img {
-        position: relative;
-        display: block;
-        width: var(--s);
-        height: var(--s);
-        border-radius: var(--ThemeRad);
-        --D: #666;
-        --B: #aaa;
-        --C: 10px;
-        --R: 20px;
-        background-position: 0px 0px, var(--C) var(--C);
-        background-size: var(--R) var(--R);
-        background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%),linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
-    }
+.logo-list .icons-name {
+    font-weight: 500;
+}
 
-    /* SysWeaver-IconSeed: seed number caption below the image (1.25em high, centered, width --s). */
-    SysWeaver-IconItem SysWeaver-IconSeed {
-        position: relative;
-        display: block;
-        width: var(--s);
-        height: 1.25em;
-        text-align: center;
-    }
-
-/* ===== Icons ===== */
-
-/* IconDice: mask icon (../icons/reload.svg) of the "Randomize" Button created by logoMain. */
-.IconDice {
-    mask-image: url('../icons/reload.svg');
+.logo-seed {
+    max-width: 100%;
+    font-family: var(--sw-mono);
+    font-size: 0.85em;
+    color: var(--sw-text-2, var(--sw-text-2));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

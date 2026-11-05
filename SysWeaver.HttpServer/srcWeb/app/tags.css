@@ -1,114 +1,77 @@
 ﻿/*
- * Styles of the tag gallery control built by tags.js (CreateTagsGallery). Optional library: pages that
- * use the control link this file together with ../app/application.css (pop-ups) and common/theme.css
- * (no first-party page references it). Uses theme variables --ThemeMain50, --ThemeBackground,
- * --ThemeAcc1, --ThemeAcc2 and --SysWeaverEditDesktopRad (from the edit styles; undefined otherwise).
+ * Styles of the tag gallery control (app/tags.js, Sw.TagsGallery / CreateTagsGallery). Pages that use the control
+ * link this file after ../common/theme.css and ../sw/ui.css. Uses the Sw tokens (--sw-*), so every theme applies.
+ * --SysWeaverEditDesktopRad (edit styles) is still honoured for the gallery radius when defined.
  */
 
 /* ===== Gallery container ===== */
-/* <SysWeaver-TagsGallery>: bordered, wrapping flex box holding one SysWeaver-TagEdit per tag plus the Add button. */
+/* <SysWeaver-TagsGallery>: bordered, wrapping flex box with one SysWeaver-TagEdit per tag plus the Add button. */
 SysWeaver-TagsGallery {
     box-sizing: border-box;
-    padding: 4px;
     display: flex;
     flex-wrap: wrap;
-    border: 1px solid var(--ThemeMain50);
-    border-radius: var(--SysWeaverEditDesktopRad);
-    background-color: var(--ThemeBackground);
-    margin: 4px;
-    margin-bottom: 32px;
-    overflow: hidden;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    margin: 4px 4px 32px 4px;
+    border: 1px solid var(--sw-border-strong);
+    border-radius: var(--sw-radius-md);
+    background-color: var(--sw-bg);
 }
 
-/* .Embedded: added by CreateTagsGallery when TagGalleryParams.Embedded is true; removes frame, padding and margins. */
-SysWeaver-TagsGallery.Embedded {
-    padding: 0;
-    border: none;
-    background-color: initial;
-    margin: 0;
-}
-
-
-    /*
-     * Colour variants .Keep (green tags) and .Ignore (blue tags), applied through TagGalleryParams.Class
-     * by the caller; both reserve a minimum height of 66px so an empty gallery keeps its size.
-     */
-    SysWeaver-TagsGallery.Keep {
-        min-height: 66px;
+    /* .Embedded (TagGalleryParams.Embedded): no frame, padding or margins. */
+    SysWeaver-TagsGallery.Embedded {
+        padding: 0;
+        border: none;
+        background-color: transparent;
+        margin: 0;
     }
 
-        SysWeaver-TagsGallery.Keep SysWeaver-TagEdit {
-            background-color: #4c4;
-        }
-
+    /* Color variants .Keep (green chips) and .Ignore (blue chips) via TagGalleryParams.Class; keep a minimum height. */
+    SysWeaver-TagsGallery.Keep,
     SysWeaver-TagsGallery.Ignore {
         min-height: 66px;
     }
 
-        SysWeaver-TagsGallery.Ignore SysWeaver-TagEdit {
-            background-color: #48c;
+        SysWeaver-TagsGallery.Keep SysWeaver-TagEdit {
+            background-color: var(--sw-ok-soft);
+            color: var(--sw-text);
+            border-color: var(--sw-ok);
         }
 
+        SysWeaver-TagsGallery.Ignore SysWeaver-TagEdit {
+            background-color: var(--sw-accent2-soft);
+            color: var(--sw-text);
+            border-color: var(--sw-accent2);
+        }
 
 /* ===== Tag chips ===== */
-/* <SysWeaver-TagEdit>: one rounded tag chip (accent background), in the gallery and in the add pop-up list. */
+/* <SysWeaver-TagEdit>: one rounded chip (accent 1 background) with the bold name and an optional remove button. */
 SysWeaver-TagEdit {
-    background-color: var(--ThemeAcc1);
-    color: var(--ThemeBackground);
-    border-radius: 15px;
-    margin: 8px;
-    padding: 8px 16px 8px 16px;
-    display: inline-block;
-    vertical-align: middle;
-    line-height: 24px;
-    outline: none;
-    transition: outline linear 0.1s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: var(--sw-control-h);
+    padding: 0 6px 0 16px;
+    border-radius: calc(var(--sw-control-h) / 2);
+    background-color: var(--sw-accent1);
+    color: var(--sw-on-accent);
 }
 
-    /* Keyboard focus ring (pop-up chips get tabIndex 0). */
-    SysWeaver-TagEdit:focus {
-        outline: 3px solid var(--ThemeAcc2);
-    }
-
-    /* <SysWeaver-TagText>: the bold tag name, floated left inside the chip. */
+    /* <SysWeaver-TagText>: the bold tag name. */
     SysWeaver-TagEdit SysWeaver-TagText {
-        float: left;
-        display: inline-block;
         font-weight: bold;
+        padding-right: 10px;
     }
 
-    /* <icon-24x24>: the remove ColorIcon element (common.js ColorIcon tag for a 24x24 icon), floated right. */
-    SysWeaver-TagEdit icon-24x24 {
-        float: right;
-        vertical-align: middle;
-        display: inline-block;
-        margin-left: 8px;
+    /* The remove button (Sw.Button, ghost): drawn in the chip's text color. */
+    SysWeaver-TagEdit .sw-button {
+        color: inherit;
+        border-radius: 50%;
     }
-
-
-
-
-/* The "Add" <SysWeaver-Button> (common.js Button) inside the gallery, vertically centred with the chips. */
-SysWeaver-TagsGallery SysWeaver-Button {
-    vertical-align: middle;
-}
-
-/* ===== Add pop-up ===== */
-/* Selectable chips inside the PopUpSelection dialog (<SysWeaver-PopUpBackground>, application.js): dimmed until hovered. */
-SysWeaver-PopUpBackground SysWeaver-TagEdit {
-    opacity: 0.8;
-    cursor: pointer;
-    transition: opacity linear 0.1s;
-}
-
-    SysWeaver-PopUpBackground SysWeaver-TagEdit:hover {
-        opacity: 1;
-    }
-
-
 
 /* ===== Icons ===== */
-/* .IconTagRemove / .IconTagAdd: mask-image icons (TagGalleryParams.RemoveIcon / AddIcon), coloured by the element background. */
+/* Mask icons of the Add (TagGalleryParams.AddIcon) and remove (RemoveIcon) buttons. */
 .IconTagRemove {
     mask-image: url("../icons/minus.svg");
 }
@@ -116,4 +79,3 @@ SysWeaver-PopUpBackground SysWeaver-TagEdit {
 .IconTagAdd {
     mask-image: url("../icons/plus.svg");
 }
-

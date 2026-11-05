@@ -16,7 +16,7 @@ namespace SysWeaver.MicroService
         /// If the last id is null or unknown (ex: the service restarted), only recent messages are returned.
         /// </summary>
         /// <param name="request">Request parameters</param>
-        /// <returns>The new messages or null if no new messages was recieved</returns>
+        /// <returns>The new messages or null if no new messages was received</returns>
         [RemoteEndPoint(HttpEndPointTypes.Post)]
         Task<IncomingTextMessage[]> GetIncoming(GetIncomingTextMessageRequest request);
     }

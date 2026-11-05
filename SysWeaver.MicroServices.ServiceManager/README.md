@@ -38,6 +38,7 @@ Startup: the manager attaches console/debugger log handlers, locates the manifes
 - **Events and messaging** — `OnServiceAdded` / `OnServiceRemoved` let infrastructure services attach to services registered later; `PostMessage` delivers keyed messages to all `IServiceMessageListener` instances; the manager is also the central logging hub (`MessageHost`)
 - **Process control** — pause/resume propagated to `IServicePausable` services and a controlled process restart (when the host supports it)
 - **Diagnostics** — statistics and performance data from all services, published as web tables (services, stats, performance, scheduled tasks, text files)
+- **Problems** — the exception trackers of all services as one table (`Api/debug/ProblemsTable`, latest failure first), and in the log: every part that starts failing is logged as a Warning ("[ServiceManager] Problem in \"System\" Source: message", the full exception once per message); while it keeps failing it is logged at most once per hour with the number of failures since the last report, so a flood of failures can't flood the log
 - **Manifest editing** — `ReadManifest` / `BuildManifest` convert the manifest to typed entries and back, used by the web admin UI to view and edit server configuration
 - **Shared helpers** — one-time pads, a file extension editor/viewer registry and text-file access used by other framework services
 - **Built-in services** — `CpuService` (priority class, affinity mask or core slicing) and `NetworkService` (wait until the machine has a LAN address)

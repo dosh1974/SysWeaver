@@ -35,7 +35,7 @@ The service requires at least one `IRateSource` registered before it in the mani
 - Rates of each source are cached on disc (`CacheFolder`, default a folder under the common application data), so they survive restarts and outages
 - Currency code aliases: a code missing from the sources can get the rate of another code (`OldToNewRateMap`, default `NLE=SLL`)
 - `SyncRates` lets other servers fetch the rates when they changed (requires the `Service` role)
-- Current rates, sources and all rates per source as web tables (menu *Debug / Exchange rate*); the optional `ExchangeRateDebugService` adds extra menu shortcuts to them
+- Current rates, sources and all rates per source as web tables (menu *Data / Exchange rates*, for every signed in user); the optional `ExchangeRateDebugService` adds extra menu shortcuts to them. Amounts are sent as numbers with the currency (`TableDataCurrency`) and formatted by the web client using `iso_data/currencies.js`, so sorting, filtering and exports work on the numbers
 - Stats and perf monitoring
 
 ## Key components

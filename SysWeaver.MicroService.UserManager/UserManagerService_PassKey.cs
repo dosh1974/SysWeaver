@@ -86,13 +86,16 @@ namespace SysWeaver.MicroService
     }
 
     /// <summary>
-    /// Thrown when trying to remove the last way a user can sign in
+    /// Thrown when trying to remove the last way a user can sign in (answered 409 with the message as the reason)
     /// </summary>
-    public sealed class LastSignInMethodException : Exception
+    public sealed class LastSignInMethodException : Exception, IHttpRefusal
     {
-        public LastSignInMethodException() : base("The last sign in method of a user can't be removed!")
+        public LastSignInMethodException() : base("The last way to sign in can't be removed: add a password or another passkey first")
         {
         }
+
+        /// <inheritdoc/>
+        public int ResponseCode => 409;
     }
 
 
@@ -130,7 +133,7 @@ namespace SysWeaver.MicroService
             return (await AddAction(new InternalNewPasswordData
             {
                 UserId = id,
-            }, ActionTokenGetResetChallenge, DateTime.UtcNow + SharePasswordTimeout).ConfigureAwait(false)).Item1;
+            }, ActionTokenGetResetChallenge, UserSubject(id), DateTime.UtcNow + SharePasswordTimeout).ConfigureAwait(false)).Item1;
         }
 
         /// <summary>
@@ -312,7 +315,11 @@ namespace SysWeaver.MicroService
             if (user == null)
                 throw new NoUserLoggedInException();
             using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
             await c.InsertAsync(ToDb(credential, user.Id, DateTime.UtcNow)).ConfigureAwait(false);
+            //  A credential was added: the links whose meaning depends on the old state stop working (see ActionTokenGroups)
+            await RevokeOnEvent(c, user.Id, AccountEvents.PassKeyAdded).ConfigureAwait(false);
+            await tr.CommitAsync().ConfigureAwait(false);
             return true;
         }
 
@@ -327,7 +334,7 @@ namespace SysWeaver.MicroService
         {
             var id = (await GetPassKeyTokenAction(token, context).ConfigureAwait(false)).Item2.UserId;
             using var c = await Db.GetAsync().ConfigureAwait(false);
-            return (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw new UserNoLongerExistException(id);
+            return (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw await NoAuthException(c, id).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -344,9 +351,11 @@ namespace SysWeaver.MicroService
             var id = action.Item2.UserId;
             using var c = await Db.GetAsync().ConfigureAwait(false);
             using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
-            var auth = (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw new UserNoLongerExistException(id);
+            var auth = (await InternalAuthUser(c, id).ConfigureAwait(false)) ?? throw await NoAuthException(c, id).ConfigureAwait(false);
             await c.InsertAsync(ToDb(credential, id, DateTime.UtcNow)).ConfigureAwait(false);
             await DeleteAction(c, action.Item1, action.Item3, context).ConfigureAwait(false);
+            //  A credential was added with a link: the other links of the user stop working (see ActionTokenGroups)
+            await RevokeOnEvent(c, id, AccountEvents.PassKeyAdded).ConfigureAwait(false);
             await tr.CommitAsync().ConfigureAwait(false);
             return auth;
         }
@@ -359,7 +368,7 @@ namespace SysWeaver.MicroService
                 if ((d != null) && ((d.Item2?.UserId ?? 0) != 0))
                     return Tuple.Create(d.Item1, d.Item2, type);
             }
-            throw new TokenExpiredException();
+            throw Refused(token);
         }
 
         /// <summary>
@@ -421,6 +430,8 @@ namespace SysWeaver.MicroService
                     throw new LastSignInMethodException();
             }
             await c.DeleteAllAsync<DbAuthPassKey>(x => (x.CredentialId == credentialId) && (x.UserId == uid)).ConfigureAwait(false);
+            //  A credential was removed: the links whose meaning depends on the old state stop working (see ActionTokenGroups)
+            await RevokeOnEvent(c, uid, AccountEvents.PassKeyRemoved).ConfigureAwait(false);
             await tr.CommitAsync().ConfigureAwait(false);
             return true;
         }

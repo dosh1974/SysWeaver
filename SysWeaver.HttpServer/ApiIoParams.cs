@@ -209,6 +209,17 @@ namespace SysWeaver.Net
 
         static readonly IReadOnlyDictionary<Char, ValueTuple<ICompType, bool>> Decomp = GetDecomp();
 
+        /// <summary>
+        /// The type characters of a binary query string argument ("_" + char + base64url data, see <see cref="Get{T}(ReadOnlySpan{char})"/>)
+        /// and the HTTP code of their compression (null = uncompressed). Lower case chars only: the upper case char is the same compression
+        /// with a named serializer.
+        /// </summary>
+        public static readonly IReadOnlyList<KeyValuePair<Char, String>> BinaryArgTypes = Decomp
+            .Where(x => Char.IsLower(x.Key))
+            .Select(x => new KeyValuePair<Char, String>(x.Key, x.Value.Item1?.HttpCode))
+            .OrderBy(x => x.Value == null ? 0 : 1).ThenBy(x => x.Key)
+            .ToArray();
+
         static readonly IReadOnlyDictionary<Char, String> Formats = new Dictionary<Char, String>()
         {
             { '{', JsonMime },
@@ -413,7 +424,7 @@ namespace SysWeaver.Net
         const int MaxInitialCapacity = 64 * 1024;
 
         static void ThrowTooLarge(long max)
-            => throw new HttpResponseException(413, String.Concat("Content Too Large - The request body exceeds the limit of ", max, " bytes [413]"));
+            => throw new HttpResponseException(413, String.Concat("The data sent is too large: the limit is ", max, " bytes"));
 
         /// <summary>
         /// Read the entire request body into pooled memory, enforcing <see cref="MaxRequestSize"/>.

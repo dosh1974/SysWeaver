@@ -1158,7 +1158,7 @@ namespace SysWeaver.Remote
                                 }
                                 var text = e.GetString(data.Span);
                                 if (text.Length > 0)
-                                    fromText = new HttpResponseException(icode, text);
+                                    fromText = new HttpResponseException(icode, text) { IsReason = false };
                             }
                         }
                     }
@@ -1171,7 +1171,7 @@ namespace SysWeaver.Remote
                             ce?.Invoke(rid, fromText, icode, null, ref data);
                         throw fromText;
                     }
-                    var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']'));
+                    var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']')) { IsReason = false };
                     if (ce != null)
                         ce?.Invoke(rid, sex, icode, null, ref data);
                     throw sex;
@@ -1234,7 +1234,7 @@ namespace SysWeaver.Remote
                                 }
                                 var text = e.GetString(data.Span);
                                 if (text.Length > 0)
-                                    fromText = new HttpResponseException(icode, text);
+                                    fromText = new HttpResponseException(icode, text) { IsReason = false };
                             }
                         }
                     }
@@ -1247,7 +1247,7 @@ namespace SysWeaver.Remote
                             ce?.Invoke(rid, fromText, icode, null, ref data);
                         throw fromText;
                     }
-                    var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']'));
+                    var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']')) { IsReason = false };
                     if (ce != null)
                         ce?.Invoke(rid, sex, icode, null, ref data);
                     throw sex;

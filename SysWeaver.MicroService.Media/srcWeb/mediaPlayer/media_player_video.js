@@ -6,7 +6,7 @@
  * (MediaTypes.Video).
  * Globals defined: MediaPlayerParamsVideo, MediaPlayerVideo.
  * Dependencies: MediaPlayerTools (media_player_tools.js: InitBase, ApplyClip default, OnCacheComplete), and the
- * common.js globals waitEvent2 and delay. media_player_audio.js is a near line-for-line copy of this file.
+ * MediaPlayerTools.waitEvent2 and MediaPlayerTools.delay. media_player_audio.js is a near line-for-line copy of this file.
  */
 
 /**
@@ -172,7 +172,7 @@ class MediaPlayerVideo {
 
     /**
      * Loads a media URL into a <video> element: appends a <source src=c> child, waits for "loadeddata" or "error"
-     * (common.js waitEvent2), then polls every 100 ms until readyState >= 3 (HAVE_FUTURE_DATA).
+     * (MediaPlayerTools.waitEvent2), then polls every 100 ms until readyState >= 3 (HAVE_FUTURE_DATA).
      * The commented-out block at the start is an inactive blob-cache implementation (VideoCache).
      * @param {HTMLVideoElement} e - The video element to load into.
      * @param {string} c - The source URL.
@@ -208,17 +208,19 @@ class MediaPlayerVideo {
         }
         */
 
-        const res = await waitEvent2(e, "loadeddata", "error", () => {
+        const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => {
             const source = document.createElement('source');
             source.src = c;
             //source.type = "video/webm";
+            //  A failed <source> fires "error" on the source only (it does not bubble): without this a broken url waited forever
+            source.addEventListener("error", () => e.dispatchEvent(new Event("error")), { once: true });
             e.appendChild(source);
         });
         if (res.type == "error") {
             return false;
         }
         while (e.readyState < 3)
-            await delay(100);
+            await MediaPlayerTools.delay(100);
         return true;
     }
 
@@ -319,7 +321,7 @@ class MediaPlayerVideo {
         n.volume = e.volume;
         if (!await MediaPlayerVideo.LoadVideo(n, t.Url)) {
             t.Paused = true;
-            const res = await waitEvent2(e, "loadeddata", "error", () => e.load());
+            const res = await MediaPlayerTools.waitEvent2(e, "loadeddata", "error", () => e.load());
             if (res.type == "error")
                 return false;
             t.Paused = true;
@@ -388,6 +390,29 @@ class MediaPlayerVideo {
     }
 
     /**
+     * The playback speed (1 = normal).
+     * @type {number}
+     */
+    Rate = 1;
+
+    /**
+     * The fastest speed SetRate takes (the browsers play media up to 16 times faster).
+     * @type {number}
+     */
+    MaxRate = 16;
+
+    /**
+     * Set the playback speed (element.playbackRate; the pitch of the sound is kept).
+     * @param {number} rate The speed, 1 = normal (clamped to 0.0625..MaxRate).
+     * @returns {Promise<void>}
+     */
+    async SetRate(rate) {
+        const r = Math.max(0.0625, Math.min(this.MaxRate, rate || 1));
+        this.Rate = r;
+        this.Element.playbackRate = r;
+    }
+
+    /**
      * Enables looping (Looping = element.loop = true). No-op when already looping.
      * @returns {Promise<void>}
      */
@@ -413,3 +438,12 @@ class MediaPlayerVideo {
     }
 
 }
+
+/** Publish the classes of this file under the new namespace Sw.Media (the global class names stay the public legacy API). */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.MediaPlayerParamsVideo = MediaPlayerParamsVideo;
+    m.MediaPlayerVideo = MediaPlayerVideo;
+})();

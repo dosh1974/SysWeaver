@@ -13,7 +13,7 @@
 
 Collage shaders sample the collage image (`tex`) and animate its tiles using `time`, `resolution`, `mouse` and `scroll` uniforms. The `MediaService.GetCollageEffects` API lists them. The text effect page in [`../textEffects/`](../textEffects/README.md) also uses them when it renders several texts as a collage.
 
-[`index.html`](index.html) reads `Effect` (default `Stripes`) and `Image` from the URL, merges optional `.json` side files for the effect and the image (a collage image comes with a tile layout like [`../DemoCollage.json`](../DemoCollage.json)), and shows the result in an iframe of `../MediaPreview.html` (media type 0, Image). [`../CollageEffectsLib.html`](../CollageEffectsLib.html) is the gallery.
+[`index.html`](index.html) reads `Effect` (default `Stripes`) and `Image` from the URL, merges optional `.json` side files for the effect and the image (a collage image comes with a tile layout like [`../DemoCollage.json`](../DemoCollage.json)), and shows the result in an iframe of `../MediaPreview.html` (media type 0, Image; page logic: the shared [`../effectPage.js`](../effectPage.js), `data-effect-page="collage"`; the image url is url encoded). [`../CollageEffectsLib.html`](../CollageEffectsLib.html) is the gallery.
 
 ## Contents
 

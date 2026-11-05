@@ -586,7 +586,7 @@ namespace SysWeaver.TextMessage
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiRequestCache(1)]
-        [WebMenuTable(null, "Messages", "WhatsApp", "The list of WhatsApp messages")]
+        [WebMenuTable(null, "WhatsAppMessages", "WhatsApp messages", "The list of WhatsApp messages")]
         public TableData MessageTable(TableDataRequest request)
             => TableDataTools.Get(request, 2000, Messages, "WhatsApp messages");
 

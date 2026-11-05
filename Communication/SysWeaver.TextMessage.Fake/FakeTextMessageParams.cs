@@ -31,6 +31,7 @@ namespace SysWeaver.TextMessage
         /// The phone number that messages are sent from.
         /// Default: "+1 555 0100".
         /// </summary>
+        [EditType(EditTypes.Phone)]
         public String From = "+1 555 0100";
 
         /// <summary>
@@ -55,6 +56,13 @@ namespace SysWeaver.TextMessage
         /// Default: 200.
         /// </summary>
         public int StatusDelay = 200;
+
+        /// <summary>
+        /// The auth required to use the API's (and see the menu items) of this service, the fake messages can contain login codes etc.
+        /// null = no auth (anyone, as the original: the services that send through it and the testers' pages call it without signing in), "" = any signed in user, else a comma separated list of tokens (one is needed), ex: Roles.OpsDev.
+        /// Default: null.
+        /// </summary>
+        public String Auth;
     }
 
     /// <summary>

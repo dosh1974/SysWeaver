@@ -38,7 +38,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             if ((ret.Length == 0) && (res.StatusCode != System.Net.HttpStatusCode.OK))
                 return default;
@@ -61,7 +61,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             return await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
         }
 
@@ -83,7 +83,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             await onRaw(res, ret).ConfigureAwait(false);
             if ((ret.Length == 0) && (res.StatusCode != System.Net.HttpStatusCode.OK))
@@ -108,7 +108,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             await onRaw(res, ret).ConfigureAwait(false);
             return ret;
@@ -130,7 +130,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             return ret;
         }
@@ -150,7 +150,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             var ret = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             await onRaw(res, ret).ConfigureAwait(false);
             return ret;
@@ -174,7 +174,7 @@ namespace SysWeaver
             message.Content = c;
             using var res = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             var cc = res.Content;
             using var stream = await cc.ReadAsStreamAsync().ConfigureAwait(false);
             await onResponse(stream, cc.Headers.ContentLength).ConfigureAwait(false);
@@ -196,7 +196,7 @@ namespace SysWeaver
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
             using var res = await client.PostAsync(url, c).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
-                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]");
+                throw new HttpResponseException((int)res.StatusCode, "Request failed with: " + res.StatusCode + " [" + (int)res.StatusCode + "]") { IsReason = false };
             return await onResponse(res).ConfigureAwait(false);
         }
 

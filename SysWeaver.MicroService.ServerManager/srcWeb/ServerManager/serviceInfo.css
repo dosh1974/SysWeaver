@@ -1,605 +1,159 @@
 ﻿/*
- * Styles of the ServerManager "service info" page (serviceInfo.html), loaded by a <link> after ../common/theme.css
- * and ../app/application.css. Plain static CSS (not templated).
- * Layout: a centred content column (--MaxW) over a fixed shadow panel (si-bg), the title bar (si-name), the state
- * pills (si-stats / si-state), the control and debug button rows (si-servicebuttons / si-debugbuttons), the two
- * chart tiles (si-graphs / si-graph), the upload drop targets (si-uploads), the config file grids (si-configs)
- * and the versions grid (si-versions), plus the si-icon-* mask icons used by the common.js Button elements.
- * Static placeholders come from serviceInfo.html; grid cells are created by serviceInfo.js.
- * Classes set by script: ViewOnly / TopWindow on body, Ok / Warning / Error / Hide on si-state, Show on
- * si-uploads / si-configs / si-file-state, Active on si-version-active (serviceInfo.js); KeyClick (common.js
- * keyboardClick); Dragging / Selecting / Uploading (common/fileUploader.js). sysweaver-button is the element
- * created by common.js Button.
- * Theme variables used (from common/theme.css): --ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc2,
- * --ThemeAcc250, --ThemeBackground, --ThemeOk, --ThemeWarning, --ThemeError, --ThemeRad, --ThemeRadInp,
- * --ThemeFadeDuration, --ThemeFontMono. No @keyframes or [data-theme] variants; @media breakpoints for phones
- * (max-width 600px) and portrait (max-aspect-ratio 2/3).
+ * serviceInfo.css - styles of the ServerManager "service info" page (serviceInfo.html), loaded after ../common/theme.css,
+ * ../sw/ui.css, smShared.css (chart tiles, line chart cards, upload buttons) and server.css (the chart heights of .sm-linecard).
+ * Plain static css, Sw tokens only.
+ *
+ * The page anatomy (main.si-page.sw-page-dash, header .sw-ph with the status badge and the control verbs, facts strip .sw-facts, KPI
+ * tiles .sw-kpi, cards .sw-card, row lists .sw-rows) comes from the shared ui library (ui/page.css, built by serviceInfo.js with
+ * Sw.PageLayout / Sw.Facts / Sw.Kpi / Sw.Card). Here only the rows of the config file and version lists (li.si-row):
+ *  - files: .si-file-icon (the file type icon), .si-file-name (a link styled button: opens the text editor), a "Backup" badge, the
+ *    size / time in .sw-rows-meta, .si-file-menu (the row menu button),
+ *  - versions: .si-version-uploaded (link: opens versionInfo.html), an "Active" badge, user / machine / comment (.si-version-text),
+ *    the last used time.
+ * body.ViewOnly (url parameter v): no pointer interaction. Flat: no shadows, no gradients.
  */
 
-/* ===== Page base ===== */
-
-/* --MaxW: width of the content column (100ch); used by si-bg and all content rows / grids. */
-:root {
-    --MaxW: 100ch;
-}
-
-/* Border-box sizing for all elements. */
-*
-{
-    box-sizing: border-box;
-}
-
-/* Full-width body without margin; 20em bottom padding leaves room below the last grid. */
-body {
-    padding: 0;
-    margin: 0;
-    width: 100%;
-    padding-bottom: 20em;
-}
-
-    /* body.ViewOnly (URL param v, set by serviceInfoMain): disables all pointer interaction, no bottom padding. */
-    body.ViewOnly {
-        pointer-events: none;
-        padding-bottom: 0;
-    }
-
-/*
- * si-bg: static placeholder; a fixed, horizontally centred panel (--MaxW + 2em wide, full height) with a
- * --ThemeMain25 shadow, behind the content (z-index -1).
- */
-si-bg {
-    position: fixed;
-    display: block;
-    left: 50%;
-    top: 0;
-    width: calc(var(--MaxW) + 2em);
-    bottom: 0;
-    transform: translateX(-50%);
-    box-shadow: 0 0 32px var(--ThemeMain25);
-    z-index: -1;
-}
-
-/* ===== Title bar (si-name) ===== */
-
-/* si-name: bold centred title bar in --ThemeAcc2 showing the service name; hidden by default. */
-si-name
-{
-    width: 100%;
-    text-align: center;
-    padding: 0.5em 0.25em;
-    font-weight: bold;
-    font-size: 125%;
-    margin-bottom: 0.5em;
-    background-color: var(--ThemeAcc2);
-    color: var(--ThemeBackground);
-    display: none;
-}
-
-/* body.TopWindow (added by serviceInfoMain when window.IsTop, i.e. not embedded in the app shell) shows the title bar. */
-body.TopWindow si-name {
-    display: block;
-}
-
-/* Phones (max-width 600px): square corners for the title bar. */
-@media screen and (max-width: 600px) {
-    si-name {
-        border-radius: 0;
-    }
-}
-
-/* ===== State pills (si-stats / si-state) ===== */
-
-/* si-stats: centred wrapping flex row (max --MaxW) holding the five si-state pills. */
-si-stats {
-    max-width: var(--MaxW);
-    margin: 0.5em auto;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-evenly;
-}
-
-/* si-state: bold rounded pill, --ThemeBackground text on --ThemeMain (status, PID, CPU, memory, total CPU time). */
-si-state {
-    display: inline-flex;
-    font-weight: bold;
-    margin: 8px 8px 8px 0;
-    padding: 0.5em 1em;
-    background-color: var(--ThemeMain);
-    color: var(--ThemeBackground);
-    border-radius: var(--ThemeRad);
-}
-
-
-    /* Status colours Ok / Warning / Error, set on si-state[0] from stateMap in update() (serviceInfo.js). */
-    si-state.Ok {
-        background-color: var(--ThemeOk);
-    }
-
-    si-state.Warning {
-        background-color: var(--ThemeWarning);
-    }
-
-    si-state.Error {
-        background-color: var(--ThemeError);
-    }
-
-    /* si-state.Hide: hides si-state[1..4] when the service has no process (ProcId 0). */
-    si-state.Hide {
-        display: none;
-    }
-
-    /*
-     * si-state.KeyClick: clickable CPU / memory pills (KeyClick added by common.js keyboardClick, not in view-only
-     * mode): pointer; --ThemeBackground border on hover, --ThemeAcc1 outline on focus.
-     */
-    si-state.KeyClick {
-        cursor: pointer;
-        border: 2px solid transparent;
-        outline: 2px solid transparent;
-        transition: border linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-    }
-
-        si-state.KeyClick:hover {
-            border: 2px solid var(--ThemeBackground);
-        }
-
-        si-state.KeyClick:focus {
-            outline: 2px solid var(--ThemeAcc1);
-        }
-
-
-/* ===== Button rows ===== */
-
-/* si-servicebuttons: centred wrapping flex row (max --MaxW) of the service control buttons (Restart ... Kill). */
-si-servicebuttons {
-    max-width: var(--MaxW);
-    margin: 0.5em auto;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-evenly;
-}
-
-
-    /* sysweaver-button (element created by common.js Button): 8px spacing between the control buttons. */
-    si-servicebuttons sysweaver-button{
-        margin: 8px 8px 8px 0;
-
-    }
-
-/* ===== Graphs (si-graphs / si-graph) ===== */
-
-/* si-graphs: block container (max --MaxW) of the two chart tiles. */
-si-graphs {
-    display: block;
-    padding: 0.5em 0.25em;
-    max-width: var(--MaxW);
-    margin: 0.5em auto;
-}
-
-/* Phones (max-width 600px): no side padding for si-graphs. */
-@media screen and (max-width: 600px) {
-    si-graphs {
-        padding-left: 0;
-        padding-right: 0;
-    }
-}
-
-/*
- * si-graph: half-width chart tile (two side by side: 50% minus margins, aspect 38/40), rounded, pointer
- * (click handler from serviceInfoMain opens server_metrics.html). Focus: --ThemeAcc1 outline; hover: --ThemeAcc250 border.
- */
-si-graph {
-    width: calc(50% - 1.5em);
-    aspect-ratio: 38 / 40;
-    padding: 0;
-    margin: 0.5em;
-    display: inline-block;
-    border-radius: var(--ThemeRad);
-    cursor: pointer;
-    border: 2px solid transparent;
-    outline: 3px solid transparent;
-    transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
-    /*background-color: var(--ThemeBackground);
-    box-shadow: 0 0 32px rgba(var(--ThemeMainRGB), 0.05);*/
-}
-
-    si-graph:focus {
-        outline: 3px solid var(--ThemeAcc1);
-    }
-
-si-graph:hover
-{
-    border: 2px solid var(--ThemeAcc250);
-}
-
-/* Portrait */
-/* Portrait screens (max-aspect-ratio 2/3): si-graph full width, no side margins or radius (stacked). */
-@media (max-aspect-ratio: 2/3) {
-    si-graph {
-        width: 100%;
-        margin-left: 0;
-        margin-right: 0;
-        border-radius: 0;
-    }
-}
-
-
-/* si-text: 24px centred text block; not created by the ServerManager HTML or JS (unused). */
-si-text
-{
-    display: block;
-    height: 24px;
-    text-align: center;
-}
-
-
-/* The chart iframe fills the tile; pointer-events none so clicks reach the si-graph element. */
-si-graph iframe {
-    display: block;
-    border: none;
-    width: 100%;
-    height: 100%;
+body.ViewOnly {
     pointer-events: none;
 }
 
-/* si-debugbuttons: centred wrapping flex row (max --MaxW) of the debug buttons (Explore, View log, Deleted). */
-si-debugbuttons {
-    max-width: var(--MaxW);
-    margin: 0.5em auto;
+/* ===== Rows ===== */
+
+.si-file-icon {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: center / contain no-repeat;
+}
+
+/* Clickable names / times: text links (buttons) */
+.si-link {
+    margin: 0;
+    padding: 0 var(--sw-space-1);
+    min-height: 1.75rem;
+    border: none;
+    border-radius: var(--sw-radius-sm);
+    background: transparent;
+    color: var(--sw-text-accent);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+@media (hover: hover) {
+    .si-link:hover {
+        background: var(--sw-hover);
+        text-decoration: underline;
+    }
+}
+
+    .si-link:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 0;
+    }
+
+.si-file-size, .si-file-time, .si-version-last {
+    font-variant-numeric: tabular-nums;
+}
+
+.si-file-menu {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    margin: 0 calc(-1 * var(--sw-space-2)) 0 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--sw-radius);
+    background: transparent;
+    color: var(--sw-text-2);
+    cursor: pointer;
+}
+
+@media (hover: hover) {
+    .si-file-menu:hover {
+        background: var(--sw-hover);
+        color: var(--sw-text);
+    }
+}
+
+    .si-file-menu:focus-visible {
+        outline: 2px solid var(--sw-focus);
+    }
+
+    .si-file-menu .sw-icon {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+
+/* Versions: the upload time first (fixed width), then user / machine / comment */
+.si-version-uploaded {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.si-version-text {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: space-evenly;
+    gap: var(--sw-space-3);
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--sw-text-2);
 }
 
+    .si-version-text > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 
-
-
-/* ===== Upload drop targets (si-uploads) ===== */
-
-/* si-uploads: 64x64px upload drop target (fileUploaderSetup in update()); hidden until it gets Show. */
-si-uploads {
-    display: none;
-    width: 64px;
-    height: 64px;
-    margin: auto;
-    border: 2px solid transparent;
-    outline: 2px solid transparent;
-    transition: border linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-    position: relative;
-    border-radius: 8px;
-    cursor: pointer;
+.si-version-comment {
+    color: var(--sw-text);
 }
 
-    /* si-uploads.Show: added by update() on the first poll when the config list exists (not in view-only mode). */
-    si-uploads.Show {
-        display: block;
-    }
-
-    /* Keyboard focus outline. */
-    si-uploads:focus {
-        outline: 2px solid var(--ThemeAcc1);
-    }
-
-    /* The icon: a ::after overlay filled with --ThemeMain and masked with upload.svg; 0.8 opacity, 1 on hover. */
-    si-uploads:after {
-        transition: opacity linear var(--ThemeFadeDuration);
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        background-color: var(--ThemeMain);
-        mask-repeat: no-repeat;
-        mask-size: contain;
-        mask-image: url("../icons/upload.svg");
-        opacity: 0.8;
-    }
-
-    si-uploads:hover:after {
-        opacity: 1;
-    }
-
-
-    /* si-uploads.Dragging (fileUploader.js): dashed --ThemeAcc1 border while files are dragged over the target. */
-    si-uploads.Dragging {
-        border: 2px dashed var(--ThemeAcc1);
-    }
-
-    /* si-uploads.Selecting (fileUploader.js): disc icon at half opacity while the file picker is open. */
-    si-uploads.Selecting:after {
-        opacity: 0.5;
-        mask-image: url("../icons/disc.svg");
-    }
-
-    /* si-uploads.Uploading (fileUploader.js): loading icon at half opacity while files are uploaded. */
-    si-uploads.Uploading:after {
-        opacity: 0.5;
-        mask-image: url("../icons/Loading.svg");
-    }
-
-
-/* ===== Config file grids (si-configs) ===== */
-
-/*
- * si-configs: 5-column grid (state star, icon, name, size, time), bordered, horizontally scrollable, max --MaxW;
- * hidden until it gets Show (added by update() when data.Configs / data.MasterConfigs exist).
- */
-si-configs {
-    display: none;
-    grid-template-columns: 28px 28px auto min-content min-content;
-    grid-gap: 0.25em 0.5em;
-    max-width: var(--MaxW);
-    margin: 1.5em auto 0.25em auto;
-    border: 1px solid var(--ThemeMain);
-    border-radius: var(--ThemeRad);
-    padding-bottom: 0.25em;
-    white-space: nowrap;
-    overflow-x: auto;
+/* The folder paths in the Files card wrap (long Windows paths) */
+.si-page .sw-fact .sw-mono {
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    overflow-wrap: anywhere;
 }
 
-    si-configs.Show {
-        display: grid;
-    }
-
-/* Phones (max-width 600px): si-configs full-bleed (no side margins, radius or side borders). */
-@media screen and (max-width: 600px) {
-    si-configs {
-        margin-left: 0;
-        margin-right: 0;
-        border-radius: 0;
-        border-left: none;
-        border-right: none;
-    }
+/* Touch: taller targets */
+.SwMobile .si-link, .SwMobile .si-file-menu {
+    min-height: var(--sw-control-h);
+    min-width: var(--sw-control-h);
 }
 
-
-
-/* si-file-header: header row spanning all 5 columns, uppercase, --ThemeMain background (created by updateFileList). */
-si-file-header {
-    grid-column-start: 1;
-    grid-column-end: 6;
-    text-transform: uppercase;
-    background-color: var(--ThemeMain);
-    color: var(--ThemeBackground);
-    padding: 1px 1em;
-    font-weight: bold;
-}
-
-
-/*
- * si-file-icon: column 2, 28x24 file type icon (background image ../icons/ext/<ext>.svg set inline by updateFileList);
- * pointer, opens the file options menu; lifts 2px on hover, --ThemeAcc1 outline on focus.
- */
-si-file-icon {
-    grid-column: 2;
-    width: 28px;
-    height: 24px;
-    background-repeat: no-repeat;
-    background-position: center center;
-    position: relative;
-    cursor: pointer;
-    outline: 2px solid transparent;
-    transition: transform linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-    border-radius: var(--ThemeRadInp);
-}
-
-    si-file-icon:hover {
-        transform: translateY(-2px);
+/* Phones: the size / time of a file and the version texts on their own line (the name keeps the width); the file facts in one column */
+@media (max-width: 599px) {
+    .si-files > li.si-row {
+        flex-wrap: wrap;
+        row-gap: 0;
     }
 
-    si-file-icon:focus {
-        outline: 2px solid var(--ThemeAcc1);
-    }
-
-/*
- * si-file-state: column 1, a fav_on.svg star (mask icon filled with --ThemeAcc1); shown only with Show, which
- * updateFileList adds when the file is not a backup (isBackup).
- */
-si-file-state {
-    grid-column: 1;
-    width: 28px;
-    height: 24px;
-    background-color: var(--ThemeAcc1);
-    mask-repeat: no-repeat;
-    mask-position: center center;
-    mask-image: url('../icons/fav_on.svg');
-    display: none;
-}
-
-    si-file-state.Show {
-        display: inline-block;
-    }
-
-    /* si-file-name: column 3, link-like file name in --ThemeAcc2 (click opens the text editor); inverted on hover, outline on focus. */
-    si-file-name {
-        grid-column: 3;
-        line-height: 24px;
-        border-radius: var(--ThemeRadInp);
-        padding: 0 0.25em;
-        cursor: pointer;
-        transition: background-color linear var(--ThemeFadeDuration), color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-        outline: 3px solid transparent;
-        color: var(--ThemeAcc2);
-    }
-
-        si-file-name:focus {
-            outline: 3px solid var(--ThemeAcc1);
+        .si-files > li.si-row > .si-file-name {
+            flex: 1 1 0;
         }
 
-        si-file-name:hover {
-            background-color: var(--ThemeAcc2);
-            color: var(--ThemeBackground);
+        .si-files > li.si-row > .sw-rows-meta {
+            order: 3;
+            flex-basis: 100%;
+            margin-left: 0;
+            padding-left: calc(1.25rem + var(--sw-space-3));
         }
 
-
-    /* si-file-size: column 4, right-aligned monospace byte size in --ThemeAcc1 (copy-on-click). */
-    si-file-size {
-        grid-column: 4;
-        text-align: right;
-        font: var(--ThemeFontMono);
-        line-height: 24px;
-        color: var(--ThemeAcc1);
+    /* one fact per row (ui/page.css: the facts strip wraps its cells with flex) */
+    .si-page .sw-card .sw-facts > div {
+        flex-basis: 100%;
     }
 
-    /* si-file-time: column 5, right-aligned monospace last-modified time (copy-on-click). */
-    si-file-time {
-        grid-column: 5;
-        font: var(--ThemeFontMono);
-        line-height: 24px;
-        text-align: right;
-        padding-right: 1em;
+    .si-versions > li.si-row {
+        flex-wrap: wrap;
     }
 
-
-/* ===== Versions grid (si-versions) ===== */
-
-/* si-versions: 6-column grid (active, uploaded, user, machine, comment, last used), bordered, horizontally scrollable. */
-si-versions {
-    display: grid;
-    grid-template-columns: 28px auto auto auto max-content auto;
-    grid-gap: 0.25em 0.5em;
-    max-width: var(--MaxW);
-    margin: 1.5em auto 0.25em auto;
-    border: 1px solid var(--ThemeMain);
-    border-radius: var(--ThemeRad);
-    padding-bottom: 0.25em;
-    white-space: nowrap;
-    overflow-x: auto;
-}
-
-/* Phones (max-width 600px): si-versions full-bleed (no side margins, radius or side borders). */
-@media screen and (max-width: 600px) {
-    si-versions {
-        margin-left: 0;
-        margin-right: 0;
-        border-radius: 0;
-        border-left: none;
-        border-right: none;
+    .si-version-text {
+        flex-basis: 100%;
+        order: 3;
     }
-}
-
-/* si-version-header: header row spanning all 6 columns, uppercase, --ThemeMain background. */
-si-version-header {
-    grid-column-start: 1;
-    grid-column-end: 7;
-    text-transform: uppercase;
-    background-color: var(--ThemeMain);
-    color: var(--ThemeBackground);
-    padding: 1px 1em;
-    font-weight: bold;
-}
-
-/* si-version-active: column 1; with class Active (version IsActive, set by update()) shows a fav_on.svg star mask in --ThemeAcc1. */
-si-version-active {
-    grid-column: 1;
-    width: 28px;
-    height: 24px;
-    mask-repeat: no-repeat;
-    mask-position: center center;
-}
-
-    si-version-active.Active {
-        background-color: var(--ThemeAcc1);
-        mask-image: url("../icons/fav_on.svg");
-    }
-
-/* si-version-uploaded: column 2, clickable monospace upload time in --ThemeAcc2 (opens versionInfo.html); inverted on hover, outline on focus. */
-si-version-uploaded {
-    grid-column: 2;
-    font: var(--ThemeFontMono);
-    line-height: 24px;
-    text-align: right;
-    border-radius: var(--ThemeRadInp);
-    padding: 0 0.25em;
-    cursor: pointer;
-    transition: background-color linear var(--ThemeFadeDuration), color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
-    outline: 3px solid transparent;
-    color: var(--ThemeAcc2);
-}
-
-    si-version-uploaded:focus {
-        outline: 3px solid var(--ThemeAcc1);
-    }
-
-    si-version-uploaded:hover {
-        background-color: var(--ThemeAcc2);
-        color: var(--ThemeBackground);
-    }
-
-
-
-/*
- * Columns 3-6 (all copy-on-click): si-version-user (--ThemeAcc1), si-version-machine, si-version-comment
- * (--ThemeAcc1) and si-version-last (right-aligned monospace last-used time).
- */
-si-version-user {
-    color: var(--ThemeAcc1);
-    grid-column: 3;
-    line-height: 24px;
-}
-
-si-version-machine {
-    grid-column: 4;
-    line-height: 24px;
-}
-
-si-version-comment {
-    color: var(--ThemeAcc1);
-    grid-column: 5;
-    line-height: 24px;
-}
-
-si-version-last {
-    grid-column: 6;
-    font: var(--ThemeFontMono);
-    line-height: 24px;
-    text-align: right;
-    padding-right: 1em;
-}
-
-
-
-
-/* ===== Button icons (si-icon-*) ===== */
-
-/*
- * Mask images for the icon classes passed to common.js Button (which fills the masked element with the theme
- * colour): si-icon-restart (reload), si-icon-pause, si-icon-resume and si-icon-start (play), si-icon-stop,
- * si-icon-disable (close), si-icon-explore, si-icon-log (notes) and si-icon-kill (skull).
- */
-.si-icon-restart {
-    mask-image: url("../icons/reload.svg");
-}
-
-.si-icon-pause {
-    mask-image: url("../icons/preview_pause.svg");
-}
-
-.si-icon-resume {
-    mask-image: url("../icons/preview_play.svg");
-}
-
-.si-icon-stop {
-    mask-image: url("../icons/preview_stop.svg");
-}
-
-.si-icon-start {
-    mask-image: url("../icons/preview_play.svg");
-}
-
-.si-icon-disable {
-    mask-image: url("../icons/close.svg");
-}
-
-.si-icon-explore {
-    mask-image: url("../icons/explore.svg");
-}
-
-.si-icon-log {
-    mask-image: url("../icons/notes.svg");
-}
-
-.si-icon-kill {
-    mask-image: url("../icons/skull.svg");
 }

@@ -6,7 +6,7 @@
     public interface IMediaData
     {
         /// <summary>
-        /// Validate the paramaters (set them to valid bounds)
+        /// Validate the parameters (set them to valid bounds)
         /// </summary>
         void Validate();
     }

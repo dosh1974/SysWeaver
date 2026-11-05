@@ -27,7 +27,7 @@ flowchart LR
 ## Key features
 
 - `GetTypeInfo` / `GetDefaultInstance`: type descriptions (members, flags, ranges, documentation) and default instances, cached per type
-- A type information page (`edit/type.html`) linked from type names in tables, and `GetApiInfo` for detailed API documentation (debug)
+- A type information page (`edit/type.html`) linked from type names in tables, and `GetApiInfo` for detailed API documentation (debug); `GetApiIoInfo` (`Api/debug/GetApiIoInfo`, Dev) lists the enabled input / output serializers, the request compression methods, the binary GET argument types and the size limits (`ApiIoInfo`, used by explore/apihelp.html and the Curl tab of explore/api.html)
 - A text/code editor (`edit/text.html`, based on Ace) registered as the extension editor for common text file types (`.txt`, `.json`, `.cs`, `.js`, `.xml`, `.log`, …)
 - `IsoDataService` registers the ISO data module (languages, countries, currencies, phone prefixes) used by the editor's lookups
 

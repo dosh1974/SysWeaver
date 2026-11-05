@@ -322,12 +322,49 @@ namespace SysWeaver.Net
 
         readonly ExceptionTracker DispatchErrors = new ExceptionTracker();
 
+        /// <summary>
+        /// Remote requests refused because they reached a local only prefix (see <see cref="IsLocalOnlyPrefix"/>).
+        /// </summary>
+        readonly ExceptionTracker LocalOnlyRefused = new ExceptionTracker();
+
         public override IEnumerable<Stats> GetStats()
         {
             foreach (var x in base.GetStats())
                 yield return x;
             foreach (var x in DispatchErrors.GetStats(nameof(NetHttpServer), "DispatchEx."))
                 yield return x;
+            foreach (var x in LocalOnlyRefused.GetStats(nameof(NetHttpServer), "LocalOnlyRefused."))
+                yield return x;
+        }
+
+        readonly System.Collections.Concurrent.ConcurrentDictionary<String, bool> LocalOnlyPrefixes = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// True if the prefix only listens on this machine: its host is "localhost" (or a sub domain of it) or a loopback address (ex: "http://localhost:8080/", "http://127.0.0.1:8080/", "http://[::1]:8080/").
+        /// </summary>
+        /// <param name="prefix">The prefix of the request</param>
+        /// <returns>True if only local connections are allowed</returns>
+        bool IsLocalOnlyPrefix(String prefix)
+            => LocalOnlyPrefixes.GetOrAdd(prefix, static p =>
+            {
+                if (!Uri.TryCreate(p.Replace("*", "wildcard").Replace("+", "wildcard"), UriKind.Absolute, out var uri))
+                    return false;
+                var h = uri.Host.TrimStart('[').TrimEnd(']');
+                if (h.Equals("localhost", StringComparison.OrdinalIgnoreCase) || h.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                return IPAddress.TryParse(h, out var a) && IPAddress.IsLoopback(a);
+            });
+
+        /// <summary>
+        /// True if the address is a loopback address (incl. IPv4 loopback mapped to IPv6).
+        /// </summary>
+        static bool IsLoopback(IPAddress a)
+        {
+            if (a == null)
+                return false;
+            if (a.IsIPv4MappedToIPv6)
+                a = a.MapToIPv4();
+            return IPAddress.IsLoopback(a);
         }
 
         /// <summary>
@@ -432,9 +469,23 @@ namespace SysWeaver.Net
                     await Handle404(req, res).ConfigureAwait(false);
                     return;
                 }
+                //  http.sys accepts a request on any interface when its Host header names a local only prefix (ex: "Host: localhost"),
+                //  so a local only prefix must also check that the connection really comes from this machine
+                if (IsLocalOnlyPrefix(prefix) && !IsLoopback(req.RemoteEndPoint?.Address))
+                {
+                    LocalOnlyRefused.OnException(new Exception("Refused a remote request to a local only prefix"));
+                    res.StatusCode = 400;
+                    await WriteResponseString(res, "Bad Request - Invalid Hostname").ConfigureAwait(false);
+                    return;
+                }
                 using var data = new NetHttpServerRequest(c, rawUrl, url, prefix, this, host, queryStart, didIndex);
                 data.SetResHeader("Server", "");
                 await Handle(data).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsClientGone(ex))
+            {
+                //  The client closed the connection: not a problem of the server (counted as ClientGone, a debug line)
+                OnClientGone(ex, url);
             }
             catch (HttpListenerException ex)
             {
@@ -465,6 +516,10 @@ namespace SysWeaver.Net
                         //res.Headers["Server"] = "";
                         res.Close();
                     }
+                }
+                catch (Exception ex) when (IsClientGone(ex))
+                {
+                    OnClientGone(ex, url);
                 }
                 catch (Exception ex)
                 {

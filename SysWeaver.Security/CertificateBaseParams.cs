@@ -45,6 +45,7 @@ namespace SysWeaver.Security
         ///             $(Platform) = The platform, ex "WinNT", "Unix".
         /// </summary>
 
+        [EditPassword]
         public String Password = "$(AppName)";
 
         /// <summary>

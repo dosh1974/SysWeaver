@@ -145,7 +145,7 @@ namespace SysWeaver.AI
         /// Generating images are expensive, try to solve problems without generating an image.
         /// Don't generate large images unless specified.
         /// </summary>
-        /// <param name="prompt">Paramaters for the generation</param>
+        /// <param name="prompt">Parameters for the generation</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated png image</returns>
         [AiTool("🖼️✨")]
@@ -164,7 +164,7 @@ namespace SysWeaver.AI
         /// Generating images are expensive, try to solve problems without generating an image.
         /// Don't generate large images unless specified.
         /// </summary>
-        /// <param name="prompt">Source image and paramaters for the generation</param>
+        /// <param name="prompt">Source image and parameters for the generation</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated png image</returns>
         [AiTool("🖼️✂️")]

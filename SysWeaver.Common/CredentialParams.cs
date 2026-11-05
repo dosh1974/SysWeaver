@@ -25,6 +25,7 @@ namespace SysWeaver
         /// <summary>
         /// Password
         /// </summary>
+        [EditPassword]
         public String Password { get; set; }
 
         /// <summary>

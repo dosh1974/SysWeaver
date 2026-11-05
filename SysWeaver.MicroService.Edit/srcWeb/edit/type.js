@@ -1,460 +1,368 @@
 ﻿/**
- * @file type.js - shared type metadata module of the object editor and script of the type information page
- * edit/type.html (?q=<type name>).
+ * @file Type information: the TypeService client (`Sw.TypeInfo`, legacy `TypeInfoCache`), the type flags
+ * (`Sw.TypeFlags`, legacy `TypeMemberFlags`), .NET type name rendering (`Sw.TypeDoc.AddTypeName`, legacy `AddTypeName`,
+ * `AddTextElement`, `BuildLink`, `BuildTypeNameRec`) and the type documentation page edit/type.html (`Sw.TypeDoc.Main`,
+ * legacy `typeMain`, `typeAdd`, `typeAddSection`).
  *
- * Loaded by:
- * - Edit.Init() (Edit.js) via includeJs(current, "type.js"), so every page using the object editor gets it
- *   (e.g. explore/api.html, which also uses AddTypeName / AddTextElement from explore/api.js);
- * - type.html as a deferred script after common/common.js and common/tab.js; the page calls typeMain() on load.
- *
- * Globals defined: TypeMemberFlags, TypeInfoCache, AddTextElement, BuildLink, BuildTypeNameRec, AddTypeName,
- * typeAddSection, typeAdd, typeMain.
- * Dependencies (common/common.js): sendRequest, ValueFormat (createLink, AddNonNullLine), _T, _TF, makeHtmlSafe,
- * ColorIcon, Open, AddLoading, getUrlParams, Fail.
- * Server endpoints (relative to this script): GetTypeInfo and GetDefaultInstance (TypeService).
- * Styled by type.css (SysWeaver-TypeSection, SysWeaver-TypeTitle, TypeMembers / TypeEnumValues tables, ...).
+ * Loaded by Edit.js (every page with the object editor, ex: explore/api.html uses AddTypeName / AddTextElement) and by
+ * type.html. Server contract: POST `edit/GetTypeInfo` (type name -> TypeDesc or null), POST `edit/GetDefaultInstance`
+ * (type name -> json or null); type.html?q=<TypeName>.
  */
+(function () {
+    "use strict";
 
-/**
- * Bit flags of a type or member description; mirrors the C# TypeMemberFlags enum (TypeMemberFlags.cs).
- * Note: IsFlags and DateUnspecified share the value 2048 (as on the server; IsFlags applies to enums,
- * DateUnspecified to date members). Some files still use the literal values 16 / 2 instead of the names.
- * @type {Readonly<{Multiline:number, Password:number, AcceptNull:number, Slider:number, ReadOnly:number,
- *   Collection:number, Indexed:number, IsEnum:number, IsPrimitive:number, IsObject:number, Hide:number,
- *   IsFlags:number, DateUnspecified:number}>}
- */
-const TypeMemberFlags = Object.freeze({
-    Multiline: 1,
-    Password: 2,
-    AcceptNull: 4,
-    Slider: 8,
-    ReadOnly: 16,
-    Collection: 32,
-    Indexed: 64,
-    IsEnum: 128,
-    IsPrimitive: 256,
-    IsObject: 512,
-    Hide: 1024,
-    IsFlags: 2048,
-    DateUnspecified: 2048,
-});
-
-
-/**
- * Static cache of type descriptions and default instances fetched from the server (TypeService).
- * Never instantiated; all members are static. URLs are resolved relative to this script when it is evaluated.
- */
-class TypeInfoCache {
-
-    /** @type {Map<string, ?object>} Type descriptions (TypeDesc) by type name (null for failed lookups, but those are re-requested). */
-    static Types = new Map();
-    /** @type {Map<string, Array>} Default instances by type name as [found:boolean, json:?string]. */
-    static InstanceTypes = new Map();
-
-    /** @type {string} Absolute url of the type information page (edit/type.html). */
-    static TypeLink = new URL(document.currentScript.src + "/../type.html").href;
-    /** @type {string} Absolute url of the GetTypeInfo endpoint (edit/GetTypeInfo). */
-    static Req = new URL(document.currentScript.src + "/../GetTypeInfo").href;
-    /** @type {string} Absolute url of the GetDefaultInstance endpoint (edit/GetDefaultInstance). */
-    static ReqNew = new URL(document.currentScript.src + "/../GetDefaultInstance").href;
-
+    const el = Sw.el;
+    const ScriptUrl = (document.currentScript && document.currentScript.src) || (Sw.Url.Root + "edit/type.js");
 
     /**
-     * Gets the type description of a type, using the cache. Sends sendRequest(Req, typeName, false) on a miss.
-     * A falsy response is stored as null, but since cached values are tested for truthiness, null results are
-     * requested again next time.
-     * @param {string} typeName - .NET type name.
-     * @returns {Promise<?object>} The type description (TypeDesc: TypeName, Flags, Members, Summary, ...) or null.
+     * Type / member flags (mirror of the C# TypeMemberFlags; DateUnspecified has its own bit, 4096).
+     * @enum {number}
      */
-    static async GetType(typeName) {
-        const m = TypeInfoCache.Types;
-        const t = m.get(typeName);
-        if (t)
-            return t;
-        const r = await sendRequest(TypeInfoCache.Req, typeName, false);
-        if (!r) {
-            m.set(typeName, null);
-            return null;
-        }
-        m.set(typeName, r);
-        return r;
+    const TypeFlags = (Sw.Edit && Sw.Edit.Flags) || Object.freeze({
+        Multiline: 1, Password: 2, AcceptNull: 4, Slider: 8, ReadOnly: 16, Collection: 32, Indexed: 64, IsEnum: 128,
+        IsPrimitive: 256, IsObject: 512, Hide: 1024, IsFlags: 2048, DateUnspecified: 4096,
+    });
+
+    /**
+     * Client of the TypeService: type descriptions and default instances, cached per page (also null results).
+     */
+    const TypeInfo = {
+        /** @type {Map<string, ?object>} Type name -> TypeDesc. */
+        Types: new Map(),
+        /** @type {Map<string, ?string>} Type name -> json of the default instance (null = none). */
+        InstanceTypes: new Map(),
+        /** @type {string} Url of the type documentation page. */
+        TypeLink: new URL("type.html", ScriptUrl).href,
+        /** @type {string} Url of the type info api. */
+        Req: new URL("GetTypeInfo", ScriptUrl).href,
+        /** @type {string} Url of the default instance api. */
+        ReqNew: new URL("GetDefaultInstance", ScriptUrl).href,
+
+        /**
+         * Get a type description (cached).
+         * @param {string} typeName - .NET type name.
+         * @returns {Promise<?object>} The TypeDesc or null.
+         */
+        async GetType(typeName) {
+            const m = TypeInfo.Types;
+            if (m.has(typeName))
+                return m.get(typeName);
+            const r = await Sw.Net.Send(TypeInfo.Req, typeName, { Post: true });
+            m.set(typeName, r || null);
+            return r || null;
+        },
+
+        /**
+         * Get the default instance of a type (a fresh copy on every call).
+         * @param {string} typeName - .NET type name.
+         * @returns {Promise<?object>} The instance or null.
+         */
+        async GetInstance(typeName) {
+            const m = TypeInfo.InstanceTypes;
+            if (!m.has(typeName)) {
+                const d = await Sw.Net.Send(TypeInfo.ReqNew, typeName, { Post: true });
+                m.set(typeName, d === null || d === undefined ? null : JSON.stringify(d));
+            }
+            const j = m.get(typeName);
+            return j === null ? null : JSON.parse(j);
+        },
+    };
+
+    /**
+     * Add a text element (`SysWeaver-Text`, css hook used by explore/api.css).
+     * @param {HTMLElement} target - Parent.
+     * @param {string} text - Text.
+     * @param {?string} [title] - Tooltip.
+     * @param {?string} [className] - Class.
+     * @returns {HTMLElement} The element.
+     */
+    function AddTextElement(target, text, title, className) {
+        const t = document.createElement("SysWeaver-Text");
+        t.textContent = text ?? "";
+        t.title = title ?? "";
+        if (className)
+            t.classList.add(className);
+        target.append(t);
+        return t;
     }
 
     /**
-     * Gets a server-created default instance of a type, using the cache. Sends
-     * sendRequest(ReqNew, typeName, false) on a miss and caches the JSON string (or "not found" for null),
-     * so callers get a fresh copy (JSON.parse) on cached calls; the first call returns the response object itself.
-     * @param {string} typeName - .NET type name.
-     * @returns {Promise<?object>} A default instance, or null when the server returned null.
+     * A link to the documentation page of a type (same window).
+     * @param {string} name - Display text.
+     * @param {string} [link] - Type name (default name).
+     * @returns {HTMLAnchorElement} The link.
      */
-    static async GetInstance(typeName) {
+    function BuildLink(name, link) {
+        link = link || name;
+        return Sw.Cells.CreateLink(TypeInfo.TypeLink + "?q=" + encodeURIComponent(link), name, "_self",
+            _T('Show information about the type "{0}"', link, "A tool tip description of a link that when followed will show information about a C# type.{0} is replaced with the C# name of the type"));
+    }
 
-        const m = TypeInfoCache.InstanceTypes;
-        const t = m.get(typeName);
-        if (typeof t !== "undefined")
-            return t[0] ? JSON.parse(t[1]) : null;
-        const d = await sendRequest(TypeInfoCache.ReqNew, typeName, false);
-        if (d === null) {
-            m.set(typeName, [false, null]);
-            return null;
+    /**
+     * Split a .NET type name into display parts: generics as `Base<Arg, ...>`, arrays as `Name[]`; each type part is a link
+     * (when link) or a text.
+     * @param {string} name - The type name.
+     * @param {boolean} link - Create links.
+     * @returns {Array<string|HTMLElement>} The parts.
+     */
+    function BuildTypeNameRec(name, link) {
+        const nl = name.length;
+        if (name.charAt(nl - 1) !== "]")
+            return [link ? BuildLink(name) : name];
+        //  Array: Name[] / Name[,]
+        const ai = name.lastIndexOf("[");
+        const ap = name.substring(ai);
+        if (/^\[[, ]*\]$/.test(ap)) {
+            const r = BuildTypeNameRec(name.substring(0, ai), link);
+            r.push(ap);
+            return r;
         }
-        m.set(typeName, [true, JSON.stringify(d)]);
-        return d;
-    }
-
-}
-
-/**
- * Appends a SysWeaver-Text element with the given text.
- * @param {HTMLElement} target - Parent element.
- * @param {string} text - Text (innerText).
- * @param {string} [title=""] - Tooltip.
- * @param {string} [className] - Optional class to add.
- * @returns {void}
- */
-function AddTextElement(target, text, title, className) {
-    const tt = document.createElement("SysWeaver-Text");
-    tt.innerText = text;
-    tt.title = title ?? "";
-    if (className)
-        tt.classList.add(className);
-    target.appendChild(tt);
-}
-
-/**
- * Creates a link (ValueFormat.createLink, target "_self") to the type information page for a type.
- * @param {string} name - Display text.
- * @param {string} [link=name] - Type name used in the "?q=" query.
- * @returns {HTMLElement} The link element.
- */
-function BuildLink(name, link) {
-    link = link ? link : name;
-    //const a = document.createElement("a");
-    //a.innerText = name;
-    //a.href = TypeInfoCache.TypeLink + "?q=" + link;
-    //a.title = 'Click to show information about the type "' + link + '"';
-    //a.target = "_self";
-    const a = ValueFormat.createLink(TypeInfoCache.TypeLink + "?q=" + link, name, "_self",
-        _T('Click to show information about the type "{0}"', link, "A tool tip description of a link that when followed will show information about a C# type.{0} is replaced with the C# name of the type")
-    );
-    return a;
-}
-
-/**
- * Recursively splits a .NET reflection type name into display parts, rendering generics as "Base<Arg,...>".
- * - Names not ending in "]" are returned as is (or as a link).
- * - Names ending in an array suffix like "[]" return the parts of the element type followed by the suffix.
- *   (The rank check indexes the suffix with absolute name positions, so in practice only "[]" is detected.)
- * - Names containing "`" are generics "Base`n[[Arg1],[Arg2]]": the base name (linked to the full generic name)
- *   is followed by "<", the recursively built argument parts (always linked) separated by "," and a closing ">".
- * - Anything else ending in "]" is returned whole.
- * @param {string} name - Type name.
- * @param {boolean} link - When true type names become links (BuildLink), otherwise plain strings.
- * @returns {Array<string|HTMLElement>} Parts in display order (strings and link elements).
- */
-function BuildTypeNameRec(name, link) {
-    //  Non array or generic
-    const nl = name.length;
-    if (name.charAt(nl - 1) != ']') {
-        if (!link)
-            return [name];
-        return [BuildLink(name)];
-    }
-    //  Check for array
-    const ai = name.lastIndexOf('[');
-    const ap = name.substring(ai, nl);
-    const apl = ap.length - 1;
-    let count = 1;
-    for (let i = ai + 1; i < apl; ++i) {
-        const c = ap.charAt(i);
-        if (c === ',')
-            ++count;
-        if (c === ' ')
-            ++count;
-    }
-    if (count === apl) {
-        //  It's an array
-        const ret = BuildTypeNameRec(name.substring(0, ai), link);
-        ret.push(ap);
-        return ret;
-    }
-    //  Should be a generic..
-    const gi = name.indexOf('`');
-    if (gi < 0) {
-        // ..but wasn't
-        if (!link)
-            return [name];
-        return [BuildLink(name)];
-    }
-    //  Was a generic
-    let pos = name.indexOf('[');
-    const baseName = name.substring(0, gi);
-    const parts = link ? [BuildLink(baseName, name)] : [baseName];
-    let start = pos;
-    count = 0;
-    for (let i = pos + 1; i < nl; ++i) {
-        const c = name.charAt(i);
-        if (c === '[') {
-            if (count === 0) {
-                parts.push(name.substring(start, i + 1).replace(' ', '').replace('[[', '<').replace(']', '').replace('[', ''));
-                start = i + 1;
+        //  Generic: Base`1[[Arg1],[Arg2]]
+        const gi = name.indexOf("`");
+        if (gi < 0)
+            return [link ? BuildLink(name) : name];
+        const baseName = name.substring(0, gi);
+        const parts = [link ? BuildLink(baseName, name) : baseName, "<"];
+        let depth = 0, start = -1, first = true;
+        for (let i = name.indexOf("["); i < nl; ++i) {
+            const c = name.charAt(i);
+            if (c === "[") {
+                ++depth;
+                if (depth === 2)
+                    start = i + 1;
             }
-            ++count;
-        }
-        if (c === ']') {
-            --count;
-            if (count === 0) {
-                const r = BuildTypeNameRec(name.substring(start, i), true);
-                const rl = r.length;
-                for (let j = 0; j < rl; ++j)
-                    parts.push(r[j]);
-                start = i;
+            else if (c === "]") {
+                if (depth === 2 && start >= 0) {
+                    if (!first)
+                        parts.push(", ");
+                    first = false;
+                    const arg = name.substring(start, i).split(",")[0].trim();
+                    for (const p of BuildTypeNameRec(arg, true))
+                        parts.push(p);
+                    start = -1;
+                }
+                --depth;
             }
         }
+        parts.push(">");
+        return parts;
     }
-    parts.push(name.substring(start, nl).replace(' ', '').replace(']]', '>'));
-    return parts;
-}
 
-/**
- * Renders a type name into target using BuildTypeNameRec: string parts become SysWeaver-Text elements, links are
- * appended as is. When link is false and ext is given, the first part becomes an external link (target "_blank").
- * Also used by explore/api.js.
- * @param {HTMLElement} target - Parent element.
- * @param {string} name - .NET type name.
- * @param {boolean} link - Link type names to type.html.
- * @param {string} [ext] - External documentation url (used only when link is false).
- * @returns {void}
- */
-function AddTypeName(target, name, link, ext) {
-    const parts = BuildTypeNameRec(name, link);
-    if (!link) {
+    /**
+     * Add a formatted type name (generic arguments linked to their own pages).
+     * @param {HTMLElement} target - Parent.
+     * @param {string} name - Type name.
+     * @param {boolean} link - Link the base type too.
+     * @param {?string} [ext] - External documentation url (the base name links there when not linked).
+     */
+    function AddTypeName(target, name, link, ext) {
+        const parts = BuildTypeNameRec(name, link);
+        if (!link && ext && typeof parts[0] === "string") {
+            const n = parts[0];
+            parts[0] = Sw.Cells.CreateLink(ext, n, "_blank",
+                _T('Show external information about the type "{0}" at:', n, "A tool tip description of a link that when followed will show information about a C# type on the official external site.{0} is replaced with the C# name of the type.The text is followed by the url on a new line") + "\n" + ext);
+        }
+        for (const p of parts) {
+            if (typeof p === "string")
+                AddTextElement(target, p);
+            else
+                target.append(p);
+        }
+    }
+
+    /**
+     * Add a page section.
+     * @param {HTMLElement} target - Parent.
+     * @param {string} title - Heading.
+     * @param {?string} [text] - Text.
+     * @param {?string} [className] - Class (TypeCol, TypeCode, TypeItalic).
+     * @returns {HTMLElement} The section.
+     */
+    function typeAddSection(target, title, text, className) {
+        const s = el("section.sw-type-section", { class: className || null }, el("h2.sw-type-title", { text: title }));
+        if (text)
+            s.append(el("div.sw-type-text", { text: text }));
+        target.append(s);
+        return s;
+    }
+
+    /**
+     * Create a table with a header row.
+     * @param {string} cls - Class.
+     * @param {string[]} heads - Header texts.
+     * @returns {HTMLTableElement} The table.
+     */
+    function table(cls, heads) {
+        //  Reference documentation of one type: its members / enum values in source order, cells with links to the member types; no data rows
+        //  to sort, search or act on (a static "doc table" building block is requested from the framework; this moves to it then)
+        /* SwWeb:allow ux-lst-3 (reference documentation of one type, not a list of data rows; see above) */
+        const t = el("table.sw-type-table", { class: cls });
+        const h = t.createTHead().insertRow();
+        for (const x of heads)
+            h.append(el("th", { text: x, attrs: { scope: "col" } }));
+        t.createTBody();
+        return t;
+    }
+
+    /**
+     * Render the documentation of a type.
+     * @param {HTMLElement} target - Parent.
+     * @param {object|string} data - TypeDesc or type name.
+     * @returns {Promise<void>}
+     */
+    async function typeAdd(target, data) {
+        if (typeof data === "string")
+            data = await TypeInfo.GetType(data);
+        if (!data)
+            return;
+        const flags = data.Flags;
+        const isCollection = (flags & TypeFlags.Collection) !== 0;
+        const ext = data.Ext;
+        const sec = typeAddSection(target, _TF("Type name", "The title text of a section that contains the C# type name"), null, isCollection ? "TypeCol" : "TypeCode");
+        const nameRow = el("div.sw-type-name");
+        sec.append(nameRow);
+        AddTypeName(nameRow, data.TypeName, false, ext);
+        nameRow.append(new Sw.Button({
+            Icon: "copy", Kind: "ghost", Small: true, Title: _TF("Copy the type name", "Tool tip of a button that copies a C# type name"),
+            OnClick: () => Sw.Clipboard.Copy(data.TypeName),
+        }).E);
         if (ext) {
-            const name = parts[0];
-            const a = ValueFormat.createLink(ext, name, "_blank",
-                _T('Click to show external information about the type "{0}" at:', name, "A tool tip description of a link that when followed will show information about a C# type on the official external site.{0} is replaced with the C# name of the type.The text is followed by the url on a new line") + '\n' + ext
-            );
-            parts[0] = a;
+            nameRow.append(new Sw.Button({
+                Icon: "external", Kind: "ghost", Small: true,
+                Title: _T('Show external information about the type "{0}" at:', data.TypeName, "A tool tip description of a link that when followed will show information about a C# type on the official external site.{0} is replaced with the C# name of the type.The text is followed by the url on a new line") + "\n" + ext,
+                OnClick: () => window.open(ext, "_blank", "noopener"),
+            }).E);
         }
-    }
-    const pl = parts.length;
-    for (let i = 0; i < pl; ++i) {
-        const p = parts[i];
-        if (typeof p === "string") {
-            AddTextElement(target, p);
-            continue;
-        }
-        target.appendChild(p);
-    }
-}
-
-/**
- * Appends a SysWeaver-TypeSection with a SysWeaver-TypeTitle heading and optional text.
- * @param {HTMLElement} target - Parent element.
- * @param {string} title - Section title.
- * @param {?string} [text] - Optional text node content appended after the title.
- * @param {string} [className] - Optional class for the section (TypeCode, TypeCol, TypeItalic).
- * @returns {HTMLElement} The section element.
- */
-function typeAddSection(target, title, text, className) {
-    const section = document.createElement("SysWeaver-TypeSection");
-    const t = document.createElement("SysWeaver-TypeTitle");
-    t.innerText = title;
-    if (className)
-        section.classList.add(className);
-    section.appendChild(t);
-    //section.appendChild(document.createElement("br"));
-    target.appendChild(section);
-    if (text)
-        section.appendChild(document.createTextNode(text));
-    return section;
-}
-
-
-/**
- * Renders the documentation of a type into target:
- * a "Type name" section (class TypeCol for collections, TypeCode otherwise; with a SysWeaverTypeIconExternal
- * ColorIcon that Open()s data.Ext when present), then Summary / Remarks (TypeItalic) and Assembly sections.
- * Collections stop there. Enums get an "Enum values" / "Enum flags" table (table.TypeEnumValues; hex values for
- * flags) decoded from data.Default (same encoding as EditTypeEnum). Non-primitive types with members get a
- * "Members" table (table.TypeMembers) whose type cells link to type.html.
- * @param {HTMLElement} target - Parent element.
- * @param {object|string} data - Type description (TypeDesc) or a type name to fetch via TypeInfoCache.GetType.
- * @returns {Promise<void>}
- */
-async function typeAdd(target, data) {
-
-    if (typeof data === "string")
-        data = await TypeInfoCache.GetType(data);
-    const flags = data.Flags;
-    const isCollection = (flags & TypeMemberFlags.Collection) != 0;
-    const ext = data.Ext;
-    let section = typeAddSection(target, _TF("Type name", "The title text of a section that contains the C# type name"), null, isCollection ? "TypeCol" : "TypeCode");
-    const tn = data.TypeName;
-    AddTypeName(section, tn, false, ext);
-    if (ext) {
-        const extLink = new ColorIcon("SysWeaverTypeIconExternal", "IconColorThemeMain", 24, 24,
-            _T('Click to show external information about the type "{0}" at:', tn, "A tool tip description of a link that when followed will show information about a C# type on the official external site.{0} is replaced with the C# name of the type.The text is followed by the url on a new line") + '\n' + ext,
-            ev => {
-                Open(ext);
-            });
-        section.appendChild(extLink.Element);
-    }
-
-    if (data.Summary)
-        typeAddSection(target, _TF("Summary", "The title text of a section that contains the C# code summary for the type"), data.Summary, "TypeItalic");
-    if (data.Remarks)
-        typeAddSection(target, _TF("Remarks", "The title text of a section that contains the C# code remarks for the type"), data.Remarks, "TypeItalic");
-    if (data.Asm)
-        typeAddSection(target, _TF("Assembly", "The title text of a section that contains the C# assembly name that defined the type"), data.Asm);
-
-    if (isCollection)
-        return;
-
-    if ((flags & TypeMemberFlags.IsEnum) != 0) {
-        const v = data.Default;
-        if (!v)
+        if (data.Summary)
+            typeAddSection(target, _TF("Summary", "The title text of a section that contains the C# code summary for the type"), data.Summary, "TypeItalic");
+        if (data.Remarks)
+            typeAddSection(target, _TF("Remarks", "The title text of a section that contains the C# code remarks for the type"), data.Remarks, "TypeItalic");
+        if (data.Asm)
+            typeAddSection(target, _TF("Assembly", "The title text of a section that contains the C# assembly name that defined the type"), data.Asm);
+        if (isCollection)
             return;
-        const values = v.split('>')[1].split('|');
-        const valLen = values.length;
-        if (valLen <= 0)
-            return;
-
-        const isFlags = (flags & TypeMemberFlags.IsFlags) != 0;
-        section = typeAddSection(target, isFlags ?
-            _TF("Enum flags", "The title text of a section that contains a table with the C# enum values as flags")
-            :
-            _TF("Enum values", "The title text of a section that contains a table with the C# enum values")
-        );
-        const table = document.createElement("table");
-        table.classList.add("TypeEnumValues");
-        section.appendChild(table);
-
-        table.innerHTML = "<tr><th>" +
-            makeHtmlSafe(_TF("VALUE", "The header text of a table column that contains the decimal numerical value of an enum value")) +
-            "</th><th>" +
-            makeHtmlSafe(_TF("NAME", "The header text of a table column that contains the name of an enum value")) +
-            "</th><th>" +
-            makeHtmlSafe(_TF("SUMMARY", "The header text of a table column that contains the C# code summary of an enum value")) +
-            "</th></tr>";
-        for (let i = 0; i < valLen; ++i) {
-            const vals = values[i].split('<');
-            const vl = vals.length;
-            const r = table.insertRow();
-            let v = parseInt(vals[0]);
-            const hexVal = "0x" + v.toString(16);
-            v = "" + v;
-            const sum = vl > 2 ? vals[2] : "";
-            const remark = vl > 3 ? vals[3] : "";
-            let title = ValueFormat.AddNonNullLine("", _TF("Name", "The prefix of a row in a tool tip that ends with the name of an enum value") + ": ", vals[1]);
-            if (isFlags) {
-                title = ValueFormat.AddNonNullLine(title, _TF("Hex value", "The prefix of a row in a tool tip that ends with the hexadecimal numerical value of an enum value") + ": ", hexVal);
-                title = ValueFormat.AddNonNullLine(title, _TF("Decimal value", "The prefix of a row in a tool tip that ends with the decimal numerical value of an enum value") + ": ", v);
-            } else {
-                title = ValueFormat.AddNonNullLine(title, _TF("Decimal value", "The prefix of a row in a tool tip that ends with the decimal numerical value of an enum value") + ": ", v);
-                title = ValueFormat.AddNonNullLine(title, _TF("Hex value", "The prefix of a row in a tool tip that ends with the hexadecimal numerical value of an enum value") + ": ", hexVal);
+        if ((flags & TypeFlags.IsEnum) !== 0) {
+            const v = data.Default;
+            const gt = v ? v.indexOf(">") : -1;
+            const values = gt >= 0 ? v.substring(gt + 1).split("|").filter(x => x) : [];
+            if (!values.length)
+                return;
+            const isFlags = (flags & TypeFlags.IsFlags) !== 0;
+            const s = typeAddSection(target, isFlags
+                ? _TF("Enum flags", "The title text of a section that contains a table with the C# enum values as flags")
+                : _TF("Enum values", "The title text of a section that contains a table with the C# enum values"));
+            const t = table("TypeEnumValues", [
+                _TF("VALUE", "The header text of a table column that contains the decimal numerical value of an enum value"),
+                _TF("NAME", "The header text of a table column that contains the name of an enum value"),
+                _TF("SUMMARY", "The header text of a table column that contains the C# code summary of an enum value")]);
+            const body = t.tBodies[0];
+            for (const val of values) {
+                const p = val.split("<");
+                const n = parseInt(p[0]);
+                const hex = "0x" + (n >>> 0).toString(16);
+                const r = body.insertRow();
+                let tip = _TF("Name", "The prefix of a row in a tool tip that ends with the name of an enum value") + ": " + p[1];
+                tip += "\n" + _TF("Decimal value", "The prefix of a row in a tool tip that ends with the decimal numerical value of an enum value") + ": " + n;
+                tip += "\n" + _TF("Hex value", "The prefix of a row in a tool tip that ends with the hexadecimal numerical value of an enum value") + ": " + hex;
+                if (p[2])
+                    tip += "\n" + _TF("Summary", "The prefix of a row in a tool tip that ends with the C# code summary of an enum value") + ": " + p[2];
+                if (p[3])
+                    tip += "\n" + _TF("Remarks", "The prefix of a row in a tool tip that ends with the C# code remarks of an enum value") + ": " + p[3];
+                r.title = tip;
+                r.insertCell().textContent = isFlags ? hex : ("" + n);
+                r.insertCell().textContent = p[1] || "";
+                r.insertCell().textContent = p[2] || "";
             }
-            title = ValueFormat.AddNonNullLine(title, _TF("Summary", "The prefix of a row in a tool tip that ends with the C# code summary of an enum value") + ": ", sum);
-            title = ValueFormat.AddNonNullLine(title, _TF("Remarks", "The prefix of a row in a tool tip that ends with the C# code remarks of an enum value") + ": ", remark);
-            r.title = title;           
-            r.insertCell().innerText = isFlags ? hexVal : v;
-            r.insertCell().innerText = vals[1];
-            r.insertCell().innerText = sum ?? "";
-        }
-        return;
-    }
-    if ((flags & TypeMemberFlags.IsPrimitive) != 0)
-        return;
-    const members = data.Members;
-    if (!members)
-        return;
-    const ml = members.length;
-    if (ml > 0) {
-        section = typeAddSection(target, _TF("Members", "The title text of a section that contains a table with the C# members of a C# type"));
-        const table = document.createElement("table");
-        table.classList.add("TypeMembers");
-        section.appendChild(table);
-        table.innerHTML = "<tr><th>" +
-            makeHtmlSafe(_TF("TYPE", "The header text of a table column that contains the C# type name of a C# type member")) +
-            "</th><th>" +
-            makeHtmlSafe(_TF("NAME", "The header text of a table column that contains the name of a C# type member")) +
-            "</th><th>" +
-            makeHtmlSafe(_TF("SUMMARY", "The header text of a table column that contains the C# code summary of a C# type member")) +
-            "</th></tr>";
-        for (let i = 0; i < ml; ++i) {
-            const m = members[i];
-            const r = table.insertRow();
-            const mtn = m.TypeName;
-
-            let title = ValueFormat.AddNonNullLine("", _TF("Type name", "The prefix of a row in a tool tip that ends with the C# type name of a C# type member") + ": ", mtn);
-            title = ValueFormat.AddNonNullLine(title, _TF("Name", "The prefix of a row in a tool tip that ends with the name of a C# type member") + ": ", m.Name);
-            title = ValueFormat.AddNonNullLine(title, _TF("Summary", "The prefix of a row in a tool tip that ends with the C# code summary of a C# type member") + ": ", m.Summary);
-            title = ValueFormat.AddNonNullLine(title, _TF("Remarks", "The prefix of a row in a tool tip that ends with the C# code remarks of a C# type member") + ": ", m.Remarks);
-            if (mtn.indexOf('[') < 0) {
-                //const a = document.createElement("a");
-                //a.innerText = mtn;
-                //a.href = TypeInfoCache.TypeLink + "?q=" + mtn;
-                //a.title = 'Click to show information about the type "' + mtn + '"';
-                //a.target = "_self";
-                const a = ValueFormat.createLink(TypeInfoCache.TypeLink + "?q=" + mtn, mtn, "_self",
-                    _T('Click to show information about the type "{0}"', mtn, "A tool tip description of a button that when clicked will show information about a C# type.{0} is replaced with the C# type name")
-                );
-                r.insertCell().appendChild(a);
-            } else {
-                AddTypeName(r.insertCell(), mtn, true);
-            }
-            AddTextElement(r.insertCell(), m.Name, title);
-            AddTextElement(r.insertCell(), m.Summary ?? "", title);
-        }
-    }
-}
-
-/**
- * Entry point of type.html (body onload). Shows AddLoading(), reads the "q" URL parameter (type name), sets
- * document.title to "TYPE: <name>", fetches the description with TypeInfoCache.GetType and renders it with
- * typeAdd into a new SysWeaver-Page.Wide element. Missing parameter, fetch failures and null results are reported
- * with Fail(...); the loading indicator is always removed.
- * @returns {Promise<void>}
- */
-async function typeMain() {
-
-    const removeLoading = AddLoading();
-    try {
-
-        const ps = getUrlParams();
-        const typeName = ps.get('q');
-        if (!typeName) {
-            Fail(_TF("No query parameter specified!", "An error message that is shown when a required parameter isn't present"), true);
+            s.append(el("div.sw-type-scroll", null, t));
             return;
         }
-        document.title = _TF("TYPE", "The page title prefix, is followed by the C# type name") + ": " + typeName;
-        let data;
+        if ((flags & TypeFlags.IsPrimitive) !== 0)
+            return;
+        const members = data.Members || [];
+        if (!members.length)
+            return;
+        const s = typeAddSection(target, _TF("Members", "The title text of a section that contains a table with the C# members of a C# type"));
+        const t = table("TypeMembers", [
+            _TF("TYPE", "The header text of a table column that contains the C# type name of a C# type member"),
+            _TF("NAME", "The header text of a table column that contains the name of a C# type member"),
+            _TF("SUMMARY", "The header text of a table column that contains the C# code summary of a C# type member")]);
+        const body = t.tBodies[0];
+        for (const m of members) {
+            const r = body.insertRow();
+            let tip = _TF("Type name", "The prefix of a row in a tool tip that ends with the C# type name of a C# type member") + ": " + m.TypeName;
+            tip += "\n" + _TF("Name", "The prefix of a row in a tool tip that ends with the name of a C# type member") + ": " + m.Name;
+            if (m.Summary)
+                tip += "\n" + _TF("Summary", "The prefix of a row in a tool tip that ends with the C# code summary of a C# type member") + ": " + m.Summary;
+            if (m.Remarks)
+                tip += "\n" + _TF("Remarks", "The prefix of a row in a tool tip that ends with the C# code remarks of a C# type member") + ": " + m.Remarks;
+            AddTypeName(r.insertCell(), m.TypeName, true);
+            AddTextElement(r.insertCell(), m.Name, tip);
+            AddTextElement(r.insertCell(), m.Summary ?? "", tip);
+        }
+        s.append(el("div.sw-type-scroll", null, t));
+    }
+
+    /**
+     * Main of type.html: shows the documentation of the type in the url parameter q.
+     * @returns {Promise<void>}
+     */
+    async function typeMain() {
+        const done = Sw.Page.Loading();
+        const page = el("main.sw-type-page");
+        document.body.append(page);
+        //  The Design v2 page anatomy: a form page with the type name as the page header (a page about one record: not the menu name)
+        const layout = Sw.PageLayout({ Type: "form", Main: page, MenuTitle: false, Title: _TF("Type", "Title of the type documentation page while the type is loaded") });
         try {
-            data = await TypeInfoCache.GetType(typeName);
+            const typeName = Sw.Url.Get("q");
+            if (!typeName) {
+                page.append(el("p.sw-type-error", { text: _TF("No query parameter specified!", "An error message that is shown when a required parameter isn't present") + " (q=..)" }));
+                Sw.Fail(_TF("No query parameter specified!", "An error message that is shown when a required parameter isn't present"), true);
+                return;
+            }
+            //  `q` is text from the url: plain, limited text (Sw.Page.SetLinkTitle) until the server knows the type (then its own name)
+            Sw.Page.SetLinkTitle(_TF("TYPE", "The page title prefix, is followed by the C# type name") + ": " + typeName);
+            let data;
+            try {
+                data = await TypeInfo.GetType(typeName);
+            }
+            catch (e) {
+                Sw.Fail(_T('Failed to get information about the type "{0}"', typeName, "An error message that is shown when the server failed to get information about an C# type.{0} is replaced with the C# type name") + "\n" + (e.message || e), true);
+                return;
+            }
+            if (!data) {
+                page.append(el("p.sw-type-error", { text: _T('Failed to get information about the type "{0}"', typeName, "An error message that is shown when the server failed to get information about an C# type.{0} is replaced with the C# type name") }));
+                return;
+            }
+            if (typeof data.TypeName === "string" && data.TypeName) {
+                //  The server knows the type: its own name is the title (no longer text from the link)
+                Sw.Page.TitleFromLink = null;
+                layout.Header?.SetTitle(Sw.Page.LinkText(data.TypeName, 200));
+                //  (after the header, which sets the document title to its own: the original title "TYPE: <name>")
+                document.title = _TF("TYPE", "The page title prefix, is followed by the C# type name") + ": " + Sw.Page.LinkText(data.TypeName, 200);
+            }
+            await typeAdd(page, data);
         }
         catch (e) {
-            Fail(_T('Failed to get information about the type "{0}".\n{1}', typeName, e, "An error message that is shown when the server failed to get information about an C# type.{0} is replaced with the C# type name.{1} is replaced with the java script excetion text"), true);
-            return;
+            Sw.Fail(e && e.message ? e.message : String(e), true);
         }
-        if (!data) {
-            Fail(_T('Failed to get information about the type "{0}"', typeName, "An error message that is shown when the server failed to get information about an C# type.{0} is replaced with the C# type name"), true);
-            return;
+        finally {
+            done();
+            Sw.Page.Loaded();
         }
-
-        const target = document.createElement("SysWeaver-Page");
-        target.classList.add("Wide");
-        document.body.appendChild(target);
-        await typeAdd(target, data);
-    }
-    catch (e) {
-        Fail(e, true);
-    }
-    finally {
-        removeLoading();
     }
 
-
-
-
-
-}
+    /** The documentation helpers (new API). */
+    Sw.TypeDoc = { AddTextElement, BuildLink, BuildTypeNameRec, AddTypeName, AddSection: typeAddSection, Add: typeAdd, Main: typeMain };
+    Sw.TypeInfo = TypeInfo;
+    Sw.TypeFlags = TypeFlags;
+    if (Sw.Edit)
+        Sw.Edit.TypeInfo = TypeInfo;
+    //  Legacy globals.
+    const legacy = {
+        TypeMemberFlags: TypeFlags, TypeInfoCache: TypeInfo, AddTextElement, BuildLink, BuildTypeNameRec, AddTypeName,
+        typeAddSection, typeAdd, typeMain,
+    };
+    for (const k in legacy)
+        if (!window[k])
+            window[k] = legacy[k];
+})();

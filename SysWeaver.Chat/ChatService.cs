@@ -28,6 +28,7 @@ namespace SysWeaver.Chat
     [OptionalDep<IChatProvider>]
     [OptionalDep<HttpServerBase>]
     [OptionalDep<IUserStorageService>]
+    [WebMenuEmbedded(null, "Debug/ChatTest", "Chat test", "chat/ChatTest.html", "Test the chat service: chat with the registered chat providers", "icons/chat.svg", 21, Roles.Dev)]
     [WebApiUrl("../chat")]
     [AiToolPrefix("")]
     public sealed class ChatService : IDisposable, IHttpServerModule, IHaveAiTools
@@ -233,6 +234,7 @@ namespace SysWeaver.Chat
 
             public void PostMessage(string providerChatId, ChatMessage message, HttpSession session, ChatScopes scope)
             {
+                ChatDataViews.Fill(Service.Manager, message);
                 message.Flags &= ~ChatMessageFlags.CanRemove;
                 var to = message.GetTo();
                 if (!String.IsNullOrEmpty(to))
@@ -250,6 +252,7 @@ namespace SysWeaver.Chat
 
             public void ReplaceMessage(string providerChatId, ChatMessage message, HttpSession session, ChatScopes scope)
             {
+                ChatDataViews.Fill(Service.Manager, message);
                 message.Flags &= ~ChatMessageFlags.CanRemove;
                 var to = message.GetTo();
                 if (!String.IsNullOrEmpty(to))
@@ -364,6 +367,7 @@ namespace SysWeaver.Chat
             if (max > 200)
                 max = 200;
             var res = await c.Provider.Join(pid, context, from, max).ConfigureAwait(false);
+            FillDataViews(res?.Messages);
             var userGuid = context.Session.Auth?.Guid;
             var userStore = userGuid == null ? null : UserStore?.GetUserPath(userGuid);
             res.UserGuid = userGuid.ToHex();
@@ -377,6 +381,19 @@ namespace SysWeaver.Chat
         }
 
         readonly ConcurrentDictionary<String, ChatJoinResponse> JoinResponses = new ConcurrentDictionary<string, ChatJoinResponse>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Fill the data views of messages (how their attachments are shown, see <see cref="ChatDataViews"/>).
+        /// </summary>
+        /// <param name="messages">The messages (may be null).</param>
+        void FillDataViews(ChatMessage[] messages)
+        {
+            if (messages == null)
+                return;
+            var m = Manager;
+            foreach (var x in messages)
+                ChatDataViews.Fill(m, x);
+        }
 
 
 
@@ -419,6 +436,7 @@ namespace SysWeaver.Chat
                 if (o != l)
                     Array.Resize(ref m, o);
             }
+            FillDataViews(m);
             return m;
         }
 
@@ -484,8 +502,12 @@ namespace SysWeaver.Chat
             var body = msgRequest.Body;
             if (body == null)
                 throw new ArgumentNullException("No message body supplied!", nameof(msgRequest.Body));
+            //  Only the server application may send HTML (ex: using IChatController.PostMessage), a client may only send text or markdown.
+            //  Refused with 400 (a client error, not a server error); unknown format values are refused too (a viewer could treat them as html).
             if (body.Format == ChatMessageFormats.HTML)
-                throw new ArgumentException("Users may not send HTML messages!", nameof(body.Format));
+                throw new HttpResponseException(400, "Users may not send HTML messages");
+            if ((body.Format != ChatMessageFormats.Text) && (body.Format != ChatMessageFormats.MarkDown))
+                throw new HttpResponseException(400, "Unknown message format");
             return c.Provider.UserMessage(pid, context, body);
         }
 
@@ -591,7 +613,7 @@ namespace SysWeaver.Chat
                 if ((us.Length >= (i + rest.Length)) && us.StartsWith(prefix.AsSpan(0, i), StringComparison.OrdinalIgnoreCase) && us.Slice(i).StartsWith(rest, StringComparison.OrdinalIgnoreCase))
                     return url.Substring(i + rest.Length);
             }
-            throw new Exception("The url \"" + url + "\" is not on this server");
+            throw new Exception("The url \"" + url + "\" is not on this service");
         }
 
         /// <summary>

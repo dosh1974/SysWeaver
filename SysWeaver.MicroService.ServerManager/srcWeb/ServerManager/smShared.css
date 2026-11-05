@@ -1,0 +1,186 @@
+/*
+ * smShared.css - styles shared by the ServerManager pages for the elements built by smShared.js:
+ *  - .sm-chart (chart tile: an iframe of ../chart/chart.html under a transparent .sm-chart-click button; the page
+ *    sets the size),
+ *  - .sm-upload (upload button made an upload target by SmShared.UploadTarget; the classes Dragging, Selecting and
+ *    Uploading are toggled by common/fileUploader.js), .sm-upload-icon, .sm-upload-row (centering row), .sm-upload-labeled
+ *    (variant with a visible word, .sm-upload-text),
+ *  - .sm-copyable cells use the Sw .sw-copyable style.
+ * Loaded after ../common/theme.css and ../sw/ui.css. Plain static css, Sw tokens only.
+ */
+
+/* ===== Chart tiles ===== */
+
+.sm-chart {
+    position: relative;
+    border-radius: var(--sw-radius-lg);
+}
+
+    .sm-chart iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+        pointer-events: none;
+        background: transparent;
+    }
+
+.sm-chart-click {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+    transition: border-color var(--sw-dur-2);
+}
+
+    /* Hover frame: only after the mouse really moved over the tile (.sm-hot, set by SmShared.ChartTile), not when the pointer just
+       rests there while the page changes under it (ex: after picking a theme in the settings menu above the tile). */
+    .sm-chart-click.sm-hot {
+        border-color: var(--sw-border-strong);
+    }
+
+    .sm-chart-click:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+/* ===== Upload targets ===== */
+
+.sm-upload-row {
+    display: flex;
+    justify-content: center;
+    padding: 8px;
+}
+
+.sm-upload {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    margin: 0;
+    padding: 4px;
+    border: 2px solid transparent;
+    border-radius: var(--sw-radius);
+    background: transparent;
+    color: var(--sw-fg);
+    cursor: pointer;
+    transition: border-color var(--sw-dur-2), background-color var(--sw-dur-2);
+}
+
+    .sm-upload .sm-upload-icon {
+        width: 100%;
+        height: 100%;
+        opacity: 0.8;
+        transition: opacity var(--sw-dur-2);
+    }
+
+@media (hover: hover) {
+    .sm-upload:hover {
+        background-color: var(--sw-surface);
+    }
+
+        .sm-upload:hover .sm-upload-icon {
+            opacity: 1;
+        }
+}
+
+    .sm-upload:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+    .sm-upload:disabled {
+        opacity: 0.4;
+        cursor: default;
+    }
+
+    /* Files dragged over the target (fileUploader.js). */
+    .sm-upload.Dragging {
+        border: 2px dashed var(--sw-accent1);
+    }
+
+    /* The file picker is open / files are uploading (fileUploader.js). */
+    .sm-upload.Selecting .sm-upload-icon {
+        opacity: 0.5;
+        -webkit-mask-image: url("../icons/disc.svg") !important;
+        mask-image: url("../icons/disc.svg") !important;
+    }
+
+    .sm-upload.Uploading .sm-upload-icon {
+        opacity: 0.5;
+        -webkit-mask-image: url("../icons/Loading.svg") !important;
+        mask-image: url("../icons/Loading.svg") !important;
+    }
+
+/* A labeled upload target (.sm-upload-labeled, ex: keys.html "Upload key files"): an outlined button with the icon and a word,
+   a dashed outline that says "drop here" without looking like an error. */
+.sm-upload.sm-upload-labeled {
+    width: auto;
+    height: auto;
+    min-height: var(--sw-control-h);
+    gap: 8px;
+    padding: 6px 18px;
+    border: 2px dashed var(--sw-border-strong);
+    background: var(--sw-surface);
+    font: inherit;
+}
+
+    .sm-upload.sm-upload-labeled .sm-upload-icon {
+        width: calc(28px * var(--sw-scale, 1));
+        height: calc(28px * var(--sw-scale, 1));
+        flex: none;
+    }
+
+    .sm-upload.sm-upload-labeled.Dragging {
+        border-color: var(--sw-accent1);
+        background: var(--sw-accent1-soft);
+    }
+
+.sm-upload-text {
+    font-weight: 600;
+}
+
+/* ===== Design v2 page parts (smShared.js) ===== */
+
+/* An upload button that is also a drop target (SmShared.UploadButton; classes from common/fileUploader.js) */
+.sw-button.sm-dropbtn.Dragging {
+    border-style: dashed;
+    border-color: var(--sw-accent1);
+    background: var(--sw-selected);
+}
+
+.sw-button.sm-dropbtn:is(.Selecting, .Uploading) {
+    opacity: 0.7;
+    cursor: progress;
+}
+
+/* A live table in a fill page (SmShared.FillTable): the window height, the table frame takes the free height of the page */
+html:has(> body > .sw-page-fill) {
+    box-sizing: border-box;
+    height: 100%;
+    overflow: hidden;
+}
+
+    html:has(> body > .sw-page-fill) > body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+    }
+
+.sm-fill {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* The table's refresh line under the page description (moved there by SmShared.FillTable) */
+.sw-ph-text > .sw-table-ph-desc {
+    margin-top: var(--sw-space-1);
+}

@@ -1,174 +1,1002 @@
 ﻿/*
- * Edit.css - shared styles of the object editor (Edit.js), independent of the layout style.
- * Loaded with <link> by pages that host the editor: edit/index.html (test page), explore/api.html and
- * ServerManager/services.html, always together with EditDesktop.css and EditMobile.css (layout specific) and
- * after common/theme.css (theme variables such as --ThemeMain).
- * Contents: shared custom properties, member/type title elements, read-only and drag state classes, and the
- * mask-image icon classes used by the editor's popup menus (IconClass in Edit.js menu items).
+ * Edit.css - shared styles of the object editor (Edit.js): the editor box, title row, member rows, inputs, nested
+ * entries, drag / drop and state classes. Layout specifics: EditDesktop.css (three columns) and EditMobile.css (title above
+ * the value). Loaded automatically by Edit.js (pages may also link the three files; they are loaded once).
+ * Colors, radii and sizes come from the Sw tokens (sw/ui.css: --sw-*), which follow the SysWeaver themes.
  */
 
-/*
- * Custom properties:
- * --SysWeaverEditFadeDuration: duration (seconds) of the hover / focus colour transitions in EditDesktop.css,
- *   EditMobile.css and EditLanguage.css.
- * --white: plain white (#ffffff); defined here, not referenced by the edit stylesheets.
- */
 :root {
-    --SysWeaverEditFadeDuration: 0.1s;
-    --white: #ffffff;
+    /* Old variables kept for other style sheets (app/tags.css uses --SysWeaverEditDesktopRad). */
+    --SysWeaverEditFadeDuration: var(--sw-dur-2, 0.1s);
+    --SysWeaverEditDesktopRad: var(--sw-radius, 8px);
+    --SysWeaverEditDesktopRadInp: var(--sw-radius, 8px);
+    --SysWeaverEditDesktopRadInp2: var(--sw-radius, 8px);
 }
-/* Disabled (commented out) page-level html/body styles, kept for reference. */
-/*
-html {
-    margin: 0;
+
+/* ===== Editor box ===== */
+
+/* .sw-edit: an editor (root or child). The root is a framed box unless Border is false (NoBorder). */
+.sw-edit {
+    box-sizing: border-box;
+    display: block;
+    min-width: 0;
+    color: var(--sw-fg);
+    font-family: var(--sw-sans);
+    font-size: var(--sw-text-md);
+}
+
+.sw-edit-root {
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-lg);
+    background: var(--sw-bg);
+    padding: 6px;
+    margin: 4px 0;
+}
+
+    .sw-edit-root.sw-edit-noborder {
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+        background: none;
+    }
+
+/* An editor placed directly in an old tab page (common/tab.js SysWeaver-TabContent) or a Sw tab has no frame. */
+SysWeaver-TabContent > .sw-edit-root, .sw-tab-content > .sw-edit-root {
+    border: none;
+    border-radius: 0;
     padding: 0;
-    width: 100%;
-    height: 100%;
-    color: var(--ThemeMain);
-    font-family: Verdana, Geneva, Tahoma, sans-serif;
-    user-select: none;
-    font-size: 125%;
+    background: none;
 }
 
-body {
-    margin: 0;
+.sw-edit-empty {
+    padding: 6px 8px;
+    color: var(--sw-text-3);
+    font-style: italic;
+}
+
+/* ===== Title row ===== */
+
+.sw-edit-head {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: var(--sw-control-h);
+    padding: 0 2px 4px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--sw-border);
+}
+
+.sw-edit-typetitle {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 600;
+    color: var(--sw-text-accent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: text;
+    padding: 0 0.3em 0 4px;
+}
+
+.sw-edit-headextra {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 0 auto;
+}
+
+/* Collapsed editor (title row expand button): the members are hidden (!important: the layout sheets set display on
+   .sw-edit-body with the same specificity and are loaded later). */
+.sw-edit.sw-edit-collapsed > .sw-edit-body {
+    display: none !important;
+}
+
+.sw-edit-collapsed > .sw-edit-head {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* ===== Member rows (positions in EditDesktop.css / EditMobile.css) ===== */
+
+.sw-edit-row {
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface);
+    transition: background-color var(--sw-dur-2), box-shadow var(--sw-dur-2);
+}
+
+    .sw-edit-row:focus-within {
+        background: var(--sw-surface-sunken);
+    }
+
+.sw-edit-label {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: var(--sw-control-h);
+    padding: 0 8px;
+    cursor: pointer;
+    border-radius: var(--sw-radius);
+}
+
+@media (hover: hover) {
+    .sw-edit-label:hover {
+        color: var(--sw-text-accent);
+    }
+}
+
+/* overflow hidden (ellipsis) clips the overhang of the last italic glyph ("Iso" read "Isc", "LanguageInfo[]" lost its "]"):
+   a small end padding keeps it inside the box (also counted by max-content, so grid columns grow with it). */
+.sw-edit-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: text;
+    padding-inline-end: 0.25em;
+}
+
+/* Read only members: never italic (Design v2: italic clipped and read badly); a small lock after the name, the muted color */
+.sw-edit-ro .sw-edit-name {
+    color: var(--sw-text-2);
+}
+
+    .sw-edit-ro > .sw-edit-label .sw-edit-name::after, .sw-edit-root.sw-edit-readonly > .sw-edit-head .sw-edit-typetitle::after {
+        content: "";
+        display: inline-block;
+        width: 0.8em;
+        height: 0.8em;
+        margin-left: 0.35em;
+        vertical-align: -0.05em;
+        background: currentColor;
+        opacity: .7;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272.4%27 stroke-linecap=%27round%27%3E%3Crect x=%275%27 y=%2711%27 width=%2714%27 height=%279%27 rx=%272%27/%3E%3Cpath d=%27M8 11V8a4 4 0 0 1 8 0v3%27/%3E%3C/svg%3E") center / contain no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272.4%27 stroke-linecap=%27round%27%3E%3Crect x=%275%27 y=%2711%27 width=%2714%27 height=%279%27 rx=%272%27/%3E%3Cpath d=%27M8 11V8a4 4 0 0 1 8 0v3%27/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    /* A read only editor: the lock is on its title row, not on every row */
+    .sw-edit-readonly .sw-edit-ro > .sw-edit-label .sw-edit-name::after {
+        content: none;
+    }
+
+.sw-edit-icon {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+}
+
+    .sw-edit-icon:empty {
+        display: none;
+    }
+
+.sw-edit-value {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 4px;
+}
+
+/* Hidden members (Hide: expressions). */
+.sw-edit-row.sw-hide, .sw-edit-data.sw-hide {
+    display: none !important;
+}
+
+/* Validation error highlight (Validate(true)). */
+.sw-edit-row.sw-edit-error {
+    box-shadow: 0 0 0 2px var(--sw-danger);
+}
+
+/* Expanded object / collection rows connect to their data row. */
+.sw-edit-row.sw-edit-expanded {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* ===== Inputs ===== */
+
+.sw-edit-input {
+    flex: 1 1 12em;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+    .sw-edit-input.EditReadOnly, .sw-edit-input[readonly] {
+        color: var(--sw-text-2);
+        background: transparent;
+    }
+
+/* Read only values (Sw.Edit.ReadOnlyText): plain text, no input (no caret, nothing to type, paste or drop into); selectable,
+   focusable for the keyboard (copy, the member menu). Same height and text start as an input, so rows line up. */
+.sw-edit-rotext {
+    display: block;
+    min-height: calc(var(--sw-control-h) - 8px);
+    padding: calc((var(--sw-control-h) - 8px - 1.35em) / 2) 9px;
+    line-height: 1.35;
+    color: var(--sw-fg);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--sw-radius);
+    overflow-wrap: anywhere;
+    white-space: normal;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+    .sw-edit-rotext.sw-edit-rotext-multi {
+        white-space: pre-wrap;
+    }
+
+    .sw-edit-rotext.sw-edit-masked {
+        -webkit-text-security: disc;
+    }
+
+    .sw-edit-rotext.sw-edit-rotext-empty::before {
+        content: attr(data-placeholder);
+        color: var(--sw-text-3);
+        font-family: var(--sw-mono);
+    }
+
+    .sw-edit-rotext:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: -2px;
+    }
+
+    .sw-edit-rotext.sw-edit-number {
+        flex: 0 1 auto;
+        width: auto;
+        min-width: 3em;
+    }
+
+textarea.sw-edit-multiline {
+    resize: vertical;
+    min-height: 4.5em;
+    max-height: 20em;
+    font-family: var(--sw-sans);
+    line-height: 1.4;
+}
+
+/* Numbers (Design v2, PORTING.md B14): the UI font with tabular figures, one width for every number box (--sw-edit-number-w, so the
+   boxes of a form line up instead of ragged digit based widths), right aligned; with a slider the slider takes the rest. */
+.sw-edit {
+    --sw-edit-number-w: 9rem;
+}
+
+.sw-edit-input.sw-edit-number {
+    flex: 0 1 var(--sw-edit-number-w);
+    width: var(--sw-edit-number-w);
+    font-family: var(--sw-sans);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+    /* Read only numbers: plain text (left aligned like every read only value), tabular figures */
+    .sw-edit-rotext.sw-edit-number {
+        flex: 0 1 auto;
+        width: auto;
+        min-width: 3em;
+        text-align: left;
+    }
+
+    /* Read only numbers stay upright: Chromium clips the last glyph of right aligned (synthetic) italic text in inputs
+       ("30" was shown as "3("); read only is still shown by the muted color and the transparent background. */
+    .sw-edit-input.sw-edit-number.EditReadOnly, .sw-edit-input.sw-edit-number[readonly] {
+        font-style: normal;
+    }
+
+.sw-edit-hasslider > .sw-slider {
+    flex: 1 1 8em;
+    min-width: 6em;
+}
+
+/* Date / time: side by side, wrapping when narrow. */
+.sw-edit-datetime {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+    .sw-edit-datetime > .sw-edit-input {
+        flex: 1 1 9em;
+    }
+
+/* Enums: the select fills the cell; flags are chips. */
+.sw-edit-select {
+    flex: 1 1 auto;
+    max-width: 100%;
+    justify-content: space-between;
+}
+
+.sw-edit-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+    .sw-edit-flags .sw-chip:is(:disabled, [aria-disabled="true"]) {
+        cursor: default;
+        opacity: .75;
+    }
+
+/* Object / collection summary next to the expand button. */
+.sw-edit-info {
+    color: var(--sw-text-2);
+    cursor: pointer;
+    user-select: text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 0 1 auto;
+    padding-inline-end: 0.25em; /* italic overhang ("null" was clipped to "nul") */
+}
+
+/* A null value of a read only editor (ex: an API that returned null): a clear "null" instead of an empty default object. */
+.sw-edit-null {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--sw-control-h);
+    padding: 0 8px;
+    color: var(--sw-text-2);
+}
+
+    .sw-edit-null > code {
+        font-family: var(--sw-mono);
+        padding: 2px 8px;
+        border-radius: var(--sw-radius);
+        background: var(--sw-surface-sunken);
+        color: var(--sw-fg);
+    }
+
+/* Focus rings of the small buttons of the editor (title row, icon cell, item buttons) stay inside the editor box: the default
+   offset (2px) drew them outside the editor and its tab page, where they were cut off. */
+.sw-edit .sw-button:focus-visible {
+    outline-offset: 0;
+}
+
+/* ===== Nested content (objects, collection items) ===== */
+
+.sw-edit-data {
+    padding: 0 0 4px 14px;
+    border-left: 2px solid var(--sw-accent1-soft);
+    margin: 0 0 2px 10px;
+}
+
+    .sw-edit-data:empty {
+        display: none;
+    }
+
+.sw-edit-entry {
+    margin-top: 4px;
+}
+
+.sw-edit-child {
+    border: none;
     padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow-y: scroll;
-}
-*/
-
-/* ===== Titles and info text ===== */
-
-/* SysWeaver-MemberTitle: the member display name in the title cell (created by EditDesktop.js / EditMobile.js); selectable text. */
-SysWeaver-MemberTitle {
-    display: inline-block;
-    padding: 5px;
-    user-select: text;
+    background: none;
 }
 
-/* SysWeaver-TypeTitle: small, left-floating 24px high type caption (created by Edit.SetTypeInfo / EditDesktop / EditMobile AddTypeInfo). */
-SysWeaver-TypeTitle {
-    font-size: 80%;
-    display: inline-block;
-    user-select: text;
-    height: 24px;
-    line-height: 24px;
-    vertical-align: middle;
-    float: left;
+    .sw-edit-child > .sw-edit-head {
+        min-height: 0;
+        padding: 0 0 2px;
+        margin-bottom: 2px;
+    }
+
+    .sw-edit-child .sw-edit-row {
+        background: var(--sw-surface-sunken);
+    }
+
+        .sw-edit-child .sw-edit-row:focus-within {
+            background: var(--sw-surface-strong);
+        }
+
+/* ===== Drag and drop ===== */
+
+.sw-edit-draggable {
+    cursor: grab;
 }
 
-
-/* SysWeaver-EditInfo: italic summary next to the 36px expand icon of object / collection members (EditTypeObject.js, EditTypeCollection.js); line-height matches the icon. */
-SysWeaver-EditInfo {
-    display: inline;
-    line-height: 36px;
-    font-style: italic;
-    margin-left: 8px;
-    vertical-align: top;
-}
-
-
-/* ===== State classes ===== */
-
-/* EditReadOnly: set on the title cell of read-only members (EditDesktop.js / EditMobile.js) and on read-only inputs (Edit.Create*Input); shown in italics. */
-td.EditReadOnly SysWeaver-MemberTitle {
-    font-style: italic;
-}
-
-input.EditReadOnly
-{
-    font-style: italic;
-}
-
-
-/* EditDraggable: cells that can be dragged (drag & drop of values, added in Edit.js); grab cursor, grabbing while pressed. */
-td.EditDraggable
-{
-    cursor: move; /* fallback: no `url()` support or images disabled */
-    cursor: grab; /* W3C standards syntax, all modern browser */
-}
-
-    td.EditDraggable:active {
+    .sw-edit-draggable:active {
         cursor: grabbing;
     }
 
-/* EditFloatRight: forces an element (the collection item remove icon, EditTypeCollection.js) to float right in its cell. */
-td > .EditFloatRight
-{
-    float: right !important;
+/* Collection items: drag handle (pointer drag re-orders, touch too), the item being dragged, the drop position line. */
+.sw-edit-grip {
+    cursor: grab;
+    touch-action: none;
 }
 
-/* Hide: rows of hidden members / collapsed data rows (toggled by Edit.js, EditDesktop.js, EditMobile.js). */
-tr.Hide {
+    .sw-edit-grip:active {
+        cursor: grabbing;
+    }
+
+.sw-edit-data {
+    position: relative;
+}
+
+.sw-edit-entry.sw-edit-dragging {
+    opacity: .45;
+}
+
+.sw-edit-dropline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: var(--sw-radius-pill);
+    background: var(--sw-focus);
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* "Add item" below the items of an expanded collection. */
+.sw-edit-addrowwrap {
+    margin-top: 4px;
+}
+
+.sw-edit-drop {
+    outline: 2px dashed var(--sw-accent2);
+    outline-offset: -2px;
+    background: var(--sw-accent2-soft);
+}
+
+/* ===== Language plug-in value (EditTypeLanguage.js) ===== */
+
+.sw-edit-language {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--sw-control-h);
+    padding: 0 10px;
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg);
+    color: var(--sw-fg);
+    font: inherit;
+    cursor: pointer;
+    max-width: 100%;
+}
+
+    .sw-edit-language:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 1px;
+    }
+
+    .sw-edit-language:disabled {
+        cursor: default;
+        font-style: normal;
+    }
+
+    .sw-edit-language img {
+        height: 18px;
+        max-width: 32px;
+    }
+
+/* ===== Legacy icon classes (old WebMenu items of plug-ins; ColorIcon based pages) ===== */
+
+.SysWeaverEditIconMenu { mask-image: url("../icons/menu.svg"); }
+.SysWeaverEditIconDefault { mask-image: url("../icons/reload.svg"); }
+.SysWeaverEditIconCopy { mask-image: url("../icons/copy.svg"); }
+.SysWeaverEditIconPaste { mask-image: url("../icons/paste.svg"); }
+.SysWeaverEditIconExpand { mask-image: url("../icons/expand.svg"); }
+.SysWeaverEditIconCollapse { mask-image: url("../icons/collapse.svg"); }
+.SysWeaverEditIconAddItem { mask-image: url("../icons/plus.svg"); }
+.SysWeaverEditIconClearCollection { mask-image: url("../icons/clear.svg"); }
+.SysWeaverEditIconAddItemBefore { mask-image: url("../icons/AddAbove.svg"); }
+.SysWeaverEditIconAddItemAfter { mask-image: url("../icons/AddBelow.svg"); }
+.SysWeaverEditIconMoveItemTop { mask-image: url("../icons/MoveTop.svg"); }
+.SysWeaverEditIconMoveItemUp { mask-image: url("../icons/MoveUp.svg"); }
+.SysWeaverEditIconMoveItemDown { mask-image: url("../icons/MoveDown.svg"); }
+.SysWeaverEditIconMoveItemBottom { mask-image: url("../icons/MoveBottom.svg"); }
+
+/* ===== Color (EditTypeColor.js): swatch (Sw.ColorPicker, a checkerboard shows through transparent colors), text, alpha, intensity ===== */
+
+.sw-edit-color {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-width: 0;
+}
+
+    .sw-edit-color > .sw-edit-colortext {
+        flex: 1 1 10em;
+        font-family: var(--sw-mono);
+    }
+
+.sw-edit-colorswatch.sw-edit-colornull .sw-swatch-color {
+    background: repeating-linear-gradient(45deg, transparent 0 4px, var(--sw-border) 4px 6px) !important;
+}
+
+.sw-edit-coloralpha, .sw-edit-colorhdr {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 10em;
+    min-width: 8em;
+}
+
+    .sw-edit-coloralpha > .sw-slider {
+        flex: 1 1 auto;
+    }
+
+    .sw-edit-colorhdr {
+        flex: 0 0 auto;
+        min-width: 0;
+    }
+
+        .sw-edit-colorhdr > .sw-number {
+            width: 6em;
+        }
+
+.sw-edit-colorlabel {
+    color: var(--sw-text-2);
+    font-size: 90%;
+}
+
+/* ===== Duration, guid, e-mail / url / phone (EditTypeTimeSpan.js, EditTypeSpecs.js) ===== */
+
+.sw-edit-input.sw-edit-duration {
+    flex: 0 1 14em;
+    font-family: var(--sw-mono);
+}
+
+.sw-edit-input.sw-edit-guid {
+    flex: 1 1 22em;
+    font-family: var(--sw-mono);
+}
+
+.sw-edit-hint {
+    color: var(--sw-text-2);
+    font-size: 90%;
+    white-space: nowrap;
+}
+
+/* Numbers with a unit (EditTypeUnit.js): the box takes typed units ("90s", "2 MB"), the unit follows it */
+.sw-edit-input.sw-edit-unitbox {
+    font-variant-numeric: tabular-nums;
+}
+
+.sw-edit-unit {
+    flex: none;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-size: 90%;
+    white-space: nowrap;
+}
+
+/* A hint that warns (a duration set to its Min / Max, a color member that can't store alpha): warning color with a sign, may wrap */
+.sw-edit-hint.sw-edit-hintwarn {
+    color: var(--sw-warning);
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+    .sw-edit-hint.sw-edit-hintwarn::before {
+        content: "\26A0\FE0E\A0";
+    }
+
+/* A text that is not valid for its type (while typing; the value keeps the last valid one) */
+.sw-edit-input.sw-invalid {
+    border-color: var(--sw-danger);
+    box-shadow: 0 0 0 1px var(--sw-danger);
+}
+
+/* ===== null (Design v2: null looks like null) ===== */
+
+/* The null token: object / collection summaries, read only null values ("null" in a dashed mono box) */
+.sw-edit-info.sw-edit-nulltoken, .sw-edit-null > code, .sw-edit-rotext[data-placeholder="null"]::before {
+    font-family: var(--sw-mono);
+    font-size: 90%;
+    padding: 1px 6px;
+    border: 1px dashed var(--sw-border-strong);
+    border-radius: var(--sw-radius);
+    color: var(--sw-text-2);
+    background: none;
+}
+
+/* The empty token: a read only empty text shows "empty" (Sw.Edit.EmptyText) in the shape of the null token, a step quieter (solid
+   hairline), never a blank (Design v2). The text is not part of the value: copy / selection give "". */
+.sw-edit-rotext.sw-edit-rotext-blank::before {
+    font-family: var(--sw-mono);
+    font-size: 90%;
+    padding: 1px 6px;
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    color: var(--sw-text-2);
+    background: none;
+    -webkit-text-security: none;
+}
+
+/* "Set a value": creates the default object / an empty collection of a null member (editable editors) */
+.sw-edit-setvalue {
+    font-size: 90%;
+}
+
+/* The "+ Add item" row below the items: a dashed full width row (Design v2 collections) */
+.sw-edit-addrowwrap > .sw-edit-addrow {
+    width: 100%;
+    justify-content: flex-start;
+    border: 1px dashed var(--sw-border-strong);
+    color: var(--sw-text-2);
+}
+
+@media (hover: hover) {
+    .sw-edit-addrowwrap > .sw-edit-addrow:hover:not(:disabled, [aria-disabled="true"]) {
+        color: var(--sw-fg);
+        border-color: var(--sw-accent1);
+    }
+}
+
+/* ===== Hint line, summaries, form footer (Design v2, PORTING.md B14) ===== */
+
+/* The label is the name over its hint line (short type and constraints) */
+.sw-edit-label {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.sw-edit-typehint {
+    display: block;
+    max-width: 100%;
+    padding: 0 0.25em 4px 0;
+    margin-top: -2px;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-size: var(--sw-text-xs, 0.75rem);
+    font-weight: 400;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+    .sw-edit-label:hover .sw-edit-typehint {
+        color: var(--sw-text-2, var(--sw-text-2));
+    }
+}
+
+/* Title row summary of a collection item / object ("[3] Afar · aa · Afar") */
+.sw-edit-summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--sw-text-2, var(--sw-text-2));
+    padding-inline-end: 0.25em;
+}
+
+.sw-edit-head:has(.sw-edit-summary) > .sw-edit-typetitle {
+    flex: 0 0 auto;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-text-xs, 0.75rem);
+    color: var(--sw-text-3, var(--sw-text-2));
+    font-weight: 400;
+}
+
+/* The object / collection summary of a member ellipsizes in its cell */
+.sw-edit-value > .sw-edit-info {
+    max-width: 100%;
+}
+
+/* Sticky form footer (Sw.Edit.FormFooter): Reset (left), the change count, the actions (right, primary last) */
+.sw-edit-formfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2, 8px);
+    padding: var(--sw-space-3, 12px) var(--sw-space-4, 16px);
+    margin-top: var(--sw-space-2, 8px);
+    background: var(--sw-surface, var(--sw-bg));
+    border-top: 1px solid var(--sw-border, var(--sw-border));
+}
+
+    .sw-edit-formfoot > .sw-edit-changes {
+        background: var(--sw-accent1-soft);
+        color: var(--sw-text-accent, var(--sw-fg));
+    }
+
+    .sw-edit-formfoot > .sw-edit-changes[hidden] {
+        display: none;
+    }
+
+.sw-edit-formfoot-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sw-space-2, 8px);
+    margin-left: auto;
+}
+
+/* Phones: full size buttons sharing the row */
+.sw-edit-formfoot.sw-edit-formfoot-touch .sw-button, html[data-density="touch"] .sw-edit-formfoot .sw-button {
+    min-height: 44px;
+}
+
+@media (max-width: 760px) {
+    .sw-edit-formfoot {
+        padding: var(--sw-space-2, 8px);
+    }
+
+        .sw-edit-formfoot .sw-button {
+            min-height: 44px;
+        }
+}
+
+/* ===== Read only display renderers (Design v2, PORTING.md B14: nothing read only looks interactive) ===== */
+
+/* Enums / flags ("Read, Write"), booleans ("Yes" / "No") and the language of a read only member: plain text like every read only
+   value (Sw.Edit.ReadOnlyText), no select box, chips, switch or button */
+.sw-edit-rotext.sw-edit-roselect, .sw-edit-rotext.sw-edit-robool {
+    flex: 1 1 auto;
+    max-width: 100%;
+}
+
+.sw-edit-rotext, .sw-edit-language-ro {
+    font-variant-numeric: tabular-nums;
+}
+
+.sw-edit-language.sw-edit-language-ro {
+    min-height: calc(var(--sw-control-h) - 8px);
+    padding: 0 9px;
+    border-color: transparent;
+    background: none;
+    cursor: text;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* The language as a plain code (no IsoDataService: no language list and no flags) */
+.sw-edit-input.sw-edit-langcode-input:not(.sw-edit-rotext) {
+    flex: 0 1 9rem;
+    width: 9rem;
+}
+
+/* new Sw.Edit("Unknown.Type"): the type name could not be resolved */
+.sw-edit-typeerror {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sw-space-2, 8px);
+    padding: var(--sw-space-2, 8px) var(--sw-space-3, 12px);
+    border-radius: var(--sw-radius);
+    background: var(--sw-danger-soft);
+    color: var(--sw-danger);
+    font-size: var(--sw-text-sm, 0.875rem);
+    overflow-wrap: anywhere;
+}
+
+    .sw-edit-typeerror .sw-icon {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+    }
+
+/* A form footer of an editor where nothing is editable (Sw.Edit.FormFooter NothingEditable): hidden, or (ShowReadOnly) the actions only */
+.sw-edit-formfoot[hidden], .sw-edit-formfoot > .sw-edit-reset[hidden] {
     display: none;
 }
 
-/*############# Icons ###################*/
-/*
- * Icon classes for ColorIcon / popup menu items (IconClass in Edit.js, EditTypeCollection.js). Each sets only a
- * mask-image from ../icons/; the colour comes from the background colour set by the ColorIcon base styles.
- * SysWeaverEditIconMenu = menu, SysWeaverEditIconDefault = reset to default (reload.svg),
- * SysWeaverEditIconCopy / SysWeaverEditIconPaste = copy / paste, SysWeaverEditIconExpand /
- * SysWeaverEditIconCollapse = expand / collapse, SysWeaverEditIconAddItem = add item (plus.svg),
- * SysWeaverEditIconClearCollection = clear collection, SysWeaverEditIconAddItemBefore / SysWeaverEditIconAddItemAfter
- * = insert above / below, SysWeaverEditIconMoveItemTop / SysWeaverEditIconMoveItemUp / SysWeaverEditIconMoveItemDown /
- * SysWeaverEditIconMoveItemBottom = move item.
- */
-.SysWeaverEditIconMenu {
-    mask-image: url("../icons/menu.svg");
+/* A read only color: the swatch shows the true color (not dimmed like a disabled button) and has no button look */
+.sw-edit-color > .sw-edit-colorswatch:disabled {
+    opacity: 1;
+    cursor: default;
+    background: none;
+    border-color: transparent;
+    box-shadow: none;
 }
 
-.SysWeaverEditIconDefault {
-    mask-image: url("../icons/reload.svg");
+/* ===== Calm rows and sized controls (PORTING.md B14) ===== */
+
+/* Control widths by type (override on .sw-edit or any container, ex: `.my-form .sw-edit { --sw-edit-text-w: 30rem }`):
+   - --sw-edit-number-w / --sw-edit-number-max: number boxes start at the first and grow with the value up to the second;
+   - --sw-edit-field-w: short values (enum selects, date / time, colors, durations, e-mail / url / phone, the language);
+   - --sw-edit-text-w: one line texts; multi line texts (textarea) and nested data use the full width. */
+.sw-edit {
+    --sw-edit-number-max: 20rem;
+    --sw-edit-field-w: 22rem;
+    --sw-edit-text-w: 40rem;
+    --sw-edit-rule: color-mix(in srgb, var(--sw-border) 55%, transparent);
 }
 
-.SysWeaverEditIconCopy {
-    mask-image: url("../icons/copy.svg");
+/* Rows: no tinted blocks, a hairline between rows like the data grid; the focused row gets the faint hover tint */
+.sw-edit-row, .sw-edit-child .sw-edit-row {
+    background: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--sw-edit-rule);
 }
 
-.SysWeaverEditIconPaste {
-    mask-image: url("../icons/paste.svg");
+    .sw-edit-row:focus-within, .sw-edit-child .sw-edit-row:focus-within {
+        background: var(--sw-hover, var(--sw-surface-sunken));
+    }
+
+    .sw-edit-row.sw-edit-expanded {
+        border-bottom-color: transparent;
+    }
+
+.sw-edit-desktop .sw-edit-body {
+    row-gap: 0;
 }
 
-.SysWeaverEditIconExpand {
-    mask-image: url("../icons/expand.svg");
+.sw-edit-desktop .sw-edit-row > .sw-edit-label, .sw-edit-desktop .sw-edit-row > .sw-edit-value {
+    padding-top: 3px;
+    padding-bottom: 3px;
 }
 
-.SysWeaverEditIconCollapse {
-    mask-image: url("../icons/collapse.svg");
+.sw-edit-data {
+    margin-top: 0;
+    margin-bottom: 6px;
 }
 
-.SysWeaverEditIconAddItem {
-    mask-image: url("../icons/plus.svg");
+/* Single line texts: up to --sw-edit-text-w */
+.sw-edit-value > input.sw-edit-input:not(.sw-edit-number) {
+    max-width: var(--sw-edit-text-w);
 }
 
-.SysWeaverEditIconClearCollection {
-    mask-image: url("../icons/clear.svg");
+/* Number boxes: at least --sw-edit-number-w, wider for a long value (--sw-edit-number-len, set by the editor), at most
+   --sw-edit-number-max (the tool tip then shows the whole value) */
+.sw-edit-input.sw-edit-number {
+    flex: 0 0 auto;
+    width: max(var(--sw-edit-number-w), calc(var(--sw-edit-number-len, 0) * 1ch + 1.75rem));
+    max-width: min(100%, var(--sw-edit-number-max));
 }
 
-.SysWeaverEditIconAddItemBefore {
-    mask-image: url("../icons/AddAbove.svg");
+.sw-edit-hasslider > .sw-slider {
+    flex: 1 1 8em;
+    max-width: var(--sw-edit-field-w);
 }
 
-.SysWeaverEditIconAddItemAfter {
-    mask-image: url("../icons/AddBelow.svg");
+/* Short values */
+.sw-edit-select {
+    flex: 0 1 auto;
+    min-width: min(100%, 12rem);
+    max-width: min(100%, var(--sw-edit-field-w));
 }
 
-.SysWeaverEditIconMoveItemTop {
-    mask-image: url("../icons/MoveTop.svg");
+.sw-edit-datetime {
+    flex: 0 1 auto;
+    max-width: 100%;
 }
 
-.SysWeaverEditIconMoveItemUp {
-    mask-image: url("../icons/MoveUp.svg");
+    .sw-edit-datetime > .sw-edit-input {
+        flex: 0 1 11rem;
+        width: 11rem;
+        max-width: 100%;
+    }
+
+.sw-edit-color {
+    max-width: min(100%, calc(2 * var(--sw-edit-field-w)));
 }
 
-.SysWeaverEditIconMoveItemDown {
-    mask-image: url("../icons/MoveDown.svg");
+    .sw-edit-color > .sw-edit-colortext {
+        flex: 0 1 14rem;
+    }
+
+    .sw-edit-coloralpha {
+        flex: 0 1 14rem;
+    }
+
+.sw-edit-value > input.sw-edit-input.sw-edit-duration {
+    flex: 0 1 14em;
 }
 
-.SysWeaverEditIconMoveItemBottom {
-    mask-image: url("../icons/MoveBottom.svg");
+.sw-edit-value > input.sw-edit-input.sw-edit-guid {
+    flex: 0 1 24rem;
 }
 
+.sw-edit-value > input.sw-edit-input.sw-edit-email, .sw-edit-value > input.sw-edit-input.sw-edit-url, .sw-edit-value > input.sw-edit-input.sw-edit-phone {
+    max-width: var(--sw-edit-field-w);
+}
+
+.sw-edit-value > input.sw-edit-input.sw-edit-url {
+    max-width: var(--sw-edit-text-w);
+}
+
+textarea.sw-edit-multiline {
+    max-width: none;
+}
+
+/* The hint line breaks between its parts (" · "), never inside one ("2020-01-01 to 2030-12-31"); a part longer than the label
+   column ends with an ellipsis (the label's tool tip has the whole hint) */
+.sw-edit-typehint {
+    overflow-wrap: normal;
+}
+
+.sw-edit-hintpart {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+/* A validation message under the field (Validate(true)); removed when the value changes */
+.sw-edit-fielderror {
+    flex: 1 0 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: var(--sw-danger);
+    font-size: var(--sw-text-sm, 0.875rem);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+    .sw-edit-fielderror::before {
+        content: "\26A0\FE0E";
+        flex: none;
+    }
+
+.sw-edit-row.sw-edit-haserror {
+    box-shadow: inset 3px 0 0 var(--sw-danger);
+}
+
+/* Directly inside a card body (Sw.Card): the card is the frame (Sw.Edit adds sw-edit-incard). The editor drops its own frame;
+   when the card has a title, the editor's title row moves into the card's tools (sw-edit-head-incard): only the editor menu
+   shows there, next to the card title (the row keeps copy / paste / drag and drop of the whole value). Opt out: the class
+   "sw-edit-framed" on the editor element before it is shown (Options.Border / Title false drop them everywhere). */
+.sw-edit-root.sw-edit-incard {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    background: none;
+}
+
+.sw-edit-head.sw-edit-head-incard {
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+    .sw-edit-head.sw-edit-head-incard > .sw-edit-typetitle, .sw-edit-head.sw-edit-head-incard > .sw-edit-expand {
+        display: none;
+    }
+
+/* ===== Units and notes next to their values (read only, every layout and width) =====
+   A read only value is text sized to its content, not the edit box: the unit and the note follow the value ("90 s = 1 min 30 s",
+   "2097152 B = 2 MB", "00:01:30 = 1 min 30 s") instead of floating at the edit box width, and date and time read as one value
+   ("2026-10-20 08:00:00", also on phones). Editable boxes keep their sizes (the unit follows the box, the number is right aligned). */
+.sw-edit .sw-edit-value > .sw-edit-rotext.sw-edit-input.sw-edit-number,
+.sw-edit .sw-edit-value > .sw-edit-rotext.sw-edit-input.sw-edit-duration,
+.sw-edit .sw-edit-value > .sw-edit-rotext.sw-edit-input.sw-edit-guid,
+.sw-edit .sw-edit-datetime > .sw-edit-rotext.sw-edit-input {
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+    /* the unit right after the read only number: no inner padding between them ("90 s", not "90    s") */
+    .sw-edit .sw-edit-value > .sw-edit-rotext.sw-edit-input:has(+ .sw-edit-unit),
+    .sw-edit .sw-edit-value > .sw-edit-rotext.sw-edit-input:has(+ .sw-edit-hint) {
+        padding-right: 0;
+    }
+
+.sw-edit .sw-edit-datetime:has(> .sw-edit-rotext) {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    column-gap: 0;
+}
+
+    .sw-edit .sw-edit-datetime > .sw-edit-rotext + .sw-edit-rotext {
+        padding-left: 0;
+    }
+
+/* the unit and the note: the UI font, centered on the value line */
+.sw-edit .sw-edit-value > .sw-edit-unit {
+    align-self: center;
+}

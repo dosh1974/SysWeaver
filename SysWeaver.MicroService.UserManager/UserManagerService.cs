@@ -8,6 +8,7 @@ using SysWeaver.Auth;
 using SysWeaver.Compression;
 using SysWeaver.Db;
 using SysWeaver.Net;
+using SysWeaver.Security;
 using SimpleStack.Orm;
 using SysWeaver.Data;
 using SysWeaver.MicroService.Db;
@@ -19,23 +20,26 @@ namespace SysWeaver.MicroService
 {
 
     [WebApiUrl("auth")]
-    [WebMenuEmbedded("User", "User/LostPassword", "Forgot password", "auth/ForgotPassword.html", "Click to recover your passowrd", "IconRecover", 20, null, true)]
+    [WebMenuEmbedded("User", "User/LostPassword", "Forgot password", "auth/ForgotPassword.html", "Click to recover your password", "IconRecover", 20, null, true)]
 
     [WebMenuEmbedded("User", "User/AddPassword", "Add a password", "auth/AddPassword.html", "Click to add a password to your account", "IconAddPassword", 30, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanAddPassword))]
     [WebMenuEmbedded("User", "User/ChangePassword", "Change password", "auth/SetPassword.html", "Click to change your password", "IconChangePassword", 31, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanChangePassword))]
-    [WebMenuEmbedded("User", "User/DeletePassword", "Delete password", "auth/DeletePassword.html", "Click to delate your account password", "IconDeletePassword", 32, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanDeletePassword))]
+    [WebMenuEmbedded("User", "User/DeletePassword", "Delete password", "auth/DeletePassword.html", "Click to delete your account password", "IconDeletePassword", 32, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanDeletePassword))]
 
     [WebMenuEmbedded("User", "User/AddEmail", "Add email address", "auth/AddEmail.html", "Click to associate an email address to your account", "IconAddEmail", 40, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanAddEmail))]
     [WebMenuEmbedded("User", "User/ChangeEmail", "Change email address", "auth/ChangeEmail.html", "Click to change your associated email address", "IconChangeEmail", 41, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanChangeEmail))]
     [WebMenuEmbedded("User", "User/DeleteEmail", "Remove email address", "auth/DeleteEmail.html", "Click to remove your associated email address", "IconDeleteEmail", 42, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanDeleteEmail))]
 
-    [WebMenuEmbedded("User", "User/AddPhone", "Add phone number", "auth/AddPhone.html", "Click to associate an phone number to your account", "IconAddPhone", 50, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanAddPhone))]
+    [WebMenuEmbedded("User", "User/AddPhone", "Add phone number", "auth/AddPhone.html", "Click to associate a phone number to your account", "IconAddPhone", 50, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanAddPhone))]
     [WebMenuEmbedded("User", "User/ChangePhone", "Change phone number", "auth/ChangePhone.html", "Click to change your associated phone number", "IconChangePhone", 51, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanChangePhone))]
     [WebMenuEmbedded("User", "User/DeletePhone", "Remove phone number", "auth/DeletePhone.html", "Click to remove your associated phone number", "IconDeletePhone", 52, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanDeletePhone))]
 
     [WebMenuEmbedded("User", "User/DeleteAccount", "Delete account", "auth/DeleteAccount.html", "Click to delete this account", "IconDelete", 100, "", false, nameof(SysWeaver) + "." + nameof(MicroService) + "." + nameof(UserManagerService) + "." + nameof(UserManagerService.CanDelete))]
+    //  One place for the user accounts, the original's: User menu > Management > Invite user / Users (Users replaces the original "View users"
+    //  table item, same roles). S7a O3: the rewrite's copies in the main menu (Administration > Users > Invite user) are gone, the original had none.
     [WebMenuPath("User", "User/Management", "Management", "User management tools, manage other users", null, 100000)]
     [WebMenuEmbedded("User", "User/Management/InviteUser", "Invite user", "auth/InviteUser.html", "Click to invite a user to join this site", "IconInvite", 0, UserManagerRoles.InviteUser)]
+    [WebMenuEmbedded("User", "User/Management/Users", "Users", "auth/Users.html", "The user accounts of this site: find a user, invite a user or force a password reset", "IconUsers", 1, UserManagerRoles.ViewUser)]
     [IsMicroService]
     [RequiredDep<IEmailSender>]
     public sealed partial class UserManagerService : AuthorizerBase, IDisposable
@@ -251,6 +255,8 @@ namespace SysWeaver.MicroService
             if (shortCodeDigits > 16)
                 shortCodeDigits = 16;
             ShortCodeDigits = shortCodeDigits;
+            CodeTryLimits = GetCodeTryLimits(p.CodeTriesPerUser);
+            ResetCodeTryLimits = CodeTryLimits.Length > 0 ? CodeTryLimits : [new RateLimiterParams { Count = 10, Duration = 15 * 60 }];
 
 
             ManProps = new UserManagerProps
@@ -287,6 +293,8 @@ namespace SysWeaver.MicroService
             Messages = String.IsNullOrEmpty(p.LocalizedMessages) ? null : new ManagedMessages(p.LocalizedMessages, EnvInfo.AppLanguage ?? "en-US", true,
                 ManagedMessageTypes.Text | ManagedMessageTypes.Email,
                 ManagedMessageTypes.All,
+                //  The variables besides the standard ones: "[UndoLink]" of the changed e-mail notice
+                ChangedEmailMail.UserManagerVars,
                 "AddPassword",
                 "DeletePassword",
                 "DeleteUser",
@@ -301,6 +309,8 @@ namespace SysWeaver.MicroService
                 "AddPhone",
                 "ChangePhone",
                 "DeletedPhone",
+                //  Optional (newer than the other templates): folders without it use the built in template
+                "*ChangedEmail",
                 "*Header",
                 "*Footer"
                 );
@@ -329,6 +339,14 @@ namespace SysWeaver.MicroService
 
         AuthManagerService AuthMan;
         HttpServerBase HttpServer;
+
+        /// <summary>
+        /// The root of the links in the messages (see <see cref="HttpServerBase.GetLinkRoot"/>): with a wildcard listener prefix the
+        /// configured external root, never the client's Host header (it could make a reset link point to someone else's site)
+        /// </summary>
+        /// <param name="context">The request, null for none</param>
+        String LinkRoot(HttpServerRequest context)
+            => context?.Server?.GetLinkRoot(context) ?? HttpServer?.GetLinkRoot(null) ?? "";
         
         readonly ManagedMessages Messages;
 
@@ -347,6 +365,9 @@ namespace SysWeaver.MicroService
 
         async Task<bool> Prune()
         {
+            //  First: no database needed (a database error doesn't stop it)
+            PruneResetPasswordSent();
+            PruneCodes();
             using (var c = await Db.GetAsync().ConfigureAwait(false))
             {
                 var now = DateTime.UtcNow;
@@ -360,6 +381,8 @@ namespace SysWeaver.MicroService
             SystemString.Dispose();
             Manager.OnServiceAdded -= Manager_OnServiceAdded;
             Interlocked.Exchange(ref PruneTask, null)?.Dispose();
+            //  The password reset work that waits ends (the running sends finish)
+            ResetPasswordStop.Cancel();
         }
 
         readonly String HtmlLogo;
@@ -397,7 +420,7 @@ namespace SysWeaver.MicroService
             var d = new Dictionary<String, String>(StringComparer.Ordinal)
             {
                 {  "[Site]", EnvInfo.AppDisplayName },
-                {  "[Root]", context?.Prefix ?? HttpServer?.ExternalRootUri ?? ""},
+                {  "[Root]", LinkRoot(context) },
                 {  "[BackgroundDark]", cols.BackgroundDark },
                 {  "[Background]", cols.Background },
                 {  "[Color]", cols.Acc1 },
@@ -701,7 +724,7 @@ namespace SysWeaver.MicroService
         {
             var actionData = await GetAction<T>(token, type, context).ConfigureAwait(false);
             if (actionData == null)
-                throw new TokenExpiredException();
+                throw Refused(token);
             token = actionData.Item1;
             var id = getIdFromData(actionData.Item2);
             if (id == 0)
@@ -713,7 +736,7 @@ namespace SysWeaver.MicroService
                 throw new UserNoLongerExistException(id);
             var auth = await InternalAuthUser(c, id).ConfigureAwait(false);
             if (auth == null)
-                throw new UserNoLongerExistException(id);
+                throw await NoAuthException(c, id).ConfigureAwait(false);
             await DeleteAction(c, token, type, context).ConfigureAwait(false);
             await tr.CommitAsync().ConfigureAwait(false);
             return auth;
@@ -823,7 +846,8 @@ namespace SysWeaver.MicroService
             if (uid == 0)
                 return false;
             using var c = await Db.GetAsync().ConfigureAwait(false);
-            return (await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == uid).ConfigureAwait(false)) != null;
+            //  A row without a hash is no password (GetSaltAsync adds one for a user without a password when anyone asks for the salt)
+            return IsUsablePassword(await c.FirstOrDefaultAsync<DbAuthPassword>(x => x.UserId == uid).ConfigureAwait(false));
         }
 
 
@@ -880,7 +904,7 @@ namespace SysWeaver.MicroService
             var token = r.Token;
             var dataD = await GetAction<NewUserData>(token, DbAction.CreateUser, context).ConfigureAwait(false);
             if (dataD == null)
-                throw new TokenExpiredException();
+                throw Refused(token);
             token = dataD.Item1;
             var u = dataD.Item2;
             if ((u == null))
@@ -961,6 +985,13 @@ namespace SysWeaver.MicroService
                     throw new UserDoNotExistException(userName);
                 await DeleteAction(c, token, DbAction.CreateUser, context).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
+            }
+            //  Audit: the new account, how it came to be (invitation or sign up) and its sign in method and tokens (no secrets)
+            {
+                var how = String.IsNullOrEmpty(u.InvitedBy) ? "signed up" : $"accepted the invitation by \"{u.InvitedBy}\"";
+                var method = !String.IsNullOrEmpty(r.NewHash) ? "a password" : (beforeCommit != null ? "a passkey" : "no sign in method yet");
+                var tokenText = (tokenSet == null) || (tokenSet.Count == 0) ? "no tokens" : String.Concat("the tokens ", String.Join(", ", tokenSet));
+                Manager.AddMessage(MessageLevels.Info, $"User \"{userName}\" (#{id}) was created: {how}, with {method} and {tokenText}");
             }
             await RaiseOnUserCreated(id, userName).ConfigureAwait(false);
             if (login)
@@ -1178,11 +1209,11 @@ namespace SysWeaver.MicroService
         static readonly IReadOnlySet<Char> InvalidChars = ReadOnlyData.Set("|,;:*/\\!\"'".ToCharArray());
 
         /// <summary>
-        /// 
+        /// Set the nick name of a user (trimmed, at most AuhorizationLimits.MaxNickNameLength chars, no special characters)
         /// </summary>
-        /// <param name="userId"></param>
-        /// <param name="newName"></param>
-        /// <returns>true or false, old name, new name</returns>
+        /// <param name="userId">The user id</param>
+        /// <param name="newName">The new nick name</param>
+        /// <returns>true if changed (false if the user doesn't exist or already has exactly this name), old name, new name</returns>
         /// <exception cref="Exception"></exception>
         public async Task<Tuple<bool, String, String>> SetNickName(long userId, String newName)
         {
@@ -1206,9 +1237,9 @@ namespace SysWeaver.MicroService
                 if (user == null)
                     return Tuple.Create(false, (String)null, (String)null);
                 var current = user.NickName;
-                if (current != null)
-                    if (current.FastToLower().FastEquals(newName.FastToLower()))
-                        return Tuple.Create(false, current, current);
+                //  Unchanged only when exactly the same: a change of the letter case ("anna" to "Anna") is saved
+                if (current.FastEquals(newName))
+                    return Tuple.Create(false, current, current);
                 user.NickName = newName;
                 await c.UpdateAsync(user, x => new { x.NickName }).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
@@ -1294,6 +1325,8 @@ namespace SysWeaver.MicroService
                     Email = newEmail,
                     UserId = userId,
                 }).ConfigureAwait(false);
+                //  The links that depend on the old address stop working
+                await RevokeOnEvent(c, userId, AccountEvents.EmailChanged).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
             ResetSessionAuth(user, newEmail);
@@ -1365,6 +1398,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Add a pending new user action
         /// </summary>
+        /// <param name="subjectKind">"invite" or "signup": only one live token per kind and address (a newer invitation to the same address revokes the older one, see <see cref="TargetSubject"/>)</param>
         /// <param name="username">Email of the new user</param>
         /// <param name="email">Email of the new user</param>
         /// <param name="phone">Phone number of the new user</param>
@@ -1374,8 +1408,9 @@ namespace SysWeaver.MicroService
         /// <param name="language">Optional language preference for the user</param>
         /// <param name="expiration">Optional expiration time (UTC), default will bew the NewUserTimeout</param>
         /// <param name="context">Optional context, required to get a short code</param>
+        /// <param name="invitedBy">Optional user name of the inviter (shown in the pending invitations)</param>
         /// <returns>The token that must be supplied together with a new password</returns>
-        async Task<Tuple<String, String>> GetNewUserToken(String username, String email, String phone, String salt, String[] authTokens = null, String domain = null, String language = null, DateTime? expiration = null, HttpServerRequest context = null)
+        async Task<Tuple<String, String>> GetNewUserToken(String subjectKind, String username, String email, String phone, String salt, String[] authTokens = null, String domain = null, String language = null, DateTime? expiration = null, HttpServerRequest context = null, String invitedBy = null)
         {
             if (email != null)
             {
@@ -1425,7 +1460,8 @@ namespace SysWeaver.MicroService
                 Tokens = authTokens,
                 Domain = domain,
                 Language = language,
-            }, DbAction.CreateUser, expiration ?? (now + NewUserTimeout), context, now + NewUserShortTimeout).ConfigureAwait(false);
+                InvitedBy = invitedBy,
+            }, DbAction.CreateUser, TargetSubject(subjectKind, email ?? phone), expiration ?? (now + NewUserTimeout), context, now + NewUserShortTimeout).ConfigureAwait(false);
             return tokens;
         }
 
@@ -1438,13 +1474,16 @@ namespace SysWeaver.MicroService
             public DateTime Expiration;
             public String Type;
             public int TriesLeft;
+            /// <summary>The account of the code, 0 for none (a sign up): its wrong tries also count per account, see <see cref="TrySessionCode"/></summary>
+            public readonly long UserId;
 
-            public ShortData(string shortCode, string token, DateTime expiration, string type, int triesLeft = 10)
+            public ShortData(string shortCode, string token, DateTime expiration, string type, long userId, int triesLeft = 10)
             {
                 ShortCode = shortCode;
                 Token = token;
                 Expiration = expiration;
                 Type = type;
+                UserId = userId;
                 TriesLeft = triesLeft;
             }
         }
@@ -1473,18 +1512,325 @@ namespace SysWeaver.MicroService
 
         readonly int ShortCodeDigits = 6;
 
+        #region One live token per subject and purpose
+
+        /// <summary>
+        /// The subject of the action tokens that belong to a user (see <see cref="AddAction"/>): only one live token per user and type.
+        /// </summary>
+        /// <param name="userId">The user id</param>
+        /// <param name="variant">Optional variant, ex: "restore" for the recovery link of a removed e-mail address (so a new change request doesn't revoke it)</param>
+        /// <returns>The subject</returns>
+        public static String UserSubject(long userId, String variant = null)
+            => variant == null
+                ? String.Concat("user:", userId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                : String.Concat("user:", userId.ToString(System.Globalization.CultureInfo.InvariantCulture), "|", variant);
+
+        /// <summary>
+        /// The subject of the action tokens for an address that has no user yet (an invitation or a sign up): only one live token per address and kind.
+        /// </summary>
+        /// <param name="kind">"invite" or "signup" (separate: a sign up never revokes an invitation)</param>
+        /// <param name="target">The e-mail address or phone number</param>
+        /// <returns>The subject</returns>
+        public static String TargetSubject(String kind, String target)
+            => String.Concat(kind, ":", target?.Trim().ToLowerInvariant() ?? "");
+
+        /// <summary>
+        /// The subject variant of the recovery link sent to a removed e-mail address or phone number (see <see cref="UserSubject"/>): a new change request doesn't revoke it,
+        /// but any later change of the account does (see <see cref="ActionTokenGroups"/>), and it never replaces a newer address.
+        /// </summary>
+        public const String RestoreVariant = "restore";
+
+        /// <summary>
+        /// The subject variant of the undo link sent to the old e-mail address after a change (see <see cref="UndoEmailChange"/>): only the deletion of
+        /// the account revokes it (the one who changed the address can't make it stop working), a newer undo link doesn't replace it.
+        /// </summary>
+        public const String UndoVariant = "undo";
+
+        /// <summary>
+        /// The events that change an account, and so revoke the outstanding links whose meaning depends on the old state (see <see cref="ActionTokenGroups"/>).
+        /// </summary>
+        public static class AccountEvents
+        {
+            /// <summary>The password was changed, set (reset link) or added</summary>
+            public const String PasswordChanged = "PasswordChanged";
+            /// <summary>An administrator required a new password</summary>
+            public const String PasswordForcedReset = "PasswordForcedReset";
+            /// <summary>The password was removed</summary>
+            public const String PasswordRemoved = "PasswordRemoved";
+            /// <summary>A passkey was added</summary>
+            public const String PassKeyAdded = "PassKeyAdded";
+            /// <summary>A passkey was removed</summary>
+            public const String PassKeyRemoved = "PassKeyRemoved";
+            /// <summary>An e-mail address was added or changed (confirmed)</summary>
+            public const String EmailChanged = "EmailChanged";
+            /// <summary>The e-mail address was removed</summary>
+            public const String EmailRemoved = "EmailRemoved";
+            /// <summary>A phone number was added or changed (confirmed)</summary>
+            public const String PhoneChanged = "PhoneChanged";
+            /// <summary>The phone number was removed</summary>
+            public const String PhoneRemoved = "PhoneRemoved";
+            /// <summary>The account was deleted</summary>
+            public const String AccountDeleted = "AccountDeleted";
+        }
+
+        /// <summary>
+        /// The token kind (purpose) of an action type and subject variant, as declared in <see cref="ActionTokenGroups"/>: the type, or "type|variant".
+        /// </summary>
+        /// <param name="type">The action type, ex: <see cref="DbAction.AddEmail"/></param>
+        /// <param name="variant">The subject variant, ex: <see cref="RestoreVariant"/>, null for none</param>
+        /// <returns>The kind</returns>
+        public static String TokenKind(String type, String variant = null)
+            => variant == null ? type : String.Concat(type, "|", variant);
+
+        /// <summary>
+        /// <b>Every action token kind of a user and the account events that revoke it, by group</b> (one place, so a new kind can't be forgotten):
+        /// <list type="bullet">
+        /// <item>"Account" links (reset / add / delete password, add a passkey, delete the account; sent to every address of the account): revoked by every account event,
+        /// so a link sent to an old address or before a password change never works afterwards.</item>
+        /// <item>"Email" links (add / change e-mail, restore a removed e-mail): revoked by a credential change, an e-mail change or removal, and the deletion.</item>
+        /// <item>"Phone" links (add / change phone, restore a removed phone): revoked by a credential change, a phone change or removal, and the deletion.</item>
+        /// <item>"Undo" links (undo an e-mail change, sent to the old address): only revoked by the deletion, so the one who changed the address can't make them stop working.</item>
+        /// <item>Invitations and sign ups (<see cref="DbAction.CreateUser"/>) belong to no account yet: no event revokes them.</item>
+        /// </list>
+        /// A new kind of action token MUST be declared here (<see cref="AddAction"/> refuses an undeclared kind for a user subject); the unit tests generate
+        /// the matrix of every kind and every event from this declaration.
+        /// </summary>
+        public static readonly TokenGroups ActionTokenGroups = new TokenGroups()
+            .Group("Account",
+                AccountEvents.PasswordChanged, AccountEvents.PasswordForcedReset, AccountEvents.PasswordRemoved, AccountEvents.PassKeyAdded, AccountEvents.PassKeyRemoved,
+                AccountEvents.EmailChanged, AccountEvents.EmailRemoved, AccountEvents.PhoneChanged, AccountEvents.PhoneRemoved, AccountEvents.AccountDeleted)
+            .Group("Email",
+                AccountEvents.PasswordChanged, AccountEvents.PasswordForcedReset, AccountEvents.PasswordRemoved, AccountEvents.PassKeyAdded, AccountEvents.PassKeyRemoved,
+                AccountEvents.EmailChanged, AccountEvents.EmailRemoved, AccountEvents.AccountDeleted)
+            .Group("Undo",
+                AccountEvents.AccountDeleted)
+            .Group("Phone",
+                AccountEvents.PasswordChanged, AccountEvents.PasswordForcedReset, AccountEvents.PasswordRemoved, AccountEvents.PassKeyAdded, AccountEvents.PassKeyRemoved,
+                AccountEvents.PhoneChanged, AccountEvents.PhoneRemoved, AccountEvents.AccountDeleted)
+            .Purpose(DbAction.ResetPassword, "Account")
+            .Purpose(DbAction.AddPassword, "Account")
+            .Purpose(DbAction.DeletePassword, "Account")
+            .Purpose(ActionTokenGetResetChallenge, "Account")
+            .Purpose(DbAction.DeleteUser, "Account")
+            .Purpose(DbAction.AddEmail, "Email")
+            .Purpose(TokenKind(DbAction.AddEmail, RestoreVariant), "Email")
+            .Purpose(DbAction.AddPhone, "Phone")
+            .Purpose(TokenKind(DbAction.AddPhone, RestoreVariant), "Phone")
+            .Purpose(DbAction.UndoEmail, "Undo")
+            .Purpose(TokenKind(DbAction.UndoEmail, UndoVariant), "Undo")
+            .Purpose(DbAction.CreateUser);
+
+        /// <summary>
+        /// The action types of the "Account" links that older versions made without a subject tag (found by reading their data, see <see cref="RevokeOnEvent"/>).
+        /// </summary>
+        static readonly String[] UntaggedCredentialTypes = [DbAction.ResetPassword, DbAction.AddPassword, DbAction.DeletePassword, ActionTokenGetResetChallenge];
+
+        #region Dead tokens (why a link no longer works)
+
+        /// <summary>
+        /// Why a token is no longer live (in memory, for the "this link no longer works" page, see <see cref="CheckActionToken"/>): "Used", "Replaced" or an <see cref="AccountEvents"/> name.
+        /// Forgotten at a restart (the page then says the generic sentence).
+        /// </summary>
+        readonly Dictionary<String, Tuple<String, long>> DeadTokens = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The most dead tokens remembered (the older half is forgotten when full)
+        /// </summary>
+        const int MaxDeadTokens = 20000;
+
+        /// <summary>
+        /// The cause of a token that was used
+        /// </summary>
+        public const String CauseUsed = "Used";
+
+        /// <summary>
+        /// The cause of a token that was replaced by a newer one
+        /// </summary>
+        public const String CauseReplaced = "Replaced";
+
+        /// <summary>
+        /// The cause of a token that expired
+        /// </summary>
+        public const String CauseExpired = "Expired";
+
+        /// <summary>
+        /// The cause of a restore link when the account has a newer address
+        /// </summary>
+        public const String CauseNewerContact = "NewerContact";
+
+        void MarkDead(String token, String cause)
+        {
+            if (String.IsNullOrEmpty(token))
+                return;
+            var d = DeadTokens;
+            lock (d)
+            {
+                if (d.Count >= MaxDeadTokens)
+                {
+                    var keep = d.OrderByDescending(x => x.Value.Item2).Take(MaxDeadTokens / 2).ToList();
+                    d.Clear();
+                    foreach (var x in keep)
+                        d[x.Key] = x.Value;
+                }
+                d[token] = Tuple.Create(cause, DateTime.UtcNow.Ticks);
+            }
+        }
+
+        String DeadCause(String token)
+        {
+            if (String.IsNullOrEmpty(token))
+                return null;
+            var d = DeadTokens;
+            lock (d)
+                return d.TryGetValue(token, out var c) ? c.Item1 : null;
+        }
+
+        /// <summary>
+        /// The sentence for people that says why a link no longer works.
+        /// </summary>
+        /// <param name="cause">The cause ("Used", "Replaced", "Expired", "NewerContact", an <see cref="AccountEvents"/> name), null if unknown</param>
+        /// <param name="isCode">True for a short code that the user typed (not a link)</param>
+        /// <param name="kindType">The action type (for the "newer address" sentence), null if unknown</param>
+        /// <returns>The sentence (in english, translated by the server)</returns>
+        public static String TokenRefusedReason(String cause, bool isCode = false, String kindType = null)
+        {
+            if (isCode && (cause == null))
+                return "The code is wrong or no longer works: check it, or ask for a new message.";
+            const String p = "This link no longer works: ";
+            switch (cause)
+            {
+                case CauseUsed: return p + "it was already used.";
+                case CauseReplaced: return p + "a newer link was sent, use the link in the newest message.";
+                case CauseExpired: return p + "it has expired.";
+                case CauseNewerContact: return p + (kindType == DbAction.AddPhone ? "a newer phone number was confirmed for the account after it was sent." : "a newer e-mail address was confirmed for the account after it was sent.");
+                case AccountEvents.PasswordChanged: return p + "the password of the account was changed after it was sent.";
+                case AccountEvents.PasswordForcedReset: return p + "an administrator required a new password after it was sent.";
+                case AccountEvents.PasswordRemoved: return p + "the password of the account was removed after it was sent.";
+                case AccountEvents.PassKeyAdded: return p + "a passkey was added to the account after it was sent.";
+                case AccountEvents.PassKeyRemoved: return p + "a passkey of the account was removed after it was sent.";
+                case AccountEvents.EmailChanged: return p + "the e-mail address of the account was changed after it was sent.";
+                case AccountEvents.EmailRemoved: return p + "the e-mail address of the account was removed after it was sent.";
+                case AccountEvents.PhoneChanged: return p + "the phone number of the account was changed after it was sent.";
+                case AccountEvents.PhoneRemoved: return p + "the phone number of the account was removed after it was sent.";
+                case AccountEvents.AccountDeleted: return p + "the account was deleted.";
+            }
+            return p + "it is incomplete, or it was already used, replaced by a newer link or has expired.";
+        }
+
+        /// <summary>
+        /// The exception for a token that can't be used (410 with the reason, see <see cref="TokenExpiredException"/>).
+        /// </summary>
+        /// <param name="token">The token or short code as sent by the client</param>
+        /// <returns>The exception to throw</returns>
+        TokenExpiredException Refused(String token)
+        {
+            token = token?.Replace(' ', '+');
+            var isCode = (token != null) && (token.Length <= 32);
+            var cause = isCode ? null : DeadCause(token);
+            return new TokenExpiredException(TokenRefusedReason(cause, isCode), isCode ? 400 : 410);
+        }
+
+        #endregion//Dead tokens
+
+        /// <summary>
+        /// Revoke the live action tokens of a subject for some types (tokens made by <see cref="AddAction"/> with that subject).
+        /// </summary>
+        /// <param name="c">An open connection (may be in a transaction)</param>
+        /// <param name="subject">The subject</param>
+        /// <param name="cause">Why ("Replaced" or an <see cref="AccountEvents"/> name), remembered for the "no longer works" page</param>
+        /// <param name="keep">A token to keep (ex: the one just issued), null for none</param>
+        /// <param name="types">The action types</param>
+        /// <returns>The number of tokens revoked</returns>
+        async Task<int> RevokeActions(OrmConnection c, String subject, String cause, String keep, params String[] types)
+        {
+            int n = 0;
+            foreach (var type in types)
+            {
+                var tag = SubjectTokens.Tag(type, subject);
+                var rows = await c.SelectAsync<DbAction>(x => x.Type == type && x.Token.StartsWith(tag)).ConfigureAwait(false);
+                foreach (var row in rows)
+                {
+                    var t = row.Token;
+                    if (String.Equals(t, keep, StringComparison.Ordinal))
+                        continue;
+                    n += await c.DeleteAllAsync<DbAction>(x => x.Token == t).ConfigureAwait(false);
+                    MarkDead(t, cause);
+                }
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// Something changed on an account: revoke every outstanding link of the user whose kind is revoked by the event (see <see cref="ActionTokenGroups"/>).
+        /// Call it in the transaction that makes the change. Also finds the "Account" links made before tokens had a subject (by reading their data).
+        /// </summary>
+        /// <param name="c">An open connection (may be in a transaction)</param>
+        /// <param name="userId">The user</param>
+        /// <param name="evt">The event, one of <see cref="AccountEvents"/></param>
+        /// <param name="keep">A token to keep (ex: the restore link just sent because of the event), null for none</param>
+        /// <returns>The number of tokens revoked</returns>
+        async Task<int> RevokeOnEvent(OrmConnection c, long userId, String evt, String keep = null)
+        {
+            int n = 0;
+            var kinds = ActionTokenGroups.RevokedBy(evt);
+            //  The reset codes use the reset token
+            if (kinds.Contains(DbAction.ResetPassword))
+                RemoveResetCodes(userId);
+            foreach (var kind in kinds)
+            {
+                var bar = kind.IndexOf('|');
+                var type = bar < 0 ? kind : kind.Substring(0, bar);
+                var variant = bar < 0 ? null : kind.Substring(bar + 1);
+                n += await RevokeActions(c, UserSubject(userId, variant), evt, keep, type).ConfigureAwait(false);
+            }
+            //  Tokens without a subject tag (made by an older version, live for at most a day): read their data
+            var now = DateTime.UtcNow;
+            foreach (var type in UntaggedCredentialTypes)
+            {
+                if (!kinds.Contains(type))
+                    continue;
+                var rows = await c.SelectAsync<DbAction>(x => x.Type == type && x.Expiration > now).ConfigureAwait(false);
+                foreach (var row in rows)
+                {
+                    long id;
+                    try
+                    {
+                        id = type == DbAction.DeletePassword ? Data.FromData<long>(row.Data) : (Data.FromData<InternalNewPasswordData>(row.Data)?.UserId ?? 0);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                    if (id != userId)
+                        continue;
+                    var t = row.Token;
+                    if (String.Equals(t, keep, StringComparison.Ordinal))
+                        continue;
+                    n += await c.DeleteAllAsync<DbAction>(x => x.Token == t).ConfigureAwait(false);
+                    MarkDead(t, evt);
+                }
+            }
+            if (n > 0)
+                Manager.AddMessage(MessageLevels.Debug, $"Revoked {n} outstanding links of user #{userId} ({evt})");
+            return n;
+        }
+
         /// <summary>
         /// Generate an "action" token, the token should be sent to one or more of a users communication channels.
+        /// <para>Only ONE token per <paramref name="subject"/> and <paramref name="type"/> is live: the older live tokens of the same subject and type are revoked
+        /// (an older, unused link stops working when a newer one is sent). Pass null as the subject only for a token that may exist many times.</para>
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data"></param>
-        /// <param name="type"></param>
-        /// <param name="expiration"></param>
+        /// <typeparam name="T">The type of the data</typeparam>
+        /// <param name="data">The data kept with the token</param>
+        /// <param name="type">The action type (ex: <see cref="DbAction.ResetPassword"/>)</param>
+        /// <param name="subject">Who the token is for (ex: <see cref="UserSubject"/>, <see cref="TargetSubject"/>), null = no "one live token" rule</param>
+        /// <param name="expiration">When the token expires (UTC)</param>
         /// <param name="context">If non-null a short code (shorter lived) will be generated that can only be used in that session</param>
         /// <param name="shortExpiration">If a context supplied, a short expiration time must also be suplied</param>
-        /// <returns></returns>
+        /// <param name="replace">False to keep the older live tokens of the subject (ex: one undo link per changed address, see <see cref="UndoVariant"/>)</param>
+        /// <returns>The token and the short code</returns>
         /// <exception cref="ArgumentException"></exception>
-        async Task<Tuple<String, String>> AddAction<T>(T data, String type, DateTime expiration, HttpServerRequest context = null, DateTime? shortExpiration = null)
+        async Task<Tuple<String, String>> AddAction<T>(T data, String type, String subject, DateTime expiration, HttpServerRequest context = null, DateTime? shortExpiration = null, bool replace = true)
         {
 #if DEBUG
             if (!type.IsAsciiOnly())
@@ -1492,27 +1838,43 @@ namespace SysWeaver.MicroService
             if (type.Length > 8)
                 throw new ArgumentException("Max length of 8", nameof(type));
 #endif//DEBUG
+            //  Every kind of token must be declared in the revocation groups (so no event forgets it)
+            if (subject != null)
+            {
+                var bar = subject.IndexOf('|');
+                var kind = TokenKind(type, bar < 0 ? null : subject.Substring(bar + 1));
+                if (!ActionTokenGroups.IsDeclared(kind))
+                    throw new ArgumentException("The action token kind " + kind + " is not declared in ActionTokenGroups", nameof(type));
+            }
             var shortCodeDigits = ShortCodeDigits;
             String token;
             String shortCode;
             using (var rng = SecureRng.Get())
             {
-                token = rng.GetGuid48();
+                token = subject == null ? rng.GetGuid48() : SubjectTokens.Create(type, subject, 48);
                 shortCode = rng.GetNumericCode(shortCodeDigits);
             }
             var d = Data.ToData(data);
             using var c = await Db.GetAsync().ConfigureAwait(false);
-            await c.InsertAsync<DbAction>(new DbAction
+            using (var tr = await c.BeginTransactionAsync().ConfigureAwait(false))
             {
-                Token = token,
-                Type = type,
-                Expiration = expiration,
-                Data = d,
-            }).ConfigureAwait(false);
+                if ((subject != null) && replace)
+                    await RevokeActions(c, subject, CauseReplaced, null, type).ConfigureAwait(false);
+                await c.InsertAsync<DbAction>(new DbAction
+                {
+                    Token = token,
+                    Type = type,
+                    Expiration = expiration,
+                    Data = d,
+                }).ConfigureAwait(false);
+                await tr.CommitAsync().ConfigureAwait(false);
+            }
             if (context != null)
-                context.Session.Set(ShortCodeName, new ShortData(shortCode, token.Replace(' ', '+'), shortExpiration ?? expiration, type));
+                context.Session.Set(ShortCodeName, new ShortData(shortCode, token.Replace(' ', '+'), shortExpiration ?? expiration, type, SubjectUserId(subject)));
             return Tuple.Create(token, shortCode);
         }
+
+        #endregion//One live token per subject and purpose
 
         async Task<Tuple<String, T>> GetAction<T>(String token, String type, HttpServerRequest context, T onFail = default)
         {
@@ -1529,26 +1891,11 @@ namespace SysWeaver.MicroService
                 if (shortCode != null)
                 {
                     var s = context.Session;
-                    if (s.TryGet<ShortData>(ShortCodeName, out var shortData))
+                    //  A right code for another type uses up no try either (the pages probe more than one type with the same code)
+                    if (s.TryGet<ShortData>(ShortCodeName, out var shortData) && (TrySessionCode(s, shortData, shortCode) > 0) && shortData.Type.FastEquals(type))
                     {
-                        if (DateTime.UtcNow >= shortData.Expiration)
-                        {
-                            s.TryRemove(ShortCodeName);
-                        }
-                        else
-                        {
-                            if (shortData.ShortCode.FastEquals(shortCode) && shortData.Type.FastEquals(type))
-                            {
-                                removeIfFail = true;
-                                token = shortData.Token;
-                            }
-                            else
-                            {
-                                --shortData.TriesLeft;
-                                if (shortData.TriesLeft < 0)
-                                    s.TryRemove(ShortCodeName);
-                            }
-                        }
+                        removeIfFail = true;
+                        token = shortData.Token;
                     }
                 }
             }
@@ -1558,6 +1905,8 @@ namespace SysWeaver.MicroService
                 d = await c.FirstOrDefaultAsync<DbAction>(x => x.Token == token).ConfigureAwait(false);
             if ((d == null) || (DateTime.UtcNow > d.Expiration) || (!type.FastEquals(d.Type)))
             {
+                if ((d != null) && type.FastEquals(d.Type))
+                    MarkDead(token, CauseExpired);
                 if (removeIfFail)
                     context.Session.TryRemove(ShortCodeName);
                 return default;
@@ -1585,6 +1934,7 @@ namespace SysWeaver.MicroService
                 }
             }
             await c.DeleteAllAsync<DbAction>(x => x.Token == token && x.Type == type).ConfigureAwait(false);
+            MarkDead(token, CauseUsed);
         }
 
 
@@ -1606,7 +1956,7 @@ namespace SysWeaver.MicroService
             target = target?.Trim();
             var com = GetComs(ref target);
             if (com == null)
-                throw new Exception("Don't know how to send messages to " + target.ToQuoted());
+                throw new HttpResponseException(400, "Enter a valid e-mail address or phone number (" + (target ?? "").ToQuoted() + " is neither)");
             var s = context?.Session;
             if (s == null)
                 throw new NoSessionException();
@@ -1614,9 +1964,12 @@ namespace SysWeaver.MicroService
                 throw new UserAlreadyLoggedInException();
             var cn = com.Name;
             var salt = AuthTools.GetRandomSalt();
-            var tokens = await GetNewUserToken(null, cn == "Email" ? target : null, cn == "Sms" ? target : null, salt, null, null, null, null, context).ConfigureAwait(false);
-            String link = String.Concat(context?.Prefix ?? "", "auth/ChoosePassword.html?", HttpUtility.UrlEncode(tokens.Item1));
-            /*            String link = String.Concat(context?.Prefix ?? "", "auth/ChoosePassword.html?user=",
+            //  Every com but Email sends to a phone number (Sms and WhatsApp): the phone is kept for any of them (AS7-11: with WhatsApp first in the
+            //  coms order the sign up lost the phone, only "Sms" was checked)
+            var isEmail = cn == "Email";
+            var tokens = await GetNewUserToken("signup", null, isEmail ? target : null, isEmail ? null : target, salt, null, null, null, null, context).ConfigureAwait(false);
+            String link = String.Concat(LinkRoot(context), "auth/ChoosePassword.html?", HttpUtility.UrlEncode(tokens.Item1));
+            /*            String link = String.Concat(LinkRoot(context), "auth/ChoosePassword.html?user=",
                             HttpUtility.UrlEncode(target),
                             "&salt=",
                             HttpUtility.UrlEncode(salt),
@@ -1683,7 +2036,7 @@ namespace SysWeaver.MicroService
         public async Task<T> GetUserData<T>(String key, String userGuid) where T : class
         {
             if (key.Length > UserManagerTools.MaxDataKeyLength)
-                throw new Exception("Key to long!");
+                throw new Exception("Key too long");
             if (!StringTools.IsIdentifier(key))
                 throw new Exception("Guid must be an \"identifier\", only 'a'-'z' and numbers is accepeted (no number at the first position)");
             key = key.FastToLower();
@@ -1711,7 +2064,7 @@ namespace SysWeaver.MicroService
         public async Task SetUserData<T>(String key, String userGuid, T data) where T : class
         {
             if (key.Length > UserManagerTools.MaxDataKeyLength)
-                throw new Exception("Key to long!");
+                throw new Exception("Key too long");
             if (!StringTools.IsIdentifier(key))
                 throw new Exception("Guid must be an \"identifier\", only 'a'-'z' and numbers is accepeted (no number at the first position)");
             key = key.FastToLower();
@@ -1736,7 +2089,7 @@ namespace SysWeaver.MicroService
         public async Task<String> GetUserDataString(String key, String userGuid)
         {
             if (key.Length > UserManagerTools.MaxDataKeyLength)
-                throw new Exception("Key to long!");
+                throw new Exception("Key too long");
             if (!StringTools.IsIdentifier(key))
                 throw new Exception("Guid must be an \"identifier\", only 'a'-'z' and numbers is accepeted (no number at the first position)");
             key = key.FastToLower();
@@ -1761,7 +2114,7 @@ namespace SysWeaver.MicroService
         public async Task SetUserDataString(String key, String userGuid, String data)
         {
             if (key.Length > UserManagerTools.MaxDataKeyLength)
-                throw new Exception("Key to long!");
+                throw new Exception("Key too long");
             if (!StringTools.IsIdentifier(key))
                 throw new Exception("Guid must be an \"identifier\", only 'a'-'z' and numbers is accepeted (no number at the first position)");
             if (data?.Length > UserManagerTools.MaxDataStringLength)

@@ -2,25 +2,37 @@
  * @file textEffect.js - text and animated number counter effects rendered through GLSL image effects.
  *
  * Loaded with a classic `<script defer>` (no module) as `../textEffect.js` by `counterEffects/index.html`
- * (after `../../common/common.js`, `../../common/anim.js`, `../canvasTools.js`), which boots `textEffectMain()`
- * from `<body onload>`.
+ * (a lean page without the SysWeaver core: `../../common/anim.js`, `../../mediaPlayer/media_player.js`, this file),
+ * which boots `textEffectMain()` at DOMContentLoaded (`data-text-effect-main` on the body).
  *
- * Globals defined: `CounterEffectParams` (class), `TextEffect` (static factory class), `textEffectMain` (function).
+ * Globals defined: `CounterEffectParams` (class), `TextEffect` (static factory class), `textEffectMain` (function);
+ * new names `Sw.Media.TextEffect`, `Sw.Media.CounterEffectParams`.
  *
- * Dependencies: common.js (`includeJs`, `getUrlParams`, `PageLoaded`), mediaPlayer/canvasTools.js
- * (`TextStyle`, `CanvasTools`), mediaPlayer/media_player.js (`MediaPlayer`, `MediaTypes`) and the parameter
- * classes `MediaPlayerParamsEffect` / `MediaPlayerParamsImage` (from the mediaPlayer folder), plus the
- * `imageEffects/*.glsl` and `counterEffects/*.glsl` shaders.
+ * Dependencies: mediaPlayer/media_player.js (`MediaPlayer`, `MediaTypes`; loaded by this file when the page did not),
+ * mediaPlayer/canvasTools.js (`TextStyle`, `CanvasTools`, loaded by MediaPlayer.Init) and the parameter classes
+ * `MediaPlayerParamsEffect` / `MediaPlayerParamsImage` (loaded by TextEffect.LoadPlayers), plus the
+ * `imageEffects/*.glsl` and `counterEffects/*.glsl` shaders. No SysWeaver core needed.
  *
  * Conventions: the factories return a media player; the caller appends `player.Element` and then calls
  * `Show()` and `Play()`. Both factories await the async `MediaPlayer.Create` and `player.Cache()`.
  */
 
 /**
- * Top-level call executed at parse time: loads the media player framework (`MediaPlayer`, `MediaTypes`, ...)
- * relative to this script's URL. The load is asynchronous; the code expects it to be done when `onload` fires.
+ * Loads the media player library relative to this script when the page did not load it (resolves when MediaPlayer exists).
+ * @type {Promise<void>}
  */
-includeJs(document.currentScript.src, "../mediaPlayer/media_player.js");
+const TextEffectPlayerLoad = (function () {
+    if (typeof MediaPlayer === "function")
+        return Promise.resolve();
+    const src = new URL("../mediaPlayer/media_player.js", document.currentScript.src).href;
+    return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("Failed to load " + src));
+        s.src = src;
+        document.head.appendChild(s);
+    });
+})();
 
 
 /**
@@ -64,22 +76,23 @@ class TextEffect {
      * Loads the player scripts the factories need before they create `MediaPlayerParamsImage` /
      * `MediaPlayerParamsEffect` objects (`MediaPlayer.Create` loads player classes lazily, which is too late
      * for that, and does not load media_player_image.js for an image with an effect). Loading is de-duplicated
-     * by `includeJs`, so repeated calls are cheap.
+     * by MediaPlayer.Include, so repeated calls are cheap. Also waits for media_player.js and MediaPlayer.Ready (canvasTools.js).
      * @returns {Promise<void>}
      */
     static async LoadPlayers() {
-        const current = MediaPlayer.CurrentUrl;
-        await Promise.all([
-            includeJs(current, "media_player_image.js"),
-            includeJs(current, "media_player_effect.js"),
-            includeJs(current, "media_effect_program.js"),
+        await TextEffectPlayerLoad;
+        await MediaPlayer.Ready;
+        await MediaPlayer.IncludeAll([
+            "media_player_image.js",
+            "media_player_effect.js",
+            "media_effect_program.js",
         ]);
     }
 
 
     /**
      * Create a text effect
-     * Steps: if `textStyle.FontUrl` is set, loads it as a `FontFace` named `textStyle.FontUrlName` and adds it to
+     * Steps: if `textStyle.FontUrl` is set, loads it (`MediaPlayerTools.LoadFont`: parsed, http(s) only, escaped) as a `FontFace` named `textStyle.FontUrlName` and adds it to
      * `document.fonts`; forces `effectParams.Transparent = true`; renders `text` to an image (blob) URL with
      * `CanvasTools.CreateTextImageUrl`; maps a name not ending in ".glsl" to `imageEffects/<name>.glsl`
      * (relative to the page); creates an Image player with `MediaPlayerParamsImage{Effect, EffectParams}`
@@ -95,11 +108,8 @@ class TextEffect {
         await TextEffect.LoadPlayers();
         effectName = effectName ?? "Rain";
         textStyle = textStyle ?? new TextStyle();
-        if (textStyle.FontUrl) {
-            const ff = new FontFace(textStyle.FontUrlName, "url('" + textStyle.FontUrl + "')");
-            await ff.load();
-            document.fonts.add(ff);
-        }
+        if (textStyle.FontUrl)
+            await MediaPlayerTools.LoadFont(textStyle.FontUrlName, textStyle.FontUrl);
         effectParams = effectParams ?? new MediaPlayerParamsEffect();
         effectParams.Transparent = true;
         const url = await CanvasTools.CreateTextImageUrl(text, textStyle);
@@ -117,7 +127,7 @@ class TextEffect {
     /**
      * Create a counter effect
      * Steps:
-     * 1. Loads `textStyle.FontUrl` as a FontFace when set; ensures `effectParams.FxProps` exists; clamps Fade (>= 1),
+     * 1. Loads `textStyle.FontUrl` with MediaPlayerTools.LoadFont when set; ensures `effectParams.FxProps` exists; clamps Fade (>= 1),
      *    ExtraSpacing (>= 0, then minus fade) and MaxDigits (1..32); sets `textStyle.MarginTop = 4` and
      *    `MarginBottom = 4 + waste` (the textStyle object is modified); forces `effectParams.Transparent = true`.
      * 2. Renders a digit atlas with `CanvasTools.CreateNumberImageUrl` (11 vertically stacked rows: digits,
@@ -143,11 +153,8 @@ class TextEffect {
         effectName = effectName ?? "ScrollUp";
         counterParams = counterParams ?? new CounterEffectParams();
         textStyle = textStyle ?? new TextStyle();
-        if (textStyle.FontUrl) {
-            const ff = new FontFace(textStyle.FontUrlName, "url('" + textStyle.FontUrl + "')");
-            await ff.load();
-            document.fonts.add(ff);
-        }
+        if (textStyle.FontUrl)
+            await MediaPlayerTools.LoadFont(textStyle.FontUrlName, textStyle.FontUrl);
         effectParams = effectParams ?? new MediaPlayerParamsEffect();
         if (!effectParams.FxProps)
             effectParams.FxProps = {};
@@ -434,22 +441,20 @@ class TextEffect {
 
 
 /**
- * Demo boot function of `counterEffects/index.html` (called from `<body onload>`).
+ * Demo boot function of `counterEffects/index.html` (started at DOMContentLoaded by `data-text-effect-main`).
  * Builds a hard-coded gold `TextStyle` (bold 160px tahoma, fill/stroke gradients, drop shadow) and a
  * `CounterEffectParams` (prefix "SEK ", suffix ":-", "," thousands separator, DigitSpacing -25, FlipFraction 0.25,
  * Fade 40, 8 digits), creates `TextEffect.CreateCounterEffect("ScrollUp", ...)`, appends its element to the body,
  * sets `fx.GetValue = x => [(990 + x^1.6) * 100, 500]`, shows and plays it, then appends a
  * `CanvasTools.CreateTextGrid` of 16 greetings (3 columns) with the same style.
- * URL params are read (`getUrlParams()`) but not used.
- * On any error the body text is replaced with "Generic failure.\n" + error; otherwise `PageLoaded()` is called.
+ * URL params are ignored. On any error the body text is replaced with the error; otherwise the loaded protocol is posted
+ * (MediaPlayerTools.PostPageLoaded: PageLoaded to the parent, LoaderRemoved to the top window).
  * @returns {Promise<void>}
  */
 async function textEffectMain() {
     const target = document.body;
     try {
-        const ps = getUrlParams();
-
-
+        await TextEffect.LoadPlayers();
         const s = new TextStyle();
 
         Object.assign(s, {
@@ -629,21 +634,9 @@ async function textEffectMain() {
 
         document.body.append(fx.Element);
 
-        let value = 0;
-        /**
-         * Stores the mouse x offset in the local `value`; only the commented-out GetValue variants use it.
-         * @param {MouseEvent} me - The mousemove event.
-         * @returns {void}
-         */
-        document.body.onmousemove = me => {
-            value = me.offsetX;
-        };
-
         //fx.GetValue = x => [991, 100];
         //fx.GetValue = x => [990 + ((x % 3) | 0), 100];
-        //fx.GetValue = x => [value, 100];
         fx.GetValue = x => [(990 + Math.pow(x, 1.6)) * 100.0, 500];
-        //fx.GetValue = x => [99950 + value * 0.3, 100];
 
 
 
@@ -684,9 +677,26 @@ async function textEffectMain() {
 
     }
     catch (e) {
-        target.innerText = "Generic failure.\n" + e;
+        target.textContent = "" + e;
         return;
     }
-    PageLoaded();
+    MediaPlayerTools.PostPageLoaded();
 }
 
+
+/** Publish the new API names (the classes stay the public legacy globals); boot the counter demo page when it asks for it. */
+(function () {
+    "use strict";
+    const Sw = window.Sw = window.Sw || {};
+    const m = Sw.Media = Sw.Media || {};
+    m.TextEffect = TextEffect;
+    m.CounterEffectParams = CounterEffectParams;
+    const start = () => {
+        if (document.body && document.body.hasAttribute("data-text-effect-main"))
+            textEffectMain();
+    };
+    if (document.readyState === "loading")
+        document.addEventListener("DOMContentLoaded", start, { once: true });
+    else
+        start();
+})();

@@ -1,150 +1,28 @@
 ﻿<!doctype html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8" />
+    <!-- SwWeb:no-framework (a transparent render surface of the media player: no page chrome, themes or texts) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+        Image effect: ?Effect=<name> (default DistortedTv)&Image=<url> (default ../../logo.png) + image / effect params; the side .json of the effect and of the image are applied.
+        Shared logic and parameters: ../effectPage.js (url keys are case sensitive member names; other keys are shader variables).
+        A lean page on purpose (no SysWeaver core): a transparent, non-interactive full window host for backgrounds and embeds.
+    -->
     <script defer src="../parseTools.js"></script>
     <script defer src="../../common/anim.js"></script>
     <script defer src="../../mediaPlayer/media_player_tools.js"></script>
     <script defer src="../../mediaPlayer/media_effect_program.js"></script>
     <script defer src="../../mediaPlayer/media_player_effect.js"></script>
-    <script defer>
-        /*
-            Parameters (basic):
-                image = 	Image url.
-                text = 		The text to show.
-
-            Effects:
-                    "Rain"
-                    "OldMovie"
-                    "DistortedTv"
-                    "BadVHS"
-                    "VHS"
-        */
-
-        async function main() {
-
-            const href = window.location.href;
-            const p = new URL(href).searchParams;
-
-
-            // MediaPlayerParamsImage
-            const props = {
-                Crop: null,
-                Duration: 10,
-                EffectSizeFromImage: true,
-                Transparent: true,
-                AdaptiveSize: false,
-            };
-
-            // MediaPlayerParamsEffect
-            const ep =
-            {
-                Width: 1920,
-                Height: 1080,
-                Speed: 1,
-                LimitSize: false,
-                DpiAdjust: false,
-                DpiScale: 1,
-                Static: false,
-                AdaptiveSize: true,
-                WrapU: false,
-                WrapY: false,
-                WebGL2: false,
-                MipMap: false,
-                AntiAlias: false,
-                ScrollId: null,
-                MouseId: null,
-                MouseEnable: false,
-                ImageSize: false,
-                ShowVars: false,
-                ForceMode: null,
-                DarkModeSwitch: 200,
-                CustomX: 0,
-                CustomY: 0,
-                CustomZ: 0,
-                CustomAnimX: null,
-                CustomAnimY: null,
-                CustomAnimZ: null,
-           };
-
-
-            //  Effect paramaters
-            const fxParams =
-            {
-
-            };
-
-            const image = p.get("Image") ?? "../../logo.png";
-
-            let effect = p.get("Effect") ?? "DistortedTv";
-            if (!effect.endsWith(".glsl"))
-                effect += ".glsl";
-
-            //  Load effect parameters
-            const subP = "";// effect.indexOf('://') < 0 ? "../" : "";
-            await ParseTools.FileToObject(subP + effect.substring(0, effect.lastIndexOf('.')) + ".json", props, (k, v) =>
-                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
-                    fxParams[k1] = ParseTools.DecodeObject(v1)));
-
-
-            //  Load image parameters
-            const subP2 = "";// image.indexOf('://') < 0 ? "../" : "";
-            await ParseTools.FileToObject(subP2 + image.substring(0, image.lastIndexOf('.')) + ".json", props, (k, v) =>
-                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
-                    fxParams[k1] = ParseTools.DecodeObject(v1)));
-
-            //  Parse parameters
-            ParseTools.ParamsToObject(p, props, (k, v) =>
-                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
-                    fxParams[k1] = ParseTools.DecodeObject(v1)));
-
-            //  Fix parameters
-            props.Effect = effect;
-            props.EffectParams = ep;
-            ep.FxProps = fxParams;
-            ep.Transparent = props.Transparent;
-            ep.AdaptiveSize = props.AdaptiveSize;
-            if (props.EffectSizeFromImage)
-                ep.AdaptiveSize = false;
-
-            //  Media player
-
-            const player = new MediaPlayerEffect(effect, props.EffectParams, gl => new MediaPlayerImageTexture(gl, props, image));
-            document.body.appendChild(player.Element);
-            await player.Cache(true);
-
-            function updateSize() {
-                return MediaPlayerTools.UpdateSize(document.body, player);
-            }
-            new ResizeObserver(updateSize).observe(document.body);
-
-            await player.Play();
-            await player.Show();
-            MediaPlayerTools.SetupMediaMessages(player);
-            MediaPlayerTools.PostPageLoaded();
-
-/*
-
-            //  Build url
-            url = '../MediaPreview.html?transparent=true&link=' + image + '&type=0&props=' + encodeURIComponent(JSON.stringify(props));
-            if (p.has("ShaderDebug") && (p.get("ShaderDebug") === "true"))
-                url += "&ShaderDebug=true";
-
-            console.log(url);
-            const c = document.createElement("iframe");
-            ParseTools.MessageProxy(c);
-            c.src = url;
-            document.body.appendChild(c);
-            */
-        }
-    </script>
+    <script defer src="../effectPage.js"></script>
     <style>
         :root {
             color-scheme: normal !important;
         }
 
+        /* SwWeb:allow-element-css (a full window effect renderer without Sw components: the canvas fills the window) */
         html, body {
             background: none transparent !important;
-            background-color: transparent;
             margin: 0;
             padding: 0;
             width: 100%;
@@ -157,6 +35,7 @@
             }
 
         iframe {
+            display: block;
             border: none;
             width: 100%;
             height: 100%;
@@ -164,6 +43,6 @@
         }
     </style>
 </head>
-<body onload="main()">
+<body data-effect-page="image">
 </body>
 </html>

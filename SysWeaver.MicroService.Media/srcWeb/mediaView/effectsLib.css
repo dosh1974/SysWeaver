@@ -1,0 +1,202 @@
+﻿/*
+ * effectsLib.css - styles of the effect galleries (BackgroundEffectsLib.html, ImageEffectsLib.html, CollageEffectsLib.html,
+ * built by effectsLib.js). Loaded after ../common/theme.css and ../sw/ui.css; uses the Sw ui tokens.
+ */
+
+/* Page: a Design v2 dashboard page (main.fx-page.sw-page-dash, ui/page.css: page header, max width, padding) with a responsive grid
+   of cards (one column on phones). */
+.fx-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    gap: var(--sw-space-4, 16px);
+}
+
+    /* The empty / error state spans the grid */
+    .fx-list > .sw-state {
+        grid-column: 1 / -1;
+    }
+
+/* A card: title row (name link + copy button), info text, 16:9 thumbnail. A click on the thumbnail or the name link (Enter) opens the
+   effect page; a click elsewhere on the card copies its url (as the original card); the name link shows the keyboard focus ring. */
+.fx-card {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--sw-surface, var(--sw-surface));
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius-md, var(--sw-radius-lg));
+    overflow: hidden;
+    cursor: pointer;
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+    transition: outline-color linear var(--sw-dur-2, 0.15s);
+}
+
+    .fx-card:focus-visible {
+        outline-color: var(--sw-focus, var(--ThemeAcc2));
+    }
+
+@media (hover: hover) {
+    .fx-card:hover {
+        border-color: var(--sw-border-strong, var(--sw-border-strong));
+    }
+}
+
+.fx-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.25em 0.25em 0.25em 1em;
+    border-bottom: 1px solid var(--sw-border, var(--sw-border));
+    color: var(--sw-text, var(--sw-fg));
+    font-weight: 500;
+}
+
+.fx-name {
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The state / timing text: always two lines high (empty, "Waiting (3 of 20)", the times or a failure reason), so a card never
+   grows when its text changes and the cards below stay put (LAY-1); longer texts end with "…" (the whole text is the tool tip). */
+.fx-info {
+    box-sizing: content-box;
+    padding: 0.5em 1em;
+    font-size: var(--sw-text-sm, 90%);
+    line-height: 1.4;
+    height: 2.8em;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    color: var(--sw-text-2, var(--sw-text-2));
+}
+
+.fx-card.fx-failed .fx-info {
+    color: var(--sw-danger, #d33);
+}
+
+/* The thumbnail keeps its 16:9 place while rendering; the state text (.fx-state) is a bar at its bottom until it is done. */
+.fx-frame {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    /* Never taller than 16:9: a thumbnail of another shape (the image effects render the square logo) is fitted inside, the card does not grow (LAY-2) */
+    overflow: hidden;
+    background-color: var(--sw-surface-sunken, transparent);
+}
+
+.fx-state {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--sw-surface, Canvas);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6em;
+    padding: 0.5em;
+    text-align: center;
+    color: var(--sw-text-2, var(--ThemeMain));
+    pointer-events: none;
+}
+
+    .fx-state:empty {
+        display: none;
+    }
+
+
+/*
+ * The placeholder of a card without a thumbnail yet (effectsLib.js CreateCard): the effect name over a flat sunken surface (Design v2: no
+ * decorative gradients), on the image / collage galleries over the dimmed source picture (img.fx-ph-src). Hidden once a thumbnail shows
+ * (class fx-has-thumb: a cached one at once, or the rendered one).
+ */
+.fx-ph {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--sw-surface-sunken, var(--sw-surface-sunken, rgba(var(--ThemeMainRGB), 0.2)));
+}
+
+.fx-ph-src {
+    position: absolute;
+    inset: 8%;
+    width: 84%;
+    height: 84%;
+    object-fit: contain;
+    opacity: 0.25;
+}
+
+.fx-ph-name {
+    position: relative;
+    max-width: 90%;
+    padding: 0.2em 0.6em;
+    font-size: 150%;
+    font-weight: bold;
+    color: var(--sw-accent1, var(--ThemeAcc1));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fx-card.fx-has-thumb .fx-ph {
+    display: none;
+}
+
+/* Rendering: a small spinning ring before the text (no motion with reduced motion). */
+.fx-card[data-state="rendering"] .fx-state::before {
+    content: "";
+    flex: none;
+    width: 1.2em;
+    height: 1.2em;
+    border-radius: 50%;
+    border: 2px solid var(--sw-border, currentColor);
+    border-top-color: var(--sw-accent1, var(--ThemeAcc1));
+    animation: fx-spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fx-card[data-state="rendering"] .fx-state::before {
+        animation: none;
+    }
+}
+
+@keyframes fx-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.fx-card[data-state="failed"] .fx-state {
+    color: var(--sw-danger, #d33);
+}
+
+.fx-thumb {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border: none;
+}
+
+    .fx-thumb:not([src]) {
+        visibility: hidden;
+    }
+
+/* The off-screen render canvas of MediaPlayerEffect.GetImage: must stay "visible" (opacity > 0) or the player skips drawing. */
+canvas.MediaHidden {
+    position: absolute;
+    left: 10000px;
+    bottom: 10000px;
+    opacity: 0.001;
+}

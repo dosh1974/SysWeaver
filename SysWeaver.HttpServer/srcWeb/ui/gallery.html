@@ -1,0 +1,317 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SysWeaver UI gallery</title>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="stylesheet" href="../common/theme.css">
+    <script>
+        /*
+         * Component gallery of the SysWeaver UI library (Sw): every component in every state, used for testing and reviews.
+         * Loads the source files one by one (core/*.js, ui/*.js, ui/*.css); with ?bundle the bundles sw/core.js, sw/ui.js and sw/ui.css.
+         * Scripts are added with async = false so they run in order. Url flags of the core work too (?settheme=dark, ?mobile=true ...).
+         */
+        (function () {
+            "use strict";
+            var bundle = /[?&]bundle\b/i.test(location.search);
+            var css = bundle ? ["../sw/ui.css"] : ["tokens.css", "components.css", "overlays.css", "cells.css", "code.css", "icons.css", "page.css"];
+            var js = bundle
+                ? ["../sw/core.js", "../sw/ui.js", "code.js"]
+                : ["../core/kernel.js", "../core/base.js", "../core/i18n.js", "../core/url.js", "../core/storage.js", "../core/include.js", "../core/format.js",
+                    "../core/net.js", "../core/interop.js", "../core/session.js", "../core/layout.js", "../core/session_start.js",
+                    "../core/theme.js", "../core/page.js", "../core/activity.js", "../core/draft.js",
+                    "../core/access.js", "../core/init.js",
+                    "base.js", "controls.js", "overlay.js", "layout.js", "editors.js", "cells.js", "code.js", "page.js"];
+            js.push("gallery.js");
+            css.forEach(function (h) {
+                var l = document.createElement("link");
+                l.rel = "stylesheet";
+                l.href = h;
+                document.head.appendChild(l);
+            });
+            js.forEach(function (s) {
+                var e = document.createElement("script");
+                e.src = s;
+                e.async = false;
+                document.head.appendChild(e);
+            });
+        })();
+    </script>
+    <style>
+        body.sw-gallery {
+            margin: 0;
+            padding: 0 16px 48px;
+        }
+
+        .g-head {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin: 0 -16px 16px;
+            padding: 8px 16px;
+            background: color-mix(in srgb, var(--sw-bg) 88%, transparent);
+            backdrop-filter: blur(6px);
+            border-bottom: 1px solid var(--sw-line);
+        }
+
+        .g-head h1 {
+            flex: 1;
+            min-width: 180px;
+            margin: 0;
+            font-size: 1.25em;
+            font-family: var(--sw-head);
+            color: var(--sw-accent1-fg);
+        }
+
+        .g-section {
+            background: color-mix(in srgb, var(--sw-bg) 92%, transparent);
+            --sw-frame-bg: var(--sw-bg);
+        }
+
+        .g-section .sw-group-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .g-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .g-row .sw-slider {
+            flex: 1;
+        }
+
+        .g-label {
+            min-width: 90px;
+            color: var(--sw-muted);
+            font-size: 0.85em;
+        }
+
+        /* Brand card: colour swatches, font samples, the weave with a solid panel */
+        .g-swatch {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 2px;
+            font-size: 0.85em;
+        }
+
+        .g-swatch-color {
+            width: 64px;
+            height: 40px;
+            border: 1px solid var(--sw-line);
+            border-radius: var(--sw-radius);
+        }
+
+        .g-fonts {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .g-weave {
+            width: 100%;
+            padding: 24px;
+            border-radius: var(--sw-radius-lg);
+        }
+
+        .g-weave-panel {
+            display: flex;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .g-icons {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+            gap: 4px;
+            max-height: 360px;
+            overflow: auto;
+        }
+
+        .g-icon {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            padding: 4px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: var(--sw-muted);
+        }
+
+        .g-icon .sw-icon {
+            width: 22px;
+            height: 22px;
+            color: var(--sw-fg);
+        }
+
+        .g-icon span:last-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .g-box {
+            position: relative;
+            min-height: 120px;
+            border: 1px dashed var(--sw-line-strong);
+            border-radius: var(--sw-radius);
+            padding: 12px;
+        }
+
+        .g-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.92em;
+        }
+
+        .g-table td, .g-table th {
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--sw-line);
+            vertical-align: middle;
+            max-width: 320px;
+            overflow: hidden;
+        }
+
+        .g-table th {
+            text-align: left;
+            color: var(--sw-muted);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .g-scroll {
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        .g-pager-item {
+            width: 120px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--sw-radius);
+            background: var(--sw-bg-3);
+            margin-right: 8px;
+            flex: none;
+        }
+
+        .g-imgs img {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin: 2px;
+            background: var(--sw-bg-3);
+        }
+
+        .g-imgs {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+
+        .g-fail {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+        }
+
+        .g-fail figcaption {
+            max-width: 96px;
+            font-size: 0.75em;
+            text-align: center;
+        }
+
+        /* Intro below the header */
+        .g-intro {
+            max-width: 72em;
+            margin: 0 0 16px;
+            line-height: 1.5;
+        }
+
+        .g-intro p {
+            margin: 0 0 6px;
+        }
+
+        .g-intro a, .g-doc {
+            color: var(--sw-accent1-fg);
+        }
+
+        .g-intro code, .g-api code {
+            font-family: var(--sw-mono);
+            font-size: 0.9em;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: var(--sw-bg-inset);
+        }
+
+        /* Per card: API names, docs link, code toggle and snippet */
+        .g-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px 12px;
+        }
+
+        .g-api {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .g-meta-tools {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .g-doc {
+            display: inline-flex;
+            align-items: center;
+            min-height: var(--sw-touch);
+            padding: 0 4px;
+        }
+
+        .g-codebox[hidden], .g-code[hidden] {
+            display: none;
+        }
+
+        .g-code {
+            margin: 0;
+            padding: 10px 12px;
+            max-width: 100%;
+            overflow: auto;
+            font-family: var(--sw-mono);
+            font-size: 12px;
+            line-height: 1.45;
+            white-space: pre;
+            border-radius: var(--sw-radius);
+            background: var(--sw-bg-inset);
+            border: 1px solid var(--sw-line);
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        .g-code-tools {
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+<body class="sw-root sw-gallery" translate="no">
+    <noscript>The gallery needs JavaScript.</noscript>
+</body>
+</html>

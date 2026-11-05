@@ -3,6 +3,9 @@ using System;
 
 namespace SysWeaver.MicroService
 {
+    /// <summary>
+    /// The input of <see cref="UserManagerService.InviteUser"/>: who to invite and what the new account gets.
+    /// </summary>
     public sealed class InviteUserRequest
     {
         /// <summary>
@@ -18,12 +21,12 @@ namespace SysWeaver.MicroService
         public String Email { get; set; }
 
         /// <summary>
-        /// Optional security tokens to give the user (the inviter must have them)
+        /// Optional security tokens to give the user: tokens the inviter has; an Admin may also give any token except Debug, a Debug user any token; other tokens are left out
         /// </summary>
         public String[] Tokens { get; set; }
 
         /// <summary>
-        /// Application specific domain (the inviter must be part of the same domain)
+        /// Application specific domain of the new account: empty (null) for the inviter's own domain; another domain only when the inviter is Debug or Admin (else 403)
         /// </summary>
         public String Domain { get; set; }
 
@@ -39,6 +42,13 @@ namespace SysWeaver.MicroService
         public String Token { get; set; }
         
         public String NewHash { get; set; }
+
+        /// <summary>
+        /// Optional (<see cref="UserManagerService.ResetPassword"/> only): the hash of the new password made with the salt of the current password
+        /// (<see cref="NewPasswordData.CurrentSalt"/>). When an administrator required the new password (<see cref="NewPasswordData.Forced"/>) a hash
+        /// that equals the current password is refused (the result has the error <see cref="UserErrors.SamePassword"/>). Null (older clients): not checked.
+        /// </summary>
+        public String CurrentHash { get; set; }
     }
 
 

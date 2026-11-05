@@ -457,3 +457,6 @@ FodyWeavers.xsd
 web
 /SysWeaver.TableData/data
 data
+.web
+.claude
+/.mcp.json

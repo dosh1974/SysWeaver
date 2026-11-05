@@ -1,68 +1,49 @@
 ﻿/*
  * media.css - styles of the media player pages and the custom elements built by media.js
- * (mediaCreatePlayer, mediaPlayWithPopup, mediaEditProps, mediaEditMain, mediaViewMain, mediaPreviewMain).
+ * (Sw.MediaView: CreatePlayer, PlayWithPopup, EditProps, EditMain, ViewMain, PreviewMain).
  *
- * Loaded with <link rel="stylesheet"> by MediaView.html (after ../common/theme.css and ../app/application.css)
- * and MediaPreview.html (after ../common/theme.css), and by any external host page of mediaEditMain.
- * Not templated. Icon masks reference ../icons/*.svg relative to this file.
- *
- * Depends on theme variables from common/theme.css: --ThemeBackground, --ThemeBackground75, --ThemeMain,
- * --ThemeMain50, --ThemeAcc1, --ThemeRad, --ThemeFontMono.
- * Defines custom properties: --maxWidth (on Media-Preview) and --c0, --c1, --hs, --s (checkerboard on
- * body.MediaPreview.NoFade); see the rules below.
- * No @keyframes, @media queries or [data-theme] variants; only transitions on Media-Stat, Media-Button and
- * body.MediaPreview > *.
- *
- * Note: element (tag) selectors are case-insensitive in HTML, so "Media-PreView" matches <Media-Preview>
- * (common.js Button creates the text element literally as <Sysweaver-ButtonText>).
+ * Loaded by MediaView.html, MediaPreview.html and MediaEdit.html after ../common/theme.css and ../sw/ui.css, and by any external host
+ * page of the media editor. Not templated. Icon masks reference ../icons/*.svg relative to this file.
+ * Uses the theme variables of common/theme.css (--ThemeBackground75, --ThemeMain, --ThemeMain50) and the Sw ui tokens
+ * (--sw-bg, --sw-fg, --sw-line, --sw-radius, --sw-mono, --sw-focus, --sw-gap).
+ * Custom properties: --maxWidth (on Media-Preview) and --c0, --c1, --hs, --s (checkerboard on body.MediaPreview.NoFade).
  */
 
 /* ===== Page and layout ===== */
 
-/* Page body: no margin/padding, no text selection, centered text, vertical scroll only. */
-body {
+/* Viewer page body: no margin, centered, vertical scroll only. */
+body.media-page {
     margin: 0;
     padding: 0;
-    user-select: none;
     text-align: center;
-    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: none transparent;
+}
+
+/* Editor page body (MediaEdit.html): the page scrolls, a small gutter on phones. */
+body.media-edit-page {
+    margin: 0;
+    padding: 0.5em max(0.5em, env(safe-area-inset-right)) 1em max(0.5em, env(safe-area-inset-left));
     overflow-x: hidden;
     overflow-y: auto;
 }
 
-
-/* <SysWeaver-Page class="Media"> appended by mediaEditMain: fixed background page behind the editor. */
-SysWeaver-Page.Media {
-    position: fixed;
-    top: 0;
-}
-
-/* <Media-Full>: editor container created by mediaEditMain, layered above the fixed SysWeaver-Page (z-index 1). */
+/* <Media-Full>: editor container created by EditMain. */
 Media-Full {
     position: relative;
+    display: block;
     z-index: 1;
 }
 
-
-/*
- * Collapsed editor: class Hide on <Media-Full> is toggled by toggleCollape (mediaEditMain) and hides the
- * player (Media-Preview), its Media-Stats and Media-Controls; the property editor stays visible.
- */
-Media-Full.Hide Media-Preview
-{
-    display: none;
-}
-
-    Media-Full.Hide Media-Stats{
-        display: none;
-    }
-
+    /* Collapsed editor (class Hide): hides the player, its stats and controls; the property editor stays. */
+    Media-Full.Hide Media-Preview,
+    Media-Full.Hide Media-Stats,
     Media-Full.Hide Media-Controls {
         display: none;
     }
 
-
-    /* Editor children are limited to 52em and centered; the player box (Media-Preview) is exempt and uses its own --maxWidth. */
+    /* Editor children are limited to 52em and centered; the player box uses its own --maxWidth. */
     Media-Full > * {
         max-width: 52em;
         margin-left: auto;
@@ -73,37 +54,38 @@ Media-Full.Hide Media-Preview
         max-width: initial;
     }
 
-
 /*
- * <Media-NoAudio>: full-screen blurred "Must click once to get audio!" overlay appended by mediaPlayWithPopup
- * when un-muting needs a user gesture; z-index 1000 puts it above everything; the text is vertically centered
- * with line-height: 100vh.
+ * <Media-NoAudio>: full page blurred "Must click once to get audio!" button appended by PlayWithPopup when un-muting
+ * needs a user gesture (click, Enter or Space).
  */
 Media-NoAudio {
     position: fixed;
-    left: 0;
-    top: 0;
-    width: 100vw;
-    height: 100vh;
+    inset: 0;
     z-index: 1000;
-    background-color: var(--ThemeBackground75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1em;
+    box-sizing: border-box;
+    background-color: color-mix(in srgb, var(--sw-bg) 75%, transparent);
     backdrop-filter: blur(4px);
     font-size: 125%;
-    color: var(--ThemeMain);
+    color: var(--sw-text);
     cursor: pointer;
-    line-height: 100vh;
-    vertical-align: middle;
     text-align: center;
+    outline: none;
 }
+
+    Media-NoAudio:focus-visible {
+        box-shadow: inset 0 0 0 3px var(--sw-focus, var(--ThemeAcc1));
+    }
 
 
 /* ===== Preview and aspect container ===== */
 
-/* Preview */
 /*
- * <Media-Preview>: the player box created by mediaCreatePlayer (player.TopElement).
- * Custom property --maxWidth: box width = the smaller of (viewport width - 5em) and the width that gives a 16:9
- * box fitting in (80vh - 72px - 5em) of height; the height is --maxWidth * 9 / 16 (16:9).
+ * <Media-Preview>: the player box (player.TopElement). --maxWidth: the smaller of (viewport width - 5em) and the width of
+ * a 16:9 box fitting in (80vh - 72px - 5em); the height is 16:9.
  */
 Media-Preview {
     --maxWidth: calc(min(100vw - 5em, ((80vh - 72px - 5em) * 16 / 9)));
@@ -113,48 +95,46 @@ Media-Preview {
     margin: 1em auto;
 }
 
-    /* Class Replacing (set by mediaCreatePlayer when given a "before" element, removed by reload): the new player is built off-screen (top: -10000px). */
+    /* Class Replacing (a player rebuild): the new player is built off-screen. */
     Media-Preview.Replacing {
         position: fixed;
         top: -10000px;
     }
 
-    /* Class NoVisual (set by mediaCreatePlayer when the player has no visual, e.g. audio): collapse the box to zero size. */
+    /* Class NoVisual (audio only): collapse the box. */
     Media-Preview.NoVisual {
         width: 0;
         height: 0;
         margin: 0;
     }
 
-/* Fit mode (class MediaPreviewFit on <Media-AspectContainer>, set by mediaCreatePlayer when fit): children get the theme background. */
-Media-AspectContainer.MediaPreviewFit > * {
-    background-color: var(--ThemeBackground);
-}
-
-
-/* Same selector again; only holds a commented-out drop shadow, so the rule is empty. */
-Media-AspectContainer.MediaPreviewFit > *{
-    /*filter: drop-shadow(0 0 16px rgba(var(--ThemeAcc1RGB), 0.5));*/
-}
-
-/* Fill mode (class MediaPreviewFill, set by mediaCreatePlayer when not fit): clip the overflowing media. */
-Media-AspectContainer.MediaPreviewFill {
-    overflow: hidden;
-}
-
-
-/* Aspect ratio control */
-
-/* <Media-AspectContainer>: the clip box inside Media-Preview; its size/position is set inline by UpdateSize (mediaCreatePlayer). */
+/* <Media-AspectContainer>: the clip box inside Media-Preview; size / position set inline by UpdateSize. */
 Media-AspectContainer {
     position: relative;
     display: block;
+    outline: none;
 }
 
-    /*
-     * Children (player element, Media-Overlay): non-interactive, transform-origin top left so the inline
-     * scale(..) translate(..) transform set by UpdateSize maps the clip rectangle onto the box.
-     */
+    /* MediaView: the clip box is a button that opens the full screen preview. */
+    Media-AspectContainer[role="button"] {
+        cursor: zoom-in;
+    }
+
+    Media-AspectContainer:focus-visible {
+        outline: 3px solid var(--sw-focus, var(--ThemeAcc1));
+        outline-offset: 2px;
+    }
+
+    /* Fit mode: the media gets the theme background. Fill mode: the overflow is clipped. */
+    Media-AspectContainer.MediaPreviewFit > * {
+        background-color: var(--sw-canvas);
+    }
+
+    Media-AspectContainer.MediaPreviewFill {
+        overflow: hidden;
+    }
+
+    /* Children (player element, Media-Overlay): non-interactive, the inline transform maps the clip onto the box. */
     Media-AspectContainer > * {
         position: relative;
         display: block;
@@ -165,129 +145,101 @@ Media-AspectContainer {
         transform-origin: top left;
     }
 
-        /* Class MediaHidden (set by the mediaPlayer scripts until the player is shown): invisible and taken out of the flow. */
+        /* MediaHidden (set by the player library until Show / Cache): invisible and out of the flow. */
         Media-AspectContainer > *.MediaHidden {
-            opacity: 0;
+            opacity: 0;    /* SwWeb:allow ux-mot-7 (a media element the player shows when it is loaded: no control inside, out of the flow) */
             position: fixed;
         }
 
-    /*
-     * <Media-Overlay>: crop visualization layer appended by mediaCreatePlayer on top of the player; it gets the
-     * same transform/size as the player. Invisible by default; class Show (set by UpdateSize when player.UseClip is
-     * false) makes it visible with a red outline (the semi-transparent red borders marking the cropped margins are
-     * set inline). The MediaPreviewFit variant removes the fit-mode background/filter.
-     */
+    /* <Media-Overlay>: crop visualization (class Show when the crop is visualized: red outline, red margin borders inline). */
+    Media-AspectContainer > Media-Overlay,
     Media-AspectContainer.MediaPreviewFit > Media-Overlay {
-        filter: none;
-        background-color: transparent;
-    }
-
-    Media-AspectContainer > Media-Overlay {
         background-color: transparent;
         box-sizing: border-box;
         position: absolute;
         opacity: 0;
         outline: 2px solid transparent;
+        filter: none;
     }
 
         Media-AspectContainer > Media-Overlay.Show {
-            background-color: transparent;
             opacity: 1;
-            outline: 2px solid red;
+            outline: 2px solid var(--sw-danger);
         }
 
 /* ===== Stats ===== */
 
-/* Stats */
-
-/* <Media-Stats>: wrapping flex row of stat chips created by mediaCreatePlayer (unless noStats); a single chip is centered. */
+/* <Media-Stats>: wrapping row of stat chips. */
 Media-Stats {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     align-content: flex-start;
-    justify-content: space-between;
-    overflow: visible;
-    margin: 0 auto;
-    margin-bottom: 1em;
+    justify-content: center;
+    gap: 0.5em;
+    margin: 0 auto 1em auto;
+    padding: 0 0.5em;
 }
 
-    Media-Stats > *:first-child:last-child {
-        margin: 0 auto;
-    }
-
-/* <Media-Stat>: one clickable stat chip (click copies it to the clipboard); mono font, theme border, animated border/outline. */
+/* <Media-Stat>: one stat chip (click / Enter / Space copies it). Colors: Adjust = trim (green), Clip = crop (blue), Actual = render size (magenta). */
 Media-Stat {
-    margin: 0.5em;
-    display: inline-block;
-    padding: 4px 8px;
-    border: 2px solid var(--ThemeMain50);
-    border-radius: var(--ThemeRad);
-    font-size: 70%;
-    background-color: var(--ThemeBackground);
-    outline: 2px solid transparent;
+    --stat: color-mix(in srgb, var(--sw-fg) 50%, transparent);
+    display: inline-flex;
+    align-items: center;
+    min-height: 2em;
+    box-sizing: border-box;
+    padding: 2px 8px;
+    border: 2px solid var(--stat);
+    border-radius: var(--sw-radius, 6px);
+    font-size: max(calc(13px * var(--sw-scale, 1)), calc(var(--sw-text-md, 15px) * 0.9));
+    font-family: var(--sw-sans, sans-serif);
+    font-variant-numeric: tabular-nums;
+    background-color: var(--sw-surface);
     cursor: pointer;
-    transition: border linear 0.1s, outline linear 0.1s;
-    font-family: var(--ThemeFontMono);
+    outline: none;
+    transition: border-color linear var(--sw-dur-1);
 }
 
-    /*
-     * Stat category colors (class passed to createStats in mediaCreatePlayer); the :hover variants make the border opaque.
-     * Adjust = green, trimmed time/duration (props.StartAt);
-     * Clip = blue, cropped width/height/left/top (props.Crop);
-     * Actual = magenta, render width/height (props.AdaptiveSize).
-     */
     Media-Stat.Adjust {
-        color: rgb(20, 192, 20);
-        border: 2px solid rgba(20, 192, 20, 0.5);
+        --stat: color-mix(in srgb, var(--sw-chart-3) 50%, transparent);
+        color: var(--sw-chart-3);
     }
-
-        Media-Stat.Adjust:hover {
-            border: 2px solid rgb(20, 192, 20);
-        }
-
 
     Media-Stat.Clip {
-        color: rgb(20, 96, 192);
-        border: 2px solid rgba(20, 96, 192, 0.5);
+        --stat: color-mix(in srgb, var(--sw-chart-2) 50%, transparent);
+        color: var(--sw-chart-2);
     }
-
-        Media-Stat.Clip:hover {
-            border: 2px solid rgb(20, 96, 192);
-        }
-
 
     Media-Stat.Actual {
-        color: rgb(192, 20, 192);
-        border: 2px solid rgba(192, 20, 192, 0.5);
+        --stat: color-mix(in srgb, var(--sw-chart-4) 50%, transparent);
+        color: var(--sw-chart-4);
     }
 
-        Media-Stat.Actual:hover {
-            border: 2px solid rgb(192, 20, 192);
-        }
+    Media-Stat:focus-visible {
+        box-shadow: 0 0 0 3px var(--sw-focus, var(--ThemeAcc1));
+    }
 
-    /* Default chip hover border and keyboard focus outline (--ThemeAcc1); colored :hover rules above win by specificity. */
+    Media-Stat.Hide {
+        display: none;
+    }
+
+@media (hover: hover) {
     Media-Stat:hover {
-        border: 2px solid var(--ThemeMain);
+        border-color: currentColor;
     }
-
-    Media-Stat:focus {
-        outline: 2px solid var(--ThemeAcc1);
-    }
-
-
-/* Class Hide on a stat chip: set by setText (createStats) when called without text. */
-Media-Stat.Hide
-{
-    display: none;
 }
 
-/* <Media-StatName> (label) and <Media-StatValue> (right-aligned value, min 5em to limit jitter) inside a stat chip. */
+/* Touch layouts: chips are at least a touch target high. */
+.SwMobile Media-Stat {
+    min-height: var(--sw-control-h, 44px);
+}
+
 Media-StatName {
     display: inline-block;
     margin-right: 0.75em;
 }
 
+/* Right aligned value, min 5em to limit jitter. */
 Media-StatValue {
     display: inline-block;
     text-align: right;
@@ -295,123 +247,64 @@ Media-StatValue {
 }
 
 
-
 /* ===== Controls ===== */
 
-/* Controls */
-/* <Media-Controls>: wrapping flex row of player buttons created by mediaCreatePlayer (unless noControls); a single button is centered. */
+/* <Media-Controls>: wrapping row of Sw buttons (class media-button). */
 Media-Controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    align-content: flex-start;
-    justify-content: space-between;
-    overflow: visible;
+    justify-content: center;
+    gap: 0.5em;
     margin: 0 auto;
+    padding: 0 0.5em 0.5em 0.5em;
 }
 
-    Media-Controls > *:first-child:last-child
-    {
-        margin: 0 auto;
+    /* Small buttons, but their text grows with the large screen steps (--sw-scale) like the chips above */
+    Media-Controls .media-button {
+        min-width: 7.5em;
+        font-size: calc(14px * var(--sw-scale, 1));
     }
 
-/*
- * <Media-Button>: button element used by common.js Button via ButtonStyle.ButtonElement = "Media-Button"
- * (player controls, editor buttons): accent background, rounded, drop shadow; lifts slightly on hover.
- */
-Media-Button {
-    font-size: 80%;
-    font-weight: bold;
-    min-width: 128px;
-    transition: opacity linear 0.1s, transform linear 0.03s, box-shadow linear 0.03s;
-    opacity: 0.8;
-    margin: 8px;
-    display: inline-block;
-    line-height: 24px;
-    padding: 8px 16px 8px 16px;
-    background-color: var(--ThemeAcc1);
-    color: var(--ThemeBackground);
-    border-radius: 15px;
-    cursor: pointer;
-    box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+.SwNarrow Media-Controls .media-button {
+    min-width: 0;
 }
-
-    Media-Button:hover {
-        transform: translate(-0.5px, -1px);
-        opacity: 1;
-    }
-
-
-    /* States set by common.js Button: Pressed while clicked (pushed down, small shadow); Disabled when not enabled (dimmed, no hover effect). */
-    Media-Button.Pressed {
-        transform: translate(1px, 2px);
-        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
-        opacity: 1;
-        cursor: pointer;
-    }
-
-    Media-Button.Disabled {
-        transform: translate(1px, 2px);
-        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
-        opacity: 0.4;
-        cursor: default;
-    }
-
-    Media-Button.Disabled:hover {
-        opacity: 0.4;
-    }
-
-
-    /* Button content created by common.js Button: <Sysweaver-ButtonText> floats left, the 24x24 mask icon <Icon-24x24> floats right. */
-    Media-Button Sysweaver-ButtonText {
-        vertical-align: middle;
-        display: inline-block;
-        float: left;
-    }
-
-    Media-Button Icon-24x24 {
-        vertical-align: middle;
-        display: inline-block;
-        float: right;
-        margin-left: 8px;
-    }
 
 
 /* ===== Property editor ===== */
 
-/* <Media-Edit>: container of the Edit-service property editor appended by mediaEditProps; full width, left aligned. */
+/* <Media-Edit>: container of the Edit service property editor (EditProps). */
 Media-Edit {
     position: relative;
     box-sizing: border-box;
-    margin: 0 auto 0 auto;
+    margin: 0 auto;
     padding: 0 0.25em 1em 0.25em;
     width: 100%;
     display: block;
     text-align: left;
 }
 
+    /* Shown instead of the editor (no editable settings, no edit service). */
+    Media-Edit > .media-edit-note {
+        margin: 0.75em 0;
+        color: var(--sw-text-2, var(--sw-fg));
+        text-align: center;
+    }
+
 
 /* ===== MediaView.html layout ===== */
 
-/* <Media-View>: created by mediaViewMain; absolute box (1em inset) with a 3-row grid: preview (min 25%), stats, controls. */
+/* <Media-View>: absolute box (1em inset) with a 3-row grid: preview (min 25%), stats, controls. */
 Media-View {
     position: absolute;
-    left: 1em;
-    top: 1em;
-    right: 1em;
-    bottom: 1em;
+    inset: 1em;
     display: grid;
-    grid-gap: 0;
+    gap: 0;
     grid-template-rows: minmax(25%, auto) max-content max-content;
     grid-template-columns: 100%;
 }
 
-
-    /*
-     * Grid placement: Media-PreView (matches <Media-Preview>, tag selectors are case-insensitive) fills row 1
-     * and overrides the --maxWidth sizing; Media-Stats row 2; Media-Controls row 3.
-     */
-    Media-View Media-PreView {
+    Media-View Media-Preview {
         grid-row: 1;
         grid-column: 1;
         width: 100%;
@@ -424,52 +317,425 @@ Media-View {
         padding-top: 1em;
         grid-row: 2;
         grid-column: 1;
-        max-width: initial;
     }
 
     Media-View Media-Controls {
         grid-row: 3;
         grid-column: 1;
-        max-width: initial;
     }
 
+/* Phones: a smaller inset. */
+.SwMobile Media-View {
+    inset: 0.5em;
+}
 
+/* ===== MediaView.html player chrome (media.js CreateChrome) ===== */
+
+/*
+ * Media-View.MediaChrome: the media fills a dark stage; the controls are on top of it (like a video player).
+ * Classes on the view: MediaChromeOn (the bars are shown), MediaPaused (paused: the bars and the big Play button stay),
+ * MediaAudioOnly (no picture: a speaker in the middle, the bars stay).
+ */
+Media-View.MediaChrome,
+.SwMobile Media-View.MediaChrome {
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    background: var(--media-stage);
+    /* The player colours: light controls on a dark stage over any picture, whatever the theme (as in every video player) */
+    --media-stage: #000; /* SwWeb:allow-design (the stage around a media is black in every theme) */
+    --media-fg: #fff; /* SwWeb:allow-design (light controls on the dark stage and over the picture) */
+    --media-fg-2: rgb(255 255 255 / 0.9); /* SwWeb:allow-design (the time, on the dark stage) */
+    --media-fg-3: rgb(255 255 255 / 0.25); /* SwWeb:allow-design (the speaker of an audio media, on the dark stage) */
+    --media-track: rgb(255 255 255 / 0.3); /* SwWeb:allow-design (the slider track over the picture) */
+    --media-hover: rgb(255 255 255 / 0.15); /* SwWeb:allow-design (hovered bar button over the picture) */
+    --media-scrim: rgb(0 0 0 / 0.55); /* SwWeb:allow-design (behind the big Play button, over the picture) */
+    --media-shade-top: linear-gradient(to bottom, rgb(0 0 0 / 0.7), transparent); /* SwWeb:allow-design (a shade that keeps the title readable over any picture) */
+    --media-shade-bottom: linear-gradient(to top, rgb(0 0 0 / 0.8), transparent); /* SwWeb:allow-design (a shade that keeps the controls readable over any picture) */
+    color: var(--media-fg);
+    outline: none;
+    text-align: left;
+}
+
+    Media-View.MediaChrome:focus-visible {
+        box-shadow: inset 0 0 0 3px var(--sw-focus);
+    }
+
+    Media-View.MediaChrome Media-Preview {
+        position: absolute;
+        inset: 0;
+        width: auto;
+        height: auto;
+        margin: 0;
+    }
+
+    /* The canvas background of a fitted media is the stage (no theme colored bars around it) */
+    Media-View.MediaChrome Media-AspectContainer.MediaPreviewFit > * {
+        background-color: transparent;
+    }
+
+    /* Playing without activity: no mouse pointer over the media */
+    Media-View.MediaChrome:not(.MediaChromeOn):not(.MediaPaused):not(.MediaAudioOnly) {
+        cursor: none;
+    }
+
+.media-chrome {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+/* The title bar and the control bar: shown while active, paused or audio only */
+.media-chrome-part {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    pointer-events: none;
+    opacity: 0;    /* SwWeb:allow ux-mot-7 (an auto hiding player bar: a pointer move, a tap, a key or the focus shows it) */
+    transition: opacity var(--sw-dur-2, 200ms) ease;
+}
+
+    .MediaChromeOn .media-chrome-part,
+    .MediaPaused .media-chrome-part,
+    .MediaAudioOnly .media-chrome-part,
+    .media-chrome-part:focus-within {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+.media-top {
+    top: 0;
+    align-items: center;
+    gap: var(--sw-space-2, 8px);
+    padding: 12px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
+    background: var(--media-shade-top); /* SwWeb:allow-design (a shade that keeps the bar readable over any picture, as in video players) */
+}
+
+.media-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--sw-text-md, 15px);
+    font-weight: 600;
+}
+
+.media-bar {
+    bottom: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 32px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    background: var(--media-shade-bottom); /* SwWeb:allow-design (a shade that keeps the bar readable over any picture, as in video players) */
+}
+
+.media-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.media-bar-gap {
+    flex: 1;
+}
+
+/* Bar buttons: white on the dark gradient, whatever the theme */
+.media-chrome .media-chrome-button {
+    color: var(--media-fg);
+    border-radius: 50%;
+}
+
+@media (hover: hover) {
+    .media-chrome .media-chrome-button:hover {
+        background: var(--media-hover);
+    }
+}
+
+    .media-chrome .media-chrome-button[aria-pressed="true"] {
+        color: var(--sw-accent1);
+        background: var(--media-hover);
+    }
+
+/* The time line: a thin track over the full width, a small thumb */
+.media-chrome .sw-slider .sw-slider-track {
+    height: 4px;
+    border: none;
+    background: var(--media-track);
+}
+
+.media-chrome .sw-slider .sw-slider-fill {
+    opacity: 1;
+}
+
+.media-chrome .sw-slider .sw-slider-thumb {
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: none;
+    background: var(--sw-slider-color);
+    box-shadow: 0 0 0 2px var(--media-scrim);
+}
+
+.media-timeline {
+    padding: 0 7px;
+}
+
+.media-volume {
+    width: 88px;
+    min-width: 60px;
+    padding: 0 7px;
+}
+
+/* Touch screens and narrow windows: the device keys set the volume (only the mute button); no Stop (the time line goes back to the start) */
+.SwMobile .media-volume,
+.SwNarrow .media-volume,
+.SwNarrow .media-chrome .media-stop {
+    display: none;
+}
+
+.media-time {
+    padding: 0 8px;
+    font-size: var(--sw-text-sm, 13px);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--media-fg-2);
+}
+
+/* Paused: a big Play button in the middle */
+.media-chrome .media-bigplay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 72px;
+    height: 72px;
+    min-width: 0;
+    padding: 0;
+    margin: -36px 0 0 -36px;
+    border: none;
+    border-radius: 50%;
+    background: var(--media-scrim);
+    color: var(--media-fg);
+    pointer-events: auto;
+}
+
+    .media-chrome .media-bigplay .sw-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    Media-View.MediaChrome:not(.MediaPaused) .media-bigplay {
+        display: none;
+    }
+
+/* Audio only: a speaker in the middle of the stage */
+.media-audio-art {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+    color: var(--media-fg-3);
+}
+
+    .media-audio-art .sw-icon {
+        width: 96px;
+        height: 96px;
+    }
+
+.MediaAudioOnly .media-bigplay {
+    top: 40%;
+}
+
+/* A jump of 15 s (a double tap on a side, J / L, the menu): "+15 s" on the right, "-15 s" on the left, for a moment */
+.media-skip {
+    position: absolute;
+    top: 50%;
+    right: 12%;
+    padding: 10px 18px;
+    margin-top: -24px;
+    border-radius: var(--sw-radius-pill);
+    background: var(--media-scrim);
+    color: var(--media-fg);
+    font-size: var(--sw-text-lg, 18px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;    /* SwWeb:allow ux-mot-7 (a short feedback text, no control inside) */
+    transition: opacity var(--sw-dur-2, 200ms) ease;
+}
+
+    .media-skip.media-skip-back {
+        right: auto;
+        left: 12%;
+    }
+
+    .media-skip.media-skip-on {
+        opacity: 1;
+    }
+
+/* A link dragged over the player: an outline says it can be dropped (it is then shown) */
+Media-View.MediaChrome.MediaDropping {
+    box-shadow: inset 0 0 0 4px var(--sw-accent1);
+}
+
+/* The stats panel (top right; Media-Stats as a list of chips), stays while the bars hide */
+.media-stats-panel {
+    position: absolute;
+    top: 52px;
+    right: max(12px, env(safe-area-inset-right));
+    width: min(24em, calc(100% - 24px));
+    max-height: calc(100% - 140px);
+    overflow: auto;
+    box-sizing: border-box;
+    padding: var(--sw-space-2, 8px);
+    border-radius: var(--sw-radius-lg, 10px);
+    background: color-mix(in srgb, var(--sw-surface) 92%, transparent);
+    color: var(--sw-text);
+    pointer-events: auto;
+}
+
+    .media-stats-panel[hidden] {
+        display: none;
+    }
+
+    .media-stats-panel Media-Stats {
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+    }
+
+    .media-stats-panel Media-Stat {
+        justify-content: space-between;
+        min-height: 0;
+        border-width: 1px;
+    }
+
+/*
+ * "Text from the link" with a text media from the url inside the app shell (media.js AddTextCaption, MediaView and
+ * MediaPreview), text only. media.js PlaceTextCaption puts it (fixed, viewport coordinates) directly above the rendered
+ * text (below when there is no room) and adds class Placed. Body text size from the tokens (--sw-size grows with --sw-scale on large screens).
+ */
+.MediaTextCaption {
+    position: fixed;
+    z-index: 2;
+    left: 0;
+    top: 0;
+    box-sizing: border-box;
+    max-width: calc(100vw - 16px);
+    margin: 0;
+    padding: 0.2em 0.6em;
+    font-family: var(--sw-sans, sans-serif);
+    font-size: var(--sw-text-md, 15px);
+    font-weight: var(--sw-sans-weight, normal);
+    line-height: 1.3;
+    color: var(--sw-fg, CanvasText);
+    background: var(--sw-surface-sunken, Canvas);
+    border: 1px solid var(--sw-border-strong, currentColor);
+    border-radius: var(--sw-radius, 6px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+    .MediaTextCaption.Placed {
+        visibility: visible;
+    }
+
+/* MediaView: room for the caption above the media box. */
+.MediaWithCaption Media-View {
+    top: calc(1.5em + 2 * var(--sw-text-md, 15px));
+}
+
+/* A refused link parameter (media.js ShowLinkProblem): the reason and an "Open in a new tab" button. */
+.MediaRefused {
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    width: calc(100% - 2em);
+    max-width: 36em;
+    margin: 2em auto;
+    text-align: start;
+    padding: 1em;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75em;
+    font-family: var(--sw-sans, sans-serif);
+    color: var(--sw-fg, inherit);
+    background: var(--sw-surface, transparent);
+    border: 1px solid var(--sw-border-strong, currentColor);
+    border-radius: var(--sw-radius, 6px);
+    cursor: auto;
+}
+
+    .MediaRefused .MediaRefusedText {
+        margin: 0;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
+    /* MediaPreview: the error state stays usable ("Try again"; the player rule below makes children non-interactive). */
+    body.MediaPreview > .MediaRefused {
+        pointer-events: auto;
+    }
+
+/*
+ * A web font of a text media failed (media.js FontNotice): a small persistent notice at the bottom left, the text is
+ * rendered with a default font. Text only.
+ */
+.MediaFontNotice {
+    position: fixed;
+    z-index: 3;
+    left: 8px;
+    bottom: 8px;
+    box-sizing: border-box;
+    max-width: calc(100vw - 16px);
+    margin: 0;
+    padding: 0.2em 0.6em;
+    font-family: var(--sw-sans, sans-serif);
+    font-size: calc(var(--sw-text-md, 15px) * 0.87);
+    line-height: 1.3;
+    color: var(--sw-fg, CanvasText);
+    background: var(--sw-surface-sunken, Canvas);
+    border: 1px solid var(--sw-border-strong, currentColor);
+    border-radius: var(--sw-radius, 6px);
+    pointer-events: none;
+}
 
 
 /* ===== Preview page (MediaPreview.html) ===== */
 
-/* Class MediaPreview on <body>, added by mediaPreviewMain: the body is a full-window box without scrolling. */
-body.MediaPreview
-{
+/* body.MediaPreview (PreviewMain): a full window box without scrolling. */
+body.MediaPreview {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
+    margin: 0;
     overflow: hidden;
 }
 
-    /* The player element appended directly to the body: non-interactive, fades in/out via opacity. */
-    body.MediaPreview > * {
+    /* The player element (not the Sw toasts / layers): non-interactive, fades in via opacity. */
+    body.MediaPreview > :not(.sw-toasts):not(.sw-layer):not(.sw-loader):not(.MediaTextCaption):not(.MediaFontNotice) {
         position: relative;
         display: block;
         transform-box: border-box;
         left: 0;
         top: 0;
-        transition: opacity linear 0.1s;
+        transition: opacity linear var(--sw-dur-1);
         border: none;
         outline: none;
         pointer-events: none;
     }
 
-
-
     /*
-     * Class NoFade (added by mediaPreviewMain when a screenshot host is present): checkerboard background so
-     * transparency is visible, and no fade transitions on the player.
-     * Custom properties: --c0 / --c1 = the two checker colors; --hs = half checker cell size (1/32 of the smaller
-     * viewport side, rounded up to whole px with CSS round()); --s = cell size (2 * --hs) used as background-size.
-     * Technique: four 45deg linear-gradient triangles offset by --hs form the checker squares.
+     * Class NoFade (a screenshot host is present): checkerboard background so transparency is visible, no transitions.
+     * --c0 / --c1 = checker colors; --hs = half cell (1/32 of the smaller viewport side, whole px); --s = cell size.
      */
     body.MediaPreview.NoFade {
         --c0: #bbb;
@@ -482,88 +748,83 @@ body.MediaPreview
         background-position: 0 0, var(--hs) var(--hs), var(--hs) 0, 0 var(--hs);
     }
 
-    body.MediaPreview.NoFade > * {
+    body.MediaPreview.NoFade > :not(.sw-toasts) {
         transition: none;
     }
 
-    /* Player element hidden (class MediaHidden set by the mediaPlayer scripts) until Show(). */
     body.MediaPreview > *.MediaHidden {
-        opacity: 0;
+        opacity: 0;    /* SwWeb:allow ux-mot-7 (a media element the player shows when it is loaded: no control inside, out of the flow) */
     }
 
-
-    /* ===== Icons ===== */
-
-    /* Control icons */
     /*
-     * Mask icons (mask-image; the icon element's background color shows through) used as Button icon classes:
-     * player controls in mediaCreatePlayer: MediaIconPlay, MediaIconPause, MediaIconStop, MediaIconMute,
-     * MediaIconUnMute, MediaIconVolLoud, MediaIconVolLow, MediaIconExpand, MediaIconLoop, MediaIconOnce
-     * (../icons/preview_*.svg);
-     * mediaEditProps buttons: IconSave ("Save changes", disc.svg), IconApply ("Apply changes", reload.svg);
-     * mediaEditMain buttons: IconMediaNewWindow (newtab.svg), IconMediaCollapse (collapse.svg) and
-     * IconMediaExpand (expand.svg).
+     * Class MediaCaptioned (PreviewMain: a text from the url inside the app shell, with the "Text from the link" caption):
+     * the text only gets a limited area in the middle (a crafted link can't paint a full page message), a collage
+     * (class MediaCollage) a smaller one; the media is fitted into it (UpdateSize uses the body box).
      */
-    .MediaIconPlay {
-        mask-image: url("../icons/preview_play.svg");
+    body.MediaPreview.MediaCaptioned {
+        left: 15%;
+        top: 30%;
+        width: 70%;
+        height: 35%;
+    }
+
+    body.MediaPreview.MediaCaptioned.MediaCollage {
+        left: 20%;
+        top: 25%;
+        width: 60%;
+        height: 45%;
+    }
+
+    /* Phones in portrait: the narrow width is the limit, so use more of it. */
+    .SwMobile body.MediaPreview.MediaCaptioned {
+        left: 5%;
+        width: 90%;
     }
 
 
+/* ===== Icons ===== */
 
+/*
+ * Mask icon classes of the player buttons (Sw.Button Icon option; names start with "Icon" so Sw treats them as icon
+ * classes). The old MediaIcon* names are kept for host pages that still use them.
+ * IconSave / IconApply / IconMediaNewWindow / IconMediaCollapse / IconMediaExpand (editor) come from sw/ui.css.
+ */
+.IconMediaPreviewPlay, .MediaIconPlay {
+    mask-image: url("../icons/preview_play.svg");
+}
 
-.MediaIconPause {
+.IconMediaPreviewPause, .MediaIconPause {
     mask-image: url("../icons/preview_pause.svg");
 }
 
-.MediaIconStop {
+.IconMediaPreviewStop, .MediaIconStop {
     mask-image: url("../icons/preview_stop.svg");
 }
 
-
-.MediaIconMute {
+.IconMediaPreviewMute, .MediaIconMute {
     mask-image: url("../icons/preview_mute.svg");
 }
 
-.MediaIconUnMute {
+.IconMediaPreviewUnMute, .MediaIconUnMute {
     mask-image: url("../icons/preview_unmute.svg");
 }
 
-.MediaIconVolLoud {
+.IconMediaPreviewVolLoud, .MediaIconVolLoud {
     mask-image: url("../icons/preview_vol_loud.svg");
 }
 
-.MediaIconVolLow {
+.IconMediaPreviewVolLow, .MediaIconVolLow {
     mask-image: url("../icons/preview_vol_low.svg");
 }
 
-.MediaIconExpand {
+.IconMediaPreviewExpand, .MediaIconExpand {
     mask-image: url("../icons/preview_expand.svg");
 }
 
-.MediaIconLoop {
+.IconMediaPreviewLoop, .MediaIconLoop {
     mask-image: url("../icons/preview_loop.svg");
 }
 
-.MediaIconOnce {
+.IconMediaPreviewOnce, .MediaIconOnce {
     mask-image: url("../icons/preview_once.svg");
-}
-
-.IconSave {
-    mask-image: url("../icons/disc.svg");
-}
-
-.IconApply {
-    mask-image: url("../icons/reload.svg");
-}
-
-.IconMediaNewWindow {
-    mask-image: url("../icons/newtab.svg");
-}
-
-.IconMediaCollapse {
-    mask-image: url("../icons/collapse.svg");
-}
-
-.IconMediaExpand{
-    mask-image: url("../icons/expand.svg");
 }

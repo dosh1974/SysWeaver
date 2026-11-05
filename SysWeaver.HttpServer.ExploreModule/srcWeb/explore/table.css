@@ -1,966 +1,3436 @@
-﻿
-
-/*
- * table.css - styles of the live data table built by table.js (Table.addTable) and of the cell output of
- * ValueFormat.update / ValueFormat.updateFormat in common/common.js (which adds "ValueFormat" + format name
- * classes plus Right, Left, Null, False, Text, Toggle, Monospaced, Capped, KeyClick, MouseClick).
- * Loaded by explore/table.html and by other pages that embed Table.addTable or render ValueFormat tables
- * (e.g. ServerManager keys.html / services.html). The a / body / html rules assume the table fills the page.
- * Uses theme variables from common/theme.css (--ThemeMain, --ThemeMain25, --ThemeAcc1, --ThemeAcc1RGB,
- * --ThemeAcc150, --ThemeAcc2, --ThemeAcc2RGB, --ThemeAcc225, --ThemeBackground, --ThemeRad, --ThemeRadInp,
- * --ThemeFont, --ThemeFontMono, --ThemeIconSize, --ThemeFadeDuration) and --Margin (set by the host / app shell).
- * Mask icon classes (mask-image) are colored by the ColorIcon / IconColor* rules of common.css; icon-16x16,
- * icon-26x26 and icon-main are the wrapper elements created by ColorIcon. Not templated; no media queries or
- * [data-theme] variants; one @keyframes (DataTableFlash). Uses CSS nesting in the SwSelfWide / SwSelfNarrow rules.
+﻿/*
+ * explore/table.css - styles of the live data table (Sw.Table, explore/table.js) and of the page explore/table.html.
+ * Loaded by explore/table.html and by every page that embeds a table (ex: ServerManager keys.html / services.html, old or new format).
+ * Uses the Sw tokens (sw/ui.css: --sw-bg, --sw-fg, --sw-accent1/2, --sw-line, --sw-touch ...), which follow the SysWeaver theme.
+ * Cell content is rendered by Sw.Cells (ui/cells.css); the cell classes are the Sw ones (sw-right, sw-mono ...) on new pages and the old
+ * names (Right, Monospaced, Null, False, Text, Toggle, Capped, ValueFormat<Kind>) on old pages (compat layer), so both are styled here.
+ *
+ * Structure (Design v2, PORTING.md B13): [header.sw-table-ph (table.html: h1.sw-table-ph-title, p.sw-table-ph-desc) | p.sw-table-note (embedded)]
+ *   div.sw-table, the table frame (.sw-table-page: fills the window, .sw-table-narrow: < 600px wide, .sw-table-compact: compact screen
+ *   (phone), .sw-table-cards: card layout, .sw-table-loading: until the first answer, .sw-table-busy: user request running,
+ *   .sw-table-zebra: striped rows, .sw-table-pin / -pin2 / -actpin: pinned columns, .sw-table-failed / -denied-on: error states)
+ *   > div.sw-table-toolbar (.sw-table-search, .sw-table-filterbtn2 + .sw-table-badge, .sw-table-tspacer, div.sw-table-ttools > .sw-table-tbtn)
+ *   > div.sw-table-chips (.sw-table-chip > .sw-table-chip-main + .sw-table-chip-x, .sw-table-chip-add, .sw-table-chip-clear)
+ *   > div.sw-table-cardbar (old pages; the filter dialog: .sw-table-fdialog > .sw-table-fsheet / .sw-table-fe)
+ *   > div.sw-table-area (takes the free height of a page table, so the footer is always at the bottom of the frame)
+ *     > div.sw-table-scroll > table.sw-table-grid > thead (tr.sw-table-head: th.sw-table-corner + th per column), tbody.sw-table-filters
+ *       (tr.sw-table-frow: .sw-table-fops / .sw-table-fvals / .sw-table-fflags), tbody.sw-table-body (td.sw-table-rn + td per column)
+ *     > div.sw-table-skel, div.sw-table-empty / div.sw-table-error / div.sw-table-denied (.sw-table-state), div.sw-table-edge-l / -r
+ *   > div.sw-table-foot (div.sw-table-fleft: .sw-table-range, .sw-table-changed, .sw-table-stale; label.sw-table-pps > select.sw-table-pps-sel;
+ *     div.sw-table-nav: .sw-table-pbtn first / prev, .sw-table-pageno, next).
+ * Custom properties: --sw-table-rnw (row number column width, set by table.js), --sw-table-head (header background),
+ * --sw-table-sticky (opaque background of sticky cells), --sw-table-cellmax (max width of a cell).
  */
 
-/* ===== Page ===== */
+/* ===== Page (explore/table.html) ===== */
 
-/* Links (and visited links): no decoration or padding, inherit the text color. */
-a {
-    text-decoration: none;
-    color: inherit;
-    padding: 0;
+/* The page fills the window; html may have a padding (ex: html.Embedded in the app shell), so the body takes the content box height */
+html:has(body.sw-table-pagebody) {
+    background: transparent;
+    overflow: hidden;
+    box-sizing: border-box;
+    height: 100%;
+}
+
+/* A column: the note above the table (table.js UpdateNote, outside the table frame), then the table taking the rest of the height */
+body.sw-table-pagebody {
     margin: 0;
+    background: transparent;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
-    a:visited {
-        color: inherit;
+/* Opened on its own (a bookmark, a new tab; not in the shell, not in another page's frame): the standard page margin (--Margin, the
+   Design v2 page padding --sw-page-px: 32 / 24 / 16 px), as inside the shell */
+html.sw-table-alone:has(body.sw-table-pagebody) {
+    padding: var(--Margin, 24px);
+}
+
+@media (max-height: 500px) {
+    html.sw-table-alone:has(body.sw-table-pagebody) {
+        padding: 4px 8px;
     }
-
-/* Page body: centered content (the inline-block table), height forced to 100% - 200px. */
-body {
-    text-align: center;
-    height: calc(100% - 200px) !important;
 }
 
-/* Page root: no vertical scroll (rows are paged / auto-counted), always-on horizontal scroll, stable gutter, themed scrollbar. */
-html {
-    overflow-y: hidden;
-    overflow-x: scroll;
-    scrollbar-gutter: stable auto;
-    scrollbar-color: var(--ThemeAcc150) var(--ThemeBackground);
+/* In a frame of a host without padding around it (the iframe has data-sw-page-padding; ex: a Fenrir pop-up window, table.js tableMain):
+   the theme's page padding (--sw-page-px: density and screen width), so the texts and the live dot keep off the frame edge */
+html.sw-table-padded:has(body.sw-table-pagebody) {
+    padding: var(--sw-page-px, 16px);
 }
 
-/* ===== Data table ===== */
+@media (max-height: 500px) {
+    html.sw-table-padded:has(body.sw-table-pagebody) {
+        padding: 4px 8px;
+    }
+}
 
-/*
- * DataTable: the table.DataTable created by Table.addTable; inline-block, collapsed borders, shadow, --ThemeBackground.
- * Custom properties defined here:
- *   --HeaderCol       background of the header row and filter rows (--ThemeAcc1RGB at 10%).
- *   --HeaderColHover  hover background of those rows (--ThemeAcc1RGB at 25%).
- *   --RowPadding      --ThemeIconSize x 4px rounded to 1px; defined but not used in this file.
- */
-.DataTable {
-    --HeaderCol: rgba(var(--ThemeAcc1RGB), 0.1);
-    --HeaderColHover: rgba(var(--ThemeAcc1RGB), 0.25);
-    --RowPadding: round(calc(var(--ThemeIconSize) * 4px), 1px);
+/* Low screens (phones in landscape): a slim page margin in the shell, the rows need the height */
+@media (max-height: 500px) {
+    html.Embedded:has(body.sw-table-pagebody) {
+        padding: 4px 8px;
+    }
+}
+
+/* ===== Root ===== */
+
+.sw-table {
+    --sw-table-head: var(--sw-surface-sunken, color-mix(in srgb, var(--sw-bg) 88%, var(--sw-accent1)));
+    --sw-table-sticky: var(--sw-bg);
+    /* Row backgrounds: every grid cell paints the background of its row state (--sw-table-rowbg: normal, stripe, hover,
+       failing row), the sticky cells too, so pinned columns are opaque and match their row in every state and theme */
+    --sw-table-row: var(--sw-table-sticky);
+    --sw-table-row-alt: color-mix(in srgb, var(--sw-table-sticky) 96.5%, var(--sw-fg));
+    --sw-table-row-hover: color-mix(in srgb, var(--sw-table-sticky) 94%, var(--sw-accent1));
+    /* The row hairline (horizontal rules only; vertical rules: option ColumnLines, class sw-table-vlines) */
+    --sw-table-rule: color-mix(in srgb, var(--sw-border, var(--sw-border)) 75%, var(--sw-table-sticky));
+    --sw-table-cellmax: 60ch;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    color: var(--sw-fg);
+    font-family: var(--sw-sans);
     text-align: left;
-    display: inline-block;
-    border-collapse: collapse;
-    border-spacing: 0;
-    font-size: 100%;
+}
+
+/* The table never depends on the host page's box model: without class="sw-root" on the body (old or unported pages)
+   the cells were content-box, and the locked column widths (table.js LockWidths) grew by the cell padding on every pass */
+.sw-table, .sw-table *, .sw-table *::before, .sw-table *::after {
+    box-sizing: border-box;
+}
+
+/* The table frame (grid layouts): one bordered panel holding the header, the rows and the footer bar, so the bar always has the
+   left / right edges of the table, never a detached strip. The cards (phones) have their own card borders: no frame. */
+.sw-table:not(.sw-table-cards):not(.sw-table-denied-on) {
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    background: var(--sw-bg);
+}
+
+/* Page tables (explore/table.html) fill the free height of the window: the scrolled area takes all of it whatever the number and the
+   height of the rows, so the footer bar stays at the bottom edge, exactly in place while paging (a short last page), refreshing,
+   rows changing height, scroll bars coming and going; the rows scroll inside the frame */
+.sw-table-page {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* The scrolled area: both directions; the grid takes at least the full width of the frame */
+.sw-table-scroll {
+    position: relative;
+    overflow: auto;
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    scrollbar-color: color-mix(in srgb, var(--sw-accent1) 50%, transparent) transparent;
+}
+
+/* The rows area of the frame (table.js t.Area: the scrolled grid, the skeleton / empty / error / not allowed states and the edge
+   cues over it), between the tool bar and the footer. Page tables: it takes all the free height of the frame (flex 1 1 0, never its
+   content height), so the footer is ALWAYS at the bottom edge of the frame: with 2 rows, a short last page (Next / Back stay under the
+   mouse), an empty result, while loading, refreshing, rows changing height and scroll bars coming and going. Embedded
+   tables: the area takes its content height (the footer is sticky at the bottom of the window while the page scrolls). */
+.sw-table-area {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.sw-table-page > .sw-table-area {
+    flex: 1 1 0;
+}
+
+.sw-table-area > .sw-table-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+}
+
+.sw-table-page .sw-table-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+/* Fill tables (embedded, table.js option Fill; default when the container has the class sw-fill or sw-table-fill): the frame takes the
+   free height of its container and the rows area grows into it, so the footer is at the bottom of the frame as on a page table. The
+   area keeps at least its content height when the container is as high as its content (ex: a page that scrolls as a whole on phones).
+   The rule for every table: page tables and fill tables: footer at the bottom of the frame; other embedded tables (a table
+   in a card or a section between other content): the frame is as high as its rows, the footer follows the last row. */
+.sw-table-fill {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+:is(.sw-fill, .sw-table-fill):has(> .sw-table-fill) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.sw-table-fill > .sw-table-area {
+    flex: 1 1 auto;
+}
+
+/* An embedded table in a host with a fixed height (table.js HostFit, FrontendDev S5b N1): a fill table of that host, so the frame
+   never paints over the content below the host (the next card); the rows scroll inside the frame */
+:has(> .sw-table-hostfit) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* No rows: the header stays (the scrolled area takes its own height), the empty state takes the free space below it */
+.sw-table-area:has(> .sw-table-empty:not([hidden])) > .sw-table-scroll {
+    flex: none;
+}
+
+.sw-table-area > .sw-table-empty:not([hidden]) {
+    flex: 1 1 auto;
+}
+
+/* The states never draw outside the rows area (ex: under the footer on a landscape phone, 844x390): they may shrink and then scroll
+   inside the area; "safe" keeps the top of a too high state visible */
+.sw-table-area > .sw-table-state {
+    min-height: 0;
+    overflow: auto;
+    justify-content: safe center;
+}
+
+/* Edge cues of a grid wider than its area (table.js UpdateEdges places them over the visible part of the scrolled area): a shadow at
+   the left edge while columns are scrolled out to the left, a shadow with an arrow button at the right edge while more columns follow */
+.sw-table-edge {
+    position: absolute;
+    z-index: 5;
+    width: 28px;
     margin: 0;
-    box-shadow: 0px 0px 12px rgba(0,0,0,0.3), 0px 0px 4px var(--ThemeAcc150);
-    background-color: var(--ThemeBackground);
+    padding: 0;
+    border: none;
+    pointer-events: none;
 }
 
-    /* Rows: background transition and --ThemeAcc2RGB hover tint. */
-    .DataTable tr {
-        transition: background-color 0.2s;
+.sw-table-edge[hidden] {
+    display: none;
+}
+
+/* (a 1 px line, no fade band: the old fade covered a whole column, a bright glow in Hacker; Design v2 flat) */
+.sw-table-edge-l {
+    width: 0;
+    border-left: 1px solid var(--sw-border-strong, var(--sw-border-strong));
+}
+
+.sw-table-edge-r {
+    width: 40px;
+    transform: translateX(-100%);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    border-right: 1px solid var(--sw-border-strong, var(--sw-border-strong));
+    color: var(--sw-text-accent);
+    cursor: pointer;
+}
+
+    /* A column scrolled under the pinned row actions (or out at the right edge) fades out over 20 px before the edge line, so a
+       header or value is never cut through a letter ("Paged syster / memor"): the rows fade to the row colour, the header band
+       (--sw-table-headh, set by table.js UpdateEdges) to the header colour. No shadow: only the text under it fades. */
+    .sw-table-edge-r::before,
+    .sw-table-edge-r::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        width: 20px;
+        pointer-events: none;
     }
 
-        .DataTable tr:hover {
-            background-color: rgba(var(--ThemeAcc2RGB), 0.15);
+    .sw-table-edge-r::before {
+        top: var(--sw-table-headh, 0px);
+        bottom: 0;
+        background: linear-gradient(to right, transparent, var(--sw-table-row, var(--sw-bg))); /* SwWeb:allow-design (fades the text scrolled under the pinned column, not a surface) */
+    }
+
+    .sw-table-edge-r::after {
+        top: 0;
+        height: var(--sw-table-headh, 0px);
+        background: linear-gradient(to right, transparent, var(--sw-table-head)); /* SwWeb:allow-design (fades the header text scrolled under the pinned column, not a surface) */
+    }
+
+    /* (the arrow stays above the fade) */
+    .sw-table-edge-r > .sw-table-edge-arrow {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Only the arrow takes clicks / taps (the shadow lets them through to the cells under it) */
+    .sw-table-edge-arrow {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 44px;
+        margin-right: 2px;
+        border-radius: var(--sw-radius);
+        border: 1px solid var(--sw-border, var(--sw-border));
+        background: var(--sw-surface-raised, var(--sw-bg));
+        /* (it floats over the cells: the floating layer elevation) */
+        box-shadow: var(--sw-elev-1);
+    }
+
+        .sw-table-edge-arrow > * {
+            width: 16px;
+            height: 16px;
         }
 
-        /*
-         * Remove the outer borders of the table (top, left, bottom, right). Note: the bare "th" parts of the
-         * "td,th" / "td, th" selector lists apply to every th on the page. The first data column (row number) is centered.
-         */
-        .DataTable tr:first-child td,th {
-            border-top-style: none !important;
-        }
+/* Busy: a thin running bar under the tool bar, over the top of the grid (the data stays) */
+.sw-table-busy > .sw-table-area::before {
+    content: "";
+    position: absolute;
+    z-index: 7;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--sw-accent1), transparent); /* SwWeb:allow-design (the moving busy line, an indicator, not a surface) */
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: sw-table-busy 1s linear infinite;
+}
 
-    .DataTable td:first-child {
-        border-left-style: none !important;
-        text-align: center;
+@keyframes sw-table-busy {
+    from {
+        background-position: -40% 0;
     }
 
-    .DataTable th:first-child {
-        border-left-style: none !important;
-    }
-
-    .DataTable tr:last-child td, th {
-        border-bottom-style: none !important;
-    }
-
-    .DataTable td:last-child {
-        border-right-style: none !important;
-    }
-
-    .DataTable th:last-child {
-        border-right-style: none !important;
-    }
-
-
-
-
-        /* Header row background --HeaderCol, --HeaderColHover on hover. */
-        .DataTable tr:first-child {
-            background-color: var(--HeaderCol);
-        }
-
-            .DataTable tr:first-child:hover {
-                background-color: var(--HeaderColHover);
-            }
-
-
-/*
- * Layout variants: classes SwSelfWide / SwSelfNarrow on html are set by the app shell code in common.js
- * (when the page is embedded). Uses CSS nesting.
- * SwSelfWide: the table gets --ThemeRad corners, clipped overflow and margin-right: var(--Margin).
- */
-html.SwSelfWide {
-
-
-    .DataTable {
-        border-radius: var(--ThemeRad);
-        overflow: hidden;
-        margin-right: var(--Margin);
-    }
-
-}/* html.SwWide*/
-
-
-/*
- * SwSelfNarrow: html gets margin-left / margin-right / margin-bottom 0, min-width 100% and
- * min-height calc(100% - var(--Margin)); the nested .DataTable rule gives the table min-width 100%.
- */
-html.SwSelfNarrow {
-    
-    margin-left: 0;
-    margin-right: 0;
-    margin-bottom: 0;
-    min-width: 100%;
-    min-height: calc(100% - var(--Margin));
-
-    .DataTable {
-        min-width: 100%;
+    to {
+        background-position: 140% 0;
     }
 }
-/* html.SwNarrow*/
 
+/* ----- States inside the frame (Design v2, PORTING.md B13; the tool bar and the footer stay): an icon in a sunken circle, a title, one sentence,
+   an action. Empty (table.js UpdateEmpty), error (ShowError), not allowed / not found (ShowDenied / ShowNotFound). ----- */
+.sw-table-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-2, 8px);
+    padding: var(--sw-space-8, 32px) var(--sw-space-4, 16px);
+    text-align: center;
+    color: var(--sw-text-2, var(--sw-text-2));
+}
 
-    /* Header cells (built by tableRedraw): no wrap, not selectable, --ThemeAcc150 borders. */
-    .DataTable th {
-        text-align: left;
-        overflow: hidden;
-        white-space: nowrap;
-        vertical-align: middle;
-        user-select: none;
-        border: 1px solid var(--ThemeAcc150);
+.sw-table-state[hidden] {
+    display: none;
+}
+
+.sw-table-state-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: var(--sw-space-1, 4px);
+    border-radius: 50%;
+    background: var(--sw-surface-sunken, var(--sw-surface-sunken));
+    color: var(--sw-text-2, var(--sw-text-2));
+}
+
+    .sw-table-state-icon > .sw-icon {
+        width: 1.5rem;
+        height: 1.5rem;
     }
 
-        /* First header cell = filter mode toggle icon (cycles state.Expanded): centered, pointer; its child displayed as block. */
-        .DataTable th:first-child {
-            cursor: pointer;
-            padding: 0 0.5em 0 0.5em;
-            margin: 0;
-            text-align: center;
-            vertical-align: middle;
-        }
+.sw-table-state-danger {
+    background: var(--sw-danger-soft, var(--sw-surface-sunken));
+    color: var(--sw-danger);
+}
 
-        .DataTable th:first-child > *{
-            display: block;
-        }
+.sw-table-state-title {
+    margin: 0;
+    color: var(--sw-text, var(--sw-fg));
+    font-family: var(--sw-font, var(--sw-sans));
+    font-size: var(--sw-text-lg, 1.1em);
+    font-weight: 500;
+}
 
+.sw-table-state-text {
+    margin: 0;
+    max-width: 32rem;
+}
 
-        /* Column header content div (sort icon + title span) as an inline-flex row. */
-        .DataTable th div {
-            display: inline-flex;
-            align-items: center;
-        }
+.sw-table-empty .sw-button {
+    margin-top: var(--sw-space-2, 8px);
+}
 
+/* The error state takes the free height of the rows area (centered message) */
+.sw-table-area > .sw-table-error {
+    flex: 1 1 auto;
+}
 
-/* ===== Filter rows ===== */
+/* ----- Loading (table.js: sw-table-loading until the first answer): skeleton rows of the real row height, no spinner overlay ----- */
+.sw-table-skel {
+    display: none;
+}
 
-    /* HideRow: hidden filter rows (class toggled by Table.tableUpdateFilterIcon and Table.addFilterRow per state.Expanded). */
-    .DataTable tr.HideRow {
+.sw-table-loading .sw-table-skel {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sw-table-loading .sw-table-scroll {
+    display: none;
+}
+
+.sw-table-skel-head {
+    height: calc(var(--sw-row-h, 2.5rem) - 4px);
+    background: var(--sw-surface-sunken, var(--sw-table-head));
+    border-bottom: 1px solid var(--sw-border);
+}
+
+.sw-table-skel-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-6, 24px);
+    height: var(--sw-row-h, 2.5rem);
+    padding: 0 var(--sw-space-3, 12px);
+    border-bottom: 1px solid color-mix(in srgb, var(--sw-border) 55%, transparent);
+    box-sizing: border-box;
+}
+
+    .sw-table-skel-row > span {
+        display: block;
+        height: 0.7em;
+        border-radius: var(--sw-radius-sm);
+        background: color-mix(in srgb, var(--sw-fg) 9%, transparent);
+        animation: sw-table-skel 1.4s ease-in-out infinite;
+    }
+
+@keyframes sw-table-skel {
+    50% {
+        opacity: 0.45;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw-table-skel-row > span {
+        animation: none;
+    }
+}
+
+/* Error state: no data could be loaded (table.js ShowError; removed by the next successful request) */
+.sw-table-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75em;
+    padding: 2em 1em;
+    text-align: center;
+    color: var(--sw-fg);
+}
+
+.sw-table-error[hidden] {
+    display: none;
+}
+
+.sw-table-error-icon {
+    width: 2.5em;
+    height: 2.5em;
+    color: var(--sw-danger);
+}
+
+.sw-table-error-text {
+    max-width: 40em;
+    overflow-wrap: anywhere;
+}
+
+/* The "Technical details" disclosure of the error state (table.js ErrorDetail): the raw error text (selectable) and a Copy button */
+.sw-table-error-detail {
+    max-width: min(48em, 100%);
+    text-align: left;
+    color: var(--sw-text-2);
+    font-size: 0.9em;
+}
+
+    .sw-table-error-detail > summary {
+        transition: color var(--sw-dur-1) linear;
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--sw-control-h);
+        cursor: pointer;
+        color: var(--sw-text-accent);
+        list-style: none;
+    }
+
+    .sw-table-error-detail > summary::before {
+        content: "\25B8";
+        margin-right: 0.4em;
+    }
+
+    .sw-table-error-detail[open] > summary::before {
+        content: "\25BE";
+    }
+
+    .sw-table-error-detail > summary::-webkit-details-marker {
         display: none;
     }
 
-
-    /* FilterRow: the 3 rows per filter set from Table.addFilterRow; tinted --HeaderCol, --HeaderColHover on hover. */
-    .DataTable tr.FilterRow {
-        background-color: var(--HeaderCol);
+    .sw-table-error-detail > summary:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
     }
 
-
-        .DataTable tr.FilterRow:hover {
-            background-color: var(--HeaderColHover);
-        }
-
-        .DataTable tr.FilterRow:nth-child(2n):hover {
-            background-color: var(--HeaderColHover);
-        }
-
-
-        /* First filter cell = action icon (Reset / Close / Clear / Plus): centered, pointer, child as block. */
-        .DataTable tr.FilterRow td:first-child {
-            color: var(--ThemeMain);
-            opacity: 1;
-            cursor: pointer;
-            padding: 0 0.5em 0 0.5em;
-            margin: 0;
-            text-align: center;
-            vertical-align: middle;
-            font-size: 100%;
-        }
-
-
-        .DataTable tr.FilterRow td:first-child > * {
-            display: block;
-        }
-
-        /* Filter cells: bordered, no wrap, small padding. */
-        .DataTable tr.FilterRow td {
-            vertical-align: middle;
-            border: 1px solid var(--ThemeAcc150);
-            padding: 2px 3px 2px 3px;
-            white-space: nowrap;
-        }
-
-            /* Op selects (row 1 of a set): fill the cell, themed, --ThemeAcc2 focus outline; options highlighted in --ThemeAcc1 on hover. */
-            .DataTable tr.FilterRow td select {
-                font-family: var(--ThemeFont);
-                box-sizing: border-box;
-                border: none;
-                outline: none;
-                background-color: var(--ThemeBackground);
-                color: var(--ThemeMain);
-                cursor: pointer;
-                border-radius: var(--ThemeRadInp);
-                padding: 1px 0 1px 0;
-                width: 100%;
-                height: 100%;
-                font-size: 100%;
-            }
-
-                .DataTable tr.FilterRow td select:focus {
-                    outline: 2px solid var(--ThemeAcc2);
-                }
-
-            .DataTable tr.FilterRow td option {
-                cursor: pointer;
-            }
-
-                .DataTable tr.FilterRow td option:hover {
-                    background-color: var(--ThemeAcc1);
-                    color: var(--ThemeBackground);
-                }
-
-
-
-            /* Value inputs (row 2 of a set): fill the cell; italic faded placeholder (the op name); focus outline; read-only at 70%. */
-            .DataTable tr.FilterRow td input {
-                font-family: var(--ThemeFont);
-                box-sizing: border-box;
-                border: none;
-                outline: none;
-                background-color: var(--ThemeBackground);
-                color: var(--ThemeMain);
-                border-radius: var(--ThemeRadInp);
-                padding: 2px 3.5px 2px 3.5px;
-                width: 100%;
-                height: 100%;
-                font-size: 100%;
-            }
-
-                .DataTable tr.FilterRow td input::placeholder {
-                    font-size: 90%;
-                    font-style: italic;
-                    opacity: 0.6;
-                }
-
-                .DataTable tr.FilterRow td input:focus {
-                    outline: 2px solid var(--ThemeAcc2);
-                }
-
-                .DataTable tr.FilterRow td input:read-only {
-                    opacity: 0.7;
-                }
-
-
-            /*
-             * table-check: the "!" (Invert) and "A ≠ a" (CaseSensitive) toggles from addFilterRow (row 3 of a set):
-             * small pills with hover lift, press shift and focus outline. Class Disabled (column does not allow the
-             * option) stays at 70% without effects; class Checked inverts to a --ThemeMain background; the second
-             * toggle gets a 4px left margin.
-             */
-            .DataTable tr.FilterRow td table-check {
-                border-radius: var(--ThemeRadInp);
-                padding: 0px 5px 0px 5px;
-                background-color: var(--ThemeBackground);
-                color: var(--ThemeMain);
-                user-select: none;
-                cursor: pointer;
-                border: 1px solid var(--ThemeBackground);
-                line-height: 21.5px;
-                display: inline-block;
-                opacity: 0.8;
-                transition: opacity linear 0.1s, transform linear 0.1s, outline linear 0.1s;
-            }
-
-                .DataTable tr.FilterRow td table-check.Disabled {
-                    cursor: default;
-                    opacity: 0.7;
-                }
-
-
-                .DataTable tr.FilterRow td table-check:hover {
-                    opacity: 1;
-                    transform: translateY(-0.5px);
-                }
-
-                .DataTable tr.FilterRow td table-check.Disabled:hover {
-                    opacity: 0.7;
-                    transform: none;
-                }
-
-
-                .DataTable tr.FilterRow td table-check:active {
-                    transform: translateY(1px);
-                }
-
-                .DataTable tr.FilterRow td table-check.Disabled:active {
-                    transform: none;
-                }
-
-
-                .DataTable tr.FilterRow td table-check:focus {
-                    opacity: 1;
-                    transform: translateY(-0.5px);
-                    outline: 2px solid var(--ThemeAcc2);
-                }
-
-                .DataTable tr.FilterRow td table-check.Disabled:focus {
-                    opacity: 0.7;
-                    transform: none;
-                    outline: none;
-                }
-
-                .DataTable tr.FilterRow td table-check.Checked {
-                    color: var(--ThemeBackground);
-                    background-color: var(--ThemeMain);
-                    border: 1px solid var(--ThemeBackground);
-                }
-
-                .DataTable tr.FilterRow td table-check:nth-child(2) {
-                    margin-left: 4px;
-                }
-
-/* ===== Header sort states ===== */
-
-    /*
-     * Sort state classes set by Table.tableUpdateHeader: Sort = sortable but not the primary sort (50% opacity,
-     * 90% on hover); CurrentSort = primary sort column; NoSort = not sortable (its icon-16x16 collapsed to 0 width).
-     * icon-main (the ColorIcon element) gets a 4px right margin.
-     */
-    .DataTable th.Sort {
-        cursor: pointer;
-        opacity: 0.5;
-        transition: opacity 0.1s;
-    }
-
-        .DataTable th.Sort:hover {
-            opacity: 0.9;
-        }
-
-        .DataTable th.Sort icon-main {
-            margin-right: 4px;
-        }
-
-    .DataTable th.NoSort icon-16x16 {
-        width: 0px;
-    }
-
-    .DataTable th.CurrentSort {
-        cursor: pointer;
-    }
-
-        .DataTable th.CurrentSort icon-main {
-            margin-right: 4px;
-        }
-
-/* Column titles (cell.Text span): bold uppercase 75% in --ThemeAcc1. */
-.DataTable th span {
-    color: var(--ThemeAcc1);
-    font-weight: bold;
-    font-size: 75%;
-    text-transform: uppercase;
-    text-overflow: ellipsis;
-    padding: 0 0.5em 0 0.5em;
+.sw-table-error-detail-text {
+    margin: 0 0 0.4em;
+    padding: 8px 10px;
+    max-height: 12em;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size, 0.9em);
+    background: var(--sw-surface-sunken);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    color: var(--sw-fg);
+    user-select: text;
+    -webkit-user-select: text;
 }
 
-/* ===== Data cells ===== */
+/* table.html without the q parameter (same layout, informational) */
+.sw-table-missing .sw-table-error-icon {
+    color: var(--sw-accent1);
+}
 
-    /* Data cells: ellipsis, no wrap, --ThemeAcc225 borders, --ThemeAcc1 text, box-shadow transition (focus ring). */
-    .DataTable td {
-        text-overflow: ellipsis;
-        overflow: hidden;
-        white-space: nowrap;
-        border: 1px solid var(--ThemeAcc225);
-        padding: 4px 6px 4px 6px;
-        vertical-align: middle;
-        color: var(--ThemeAcc1);
-        transition: box-shadow linear var(--ThemeFadeDuration);
+.sw-table-failed .sw-table-scroll {
+    display: none;
+}
+
+/* Not allowed (table.js ShowDenied, 403) / not found: only the shared state (ui/components.css .sw-denied, inside the rows area); no
+   tool bars, no footer */
+.sw-table-denied[hidden] {
+    display: none;
+}
+
+.sw-table-denied-on > :not(.sw-table-area), .sw-table-denied-on > .sw-table-area > :not(.sw-table-denied) {
+    display: none !important;
+}
+
+.sw-table-denied-on .sw-table-denied {
+    flex: 1 1 auto;
+}
+
+/* (the shared state brings its own layout) */
+.sw-table-denied:not([hidden]) {
+    display: block;
+    padding: 0;
+}
+
+.sw-table-page .sw-denied {
+    padding-top: max(2.5em, 12vh);
+}
+
+/* ===== Grid ===== */
+
+/* (no border of its own, the root is the table frame; at least as wide as the frame, so the header and the row lines reach its edges) */
+.sw-table-grid {
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+    min-width: 100%;
+    font-size: 100%;
+    background: var(--sw-bg);
+    border: none;
+    border-radius: var(--sw-radius) var(--sw-radius) 0 0;
+}
+
+/* Calm grid (Design v2, PORTING.md B13): row hairlines only, no rule between the columns (the aligned values and the header make
+   the columns); option ColumnLines (class sw-table-vlines) adds subtle column rules for dense numeric tables */
+.sw-table-grid th, .sw-table-grid td {
+    border-right: none;
+    border-bottom: 1px solid var(--sw-table-rule);
+    vertical-align: middle;
+}
+
+.sw-table-vlines .sw-table-grid th, .sw-table-vlines .sw-table-grid td {
+    border-right: 1px solid color-mix(in srgb, var(--sw-table-rule) 70%, var(--sw-table-sticky));
+}
+
+.sw-table-grid tr > :last-child {
+    border-right: none;
+}
+
+.sw-table-body tr:last-child td {
+    border-bottom: none;
+}
+
+/* ----- Header ----- */
+
+.sw-table-head th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--sw-table-head);
+    padding: 0 calc(var(--sw-cell-px, 8px) - 4px);
+    white-space: nowrap;
+    text-align: left;
+    font-weight: normal;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: pointer;
+    border-bottom: 1px solid var(--sw-border);
+    outline: none;
+}
+
+.sw-table-head th:first-child {
+    border-top-left-radius: var(--sw-radius);
+}
+
+.sw-table-head th:last-child {
+    border-top-right-radius: var(--sw-radius);
+}
+
+.sw-table-head th.sw-table-corner {
+    left: 0;
+    z-index: 4;
+    padding: 0 2px;
+    text-align: center;
+    cursor: default;
+}
+
+.sw-table-th {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: var(--sw-control-h);
+}
+
+/* Header alignment follows the values: the title starts where the values start (th padding + title padding = the cell
+   padding --sw-cell-px), the sort icon after it; numeric / date columns (table.js UpdateHeadAlign: sw-table-thr, the cells are right
+   aligned) end the title where the values end, the sort icon before it; centred columns (images, colours) are centred */
+.sw-table-th > .sw-table-title {
+    order: 0;
+}
+
+.sw-table-th > .sw-table-prio {
+    order: 1;
+}
+
+.sw-table-th > .sw-table-sort {
+    order: 2;
+}
+
+.sw-table-head th.sw-table-thr .sw-table-th {
+    justify-content: flex-end;
+}
+
+    .sw-table-head th.sw-table-thr .sw-table-th > .sw-table-sort {
+        order: -2;
     }
 
-        /* KeyClick (set by keyboardClick in common.js on keyboard-clickable cells): inset --ThemeAcc2 focus ring via box-shadow. */
-        .DataTable td.KeyClick:focus {
-            box-shadow: inset 1px 0 0 var(--ThemeAcc2), inset -1px 0 0 var(--ThemeAcc2), inset 0 1px 0 var(--ThemeAcc2), inset 0 -1px 0 var(--ThemeAcc2);
-            outline: none;
-        }
-
-
-        /* Spans in cells as --ThemeAcc1 pills; links in --ThemeAcc2 with a filled hover. */
-        .DataTable td span {
-            margin: 0px 4px 0px 4px;
-            background-color: var(--ThemeAcc1);
-            color: var(--ThemeBackground);
-            border-radius: var(--ThemeRadInp);
-            padding: 2px 4px 2px 4px;
-            font-weight: bold;
-        }
-
-        .DataTable td a {
-            color: var(--ThemeAcc2);
-            padding: 2px 4px 2px 4px;
-            transition: color 0.2s, background-color 0.2s;
-            border-radius: 6px;
-        }
-
-            .DataTable td a:hover {
-                color: var(--ThemeBackground);
-                background-color: var(--ThemeAcc2);
-            }
-
-        /* Row number column (cell 0): small and faded. */
-        .DataTable td:nth-child(1) {
-            color: rgba(var(--ThemeAcc2RGB), 0.6);
-            font-size: 75%;
-            padding-top: 8px;
-        }
-
-        /*
-         * ValueFormat modifier classes (common.js): Right = right-aligned (numbers); Monospaced = --ThemeFontMono;
-         * Flash = runs @keyframes DataTableFlash for 1s (class passed as "flash" by Table.tableRedraw for changed
-         * cells during periodic refreshes); False = false booleans in --ThemeAcc2; Null = null values at 50%;
-         * Text = selectable --ThemeMain text; Toggle = centered toggle cells without padding.
-         */
-        .DataTable td.Right {
-            text-align: right;
-        }
-
-        .DataTable td.Monospaced {
-            font-family: var(--ThemeFontMono);
-            padding-top: 7px;
-        }
-
-        .DataTable td.Flash {
-            animation-name: DataTableFlash;
-            animation-duration: 1s;
-        }
-
-        .DataTable td.False {
-            color: var(--ThemeAcc2);
-        }
-
-        .DataTable td.Null {
-            opacity: 0.5;
-        }
-
-        .DataTable td.Text {
-            user-select: text;
-            color: var(--ThemeMain);
-        }
-
-        .DataTable td.Toggle {
-            padding: 0;
-            text-align: center;
-            vertical-align: middle;
-        }
-
-/* ===== ValueFormat cells ===== */
-
-        /* ValueFormatImg: image cells, centered without vertical padding; Left / Right alignment; ImgLink = linked image (pointer). */
-        .DataTable td.ValueFormatImg {
-            padding-top: 0;
-            padding-bottom: 0;
-            text-align: center;
-            vertical-align: middle;
-        }
-
-            .DataTable td.ValueFormatImg.Left {
-                text-align: left;
-            }
-
-            .DataTable td.ValueFormatImg.Right {
-                text-align: right;
-            }
-
-            .DataTable td.ValueFormatImg img.ImgLink {
-                cursor: pointer;
-            }
-
-
-        /* ValueFormatDefault with MouseClick: clickable default cells with a --ThemeAcc1 hover color. */
-        .DataTable td.ValueFormatDefault.MouseClick {
-            cursor: pointer;
-            transition: color linear 0.1s;
-        }
-
-            .DataTable td.ValueFormatDefault.MouseClick:hover {
-                color: var(--ThemeAcc1);
-            }
-
-        /* ValueFormatWebColor: color swatch cells, bold monospace centered black text; white text with False (dark background). */
-        .DataTable td.ValueFormatWebColor {
-            font-family: var(--ThemeFontMono);
-            font-weight: bold;
-            cursor: pointer;
-            text-align: center;
-            vertical-align: middle;
-            user-select: text;
-            color: #000;
-        }
-
-
-            .DataTable td.ValueFormatWebColor.False {
-                color: #fff;
-            }
-
-
-        /*
-         * ValueFormatJson, ValueFormatText, ValueFormatMD: JSON, text and markdown cells - selectable --ThemeMain text,
-         * pointer, --ThemeAcc1 on hover; Capped (value truncated by ValueFormat) appends " ..." in --ThemeAcc2.
-         */
-        .DataTable td.ValueFormatJson {
-            user-select: text;
-            padding-top: 0;
-            padding-bottom: 0;
-            vertical-align: middle;
-            cursor: pointer;
-            color: var(--ThemeMain);
-            transition: color linear 0.1s;
-        }
-
-            .DataTable td.ValueFormatJson:hover {
-                color: var(--ThemeAcc1);
-            }
-
-            .DataTable td.ValueFormatJson.Capped:after {
-                content: ' ...';
-                color: var(--ThemeAcc2);
-            }
-
-        .DataTable td.ValueFormatText {
-            user-select: text;
-            padding-top: 0;
-            padding-bottom: 0;
-            vertical-align: middle;
-            cursor: pointer;
-            color: var(--ThemeMain);
-            transition: color linear 0.1s;
-        }
-
-            .DataTable td.ValueFormatText:hover {
-                color: var(--ThemeAcc1);
-            }
-
-            .DataTable td.ValueFormatText.Capped:after {
-                content: ' ...';
-                color: var(--ThemeAcc2);
-            }
-
-
-        .DataTable td.ValueFormatMD {
-            user-select: text;
-            padding-top: 0;
-            padding-bottom: 0;
-            vertical-align: middle;
-            cursor: pointer;
-            color: var(--ThemeMain);
-            transition: color linear 0.1s;
-        }
-
-            .DataTable td.ValueFormatMD:hover {
-                color: var(--ThemeAcc1);
-            }
-
-            .DataTable td.ValueFormatMD.Capped:after {
-                content: ' ...';
-                color: var(--ThemeAcc2);
-            }
-
-
-        /*
-         * ValueFormatDt: date/time cells with a 24px left indent for a mask glyph in ::after (custom property
-         * --s = 20px x --ThemeIconSize, glyph size). Hidden by default; ValueFormatDtutc shows
-         * ../icons/table_country.svg at 50% (UTC), ValueFormatDtlocal shows ../icons/home.svg at 50% (local time).
-         */
-        .DataTable td.ValueFormatDt {
-            padding-left: 24px;
-            position: relative;
-        }
-
-            .DataTable td.ValueFormatDt:after {
-                --s: calc(20px * var(--ThemeIconSize));
-                content: '';
-                position: absolute;
-                left: 0;
-                top: 3px;
-                width: var(--s);
-                height: var(--s);
-                background-color: var(--ThemeMain);
-                opacity: 0;
-                transition: opacity linear var(--ThemeFadeDuration);
-                mask-image: url('../icons/table_country.svg');
-            }
-
-            .DataTable td.ValueFormatDt.ValueFormatDtutc:after {
-                opacity: 0.5;
-            }
-
-            .DataTable td.ValueFormatDt.ValueFormatDtlocal:after {
-                opacity: 0.5;
-                mask-image: url('../icons/home.svg');
-            }
-
-
-    /*
-     * SysWeaver-toggle: toggle pills created by ValueFormat (TempToggle) in common.js: --ThemeAcc2 background,
-     * 50% opacity, lift on hover / focus, press shift on active; class Null = 20% with default cursor.
-     */
-    SysWeaver-toggle {
-        user-select: none;
-        display: inline-block;
-        background-color: var(--ThemeAcc2);
-        padding: 0 6px 0 6px;
-        color: var(--ThemeBackground);
-        border-radius: 6px;
-        cursor: pointer;
-        vertical-align: middle;
-        opacity: 0.5;
-        transition: opacity 0.1s transform 0.1s outline 0.1s;
-        margin: 1px 4px 1px 4px;
+    .sw-table-head th.sw-table-thr .sw-table-th > .sw-table-prio {
+        order: -1;
     }
 
-        SysWeaver-toggle:focus {
-            opacity: 1;
-            transform: translateY(-0.5px);
-            outline: 2px solid var(--ThemeAcc1);
-        }
+    .sw-table-head th.sw-table-thr .sw-table-title {
+        text-align: right;
+    }
 
-        SysWeaver-toggle:hover {
-            opacity: 1;
-            transform: translateY(-0.5px);
-        }
+.sw-table-head th.sw-table-thc .sw-table-th {
+    justify-content: center;
+}
 
-        SysWeaver-toggle:active {
-            transform: translateY(1px);
-        }
+    .sw-table-head th.sw-table-thc .sw-table-title {
+        text-align: center;
+    }
 
-        SysWeaver-toggle.Null {
-            opacity: 0.2;
-            cursor: default;
-        }
+.sw-table-title {
+    /* Design v2, PORTING.md B13: sentence case, 12 px 500 in the secondary text colour (the sorted column in the text colour) */
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-weight: 500;
+    font-size: var(--sw-text-xs, 0.78rem);
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Long titles wrap between words (never inside one), so wide tables need less width ("THOUSANDS / SEPARATOR"); the cell tool tip
+       starts with the full title */
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+    line-height: 1.15;
+}
 
+/* (no sort icon: the title alone, aligned like the others) */
+.sw-table-head th.sw-sort-none .sw-table-title {
+    padding-left: 4px;
+}
 
-    /*
-     * SysWeaver-action: action buttons created by ValueFormat (TempAction / TempSpan): 22px high inline-flex
-     * --ThemeAcc2 pills, image max 22px, lift effects; classes Null / Disabled = 20% with default cursor.
-     * SysWeaver-actionText: the button text span (6px left margin).
-     */
-    SysWeaver-action {
-        user-select: none;
-        display: inline-flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: left;
-        background-color: var(--ThemeAcc2);
-        padding: 0px 6px 0px 3px;
-        color: var(--ThemeBackground);
-        border-radius: 6px;
-        cursor: pointer;
-        vertical-align: middle;
+/* A column without a visible title (C# TableDataNoTitleAttribute, an icon only column): the title is only read by screen readers
+   (and is in the tool tip), the header keeps the sort icon */
+.sw-table-head th.sw-table-notitle .sw-table-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Sort button: dimmed unless the column is sorted */
+.sw-table-sort {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: calc(var(--sw-control-h) * 0.8);
+    height: calc(var(--sw-control-h) * 0.8);
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: var(--sw-radius);
+    background: transparent;
+    color: var(--sw-text-2, var(--sw-text-accent));
+    cursor: pointer;
+    opacity: 0.35;
+    transition: opacity var(--sw-dur-1), background-color var(--sw-dur-1);
+    touch-action: manipulation;
+}
+
+.sw-table-sort[hidden] {
+    display: none;
+}
+
+.sw-table-sort .sw-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.sw-sort-on .sw-table-sort {
+    opacity: 0.7;
+}
+
+.sw-sort-current .sw-table-sort {
+    opacity: 1;
+}
+
+/* (the sorted column's title in the text colour) */
+.sw-table-head th.sw-sort-on .sw-table-title {
+    color: var(--sw-text, var(--sw-fg));
+}
+
+@media (hover: hover) {
+    /* Mouse screens (Design v2, PORTING.md B13): the sort icon shows on the sorted columns and on hover / keyboard focus only */
+    .sw-table-head th:not(.sw-sort-on) .sw-table-sort {
+        opacity: 0;
+    }
+
+    .sw-table-head th:hover .sw-table-sort, .sw-table-head th:focus-within .sw-table-sort, .sw-table-head th:focus-visible .sw-table-sort {
+        opacity: 0.7;
+    }
+
+    .sw-table-head th:not(.sw-table-corner):hover {
+        background: color-mix(in srgb, var(--sw-table-head) 92%, var(--sw-fg));
+    }
+
+    .sw-table-head th .sw-table-sort:hover {
+        opacity: 1;
+        background: var(--sw-hover, var(--sw-accent1-soft));
+    }
+}
+
+/* Sort priority (2, 3) of the secondary sort columns */
+.sw-table-prio {
+    font-size: 70%;
+    color: var(--sw-accent2);
+    font-weight: bold;
+    min-width: 0.6em;
+}
+
+.sw-table-prio:empty {
+    display: none;
+}
+
+/* Filter mode button; an accent dot while filters are active */
+.sw-table-filterbtn {
+    position: relative;
+}
+
+.sw-table-filtered::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    top: 3px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--sw-accent2);
+}
+
+/* ----- Filter rows ----- */
+
+.sw-table-frow td {
+    background: color-mix(in srgb, var(--sw-bg) 94%, var(--sw-accent1));
+    padding: 2px 3px;
+    white-space: nowrap;
+}
+
+.sw-table-frow td.sw-table-fact {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    text-align: center;
+    padding: 0 2px;
+}
+
+.sw-table-fop, .sw-table-fval {
+    transition: border-color var(--sw-dur-1) linear, background-color var(--sw-dur-1) linear, box-shadow var(--sw-dur-1) linear;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 7em;
+    min-height: calc(var(--sw-control-h) * 0.8);
+    font: inherit;
+    font-size: 90%;
+    color: var(--sw-fg);
+    background: var(--sw-surface-sunken);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    padding: 2px 6px;
+    outline: none;
+}
+
+.sw-table-fop {
+    cursor: pointer;
+}
+
+.sw-table-fop option {
+    background: var(--sw-bg);
+    color: var(--sw-fg);
+}
+
+.sw-table-fval::placeholder {
+    font-style: italic;
+    color: var(--sw-text-3);
+}
+
+.sw-table-fop:focus-visible, .sw-table-fval:focus {
+    border-color: var(--sw-accent1);
+    box-shadow: 0 0 0 2px var(--sw-focus);
+}
+
+.sw-table-fop:disabled, .sw-table-fval:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Filter flags "Not" (invert) and "Match case" (case sensitive) */
+.sw-table-flag {
+    min-width: calc(var(--sw-control-h) * 0.8);
+    min-height: calc(var(--sw-control-h) * 0.8);
+    margin-right: 4px;
+    padding: 0 8px;
+    font: inherit;
+    font-size: 85%;
+    font-weight: bold;
+    color: var(--sw-fg);
+    background: var(--sw-surface-sunken);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.sw-table-flag[aria-pressed="true"] {
+    color: var(--sw-on-accent);
+    background: var(--sw-accent1);
+    border-color: var(--sw-accent1);
+}
+
+.sw-table-flag:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.sw-table-flag:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 1px;
+}
+
+/* ----- Data cells ----- */
+
+.sw-table-body td {
+    padding: 4px 8px;
+    max-width: var(--sw-table-cellmax);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* Data in the normal text color (numbers, dates, names); the accent is only for links and controls (ui/cells.css a.sw-link) */
+    color: var(--sw-fg);
+    outline: none;
+}
+
+/* Fixed row geometry in the grid (Design v2, PORTING.md B13): every row is --sw-row-h high (a full automatic page of a page table:
+   --sw-row-fill, table.js FillRows, so the rows fill the frame; D22) (the skeleton rows too, so the first automatic page
+   size, table.js FitFirst, is right and nothing moves when the data comes); taller only for wrapped values (opt-in) */
+.sw-table:not(.sw-table-cards) .sw-table-body td {
+    box-sizing: border-box;
+    height: var(--sw-row-fill, var(--sw-row-h, 2.5rem));
+    padding-left: var(--sw-cell-px, 8px);
+    padding-right: var(--sw-cell-px, 8px);
+}
+
+/* Compact rows (S7a-A2-1, table.js Fit / FillRows): the rows of a page table that don't fit in the frame at --sw-row-h share it, down
+   to the height of their text line (about 23 px; the original's rows were 26-28 px), so the page sizes the original asked in the same
+   window (S7a-A2-4: about 30 rows at 1080 px, 20 at 768 px) fit in the frame of the redesign */
+.sw-table.sw-table-dense:not(.sw-table-cards) .sw-table-body td {
+    padding-top: 1px;
+    padding-bottom: 1px;
+}
+
+/* (an inline cell image aligned "middle" made its line box, and the compact row, a few px taller than a text row: flag rows of 27 px in
+   rows filled to 26 px, so the last row of the country table was cut, S8): at most 22 px high in a compact row, aligned at the top of the
+   line box, so it is no taller than a text row; the cell still centres it. important: the cell renderer sets its 24 px limit inline
+   (ui/cells.js Img, --ThemeIconSize); only the compact rows lower it, never a smaller image is enlarged */
+.sw-table.sw-table-dense:not(.sw-table-cards) .sw-table-body td img.sw-cell-img {
+    vertical-align: top;
+    max-height: 22px !important;
+}
+
+/* Numbers in the text font with tabular digits (Design v2, PORTING.md B13: no monospace), so columns of numbers line up */
+.sw-table:not(.sw-table-cards) .sw-table-body td.sw-mono:is(.sw-right, .Right, .sw-cell-dt, .sw-fmt-Number, .sw-fmt-ByteSize, .sw-fmt-ByteSpeed, .sw-fmt-Duration, .sw-fmt-Uptime) {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The soft breaks of long names (table.js softBreaks, for the cards) never wrap a single line grid cell (a <wbr> breaks even in
+   white-space: nowrap) */
+.sw-table:not(.sw-table-cards) .sw-table-body td:not(.sw-table-wrap) wbr {
+    display: none;
+}
+
+/* A header that shows the explanation of a cryptic one letter title (table.js BuildHead, "Cpu use details"): narrow, wraps at words */
+.sw-table-head th.sw-table-hinted {
+    white-space: normal;
+    max-width: 7em;
+    line-height: 1.15;
+}
+
+.sw-table-body td.sw-table-wrap, .sw-table-head th.sw-table-wrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* The row background (one opaque colour per row state, painted by every cell of the grid, the sticky ones included) */
+.sw-table-body tr {
+    --sw-table-rowbg: var(--sw-table-row);
+}
+
+.sw-table-zebra .sw-table-body tr:nth-child(2n) {
+    --sw-table-rowbg: var(--sw-table-row-alt);
+}
+
+@media (hover: hover) {
+    .sw-table-body tr:hover {
+        --sw-table-rowbg: var(--sw-table-row-hover);
+    }
+}
+
+/* (keyboard focus in a row: the hover colour, so the focused row reads as one line across the pinned columns) */
+.sw-table-body tr:focus-within {
+    --sw-table-rowbg: var(--sw-table-row-hover);
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body td {
+    background-color: var(--sw-table-rowbg, var(--sw-table-row));
+}
+
+/* Row numbers: small, quiet (the second accent, opaque and a touch towards the text colour: >= 4.5:1 in every theme; 70 % alpha was
+   2.9:1 in light, S7a-A1-3), sticky */
+.sw-table-body td.sw-table-rn {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: var(--sw-table-rowbg, var(--sw-table-sticky));
+    color: color-mix(in oklab, var(--sw-accent2) 72%, var(--sw-text));
+    font-size: 75%;
+    text-align: center;
+    padding: 4px 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard focus (the roving tab stop of the grid); also after a modifier click (table.js showFocus: the ring where the browser does
+   not show it) */
+.sw-table-grid td:focus-visible, .sw-table-grid th:focus-visible,
+.sw-table-grid :is(td, th):is(.sw-table-modfocus, .sw-focus-shown) {
+    box-shadow: inset 0 0 0 2px var(--sw-focus);
+}
+
+/* The current cell after a click (UX guide FOC-3: the current item of the grid always shows, also without the keyboard ring): a thin
+   inset outline (an outline, so it stays under forced colors) */
+.sw-table-grid td:focus:not(:focus-visible):not(.sw-table-modfocus):not(.sw-focus-shown), .sw-table-grid th:focus:not(:focus-visible):not(.sw-table-modfocus):not(.sw-focus-shown) {
+    outline: 1px solid var(--sw-focus);
+    outline-offset: -1px;
+}
+
+/* The ring on a control of the table after a modifier click, where the browser shows none (table.js showFocus) */
+.sw-table :is(button, [role=button], summary).sw-table-modfocus {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+/* Selection (UX guide INP-30): the values of the cells are content and selectable (a drag, a double click on a word, Shift+click to
+   extend); the chrome of the grid is not: header, row numbers, row actions, the card labels (pseudo elements) */
+.sw-table-body td:not(.sw-table-rn):not(.sw-cell-actions) {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sw-table-body td.sw-table-rn, .sw-table-body td.sw-cell-actions {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Sentence and status text of the table is selectable too (read aloud with Speak Selection): the range, the state titles and texts,
+   the note, the stale chip */
+.sw-table-range, .sw-table-stale, .sw-table-note, .sw-table-ph-desc, .sw-table-state-title, .sw-table-state-text, .sw-table-error-text {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* A live refresh on hold (table.js HoldRows, UX guide FBK-7: rows never move under the pointer or the focus): an arrow on the rows
+   that move when the pointer / focus leaves the rows (up, down, out of the page): in the grid in the start padding of the first shown
+   cell, in the cards after the card title (the card cells use ::before for their labels) */
+:where(.sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-movecell) {
+    position: relative;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-movecell::before, .sw-table-cards .sw-table-body td.sw-table-movecell::after {
+    font-size: 0.9em;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--sw-accent1);
+    pointer-events: none;
+}
+
+/* (grid: a full height accent bar at the row start, so a moving row is seen at a glance; the arrow sits in the cell's start padding after
+   the bar: nothing covers or shifts a value. The light tint of the whole row only on the row under the pointer or with the focus: when
+   most rows move (a live table sorted by memory) the marks stay a quiet signal, not an error state) */
+.sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-movecell::before {
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move] > td.sw-table-movecell {
+    box-shadow: inset 3px 0 0 var(--sw-accent1);
+}
+
+/* (set on the row, so the filler cell at the row end, tr::after of sw-table-filled, has the tint too: Admin N52) */
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move]:focus-within,
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move]:focus-within > td {
+    --sw-table-rowbg: color-mix(in srgb, var(--sw-accent1) 8%, var(--sw-table-row, var(--sw-bg)));
+}
+
+@media (hover: hover) {
+    .sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move]:hover,
+    .sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move]:hover > td {
+        --sw-table-rowbg: color-mix(in srgb, var(--sw-accent1) 8%, var(--sw-table-row, var(--sw-bg)));
+    }
+}
+
+.sw-table-cards .sw-table-body td.sw-table-movecell::after {
+    margin-inline-start: 8px;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move="up"] > td.sw-table-movecell::before, .sw-table-cards .sw-table-body tr[data-sw-move="up"] > td.sw-table-movecell::after {
+    content: "\2191";
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move="down"] > td.sw-table-movecell::before, .sw-table-cards .sw-table-body tr[data-sw-move="down"] > td.sw-table-movecell::after {
+    content: "\2193";
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move="out"] > td.sw-table-movecell::before, .sw-table-cards .sw-table-body tr[data-sw-move="out"] > td.sw-table-movecell::after {
+    content: "\2195";
+}
+
+/* (a row that leaves the page keeps its last values, muted) */
+.sw-table:not(.sw-table-cards) .sw-table-body tr[data-sw-move="out"] > td:not(.sw-table-rn):not(.sw-cell-actions) {
+    color: var(--sw-text-2);
+}
+
+@media (forced-colors: active) {
+    .sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-movecell::before, .sw-table-cards .sw-table-body td.sw-table-movecell::after {
+        color: CanvasText;
+    }
+}
+
+/* Changed values during a live refresh: as the original (DataTableFlash): the cell starts in the theme's second accent at 25 %
+   (--ThemeAcc225) and fades to the row colour in 1 s (ease) in every theme; Sw.Cells removes sw-flash again after 1050 ms. Fixed
+   1 s, not a theme motion duration: it is a colour fade, not movement (the 1 ms of reduced motion made it
+   a one frame blink, owner report 3 #9). Mixed into the opaque row colour (so a pinned cell never turns see-through while it
+   fades); only values of the same row item are tinted (table.js: rows that moved because of the sort are not).
+   Reduced motion fades the same way (as the original): it is a colour change in place, nothing moves. Owner report 4 #10: with
+   reduced motion on (ex: Windows "Animation effects" off) the tint was held for 1 s and then cut off, which read as "the background
+   stays and is then removed". ui/tokens.css reduces only motion (no rule on every element since S7a-A1-1), so this fixed
+   duration applies as is. */
+.sw-table-grid td.sw-flash {
+    --sw-table-flash: color-mix(in srgb, var(--sw-accent2) 25%, var(--sw-table-rowbg, var(--sw-table-row)));
+    /* SwWeb:allow ux-mot-2 (the original's 1 s colour fade in every theme and with reduced motion: no movement, owner reports 3 #9, 4 #10) */
+    animation: sw-table-flash 1s ease;
+}
+
+@keyframes sw-table-flash {
+    from {
+        background-color: var(--sw-table-flash);
+    }
+}
+
+/* Row hover, the current cell and selection tints change with a short colour fade (the change highlight above is an animation and
+   wins while it runs) */
+.sw-table-grid > tbody > tr > td {
+    transition: background-color var(--sw-dur-1) linear;
+}
+
+/* Cell classes (the Sw names and the old compat names) */
+.sw-table-body td.sw-right, .sw-table-body td.Right {
+    text-align: right;
+}
+
+.sw-table-body td.Left {
+    text-align: left;
+}
+
+.sw-table-body td.Center {
+    text-align: center;
+}
+
+.sw-table-body td.sw-mono, .sw-table-body td.Monospaced {
+    font-family: var(--sw-mono);
+}
+
+/* Numbers, sizes, durations and time stamps are never cut: no maximum width and no ellipsis, so the column is always as
+   wide as its values; only text is cut, with the ellipsis at the right (the whole value is in the tool tip, the cell menu and the
+   cards) */
+.sw-table:not(.sw-table-cards) .sw-table-body td:is(.sw-right, .Right, .sw-cell-dt, .sw-fmt-Number, .sw-fmt-ByteSize, .sw-fmt-ByteSpeed, .sw-fmt-Duration, .sw-fmt-Uptime) {
+    max-width: none;
+    text-overflow: clip;
+}
+
+.sw-table-body td.Null {
+    opacity: 0.5;
+}
+
+/* (grid cells paint their row background: zero values are muted by colour, not by half opacity, which also faded the background) */
+.sw-table:not(.sw-table-cards) .sw-table-body td:is(.sw-null, .Null) {
+    opacity: 1;
+    /* the secondary text colour (>= 4.5:1 in every theme; a 50 % mix with the row was 2.8-3.0:1, S7a-A1-3) */
+    color: var(--sw-text-2);
+}
+
+.sw-table-body td.False {
+    color: var(--sw-accent2);
+}
+
+.sw-table-body td.sw-cell-text, .sw-table-body td.Text {
+    color: var(--sw-fg);
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sw-table-body td.sw-cell-actions, .sw-table-body td.Toggle {
+    padding-top: 1px;
+    padding-bottom: 1px;
+}
+
+.sw-table-body td.Capped::after {
+    content: " \2026";
+    color: var(--sw-accent2);
+}
+
+.sw-table-body td.sw-fmt-Json, .sw-table-body td.sw-fmt-Text, .sw-table-body td.sw-fmt-MD,
+.sw-table-body td.ValueFormatJson, .sw-table-body td.ValueFormatText, .sw-table-body td.ValueFormatMD {
+    color: var(--sw-fg);
+    cursor: pointer;
+}
+
+.sw-table-body td.sw-fmt-Img, .sw-table-body td.ValueFormatImg {
+    padding-top: 0;
+    padding-bottom: 0;
+    text-align: center;
+}
+
+.sw-table-body td.ValueFormatWebColor, .sw-table-body td.sw-fmt-WebColor {
+    font-family: var(--sw-mono);
+    font-weight: bold;
+    text-align: center;
+    color: #111; /* SwWeb:allow-design (text on the cell's own web colour: fixed contrast on data) */
+}
+
+.sw-table-body td.ValueFormatWebColor.False, .sw-table-body td.sw-fmt-WebColor.sw-false {
+    color: #fff; /* SwWeb:allow-design (text on a dark web colour) */
+}
+
+.sw-table-body td.sw-copyable {
+    cursor: pointer;
+}
+
+/* Links in the table: the data text color at the normal weight, no underline at rest, so tables with several link columns (names,
+   countries, MIME types) read as data, not as a field of underlines; the accent underline shows on the link's hover / focus and in
+   the focused cell (a pointer cursor over the link). Touch screens (no hover) keep a faint underline as the link cue. */
+.sw-table-body td a.sw-link:not(.sw-link-image) {
+    color: var(--sw-fg);
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+}
+
+    .sw-table-body td a.sw-link:not(.sw-link-image):focus-visible {
+        color: var(--sw-text-accent);
+        text-decoration-color: currentColor;
+    }
+
+@media (hover: hover) {
+    .sw-table-body td a.sw-link:not(.sw-link-image):hover {
+        color: var(--sw-text-accent);
+        text-decoration-color: currentColor;
+    }
+}
+
+    .sw-table-body td:focus-visible a.sw-link:not(.sw-link-image) {
+        text-decoration-color: color-mix(in srgb, var(--sw-text-accent) 55%, transparent);
+    }
+
+@media (hover: none) {
+    .sw-table-body td a.sw-link:not(.sw-link-image) {
+        text-decoration-color: color-mix(in srgb, var(--sw-text-accent) 40%, transparent);
+    }
+}
+
+/* One quiet link affordance in the grid: the hover underline marks a link; the external / web search glyph of links to other
+   sites (ui/cells.js ExternalLink; table.js puts the search glyph after the text in the grid) only shows on the link's hover / focus
+   and on the focused cell, so rows with 3-4 links do not carry 3-4 glyphs. Its space stays reserved (nothing moves on hover). Touch
+   screens (no hover) show it faint. The tool tip ("Opens <host> in a new tab") and the cards are unchanged. */
+.sw-table:not(.sw-table-cards) .sw-table-body td a.sw-link-ext .sw-link-search-icon {
+    margin-left: 0.25em;
+    margin-right: 0;
+}
+
+/* (the glyph takes no width at rest: its negative end margin gives back its width and its start margin, so the text lines up with the
+   column header and a link column is as wide as a plain one; on hover / focus it shows in the cell's end padding) */
+.sw-table:not(.sw-table-cards) .sw-table-body td a.sw-link-ext .sw-link-ext-icon {
+    opacity: 0;
+    margin-right: -1.1em;
+    transition: opacity var(--sw-dur-1, 0.12s);
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body td a.sw-link-ext:focus-visible .sw-link-ext-icon,
+.sw-table:not(.sw-table-cards) .sw-table-body td:focus-visible a.sw-link-ext .sw-link-ext-icon {
+    opacity: 0.8;
+}
+
+@media (hover: hover) {
+    .sw-table:not(.sw-table-cards) .sw-table-body td a.sw-link-ext:hover .sw-link-ext-icon {
         opacity: 0.8;
-        transition: opacity 0.1s transform 0.1s outline 0.1s;
-        margin: 1px 4px 1px 4px;
-        height: 22px;
+    }
+}
+
+@media (hover: none) {
+    .sw-table:not(.sw-table-cards) .sw-table-body td a.sw-link-ext .sw-link-ext-icon {
+        opacity: 0.45;
+    }
+}
+
+/* Row actions in the grid (the Actions format, ui/cells.js Actions: the per row visibility and the confirmation of
+   destructive actions are unchanged): always visible on every row (UX guide LST-2), as quiet ghost buttons (no border, no fill, the
+   secondary text colour), so a list of processes is not a loud column of "Kill" buttons but every action can be found at a glance;
+   the row's hover and keyboard focus (the roving cell focus: arrows / Tab) give them the text colour. Their column is a real column
+   (never 0 px wide, table.js ZeroCols). Destructive actions (table.js: sw-cell-action-danger) take the danger colour on hover. */
+.sw-table:not(.sw-table-cards) .sw-table-body td.sw-cell-actions .sw-cell-action {
+    border-color: transparent;
+    background: transparent;
+    color: var(--sw-text-2, var(--sw-text-2));
+    margin-right: 2px;
+    padding: 0 6px;
+    transition: color var(--sw-dur-1) var(--sw-ease), border-color var(--sw-dur-1) var(--sw-ease), background-color var(--sw-dur-1) var(--sw-ease);
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr:is(:focus-within, .sw-table-actpending) td.sw-cell-actions .sw-cell-action {
+    color: var(--sw-text, var(--sw-fg));
+}
+
+@media (hover: hover) {
+    .sw-table:not(.sw-table-cards) .sw-table-body tr:hover td.sw-cell-actions .sw-cell-action {
+        color: var(--sw-text, var(--sw-fg));
     }
 
-        SysWeaver-action img {
-            max-width: 22px;
-            max-height: 22px;
+    .sw-table:not(.sw-table-cards) .sw-table-body td.sw-cell-actions .sw-cell-action:hover:not(:disabled):not([aria-disabled="true"]) {
+        border-color: var(--sw-border-strong, var(--sw-border-strong));
+        background: var(--sw-surface, var(--sw-bg));
+        color: var(--sw-text, var(--sw-fg));
+    }
+
+    .sw-table:not(.sw-table-cards) .sw-table-body td.sw-cell-actions .sw-cell-action.sw-cell-action-danger:hover:not(:disabled):not([aria-disabled="true"]) {
+        border-color: var(--sw-danger);
+        color: var(--sw-danger);
+    }
+}
+
+/* A multi line text (table.js sw-table-multiline: a call stack, an exception) shows only the start of its first line in the grid: a
+   narrow column, so it does not push the other columns off screen (a click shows the whole text) */
+.sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-multiline {
+    max-width: min(var(--sw-table-cellmax), 16em);
+}
+
+/* ===== Wide grid: the row actions column (table.js UpdateActPin, sw-table-actpin: the last column has the Actions format, ex: Kill)
+   stays at the right edge while scrolling sideways, so a row's actions are always visible next to its pinned name ===== */
+/* (opaque in every row state: the row colour; a 1 px divider at its left edge, no shadow: Design v2 flat surfaces) */
+.sw-table-actpin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-grid tr > :last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: var(--sw-table-rowbg, var(--sw-table-sticky));
+    border-left: 1px solid var(--sw-border, var(--sw-border));
+}
+
+/* (zero / empty values, .sw-null / .Null: half opacity would show the cells scrolled under them: muted by colour instead) */
+.sw-table-actpin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child:is(.sw-null, .Null) {
+    opacity: 1;
+    color: var(--sw-text-2);
+}
+
+.sw-table-actpin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-frow > td:last-child {
+    z-index: 2;
+    background: color-mix(in srgb, var(--sw-bg) 94%, var(--sw-accent1));
+}
+
+.sw-table-actpin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:last-child {
+    z-index: 4;
+    background-color: var(--sw-table-head);
+}
+
+/* ===== Narrow (phones): sticky first data column next to the row numbers ===== */
+
+.sw-table-narrow {
+    --sw-table-cellmax: 70vw;
+}
+
+.sw-table-narrow .sw-table-grid {
+    border-radius: 0;
+    margin: 0;
+}
+
+/* (phone portrait: the page has no side margins, so the frame has no side borders and no round corners) */
+.sw-table-narrow:not(.sw-table-cards) {
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+}
+
+.sw-table-narrow .sw-table-head th:first-child, .sw-table-narrow .sw-table-head th:last-child {
+    border-radius: 0;
+}
+
+.sw-table-narrow:not(.sw-table-cards) .sw-table-body td:nth-child(2) {
+    position: sticky;
+    left: var(--sw-table-rnw, 0px);
+    z-index: 1;
+    max-width: 40vw;
+    background-color: var(--sw-table-rowbg, var(--sw-table-sticky));
+    border-right: 1px solid var(--sw-border, var(--sw-border));
+}
+
+.sw-table-narrow:not(.sw-table-cards) .sw-table-frow td:nth-child(2) {
+    position: sticky;
+    left: var(--sw-table-rnw, 0px);
+    z-index: 2;
+    max-width: 40vw;
+}
+
+.sw-table-narrow:not(.sw-table-cards) .sw-table-head th:nth-child(2) {
+    left: var(--sw-table-rnw, 0px);
+    z-index: 4;
+    max-width: 40vw;
+    border-right: 1px solid var(--sw-border, var(--sw-border));
+}
+
+.sw-table-narrow .sw-table-head th.sw-table-corner {
+    min-width: var(--sw-table-rnw, auto);
+    box-sizing: border-box;
+}
+
+/* ===== Wide grid: pinned identifying columns (table.js UpdatePins): the first data column (sw-table-pin) and the name column next to
+   it (sw-table-pin2, at --sw-table-p2) stay at the left while scrolling sideways, so a row's actions always show next to its name ===== */
+
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body td:nth-child(2),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body td:nth-child(3) {
+    position: sticky;
+    z-index: 1;
+    background-color: var(--sw-table-rowbg, var(--sw-table-sticky));
+}
+
+/* (zero values, .sw-null / .Null: half opacity, would show the cells scrolled under them: muted by color instead) */
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body td:nth-child(2):is(.sw-null, .Null),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body td:nth-child(3):is(.sw-null, .Null) {
+    opacity: 1;
+    color: var(--sw-text-2);
+}
+
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-frow td:nth-child(2),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-frow td:nth-child(3) {
+    position: sticky;
+    z-index: 2;
+}
+
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:nth-child(2),
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-frow > td:nth-child(2),
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:nth-child(2) {
+    left: var(--sw-table-rnw, 0px);
+}
+
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:nth-child(3),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-frow > td:nth-child(3),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:nth-child(3) {
+    left: var(--sw-table-p2, 0px);
+}
+
+.sw-table-pin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:nth-child(2),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:nth-child(3) {
+    z-index: 4;
+}
+
+/* A 1 px divider at the right edge of the last pinned column (Design v2: flat, no shadow; the left edge cue adds a stronger line while
+   columns are scrolled under it, UpdateEdges) */
+.sw-table-pin:not(.sw-table-pin2):not(.sw-table-narrow):not(.sw-table-cards) .sw-table-grid tr > :nth-child(2),
+.sw-table-pin2:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-grid tr > :nth-child(3) {
+    border-right: 1px solid var(--sw-border, var(--sw-border));
+}
+
+/* ===== Cards (compact screens, table.js UpdateLayout): one card per row, one "label: value" line per column, no sideways scrolling.
+   The header row and the filter rows are hidden: the card tool bar (Sort / Filter) above the cards replaces them.
+   The labels are the data-label attributes (column titles) set by table.js. The table keeps its grid keyboard model. ===== */
+
+.sw-table-cards .sw-table-scroll {
+    overflow-x: hidden;
+}
+
+.sw-table-cards .sw-table-grid, .sw-table-cards .sw-table-grid > thead, .sw-table-cards .sw-table-grid > tbody {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sw-table-cards .sw-table-grid {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    margin: 0;
+}
+
+.sw-table-cards .sw-table-grid tr[hidden] {
+    display: none;
+}
+
+.sw-table-cards .sw-table-grid th, .sw-table-cards .sw-table-grid td {
+    border: none;
+}
+
+/* The header row and the filter rows are hidden in the card layout: the card tool bar (div.sw-table-cardbar, "Sort" and "Filter"
+   buttons opening a menu / dialog with the same options) replaces them, so the cards get the height */
+.sw-table-cards .sw-table-grid > thead, .sw-table-cards .sw-table-grid > tbody.sw-table-filters {
+    display: none;
+}
+
+/* Card tool bar: only shown in the card layout */
+.sw-table-cardbar {
+    display: none;
+}
+
+.sw-table-cards .sw-table-cardbar {
+    display: flex;
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 2px 4px;
+    border-bottom: 1px solid var(--sw-border);
+    background: color-mix(in srgb, var(--sw-bg) 94%, var(--sw-accent1));
+}
+
+/* Sort and Filter: two equal halves of the bar, content centred, a thin line between them */
+.sw-table-cardbtn {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: var(--sw-control-h);
+    justify-content: center;
+}
+
+.sw-table-cardbtn + .sw-table-cardbtn::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: 20%;
+    bottom: 20%;
+    border-left: 1px solid var(--sw-border);
+}
+
+/* Long column titles ("Sort: Official name") are cut, never wider than the bar */
+.sw-table-cardbtn > span:not(.sw-icon) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Filter dialog of the card layout (table.js FilterSheet): one labelled line per column */
+.sw-table-fsheet {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: min(30em, 100%);
+}
+
+.sw-table-fsheet-note {
+    margin: 0;
+    color: var(--sw-text-2);
+}
+
+.sw-table-fset {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sw-table-fset + .sw-table-fset {
+    padding-top: 8px;
+    border-top: 1px solid var(--sw-border);
+}
+
+.sw-table-fset-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+}
+
+.sw-table-frow2 {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sw-table-flabel {
+    font-size: 0.85em;
+    color: var(--sw-text-2);
+}
+
+/* Operation and value on one line, the "Not" / "Match case" toggles wrap to the next line when the dialog is narrow (phones) */
+.sw-table-fctl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: stretch;
+}
+
+.sw-table-fctl .sw-table-fop {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 40%;
+}
+
+.sw-table-fctl .sw-table-fval {
+    flex: 1 1 8em;
+    min-width: 6em;
+}
+
+/* The "Not" / "Match case" toggles of the filter dialog: together, beside the value or (narrow dialog) on their own line, sharing it */
+.sw-table-ftoggles {
+    display: flex;
+    flex: 1 0 auto;
+    gap: 4px;
+}
+
+.sw-table-fctl .sw-table-ftoggles .sw-table-flag {
+    flex: 1 0 auto;
+}
+
+.sw-table-fctl .sw-table-flag {
+    flex: none;
+    white-space: nowrap;
+}
+
+.sw-table-fctl .sw-table-fop, .sw-table-fctl .sw-table-fval, .sw-table-fctl .sw-table-flag {
+    min-height: var(--sw-control-h);
+    margin: 0;
+    font-size: 100%;
+}
+
+.sw-table-fsheet-tools {
+    display: flex;
+}
+
+/* Data rows: cards (side by side when there is room, ex: phones in landscape) */
+.sw-table-cards .sw-table-grid > tbody.sw-table-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    gap: 8px;
+    padding: 4px 4px 8px;
+}
+
+/* (phone portrait: the page has no side margins there, sw-table-narrow; the cards keep the phone gutter of the rest of the layout) */
+.sw-table-narrow.sw-table-cards .sw-table-grid > tbody.sw-table-body {
+    padding-inline: 12px;
+}
+
+.sw-table-cards .sw-table-body tr {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 2px 0 4px;
+    background: var(--sw-bg);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+}
+
+.sw-table-cards .sw-table-body td, .sw-table-cards .sw-table-body tr:nth-child(2n) td {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    position: static;
+    max-width: none;
+    min-height: 1.6em;
+    padding: 3px 10px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+/* One value font in the cards: the page font and size for text, numbers (tabular digits, no monospace) and links (links keep
+   their color, not bold) */
+.sw-table-cards .sw-table-body td:not(.sw-table-rn), .sw-table-cards .sw-table-body td.sw-mono:not(.sw-table-rn) {
+    font-family: var(--sw-sans);
+    font-size: var(--sw-text-md);
+    font-weight: normal;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+}
+
+.sw-table-cards .sw-table-body td:not(.sw-table-rn) > * {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.sw-table-cards .sw-table-body td .sw-link {
+    font-weight: 500;
+}
+
+/* An icon only link (table.js sw-table-iconlink, ex: the "📊" chart links of Process information): a larger icon and the word "Show"
+   (data-sw-show) next to it, a touch sized target */
+.sw-table-cards .sw-table-body td.sw-table-iconlink > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    font-size: 1.25em;
+    text-decoration: none;
+}
+
+    .sw-table-cards .sw-table-body td.sw-table-iconlink > a::after {
+        content: attr(data-sw-show);
+        font-size: calc(var(--sw-text-md) * 0.95);
+        text-decoration: underline;
+        /* Never squeezed by the picture (an image link has line-height 0 and a shrinkable max-width: 100% img) */
+        flex: none;
+        line-height: normal;
+        white-space: nowrap;
+    }
+
+/* Long values (table.js .sw-table-long) are clamped to 3 lines; the cut ones (.sw-table-clamped, table.js UpdateClamps) end with
+   an "… more" hint (the translated word in data-more) over the end of the last line, a tap shows the whole value (.sw-table-unclamp,
+   until the value changes), so does the keyboard focus */
+.sw-table-cards .sw-table-body td.sw-table-long:not(.sw-table-unclamp):not(:focus-visible) {
+    max-height: calc(3 * 1.35em + 6px);
+    overflow: hidden;
+}
+
+.sw-table-cards .sw-table-body td.sw-table-clamped {
+    cursor: pointer;
+}
+
+    .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-table-clamped:not(.sw-table-unclamp):not(:focus-visible) {
+        position: relative;
+    }
+
+        .sw-table-cards .sw-table-body td.sw-table-clamped:not(.sw-table-unclamp):not(:focus-visible)::after {
+            content: "\2026  " attr(data-more);
+            position: absolute;
+            right: 10px;
+            bottom: 3px;
+            padding-left: 2.5em;
+            line-height: 1.35;
+            white-space: pre;
+            color: var(--sw-text-accent, var(--sw-accent1));
+            font-weight: 600;
+            background: linear-gradient(to right, transparent, var(--sw-bg) 2em); /* SwWeb:allow-design (fades the overflowing text, not a surface) */
+            pointer-events: none;
         }
 
-        SysWeaver-action:focus {
-            opacity: 1;
-            transform: translateY(-0.5px);
-            outline: 2px solid var(--ThemeAcc1);
+/* Empty values are left out (table.js marks them .sw-table-blank; tr:nth-child(n): as specific as the "tr:nth-child(2n) td" base
+   rule, else the empty fields of even cards were shown) */
+.sw-table-cards .sw-table-body tr:nth-child(n) td.sw-table-blank {
+    display: none;
+}
+
+.sw-table-cards .sw-table-body td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 38%;
+    max-width: 38%;
+    font-family: var(--sw-sans);
+    font-size: 0.85em;
+    font-weight: normal;
+    color: var(--sw-text-2);
+    overflow-wrap: anywhere;
+}
+
+/* Cell content may shrink; image links take the free width (svg images without an intrinsic size scale to their max size) */
+.sw-table-cards .sw-table-body td > * {
+    min-width: 0;
+}
+
+/* Several pills (Tags) or buttons (Actions, Toggle) in one value: they keep their width (no overlapping or words broken inside)
+   and wrap as whole items; the label stays first */
+/* (the label is taken out of the flow, so wrapped items stay in the value column) */
+/* (tr:nth-child(n): as specific as the "tr:nth-child(2n) td" base rule, so even rows get position: relative too; without it the
+   absolute labels of even rows were drawn at the top of the list, over the "#1" heading of the first card) */
+.sw-table-cards .sw-table-body tr:nth-child(n) td.sw-fmt-Tags, .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-cell-actions {
+    position: relative;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 4px;
+    padding-left: calc(10px + (100% - 20px) * 0.38 + 8px);
+}
+
+    .sw-table-cards .sw-table-body td.sw-fmt-Tags[data-label]::before, .sw-table-cards .sw-table-body td.sw-cell-actions[data-label]::before {
+        position: absolute;
+        left: 10px;
+        top: 0.5em;
+        width: calc((100% - 20px) * 0.38);
+        max-width: none;
+    }
+
+    .sw-table-cards .sw-table-body td.sw-fmt-Tags > *, .sw-table-cards .sw-table-body td.sw-cell-actions > * {
+        flex: none;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+.sw-table-cards .sw-table-body .sw-link-image, .sw-table-cards .sw-table-body td > .sw-cell-img {
+    flex: 1 1 auto;
+}
+
+/* Images (ex: flags) are centered on the label line */
+.sw-table-cards .sw-table-body td.sw-fmt-Img, .sw-table-cards .sw-table-body td.ValueFormatImg {
+    align-items: center;
+}
+
+/* Row number: the card heading */
+.sw-table-cards .sw-table-body tr:nth-child(n) td.sw-table-rn {
+    position: static;
+    display: block;
+    min-height: 0;
+    padding: 2px 10px;
+    font-size: 75%;
+    text-align: left;
+    color: var(--sw-text-2);
+    background-color: transparent;
+    border-bottom: 1px solid color-mix(in srgb, var(--sw-border) 55%, transparent);
+}
+
+.sw-table-cards .sw-table-body td.sw-table-rn::before {
+    content: "#";
+}
+
+@media (hover: hover) {
+    .sw-table-cards .sw-table-body tr:hover td {
+        background-color: transparent;
+    }
+
+    .sw-table-cards .sw-table-body tr:hover {
+        border-color: var(--sw-accent1);
+    }
+}
+
+/* Compact cards (table.js CompactCard): a closed card of a wide table shows its first values (.sw-table-extra: the rest) and a
+   "Show all n fields" button (button.sw-table-morebtn, in the row number cell) at the bottom; .sw-table-open shows everything.
+   The grid layout ignores both. */
+.sw-table-morebtn {
+    transition: background-color var(--sw-dur-1) linear, color var(--sw-dur-1) linear;
+    display: none;
+}
+
+.sw-table-cards .sw-table-body tr:not(.sw-table-open) > td.sw-table-extra {
+    display: none !important;
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-collapsible {
+    position: relative;
+    padding-bottom: calc(var(--sw-control-h) + 2px);
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn .sw-table-morebtn:not([hidden]) {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: var(--sw-control-h);
+    margin: 0;
+    padding: 0 10px;
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--sw-border) 55%, transparent);
+    border-radius: 0 0 var(--sw-radius) var(--sw-radius);
+    background: transparent;
+    color: var(--sw-text-accent);
+    font: inherit;
+    font-size: calc(var(--sw-text-md) * 0.95);
+    text-align: center;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn .sw-table-morebtn::after {
+        content: " \25BE";
+    }
+
+    .sw-table-cards .sw-table-body tr.sw-table-open td.sw-table-rn .sw-table-morebtn::after {
+        content: " \25B4";
+    }
+
+    .sw-table-cards .sw-table-body .sw-table-morebtn:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: -2px;
+    }
+
+/* Zero values (.sw-null, ui/cells.css: half opacity) are muted in the cards by color only, so their labels keep the normal label color */
+.sw-table-cards .sw-table-body td.sw-null {
+    opacity: 1;
+    color: var(--sw-text-2);
+}
+
+/* Long cards (14 or more columns, ex: Process information) on portrait screens: two fields per line, each label above its value, in
+   smaller rows, so a card takes about half the height (the values are kept, zeros included). Low screens use their own column grid. */
+@media (min-height: 501px) {
+    .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 4px;
+        align-content: start;
+    }
+
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n):not(.sw-table-rn) {
+            display: block;
+            position: static;
+            min-height: 0;
+            padding: 2px 10px 3px;
+            line-height: 1.25;
         }
 
-        SysWeaver-action:hover {
-            opacity: 1;
-            transform: translateY(-0.5px);
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n).sw-table-blank {
+            display: none;
         }
 
-        SysWeaver-action:active {
-            transform: translateY(1px);
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n)[data-label]::before {
+            display: block;
+            position: static;
+            width: auto;
+            max-width: none;
+            font-size: 0.78em;
+            line-height: 1.2;
         }
 
-        SysWeaver-action.Null {
-            opacity: 0.2;
-            cursor: default;
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td.sw-fmt-Tags > *, .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td.sw-cell-actions > * {
+            display: inline-flex;
+            margin: 2px 4px 0 0;
+            vertical-align: middle;
         }
 
-        SysWeaver-action.Disabled {
-            opacity: 0.2;
-            cursor: default;
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n).sw-table-rn, .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td.sw-cell-actions {
+            grid-column: 1 / -1;
         }
+}
 
-        SysWeaver-action > * {
-            display: inline-block;
-        }
+/* ===== Page header (table.html, table.js t.PH; Design v2, PORTING.md B10): the menu name of the table and one line (live refresh / log note) ===== */
 
-    SysWeaver-actionText {
-        margin-left: 6px;
+.sw-table-ph {
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--sw-space-4, 16px);
+    min-width: 0;
+    margin: 0 0 var(--sw-space-4, 16px);
+}
+
+.sw-table-ph-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sw-table-ph-title {
+    margin: 0;
+    color: var(--sw-text, var(--sw-fg));
+    font-family: var(--sw-head, var(--sw-sans));
+    font-weight: var(--sw-head-weight, 600);
+    font-size: var(--sw-text-xl, 1.4rem);
+    line-height: var(--sw-lh-tight, 1.2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* (while the menu name is looked up, table.js MenuName option: the line is reserved, nothing shows) */
+.sw-table-ph-title.sw-table-ph-pending {
+    visibility: hidden;
+}
+
+/* No title (option HeaderTitle false, table.html "title=false"): the header is the live line only */
+.sw-table-ph-title[hidden] {
+    display: none;
+}
+
+.sw-table-ph-desc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 6px;
+    margin: var(--sw-space-1, 4px) 0 0;
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-size: var(--sw-text-sm, 0.9em);
+}
+
+    .sw-table-ph-desc:empty {
+        display: none;
     }
 
-
-
-
-    /* DataTableFlash: fades a changed cell background from --ThemeAcc225 to transparent (used by td.Flash). */
-    @keyframes DataTableFlash {
-        from {
-            background-color: var(--ThemeAcc225);
-        }
-
-        to {
-            background-color: transparent;
-        }
+    /* (the log note as the description: no box of its own) */
+    .sw-table-ph-desc.sw-table-note {
+        display: block;
+        margin: var(--sw-space-1, 4px) 0 0;
+        padding: 0;
+        border: none;
+        background: none;
     }
 
+.sw-table-live-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--sw-ok, var(--sw-accent1));
+    /* After a data request: back to its size over 0.25 s (table.js LiveDot) */
+    transition: transform 0.25s ease-out;    /* SwWeb:allow ux-mot-2 (an activity indicator: the request and the refresh must be seen in every theme, also with a small --sw-motion) */
+}
 
-    /* Export popup (SysWeaver-PopupMenu from application.js, class Table added by addTable): its SysWeaver-PopupMenuBack element is anchored at bottom 0. */
-    SysWeaver-PopupMenu.Table SysWeaver-PopupMenuBack {
-        bottom: 0;
-    }
-    /* Icon images */
-    /*
-     * Mask icons (mask-image, colored by ColorIcon) resolving against explore/ (../icons/...):
-     * IconAscending / IconDescending - header sort icons and sort menu items (m_sort_asc / m_sort_desc);
-     * IconPlus (filter toggle / add set), IconMinus (not used by table.js), IconClose (remove set; declared twice),
-     * IconMore / IconExpand / IconCollapse (filter mode icon), IconClear (clear values / search), IconReset (reset
-     * filters), IconClearSort ("Clear sort" menu item, m_menu.svg); IconPrev / IconNext / IconHome (footer
-     * navigation), IconReload (used elsewhere, e.g. PerfMonitor.cs / common.js), IconExport (newtab.svg, export menu).
-     */
-
-
-    .IconAscending {
-        mask-image: url("../icons/m_sort_asc.svg");
+    /* A data request runs: the dot grows quickly (and stays big until the answer is in) */
+    .sw-table-live-dot.sw-table-live-busy {
+        transform: scale(1.75);
+        transition-duration: 0.08s;    /* SwWeb:allow ux-mot-2 (the start of the activity indicator above) */
     }
 
-    .IconDescending {
-        mask-image: url("../icons/m_sort_desc.svg");
+/* Reduced motion: the dot changes its size without an animation (it still shows the request) */
+@media (prefers-reduced-motion: reduce) {
+    .sw-table-live-dot,
+    .sw-table-live-dot.sw-table-live-busy {
+        transition: none;
+    }
+}
+
+/* Phones (portrait: the top bar shows the title) and low screens (landscape phones: the rows need the height) have no page header */
+@media (max-width: 599px), (max-height: 500px) {
+    .sw-table-ph {
+        display: none;
+    }
+}
+
+/* ===== Tool bar (table.js BuildToolbar; Design v2, PORTING.md B13): the search field, Filter (a count badge while filters are active), the log
+   quick filter, then at the right the icon tools Sort (cards), Columns, Density, Download, Refresh and the cards / grid switch.
+   One line that never wraps (the search field gives way); a size container for the narrow rules ===== */
+
+.sw-table-toolbar {
+    flex: none;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--sw-space-2, 8px);
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px 8px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--sw-border);
+    container: swtabletools / inline-size;
+}
+
+    .sw-table-toolbar > .sw-table-search {
+        flex: 0 1 18rem;
+        width: auto;
+        min-width: 7rem;
     }
 
-    .IconPlus {
-        mask-image: url("../icons/plus.svg");
+.sw-table-tspacer {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.sw-table-ttools {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sw-table-toolbar .sw-button.sw-table-tbtn {
+    position: relative;
+    flex: none;
+}
+
+    .sw-table-toolbar .sw-button.sw-table-tbtn.sw-icon-only {
+        width: var(--sw-control-h, 34px);
+        padding: 0;
     }
 
-    .IconMinus {
-        mask-image: url("../icons/minus.svg");
+    .sw-table-toolbar .sw-button.sw-table-tbtn:not(.sw-icon-only) {
+        gap: 6px;
+        padding: 0 10px;
     }
 
-    .IconClose {
-        mask-image: url("../icons/close.svg");
+    /* (Filter while filters are active, Sort while sorted: the selected layer) */
+    .sw-table-toolbar .sw-button.sw-table-tbtn.sw-table-on {
+        background: var(--sw-selected, var(--sw-accent1-soft));
+        color: var(--sw-text, var(--sw-fg));
     }
 
-    .IconMore {
-        mask-image: url("../icons/more.svg");
+.sw-table-tlabel {
+    white-space: nowrap;
+}
+
+/* Count badges: the active filters on Filter, the hidden columns on Columns (a corner badge on the icon button) */
+.sw-table-badge {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    box-sizing: border-box;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--sw-radius-pill, 9px);
+    background: var(--sw-accent1);
+    color: var(--sw-on-accent, #fff);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+    .sw-table-badge[hidden] {
+        display: none;
     }
 
-    .IconExpand {
-        mask-image: url("../icons/expand.svg");
+.sw-icon-only > .sw-table-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+}
+
+/* Narrow tool bars (phones): the words go (the names stay the tool tips / accessible names), then the Density tool (a site setting,
+   also in Settings) */
+@container swtabletools (max-width: 640px) {
+    .sw-table-toolbar .sw-table-tlabel {
+        display: none;
     }
 
-    .IconClear {
-        mask-image: url("../icons/clear.svg");
+    .sw-table-toolbar .sw-button.sw-table-tbtn:not(.sw-icon-only) {
+        min-width: var(--sw-control-h, 34px);
+        padding: 0 6px;
+    }
+}
+
+@container swtabletools (max-width: 460px) {
+    .sw-table-toolbar .sw-table-densbtn {
+        display: none;
+    }
+}
+
+/* Very narrow tool bars (an embedded table inside a padded page on a phone): the search box gives up its minimum
+   width before a tool is pushed out of the frame (the row never scrolls sideways) */
+@container swtabletools (max-width: 420px) {
+    .sw-table-toolbar > .sw-table-search {
+        min-width: var(--sw-control-h, 34px);
+    }
+}
+
+/* ===== Filter chips (table.js UpdateChips): one removable chip per active filter, "Add filter", "Clear all", in a sunken bar under
+   the tool bar (hidden while nothing is filtered; the cards use the filter dialog) ===== */
+
+.sw-table-chips {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--sw-surface-sunken, var(--sw-surface-sunken));
+    border-bottom: 1px solid var(--sw-border);
+}
+
+    .sw-table-chips[hidden], .sw-table-cards .sw-table-chips {
+        display: none;
     }
 
-    .IconClearSort {
-        mask-image: url("../icons/m_menu.svg");
+.sw-table-chip {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    box-sizing: border-box;
+    border: 1px solid var(--sw-border, var(--sw-border));
+    border-radius: var(--sw-radius-pill, 14px);
+    background: var(--sw-surface, var(--sw-bg));
+    color: var(--sw-text, var(--sw-fg));
+}
+
+.sw-table-chip-main, .sw-table-chip-x, .sw-table-chip-add, .sw-table-chip-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--sw-text-sm, 0.9em);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.sw-table-chip-main {
+    min-width: 0;
+    height: 100%;
+    padding: 0 4px 0 10px;
+    border-radius: var(--sw-radius-pill, 14px) 0 0 var(--sw-radius-pill, 14px);
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sw-table-chip-op {
+    color: var(--sw-text-2, var(--sw-text-2));
+}
+
+.sw-table-chip-val {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
+.sw-table-chip-x {
+    justify-content: center;
+    width: 26px;
+    height: 100%;
+    padding: 0;
+    border-radius: 0 var(--sw-radius-pill, 14px) var(--sw-radius-pill, 14px) 0;
+    color: var(--sw-text-2, var(--sw-text-2));
+}
+
+    .sw-table-chip-x .sw-icon {
+        width: 14px;
+        height: 14px;
     }
 
-    .IconCollapse {
-        mask-image: url("../icons/collapse.svg");
+.sw-table-chip-add, .sw-table-chip-clear {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--sw-radius);
+    color: var(--sw-text-accent, var(--sw-text-accent));
+}
+
+    .sw-table-chip-add .sw-icon {
+        width: 16px;
+        height: 16px;
     }
 
-    .IconReset {
-        mask-image: url("../icons/reset.svg");
+.sw-table-chip-or {
+    color: var(--sw-text-3, var(--sw-text-3));
+    font-size: var(--sw-text-xs, 0.8em);
+}
+
+@media (hover: hover) {
+    .sw-table-chip-main:hover, .sw-table-chip-x:hover, .sw-table-chip-add:hover, .sw-table-chip-clear:hover {
+        background: var(--sw-hover, var(--sw-accent1-soft));
+    }
+}
+
+.sw-table-chip-main:focus-visible, .sw-table-chip-x:focus-visible, .sw-table-chip-add:focus-visible, .sw-table-chip-clear:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 1px;
+}
+
+/* The filter editor dialog (table.js EditFilter): column, operation, value, Not, Match case */
+.sw-table-fe {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3, 12px);
+    min-width: min(24rem, 78vw);
+}
+
+.sw-table-fe-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+    .sw-table-fe-row > .sw-table-fop, .sw-table-fe-row > .sw-table-fval {
+        width: 100%;
+        min-height: var(--sw-control-h, 34px);
+        font-size: var(--sw-text-md, 1em);
     }
 
-    .IconPrev {
-        mask-image: url("../icons/prev.svg");
-    }
+.sw-table-fe-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--sw-control-h, 34px);
+    cursor: pointer;
+}
 
-    .IconNext {
-        mask-image: url("../icons/next.svg");
-    }
-
-    .IconHome {
-        mask-image: url("../icons/home.svg");
-    }
-
-    .IconClose {
-        mask-image: url("../icons/close.svg");
-    }
-
-    .IconReload {
-        mask-image: url("../icons/reload.svg");
-    }
-
-    .IconExport {
-        mask-image: url("../icons/newtab.svg");
-    }
-
-    /*
-     * Exporter menu icons (IconClass from the C# exporters): full-color background images ../icons/ext/*.svg with a
-     * forced transparent background - IconFileCsv, IconFileHtml, IconFileMD, IconFileJson, IconFileXlsx, IconFilePdf.
-     */
-    .IconFileCsv {
-        background-color: transparent !important;
-        background-image: url("../icons/ext/csv.svg");
-    }
-
-    .IconFileHtml {
-        background-color: transparent !important;
-        background-image: url("../icons/ext/html.svg");
-    }
-
-    .IconFileMD {
-        background-color: transparent !important;
-        background-image: url("../icons/ext/md.svg");
-    }
-
-    .IconFileJson {
-        background-color: transparent !important;
-        background-image: url("../icons/ext/json.svg");
-    }
-
-    .IconFileXlsx {
-        background-color: transparent !important;
-        background-image: url("../icons/ext/xlsx.svg");
-    }
-
-    .IconFilePdf {
-        background-color: transparent !important;
-        background-image: url("../icons/ext/pdf.svg");
-    }
-
-    /*
-     * IconCopy: copy menu items of the column menu. IconShareLink0 / IconShareLink1 / IconShareLink2: share-link
-     * exporters ("IconShareLink" + scope index, from UserDataTableDataExporter / UserStorageChartExporter).
-     * IconClock: "Show local / UTC times" column menu item.
-     */
-    .IconCopy {
-        mask-image: url("../icons/copy.svg");
-    }
-
-    .IconShareLink0 {
-        mask-image: url("../icons/disc.svg");
-    }
-
-    .IconShareLink1 {
-        mask-image: url("../icons/user_check.svg");
-    }
-
-    .IconShareLink2 {
-        mask-image: url("../icons/share.svg");
-    }
-
-    .IconClock {
-        mask-image: url("../icons/clock.svg");
+    .sw-table-fe-check[hidden] {
+        display: none;
     }
 
 /* ===== Footer ===== */
 
-/*
- * datatable-footer: fixed 36px bottom bar created by addTable (gradient, top shadow, centered flex row) with the
- * icon-26x26 navigation / export icons (1em side margins; the last one, the clear-search icon, 0.25em left margin),
- * the search input (20ch wide, italic --ThemeMain25 placeholder); items with class Disabled at 50%.
- */
-datatable-footer {
-    position: fixed;
-    left: 0;
-    right: 0;
+/* The bottom bar of the table frame (Design v2, PORTING.md B13; the left / right edges of the table): the range text and the "Changed" legend at
+   the left, "Rows" (the page size) and the icon pager at the right edge. Fixed slots: one line that never wraps; the
+   left part takes the free width (cut when there is no room); the right part keeps its place at the right edge; the range and page
+   slots only grow (table.js UpdateFoot) and the legend reserves its space, so nothing in the bar moves when the numbers change, when
+   paging or when the legend appears. A flat surface with a hairline. Its height never depends on the data. Embedded tables: sticky
+   at the bottom of the window while the page scrolls; table.html: the last item of the full height frame. */
+.sw-table-foot {
+    position: sticky;
     bottom: 0;
-    height: 36px;
-    
+    z-index: 6;
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: center;
-
-    background-image: linear-gradient(to top, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
-    color: var(--ThemeAcc1);
-    box-shadow: 0px -4px 12px rgba(0,0,0,0.3), 0px -1px 3px var(--ThemeAcc150);
-    vertical-align: middle;
-    padding: 1px 0 4px 0;
-    text-align: center;
+    gap: var(--sw-space-4, 16px);
+    min-height: calc(var(--sw-control-h, 34px) + 12px);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)) 12px;
     box-sizing: border-box;
+    background: var(--sw-bg);
+    border-top: 1px solid var(--sw-border);
+    border-radius: 0 0 var(--sw-radius) var(--sw-radius);
+    color: var(--sw-text-2, var(--sw-text-2));
+    font-size: var(--sw-text-sm, 0.9em);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    /* (the bar never makes the table wider; a size container for the narrow rules) */
+    container: swtablefoot / inline-size;
 }
 
-        datatable-footer icon-26x26 {
-            margin-right: 1em;
-            margin-left: 1em;
+.sw-table-page .sw-table-foot {
+    flex: none;
+}
+
+.sw-table-cards .sw-table-foot, .sw-table-narrow .sw-table-foot {
+    border-radius: 0;
+}
+
+/* Left: the range text, the "Changed" legend, the "last refresh failed" chip */
+.sw-table-fleft {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-4, 16px);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sw-table-range {
+    flex: none;
+    box-sizing: border-box;
+    color: var(--sw-text, var(--sw-fg));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Legend of the tint of changed values (table.js ShowChangedLegend): a swatch in the sw-table-flash start color and "Changed"; the
+   tool tip explains it. Its space is reserved before it is shown (visibility only), so it never pushes anything. */
+.sw-table-changed {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--sw-text-2, var(--sw-text-2));
+    white-space: nowrap;
+    cursor: help;
+}
+
+    .sw-table-changed[hidden] {
+        display: inline-flex;
+        visibility: hidden;
+    }
+
+.sw-table-swatch {
+    width: 1em;
+    height: 1em;
+    box-sizing: border-box;
+    border-radius: var(--sw-radius-sm);
+    border: 1px solid var(--sw-border);
+    background-color: color-mix(in srgb, var(--sw-accent2) 25%, var(--sw-table-row, var(--sw-bg)));
+}
+
+/* "Last refresh failed 20:10" (the last data stays) */
+.sw-table-stale {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 2px 8px;
+    border-radius: var(--sw-radius-pill, 10px);
+    background: var(--sw-warning-soft, var(--sw-surface-sunken));
+    color: var(--sw-text, var(--sw-fg));
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+    .sw-table-stale[hidden] {
+        display: none;
+    }
+
+    /* (narrow tables, phones: the short form "Offline 12:40", never squeezed to "⚠ N": the range text gives way first) */
+    .sw-table-stale-short {
+        display: none;
+    }
+
+    .sw-table-narrow .sw-table-stale {
+        flex: none;
+    }
+
+        .sw-table-narrow .sw-table-stale .sw-table-stale-long {
+            display: none;
         }
 
-        datatable-footer *.Disabled {
-            cursor: default;
-            opacity: 0.5;
+        .sw-table-narrow .sw-table-stale .sw-table-stale-short {
+            display: inline;
         }
 
+    /* (while the chip is shown on a narrow footer it gets the room of the "Changed" legend and of the Rows choice: changing the page
+       size can wait for the connection; the pager at the right end does not move) */
+    .sw-table-narrow .sw-table-fleft:has(> .sw-table-stale:not([hidden])) > .sw-table-changed,
+    .sw-table-narrow .sw-table-foot:has(.sw-table-stale:not([hidden])) .sw-table-pps {
+        display: none;
+    }
 
+    .sw-table-narrow .sw-table-fleft:has(> .sw-table-stale:not([hidden])) {
+        gap: var(--sw-space-2, 8px);
+    }
 
-        datatable-footer input {
-            display: inline-block;
-            margin-right: 0.25em;
-            margin-left: 1em;
-            width: 30ch;
-            min-width: 20ch;
-            max-width: 20ch;
-            font-family: var(--ThemeFont);
-            box-sizing: border-box;
-            border: none;
-            outline: none;
-            background-color: var(--ThemeBackground);
-            color: var(--ThemeMain);
-            border-radius: var(--ThemeRadInp);
-            padding: 2px 3.5px 2px 3.5px;
-            font-size: 100%;
+/* The page header's "Live" dot while the connection is lost (table.js UpdateNote: "Paused: not connected") */
+.sw-table-live-dot.sw-table-live-paused {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--sw-text-2);
+}
+
+/* "Order on hold" (table.js HoldRows): the last item of the left part, so it moves nothing when it comes and goes */
+.sw-table-hold {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--sw-text-2);
+    white-space: nowrap;
+    cursor: help;
+}
+
+    .sw-table-hold[hidden] {
+        display: none;
+    }
+
+.sw-table-hold-mark {
+    color: var(--sw-accent1);
+}
+
+.sw-table-stale-icon {
+    width: 1em;
+    height: 1em;
+    color: var(--sw-warning, var(--sw-accent2));
+}
+
+/* Right: "Rows" and its select (Auto, 10, 25, 50, 100) */
+.sw-table-pps {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-2, 8px);
+    cursor: pointer;
+}
+
+.sw-table-pps-sel {
+    transition: border-color var(--sw-dur-1) linear, background-color var(--sw-dur-1) linear, color var(--sw-dur-1) linear;
+    box-sizing: border-box;
+    min-width: 6em;
+    min-height: var(--sw-control-h, 34px);
+    padding: 0 4px 0 8px;
+    border: 1px solid var(--sw-border-input, var(--sw-border));
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface, var(--sw-bg));
+    color: var(--sw-text, var(--sw-fg));
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+    .sw-table-pps-sel:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 1px;
+    }
+
+    .sw-table-pps-sel option {
+        background: var(--sw-bg);
+        color: var(--sw-fg);
+    }
+
+/* Right edge: the icon pager (first, previous, "Page 3", next): fixed squares (disabled ones keep their size) */
+.sw-table-nav {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sw-table-foot .sw-button.sw-table-pbtn {
+    flex: none;
+    width: var(--sw-control-h, 34px);
+    min-width: var(--sw-control-h, 34px);
+    height: var(--sw-control-h, 34px);
+    padding: 0;
+}
+
+.sw-table-pageno {
+    flex: none;
+    box-sizing: border-box;
+    min-width: 7ch;
+    padding: 0 6px;
+    text-align: center;
+    color: var(--sw-text, var(--sw-fg));
+    font-variant-numeric: tabular-nums;
+}
+
+/* Narrow bars (phones in portrait, narrow embedded tables): the legend, "Page n" and the word "Rows" go (the select keeps its
+   accessible name from the label), so range, size and pager stay on one line */
+@container swtablefoot (max-width: 520px) {
+    .sw-table-foot .sw-table-changed, .sw-table-foot .sw-table-pageno, .sw-table-foot .sw-table-hold {
+        display: none;
+    }
+
+    .sw-table-pps-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+    }
+}
+
+/* (phone portrait: the tool bar, the cards and the range text start on one 12 px line, the phone gutter) */
+.sw-table-narrow .sw-table-foot {
+    gap: var(--sw-space-2, 8px);
+    padding-left: 12px;
+    padding-right: 4px;
+}
+
+.sw-table-narrow .sw-table-toolbar {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+/* (Old footer tool buttons: the log quick filter keeps the sw-table-fbtn class; its word sits beside the icon) */
+.sw-table-blabel {
+    display: block;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.sw-table-fbtn[hidden] {
+    display: none;
+}
+
+/* Low screens (phones in landscape): a slimmer footer and card tool bar, so the rows keep most of the height */
+@media (max-height: 500px) {
+    .sw-table-foot {
+        min-height: 0;
+        padding-top: 2px;
+        padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* The empty / error states: no icon circle and slim margins, so title, sentence and action fit between the header and the footer */
+    .sw-table-area > .sw-table-state {
+        gap: var(--sw-space-1, 4px);
+        padding: var(--sw-space-3, 12px) var(--sw-space-4, 16px);
+    }
+
+        .sw-table-area > .sw-table-state > .sw-table-state-icon {
+            display: none;
         }
 
+    .sw-table-toolbar {
+        min-height: 0;
+        padding-top: 2px;
+        padding-bottom: 2px;
+    }
 
+    .sw-table-cards .sw-table-cardbar {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
 
-            datatable-footer input::placeholder {
-                color: var(--ThemeMain25);
-                font-style: italic;
-                font-size: 90%;
-            }
+    /* Whole cards on low screens: one card per line using the full width, its fields in columns (two on a phone in landscape),
+       the "#n" heading over all of them; scrolling snaps to the card tops, so no card is shown cut in half at the top */
+    .sw-table-cards .sw-table-scroll {
+        scroll-snap-type: y proximity;
+    }
 
-        datatable-footer icon-26x26:last-child{
-            margin-left: 0.25em;
+    .sw-table-cards .sw-table-grid > tbody.sw-table-body {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    /* (three field columns on a phone in landscape, so at least two closed cards fit on the screen) */
+    .sw-table-cards .sw-table-body tr {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+        column-gap: 4px;
+        align-content: start;
+        padding: 0 0 2px;
+        scroll-snap-align: start;
+        scroll-margin-top: 4px;
+    }
+
+    .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-table-rn {
+        grid-column: 1 / -1;
+    }
+
+    .sw-table-cards .sw-table-body td, .sw-table-cards .sw-table-body tr:nth-child(2n) td {
+        min-height: 0;
+        padding-top: 1px;
+        padding-bottom: 1px;
+        line-height: 1.25;
+    }
+
+    .sw-table-cards .sw-table-body td[data-label]::before {
+        font-size: 0.8em;
+    }
+
+    /* The "Show all n fields" button sits at the right end of the card heading ("#1") instead of a line of its own */
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible {
+        padding-bottom: 2px;
+    }
+
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn {
+        line-height: 28px;
+        position: relative;
+    }
+
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn .sw-table-morebtn:not([hidden]) {
+        top: 0;
+        bottom: 0;
+        left: auto;
+        right: 0;
+        min-height: 28px;
+        padding: 0 12px;
+        border-top: none;
+        border-left: 1px solid color-mix(in srgb, var(--sw-border) 55%, transparent);
+        border-radius: 0 var(--sw-radius) 0 0;
+    }
+
+    .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-table-rn {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-cell-actions .sw-cell-action {
+        min-height: 28px;
+    }
+
+    /* Long cards (14 or more columns, ex: Process information): more, narrower field columns, each label above its value, so a
+       closed card takes two field lines and at least two cards fit on a phone in landscape */
+    .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+    }
+
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n):not(.sw-table-rn) {
+            display: block;
+            position: static;
+            padding: 1px 10px 2px;
+            line-height: 1.25;
         }
+
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n).sw-table-blank {
+            display: none;
+        }
+
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td:nth-child(n)[data-label]::before {
+            display: block;
+            position: static;
+            width: auto;
+            max-width: none;
+            font-size: 0.78em;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sw-table-cards .sw-table-body tr:has(> td:nth-child(14)) > td.sw-cell-actions > * {
+            display: inline-flex;
+            margin: 1px 4px 0 0;
+            vertical-align: middle;
+        }
+
+    .sw-table-cards .sw-table-body td.sw-table-iconlink > a {
+        min-height: 0;
+        font-size: 1.1em;
+    }
+
+    .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-cell-actions {
+        padding-top: 1px;
+        padding-bottom: 1px;
+    }
+
+    /* Long values (table.js .sw-table-long, ex: a log text) take the full card width instead of wrapping in a narrow column */
+    .sw-table-cards .sw-table-body tr:nth-child(n) td.sw-table-long {
+        grid-column: 1 / -1;
+    }
+
+    /* The card tool bar is the first item of the scrolled area (table.js moves it there on low screens): at the start it is shown
+       above the first card (a snap point, so scroll snapping does not skip it), it slides away while scrolling down and comes back,
+       sticky at the top, when scrolling up (table.js UpdateCardBarHide, class sw-table-barhide); while it is shown the cards snap
+       below it (table.js UpdateSnapPadding sets scroll-padding-top to its height), so it never covers the "#1" heading */
+    .sw-table-scroll > .sw-table-cardbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        margin-bottom: 4px;
+        scroll-snap-align: start;
+        box-shadow: var(--sw-elev-1); /* floats over the scrolled cards */
+        transition: transform var(--sw-dur-2) var(--sw-ease);
+    }
+
+    .sw-table-scroll > .sw-table-cardbar.sw-table-barhide {
+        transform: translateY(-110%);
+    }
+}
+
+/* ===== Keyboard help ("?", table.html) ===== */
+
+.sw-table-keys {
+    border-collapse: collapse;
+}
+
+    .sw-table-keys td {
+        padding: 4px 8px;
+        vertical-align: top;
+        border-bottom: 1px solid var(--sw-border);
+    }
+
+    .sw-table-keys td:first-child {
+        white-space: nowrap;
+    }
+
+    .sw-table-keys kbd {
+        font-family: var(--sw-mono, monospace);
+        padding: 1px 6px;
+        border: 1px solid var(--sw-border-strong, var(--sw-border));
+        border-radius: var(--sw-radius-sm);
+        background: var(--sw-surface, transparent);
+    }
+
+/* ===== Wide grid fit (table.js UpdateFit): sw-table-tight when the columns are wider than the area: smaller filter fields, wrapped
+   column titles and long texts (empty columns are then hidden by a per table style rule, the "Columns" button shows them again) ===== */
+.sw-table-tight .sw-table-fop, .sw-table-tight .sw-table-fval {
+    min-width: 3.5em;
+}
+
+.sw-table-tight .sw-table-head th {
+    white-space: normal;
+}
+
+.sw-table-tight:not(.sw-table-cards) .sw-table-body td.sw-table-long:not(.sw-table-multiline) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    max-width: min(var(--sw-table-cellmax), 28ch);
+    min-width: 12ch;
+}
+
+.sw-table-tight:not(.sw-table-cards) .sw-table-body td.sw-table-multiline {
+    max-width: min(var(--sw-table-cellmax), 12em);
+}
+
+/* The column chooser button says how many columns are hidden: the accent colour (not only the count) */
+.sw-table-fbtn.sw-table-colshidden .sw-table-blabel {
+    color: var(--sw-text-accent);
+    font-weight: 600;
+}
+
+/* ===== Note above the table (table.js UpdateNote: the log table covers only the messages since the server last started) ===== */
+.sw-table-note {
+    display: block;
+    margin: 0 0 6px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+    color: var(--sw-text-2);
+}
+
+.sw-table-note[hidden] {
+    display: none;
+}
+
+.sw-table-note .sw-table-note-icon {
+    display: inline-block;
+    vertical-align: -0.15em;
+    margin-right: 6px;
+    width: 1.1em;
+    height: 1.1em;
+}
+
+/* ===== Health hints (table.js RowHealth / CellHealth): colour plus an icon and a word ===== */
+/* A failing row: danger tint, a danger edge on the row number, and the warning icon with "Failing" (the word is shown in the cards,
+   the grid shows the icon; the reasons are in the tool tip / accessible name) */
+.sw-table-body tr.sw-table-bad {
+    --sw-table-rowbg: color-mix(in srgb, var(--sw-danger) 10%, var(--sw-table-row, var(--sw-bg)));
+}
+
+.sw-table-body tr.sw-table-bad > td.sw-table-rn {
+    box-shadow: inset 4px 0 0 var(--sw-danger);
+}
+
+.sw-table-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 4px;
+    color: var(--sw-danger);
+    font-weight: 700;
+    vertical-align: middle;
+    cursor: help;
+}
+
+.sw-table-health[hidden] {
+    display: none;
+}
+
+.sw-table-health .sw-table-health-icon {
+    width: 1.3em;
+    height: 1.3em;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-health-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-bad {
+    border-color: var(--sw-danger);
+    border-left-width: 4px;
+}
+
+.sw-table-cards .sw-table-health {
+    font-size: 1.25em;
+}
+
+/* A high used percentage: warning / danger tint, an icon and "High" / "Critical" after the value */
+/* (.sw-table: as specific as the row background rule of the grid cells, which comes first) */
+.sw-table .sw-table-body td.sw-health-warn {
+    background-color: color-mix(in srgb, var(--sw-warning) 18%, var(--sw-table-row, var(--sw-bg)));
+}
+
+.sw-table .sw-table-body td.sw-health-bad {
+    background-color: color-mix(in srgb, var(--sw-danger) 16%, var(--sw-table-row, var(--sw-bg)));
+}
+
+.sw-health-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 6px;
+    font-weight: 700;
+    font-family: var(--sw-sans, inherit);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.sw-health-warn .sw-health-tag {
+    color: color-mix(in srgb, var(--sw-warning) 60%, var(--sw-fg));
+}
+
+.sw-health-bad .sw-health-tag {
+    color: var(--sw-danger);
+}
+
+.sw-health-tag .sw-health-icon {
+    width: 1.1em;
+    height: 1.1em;
+}
+
+/* The "Public" tag of an auth column (table.js: null = no sign in needed): a globe and the word, in the warning colour */
+.sw-tag.sw-tag-public {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-color: color-mix(in srgb, var(--sw-warning) 60%, var(--sw-border));
+    background: color-mix(in srgb, var(--sw-warning) 14%, var(--sw-bg));
+}
+
+.sw-tag.sw-tag-public .sw-tag-icon {
+    width: 1em;
+    height: 1em;
+}
+
+/* Low screens (phones in landscape, 844x390): a compact grid whatever the density, so the rows get the height: 32 px rows
+   (the compact density; the targets in the rows stay >= 24 px, WCAG 2.5.8), a one line 32 px header with the sort icon only on the
+   sorted columns (a tap on a header opens its menu with the sort choices), and a collapsed tool bar and footer (32 px controls, the
+   words of the tool buttons go, the names stay the tool tips / accessible names). 844x390: 6 whole rows visible instead of 3. */
+@media (max-height: 500px) {
+    .sw-table:not(.sw-table-cards) {
+        --sw-row-h: 2rem;
+        --sw-cell-px: 0.5rem;
+    }
+
+    .sw-table-toolbar, .sw-table-foot {
+        --sw-control-h: 2rem;
+    }
+
+    .sw-table-toolbar .sw-table-tlabel {
+        display: none;
+    }
+
+    .sw-table-toolbar .sw-button.sw-table-tbtn:not(.sw-icon-only) {
+        min-width: 2rem;
+        padding: 0 6px;
+    }
+
+    .sw-table:not(.sw-table-cards) .sw-table-head .sw-table-th {
+        min-height: 2rem;
+    }
+
+    /* (the row height decides, not the content: no vertical cell padding, 24 px row action / toggle buttons) */
+    .sw-table:not(.sw-table-cards) .sw-table-body td {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .sw-table:not(.sw-table-cards) .sw-table-body :is(.sw-cell-action, .sw-cell-toggle) {
+        min-height: 1.5rem;
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    .sw-table:not(.sw-table-cards) .sw-table-head .sw-table-title {
+        white-space: nowrap;
+    }
+
+    .sw-table:not(.sw-table-cards) .sw-table-head th:not(.sw-sort-on) .sw-table-sort {
+        display: none;
+    }
+
+    .sw-table:not(.sw-table-cards) .sw-table-head .sw-table-sort {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+}
+
+/* the "Show all n fields" button of a compact card is a quiet disclosure row (muted text, the accent only on hover / focus),
+   not a copper link at the bottom of every card */
+.sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn .sw-table-morebtn:not([hidden]) {
+    color: var(--sw-text-2);
+}
+
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn .sw-table-morebtn:not([hidden]):focus-visible {
+        color: var(--sw-text-accent);
+        background: var(--sw-hover, transparent);
+    }
+
+@media (hover: hover) {
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible td.sw-table-rn .sw-table-morebtn:not([hidden]):hover {
+        color: var(--sw-text-accent);
+        background: var(--sw-hover, transparent);
+    }
+}
+
+/* ===== Header lines, icon columns, row action overlay, column spread, phone tools, cards ===== */
+
+/* Header titles: at most two lines (table.js FitHeadTitles gives a title of several words the width of its best two line split; the
+   clamp is the safety net, the tool tip has the whole title) */
+.sw-table:not(.sw-table-cards) .sw-table-head th:not(.sw-table-notitle) .sw-table-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+/* Icon only columns (C# TableDataNoTitleAttribute, ex: the CPU / memory chart links of Process information; table.js sw-table-iconcol):
+   compact and centred, the icon in the secondary text colour (a line icon instead of the multicolour chart emoji), the accent on hover;
+   the column title is the header tool tip, the screen reader name and the card label */
+.sw-table:not(.sw-table-cards) .sw-table-grid .sw-table-body td.sw-table-iconcol {
+    /* SwWeb:allow ux-inp-24 (a column width, not a click target: the shrink-to-fit width of an icon column) */
+    width: 1px;
+    padding-left: 2px;
+    padding-right: 2px;
+    text-align: center;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-head th.sw-table-iconcol {
+    /* SwWeb:allow ux-inp-24 (a column width, not a click target: the shrink-to-fit width of an icon column) */
+    width: 1px;
+    padding: 0 2px;
+}
+
+    .sw-table:not(.sw-table-cards) .sw-table-head th.sw-table-iconcol .sw-table-th {
+        justify-content: center;
+    }
+
+.sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-iconcol > a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: var(--sw-radius);
+    color: var(--sw-text-2);
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+    .sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-iconcol > a:focus-visible {
+        color: var(--sw-text-accent);
+        background: var(--sw-hover, var(--sw-accent1-soft));
+    }
+
+@media (hover: hover) {
+    .sw-table:not(.sw-table-cards) .sw-table-body td.sw-table-iconcol > a:hover {
+        color: var(--sw-text-accent);
+        background: var(--sw-hover, var(--sw-accent1-soft));
+    }
+}
+
+.sw-table-cicon {
+    width: 18px;
+    height: 18px;
+}
+
+.sw-table-cards .sw-table-body td.sw-table-iconlink > a > .sw-table-cicon {
+    width: 20px;
+    height: 20px;
+    color: var(--sw-text-accent);
+}
+
+/* Wide frames (table.js SpreadWidths / UpdateFill, sw-table-filled): the columns keep their content widths and the free width is an
+   empty filler cell at the row end, in the row colours: row lines, stripes, hover and the header band always reach the frame edge */
+.sw-table-filled:not(.sw-table-cards):not(.sw-table-narrow) .sw-table-grid tr::after {
+    content: "";
+    display: table-cell;
+    width: var(--sw-table-fill, 0px);
+    min-width: var(--sw-table-fill, 0px);
+    padding: 0;
+    border-bottom: 1px solid var(--sw-table-rule);
+    background-color: var(--sw-table-rowbg, var(--sw-table-row));
+}
+
+.sw-table-filled:not(.sw-table-cards):not(.sw-table-narrow) .sw-table-grid .sw-table-head::after {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background-color: var(--sw-table-head);
+    border-bottom-color: var(--sw-border);
+    border-top-right-radius: var(--sw-radius);
+}
+
+.sw-table-filled:not(.sw-table-cards):not(.sw-table-narrow) .sw-table-head th:last-child {
+    border-top-right-radius: 0;
+}
+
+/* (as specific as the filler rule above: the filter row's filler has the filter row's colour, not the row colour; Admin N52) */
+.sw-table-filled:not(.sw-table-cards):not(.sw-table-narrow) .sw-table-grid tr.sw-table-frow::after {
+    background-color: color-mix(in srgb, var(--sw-bg) 94%, var(--sw-accent1));
+}
+
+.sw-table-filled:not(.sw-table-cards):not(.sw-table-narrow) .sw-table-body tr:last-child::after {
+    border-bottom: none;
+}
+
+/* Row actions (table.js UpdatePins, QuietCell span.sw-table-actbox / button.sw-table-rowmenu): a real Actions column, pinned at the
+   right edge, with the buttons on every row (UX guide LST-2: always visible, quiet at rest; never 0 px wide, never over a value).
+   On mouse screens whose columns fill the frame, rows with three or more actions get a narrow pinned column with a quiet row menu
+   button instead (sw-table-actmenu: the row's actions, with their confirmations); the cell menu (right click, Space, Shift+F10)
+   lists them too. */
+.sw-table-actbox {
+    display: contents;
+}
+
+.sw-table-rowmenu {
+    display: none;
+}
+
+@media (hover: hover) {
+    /* The row menu button (no room for the buttons at the row end); the column title is kept for screen readers only */
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:last-child {
+        padding: 0;
+    }
+
+        .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-head > th:last-child > * {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
+
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child {
+        padding: 0 2px;
+        text-align: center;
+    }
+
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-actbox {
+        display: none;
+    }
+
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-rowmenu {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: var(--sw-radius);
+        background: transparent;
+        color: var(--sw-text-2);
+        vertical-align: middle;
+        cursor: pointer;
+    }
+
+        .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-rowmenu > .sw-icon {
+            width: 18px;
+            height: 18px;
+        }
+
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr:is(:hover, :focus-within) > td:last-child > .sw-table-rowmenu {
+        color: var(--sw-text);
+    }
+
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-rowmenu:is(:hover, :focus-visible) {
+        border-color: var(--sw-border-strong);
+        background: var(--sw-surface, var(--sw-bg));
+    }
+
+    /* (a final action in the narrow column: the check mark, the tool tip says what was done) */
+    .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-done {
+        margin: 0;
+    }
+
+        .sw-table-actmenu:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-done > span {
+            display: none;
+        }
+}
+
+/* A final (destructive) row action that succeeded (table.js MarkActed sw-table-actfinal: an ended session, a killed process): the
+   actions are not offered again on that row, the "done" note takes their place */
+.sw-table-body tr.sw-table-actfinal :is(.sw-table-actbox, .sw-table-rowmenu) {
+    display: none !important;
+}
+
+/* File type icons (table.js QuietCell: the built-in multicolour file type images "icons/ext/<ext>.svg", ex: MIME mapping, as on the
+   explore pages), at the explore icon size */
+.sw-table-body img.sw-table-ftype {
+    width: auto;
+    height: 22px;
+    vertical-align: middle;
+}
+
+/* Shortened text in the grid (ui/cells.js sw-capped): a tight ellipsis, no space before it */
+.sw-table .sw-table-body .sw-capped::after {
+    content: "\2026";
+}
+
+/* A row a row action succeeded on (table.js MarkActed, ex: an ended session the server still lists): a "done" note at the row end and
+   in the card heading, the row values muted */
+.sw-table-done {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+    font-size: var(--sw-text-xs, 0.78rem);
+    color: var(--sw-ok);
+    white-space: nowrap;
+}
+
+    .sw-table-done > .sw-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* A row action that failed, shown in place (table.js ActionDone with Sw.Cells' outcome, MarkActed): "⚠ Kill: not done", the reason
+       in the row's result line (MarkWhy, below); the actions stay */
+    .sw-table-done.sw-table-failnote {
+        color: var(--sw-danger);
+    }
+
+    /* (the server says the goal was met already, ex: the process had ended, or the row is no longer listed: not an error, and not a
+       success either: the quiet colour with the info glyph; the ✓ and the success colour are only for "done") */
+    .sw-table-done.sw-table-failnote.sw-table-neutral,
+    .sw-table-done.sw-table-neutral {
+        color: var(--sw-text-2);
+    }
+
+    /* A row action that still runs after 2 s (table.js ActionTick): the seconds so far ("4 s", the tool tip says what it waits for)
+       next to the busy button, in the place of the done note */
+    .sw-table-done.sw-table-pending {
+        color: var(--sw-text-2);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* (the pinned actions column, sticky: at the cell's end over its free space, so the column keeps its width: nothing moves) */
+    .sw-table-actpin:not(.sw-table-narrow):not(.sw-table-cards) .sw-table-body tr > td:last-child > .sw-table-done.sw-table-pending {
+        position: absolute;
+        top: 50%;
+        right: 4px;
+        left: auto;
+        transform: translateY(-50%);
+        margin: 0;
+        padding: 0;
+        background: none;
+        visibility: visible;
+        pointer-events: none;
+    }
+
+/* The result line of a failed row action (table.js MarkWhy, tr.sw-table-haswhy; also the server's done text of a successful one,
+   sw-table-ok, Admin N47): the whole sentence with the server's reason as
+   visible, wrapping text ("Kill: not done. Process #65596 has already ended."), never only a tool tip; one place for the result (the
+   short end note gives way to it: in the grid it stays for screen readers only, the band is aria-hidden). Grid: a band in the room
+   the row gets below its values (--sw-table-whyh, set by table.js: the row grows by it, so the band never covers a value), drawn by a
+   layer of the scrolled area at the visible left edge (it stays in view when the grid scrolls sideways; no cell clips it), left of
+   the row actions. Cards: a line under the card title. */
+.sw-table-why {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    box-sizing: border-box;
+    font-family: var(--sw-sans);
+    font-size: var(--sw-text-xs, 0.78rem);
+    font-weight: normal;
+    line-height: 1.35;
+    color: var(--sw-danger);
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+    .sw-table-why > .sw-icon {
+        flex: none;
+        width: 14px;
+        height: 14px;
+        margin-top: 1px;
+    }
+
+    .sw-table-why.sw-table-neutral {
+        color: var(--sw-text-2);
+    }
+
+    /* the server's done text of a successful row action (table.js MarkActed, Admin N47): the whole sentence, wrapping, never cut to "…" */
+    .sw-table-why.sw-table-ok {
+        color: var(--sw-ok);
+    }
+
+.sw-table-cards .sw-table-body tr.sw-table-haswhy .sw-table-failnote {
+    display: none !important;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr.sw-table-haswhy :is(.sw-table-failnote, .sw-table-donelong) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip-path: inset(50%) !important;
+    white-space: nowrap;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr.sw-table-haswhy > td {
+    padding-bottom: calc(var(--sw-table-whyh, 18px) + 6px);
+}
+
+.sw-table-whylayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    z-index: 2;
+}
+
+    .sw-table-whylayer > .sw-table-why {
+        position: absolute;
+        top: 0;
+        left: 0;
+        padding: 0 2px;
+        user-select: text;
+        -webkit-user-select: text;
+    }
+
+.sw-table-cards .sw-table-whylayer {
+    display: none;
+}
+
+.sw-table-cards .sw-table-body td:has(> .sw-table-why) {
+    flex-wrap: wrap;
+}
+
+.sw-table-cards .sw-table-body tr > td > .sw-table-why {
+    flex: 1 0 100%;
+    max-width: 100%;
+    font-size: var(--sw-text-sm, 0.875rem);
+    overflow: visible;
+    text-overflow: clip;
+}
+
+@media (forced-colors: active) {
+    .sw-table-why {
+        color: CanvasText;
+    }
+}
+
+/* The Download button while exports run (table.js UpdateExportBusy): the spinner takes the icon's place, same size (no width change) */
+.sw-table-tspin {
+    width: 1.35em;
+    height: 1.35em;
+    flex: none;
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr.sw-table-acted > td:not(.sw-table-rn):not(.sw-cell-actions) {
+    color: var(--sw-text-2);
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-acted > td.sw-cell-actions .sw-table-done {
+    display: none;
+}
+
+.sw-table-cards .sw-table-body td.sw-table-rn[data-sw-done]::after {
+    content: "  \2713  " attr(data-sw-done);
+    white-space: pre;
+    color: var(--sw-ok);
+}
+
+    /* (no longer listed / already gone: information, not a success) */
+    .sw-table-cards .sw-table-body td.sw-table-rn[data-sw-done][data-sw-done-kind="info"]::after {
+        content: "  \24D8  " attr(data-sw-done);
+        color: var(--sw-text-2);
+    }
+
+/* The viewer's own row (table.js MarkCurrent: a bool IsCurrent column, ex: your session in Active sessions): a "You" badge before the
+   row's name (generated content: the cell text stays the value, the badge is read with it), a 3 px accent bar at the row start */
+.sw-table-body td[data-sw-you]::before {
+    content: attr(data-sw-you);
+    display: inline-block;
+    margin-inline-end: 6px;
+    padding: 0 7px;
+    border-radius: var(--sw-radius-pill, 999px);
+    font-size: var(--sw-text-xs, 0.78rem);
+    font-weight: 600;
+    line-height: 1.5;
+    vertical-align: baseline;
+    color: var(--sw-on-accent, var(--sw-bg));
+    background: var(--sw-accent1);
+}
+
+.sw-table:not(.sw-table-cards) .sw-table-body tr.sw-table-current > td:nth-child(2) {
+    box-shadow: inset 3px 0 0 var(--sw-accent1);
+}
+
+@media (forced-colors: active) {
+    .sw-table-body td[data-sw-you]::before {
+        border: 1px solid CanvasText;
+        color: CanvasText;
+        background: Canvas;
+    }
+}
+
+/* Cards: the title (table.js TitleCol / CompactCard sw-table-cardtitle: the column that names the row, ex: the user of a session, the
+   process name) is the first line, larger, without its label; the row actions menu (a kebab) at the right of the card heading */
+.sw-table-cards .sw-table-body tr > td.sw-table-cardtitle {
+    order: -1;
+    grid-column: 1 / -1;
+    font-weight: 600;
+    font-size: var(--sw-text-lg, 1.05rem);
+}
+
+    .sw-table-cards .sw-table-body tr > td.sw-table-cardtitle::before {
+        display: none !important;
+    }
+
+.sw-table-cards .sw-table-body tr > td.sw-table-rn {
+    order: -2;
+}
+
+/* A card with a title (table.js sw-table-titled) has no "#n" heading band: the row number is left out (it is not data), the
+   row actions kebab sits at the right of the title line; a card whose title value is empty keeps the numbered heading */
+.sw-table-cards.sw-table-titled .sw-table-body tr:not(:has(> td.sw-table-cardtitle.sw-table-blank)) > td.sw-table-rn > .sw-table-rnum {
+    display: none;
+}
+
+.sw-table-cards.sw-table-titled .sw-table-body tr:not(:has(> td.sw-table-cardtitle.sw-table-blank)) > td.sw-table-rn::before {
+    content: none;
+}
+
+@media not (max-height: 500px) {
+    .sw-table-cards.sw-table-titled .sw-table-body tr:not(:has(> td.sw-table-cardtitle.sw-table-blank)) > td.sw-table-rn {
+        display: contents !important;
+    }
+
+    .sw-table-cards.sw-table-titled .sw-table-body tr.sw-table-hasact > td.sw-table-cardtitle {
+        padding-right: 44px;
+    }
+}
+
+/* (low screens: the heading band stays only for the "Show all n fields" button / the kebab / the done note) */
+@media (max-height: 500px) {
+    .sw-table-cards.sw-table-titled .sw-table-body tr:not(.sw-table-collapsible):not(.sw-table-hasact):not(:has(> td.sw-table-cardtitle.sw-table-blank)) > td.sw-table-rn:not([data-sw-done]) {
+        display: none !important;
+    }
+}
+
+.sw-table-cardact {
+    transition: background-color var(--sw-dur-1) linear, color var(--sw-dur-1) linear;
+    display: none;
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-hasact {
+    position: relative;
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn {
+    min-height: 32px;
+    line-height: 32px;
+    padding-right: 44px;
+}
+
+.sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn > .sw-table-cardact:not([hidden]) {
+    display: inline-grid;
+    place-items: center;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-left: 1px solid color-mix(in srgb, var(--sw-border) 55%, transparent);
+    border-radius: 0 var(--sw-radius) 0 0;
+    background: transparent;
+    color: var(--sw-text-2);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+    .sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn > .sw-table-cardact > .sw-icon {
+        width: 20px;
+        height: 20px;
+    }
+
+/* Touch screens: the card's actions button is a whole 44 x 44 target (UX guide INP-24); the heading grows to it */
+@media (pointer: coarse) {
+    .sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn {
+        min-height: 44px;
+        line-height: 44px;
+        padding-right: 48px;
+    }
+
+    .sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn > .sw-table-cardact:not([hidden]) {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+    .sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn > .sw-table-cardact:focus-visible {
+        color: var(--sw-text);
+        background: var(--sw-hover, transparent);
+    }
+
+@media (hover: hover) {
+    .sw-table-cards .sw-table-body tr.sw-table-hasact > td.sw-table-rn > .sw-table-cardact:hover {
+        color: var(--sw-text);
+        background: var(--sw-hover, transparent);
+    }
+}
+
+/* (low screens: the "Show all n fields" button sits at the right of the heading too, left of the kebab) */
+@media (max-height: 500px) {
+    .sw-table-cards .sw-table-body tr.sw-table-collapsible.sw-table-hasact td.sw-table-rn .sw-table-morebtn:not([hidden]) {
+        right: 40px;
+    }
+}
+
+.sw-table-cards .sw-table-body tr > td.sw-cell-actions > .sw-table-actbox {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* Narrow tool bars (phones, 390 px): Download, Refresh, Density and the cards / grid switch go into the overflow menu (table.js
+   MoreMenu), so the search field keeps a usable width ("Search..." instead of "Sea") */
+.sw-table-toolbar .sw-table-morebtn2 {
+    display: none;
+}
+
+@container swtabletools (max-width: 480px) {
+    .sw-table-toolbar .sw-button.sw-table-tover {
+        display: none;
+    }
+
+    .sw-table-toolbar .sw-button.sw-table-morebtn2 {
+        display: inline-flex;
+    }
+
+    .sw-table-toolbar > .sw-table-search {
+        flex: 1 1 auto;
+        min-width: 9rem;
+    }
+
+    .sw-table-tspacer {
+        display: none;
+    }
+}

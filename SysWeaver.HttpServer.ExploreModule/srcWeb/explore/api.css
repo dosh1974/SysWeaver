@@ -1,187 +1,505 @@
-﻿
-
-/*
- * api.css - styles of explore/api.html (API inspector and tester built by api.js / apiMain()).
- * Loaded by api.html next to common/theme.css, common/tab.css and the edit/ style sheets.
- * Styles the custom elements created by api.js (SysWeaver-ApiSection, SysWeaver-ApiTag, SysWeaver-ApiUrl,
- * SysWeaver-ApiDesc, SysWeaver-ApiSendButton), the SysWeaver-Text elements created by AddTextElement
- * (edit/type.js), the tab panels of common/tab.js (SysWeaver-TabContent) and two mask icons.
- * Uses theme variables from common/theme.css (--ThemeBackground, --ThemeMain, --ThemeMainRGB, --ThemeAcc1,
- * --ThemeAcc1RGB, --ThemeAcc2, --ThemeRad, --ThemeRadInp, --ThemeFontMono). Not templated; no custom
- * properties, keyframes, media queries or theme variants.
+﻿/*
+ * explore/api.css - styles of the API inspector explore/api.html (explore/api.js), Design v2 (PORTING.md B10 / PORTING.md B14).
+ * Uses the Sw tokens and components of sw/ui.css: the page container .sw-page-form, the page header .sw-ph (Sw.PageHeader), cards
+ * .sw-card, badges .sw-badge, empty states .sw-empty (Sw.EmptyState), tabs .sw-tabs and the form footer .sw-edit-formfoot
+ * (Sw.Edit.FormFooter, edit/Edit.css). The type name elements of the signature (SysWeaver-Text / .sw-typedoc-text with the classes
+ * Signature / Control, links) come from edit/type.js.
+ * Classes: api-page (root, also sw-page-form), api-ph (the page header), api-meta (url, roles, cache, compression: api-tag badges
+ * api-cache / api-comp, api-url; the auth tags span.sw-tag; api-howto: the link to apihelp.html), api-signature (the C# signature), api-grid (the two cards),
+ * api-card (api-input, api-output; api-card-head / api-card-title for cards without tabs), api-tabs (Sw.Tabs), api-changes (the change
+ * count in the tab bar), api-params, api-json (api-json-editor, api-json-plain, api-json-error: the writable JSON tab), api-formfoot,
+ * api-noargs, api-results (api-busy while a call runs, api-stale after the input changed), api-time, api-result-foot (api-stalenote),
+ * api-null (api-nulltoken), api-void, api-error (api-errorstate, api-errortext), api-code, api-preview, api-jsonview (the read only result json), api-codebar (the Copy tool row above a json / curl text), api-ace (an Ace
+ * editor, Sw.AceEditor), api-curl (the Curl tab: api-curl-opts, api-curl-text, api-curl-note), api-denied (the note next to a
+ * Send button the user lacks the role for), api-message (no q / no api info), api-locked (api-locked-facts, api-locked-denied: the api
+ * info is refused).
+ * Flat: no shadows, no gradients. Phones (< 760 px): one column, the actions wrap, the form footer buttons are 44 px (Edit.css).
  */
 
-/* ===== API page sections ===== */
-
-/*
- * SysWeaver-ApiSection: one boxed section of the page (header, description, cache/compression,
- * signature); full width, --ThemeBackground, faint --ThemeMainRGB border, --ThemeRad corners,
- * horizontal scroll for long content.
- */
-SysWeaver-ApiSection {
-    box-sizing: border-box;
-    display: block;
-    width: 100%;
-    padding: 4px;
-    margin-bottom: 1.5em;
-    background-color: var(--ThemeBackground);
-    border: 1px solid rgba(var(--ThemeMainRGB), 0.1);
-    border-radius: var(--ThemeRad);
-    vertical-align: middle;
-    overflow-x: auto;
+body {
+    margin: 0;
 }
 
-/* SysWeaver-Page with class PadBottom (the page container created by apiMain): half-viewport bottom padding so results can scroll up. */
-SysWeaver-Page.PadBottom {
-    padding-bottom: 50svh;
+/* ---------- Page header and meta line ---------- */
+
+.api-ph .sw-ph-title {
+    overflow-wrap: anywhere;
 }
 
-/* SysWeaver-TabContent: tab panels (common/tab.js) get the --ThemeBackground background. */
-SysWeaver-TabContent {
-    background-color: var(--ThemeBackground);
+.api-ph .sw-ph-desc.sw-copyable {
+    cursor: copy;
 }
 
-/* Header section (first SysWeaver-ApiSection: method tag, url, lock icon, auth tokens) laid out as a centered flex row. */
-SysWeaver-ApiSection:first-child {
+.api-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    gap: var(--sw-space-2);
+    margin: calc(-1 * var(--sw-space-3)) 0 var(--sw-space-4);
+    min-width: 0;
 }
 
-    /* icon-24x24: the lock ColorIcon (IconSecured, 24x24 wrapper from common.js) in the header gets a 1em left margin. */
-    SysWeaver-ApiSection:first-child icon-24x24{
-        margin-left: 1em;
+.api-tag {
+    cursor: copy;
+    white-space: nowrap;
+}
+
+    /* the auth tags: the data table tags (span.sw-tag, Sw.Cells.AuthTag) */
+    .api-meta .sw-tag {
+        margin: 0;
+        font-size: var(--sw-text-sm);
+        line-height: 1.6;
     }
 
-    /* SysWeaver-Text elements (from AddTextElement in edit/type.js) and links inside sections are inline-blocks. */
-    SysWeaver-ApiSection SysWeaver-Text {
-        display: inline-block;
+.api-url {
+    min-width: 0;
+    padding: 2px 6px;
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface-sunken);
+    color: var(--sw-text);
+    font-family: var(--sw-mono);
+    font-size: var(--sw-text-sm);
+    overflow-wrap: anywhere;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: copy;
+}
+
+
+.api-tag:focus-visible, .api-url:focus-visible, .api-ph .sw-ph-desc:focus-visible, .api-code:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+/* ---------- C# signature: one mono line that wraps on narrow screens (never cut) ---------- */
+
+.api-signature {
+    box-sizing: border-box;
+    margin-bottom: var(--sw-space-4);
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius);
+    background: var(--sw-surface-sunken);
+    font-family: var(--sw-mono);
+    font-size: var(--sw-text-sm);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+    .api-signature SysWeaver-Text, .api-signature .sw-typedoc-text {
+        display: inline;
+        color: var(--sw-text-2);
     }
 
-    SysWeaver-ApiSection a {
-        display: inline-block;
+    .api-signature .Signature {
+        color: var(--sw-text);
+        font-weight: 600;
+        margin: 0 0 0 4px;
     }
 
-
-    /*
-     * ApiSignature: the C# signature section (class added by apiMain): monospace (--ThemeFontMono), 80%.
-     * Links (type names / mime search link) normal weight; SysWeaver-Text in --ThemeAcc1 at 80% alpha;
-     * class Signature (method and argument names) in --ThemeAcc2 with a 4px left margin;
-     * class Control ("(" and ");") in --ThemeMain. Signature / Control are passed to AddTextElement by api.js.
-     */
-    SysWeaver-ApiSection.ApiSignature {
-        font-family: var(--ThemeFontMono);
-        font-size: 80%;
-        padding: 12px 4px 12px 4px;
+    .api-signature .Control {
+        color: var(--sw-text-2);
     }
 
-    SysWeaver-ApiSection.ApiSignature a {
+    .api-signature a {
+        display: inline;
         font-weight: normal;
     }
 
-        SysWeaver-ApiSection.ApiSignature SysWeaver-Text {
-            color: rgba(var(--ThemeAcc1RGB), 0.8);
-        }
-
-
-            SysWeaver-ApiSection.ApiSignature SysWeaver-Text.Signature {
-                color: var(--ThemeAcc2);
-                margin: 0 0 0 4px;
-            }
-
-            SysWeaver-ApiSection.ApiSignature SysWeaver-Text.Control {
-                color: var(--ThemeMain);
-            }
-
-/* SysWeaver-ApiDesc: API description text (data.Desc) in --ThemeAcc2, selectable; click copies (set by api.js). */
-SysWeaver-ApiDesc {
-    color: var(--ThemeAcc2);
-    display: inline-block;
-    user-select: text;
+.api-mime {
+    color: var(--sw-text-2);
 }
 
-/* Empty rule for icon-24x24 inside any section (placeholder, no effect). */
-SysWeaver-ApiSection icon-24x24 {
+/* ---------- The two cards: input | result (one column below 1100 px) ---------- */
+
+.api-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sw-space-4);
+    align-items: start;
 }
 
-/* SysWeaver-ApiUrl: the API url (data.Uri) in --ThemeAcc1, selectable; click copies the absolute url. */
-SysWeaver-ApiUrl {
-    display: inline-block;
-    color: var(--ThemeAcc1);
-    user-select: text;
+@media (max-width: 1100px) {
+    .api-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
-/*
- * SysWeaver-ApiTag: pill tag (GET/POST method, auth tokens, CLIENT/SERVER cache durations, compression
- * methods): --ThemeMain background, --ThemeBackground text, bold 80%, --ThemeRadInp corners.
- * (Compression tags also get class "right", which has no rule here.)
- */
-SysWeaver-ApiTag {
-    display: inline-block;
-    background-color: var(--ThemeMain);
-    color: var(--ThemeBackground);
-    padding: 2px 6px 2px 6px;
-    border-radius: var(--ThemeRadInp);
-    margin: 3px 10px 3px 10px;
-    font-size: 80%;
-    font-weight: bold;
+.api-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
-
-/* SysWeaver-ApiSendButton: centered block wrapper of the "Send API call" Button; results tabs are appended after it. */
-SysWeaver-ApiSendButton {
-    margin: 1em auto 1em auto;
-    display: block;
-    text-align: center;
-}
-
-/* ===== Tab content ===== */
-
-/*
- * CODE: tab panels with code / preview content (JSON, ERROR, VOID, PREVIEW; class added by api.js) scroll
- * horizontally. The PREVIEW iframe (non-image mime: min 50vh, vertically resizable) and img (image mime:
- * scale-down, top-centered) fill the width with a pointer cursor (click opens the blob url in a new tab).
- */
-SysWeaver-TabContent.CODE
-{
-    overflow-x: auto;
-}
-
-
-    SysWeaver-TabContent.CODE > iframe {
-        border-radius: var(--ThemeRadInp);
-        overflow: hidden;
-        width: 100%;
-        height: 100%;
-        border: none;
-        min-height: 50vh;
-        resize: vertical;
-        cursor: pointer;
+    /* Side by side cards start at the same line (no stacking margin of ui/page.css between cards in a column) */
+    .api-page .api-grid > .sw-card.api-card {
+        margin: 0;
     }
 
-    SysWeaver-TabContent.CODE > img {
-        border-radius: var(--ThemeRadInp);
-        overflow: hidden;
+/* Card head of cards without tabs (an API without parameters, the result before the first call): the height of the tab bar */
+.api-card-head {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--sw-space-4);
+    border-bottom: 1px solid var(--sw-border);
+}
+
+.api-card-title {
+    margin: 0;
+    font-family: var(--sw-font);
+    font-size: var(--sw-text-md);
+    font-weight: 500;
+    color: var(--sw-text);
+}
+
+/* Tabs in a card: the strip is the card head, the tools (change count, status, time) on its right */
+.api-card .api-tabs {
+    margin: 0;
+    min-width: 0;
+}
+
+    .api-card .api-tabs > .sw-tabs-head {
+        padding: 0 var(--sw-space-2);
+    }
+
+    .api-card .api-tabs .sw-tabs-tools {
+        gap: var(--sw-space-2);
+        padding-right: var(--sw-space-2);
+    }
+
+    .api-card .api-tabs .sw-tab-content {
+        padding: var(--sw-space-3) var(--sw-space-4);
+    }
+
+.api-changes[hidden] {
+    display: none;
+}
+
+.api-time {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.api-params {
+    min-width: 0;
+}
+
+/* The form footer at the bottom of the input card (sticky while the form is taller than the window) */
+.api-formfoot {
+    margin-top: auto;
+    border-radius: 0 0 var(--sw-radius-md, var(--sw-radius)) var(--sw-radius-md, var(--sw-radius));
+}
+
+    .api-formfoot .api-denied {
+        margin: 0;
+        max-width: 28rem;
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-sm);
+        text-align: right;
+    }
+
+.api-noargs, .api-output .sw-empty, .api-void, .api-null {
+    padding: var(--sw-space-8) var(--sw-space-4);
+}
+
+/* ---------- Results ---------- */
+
+.api-results {
+    min-width: 0;
+    transition: opacity var(--sw-dur-2, 160ms) var(--sw-ease, ease);
+}
+
+    /* (while a call runs the last result stays readable and selectable; the Send button shows the busy state, UX guide FBK-2) */
+    .api-results.api-busy {
+        cursor: progress;
+    }
+
+    .api-results.api-stale .api-tabs .sw-tabs-body {
+        opacity: 0.6;
+    }
+
+.api-result-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sw-space-1) var(--sw-space-3);
+    align-items: center;
+    padding: var(--sw-space-3) var(--sw-space-4);
+    border-top: 1px solid var(--sw-border);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+    .api-result-foot[hidden], .api-stalenote[hidden] {
+        display: none;
+    }
+
+.api-stalenote {
+    color: var(--sw-warning);
+}
+
+/* A null API result: the null token as the title of the empty state, then the sentence */
+.api-nulltoken {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px dashed var(--sw-border-strong);
+    border-radius: var(--sw-radius);
+    font-family: var(--sw-mono);
+    font-size: var(--sw-text-md);
+    font-weight: 600;
+    color: var(--sw-text);
+}
+
+.api-code {
+    margin: 0;
+    padding: var(--sw-space-3);
+    overflow: auto;
+    max-height: 70vh;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size, var(--sw-text-sm));
+    cursor: copy;
+    background: var(--sw-surface-sunken);
+    border-radius: var(--sw-radius);
+}
+
+.api-error .api-errorstate {
+    padding: var(--sw-space-6) var(--sw-space-4) var(--sw-space-4);
+}
+
+.api-errortext {
+    color: var(--sw-danger);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    cursor: text;
+}
+
+/* Raw results: image or iframe of the blob; a click opens it in a new tab */
+.api-preview {
+    cursor: pointer;
+}
+
+    .api-preview > iframe {
+        display: block;
         width: 100%;
-        height: auto;
+        min-height: 50vh;
         border: none;
-        display: inline;
+        border-radius: var(--sw-radius);
+        resize: vertical;
+        overflow: auto;
+        /* SwWeb:allow-design (raw html / svg results are drawn on white, as a browser tab shows them) */
+        background: #fff;
+    }
+
+    .api-preview > img {
+        display: block;
+        max-width: 100%;
+        height: auto;
         object-fit: scale-down;
         object-position: center top;
-        cursor: pointer;
+        border-radius: var(--sw-radius);
     }
 
+/* ---------- The writable JSON tab of the argument (api.js ShowJson): a json code editor sized to its content, the status line below ---------- */
 
-/* ===== Icons ===== */
-
-/*
- * Mask icons (mask-image, colored by the ColorIcon / IconColor* rules of common.css):
- * IconSecured = ../icons/lock.svg (auth lock in the header section), IconSendIt = ../icons/table_api.svg
- * (the send Button).
- */
-.IconSecured {
-    mask-image: url("../icons/lock.svg");
+.api-json {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-2);
 }
 
-.IconSendIt {
-    mask-image: url("../icons/table_api.svg");
+.api-json-editor {
+    height: 12em;
+    max-height: 70vh;
+    resize: vertical;
+    border: 1px solid var(--sw-border-input, var(--sw-border));
+    border-radius: var(--sw-radius);
 }
+
+    .api-json-editor:focus-within {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: -1px;
+    }
+
+    /* One error surface: the status line below (api-json-error) and the line marker (gutter + line tint; the gutter tool tip
+       has the text); the end of line copy of the message is not shown */
+    .api-json-editor .sw-code-msg {
+        display: none;
+    }
+
+textarea.api-json-plain {
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    white-space: pre;
+}
+
+.api-json-error {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sw-space-2);
+    margin: 0;
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border-radius: var(--sw-radius);
+    background: var(--sw-danger-soft);
+    color: var(--sw-danger);
+    font-size: var(--sw-text-sm);
+    overflow-wrap: anywhere;
+}
+
+    .api-json-error[hidden] {
+        display: none;
+    }
+
+    .api-json-error .sw-icon {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+    }
+
+    .api-json-error.api-json-ok {
+        background: none;
+        color: var(--sw-ok, var(--sw-text-2));
+        padding: 0 var(--sw-space-1);
+    }
+
+/* ---------- Message instead of the inspector (no q parameter / api info not available) ---------- */
+
+.api-message {
+    padding: var(--sw-space-10) var(--sw-space-4);
+}
+
+    .api-message .sw-empty-text {
+        overflow-wrap: anywhere;
+    }
+
+/* api info refused (api.js showLocked): what is known (url, name, the Api's table row) as label / value pairs, then the not allowed state */
+.api-locked-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--sw-space-1) var(--sw-space-4);
+    margin: 0;
+    width: 100%;
+}
+
+    .api-locked-facts > dt {
+        color: var(--sw-text-2);
+    }
+
+    .api-locked-facts > dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+        user-select: text;
+    }
+
+.api-locked-denied > .sw-denied {
+    padding: 1em 0 0;
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 760px) {
+    .api-meta {
+        margin-top: calc(-1 * var(--sw-space-2));
+    }
+
+    .api-card .api-tabs .sw-tab-content {
+        padding: var(--sw-space-2) var(--sw-space-3);
+    }
+
+    .api-formfoot .api-denied {
+        text-align: left;
+    }
+}
+
+/* The "How to call" link at the end of the meta line (explore/apihelp.html) */
+.api-howto {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-1);
+    font-size: var(--sw-text-sm);
+    white-space: nowrap;
+}
+
+    .api-howto .sw-icon {
+        width: 1em;
+        height: 1em;
+    }
+
+/* ---------- The json views (Ace: Sw.AceEditor, edit/AceEditor.js) and the Copy tool row above them ---------- */
+
+.api-codebar {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 0;
+    margin-bottom: calc(-1 * var(--sw-space-1));
+}
+
+.api-jsonview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-2);
+    min-width: 0;
+}
+
+/* Ace sizes the height to the text (MinLines .. MaxLines), so no css height or resize handle */
+.api-json-editor.api-ace {
+    height: auto;
+    max-height: none;
+    resize: none;
+}
+
+/* ---------- The Curl tab ---------- */
+
+.api-curl {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-2);
+    min-width: 0;
+}
+
+.api-curl-opts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--sw-space-3) var(--sw-space-4);
+}
+
+    .api-curl-opts > .sw-field {
+        margin: 0;
+    }
+
+    .api-curl-opts > .sw-field[hidden] {
+        display: none;
+    }
+
+    /*  The switch as tall as the controls (selects, segmented: --sw-control-h), so all sit on one line */
+    .api-curl-opts > .sw-toggle {
+        min-height: var(--sw-control-h);
+    }
+
+textarea.api-curl-text {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: var(--sw-surface-sunken);
+}
+
+.api-curl-note {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-1);
+    margin: 0;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+    .api-curl-note[hidden] {
+        display: none;
+    }

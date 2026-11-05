@@ -13,7 +13,7 @@
 
 Each `.glsl` file is a WebGL fragment shader that animates over `time` and `resolution`. The `MediaService.GetBackgroundEffects` API lists the effects by file name without `.glsl`, so a new shader dropped in here shows up automatically. Tunable values are `const` declarations with a `//var:{...}` comment, which the effect player in [`../../mediaPlayer/media_effect_program.js`](../../mediaPlayer/media_effect_program.js) exposes as editable parameters. Some shaders keep comments that credit their original authors.
 
-[`index.html`](index.html) renders one effect. It reads `Effect` (default `SmoothBands`) and the player/effect properties from the URL, optionally merges a `.json` side file with the same name as the effect, and shows the result in an iframe of `../MediaPreview.html` (media type 4, Effect). [`../BackgroundEffectsLib.html`](../BackgroundEffectsLib.html) shows all of them as a gallery.
+[`index.html`](index.html) renders one effect. It reads `Effect` (default `SmoothBands`) and the player/effect properties from the URL, optionally merges a `.json` side file with the same name as the effect, and renders it directly with `MediaPlayerEffect` (the page logic is the shared [`../effectPage.js`](../effectPage.js), `data-effect-page="background"`; the side file is `<Effect>.json` next to the shader in this folder). [`../BackgroundEffectsLib.html`](../BackgroundEffectsLib.html) shows all of them as a gallery.
 
 ## Contents
 

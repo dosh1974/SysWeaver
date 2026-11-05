@@ -11,6 +11,8 @@ namespace SysWeaver.Media
         /// <summary>
         /// The shadow color, null for no shadow
         /// </summary>
+        [EditColor(EditColorFormat.Css, true)]
+        [EditAllowNull]
         public String ShadowColor = "rgba(0,0,0,0.25)";
         /// <summary>
         /// The x offset of the shadow

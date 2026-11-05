@@ -48,8 +48,14 @@ namespace SysWeaver.Net
     /// <see cref="Url"/> and <see cref="LocalUrl"/> are url decoded (path and query), <see cref="RawUrl"/> is the url as received from the listener.
     /// Not thread safe unless stated, a request is normally handled by a single logical flow.
     /// </remarks>
-    public abstract class HttpServerRequest : ITranslationContext, IDisposable
+    public abstract class HttpServerRequest : ITranslationContext, IDisposable, SysWeaver.Auth.IAuthorizedRequest
     {
+
+        /// <summary>
+        /// The authorization of the session (<see cref="HttpSession.Auth"/>), null if there is no session or no one is signed in.
+        /// Web api methods of services that can't reference the http server take <see cref="SysWeaver.Auth.IAuthorizedRequest"/> as their trailing parameter.
+        /// </summary>
+        SysWeaver.Auth.Authorization SysWeaver.Auth.IAuthorizedRequest.CallerAuth => Session?.Auth;
 
         /// <summary>
         /// Dispose <see cref="Custom"/> if it's disposable.

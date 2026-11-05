@@ -31,6 +31,11 @@ namespace SysWeaver.MicroService
     {
         public String Salt { get; set; }
 
+        /// <summary>
+        /// The user name of the inviter, null for a sign up (or an invitation made before this was recorded)
+        /// </summary>
+        public String InvitedBy { get; set; }
+
     }
 
 
@@ -40,6 +45,18 @@ namespace SysWeaver.MicroService
         public String UserName { get; set; }
         public String NickName { get; set; }
         public String Salt { get; set; }
+
+        /// <summary>
+        /// True if an administrator required the new password (<see cref="UserManagerService.ForcePasswordReset"/>): the user can't sign in with
+        /// the current password until a new one is chosen, and the new password must differ from it.
+        /// </summary>
+        public bool Forced { get; set; }
+
+        /// <summary>
+        /// When <see cref="Forced"/>: the salt of the current password, so the client can also send the hash of the new password with it
+        /// (<see cref="AddUserRequest.CurrentHash"/>) and the server can refuse the same password. Null otherwise.
+        /// </summary>
+        public String CurrentSalt { get; set; }
 
     }
 

@@ -11,6 +11,10 @@ namespace SysWeaver.MicroService
         public String Os;
         public String OsBase;
         public String TzName;
+        /// <summary>
+        /// The token required by RebootComputer (valid for at least 15 minutes), so a crafted link or a plain GET request can't reboot the computer
+        /// </summary>
+        public String RebootToken;
     }
 
 

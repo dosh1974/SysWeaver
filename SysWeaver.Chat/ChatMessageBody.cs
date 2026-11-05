@@ -17,7 +17,7 @@ namespace SysWeaver.Chat
         public String Text;
         
         /// <summary>
-        /// A link to an url with some data (typically images), can use have multiple data entries using semi colon as a separator
+        /// A link to an url with some data (typically images), can use have multiple data entries using semicolon as a separator
         /// </summary>
         [EditMax(2048)]
         public String Data;

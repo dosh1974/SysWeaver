@@ -11,11 +11,19 @@
 
 ## Purpose
 
-[`media_player.js`](media_player.js) is the entry point. It defines the `MediaTypes` constants (`Image`, `Video`, `Audio`, `YouTube`, `Effect`, `Text`) and the `MediaPlayer` class. `MediaPlayer.Init()` loads `media_player_tools.js` and `canvasTools.js` with `includeJs`, and loads all the other player scripts as well when `window.MediaLoadAll` is set. `MediaPlayer.Create(type, data, mediaParams)` then creates the right player. Each `MediaPlayerParams*` class mirrors one of the C# types in [`Media/`](../../Media/README.md).
+[`media_player.js`](media_player.js) is the entry point. It defines the `MediaTypes` constants (`Image`, `Video`, `Audio`, `YouTube`, `Effect`, `Text`) and the `MediaPlayer` class. `MediaPlayer.Init()` loads `media_player_tools.js` and `canvasTools.js` with `MediaPlayer.Include` (the core's `Sw.Net.IncludeJs` when present, else a built in de-duplicating loader; the library needs no SysWeaver core), and loads all the other player scripts as well when `window.MediaLoadAll` is set. `MediaPlayer.Create(type, data, mediaParams)` then creates the right player. Each `MediaPlayerParams*` class mirrors one of the C# types in [`Media/`](../../Media/README.md).
 
 Effects are GLSL fragment shaders (see the effect folders under [`mediaView/`](../mediaView/README.md)). [`media_effect_program.js`](media_effect_program.js) compiles them and reads editable parameters from `const` lines that end in a `//var:{...}` comment.
 
 The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include them either directly or through `media_player.js`.
+
+### New API names and compatibility (front end rewrite)
+
+- Every class of this folder is also published under the namespace **`Sw.Media`** (`Sw.Media.Types`, `Sw.Media.Player`, `Sw.Media.Tools`, `Sw.Media.MediaPlayerEffect`, `Sw.Media.CanvasTools`, ...). The global class names (`MediaTypes`, `MediaPlayer`, `MediaPlayerTools`, `MediaPlayer*`, `TextStyle`, `CanvasTools`, `EffectProgramData` ...) stay the public API for host pages (the mediaView pages and external apps).
+- The library is self contained: it works without the SysWeaver core (lean effect pages, screenshot pages) and uses the core when it is loaded (`Sw.Net.IncludeJs` for loading, `Sw.Util.HashString`, `Sw.Page.SignalLoaded`).
+- `MediaPlayer.Create` / `CreateSync` share one dispatch table (`#Needs` / `#Construct`); `Create` awaits `MediaPlayer.Ready`.
+- `MediaPlayerEffect.SetCustomX/Y/Z` share `SetCustom(name, m)`.
+- Fixes: dark mode / mouse / scroll elements no longer throw when `window.top` is cross-origin (`MediaPlayerTools.ThemeWindow`), `GetImage` JPEG quality 0.7, effect pages signal `LoaderRemoved` to the shell.
 
 ## Contents
 
@@ -44,9 +52,9 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 
 - All files are classic (non-module) scripts that declare global classes; there is no bundler, no `export`, no namespace object.
 - Two ways of loading:
-  1. **Via the entry point** `media_player.js` (used by `mediaView/media.js` and `mediaView/textEffect.js`, which do `includeJs(document.currentScript.src, "../mediaPlayer/media_player.js")`). On load the script runs `MediaPlayer.Init()` immediately at top level. It records `document.currentScript.src` in `MediaPlayer.CurrentUrl` and includes `media_player_tools.js` + `canvasTools.js` relative to it (common's `includeJs`). If `window.MediaLoadAll` is truthy (it is not set anywhere in the repo) it also includes every player script and runs `MediaPlayerTools.CanUnMute()`.
+  1. **Via the entry point** `media_player.js` (loaded by `mediaView/media.js` with `Sw.Net.IncludeJs`, by `counterEffects/index.html` with a static tag, and by `mediaView/textEffect.js` itself when missing). On load the script runs `MediaPlayer.Init()` immediately at top level. It records `document.currentScript.src` in `MediaPlayer.CurrentUrl` and includes `media_player_tools.js` + `canvasTools.js` relative to it (`MediaPlayer.Include`); the promise is kept in `MediaPlayer.Ready`, which `Create` awaits. If `window.MediaLoadAll` is truthy (it is not set anywhere in the repo) it also includes every player script and runs `MediaPlayerTools.CanUnMute()`.
   2. **Direct `<script defer>` tags** for just the needed files: the effect pages under `mediaView/backgroundEffects|imageEffects/index.html` and the `*EffectsLib.html` thumbnail pages load `media_player_tools.js`, `media_effect_program.js`, `media_player_effect.js` (plus `common/anim.js` for smoothing). `TextDemo.html` loads only `canvasTools.js`.
-- **Lazy loading:** `MediaPlayer.Create(type, data, mediaParams)` is `async`; unless `MediaLoadAll` is set it `await includeJs(...)`s the scripts the chosen player needs (for example `media_player_effect.js` + `media_effect_program.js` for an effect) before constructing it. `MediaPlayer.CreateSync` does the same switch with no loading and throws `"Must use CreateAsync when lazy loading..."` if the class is not loaded yet.
+- **Lazy loading:** `MediaPlayer.Create(type, data, mediaParams)` is `async`; unless `MediaLoadAll` is set it loads (`MediaPlayer.IncludeAll`) the scripts the chosen player needs (for example `media_player_effect.js` + `media_effect_program.js` for an effect) before constructing it. `MediaPlayer.CreateSync` does the same switch with no loading and throws `"Must use CreateAsync when lazy loading..."` if the class is not loaded yet.
 - Load-order dependency: `media_player_text.js` declares `class MediaPlayerParamsText extends TextStyle`, so `canvasTools.js` has to be loaded first. `Init()` loads it eagerly for this reason.
 - A player is usable only after `await player.Cache(keepHidden)`. Constructors only build the element and defaults, and `Cache` does all the network and GPU work.
 
@@ -72,36 +80,37 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 - `ComputeClip(i, params)`: computes `ClipX/ClipY/ClipWidth/ClipHeight/ClipR/ClipB` from `params.Crop` (`MarginTop/Right/Bottom/Left` in pixels, or `MarginTopP...` percentages when `MarginAsPercentage`). It returns false when there is no crop.
 - `ApplyClip(i, params)`: applies the clip as CSS `clip-path: inset(...)` on the element, and calls `i.OnClipChanged()` when the clip changes.
 - `UpdateSize(target, player, fill, alignX=0.5, alignY=0.5)`: lays the player element out inside `target`. With `Params.AdaptiveSize` the element gets the target's pixel size. Otherwise the element keeps its native `Width×Height` and is fitted (or filled when `fill`) with `transform: scale() translate()` (origin left top), taking the clip rectangle into account. It returns `[clipWidth, clipHeight]`.
-- `CanUnMute()`: probes autoplay-with-sound once (the result is cached in `HaveTested/Result`). It needs `MediaPlayerAudio`. It plays an embedded tiny base64 MP3 unmuted. On success it dispatches `AudioEnabled` on `document.body`. On failure it installs one-shot `keydown/mousedown/click` listeners that set `Result=true` and dispatch `AudioEnabled`.
+- `CanUnMute()`: probes autoplay-with-sound once (the result is cached in `HaveTested/Result`). It needs `MediaPlayerAudio` and loads `media_player_audio.js` first when it is missing (a video / YouTube / effect page loads only its own player, so the probe always failed there and the viewer always asked for a click). It plays an embedded tiny base64 MP3 unmuted. On success it dispatches `AudioEnabled` on `document.body`. On failure it installs one-shot `keydown/mousedown/click` listeners that set `Result=true` and dispatch `AudioEnabled`.
 - `SetupMediaMessages(player)`: the **remote-control contract** (see Player model). It adds a `window` `message` listener and returns an unsubscribe function.
 - `PostPageLoaded()`: `postMessage({Type:"PageLoaded"}, "*")` to `window.parent` (or `window.opener` when not framed).
 - `SetError(text)`: reports shader errors to a native host. It uses CefSharp (`CefSharp.BindObjectAsync()` then `window.ErrorText.SetText`) or WebView2 (`chrome.webview.hostObjects.ErrorText.SetText`).
-- Utilities: `CreateBlob(url)` (fetch to object URL), `OnCacheComplete(i, keepHidden)` (sets `Cached`, removes `MediaHidden` unless `keepHidden`), `IsAttached(el)`, `MustBeAttached(el)` (temporarily appends off-screen with `position:fixed; left:-10000px; opacity:0` and returns a restore function), `delay(ms)`, and `waitEvent2(el, ev1, ev2, fn, timeout)`. The last two duplicate the global common.js functions of the same name.
+- Utilities: `CreateBlob(url)` (fetch to object URL), `LoadFont(name, url)` (safe web font: parsed url, http(s) or a same-origin blob only, normalized href as an escaped CSS string; errors carry `FontLoad = true`), `OnCacheComplete(i, keepHidden)` (sets `Cached`, removes `MediaHidden` unless `keepHidden`), `IsAttached(el)`, `MustBeAttached(el)` (temporarily appends off-screen with `position:fixed; left:-10000px; opacity:0` and returns a restore function), `delay(ms)`, and `waitEvent2(el, ev1, ev2, fn, timeout)`. The players use these instead of the old common.js globals. New: `ThemeWindow()` (window.top when same origin, else this window), `HashString(s)` (the core's `Sw.Util.HashString` or crypto.subtle), `BlobToDataUrl(blob)`; `PostPageLoaded()` also posts `LoaderRemoved` to the top window (or calls `Sw.Page.SignalLoaded()` when the core is loaded).
 
 #### `media_player_image.js` — `MediaPlayerParamsImage`, `MediaPlayerImage`
 - Params: `Crop, Duration=10, Effect, EffectParams, EffectSizeFromImage=true, Transparent, AdaptiveSize` (defaults to true for `.svg` URLs).
-- Element: `<img>` (`object-fit: contain` when adaptive). `Cache` sets `src` and waits for `load`/`error` (global `waitEvent2`), reads `naturalWidth/Height`, sets `AspectRatio` when adaptive, then `ApplyClip`.
-- Playback is a **virtual timeline**. `Play` starts a `setTimeout` for the remaining `Duration`. At the end it either loops (resets the position, re-arms the timer and calls `OnLoop`) or pauses and calls `OnEnded`. `GetPos` derives the position from `performance.now() - StartedAt`. `Pause/Stop/Seek/Once` manipulate `CurrentPosition` and the timer. A `Duration <= 0` means "infinite/still".
+- Element: `<img>` (`object-fit: contain` when adaptive). `Cache` sets `src` and waits for `load`/`error` (`MediaPlayerTools.waitEvent2`), reads `naturalWidth/Height`, sets `AspectRatio` when adaptive, then `ApplyClip`.
+- Playback is a **virtual timeline**. `Play` starts a `setTimeout` for the remaining `Duration`. At the end it either loops (resets the position, re-arms the timer and calls `OnLoop`) or pauses and calls `OnEnded`. `GetPos` derives the position from `performance.now() - StartedAt`. `Pause/Stop/Seek/Once` manipulate `CurrentPosition` and the timer. A `Duration <= 0` means "infinite/still". `IsStill = true` marks the player as a still picture (information only: the mediaView `media.js` viewers show its play position, duration and transport buttons like for any media, as before the rewrite); the timeline works for slideshow timing (`OnEnded`, `Loop/Once`, postMessage commands).
 
 #### `media_player_video.js` / `media_player_audio.js`
 - Params: video `StartAt, EndAt, Volume=100, Stream (0 = both, 1 = video only, 2 = audio only), Transparent`; audio `StartAt, EndAt, Volume=100`.
 - Element: `<video muted>` / `<audio muted>`. A `<source src>` child is appended in the static `LoadVideo(e, url)` / `LoadAudio(e, url)`, which wait for `loadeddata`/`error` and then poll until `readyState >= 3`.
 - The `StartAt/EndAt` window is enforced in `ontimeupdate`. When `currentTime` reaches `endTime` the player either seeks back to `StartAt` (loop) or pauses at the end and fires `OnEnded`. A "LoopWatch" flag detects native `loop` wrapping back to 0 when `StartAt > 0` and re-seeks to `StartAt` (firing `OnLoop`). `onended` covers the natural end.
-- Volume is applied as `Volume * Params.Volume * 0.01` to `element.volume`. Mute toggles `element.muted`. `Loop/Once` sets `element.loop`. `GetPos` is `element.currentTime`. With `Stream==2` the video element gets 0 size and opacity 0.
+- Speed: `SetRate(r)` sets `element.playbackRate` (`Rate`, `MaxRate` = 16). - Volume is applied as `Volume * Params.Volume * 0.01` to `element.volume`. Mute toggles `element.muted`. `Loop/Once` sets `element.loop`. `GetPos` is `element.currentTime`. With `Stream==2` the video element gets 0 size and opacity 0.
 - The two files are near line-for-line copies (Stop still contains a commented-out "replace element" path).
 
 #### `media_player_youtube.js` — `MediaPlayerParamsYouTube`, `MediaPlayerYoutube`
 - Params: `Width=1920, Height=1920, StartAt, EndAt, Volume=100, Stream`, and a default `Crop` of 21.875% top and bottom (it crops the square iframe to 16:9).
-- Element: an iframe from common's `createIFrame(0)` (no load fade: visibility is controlled by `MediaHidden` and, for audio only, an inline opacity of 0), with `sandbox="allow-same-origin allow-scripts allow-presentation"`, `allow="autoplay"` and a fixed pixel size. Each instance gets an incrementing `InstanceId` (static `GlobalInstanceId`).
-- `Cache` attaches the iframe off-screen if needed (`MustBeAttached`), loads `https://www.youtube-nocookie.com/embed/<code>?...enablejsapi=1&controls=0&mute=1&loop=1&playlist=<code>...`, then performs the **YouTube IFrame postMessage protocol by hand** (no YouTube JS API library). It repeatedly posts `{"event":"listening","id":<InstanceId>,"channel":"widget"}` until messages come back. It listens on `window` `message`, parses JSON, filters on `id == InstanceId`, and re-dispatches each as a DOM `CustomEvent("YT" + event)` on the iframe (`YTonReady`, `YTinfoDelivery`, `YTonError`, ...). It retries the connection up to 5 times with exponential backoff (50 ms up to 5 s).
+- Element: a plain `document.createElement("iframe")` (formerly common's `createIFrame(0)`; no load fade: visibility is controlled by `MediaHidden` and, for audio only, an inline opacity of 0), with `sandbox="allow-same-origin allow-scripts allow-presentation"`, `allow="autoplay"` and a fixed pixel size. Each instance gets an incrementing `InstanceId` (static `GlobalInstanceId`).
+- `Cache` attaches the iframe off-screen if needed (`MustBeAttached`), loads `https://www.youtube-nocookie.com/embed/<code>?...enablejsapi=1&controls=0&mute=1&loop=1&playlist=<code>...`, then performs the **YouTube IFrame postMessage protocol by hand** (no YouTube JS API library). It repeatedly posts `{"event":"listening","id":<InstanceId>,"channel":"widget"}` until messages come back. It listens on `window` `message`, parses JSON, filters on `id == InstanceId`, and re-dispatches each as a DOM `CustomEvent("YT" + event)` on the iframe (`YTonReady`, `YTinfoDelivery`, `YTonError`, ...). It retries the connection up to 5 times with exponential backoff (50 ms up to 5 s). The `YTonReady` handshake gives up after 10 s per try (it used to wait forever).
 - Commands: `SendCommand(func, argsJson)` posts `{"event":"command","func":...,"args":...}`. `WaitCommand` sends one and waits up to 500 ms for the next `YTinfoDelivery`.
 - Position tracking and the start/end/loop window are driven by `infoDelivery.currentTime`. To show a paused frame at an exact time it uses `PauseGreaterThan`: it seeks to slightly before the time, plays muted, and pauses + seeks once the time passes. This is used for the initial cue (`YTInitCompleted`), `Stop` and paused `Seek`.
 - Volume: `setVolume [Volume*Params.Volume]` + `unMute`, or `mute`.
+- Speed: `SetRate(r)` sends `setPlaybackRate` (`Rate`, `MaxRate` = 2: YouTube plays 0.25 to 2 times the speed).
 
 #### `media_player_text.js` — `MediaPlayerParamsText`, `MediaPlayerText`, `MediaPlayerTextTexture`
 - `MediaPlayerParamsText extends TextStyle` and adds `CollageSeparator, CollageColumns=2, Crop, Duration=10, Effect, EffectParams, EffectSizeFromImage, Transparent, AdaptiveSize, DebugImage`.
 - `data` is the text itself, not a URL. When `CollageSeparator` is set it is split into several texts and rendered as a grid.
-- `Cache` optionally loads a web font (`FontUrl`/`FontUrlName` through `FontFace` + `document.fonts.add`). It renders the text with `CanvasTools.CreateTextImageUrl` or `CreateTextGridUrl` (a WebP blob URL) into an `<img>`. Collage grid stats are written into `EffectParams.FxProps` (`TileCountX/Y, TileWidth/Height, PageWidth/Height, ImageWidth/Height, Border, UniqueCount`), which lets a collage shader receive the grid layout as `//var:` constants.
+- `Cache` optionally loads a web font (`FontUrl`/`FontUrlName` through `MediaPlayerTools.LoadFont`: the url is parsed, must be http(s) (or a blob of this origin) and only its normalized href goes into the `FontFace` source as an escaped CSS string, never the raw value). A font that fails no longer stops the player: `MediaPlayerTools.LoadFontOrFallback` appends "Verdana, sans-serif" to `Font`, keeps the error in `FontError` (also on `MediaPlayerTextTexture`) and dispatches `MediaFontFallback` on the window, and the text is rendered with the default font. It renders the text with `CanvasTools.CreateTextImageUrl` or `CreateTextGridUrl` (a WebP blob URL) into an `<img>`. Collage grid stats are written into `EffectParams.FxProps` (`TileCountX/Y, TileWidth/Height, PageWidth/Height, ImageWidth/Height, Border, UniqueCount`), which lets a collage shader receive the grid layout as `//var:` constants.
 - Its timeline methods are identical copies of `MediaPlayerImage`'s.
 - `MediaPlayerTextTexture(gl, params, text)`: the texture-provider version. It renders to a canvas and uploads it as a GL texture. Otherwise it is identical to `MediaPlayerImageTexture` (see below).
 
@@ -136,21 +145,21 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
   - It sets the uniforms, calls the optional `t.OnRender(gl, player)` hook (used by counter effects to upload extra uniforms), and draws 3 vertices.
   - Performance measurement: a GPU timer query if available (thresholds 12/2 ms), otherwise frame-to-frame time (35/17 ms). `AccTime` keeps the minimum over 32 frames in `AvgDrawTimeMs`. With `DpiAdjust` the global `MediaPlayerEffect.DpiScale` is halved or doubled (0.125..1) and persisted.
 - `Validate()`: if the WebGL context is lost it releases GL, replaces the canvas with a clone and runs `Create()` again (on Play, Stop, and paused Seek). `DebugLoseContext()` forces a context loss for testing.
-- `Stop` resets to t=0 and renders one frame. A paused `Seek` renders one frame at the new time. `OnDispose` pauses, waits for the loop to stop, unregisters dark mode, removes the element, frees GL and removes the mouse listener.
-- `static GetImage(cacheName, url, params, createTextureFn)`: a thumbnail generator used by the `*EffectsLib.html` galleries. It renders the effect off-screen at t=5 s, waits for a perf sample, and turns the canvas into a JPEG data URI. It returns `[dataUri, compilationTimeMs, avgDrawTimeMs]` (or `[null, error]`). The result is cached in localStorage and revalidated by re-fetching the `.glsl` and comparing etags.
+- Speed: `SetRate(r)` (`Rate`, `MaxRate` = 100) scales the clock (time = (animTime - RenderTime) / 1000 * Rate + ResumeTime; the position goes on from where it is); `Params.Speed` still scales the effect time on top. - `Stop` resets to t=0 and renders one frame. A paused `Seek` renders one frame at the new time; a `Seek` while playing moves `ResumeTime` by the jump (it used to set it to the jump, so a seek after a pause or an earlier seek landed at the wrong time). `OnDispose` pauses, waits for the loop to stop, unregisters dark mode, removes the element, frees GL and removes the mouse listener.
+- `static GetImage(cacheName, url, params, createTextureFn)`: a thumbnail generator used by the `*EffectsLib.html` galleries. It renders the effect off-screen at t=5 s, waits for a GPU draw time sample (at most `MediaPlayerEffect.GetImageTimeoutMs` = 1500 ms, and only `GetImageFirstSampleMs` = 400 ms when not a single timer result arrived: some GPUs, headless browsers and software rendering never deliver timer query results, and the unlimited wait kept every later gallery card on "Rendering..."; then the best partial measurement or 0 = unknown, shown as "Draw time -"), and turns the canvas into a JPEG data URI. It returns `[dataUri, compilationTimeMs, avgDrawTimeMs]` (or `[null, error]`). The result is cached in localStorage and revalidated by re-fetching the `.glsl` and comparing etags.
 - `MediaPlayerImageTexture(gl, params, url)`: the texture provider for an image. `Cache(haveLod)` loads an `Image`, uploads it flipped-Y with clamp/linear filtering, creates mipmaps when `haveLod || EffectParams.MipMap` (WebGL1 needs power-of-two sizes), and returns `[w,h]` if `EffectSizeFromImage`, otherwise `null`. `ApplyClip(params)` turns the `Crop` into a UV scale/offset. `Apply(texUvLoc, texSizeLoc)` binds the texture and sets the `texUv`/`texSize` uniforms. `Dispose()` deletes the texture. Texture providers are duck-typed: `Cache(haveLod)`, `Apply(uv, size)`, `ApplyClip(p)`, `Dispose()`, `Width/Height`.
 
 ### Player model
 
 - **No inheritance.** Every player is a standalone class that gets its shared behavior from `MediaPlayerTools.InitBase` (mixin-style defaults plus shared fields). Each player has a sibling `MediaPlayerParams*` class whose field initializers are the defaults; the constructor does `Object.assign(new Params(), params)` and stores the result in `player.Params`.
 - **Common player interface** (duck-typed, used by `mediaView/media.js` and the effect pages):
-  - State fields: `Element`, `Params`, `Width/Height` (native size), `Clip*`, `UseClip`, `AspectRatio`, `HaveVisual`, `HaveAudio`, `CanPlay`, `Cached`, `Paused`, `Muted`, `Looping`, `Volume` (0..1), `Duration`, `Url/Source`.
+  - State fields: `Element`, `Params`, `Width/Height` (native size), `Clip*`, `UseClip`, `AspectRatio`, `HaveVisual`, `HaveAudio`, `CanPlay`, `IsStill` (image player only), `Cached`, `Paused`, `Muted`, `Looping`, `Volume` (0..1), `Duration`, `Url/Source`.
   - Async methods: `Cache(keepHidden)` → bool, `Play`, `Pause`, `Stop`, `Seek(sec)`, `Loop`, `Once`, `Mute`, `UnMute`, `SetVolume(0..1)`, `ResetVolume`, `OnDispose`.
   - Sync methods: `GetPos()`, `Show()`, `Hide()`, `ApplyClip(params)`, `GetTrueVolume()`.
   - Optional hooks: `MessageElement` (receives `mediaLoop`/`mediaEnded` DOM events), `OnClipChanged`, and for effects `OnRender(gl, player)`.
   - Effect-only: `ScriptTypeInfo/ScriptMember` (the editable schema), `LazyCompile`, `CompilationTime` (-1 = compiling, -2 = aborted, -3 = failed), `AvgDrawTimeMs/TotalTime/MeasureCount/ResetCounters`, `SetCustomX/Y/Z`, `DebugLoseContext`.
 - **Lifecycle**: `MediaPlayer.Create` → append `player.Element` to the DOM → `await player.Cache(keepHidden)` → `MediaPlayerTools.UpdateSize(...)` on resize → `Play()` / `Show()` → optionally `SetupMediaMessages(player)` → `OnDispose()`.
-- **Remote-control message contract** (`SetupMediaMessages`, `window.postMessage` with `{Type, ...}`): `MediaPlay`, `MediaPause`, `MediaStop`, `MediaOnce`, `MediaLoop`, `MediaMute`, `MediaUnMute`, `MediaSetVolume {Volume|Value}`, `MediaSeek {Time|Position|Value}`, and when supported `MediaDebugLoseContext` and `MediaCustomX/Y/Z {Value, Anim?, Start?}`. Outgoing: `{Type:"PageLoaded"}` to the parent/opener. This is how a hosting page (another iframe/window, or a native host) drives a player page such as `mediaView/backgroundEffects/index.html`.
+- **Remote-control message contract** (`SetupMediaMessages`, `window.postMessage` with `{Type, ...}`): `MediaPlay`, `MediaPause`, `MediaStop`, `MediaOnce`, `MediaLoop`, `MediaMute`, `MediaUnMute`, `MediaSetVolume {Volume|Value}`, `MediaSeek {Time|Position|Value}`, and when supported `MediaDebugLoseContext` and `MediaCustomX/Y/Z {Value, Anim?, Start?}`. Outgoing: `{Type:"PageLoaded"}` to the parent/opener. This is how a hosting page (another iframe/window, or a native host) drives a player page such as `mediaView/backgroundEffects/index.html`. Security: only messages of the page's own origin sent by the parent, the opener, the top window or the page itself are accepted, and `PageLoaded` / `LoaderRemoved` are posted to the own origin only (`"/"`), so a foreign site framing a player can neither control it nor observe it. The YouTube player only accepts messages from its own embed frame.
 - **Shader uniform conventions** (each one is optional and looked up by name):
   | Uniform | Value |
   |---|---|
@@ -183,7 +192,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 ### State and persistence
 
 - `localStorage["SysWeaver.Media.EffectDpiScale"]`: the global adaptive DPI scale for effects (read at class definition into `MediaPlayerEffect.DpiScale`, written by `AdjustDpi`).
-- `localStorage["SysWeaver.EffectInfo.<cacheName>.<hashString(url)>"]` = `{R:[dataUri, compileMs, drawMs], T: etag}`: the effect thumbnail cache (`GetImage`).
+- `localStorage["SysWeaver.EffectInfo.<cacheName>.<HashString(url)>"]` = `{R:[dataUri, compileMs, drawMs], T: etag}`: the effect thumbnail cache (`GetImage`).
 - In-memory statics: `MediaPlayer.CurrentUrl`, `MediaPlayerTools.HaveTested/Result` (unmute probe), `MediaPlayerTools.DarkModeEventsMap/DarkModeClear`, `MediaPlayerYoutube.GlobalInstanceId`, `window.ShaderDebug`, `window.MediaLoadAll` (input flag), `gl.PCompile` (expando on the GL context).
 - Messaging:
   - `window` `message` (`Media*` commands in, `PageLoaded` out).
@@ -193,7 +202,7 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
 
 ### Dependencies
 
-- **From `common/common.js`** (global functions): `includeJs` (media_player.js), `waitEvent2` and `delay` (image, video, audio, youtube, text; the effect code uses the `MediaPlayerTools.*` copies instead), `createIFrame` (YouTube), `hashString` and `bufferToBase64` (`MediaPlayerEffect.GetImage`).
+- **No `common/common.js` dependency any more** (rewrite): `includeJs`, `waitEvent2`, `delay`, `createIFrame`, `hashString` and `bufferToBase64` were replaced by `MediaPlayer.Include`, `MediaPlayerTools.waitEvent2 / delay / HashString / BlobToDataUrl` and a plain iframe. Optional: the core (`Sw.Net.IncludeJs`, `Sw.Util.HashString`, `Sw.Page.SignalLoaded`) when loaded.
 - **From `common/anim.js`** (optional, checked with `typeof Smoothness`): `SmoothBool`, `SmoothValue`, `SpringAnimation`, `BounceAnimation`, `Smoothness`.
 - **CSS**: no stylesheet in this folder. The consumer must define `.MediaHidden` (in `mediaView/media.css` and the `*EffectsLib.html` pages).
 - **Browser APIs**: WebGL1/2, `KHR_parallel_shader_compile`, `EXT_disjoint_timer_query`, `OES_standard_derivatives`, `EXT_shader_texture_lod`, `WEBGL_debug_shaders`, `WEBGL_lose_context`, `ResizeObserver`, `Element.checkVisibility`, `FontFace`, `canvas.letterSpacing`.
@@ -217,14 +226,14 @@ The scripts are served as `mediaPlayer/*.js`. The pages in `mediaView/` include 
   - `SetCustomX/Y/Z` are copies of each other.
   - `CreateTextGrid` and `CreateNumberImage` share measuring code.
   - The `*Blob`/`*Url` wrappers repeat each other.
-  - `MediaPlayerTools.delay/waitEvent2` duplicate common.js.
+  - `MediaPlayerTools.delay/waitEvent2` are the library's own helpers (no core needed).
   - Commented-out legacy code (old `ApplyClip`, blob video cache, element replacement in `Stop`) is still present.
 - Parameter mirroring with the C# types is by name only:
   - JS `MediaTypes` includes `Text=5`, which the C# enum lacks; C# has `MediaVimeo`, which JS has no player for.
   - `MediaEffect.DpiAdjust` defaults to true in C# and false in JS.
   - JS params declare `WrapY` while C# uses `WrapV`; the render accepts either name.
 - Effect parameter editing rewrites the GLSL source and recompiles (no uniforms). The editable schema is hand-built in the server's type-info JSON format (`Flags` bit values, `System.Single` type names), which ties this code to the generic editor in another project.
-- Cross-window reach: dark-mode detection and `GetElementFromId` read `window.top` / parent frames directly, which assumes same-origin framing. Control is through untyped `postMessage(..., "*")` with string `Type` keys, and there is no origin check.
+- Cross-window reach: dark-mode detection and `GetElementFromId` read `window.top` / parent frames directly, which assumes same-origin framing. Control is through untyped `postMessage` with string `Type` keys (same origin only).
 - Expando properties are used as data channels: `canvas.This`, `gl.PCompile`, number-atlas widths on the canvas, `style.ComputedMargins`, grid stats written into `EffectParams.FxProps`.
 - The "with effect" composition inverts the player: an Image/Text with `Effect` becomes a `MediaPlayerEffect` that owns a texture provider. So `player.Params` is the effect params, not the image/text params.
 
@@ -234,7 +243,7 @@ Conventions used in this reference: "async" marks functions returning a Promise;
 
 ### `media_player.js`
 
-Entry point of the folder, loaded with a static `<script>` tag by consuming pages (for example `mediaView/media.js` hosts, `MediaPreview.html`, `MediaView.html`, the effect `index.html` pages). It defines the global classes `MediaTypes` and `MediaPlayer`, and runs `MediaPlayer.Init()` immediately at load. `Init` loads the shared helper scripts with common.js `includeJs`, relative to this script's own URL (`document.currentScript.src`).
+Entry point of the folder, loaded with a static `<script>` tag by consuming pages (for example `mediaView/media.js` hosts, `MediaPreview.html`, `MediaView.html`, the effect `index.html` pages). It defines the global classes `MediaTypes` and `MediaPlayer` (also `Sw.Media.Types` / `Sw.Media.Player`), and runs `MediaPlayer.Init()` immediately at load (`MediaPlayer.Ready`). `Init` loads the shared helper scripts with `MediaPlayer.Include`, relative to this script's own URL (`document.currentScript.src`).
 
 #### Globals
 | Name | Kind | Description |
@@ -261,8 +270,11 @@ Static constant holder; never instantiated.
 Static factory; never instantiated.
 | Member | Kind | Signature | Description |
 |---|---|---|---|
-| `Init` | static async method | `Init()` → Promise | Stores `document.currentScript.src` in `CurrentUrl`, loads `media_player_tools.js` and `canvasTools.js` in parallel with `includeJs`. If `window.MediaLoadAll`, also loads `media_effect_program.js` and all `media_player_*.js` files, then awaits `MediaPlayerTools.CanUnMute()`. |
-| `CurrentUrl` | static field | string | URL of `media_player.js`; base for the relative `includeJs` calls. |
+| `Init` | static async method | `Init()` → Promise | Loads `media_player_tools.js` and `canvasTools.js` in parallel with `IncludeAll` (its promise is `Ready`). If `window.MediaLoadAll`, also loads `media_effect_program.js` and all `media_player_*.js` files, then awaits `MediaPlayerTools.CanUnMute()`. |
+| `CurrentUrl` | static field | string | URL of `media_player.js` (document.currentScript at load); base for the relative includes. |
+| `Ready` | static field | Promise | Resolves when `Init` is done; `Create` awaits it. |
+| `Include` | static async method | `Include(file)` → Promise<bool> | Loads a script of this folder once (`Sw.Net.IncludeJs` when the core is loaded, else a built in loader that also recognizes static script tags). |
+| `IncludeAll` | static async method | `IncludeAll(files)` → Promise<bool> | `Include` in parallel. |
 | `Create` | static async method | `Create(type, data, mediaParams)` → Promise<player \| null> | Lazily loads (unless `MediaLoadAll`) the script(s) for `type` and returns a new player: Image/Text with `mediaParams.Effect` → `new MediaPlayerEffect(mediaParams.Effect, mediaParams.EffectParams, gl => new MediaPlayer{Image\|Text}Texture(gl, mediaParams, data))`; otherwise `MediaPlayerImage/Video/Audio/Youtube/Effect/Text(data, mediaParams)`. Unknown type → `null`. |
 | `CreateSync` | static method | `CreateSync(type, data, mediaParams)` → player \| null | Same dispatch as `Create` without loading anything. When `MediaLoadAll` is not set it checks with `typeof X === "function"` that the needed classes exist and throws `Error("Must use CreateAsync when lazy loading (or perform manual init)!")` otherwise. |
 
@@ -302,6 +314,8 @@ Shared helpers for every player, loaded by `MediaPlayer.Init()` (always). Define
 | `ComputeClip` | static method | `ComputeClip(i, params)` → bool | Computes `i.ClipX/ClipY/ClipWidth/ClipHeight` (and `ClipR/ClipB` when clipped) from `(params ?? i.Params).Crop` against `i.Width/Height`. Crop uses `MarginTop/Right/Bottom/Left` pixels, or `Margin*P` percentages when `MarginAsPercentage`. Returns false (full-size clip) when there is no crop or all margins are ≤ 0. |
 | `ApplyClip` | static method | `ApplyClip(i, params)` | Runs `ComputeClip` and sets `i.Element.style.clipPath` to `inset(top right bottom left px)` (or clears it); calls `i.OnClipChanged()` when the value changed. A commented-out older implementation (with inner `NoClip` helpers and a `Stream === 2` exception) remains in the body and is inactive. |
 | `CreateBlob` | static async method | `CreateBlob(url)` → Promise<string \| null> | Fetches `url` and returns an object URL for the blob, `null` on error. Not used inside this folder. |
+| `LoadFont` | static async method | `LoadFont(name, url)` → Promise<FontFace> | Loads a web font into `document.fonts`. The url is parsed relative to the document and must be http(s) (or a blob: url of this origin); only the normalized `href` is used, quoted with `JSON.stringify` (a quote in the raw value can't inject a second CSS `url()`). Throws an `Error` with `FontLoad = true` when refused or not loadable. Used by `TextEffect` and `LoadFontOrFallback`. |
+| `LoadFontOrFallback` | static async method | `LoadFontOrFallback(style)` → Promise<Error \| null> | Loads `style.FontUrl` / `FontUrlName` with `LoadFont`; on a failure logs it, appends "Verdana, sans-serif" to `style.Font` (default font), dispatches the window event `MediaFontFallback` (detail: the error, `FontLoad = true`) and returns the error instead of throwing. Used by the text players (`FontError`). |
 | `OnCacheComplete` | static async method | `OnCacheComplete(i, keepHidden)` → Promise<true> | Removes `MediaHidden` unless `keepHidden`, sets `i.Cached = true`. Final step of every player's `Cache`. |
 | `CanUnMute` | static async method | `CanUnMute()` → Promise<bool> | One-time probe (result cached in `HaveTested`/`Result`): plays an embedded silent MP3 data URI unmuted at volume 0.01 in a detached `<audio>` (via `MediaPlayerAudio.LoadAudio`; returns false if that class is not loaded). On success dispatches `AudioEnabled` on `document.body`. If `play()` is rejected (autoplay policy) it installs a one-shot listener `l` on `keydown`/`mousedown`/`click` of `document.body` that sets `Result = true` and dispatches `AudioEnabled`. |
 | `l` | inner (of `CanUnMute`) | async `()` | User-gesture listener described above; removes itself from all three events. |
@@ -309,8 +323,8 @@ Shared helpers for every player, loaded by `MediaPlayer.Init()` (always). Define
 | `IsAttached` | static method | `IsAttached(el)` → bool | True if `el` is `document.body` or a descendant of it. |
 | `PostPageLoaded` | static method | `PostPageLoaded()` | Posts `{Type:"PageLoaded"}` (target `"*"`) to `window.parent`, or to `window.opener` when not framed; errors ignored. |
 | `MustBeAttached` | static method | `MustBeAttached(e)` → restore function | If `e` is not attached, appends it to `document.body` at `position:fixed; opacity:0; left:-10000px` and returns a function that removes it and restores those three style values; otherwise returns a no-op. |
-| `delay` | static method | `delay(msToWait)` → Promise | `setTimeout`-based sleep (copy of common.js `delay`). |
-| `waitEvent2` | static method | `waitEvent2(element, eventName1, eventName2, fn, timeout)` → Promise<Event \| null> | Resolves with the first of two events on `element` (listeners removed afterwards); calls `fn(element)` after subscribing; resolves `null` after `timeout` ms when `timeout > 0`. Copy of common.js `waitEvent2`. |
+| `delay` | static method | `delay(msToWait)` → Promise | `setTimeout`-based sleep . |
+| `waitEvent2` | static method | `waitEvent2(element, eventName1, eventName2, fn, timeout)` → Promise<Event \| null> | Resolves with the first of two events on `element` (listeners removed afterwards); calls `fn(element)` after subscribing; resolves `null` after `timeout` ms when `timeout > 0`. |
 | `end` | inner (of `waitEvent2`) | `(ev)` | Clears the timeout, removes both listeners, resolves. |
 | `SetupMediaMessages` | static method | `SetupMediaMessages(obj)` → unsubscribe function | Adds a `window` `message` listener mapping `data.Type` to player calls: `MediaPlay`, `MediaPause`, `MediaStop`, `MediaOnce`, `MediaLoop`, `MediaMute`, `MediaUnMute`, `MediaSetVolume` (`Volume ?? Value ?? 0`), `MediaSeek` (`Time ?? Position ?? Value ?? 0`), plus `MediaDebugLoseContext`, `MediaCustomX/Y/Z` (whole message passed) when `obj` has those methods. No origin check. |
 | `h` | inner (of `SetupMediaMessages`) | `(ev)` | The message handler: looks up `ev.data.Type` in the map and calls it with `ev.data`. |
@@ -319,7 +333,7 @@ Shared helpers for every player, loaded by `MediaPlayer.Init()` (always). Define
 
 ### `media_player_image.js`
 
-Static image player. Loaded by `MediaPlayer.Init` (with `MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsImage` and `MediaPlayerImage`. Uses common.js `waitEvent2`.
+Static image player. Loaded by `MediaPlayer.Init` (with `MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsImage` and `MediaPlayerImage`. Uses `MediaPlayerTools.waitEvent2`.
 
 #### Globals
 | Name | Kind | Description |
@@ -355,7 +369,7 @@ Created by `MediaPlayer.Create(MediaTypes.Image, url, params)` when no effect is
 
 ### `media_player_video.js`
 
-HTML5 video player. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsVideo` and `MediaPlayerVideo`. Uses common.js `waitEvent2` and `delay`.
+HTML5 video player. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsVideo` and `MediaPlayerVideo`. Uses `MediaPlayerTools.waitEvent2` and `delay`.
 
 #### Globals
 | Name | Kind | Description |
@@ -423,7 +437,7 @@ HTML5 audio player; a near line-for-line copy of `media_player_video.js` without
 
 ### `media_player_youtube.js`
 
-YouTube player that drives a `youtube-nocookie.com` embed iframe through the raw IFrame postMessage protocol (no YouTube JS library). Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsYouTube` and `MediaPlayerYoutube`. Uses common.js `createIFrame`, `waitEvent2`, `delay`.
+YouTube player that drives a `youtube-nocookie.com` embed iframe through the raw IFrame postMessage protocol (no YouTube JS library). Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create`. Defines globals `MediaPlayerParamsYouTube` and `MediaPlayerYoutube`. Uses a plain iframe, `MediaPlayerTools.waitEvent2` and `delay`.
 
 #### Globals
 | Name | Kind | Description |
@@ -445,7 +459,7 @@ YouTube player that drives a `youtube-nocookie.com` embed iframe through the raw
 #### class `MediaPlayerYoutube`
 | Member | Kind | Signature | Description |
 |---|---|---|---|
-| `constructor` | constructor | `(code, params)` | Merges params, creates the iframe (`createIFrame(0)`), sets `HaveVisual`/`HaveAudio` from `Stream`, `InitBase`, `scrolling="no"`, `sandbox="allow-same-origin allow-scripts allow-presentation"`, `allow="autoplay"`, pixel size; sets `Width/Height`, `CanPlay`, `done=false`, a new `InstanceId`, `Source = "https://www.youtube.com/watch?v=" + code`, `CurrentTime = StartAt`, `PauseGreaterThan = -1`, `Duration = 0`, then `ApplyClip()`. |
+| `constructor` | constructor | `(code, params)` | Merges params, creates a plain iframe (no smooth load fade; formerly `createIFrame(0)`), sets `HaveVisual`/`HaveAudio` from `Stream`, `InitBase`, `scrolling="no"`, `sandbox="allow-same-origin allow-scripts allow-presentation"`, `allow="autoplay"`, pixel size; sets `Width/Height`, `CanPlay`, `done=false`, a new `InstanceId`, `Source = "https://www.youtube.com/watch?v=" + code`, `CurrentTime = StartAt`, `PauseGreaterThan = -1`, `Duration = 0`, then `ApplyClip()`. |
 | `GlobalInstanceId` | static field | `= 0` | Counter used to give each instance a unique postMessage `id`. |
 | `Cache` | async method | `Cache(keepHidden)` → Promise<bool> | Temporarily attaches the iframe (`MustBeAttached`), defines `WaitCommand`, registers `messageHandler` on `window`, wraps `OnDispose` to remove it, then calls `connect()` up to 6 times (delay 50 ms doubling to max 5 s). After connecting: mutes, seeks to just before `StartAt` with `PauseGreaterThan = StartAt` and waits for `YTInitCompleted` (or `YTonError` → false). Restores the attachment state in `finally`. |
 | `t.WaitCommand` | field (async function, set in `Cache`) | `WaitCommand(cmd, args)` → Promise<bool> | Sends a command and waits up to 500 ms for `YTinfoDelivery` (true) or `YTonError`/timeout (false, logs a warning). |
@@ -494,7 +508,7 @@ Inherits all `TextStyle` fields (see `canvasTools.js`) and adds:
 | Member | Kind | Signature | Description |
 |---|---|---|---|
 | `constructor` | constructor | `(url, params)` | `url` is the text. Same as `MediaPlayerImage`'s constructor with `MediaPlayerParamsText` (no SVG check). |
-| `Cache` | async method | `Cache(keepHidden)` → Promise<bool> | Loads `FontUrl` as `FontFace(FontUrlName)` into `document.fonts` if set; renders the text with `CanvasTools.CreateTextGridUrl(texts, p, CollageColumns, FxProps)` or `CreateTextImageUrl(text, p)` (WebP blob URL), loads it into the `<img>`, reads `naturalWidth/Height`, `AspectRatio`, `ApplyClip()`, `OnCacheComplete`. |
+| `Cache` | async method | `Cache(keepHidden)` → Promise<bool> | Loads `FontUrl` with `MediaPlayerTools.LoadFontOrFallback(Params)` if set (a default font and `FontError` on a failure); renders the text with `CanvasTools.CreateTextGridUrl(texts, p, CollageColumns, FxProps)` or `CreateTextImageUrl(text, p)` (WebP blob URL), loads it into the `<img>`, reads `naturalWidth/Height`, `AspectRatio`, `ApplyClip()`, `OnCacheComplete`. |
 | `Play`, `Pause`, `Stop`, `GetPos`, `Once`, `Seek` | (async) methods | as image | Identical copies of the `MediaPlayerImage` timeline members. |
 | `setTimer` | inner (of `Play`) | async `()` | Same as in `MediaPlayerImage.Play`. |
 
@@ -625,7 +639,7 @@ Created once per loaded effect by `MediaPlayerEffect.Create`; `Compile` can be c
 
 ### `media_player_effect.js`
 
-WebGL effect player and image texture provider. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create` (with `media_effect_program.js`); also used directly by the `mediaView/*Effects` pages. Defines globals `MediaPlayerParamsEffect`, `MediaPlayerEffect`, `MediaPlayerImageTexture`. At class definition time it reads `localStorage["SysWeaver.Media.EffectDpiScale"]`. Optional dependency on common/anim.js (`SmoothBool`, `SmoothValue`, `SpringAnimation`, `BounceAnimation`, `Smoothness`); uses common.js `hashString` and `bufferToBase64` in `GetImage`.
+WebGL effect player and image texture provider. Loaded by `MediaPlayer.Init` (`MediaLoadAll`) or lazily by `MediaPlayer.Create` (with `media_effect_program.js`); also used directly by the `mediaView/*Effects` pages. Defines globals `MediaPlayerParamsEffect`, `MediaPlayerEffect`, `MediaPlayerImageTexture`. At class definition time it reads `localStorage["SysWeaver.Media.EffectDpiScale"]`. Optional dependency on common/anim.js (`SmoothBool`, `SmoothValue`, `SpringAnimation`, `BounceAnimation`, `Smoothness`); uses `MediaPlayerTools.HashString` and `BlobToDataUrl` in `GetImage`.
 
 #### Globals
 | Name | Kind | Description |
@@ -671,7 +685,7 @@ Created by `MediaPlayer.Create` (Effect, or Image/Text with `Effect`), by `GetIm
 | Member | Kind | Signature | Description |
 |---|---|---|---|
 | `DpiScale` | static field | number | Global adaptive DPI scale (0.125..1), persisted by `AdjustDpi`. |
-| `GetImage` | static async method | `GetImage(cacheName, url, mp, ct)` → Promise<[dataUri, compileMs, drawMs] \| [null, errorMessage]> | Thumbnail generator. Key `"SysWeaver.EffectInfo." + cacheName + "." + hashString(url)`; if cached and a re-fetch of `url` returns the same `etag`, returns the cached result. Otherwise creates `new MediaPlayerEffect(url, mp, ct)` off-screen (`top:-10000px`), caches it, seeks to 5 s, plays until a GPU-timer sample exists (when available), stops, encodes the canvas as JPEG, disposes, converts to a data URI (`bufferToBase64`), stores `{R, T: etag}` in localStorage. |
+| `GetImage` | static async method | `GetImage(cacheName, url, mp, ct)` → Promise<[dataUri, compileMs, drawMs] \| [null, errorMessage]> | Thumbnail generator. Key `"SysWeaver.EffectInfo." + cacheName + "." + MediaPlayerTools.HashString(url)`; if cached and a re-fetch of `url` returns the same `etag`, returns the cached result. Otherwise creates `new MediaPlayerEffect(url, mp, ct)` off-screen (`top:-10000px`), caches it, seeks to 5 s, plays until a GPU-timer sample exists (when available), stops, encodes the canvas as JPEG (quality 0.7; it was passed as 70, an invalid value the browser replaced by its default), disposes, converts to a data URI (`BlobToDataUrl`), stores `{R, T: etag}` in localStorage. |
 | `GetElementFromId` | static method | `GetElementFromId(id)` → Element | Looks `id` up in this window and up to 9 parent windows (stops at `top`); falls back to `top.document.body` (also when `id` is empty or access throws). |
 | `InitGL` | method | `InitGL()` | Gets the `webgl`/`webgl2` context (`antialias`, `alpha = Transparent`, no depth/stencil, no preserveDrawingBuffer; retries without antialias; throws if unavailable), enables `OES_standard_derivatives` and `EXT_shader_texture_lod`, creates the fullscreen-triangle buffer `Pos`, creates `Texture` via `CreateTextureFn(gl)`, and sets up `Query` from `EXT_disjoint_timer_query`. |
 | `constructor` | constructor | `(url, params, createTextureFn)` | Merges params, creates `<canvas>` with expando `This`, sets CSS size, `InitBase`, `Width/Height`, `CompilationTime = -1`, `ResetCounters()`, `ApplyClip()`. Dark mode: fixed by `ForceMode`, else `IsDarkMode` from the top page with optional `SmoothDark` (`SmoothBool`, when anim.js is loaded, not `Static`, `DarkModeSwitch > 0`) and registers `DarkModeChanged`. Creates `CustomX/Y/Z` animators via `GetAnimFn`. |

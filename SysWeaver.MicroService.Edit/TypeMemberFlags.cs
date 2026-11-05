@@ -55,8 +55,9 @@ namespace SysWeaver.MicroService
         IsFlags = 2048,
         /// <summary>
         /// Can be set on DateTime and DateOnly type to indicate that the the date should be unspecified (not local to user transformed to UTC).
+        /// Has its own bit (it used to share 2048 with <see cref="IsFlags"/>).
         /// </summary>
-        DateUnspecified = 2048,
+        DateUnspecified = 4096,
 
 
     }
