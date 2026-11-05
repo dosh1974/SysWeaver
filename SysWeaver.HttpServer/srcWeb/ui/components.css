@@ -692,12 +692,19 @@ svg.sw-icon {
     margin: 0 0 -12px -12px;
 }
 
-/* Fader style (crossfader): a wide rectangular cap */
+/* Fader style (crossfader, mixer channels): a rectangular cap across the track (like a mixer's), the line in it marks the value;
+   horizontal: a tall cap, vertical: a wide cap. The cap size: --sw-fader-cap (across the track) and --sw-fader-cap-w (along it). */
+.sw-slider.sw-fader {
+    --sw-fader-cap: max(2.75rem, calc(var(--sw-control-h) + 0.5rem));
+    --sw-fader-cap-w: 1.75rem;
+    min-height: var(--sw-fader-cap);
+}
+
 .sw-slider.sw-fader .sw-slider-thumb {
-    width: 58px;
-    height: 30px;
-    margin: -15px 0 0 -29px;
-    border-radius: 6px;
+    width: var(--sw-fader-cap-w);
+    height: var(--sw-fader-cap);
+    margin: calc(var(--sw-fader-cap) / -2) 0 0 calc(var(--sw-fader-cap-w) / -2);
+    border-radius: var(--sw-radius);
     background: var(--sw-surface-raised);
     border: 1px solid var(--sw-border-strong);
 }
@@ -715,17 +722,19 @@ svg.sw-icon {
 }
 
 .sw-slider.sw-fader.sw-vertical {
-    padding: 30px 0;
+    padding: calc(var(--sw-fader-cap-w) / 2 + 2px) 0;
+    min-height: 60px;
+    min-width: var(--sw-fader-cap);
 }
 
 .sw-slider.sw-fader:not(.sw-vertical) {
-    padding: 0 30px;
+    padding: 0 calc(var(--sw-fader-cap-w) / 2 + 2px);
 }
 
 .sw-slider.sw-fader.sw-vertical .sw-slider-thumb {
-    width: 30px;
-    height: 58px;
-    margin: 0 0 -29px -15px;
+    width: var(--sw-fader-cap);
+    height: var(--sw-fader-cap-w);
+    margin: 0 0 calc(var(--sw-fader-cap-w) / -2) calc(var(--sw-fader-cap) / -2);
 }
 
 .sw-slider.sw-fader.sw-vertical .sw-slider-thumb::after {
@@ -1659,6 +1668,12 @@ html.SwMobile .sw-number {
 
 .sw-tab:not(:has(.sw-tab-close)) {
     padding-right: var(--sw-space-2);
+}
+
+/* End tabs (Tabs.Add({ End: true })): pushed to the right end of the strip, with a separator */
+.sw-tab:not(.sw-tab-end) + .sw-tab-end {
+    margin-left: auto;
+    border-left: 1px solid var(--sw-border);
 }
 
 .sw-tab .sw-icon {

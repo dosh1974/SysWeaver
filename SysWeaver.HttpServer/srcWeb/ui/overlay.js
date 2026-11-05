@@ -1068,6 +1068,63 @@
                 Menu.Show(at, list, opts);
             });
         },
+
+        /**
+         * The appearance submenus of a page with its own menu (no shell settings menu: an app page, a console, a kiosk): Theme
+         * (Automatic, the built in themes, the themes registered with a Title), Density and Text size, as radio items that apply at once
+         * (Sw.Theme.Set / Reset, Sw.Theme.Density.Set, Sw.Theme.TextSize.Set: stored per browser, every window follows).
+         * @param {{Theme: boolean, Density: boolean, TextSize: boolean, Hacker: boolean}} [o] Leave out a part with false; Hacker: true
+         *   lists the Hacker theme (the server shows it to Debug users only).
+         * @returns {Array<object>} Menu items (submenus) for Sw.Menu.Show.
+         */
+        Appearance(o) {
+            o = o || {};
+            const T = Sw.Theme;
+            const items = [];
+            if (!T)
+                return items;
+            if (o.Theme !== false) {
+                const auto = !Sw.Storage.Get(Sw.Session.ThemeStorageKey, null) && !T.Forced;
+                const cur = (T.Get() || "").split("@")[0];
+                const th = (name, text, icon) => ({ Text: text, Icon: icon, Radio: true, Checked: !auto && cur === name, OnClick: () => T.Set(name) });
+                const list = [
+                    { Text: _TF("Automatic", "Theme menu item: follow the light / dark setting of the browser or OS"), Icon: "theme", Radio: true, Checked: auto, OnClick: () => T.Reset() },
+                    th("light", _TF("Light", "Theme menu item: the light theme"), "sun"),
+                    th("dark", _TF("Dark", "Theme menu item: the dark theme"), "moon"),
+                    th("application", _TF("Application", "Theme menu item: the colours of this application"), null),
+                    th("pro", _TF("Pro", "Theme menu item: the compact, mid dark theme for desktop work"), null),
+                ];
+                if (o.Hacker)
+                    list.push(th("hacker", _TF("Hacker", "Theme menu item: the retro terminal theme"), null));
+                const custom = T.Custom ? T.Custom() : [];
+                if (custom.length)
+                    list.push("-", ...custom.map(c => th(c.Name, c.Title, null)));
+                items.push({ Text: _TF("Theme", "Menu: the submenu that picks the colour theme"), Icon: "theme", Items: list });
+            }
+            if (o.Density !== false && T.Density) {
+                const D = T.Density;
+                const cur = D.IsAuto ? "" : D.Get();
+                const names = {
+                    compact: _TF("Compact", "Density menu item: small controls and rows"),
+                    comfortable: _TF("Comfortable", "Density menu item: the normal size of controls and rows"),
+                    touch: _TF("Touch", "Density menu item: large controls for touch screens"),
+                };
+                items.push({
+                    Text: _TF("Density", "Menu: the submenu that picks how dense (compact or roomy) the user interface is"), Icon: "layers",
+                    Items: [{ Text: _TF("Automatic", "Density menu item: by device and theme"), Radio: true, Checked: cur === "", OnClick: () => D.Set(null) }]
+                        .concat(D.Names.map(n => ({ Text: names[n] || n, Radio: true, Checked: cur === n, OnClick: () => D.Set(n) }))),
+                });
+            }
+            if (o.TextSize !== false && T.TextSize) {
+                const S = T.TextSize;
+                const cur = S.Get();
+                items.push({
+                    Text: _TF("Text size", "Menu: the submenu that picks the text size of the user interface"), Icon: "search",
+                    Items: S.Sizes.map(n => ({ Text: _T("{0} %", n), Radio: true, Checked: cur === n, OnClick: () => S.Set(n) })),
+                });
+            }
+            return items;
+        },
     };
 
     /**

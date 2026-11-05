@@ -684,7 +684,7 @@ The framework does what pages had to wire by hand. Nothing breaks; check these w
 - **Tables**: the filter row is on by default; an in-page table without a `Param` sends none (the old `addTable`), `explore/table.html` sends `Param: null`; the page size follows the original rule (a multiple of 5); search applies on Enter / leaving the field / Clear; a user change supersedes a running request without aborting it (its answer is ignored, as the original); a failure retries every 3 s; a link with the removed `jp` parameter shows a message instead of the table (explore/README.md).
 - **Requests**: a stand-alone page that had no session in the original gets `data-sw-no-session` on `<html>` (core/README.md); while the server is down a live table's own retry is the only traffic (the connection probe waits while another request keeps failing); a refused row action logs with `console.log`, as the original.
 - **Reloads**: `Sw.Page.Reload()` runs `Sw.Page.BeforeReload` first (the shell's touch Back guard).
-- **Check** a port against the original with the parity gate `SysWeaver.Tests\RunParityTests.bat` (`SysWeaver.Tests/ParityTests/README.md`): it replays key flows on both sides (every app's shell and a table page, search / clear, a superseded request, sign in, sign out with 2 tabs, server down ...) and diffs the requests, aborts, page reloads and states; exit code 0 = no unapproved difference ([Verify](#verify)). A new difference is fixed, or the owner's decision goes into its `approved.txt`.
+- **Check** a port against the original (optional, internal): the parity test replayed key flows on both sides (every app's shell and a table page, search / clear, a superseded request, sign in, sign out with 2 tabs, server down ...) and diffed the requests, aborts, page reloads and states. It was the gate of the front end rewrite and is now an internal tool, outside this repository ([Verify](#verify)).
 
 ---
 
@@ -739,7 +739,7 @@ Not detectable statically (review by hand): a donut for one value (chart urls ar
 
 - `SwWeb check <srcWeb> --strict --design`: 0 findings (or marked exceptions with a reason).
 - Framework changes: `core/contracttest.html` (and `?bundle`) and `ui/dialogtest.html?bundle` pass with 0 problems.
-- **Parity gate** (a change to any srcWeb, an upstream merge): `SysWeaver.Tests\RunParityTests.bat` = exit code 0. It runs the rewritten apps (8201-8211) against the original upstream apps (8301-8311) and fails on any difference in requests, aborts, page reloads, sign in / out or the page offset that is not an approved owner decision (`SysWeaver.Tests/ParityTests/README.md`, C13). It needs both app sets running, so it is not part of `dotnet test`.
+- **Parity test** (retired as a gate after the front end rewrite was committed): it ran the rewritten apps against the original, pre-rewrite apps and failed on any difference in requests, aborts, page reloads, sign in / out or the page offset that was not an approved owner decision (C13). It is kept as an internal tool, outside this repository, for a comparison with the old front end; it needs both app sets running and is not part of `dotnet test`.
 - In the browser, in the shell and stand-alone: the five themes (light, dark, pro, application, hacker), desktop 2560x1440 / 1920x1080 / 1366x768, phone 390x844 and 844x390, keyboard only (Tab, Enter / Space, Escape, arrows), no console errors.
 - Compare with the reference pages: the component gallery `ui/gallery.html` and the Design v2 prototype `ui/design.html` (`?theme=`, `?density=`, `?view=home|server|table|editor`).
 

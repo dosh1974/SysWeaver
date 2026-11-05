@@ -97,6 +97,34 @@
     cursor: pointer;
 }
 
+/* SetDots: clickable gutter dots (ex: the value inspector's breakpoint), drawn over the line number */
+.sw-code-num.sw-dot {
+    cursor: pointer;
+    color: var(--sw-text);
+}
+
+.sw-code-num.sw-dot::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: calc(var(--sw-code-lh) / 2 - 6px);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--sw-accent2);
+    border: 2px solid var(--sw-surface);
+    outline: 1px solid var(--sw-accent2);
+}
+
+/* SetSpans: highlighted text ranges */
+.sw-code-span {
+    position: absolute;
+    height: var(--sw-code-lh);
+    border-radius: var(--sw-radius-sm);
+    background: var(--sw-accent2-soft);
+    border-bottom: 2px solid var(--sw-accent2);
+}
+
 .sw-code-main {
     position: relative;
     flex: 1;

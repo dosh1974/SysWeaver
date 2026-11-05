@@ -165,7 +165,7 @@ They behave as the original's (checked by the parity scenarios `msg-legacy-api-*
 
 ## 11. Differences from the original
 
-Measured with the parity test (`D:\SysWeaver.Tests\ParityTests`, plugin `MessagingPlugin`: the original's common.js against `sw/session.js`, `sw/session.js` + `sw/theme.js` and the rewritten common.js): the requests, their bodies and order, the election, the handover, the reactions, the theme hand-shake and the classes are the same. The differences:
+Measured with the parity test (an internal tool, plugin `MessagingPlugin`: the original's common.js against `sw/session.js`, `sw/session.js` + `sw/theme.js` and the rewritten common.js): the requests, their bodies and order, the election, the handover, the reactions, the theme hand-shake and the classes are the same. The differences:
 
 | What | Original | Now | Why |
 |---|---|---|---|

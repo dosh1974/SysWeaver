@@ -380,6 +380,11 @@
      * OnComplete(item, editor) (option: called after a completion was inserted).
      * Hover(info, editor) (option): the content of the hover popup for the identifier under the mouse (info: { Word, Start, End, Line, Col }),
      * an element, a promise of one, or null (no popup). The language reference: Sw.CodeLanguages.glsl.Doc(word).
+     * SetDots([{ Line, Kind, Title }]) (clickable gutter dots, ex: breakpoints: option OnDot(line, dot, event)),
+     * SetSpans([{ Line, Col (1 based), Len, Kind }]) (highlighted text ranges, class sw-code-span sw-<Kind>),
+     * OnAltClick(info, editor) (option: Alt + click in the text, info = the word under the mouse { Word, Start, End, Line, Col }, or the
+     * selection (Sel: true) when the click is inside it), Undoable() (false while the editor is hidden: edits of a hidden editor, ex: an
+     * inactive tab, are applied directly, without undo, since a hidden textarea can't take the focus).
      */
     class CodeEditor {
         constructor(o) {
@@ -395,6 +400,8 @@
             t.States = [0];
             t.Cache = new Map();
             t.Markers = new Map();
+            t.Dots = new Map();
+            t.Spans = [];
             t.FindState = null;
             t.Complete = null;
             t.View = { Top: 0, Left: 0, SelStart: 0, SelEnd: 0 };
@@ -428,7 +435,22 @@
             //  Hover information (option Hover)
             t.Input.addEventListener("mousemove", e => t.HoverMove(e));
             t.Input.addEventListener("mouseleave", () => t.HoverLeave());
-            t.Input.addEventListener("mousedown", () => t.HideHover());
+            t.Input.addEventListener("mousedown", e => {
+                t.HideHover();
+                //  Alt + click: the identifier (or the selection) under the mouse (option OnAltClick)
+                if (e.altKey && e.button === 0 && o.OnAltClick) {
+                    const p = t.PosAt(e.clientX, e.clientY);
+                    if (!p)
+                        return;
+                    e.preventDefault();
+                    const s = t.Input.selectionStart, en = t.Input.selectionEnd;
+                    const info = p.Pos >= s && p.Pos < en && en > s
+                        ? { Word: t.Input.value.slice(s, en), Start: s, End: en, Line: t.LineOf(s) + 1, Col: s - t.Starts[t.LineOf(s)] + 1, Sel: true }
+                        : t.WordAt(p.Pos);
+                    if (info && !t.InComment(info.Start))
+                        o.OnAltClick(info, t);
+                }
+            });
             const cursor = () => {
                 if (document.activeElement !== t.Input)
                     return;
@@ -448,6 +470,11 @@
                 if (line < 0)
                     return;
                 e.preventDefault();
+                const dot = t.Dots.get(line + 1);
+                if (dot && o.OnDot) {
+                    o.OnDot(line + 1, dot, e);
+                    return;
+                }
                 const m = t.Markers.get(line + 1);
                 t.Input.focus({ preventScroll: true });
                 t.Input.setSelectionRange(t.Starts[line], line + 1 < t.Starts.length ? t.Starts[line + 1] : t.Input.value.length);
@@ -607,14 +634,17 @@
             if (t.Input.readOnly)
                 return;
             const ta = t.Input;
-            ta.focus({ preventScroll: true });
-            ta.setSelectionRange(start, end);
             let ok = false;
-            try {
-                ok = text.length > 0 ? document.execCommand("insertText", false, text) : (start === end || document.execCommand("delete", false));
-            }
-            catch {
-                ok = false;
+            //  execCommand edits the focused element: a hidden editor (ex: of an inactive tab) can't take the focus, it is changed directly (not undoable)
+            if (t.Undoable()) {
+                ta.focus({ preventScroll: true });
+                ta.setSelectionRange(start, end);
+                try {
+                    ok = text.length > 0 ? document.execCommand("insertText", false, text) : (start === end || document.execCommand("delete", false));
+                }
+                catch {
+                    ok = false;
+                }
             }
             if (!ok) {
                 ta.setRangeText(text, start, end, "end");
@@ -623,6 +653,11 @@
             if (selStart !== undefined)
                 ta.setSelectionRange(selStart, selEnd ?? selStart);
             t.ScrollToPos(ta.selectionEnd);
+        }
+
+        /** True if edits are undoable now (the editor is displayed; a hidden one is changed directly). @returns {boolean} */
+        Undoable() {
+            return this.Input.getClientRects().length > 0;
         }
 
         /** Insert text (undoable) at a position or the cursor. @param {string} text The text. @param {number} [pos] Offset. */
@@ -1369,6 +1404,28 @@
             t.Render();
         }
 
+        /**
+         * Clickable gutter dots (ex: a breakpoint), drawn over the line number; a click calls the option OnDot(line, dot, event).
+         * @param {Array<{Line: number, Kind: string, Title: string}>} list The dots (1 based lines; Kind: a class sw-dot-<Kind>).
+         */
+        SetDots(list) {
+            const t = this;
+            t.Dots.clear();
+            for (const d of list || [])
+                if (d.Line >= 1)
+                    t.Dots.set(d.Line, { Kind: d.Kind || "dot", Title: d.Title || "" });
+            t.Render();
+        }
+
+        /**
+         * Highlighted text ranges (ex: the expression a tool looks at).
+         * @param {Array<{Line: number, Col: number, Len: number, Kind: string}>} list The ranges (1 based line and column; class sw-code-span sw-<Kind>).
+         */
+        SetSpans(list) {
+            this.Spans = (list || []).filter(s => s.Line >= 1 && s.Len > 0);
+            this.Render();
+        }
+
         // -------------------------------------------------------------- layout / rendering
 
         /** Line height / character width / padding (after font changes) */
@@ -1507,6 +1564,11 @@
                 if (i >= first && i <= last)
                     html += '<div class="sw-code-mark sw-' + m.Kind + '" style="top:' + (pt + i * lh) + 'px"></div>';
             }
+            for (const sp of t.Spans) {
+                const i = sp.Line - 1;
+                if (i >= first && i <= last && i < t.Lines.length)
+                    box(i, sp.Col - 1, Math.min(t.Lines[i].length, sp.Col - 1 + sp.Len), "sw-code-span sw-" + (sp.Kind || "span"));
+            }
             const f = t.FindState;
             if (f && f.Matches.length) {
                 const startPos = t.Starts[first], endPos = last + 1 < n ? t.Starts[last + 1] : ta.value.length;
@@ -1565,8 +1627,10 @@
             let g = "";
             for (let i = first; i <= last; ++i) {
                 const m = t.Markers.get(i + 1);
-                g += '<div class="sw-code-num' + (i === curLine ? " sw-cur" : "") + (m ? " sw-" + m.Kind : "") + '" style="top:' + (pt + i * lh) + 'px"' +
-                    (m ? ' title="' + esc(m.Text).replace(/"/g, "&quot;") + '"' : "") + ">" + (i + 1) + "</div>";
+                const d = t.Dots.get(i + 1);
+                const tip = [m ? m.Text : "", d ? d.Title : ""].filter(x => x).join("\n");
+                g += '<div class="sw-code-num' + (i === curLine ? " sw-cur" : "") + (m ? " sw-" + m.Kind : "") + (d ? " sw-dot sw-dot-" + d.Kind : "") + '" style="top:' + (pt + i * lh) + 'px"' +
+                    (tip ? ' title="' + esc(tip).replace(/"/g, "&quot;") + '"' : "") + ">" + (i + 1) + "</div>";
             }
             t.GutterInner.innerHTML = g;
             t.GutterInner.style.transform = "translateY(" + (-top) + "px)";
@@ -1578,7 +1642,7 @@
     if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
         Sw.Work.RegisterOptions("Sw.CodeEditor", {
             Value: "string", Language: { Type: "string", Check: v => Languages[v] ? "" : '"' + v + '" is no language (' + Object.keys(Languages).join(", ") + ")." }, ReadOnly: "boolean", TabSize: "number",
-            AutoComplete: "boolean", Completions: "function", OnChange: "function", OnCursor: "function", Placeholder: "string", OnComplete: "function", Hover: "function",
+            AutoComplete: "boolean", Completions: "function", OnChange: "function", OnCursor: "function", Placeholder: "string", OnComplete: "function", Hover: "function", OnAltClick: "function", OnDot: "function",
         });
     Sw.CodeLanguages = Languages;
     Sw.GlslDocs = GlslDocs;

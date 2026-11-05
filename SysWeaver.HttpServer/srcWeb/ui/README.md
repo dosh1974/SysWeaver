@@ -332,6 +332,7 @@ label: put it in a `Sw.Field`.
 * Dragging the thumb is relative (no jump), tapping the track jumps there. Double tap resets to `Default`.
 * `Log`: logarithmic (`Min` > 0), snaps to 2 significant digits and to `Center`. `Center` draws a mark. `Vertical` fills the container's height.
 * Keyboard: arrows (Shift = ×10), PageUp / PageDown, Home / End. `Set` is ignored while the user drags (pass `force`). `SetRange`, `SetDisabled`, `.Dragging`.
+* `Fader`: a mixer cap across the track (a tall cap on a horizontal fader, a wide one on a vertical fader) whose line marks the value, no fill (crossfaders, channel faders, scrub handles). Size it on a page scope with `--sw-fader-cap` (across the track) and `--sw-fader-cap-w` (along it).
 
 ### NumberBox
 `new Sw.NumberBox({ Min, Max, Step, Value, Width, Label, AriaLabel, Hint, Title, Disabled, Required, Validate(v), Format(v), OnChange })`: commits on Enter / blur, arrows step; Escape keeps the typed text (as the original inputs; `EscapeReverts: true` reverts it). `Get()` returns the number, also while it is still being typed (a form read on a button click), and null for an empty box (`Value: null` or `Required`).
@@ -613,6 +614,7 @@ Items: `{ Text, Icon, Hint, Title, Desc, Checked, Radio, Disabled, Danger, Keep,
   is left). Up / Down move to the next item, the control keeps Left / Right, Home / End, typing and Backspace.
 * `Class` (a class of the menu) is also on every sub menu level (ex: a theme scope).
 `Sw.Menu.Context(element, itemsOrFn, opts)`: a context menu on long press, right click, the context menu key and Shift+F10.
+`Sw.Menu.Appearance({ Theme, Density, TextSize, Hacker })`: the Theme (Automatic, the built in themes, the themes registered with a `Title`), Density and Text size submenus as radio items, for pages with their own menu instead of the shell's settings menu (an app page, a console, a kiosk): `Sw.Menu.Show(b, [..., "-", ...Sw.Menu.Appearance()])`. Leave a part out with `false`; `Hacker: true` lists the Hacker theme (the server shows it to Debug users only).
 
 ### Dialog
 * `await Sw.Dialog.Show({ Title, Icon, Content, Buttons: [{ Text, Kind, Icon, Title, Label, Labels, Value, Close, Dismiss, Disabled, WhileBusy, Cancellable, OnClick(close, value, { Signal, Dialog }) }], Id, NoMove, Wide, Full, Close, Modal, NoEscape, EnterValue, Focus, TouchFocus, AutoDirty, BusyButtons, Above, Class, AriaLabel, Role, Describe, Owner, EditWhileBusy, OnShow(close, box, body), OnClose(value) })`
@@ -953,7 +955,7 @@ back (`IsShown()` is false meanwhile) or a block of another kind comes. Shown au
 
 ### Tabs
 `new Sw.Tabs({ Closable, OnSelect(tab, previous), OnClose(tab), OnAdd(), AddTitle, Small, Label, Fill, Class })`
-`Add({ Id, Title, Icon, Tip, Content, Closable, Data, Select })` returns `{ Id, Head, Content, Data, SetTitle, SetTip, SetDirty, SetBadge(text, kind) }`.
+`Add({ Id, Title, Icon, Tip, Content, Closable, Data, Select, End })` (`End`: the tab sits at the right end of the strip, ex: panels that are not about the current document) returns `{ Id, Head, Content, Data, SetTitle, SetTip, SetDirty, SetBadge(text, kind) }`.
 `Select`, `Close` (asks `OnClose`, false keeps the tab), `Remove`, `Next(dir)`, `Get`, `All`, `Active`, `Tools`.
 Keyboard: Left / Right / Home / End move and select, Delete closes. Middle click closes. `Fill: false` lets the body grow with the content.
 
@@ -1204,6 +1206,10 @@ ed.SetMarkers([{ Line: 12, Kind: "error", Text: "'x' : undeclared identifier" }]
 ```
 `Get()`, `Set(text)`, `Edit(text)`, `Insert(text, pos)`, `Replace(start, end, text, selStart, selEnd)`, `Cursor()`, `GoTo(line, col, select)`,
 `GoToLine()`, `Find(replace)`, `Focus()`, `SetReadOnly(bool)`, `Refresh()`, `Destroy()`, option `Hover(info, editor)`.
+`SetDots([{ Line, Kind, Title }])` (clickable gutter dots, ex: a breakpoint; option `OnDot(line, dot, event)`), `SetSpans([{ Line, Col, Len, Kind }])`
+(highlighted text ranges, class `sw-code-span sw-<Kind>`), option `OnAltClick(info, editor)` (Alt + click: the word under the mouse, or the
+selection when the click is inside it), `Undoable()` (false while the editor is hidden: edits of a hidden editor, ex: an inactive tab, are
+applied directly without undo, a hidden textarea can't take the focus).
 Keys: Tab / Shift+Tab, Enter (keeps the indentation), Home (smart), Ctrl+/ (comments), Ctrl+D, Ctrl+Shift+K, Alt+Up / Down, Ctrl+F / Ctrl+H
 (find / replace: case, word, regex), F3 / Shift+F3, Ctrl+G, Ctrl+Space. Colors: `--sw-code-*` tokens (a light variant for the light theme).
 
