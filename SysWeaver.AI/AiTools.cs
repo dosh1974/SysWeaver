@@ -158,6 +158,17 @@ namespace SysWeaver.AI
         }
 
 
+        /// <summary>
+        /// Reduce the number of tokens in an English LLM prompt, while keeping all of it's instructions.
+        /// Only rule based rewriting of the prose is done:
+        /// - Politeness, filler words and most articles are removed, verbose phrases are shortened and whitespace is compacted.
+        /// - Code, quoted text, tables, templates, tags, identifiers, urls, paths, numbers, UPPERCASE words and examples are kept verbatim.
+        /// - Negations, conditions, modals and restricting words (not, never, unless, if, must, only, just..) are kept.
+        /// The savings depends on how verbose the prompt is, a terse prompt is mostly left as is.
+        /// </summary>
+        /// <param name="prompt">The prompt, null and empty strings are returned as is</param>
+        /// <returns>The minimized prompt</returns>
+        public static String MinimizePrompt(String prompt) => AiPromptMinimizer.Minimize(prompt);
 
 
 
