@@ -25,7 +25,7 @@
             Class: Str, Closable: "boolean", OnSelect: "function", OnClose: "function", OnAdd: "function", AddTitle: Str, Small: "boolean",
             Label: Str, Fill: "boolean",
         },
-        "Tabs tab": { Id: "any", Title: Str, Icon: "any", Tip: Str, Content: "any", Closable: "boolean", Data: "any", Select: "boolean" },
+        "Tabs tab": { Id: "any", Title: Str, Icon: "any", Tip: Str, Content: "any", Closable: "boolean", Data: "any", Select: "boolean", End: "boolean" },
         Split: { A: "any", B: "any", Vertical: "boolean", Size: "number", Min: "number", Key: Str, Label: Str, OnResize: "function" },
         Pager: { OnChange: "function", Swipe: "boolean" },
         Columns: { MinWidth: "number", Gap: "string|number", Max: "number", Class: Str, Content: "any" },
@@ -205,8 +205,13 @@
             tab.Content.setAttribute("role", "tabpanel");
             tab.Content.setAttribute("aria-labelledby", headId);
             tab.Content.hidden = true;
-            t.Items.push(tab);
-            t.Strip.append(tab.Head);
+            //  End tabs (option End: panels that are not about the current document) sit at the right of the strip, the others before them
+            const firstEnd = opts.End ? null : t.Strip.querySelector(".sw-tab-end");
+            const at = firstEnd ? t.Items.findIndex(i => i.Head === firstEnd) : -1;
+            t.Items.splice(at < 0 ? t.Items.length : at, 0, tab);
+            if (opts.End)
+                tab.Head.classList.add("sw-tab-end");
+            t.Strip.insertBefore(tab.Head, firstEnd);
             t.Body.append(tab.Content);
             if (!t.Active && opts.Select !== false)
                 t.Select(tab);

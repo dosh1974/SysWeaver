@@ -457,6 +457,8 @@ FodyWeavers.xsd
 web
 /SysWeaver.TableData/data
 data
+# The bare "data" also matches source folders named "Data" (Windows: case insensitive): keep them
+!/SysWeaver.Common/Data/
 .web
 .claude
 /.mcp.json
