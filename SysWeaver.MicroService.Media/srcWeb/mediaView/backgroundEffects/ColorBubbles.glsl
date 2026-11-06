@@ -6,9 +6,9 @@ const vec3 CenterColor = vec3(0.0, 0.24, 0.6); // var: { "type": "colhdr" }
 
 const float NoiseInt = 0.0; 	//	var: { "min": 0, "max": 1.0, "step": 0.05, "desc": "The amount of noise, set to 0 to disable"}
 
-const float VingetteIntensity = 0.6;	//	var: { "min": 0, "max": 1, "step": 0.05, "name": "Vingette intensity", "desc": "The intesity of the vingette effect, set to zero to disable vingetting"}
-const float VingetteSpread = 25.0;	//	var: { "min": 10, "max": 1000, "step": 10, "name": "Vingette spread", "desc": "The spread of the vingette effect"}
-const float VingettePow = 0.5;	//	var: { "min": 0.1, "max": 10, "step": 0.1, "name": "Vingette power", "desc": "The curve of the vingetting"}
+const float VingetteIntensity = 0.6;	//	var: { "min": 0, "max": 1, "step": 0.05, "name": "Vignette intensity", "desc": "The intesity of the vignette effect, set to zero to disable vignetting"}
+const float VingetteSpread = 25.0;	//	var: { "min": 10, "max": 1000, "step": 10, "name": "Vignette spread", "desc": "The spread of the vignette effect"}
+const float VingettePow = 0.5;	//	var: { "min": 0.1, "max": 10, "step": 0.1, "name": "Vignette power", "desc": "The curve of the vignetting"}
 
 const float TopLeftO = 1.0;	//var:	{ "min": 0, "max": 1, "step": 0.05, "name": "Top left opacity", "desc": "The opacity of the output in the top left corner"}
 const float TopRightO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Top right opacity", "desc": "The opacity of the output in the top right corner"}

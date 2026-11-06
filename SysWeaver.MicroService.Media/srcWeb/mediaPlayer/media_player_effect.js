@@ -845,6 +845,11 @@ class MediaPlayerEffect {
         const tex = t.Texture;
         if (tex) {
             const newSize = await tex.Cache(programData.HaveLod);
+            //  The texture knows its size now: its crop (the media params of the image / text) can be computed
+            if (tex.ApplyClip) {
+                tex.ApplyClip();
+                t.ApplyTextue = true;
+            }
             if (newSize) {
                 const w = newSize[0];
                 const h = newSize[1];

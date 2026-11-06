@@ -212,6 +212,10 @@ class MediaPlayerYoutube {
                     }
                     if (d.event === "onError") {
                         gotError = true;
+                        //  YouTube's error code (2 bad code, 5 html5 player, 100 removed or private, 101 / 150 the owner allows no embedding,
+                        //  153 the request had no referrer): the page can say why
+                        if (t.ErrorCode === undefined && typeof d.info === "number")
+                            t.ErrorCode = d.info;
                     }
                     if (d.event === "infoDelivery") {
 

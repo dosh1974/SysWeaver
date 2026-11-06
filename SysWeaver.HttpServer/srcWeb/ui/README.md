@@ -990,7 +990,7 @@ const ed = new Sw.PropertyEditor({
 ed.SetValues({ Speed: 1.5 });
 ```
 Types: `float`, `int`, `bool`, `enum`, `color`, `color4`, `vec2`, `vec3`, `vec4` (`Names`, `Descs`), `string`. `NoSlider`, `ResetButtons`,
-`RowMenu(def) -> [menu items]` (a ⋯ button at the end of every row for its own actions, ex: "Edit…"; it stays usable on a disabled row),
+`RowMenu(def) -> [menu items]` (a ⋯ button at the end of every row for its own actions, ex: "Edit…"; it stays usable on a disabled row), a definition's own `Menu` (items, a function(def) or a promise of them) and `MenuTitle` (only that row gets a ⋯ button, ex: "Choose a picture"),
 `SetEnabled(keyOrFn, enabled)`, `Get(key)`, `SetError(key, text)`, `SetHelp(key, text)`. Modified values get an accent label and a "modified" dot after the name
 (a click on the dot, or a long press / right click on the label, resets it). On narrow screens labels are shown above their values.
 Per definition: `Map: { Min, Max, Unit, Format }` (a normalized number, ex: a 0..1 controller, also shown in the units it drives, linearly: "= 3000 lm"), `Format` (the display of a number, a template: `"{0} BPM"`, `"{0:1} %"` = 1 decimal, shown after the value box instead of the Unit; `PropertyEditor.Display(spec, value)`), `Scale` (numbers, default 1: shown and typed × Scale, its range and step too: 0.3 with `Scale: 100, Unit: "%"` shows as "30 %", the value stays 0.3; `PropertyEditor.Scaled` / `Unscaled`). Units and mapped values sit in a slot of one width on every number row of an editor, so the sliders and boxes line up. Per definition: `Hint` (the line under the name, 12 px secondary text; default for numbers "min to max unit", ex: "0.05 to 8 ×"; `""` = none;

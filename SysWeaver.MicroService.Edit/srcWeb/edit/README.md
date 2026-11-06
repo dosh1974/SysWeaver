@@ -184,6 +184,11 @@ Sw.Edit.AddType({
 | `EditParams` | member | Handler parameters (ex: the slider step) |
 | `ElementTypeName`, `KeyTypeName` | collection member | The item (value) and key type names |
 | `ElementInst`, `KeyInst` | collection member | Per item / key overrides with the member fields (`Flags`, `Min`, `Max`, `Default`, `Type`, `EditParams`), ex: `{ Flags: F.IsPrimitive \| F.ReadOnly }` = read only items |
+| `Group` | member | Client types: a heading (`div.sw-edit-group`) before the first member of a group; a heading whose members are all hidden is hidden (`UpdateGroups()`) |
+| `Unit` | member | Client types: a plain unit text after a number box ("px", "%", "×"; no conversion, unlike the `Unit:` spec), in a slot of one width on every number row of the editor (`--sw-edit-suffix-w`, class `sw-edit-units` on the editor), so the boxes and sliders line up with and without a unit |
+| `Hint` | member | Client types: the hint line under the name (`""` = none), instead of the automatic one |
+| `HideIf` | member | Client types: `function(obj)`, true hides the member (re-evaluated on every change, like `Hide:`, but keeps `Type` free for the editor spec) |
+| `MenuItems` | member | Client types: `function(obj)` returning (a promise of) Sw.Menu items: the member's own actions in its menu (ex: "Use the play position") |
 
 ### Plug-ins (custom editors)
 
@@ -233,7 +238,7 @@ What the framework does for a plug-in (a handler that is not one of the editor's
 
 - Member menu: click / tap the title, right click, long press (touch), the context menu key or Shift+F10 anywhere in the row, or the optional menu button (`Options.MenuIcon`). Items: Set default (with the default as hint), Copy (disabled for passwords), Paste (the clipboard is read when the menu opens; the hint previews the value, the tooltip explains why it is disabled), handler items, Copy name (Dev: Copy member name / Copy type name).
 - Object menu (title row menu button, long press / right click on the title row): Set default, Copy (JSON with `$type`), Paste, editor supplied items (collection items).
-- Copied / dragged values: strings raw, everything else JSON, objects with `$type`. Pasted / dropped values are accepted when the `$type` matches, null is allowed, or the handler's `IsOfType` accepts them; they are then conditioned. Every member title and the title row are drag sources (`application/json` + `text/plain`) and, unless read only, drop targets (undoable "Dropped" steps).
+- Copied / dragged values: strings raw, everything else JSON, objects with `$type`. Pasted / dropped values are accepted when the `$type` matches, null is allowed, or the handler's `IsOfType` accepts them; they are then conditioned. Every member title and the title row are drag sources (`application/json` with the JSON value, a string as a JSON string; `text/plain` with the copy text, a string raw) and, unless read only, drop targets (undoable "Dropped" steps; a string member reads a dropped JSON string as the string).
 
 
 ### Read only, null
@@ -330,7 +335,7 @@ One `UndoStack` per editor tree. Changes are recorded with dotted paths (`Edit.M
 
 | File | API |
 |---|---|
-| Edit.js (EditOptions.js is a compatibility stub) | `Sw.Edit.Options` (`EditOptions`, usable before `Ready`): `Title`, `Dev`, `ReadOnly`, `CanExpand`, `IsExpanded`, `KeyName`, `Border`, `ExpandAllCollections`, `MenuIcon`, `MenuIconClass`, `MenuColorClass`, `AddToHeader`, plus `Name`, `UndoStack`; `Clone()`; presets |
+| Edit.js (EditOptions.js is a compatibility stub) | `Sw.Edit.Options` (`EditOptions`, usable before `Ready`): `Title`, `Dev`, `ReadOnly`, `CanExpand`, `IsExpanded`, `KeyName`, `Border`, `ExpandAllCollections`, `MenuIcon`, `MenuIconClass`, `MenuColorClass`, `AddToHeader`, `MarkChanged` (a member that is not at its default gets `sw-edit-changed`: an accent name and a dot), plus `Name`, `UndoStack`; `Clone()`; presets |
 | UndoStack.js | `Invoke`, `Undo`, `Redo`, `CanUndo`, `CanRedo`, `UndoTitle`, `RedoTitle`, `OnChange(fn)`, `Clear`, `Pos`, `Ops` |
 | EditDesktop.js / EditMobile.js | `Sw.Edit.Layouts.Desktop/Mobile`: `AddTypeInfo(editor, head, type, title, options)`, `AddMember(obj, editor, body, member, title, options, isLast)`; classes `EditDesktop`, `EditMobile` |
 | EditCollectionArray.js / EditCollectionMap.js | `Sw.Edit.Collections.Array/Map` (`EditCollectionArray.Inst`, `EditCollectionMap.Inst`): `Indexed`, `createVal`, `countVal`, `getVal`, `setVal`, `getKeyName`, `keys`, `iterate` (old name `íterate`), `onKeys`, `addVal`, `removeVal`, `insertAt` (+ arrays: `insertAfter`, `move`; maps: `hasKey`) |

@@ -295,6 +295,43 @@
     const LoadTimeoutMs = 30000;
 
     /**
+     * The error of a YouTube video that did not play, from YouTube's error code (the player's ErrorCode): why, and (except for a bad
+     * code) `Open` = "Watch on YouTube" for ShowLoadError. YouTube codes: 2 bad video code, 5 html5 player, 100 removed or private,
+     * 101 / 150 the owner allows no playing on other sites, 153 the request had no referrer.
+     * @param {number|undefined} code The error code (undefined: no onError, ex: a time out).
+     * @param {string} id The video code.
+     * @returns {Error} The error.
+     */
+    function YouTubeError(code, id) {
+        let text;
+        switch (code) {
+            case 101:
+            case 150:
+                text = _TF("The owner of this YouTube video does not allow it to be played on other sites: it can only be watched on YouTube.", "Reason on the media viewer error state when a YouTube video may not be embedded (YouTube error 101 / 150)");
+                break;
+            case 100:
+                text = _TF("This YouTube video was removed or is private.", "Reason on the media viewer error state for YouTube error 100");
+                break;
+            case 2:
+                text = _TF("This is not a valid YouTube video code.", "Reason on the media viewer error state for YouTube error 2");
+                break;
+            case 5:
+                text = _TF("The YouTube player can't play this video in this browser.", "Reason on the media viewer error state for YouTube error 5");
+                break;
+            case 153:
+                text = _TF("YouTube refused to play the video: the page sent no address (referrer). The site's Referrer-Policy must allow it.", "Reason on the media viewer error state for YouTube error 153");
+                break;
+            default:
+                text = _TF("YouTube could not play this video: it may be private, removed or not allowed on other sites.", "Reason on the media viewer error state when a YouTube video failed without a known reason");
+        }
+        const e = new Error(text);
+        e.YouTubeCode = code;
+        if (code !== 2)
+            e.Open = { Url: "https://www.youtube.com/watch?v=" + encodeURIComponent(id), Text: _TF("Watch on YouTube", "Button on the media viewer error state of a YouTube video, opens it on youtube.com in a new tab") };
+        return e;
+    }
+
+    /**
      * The reason text of a load error: a specific text for a web font that failed (MediaPlayerTools.LoadFont, the error
      * has FontLoad; the browser only says "A network error occurred."), else the error message.
      * @param {*} e The error.
@@ -310,11 +347,15 @@
 
     /**
      * Show the viewer's error state: a short reason and a "Try again" button (reloads the page); the reason is also
-     * announced to screen readers. Replaces the content of target.
+     * announced to screen readers. Replaces the content of target. An error with `Open: {Url, Text}` (ex: a YouTube video that
+     * may only be watched on YouTube) adds a button that opens that address in a new tab.
      * @param {HTMLElement} target The element to show it in.
-     * @param {string} reason The reason (text only).
+     * @param {string|Error} reason The reason (text only), or the error (FailReason gives its text).
      */
     function ShowLoadError(target, reason) {
+        const open = reason && typeof reason === "object" ? reason.Open : null;
+        if (typeof reason !== "string")
+            reason = FailReason(reason);
         console.warn("Media: failed to show the media: " + reason);
         target.textContent = "";
         target.classList.remove("MediaWithCaption");
@@ -322,6 +363,10 @@
         target.append(Sw.el("div.MediaRefused.MediaFailed", { attrs: { role: "alert" } },
             Sw.el("p.MediaRefusedText", null, Sw.el("strong", { text: text })),
             Sw.el("p.MediaRefusedText", { text: reason }),
+            open ? new Sw.Button({
+                Text: open.Text, Icon: "external", Kind: "primary",
+                OnClick: () => window.open(open.Url, "_blank", "noopener,noreferrer"),
+            }).E : null,
             new Sw.Button({
                 Text: _TF("Try again", "Button text on the media viewer error state, loads the media again"),
                 Icon: "IconReload",
@@ -838,6 +883,8 @@
             const text = _TF("Failed to cache the media", "Error when a media file could not be loaded");
             if (quiet) {
                 p.remove();
+                if (type === MediaTypes.YouTube)
+                    throw YouTubeError(player.ErrorCode, data);
                 throw new Error(_TF("The media could not be loaded: the file is missing or this browser can't show it.", "Reason on the media viewer error state when the media file could not be loaded"));
             }
             Sw.Fail(text, 100000);
@@ -969,15 +1016,17 @@
      * did not choose mute, a full page `<Media-NoAudio>` button ("Tap or click once to get audio!") un-mutes and plays on
      * click / Enter / Space (playback does not start before that).
      * @param {object} player - Player returned by CreatePlayer (needs `SetButtonState`).
+     * @param {{Muted: boolean, Loop: boolean}} [o] Instead of the stored preferences (ex: the `muted` / `loop` url options of MediaView.html).
      * @returns {Promise<void>}
      */
-    async function PlayWithPopup(player) {
-        if (Prefs.Loop())
+    async function PlayWithPopup(player, o) {
+        o = o || {};
+        if (o.Loop ?? Prefs.Loop())
             await player.Loop();
         else
             await player.Once();
         player.SetVolume(Prefs.Volume());
-        const muted = Prefs.Muted();
+        const muted = o.Muted ?? Prefs.Muted();
         if (!player.HaveAudio) {
             if (player.CanPlay)
                 await player.Play();
@@ -1429,7 +1478,7 @@
         }
         catch (e) {
             target.textContent = "";
-            ShowLoadError(target, FailReason(e));
+            ShowLoadError(target, e);
         }
         finally {
             remove();
@@ -1470,7 +1519,7 @@
 
     /**
      * Boot function of `MediaView.html`.
-     * URL params: `link`/`d` (required), `type`/`t`, `props` (JSON), `no_stats`, `no_controls`, `ctrl` (InterOp message
+     * URL params: `link`/`d` (required), `type`/`t`, `props` (JSON), `no_stats`, `no_controls`, `muted`, `loop` (start muted / looping instead of the stored preferences), `pos` (seconds to start at), `ctrl` (InterOp message
      * prefix of a controlling editor). The media fills the `<Media-View>` grid (fill = false, automatic aspect, centered);
      * activating the media (click, Enter, Space) opens `MediaPreview.html?full&back&pos=...` in the same frame.
      * With `ctrl` the props are first requested from the editor and later `<ctrl>*` messages update the player:
@@ -1508,7 +1557,12 @@
                 const np = await AskEditorProps(messagePrefix);
                 if (np)
                     props = np;
+                //  The editor docks its player again when this window goes
+                window.addEventListener("pagehide", () => Sw.InterOp.Post(messagePrefix + "Closed"));
             }
+            //  The media params as given (the url, the editor); `props` below becomes the player's params (for an image or a text
+            //  with an effect those are the effect's params), a rebuild uses these
+            let mediaProps = props;
             const mview = document.createElement("Media-View");
             target.appendChild(mview);
             const caption = type === MediaTypes.Text ? AddTextCaption(target) : null;
@@ -1523,7 +1577,7 @@
             async function create(before) {
                 //  The first player fails with a reason (shown as the error state), a rebuild keeps the toast.
                 //  With controls the player chrome (CreateChrome) replaces the button row and holds the stats
-                const pd = await CreatePlayer(mview, type, data, props, true, before, !stats, false, 0, 0, 0.5, 0.5, !before);
+                const pd = await CreatePlayer(mview, type, data, mediaProps, true, before, !stats, false, 0, 0, 0.5, 0.5, !before);
                 if (!pd)
                     throw new Error(_TF("Failed to cache the media", "Error when a media file could not be loaded"));
                 return pd;
@@ -1567,15 +1621,32 @@
                     const t = m && m.Type;
                     if (!t || !t.startsWith(messagePrefix))
                         return;
+                    const name = t.substring(messagePrefix.length);
+                    if (name === "Load") {
+                        //  Another media in the editor: this page with its link and type, still linked (the props come with GetProps)
+                        const u = new URL(window.location.href);
+                        u.searchParams.set("link", m.Link);
+                        u.searchParams.set("type", String(m.MediaType));
+                        u.searchParams.delete("props");
+                        u.searchParams.delete("pos");
+                        Sw.Page.Navigate(u.href, "_self");
+                        return;
+                    }
+                    if (name === "Reload") {
+                        //  The editor's complete media params (also new members, ex: a crop that was null)
+                        const np = Object.assign({}, m);
+                        for (const k of ["Type", "From", "To", "MagicXyz"])
+                            delete np[k];
+                        mediaProps = np;
+                        player = await RebuildPlayer(player, create);
+                        props = player.Params;
+                        return;
+                    }
                     Object.getOwnPropertyNames(m).forEach(pn => {
                         if (typeof props[pn] !== "undefined")
                             props[pn] = m[pn];
                     });
-                    switch (t.substring(messagePrefix.length)) {
-                        case "Reload":
-                            player = await RebuildPlayer(player, create);
-                            props = player.Params;
-                            break;
+                    switch (name) {
                         case "SetVolume":
                             player.ResetVolume();
                             break;
@@ -1593,14 +1664,17 @@
                     }
                 });
             }
-            //  A YouTube link with a start time ("t=90"): start there
-            if (mp.Start > 0)
-                await player.Seek(mp.Start);
-            await PlayWithPopup(player);
+            //  A YouTube link with a start time ("t=90"), or `pos` (seconds, ex: a window opened by the editor): start there
+            const pos = parseFloat(U.Get("pos") ?? "");
+            const start = pos > 0 ? pos : mp.Start;
+            if (start > 0)
+                await player.Seek(start);
+            //  `muted` / `loop` (ex: a background video of a page): instead of the visitor's stored preferences, which they don't change
+            await PlayWithPopup(player, { Muted: U.Has("muted") ? true : undefined, Loop: U.Has("loop") ? true : undefined });
         }
         catch (e) {
             //  An in-page error state with the reason and "Try again" (was a toast over an empty page)
-            ShowLoadError(target, FailReason(e));
+            ShowLoadError(target, e);
         }
     }
 
@@ -2503,7 +2577,7 @@
                     Sw.Fail(FailReason(ex));
                 else {
                     target.classList.remove("MediaCaptioned", "MediaCollage");
-                    ShowLoadError(target, FailReason(ex));
+                    ShowLoadError(target, ex);
                 }
             }
             if (shost && !failed) {
@@ -2550,6 +2624,21 @@
         PreviewMain,
         SsHack,
         Ready: playerReady,
+        //  Shared with the media editor (mediaEdit.js, MediaEdit.html)
+        LoadEditor,
+        ReadMediaParams,
+        ReadEditSource,
+        ParseYouTube,
+        ParseMediaLink,
+        MediaLinkProblem,
+        ShowLinkProblem,
+        ShowLoadError,
+        FailReason,
+        CreateChrome,
+        MessagePrefix,
+        ParamTypeName,
+        FormatTime,
+        InApp,
     };
 
     //  Legacy global names (external host pages)

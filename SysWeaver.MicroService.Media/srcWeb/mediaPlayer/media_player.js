@@ -213,6 +213,20 @@ class MediaPlayer {
             case MediaTypes.Effect:
                 return new MediaPlayerEffect(data, mediaParams);
             case MediaTypes.Text:
+                //  A collage writes its grid (tile counts, sizes) into EffectParams.FxProps while the texture is made: that object must be
+                //  the one the effect player reads (its params are a shallow copy), also when the props had no EffectParams / FxProps
+                if (fx && mediaParams.CollageSeparator) {
+                    const ep = mediaParams.EffectParams = Object.assign({}, mediaParams.EffectParams || {});
+                    let fp = ep.FxProps;
+                    if (typeof fp === "string")
+                        try {
+                            fp = JSON.parse(fp);
+                        }
+                        catch {
+                            fp = null;
+                        }
+                    ep.FxProps = fp && typeof fp === "object" ? fp : {};
+                }
                 if (fx)
                     return new MediaPlayerEffect(mediaParams.Effect, mediaParams.EffectParams, gl => new MediaPlayerTextTexture(gl, mediaParams, data));
                 return new MediaPlayerText(data, mediaParams);

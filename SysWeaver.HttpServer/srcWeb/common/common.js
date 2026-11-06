@@ -34532,7 +34532,8 @@ window.Sw.Sources["ui/editors.js"] = "common/common.js";
      * Options: Defs, Values ({ key: value }, missing values show the defaults), OnInput(key, value) (continuous), OnChange(key, value) (committed),
      *          Realtime (call OnInput while dragging, default true), ResetButtons (a reset to default button on the number rows, dimmed at the default),
      *          Hints (default true: the hint lines), RowMenu(def) -> [Sw.Menu items] (a ⋯ button at the end of every row that isn't read only,
-     *          for the row's own actions, ex: "Edit the definition…"; null / empty = no menu items).
+     *          for the row's own actions, ex: "Edit the definition…"; null / empty = no menu items). A definition's own Menu (items, or a
+     *          function(def) returning them or a promise of them) and MenuTitle (the button's tool tip) give only that row a ⋯ menu (ex: "Choose an effect…").
      * Layout (Design v2, PORTING.md B14): label column (wraps, never clipped) with the hint line under the name, the value column with help / error texts
      * under the control. Modified values (not the default) get an accent colored label and a "modified" dot after it: a click on the dot (or a
      * long press / right click on the label) resets the value.
@@ -34970,13 +34971,15 @@ window.Sw.Sources["ui/editors.js"] = "common/common.js";
                     break;
                 }
             }
-            //  RowMenu(def): the row's own actions (ex: "Edit…") in a ⋯ menu at the end of the value
-            if (t.O.RowMenu) {
+            //  RowMenu(def) (every row) or the definition's own Menu (items or a function(def) returning them, only that row): the row's
+            //  own actions (ex: "Edit…", "Choose from the library…") in a ⋯ menu at the end of the value
+            const rowMenu = d.Menu ? () => (typeof d.Menu === "function" ? d.Menu(d) : d.Menu) : t.O.RowMenu ? () => t.O.RowMenu(d) : null;
+            if (rowMenu) {
                 w.MenuBtn = new Sw.Button({
                     Icon: "kebab", Small: true, Kind: "ghost", Class: "sw-prop-menu",
-                    Title: _T("More for {0}", name, "Tool tip of the ⋯ button at the end of a setting row (its own actions), {0} is the name of the setting"),
-                    AriaLabel: _T("More for {0}", name, "Tool tip of the ⋯ button at the end of a setting row (its own actions), {0} is the name of the setting"),
-                    Menu: () => (t.O.RowMenu(d) || []).filter(x => x),
+                    Title: d.MenuTitle || _T("More for {0}", name, "Tool tip of the ⋯ button at the end of a setting row (its own actions), {0} is the name of the setting"),
+                    AriaLabel: d.MenuTitle || _T("More for {0}", name, "Tool tip of the ⋯ button at the end of a setting row (its own actions), {0} is the name of the setting"),
+                    Menu: async () => ((await rowMenu()) || []).filter(x => x),
                 }).E;
                 value.append(w.MenuBtn);
             }
