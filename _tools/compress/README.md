@@ -1,38 +1,84 @@
-# compress
+# Compress
 
-[⬆ _tools](../README.md)
+[⬆ SysWeaver.Tools overview](../README.md)
 
-> Pre-built, self-contained Windows x64 build of the Compress tool, which pre-compresses web and data assets into side-by-side compressed copies during the SysWeaver builds.
+> Pre-compresses files into side-by-side compressed copies (Brotli, gzip, zstd, deflate), optionally minifying web files, recompressing PNGs and optimising shaders first — used by the SysWeaver builds for embedded web and data assets.
 
 | | |
 |---|---|
-| **Project** | [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) (source in SysWeaver.Tools) |
-| **Kind** | Pre-built tool |
-| **Used by the builds** | Yes |
+| **Layer** | Tool (command line) |
+| **Kind** | Command line tool |
+| **Platform** | Windows (the bundled minifier, PNG and shader tools are Windows executables) |
 
 ## Purpose
 
-This is the publish output of the `Compress` project in [SysWeaver.Tools](https://github.com/dosh1974/SysWeaver.Tools), synced into this folder by its [`Publish_All.bat`](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Publish_All.bat) (`.pdb` files and `createdump.exe` are left out, and only the `SysWeaver.*.xml` and `Compress.xml` documentation files are kept). It is self-contained (.NET 10 runtime included), so no .NET installation is needed to run it.
+SysWeaver serves embedded web assets pre-compressed, so they are compressed once at build time instead of on every request. Compress takes source files (typically a `srcWeb` or `srcData` folder) and writes the compressed copies (ex: `app.js.br`) to an output folder (typically `web` or `data`) that is embedded into the assembly.
 
-Project builds call it from `Exec` build steps, ex: `..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web`: about 40 build steps in 29 SysWeaver projects compress `srcWeb` / `srcData` (or SvgOpt's `.opt` output) into the generated `web` / `data` folders that are embedded into the assemblies. `SysWeaver.Media.Video` uses `-Force -Methods gzip` to pack its `runtimes` folder into `packed`. In [SysWeaver.Services](https://github.com/dosh1974/SysWeaver.Services), `FakeEmailService` and `FakeTextService` call it the same way. Because it is a Windows executable, building these projects requires Windows.
+## How it fits into SysWeaver
 
-## Contents
+The prebuilt copy in [`SysWeaver/_tools/compress`](https://github.com/dosh1974/SysWeaver/blob/main/_tools/README.md) is called from `Exec` build steps in many SysWeaver and SysWeaver.Services projects, ex: `..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web`. It is built on the "files in → folder out" shell (`FilesToFolderTool`) of [SysWeaver.CommandLine](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.CommandLine/README.md) and the compression plug-ins of [SysWeaver.Compression](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.Compression/README.md).
 
-| Item | Description |
+## Key features
+
+- Compresses each file with every method in `-Methods` (default `br,gzip,zstd`) at the best level, or only keeps the smallest result (`-OnlyBest`); `-OnlyBetter` skips results that aren't smaller than the original
+- Type specific pre-processing before compression (each can be turned off):
+  - web files (`.js`, `.mjs`, `.css`, `.htm`, `.html`, `.xhtml`, `.json`, `.svg`, `.xml`, `.rss`, `.webmanifest`) are minified with `minify`; lines between `//DEBUG_BEGIN` and `//DEBUG_END` are removed from `.js` files first
+  - `.png` files are recompressed with ZopfliPng (the result replaces the original in the output folder)
+  - `.glsl` / `.frag` shaders are stripped (comments and white space removed, short number literals, nothing renamed or evaluated) so that they work exactly like the original, also in [Effect Weaver](https://github.com/dosh1974/EffectWeaver) (its shader parser reads settings from the source, unless `-RemoveShaderVars`). `-MinifyShaders true` also tries shader_minifier (renaming, inlining, preprocessed) and uses it when smaller: about 10 % smaller after Brotli, but shader_minifier 1.6.0 rewrites can break a shader (one effect compiled and then rendered black / lost the WebGL context), so verify such results. What is kept in both modes:
+    - the tunable variable candidates are kept with their comments: `#define NAME literal` (top level or in an `#ifndef NAME` guard) and `const T NAME = literal;` with a comment (aligned comment continuation lines joined, `// var: {...}` annotations compacted), in the original order
+    - the iMouse control comments (`// iMouse.x = Name | Description | Default | Min .. Max | Unit`, the last two optional) are kept as compact lines at the top
+    - `main`, `mainImage` and `vertexMain` (the optional vertex stage) are entry points; the snippet macros the effect defines (`#define EW_SDF(p) map(p)`) are kept with the functions they use, and functions named like snippets (`Ew…`) keep their names; one top level declaration per line (snippets are inserted by line when the effect is built)
+    - conditionals on compiler macros (`#if __VERSION__ >= 300`, they differ between the GLSL ES 3.00 / 1.00 builds) are kept as is if they only contain directives
+    - with `-MinifyShaders`: if a kept define is used by a conditional (directly or through another macro), or a compiler macro conditional contains code, the shader is only stripped; the shader_minifier output (with and without aggressive inlining) is used only if it's smaller than stripping, and the source if nothing is smaller
+    - the parser's candidate rules are mirrored in `CompressProgram_Shaders.cs` (keep them in sync with EffectWeaver.Common `ShaderParser`); bumping `ShaderTypeVersion` re-processes the cached shaders
+- Files whose type doesn't benefit from compression (by MIME type) are only copied, unless `-Force` is used (`.jpg`, `.jpeg` and `.ico` are always compressed)
+- Results are cached per source file, and outputs are only written when they changed, so incremental builds are fast
+- Files are processed in parallel (sequentially in DEBUG builds)
+
+## Key components
+
+- [`CompressParams`](CompressParams.cs) — the command line options
+- [`CompressProgram`](CompressProgram.cs) — the type specific processing, compression and caching
+- [`CompressProgram_Shaders`](CompressProgram_Shaders.cs) — the shader optimization (Effect Weaver's parser rules, minimize / strip)
+
+## Using it
+
+```
+Compress [options] <SourceFiles> [DestFolder]
+
+  SourceFiles   File names or wildcard masks, separated by ';', a trailing '+' searches sub folders (ex: .\srcWeb\*+)
+  DestFolder    The output folder (default: the folder of the source file)
+
+  -Methods <list>          Compression methods (HTTP codes), comma separated: br, gzip, zstd, deflate (default br,gzip,zstd)
+  -OnlyBest                Only save the smallest compressed version
+  -OnlyBetter              Skip a compressed version that isn't smaller than the original
+  -CopyOriginal            Also copy the original file to the output folder
+  -Force                   Compress files even if their type normally isn't compressed
+  -OptimizeWebFiles false  Don't minify web files (also -RecompressImages false, -OptimizeShaders false)
+  -FailOnTypeError         A failed minify / shader minifier / png step fails the run (exit code 4) instead of shipping the original
+  -MinifyShaders true      Also minify shaders with shader_minifier when smaller (verify the results, see above)
+  -?                       Help (all options)
+```
+
+Exit codes: 0-2 as all tools, 3 if a file couldn't be compressed with any method (`-OnlyBest`), 4 if a type specific step failed with `-FailOnTypeError`, see [EXIT CODES](../README.md#exit-codes).
+
+**Checking what ships**: a failed type specific step is also printed as `<file> : warning CMP001 : ...` (with `-FailOnTypeError`: `error CMP001`), the canonical form that an MSBuild `Exec` step reports as a build warning (error). The minifiers can also break a file without failing: run `SwWeb verify-build <repository>` ([SwWeb](../SwWeb/README.md)) after a build; it checks the compressed outputs (empty outputs, minified scripts that read a name before its declaration, shaders with duplicate functions).
+
+## Limitations and considerations
+
+- The helper executables in [`tools/`](tools) (`minify.exe`, `ZopfliPng.exe`, `preprocessor.exe`, `shader_minifier.exe`; `glsl_optimizer.exe` is shipped but currently unused) are Windows binaries copied next to the tool; if one fails (exit code, or an empty shader_minifier output), the file is reported with a warning (`warning CMP001`) and compressed without the type specific step (`-FailOnTypeError`: the run fails)
+- Temporary `.js` files (after removing the `//DEBUG_BEGIN` blocks) go to a folder of the process below `SysWeaver_JsTemp` (the `TempFolder` of the machine), so parallel Compress runs don't share one
+- Unknown names in `-Methods` are silently ignored; `org` (documented as "copy the original") and an empty entry (ex: a trailing comma) currently make the option validation throw, which ends with exit code 2
+- A file named `typescript.js` is copied as is (not minified)
+
+## Folder layout
+
+| Folder | Content |
 |---|---|
-| [`runtimes/`](runtimes/README.md) | Native Brotli libraries per platform (from the Brotli.NET package) |
-| [`tools/`](tools/README.md) | Windows helper executables (minifier, PNG recompressor, shader tools) that Compress runs for type specific pre-processing |
-| [`Compress.exe`](Compress.exe) | The executable (entry point) |
-| `Compress.dll` | The tool's code |
-| [`Compress.deps.json`](Compress.deps.json), [`Compress.runtimeconfig.json`](Compress.runtimeconfig.json) | .NET dependency manifest and runtime configuration (`net10.0`, runtime 10.0.13 included) |
-| `Compress.xml` | XML documentation of the tool |
-| `SysWeaver.*.dll` (13) and matching `SysWeaver.*.xml` | SysWeaver libraries: CommandLine, Common (+ Linux / Windows), Compression (+ BrotliNativeNET / ZstdSharp), Docs, ExpressionEvaluator, MicroServices, Serialization (+ NewtonsoftJson), Storage |
-| `Brotli.Core.dll`, `brolib_x64.dll`, `brolib_x86.dll`, `ZstdSharp.dll`, `Newtonsoft.Json.dll`, `CommunityToolkit.HighPerformance.dll` | Third-party libraries (the two `brolib_*.dll` are identical to the ones in `runtimes/win/native`) |
-| other `*.dll` (~190) | The self-contained .NET runtime (`System.*`, `Microsoft.*`, `coreclr.dll`, `msquic.dll`, ...) |
+| [`tools/`](tools/README.md) | Bundled Windows helper executables (minify, ZopfliPng, shader preprocessor / minifier, unused glsl_optimizer), copied next to the tool |
 
 ## Relationships
 
-- **Part of:** [_tools](../README.md)
-- **Source:** [Compress](https://github.com/dosh1974/SysWeaver.Tools/blob/main/Compress/README.md) in SysWeaver.Tools
-- **Builds on:** [SysWeaver.CommandLine](../../SysWeaver.CommandLine/README.md), [SysWeaver.Compression](../../SysWeaver.Compression/README.md), [SysWeaver.Compression.BrotliNativeNET](../../Compression/SysWeaver.Compression.BrotliNativeNET/README.md), [SysWeaver.Compression.ZstdSharp](../../Compression/SysWeaver.Compression.ZstdSharp/README.md)
-- **Related:** [decompress](../decompress/README.md) (the reverse operation), [svg_opt](../svg_opt/README.md) (optimises SVG icons before they are compressed)
+- **Project:** [`Compress.csproj`](Compress.csproj)
+- **Builds on:** [SysWeaver.CommandLine](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.CommandLine/README.md), [SysWeaver.Common](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.Common/README.md), [SysWeaver.Compression](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.Compression/README.md), [SysWeaver.Compression.BrotliNativeNET](https://github.com/dosh1974/SysWeaver/blob/main/Compression/SysWeaver.Compression.BrotliNativeNET/README.md), [SysWeaver.Compression.ZstdSharp](https://github.com/dosh1974/SysWeaver/blob/main/Compression/SysWeaver.Compression.ZstdSharp/README.md), [SysWeaver.Serialization](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.Serialization/README.md), [SysWeaver.Serialization.NewtonsoftJson](https://github.com/dosh1974/SysWeaver/blob/main/Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md), [SysWeaver.Storage](https://github.com/dosh1974/SysWeaver/blob/main/SysWeaver.Storage/README.md)
+- **Third-party:** bundled executables: [minify](https://github.com/tdewolff/minify), [ZopfliPng](https://github.com/google/zopfli), [shader_minifier](https://github.com/laurentlb/shader-minifier) and a GLSL preprocessor

@@ -645,6 +645,10 @@ Items: `{ Text, Icon, Hint, Title, Desc, Checked, Radio, Disabled, Danger, Keep,
   `Confirm: "anna"` adds a type to confirm input ("Type anna to confirm", focused): the danger button stays disabled until the text matches
   (for actions that delete a lot, ex: an account and all its data).
 * `await Sw.Dialog.Prompt(title, value, placeholder, { Text, Label, Multiline, Type, Validate, OkText, CancelText, Mono, Id })` → text or null.
+* `await Sw.Dialog.Form(title, defs, values, { Text, OkText, CancelText, Id, Wide, Validate, OnOk, OnChange, OnReady })` → all values or null: a form of
+  `Sw.PropertyEditor` definitions (`Type: "string"` for texts, `NoSlider` numbers, `Help` lines), starting unmodified. `Validate(values)` returns
+  null, `{ key: message }` (under the fields) or a text (a toast); `OnOk(values)` does the work (a promise makes the dialog busy; `false` or
+  `{ key: message }` keeps it open, a thrown error is shown); `OnReady(editor, values, form)` / `OnChange(key, value, values, editor)` enable or hide fields (`SetEnabled`, `SetVisible`), `form.SetOk(enabled, reason)` enables / disables OK (disabled it stays reachable: a click or Enter shows the reason, `Sw.Disabled`); `form.Set(values)` sets fields as if typed (ex: a one click fix); `After` = an element under the fields (ex: a preview).
 * `await Sw.Dialog.Alert(title, text, okText)` (the button reads "Close" by default).
 * `await Sw.Dialog.Select({ Title, Tip, Placeholder, StartText, GetAll, Items(filter, close) })` → the picked value (items: elements or `{Text, Hint, Icon, Value, Title}`).
 * `const close = Sw.Dialog.Working({ Title, Text, Icon, Work, Cancel, Background, Promise, Progress, CloseText, Stop, Key, Id, NoMove })` (`NoMove`: no dialog menu, for a short wait before a question): a busy
@@ -986,9 +990,10 @@ const ed = new Sw.PropertyEditor({
 ed.SetValues({ Speed: 1.5 });
 ```
 Types: `float`, `int`, `bool`, `enum`, `color`, `color4`, `vec2`, `vec3`, `vec4` (`Names`, `Descs`), `string`. `NoSlider`, `ResetButtons`,
-`SetEnabled(keyOrFn, enabled)`, `Get(key)`, `SetError(key, text)`. Modified values get an accent label and a "modified" dot after the name
+`RowMenu(def) -> [menu items]` (a ⋯ button at the end of every row for its own actions, ex: "Edit…"; it stays usable on a disabled row),
+`SetEnabled(keyOrFn, enabled)`, `Get(key)`, `SetError(key, text)`, `SetHelp(key, text)`. Modified values get an accent label and a "modified" dot after the name
 (a click on the dot, or a long press / right click on the label, resets it). On narrow screens labels are shown above their values.
-Per definition: `Hint` (the line under the name, 12 px secondary text; default for numbers "min to max unit", ex: "0.05 to 8 ×"; `""` = none;
+Per definition: `Map: { Min, Max, Unit, Format }` (a normalized number, ex: a 0..1 controller, also shown in the units it drives, linearly: "= 3000 lm"), `Format` (the display of a number, a template: `"{0} BPM"`, `"{0:1} %"` = 1 decimal, shown after the value box instead of the Unit; `PropertyEditor.Display(spec, value)`), `Scale` (numbers, default 1: shown and typed × Scale, its range and step too: 0.3 with `Scale: 100, Unit: "%"` shows as "30 %", the value stays 0.3; `PropertyEditor.Scaled` / `Unscaled`). Units and mapped values sit in a slot of one width on every number row of an editor, so the sliders and boxes line up. Per definition: `Hint` (the line under the name, 12 px secondary text; default for numbers "min to max unit", ex: "0.05 to 8 ×"; `""` = none;
 the option `Hints: false` hides every hint), `Help` (a help text under the value), `ReadOnly` (the value as plain text, tabular figures, no
 control). Row markup (components.css, Design v2, PORTING.md B14, the same look as Sw.Edit's name over its type hint):
 `div.sw-prop-label > span.sw-prop-name + button.sw-prop-dot + small.sw-prop-hint`, `div.sw-prop-value > controls + span.sw-prop-unit`,
@@ -1208,10 +1213,13 @@ ed.SetMarkers([{ Line: 12, Kind: "error", Text: "'x' : undeclared identifier" }]
 `GoToLine()`, `Find(replace)`, `Focus()`, `SetReadOnly(bool)`, `Refresh()`, `Destroy()`, option `Hover(info, editor)`.
 `SetDots([{ Line, Kind, Title }])` (clickable gutter dots, ex: a breakpoint; option `OnDot(line, dot, event)`), `SetSpans([{ Line, Col, Len, Kind }])`
 (highlighted text ranges, class `sw-code-span sw-<Kind>`), option `OnAltClick(info, editor)` (Alt + click: the word under the mouse, or the
-selection when the click is inside it), `Undoable()` (false while the editor is hidden: edits of a hidden editor, ex: an inactive tab, are
+selection when the click is inside it), option `ContextMenu(info, editor, where, event)` (a right click, the menu key or Shift+F10: the menu
+items it returns for the word / selection, `where = { Pos, Line, Col, InComment }`, then the editor's own cut, copy, paste, select all, find,
+replace, go to line, comment; a right click outside the selection moves the cursor first; with a modifier key, or a touch long press, the
+browser's menu shows; without the option the browser's menu shows), `Undoable()` (false while the editor is hidden: edits of a hidden editor, ex: an inactive tab, are
 applied directly without undo, a hidden textarea can't take the focus).
 Keys: Tab / Shift+Tab, Enter (keeps the indentation), Home (smart), Ctrl+/ (comments), Ctrl+D, Ctrl+Shift+K, Alt+Up / Down, Ctrl+F / Ctrl+H
-(find / replace: case, word, regex), F3 / Shift+F3, Ctrl+G, Ctrl+Space. Colors: `--sw-code-*` tokens (a light variant for the light theme).
+(find / replace: case, word, regex), F3 / Shift+F3, Ctrl+G, Ctrl+Space. Colors: `--sw-code-*` tokens (a light variant for the light theme). GLSL `// var: { ... }` setting comments are dimmed (class `cv`): the code stays the focus.
 
 ## Icon classes (icons.css)
 

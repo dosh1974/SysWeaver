@@ -2890,6 +2890,34 @@ html.SwMobile .sw-number {
     white-space: nowrap;
 }
 
+/* The unit / mapped value slot after a number box: one width on every number row of an editor (FitSuffixes), so the boxes line up */
+.sw-prop-suffix {
+    display: none;
+    flex: none;
+    width: var(--sw-prop-suffix-w, auto);
+    font-size: var(--sw-text-sm);
+    white-space: nowrap;
+}
+
+.sw-props-suffixes .sw-prop-suffix {
+    display: inline-flex;
+    gap: var(--sw-space-1);
+}
+
+.sw-prop-suffix .sw-prop-mapped {
+    min-width: 0;
+}
+
+/* A normalized value in its own units (definition option Map) */
+.sw-prop-mapped {
+    flex: none;
+    min-width: 4.5em;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 /* Read only: the value as plain text (no control look), numbers in tabular figures */
 .sw-prop-ro {
     min-width: 0;
@@ -2936,6 +2964,10 @@ html.SwMobile .sw-number {
 
 .sw-prop-help {
     color: var(--sw-text-2);
+}
+
+.sw-prop-help[hidden] {
+    display: none;
 }
 
 .sw-prop-error {
@@ -2987,6 +3019,19 @@ html.SwMobile .sw-number {
     flex: none;
 }
 
+/* The ⋯ of a row (RowMenu): quiet until the row is hovered or it has the focus */
+.sw-prop-menu {
+    flex: none;
+    margin-left: auto;
+    opacity: 0.55;
+}
+
+.sw-prop-value:hover .sw-prop-menu,
+.sw-prop-menu:focus-visible,
+.sw-prop-menu[aria-expanded="true"] {
+    opacity: 1;
+}
+
 .sw-prop-reset.sw-at-default {
     opacity: 0.3;
 }
@@ -3032,6 +3077,16 @@ html.SwMobile .sw-number {
 .sw-prop-value.sw-disabled {
     opacity: 0.45;
     pointer-events: none;
+}
+
+/* Rows hidden by SetVisible (ex: the fields of a form that don't apply) */
+.sw-prop-hidden {
+    display: none !important;
+}
+
+/* The row menu of a disabled row stays usable (its own actions, ex: edit the definition) */
+.sw-prop-value.sw-disabled .sw-prop-menu {
+    pointer-events: auto;
 }
 
 .sw-prop-label.sw-disabled {
@@ -3664,6 +3719,22 @@ iframe.sw-frame-modal {
     display: flex;
     flex-direction: column;
     gap: var(--sw-space-3);
+}
+
+/* Form dialogs (Sw.Dialog.Form): the text above the fields */
+.sw-dialog-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+}
+
+/* A form has no "modified" marks: every field is an input the user fills, not a setting away from its default */
+.sw-dialog-form .sw-prop-label.sw-modified {
+    color: inherit;
+}
+
+.sw-dialog-form .sw-prop-dot {
+    display: none !important;
 }
 
 /* Text dialogs (json, long text, markdown cells) */
@@ -5516,6 +5587,7 @@ a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon {
 }
 
 .sw-code .c { color: var(--sw-code-c); font-style: italic; }
+.sw-code .cv { opacity: 0.55; }
 .sw-code .k { color: var(--sw-code-k); }
 .sw-code .t { color: var(--sw-code-t); }
 .sw-code .f { color: var(--sw-code-f); }

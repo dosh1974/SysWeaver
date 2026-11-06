@@ -2992,6 +2992,9 @@
         //  (the options form: Confirm({ Title, Text, OkText, ...the options }); FD S5b N2: a wrong name there was checked against the
         //  options only, so the warning left out the three names the author needed)
         "Sw.Dialog.Confirm({...})": Object.assign({ Title: "string", Text: "string", OkText: "string" }, ConfirmSchema),
+        "Sw.Dialog.Form": {
+            Text: "string", OkText: "string", CancelText: "string", Id: "string", Wide: "any", Validate: "function", OnOk: "function", OnChange: "function", OnReady: "function", After: "element",
+        },
         "Sw.Dialog.Prompt": {
             Text: "string", Label: "string", Multiline: "boolean", Rows: "number", Type: "string", Validate: "function", OkText: "string", CancelText: "string",
             Mono: "boolean", Id: "string",
@@ -3115,6 +3118,117 @@
             },
         });
         return v === "ok" ? tb.Get().trim() : null;
+    }
+
+    /**
+     * Sw.Dialog.Form (see there).
+     * @param {string} title Title.
+     * @param {object[]} defs The fields.
+     * @param {object} [values] Initial values.
+     * @param {object} [o] Options.
+     * @returns {Promise<object|null>} The values, or null if cancelled.
+     */
+    async function formImpl(title, defs, values, o) {
+        o = o || {};
+        const cur = {};
+        for (const d of defs || [])
+            cur[d.Key] = values && values[d.Key] !== undefined ? values[d.Key] : d.Default;
+        //  A form starts unmodified: the initial values are the fields' defaults (no "modified" marks; a reset goes back to them)
+        const pe = new Sw.PropertyEditor({
+            Defs: (defs || []).map(d => Object.assign({}, d, { Default: cur[d.Key] })), Values: cur, Hints: o.Hints,
+            OnInput: (k, v) => cur[k] = v,
+            OnChange: (k, v) => {
+                cur[k] = v;
+                pe.SetError(k, null);
+                if (o.OnChange)
+                    o.OnChange(k, v, cur, pe);
+            },
+        });
+        let box = null;
+        const content = el("div.sw-dialog-form", null, o.Text ? el("div.sw-dialog-text", { text: o.Text }) : null, pe.E, o.After || null);
+        //  The OK button can be disabled by the form (ex: nothing to write): ctl.SetOk(enabled, reason)
+        let okOff = null;
+        const applyOk = () => {
+            const b = box && box.querySelector(".sw-dialog-foot .sw-button:last-child");
+            if (!b)
+                return;
+            //  Reachable while disabled (UX INP-12): a click or Enter says why (the reason is also the tool tip)
+            Sw.Disabled.Set(b, okOff !== null, okOff !== null ? { Reason: okOff || _TF("Not available yet", "Reason of a disabled OK button of a form when the form gives none") } : undefined);
+        };
+        const ctl = {
+            SetOk: (enabled, reason) => {
+                okOff = enabled ? null : (reason || "");
+                applyOk();
+            },
+            //  Set fields as if typed (ex: a one click fix of a hint): the values, OnChange per field
+            Set: values => {
+                //  (SetValues shows defaults for the keys it isn't given: give it every value)
+                pe.SetValues(Object.assign({}, cur, values));
+                for (const [k, v] of Object.entries(values || {})) {
+                    cur[k] = v;
+                    pe.SetError(k, null);
+                    if (o.OnChange)
+                        o.OnChange(k, v, cur, pe);
+                }
+            },
+        };
+        if (o.OnReady)
+            o.OnReady(pe, cur, ctl);
+        //  Errors: { key: message } under the fields, a text as a toast; true when there are none
+        const show = err => {
+            if (!err || (typeof err === "object" && !Object.keys(err).length))
+                return true;
+            if (typeof err === "string") {
+                Sw.Toast(err, { Kind: "error" });
+                return false;
+            }
+            for (const [k, m] of Object.entries(err))
+                pe.SetError(k, m);
+            return false;
+        };
+        const check = () => {
+            //  a text field with the focus commits on blur: commit it first
+            const a = document.activeElement;
+            if (a && content.contains(a) && typeof a.blur === "function")
+                a.blur();
+            for (const d of defs || [])
+                pe.SetError(d.Key, null);
+            return show(o.Validate ? o.Validate(cur) : null);
+        };
+        const ok = () => {
+            if (okOff !== null)
+                return false;
+            if (!check())
+                return false;
+            if (!o.OnOk)
+                return undefined;
+            const r = o.OnOk(cur);
+            const after = x => x === false ? false : show(x && typeof x === "object" ? x : null) ? undefined : false;
+            return r && typeof r.then === "function" ? r.then(after) : after(r);
+        };
+        const v = await Dialog.Show({
+            Title: title, Id: o.Id || "sw.form", Wide: o.Wide,
+            Content: content,
+            Buttons: [
+                { Text: o.CancelText || _TF("Cancel", "The text of a button on a dialog that when pressed will close the dialog without performing the action"), Value: null },
+                { Text: o.OkText || _TF("OK", "The text of a button on a dialog that when pressed will accept the entered value"), Kind: "primary", Value: "ok", OnClick: ok },
+            ],
+            //  Enter = OK (with OnOk: a click on OK, so the work runs as from the button)
+            EnterValue: () => {
+                if (!o.OnOk)
+                    return check() ? "ok" : undefined;
+                const b = box && box.querySelector(".sw-dialog-foot .sw-button:last-child");
+                //  (a disabled OK says why: Sw.Disabled)
+                if (b)
+                    b.click();
+                return undefined;
+            },
+            OnShow: (c, b) => {
+                box = b;
+                applyOk();
+            },
+        });
+        return v === "ok" ? cur : null;
     }
 
     /**
@@ -6026,6 +6140,25 @@
         Prompt(title, value, placeholder, o) {
             checkOpts("Sw.Dialog.Prompt", o);
             const p = promptImpl(title, value, placeholder, o);
+            p.SwDialog = true;
+            return p;
+        },
+
+        /**
+         * Ask the user for several values: a form of Sw.PropertyEditor definitions (Type "string" for texts, NoSlider for unbounded
+         * numbers, Help for a line under a field).
+         * @param {string} title Title.
+         * @param {object[]} defs The fields (PropertyEditor definitions).
+         * @param {object} [values] The initial values ({ key: value }, missing ones show their Default).
+         * @param {object} [o] Options: { Text (a description above the fields), OkText, CancelText, Id, Wide,
+         * Validate(values) -> null | { key: message } (shown under the fields) | "message" (a toast), checked on OK and Enter,
+         * OnOk(values) -> the work of OK (may return a promise: the dialog is busy; it stays open when it returns false or { key: message },
+         * a thrown error is shown), OnChange(key, value, values, editor) (ex: to enable fields), OnReady(editor, values, form) (the form is built: ex: disable fields; form.SetOk(enabled, reason) enables / disables OK, ex: nothing to write; form.Set(values) sets fields as if typed, ex: a one click fix), After (an element under the fields, ex: a preview of the result) }.
+         * @returns {Promise<object|null>} All values (the defaults filled in), or null if cancelled.
+         */
+        Form(title, defs, values, o) {
+            checkOpts("Sw.Dialog.Form", o);
+            const p = formImpl(title, defs, values, o);
             p.SwDialog = true;
             return p;
         },

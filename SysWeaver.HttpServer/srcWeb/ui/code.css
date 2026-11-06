@@ -255,6 +255,7 @@
 }
 
 .sw-code .c { color: var(--sw-code-c); font-style: italic; }
+.sw-code .cv { opacity: 0.55; }
 .sw-code .k { color: var(--sw-code-k); }
 .sw-code .t { color: var(--sw-code-t); }
 .sw-code .f { color: var(--sw-code-f); }
