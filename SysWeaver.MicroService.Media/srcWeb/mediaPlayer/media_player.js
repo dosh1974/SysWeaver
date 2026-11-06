@@ -93,7 +93,8 @@ class MediaPlayer {
         3: { Files: ["media_player_youtube.js"], Classes: ["MediaPlayerYoutube"] },
         4: { Files: ["media_player_effect.js", "media_effect_program.js"], Classes: ["MediaPlayerEffect", "EffectProgramData"] },
         5: { Files: ["media_player_text.js"], Classes: ["MediaPlayerText"] },
-        "0Fx": { Files: ["media_player_effect.js", "media_effect_program.js"], Classes: ["MediaPlayerEffect", "EffectProgramData"] },
+        //  (the image texture of the effect takes the defaults of MediaPlayerParamsImage, media_player_image.js)
+        "0Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_image.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerImage"] },
         "5Fx": { Files: ["media_player_effect.js", "media_effect_program.js", "media_player_text.js"], Classes: ["MediaPlayerEffect", "EffectProgramData", "MediaPlayerText"] },
     };
 
@@ -199,6 +200,10 @@ class MediaPlayer {
      */
     static #Construct(type, data, mediaParams) {
         const fx = mediaParams && mediaParams.Effect;
+        //  A transparent image / text with an effect: the effect draws see-through too (its canvas gets an alpha channel), unless its
+        //  own params say otherwise
+        if (fx && mediaParams.Transparent && (type === MediaTypes.Image || type === MediaTypes.Text) && !(mediaParams.EffectParams && mediaParams.EffectParams.Transparent === false))
+            mediaParams.EffectParams = Object.assign({}, mediaParams.EffectParams || {}, { Transparent: true });
         switch (type) {
             case MediaTypes.Image:
                 if (fx)

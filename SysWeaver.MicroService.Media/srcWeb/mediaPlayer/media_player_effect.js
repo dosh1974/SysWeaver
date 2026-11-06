@@ -1391,7 +1391,9 @@ class MediaPlayerImageTexture {
     constructor(gl, params, url) {
         const t = this;
         const texture = gl.createTexture();
-        t.Params = params;
+        //  The image defaults under the given params (a share link leaves out defaults, ex: EffectSizeFromImage = true, which keeps
+        //  the shape of the picture), as the text texture does
+        t.Params = typeof MediaPlayerParamsImage === "function" ? Object.assign(new MediaPlayerParamsImage(), params) : params;
         t.Url = url;
         t.GL = gl;
         t.Texture = texture;

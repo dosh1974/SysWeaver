@@ -134,13 +134,23 @@ void main()
     
     float focus = mix(MaxBlur-c.y, MinBlur, S(.1, .2, c.x));
     
+    //  The slope at the sharp rim of a drop can be larger than the picture: limit the refraction (a drop shows what is near it) and
+    //  clamp the sampled point to the picture (half a texel in, so filtering never reads outside), so nothing from beyond the edges
+    //  (see-through or black) is pulled into the picture
+    float nl = length(n);
+    if (nl > 0.08)
+        n *= 0.08 / nl;
+    vec2 texel = 0.5 / max(resolution, vec2(1.0));
+    vec2 q = clamp(UV + n, texel, 1.0 - texel);
+
     vec4 col;
     if (MaxBlur > 0.0)
-        col = texture2DLod(tex, UV+n, focus);
+        col = texture2DLod(tex, q, focus);
     else
-        col = texture2D(tex, UV+n);
-    col.xyz *= col.a;
-    gl_FragColor = col;
+        col = texture2D(tex, q);
+    //  Transparency: the canvas uses premultiplied alpha, so the colour is scaled by its alpha and the alpha is kept (see-through
+    //  parts stay see-through, never black)
+    gl_FragColor = vec4(col.rgb * col.a, col.a);
 
 }
 

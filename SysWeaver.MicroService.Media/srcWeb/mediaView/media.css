@@ -334,7 +334,8 @@ Media-View {
 /*
  * Media-View.MediaChrome: the media fills a dark stage; the controls are on top of it (like a video player).
  * Classes on the view: MediaChromeOn (the bars are shown), MediaPaused (paused: the bars and the big Play button stay),
- * MediaAudioOnly (no picture: a speaker in the middle, the bars stay).
+ * MediaAudioOnly (no picture: a speaker in the middle, the bars stay), MediaChromeFresh (the start of MediaView.html: nothing over
+ * the picture, also while paused, until the first activity).
  */
 Media-View.MediaChrome,
 .SwMobile Media-View.MediaChrome {
@@ -356,6 +357,11 @@ Media-View.MediaChrome,
     outline: none;
     text-align: left;
 }
+
+    /* A transparent media (its Transparent setting): the page background of the theme shows through its see-through parts */
+    Media-View.MediaChrome.MediaTransparent {
+        --media-stage: var(--sw-bg);
+    }
 
     Media-View.MediaChrome:focus-visible {
         box-shadow: inset 0 0 0 3px var(--sw-focus);
@@ -397,7 +403,7 @@ Media-View.MediaChrome,
 }
 
     .MediaChromeOn .media-chrome-part,
-    .MediaPaused .media-chrome-part,
+    .MediaPaused:not(.MediaChromeFresh) .media-chrome-part,
     .MediaAudioOnly .media-chrome-part,
     .media-chrome-part:focus-within {
         opacity: 1;
@@ -524,7 +530,8 @@ Media-View.MediaChrome,
         height: 36px;
     }
 
-    Media-View.MediaChrome:not(.MediaPaused) .media-bigplay {
+    Media-View.MediaChrome:not(.MediaPaused) .media-bigplay,
+    Media-View.MediaChrome.MediaChromeFresh .media-bigplay {
         display: none;
     }
 

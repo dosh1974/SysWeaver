@@ -4,7 +4,13 @@
  * Loaded after ../sw/ui.css and media.css. Uses the Sw ui tokens only.
  */
 
-/* The page fills the window; only the settings pane scrolls */
+/* The page fills the window (also the frame of the app shell: no padding of html.Embedded, which would push the bottom of the
+   editor, the player's control bar, out of the frame); only the settings pane scrolls */
+html.Embedded:has(> body.me-page) {
+    padding: 0;
+    height: 100%;
+}
+
 body.media-edit-page.me-page {
     padding: 0;
     overflow: hidden;
@@ -88,11 +94,6 @@ body.media-edit-page.me-page {
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-
-    /* The settings pane names the media: no title over the picture */
-    .me-stage .media-title {
-        display: none;
     }
 
     /* A text is drawn edge to edge: some room around it */

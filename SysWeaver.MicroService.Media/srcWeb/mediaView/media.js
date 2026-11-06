@@ -1519,8 +1519,8 @@
 
     /**
      * Boot function of `MediaView.html`.
-     * URL params: `link`/`d` (required), `type`/`t`, `props` (JSON), `no_stats`, `no_controls`, `muted`, `loop` (start muted / looping instead of the stored preferences), `pos` (seconds to start at), `ctrl` (InterOp message
-     * prefix of a controlling editor). The media fills the `<Media-View>` grid (fill = false, automatic aspect, centered);
+     * URL params: `link`/`d` (required), `type`/`t`, `props` (JSON), `no_stats`, `no_controls`, `muted`, `loop` (start muted / looping instead of the stored preferences), `pos` (seconds to start at), `edit=false` (no "Edit" menu
+     * item / E key, which open the media in MediaEdit.html), `ctrl` (InterOp message prefix of a controlling editor). The media fills the `<Media-View>` grid (fill = false, automatic aspect, centered);
      * activating the media (click, Enter, Space) opens `MediaPreview.html?full&back&pos=...` in the same frame.
      * With `ctrl` the props are first requested from the editor and later `<ctrl>*` messages update the player:
      * Reload (rebuild), SetVolume, UpdateSize, Crop, Compile; matching message fields are copied into the props.
@@ -1597,6 +1597,8 @@
             if (controls)
                 CreateChrome(mview, () => player, {
                     Stats: stats,
+                    StartHidden: true,
+                    Transparent: () => !!(mediaProps && mediaProps.Transparent),
                     FullPage: () => showFull(player),
                     Info: () => ({
                         Type: type,
@@ -1604,6 +1606,15 @@
                             : type === MediaTypes.Text ? null : new URL(data, window.location.href).href,
                     }),
                     Load: m => ShowLink(m),
+                    //  "Edit": this media with its settings in MediaEdit.html (edit=false hides it; not for a player linked to an editor)
+                    Edit: messagePrefix || /^(false|0|no)$/i.test(U.Get("edit") ?? "") ? null : () => {
+                        const q = new URLSearchParams();
+                        q.set("link", U.Get("link") ?? U.Get("d"));
+                        q.set("type", String(type));
+                        if (mediaProps)
+                            q.set("props", JSON.stringify(mediaProps));
+                        Sw.Page.Navigate("MediaEdit.html?" + q.toString(), "_self");
+                    },
                 });
             //  The caption sits directly above the text (a rebuild replaces the player: read it at each placing)
             if (caption)
@@ -1744,6 +1755,12 @@
      * @param {object} o Options.
      * @param {boolean} o.Stats True: a Stats button and panel (the player's `Stats` element is moved into it).
      * @param {function():void} o.FullPage Called when the browser has no full screen for the element (opens the full page preview).
+     * @param {?function():void} [o.Edit] Opens the media in the editor: an "Edit" menu item and the E key (none: no edit).
+     * @param {function():boolean} [o.Transparent] True when the media is transparent (its settings; the player's own Params.Transparent
+     *   counts too, an image / text with an effect has the effect's params): class MediaTransparent, the theme background as the stage.
+     * @param {function():string} [o.Title] The name in the title bar (default: the page title).
+     * @param {boolean} [o.StartHidden] True: no controls and no title at the start (until a pointer move, a tap, a key or the focus;
+     *   shown when the media still doesn't play after 1.5 s; never for audio only media).
      */
     function CreateChrome(view, getPlayer, o) {
         const el = Sw.el;
@@ -1994,6 +2011,8 @@
                 { Text: _TF("Show url...", "Menu item of the media viewer that asks for a media address and shows it"), Icon: "link", Hint: "U", OnClick: askLink },
                 { Text: _TF("Copy information to clipboard", "Menu item of the media viewer that copies the address, the state, the statistics and the settings of the media"), Icon: "copy", OnClick: copyInfo },
                 { Text: _TF("Open the original file", "Menu item of the media viewer that opens the original file in a new tab (or its editor)"), Icon: "external", OnClick: () => Sw.Page.EditOrOpen(p.Source) });
+            if (o.Edit)
+                items.push({ Text: _TF("Edit", "Menu item of the media viewer that opens the media with its settings in the media editor"), Icon: "edit", Hint: "E", OnClick: o.Edit });
             return items;
         };
 
@@ -2041,7 +2060,7 @@
                 show();
             },
         });
-        const title = el("span.media-title", { text: document.title });
+        const title = el("span.media-title", { text: o.Title ? o.Title() : document.title });
         const top = el("div.media-top.media-chrome-part", null, title);
         const bar = el("div.media-bar.media-chrome-part", null,
             timeS.E,
@@ -2078,16 +2097,46 @@
             view.classList.remove("MediaChromeOn");
         }
         function show() {
+            view.classList.remove("MediaChromeFresh");
             view.classList.add("MediaChromeOn");
             clearTimeout(hideTimer);
             hideTimer = setTimeout(hide, ChromeHideMs);
         }
+        //  The start: no controls and no title over the picture (also while it loads, paused) until the first activity (a pointer move,
+        //  a tap, a key, the focus); a media that still doesn't play after a moment (the browser refused to start it) shows its Play
+        //  button and controls. Audio only media keep the controls (there is nothing else to see)
+        if (o.StartHidden && player0.HaveVisual) {
+            view.classList.add("MediaChromeFresh");
+            setTimeout(() => {
+                const p = getPlayer();
+                if (p && p.CanPlay && p.Paused)
+                    view.classList.remove("MediaChromeFresh");
+            }, 1500);
+        }
         let lastTouch = 0;
+        //  A mouse shows hidden controls only after it moved a little (RevealPx from where it was first seen since they hid): a bumped
+        //  mouse or a pointer resting on the media doesn't bring them back. While shown any move keeps them
+        const RevealPx = 24;
+        let anchor = null;
         view.addEventListener("pointermove", ev => {
-            if (ev.pointerType === "mouse")
+            if (ev.pointerType !== "mouse")
+                return;
+            if (view.classList.contains("MediaChromeOn")) {
+                anchor = null;
                 show();
+                return;
+            }
+            if (!anchor) {
+                anchor = { X: ev.clientX, Y: ev.clientY };
+                return;
+            }
+            if (Math.hypot(ev.clientX - anchor.X, ev.clientY - anchor.Y) < RevealPx)
+                return;
+            anchor = null;
+            show();
         });
         view.addEventListener("pointerleave", ev => {
+            anchor = null;
             if (ev.pointerType === "mouse" && !timeS.Dragging && !volS.Dragging) {
                 clearTimeout(hideTimer);
                 view.classList.remove("MediaChromeOn");
@@ -2156,9 +2205,9 @@
             }, 300);
         });
 
-        //  The context menu of the media: the ⋮ menu
+        //  The context menu of the media: the ⋮ menu (a pure right click; with Shift, Ctrl, Alt ... the browser's menu, UX guide INP-3)
         view.addEventListener("contextmenu", ev => {
-            if (!onMedia(ev) || !Sw.Menu)
+            if (!onMedia(ev) || !Sw.Menu || !Sw.IsPureContextMenu(ev))
                 return;
             ev.preventDefault();
             Sw.Menu.Show({ X: ev.clientX, Y: ev.clientY }, menuItems(), { Label: _TF("Media player", "Accessible name of the media player area of the media viewer") });
@@ -2253,6 +2302,11 @@
                 case "u":
                     askLink();
                     break;
+                case "e":
+                    if (!o.Edit)
+                        return;
+                    o.Edit();
+                    break;
                 case "m":
                     toggleMute();
                     break;
@@ -2292,12 +2346,15 @@
                 return;
             const p = getPlayer();
             if (p) {
+                //  A transparent media (its Transparent setting): the theme background shows through instead of the black stage
+                put("transparent", !!((p.Params && p.Params.Transparent) || (o.Transparent && o.Transparent())), v => view.classList.toggle("MediaTransparent", v));
                 const paused = !!p.Paused;
                 put("paused", paused, v => {
                     view.classList.toggle("MediaPaused", v);
                     playB.SetIcon(v ? "play" : "pause");
                     playB.SetTitle(v ? _TF("Play", "Tool tip of the play button of the media viewer") : _TF("Pause", "Tool tip of the pause button of the media viewer"));
-                    if (!v)
+                    //  Playing again: the bars hide after a moment (not at the start: they are not shown yet)
+                    if (!v && !view.classList.contains("MediaChromeFresh"))
                         show();
                 });
                 put("loop", !!p.Looping, v => loopB.SetPressed(v));
@@ -2329,12 +2386,13 @@
                     fullB.SetIcon(v ? "fullscreenExit" : "fullscreen");
                     fullB.SetTitle(v ? _TF("Leave full screen", "Tool tip of the full screen button of the media viewer in full screen") : _TF("Full screen", "Tool tip of the full screen button of the media viewer"));
                 });
-                put("title", document.title, v => title.textContent = v);
+                put("title", o.Title ? o.Title() : document.title, v => title.textContent = v);
             }
             requestAnimationFrame(update);
         }
         update();
-        show();
+        if (!view.classList.contains("MediaChromeFresh"))
+            show();
     }
 
     // ------------------------------------------------------------------ MediaPreview.html

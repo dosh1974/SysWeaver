@@ -204,12 +204,13 @@
     /**
      * The settings of a media type as the player uses them when nothing is given (the MediaPlayerParams* defaults).
      * @param {number} type The media type.
+     * @param {?string} [data] The media (link): an svg image fills its box by default, as the image player does (it has no pixel size).
      * @returns {object} A new object.
      */
-    function Defaults(type) {
+    function Defaults(type, data) {
         switch (type) {
             case TImage:
-                return { Crop: null, Duration: 10, Effect: null, EffectParams: null, EffectSizeFromImage: true, Transparent: false, AdaptiveSize: false };
+                return { Crop: null, Duration: 10, Effect: null, EffectParams: null, EffectSizeFromImage: true, Transparent: false, AdaptiveSize: String(data || "").endsWith(".svg") };
             case TVideo:
                 return { StartAt: 0, EndAt: 0, Volume: 100, Stream: 0, Transparent: false, Crop: null };
             case TAudio:
@@ -364,12 +365,12 @@
     /**
      * The settings of a media type.
      * @param {number} type The media type.
-     * @param {object} ctx The context (Duration, Pos, SetFromPos, EffectOptions, TextureMenu).
+     * @param {object} ctx The context (Data: the media link, Duration, Pos, SetFromPos, EffectOptions, TextureMenu).
      * @returns {Array<object>} PropertyEditor definitions with: Get / Set (virtual values), Show(props), Live (applied without a
      *   rebuild), Local (editor only, never shared).
      */
     function Schema(type, ctx) {
-        const d = Defaults(type);
+        const d = Defaults(type, ctx && ctx.Data);
         switch (type) {
             case TImage:
                 return [
@@ -379,7 +380,7 @@
                         Desc: _TF("How long the picture is shown (its time line, ex: in a slideshow); 0 = no end", "Description of a setting in the media editor"),
                     },
                     {
-                        Key: "AdaptiveSize", Label: _TF("Fill the box", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Picture(), Live: "AdaptiveSize",
+                        Key: "AdaptiveSize", Label: _TF("Fill the box", "Setting in the media editor"), Type: "bool", Default: d.AdaptiveSize, Group: G.Picture(), Live: "AdaptiveSize",
                         Desc: _TF("Scales the picture to the size of its box (keeps its shape)", "Description of a setting in the media editor"),
                     },
                     {
@@ -953,7 +954,7 @@
                 URL.revokeObjectURL(t.Blob);
                 t.Blob = null;
             }
-            t.Props = o.Keep ? (o.Props || {}) : Object.assign(Defaults(type), clone(o.Props) || {});
+            t.Props = o.Keep ? (o.Props || {}) : Object.assign(Defaults(type, data), clone(o.Props) || {});
             //  A text collage is drawn by its effect at the size of the box (not of one text), as the collage pages do
             if (type === TText && t.Props.CollageSeparator && !o.Keep) {
                 const given = o.Props || {};
@@ -1100,6 +1101,10 @@
             t.Player = player;
             MV.CreateChrome(view, () => t.Player, {
                 Stats: true,
+                StartHidden: true,
+                //  The name over the picture, as the viewer shows it (not the page title "... - Media editor")
+                Title: () => t.LocalName || MediaName(t.Type, t.Data),
+                Transparent: () => !!(t.Props && t.Props.Transparent),
                 FullPage: () => Sw.Toast(_TF("This browser can't show the player in full screen here: use Pop out.", "Note of the media editor when full screen is not possible"), { Kind: "info" }),
                 Info: () => ({
                     Type: t.Type,
@@ -1273,6 +1278,7 @@
             const t = this;
             return {
                 Duration: t.Player ? t.Player.Duration : 0,
+                Data: t.Data,
                 Props: t.Props,
                 Pos: t.Player ? () => t.Player ? t.Player.GetPos() : 0 : null,
                 SetFromPos: key => {
@@ -1814,7 +1820,7 @@
             const t = this;
             t.PushUndo();
             const keep = t.Props.$type;
-            t.Props = Defaults(t.Type);
+            t.Props = Defaults(t.Type, t.Data);
             if (keep)
                 t.Props.$type = keep;
             t.FxSig = null;
@@ -1928,7 +1934,7 @@
          */
         Changed() {
             const t = this;
-            const d = Defaults(t.Type);
+            const d = Defaults(t.Type, t.Data);
             const out = {};
             const fxDiff = (fx, defs) => {
                 let v = fx;
@@ -2561,7 +2567,7 @@
                     throw new Error(_TF("The media was not found.", "Error when the media editor's get api returned nothing"));
                 const e = info.Edit;
                 t.CanEdit = src.EditMask ? ((typeof e === "number" ? e : 0) & src.EditMask) !== 0 : !!e;
-                const props = info.Data || Defaults(info.Type);
+                const props = info.Data || Defaults(info.Type, info.Link);
                 if (!props.$type && MV.ParamTypeName(info.Type))
                     props.$type = MV.ParamTypeName(info.Type);
                 if (props.Crop)
