@@ -331,13 +331,13 @@ class MediaPlayerTextTexture {
     /**
      * Creates the provider and an (empty) GL texture.
      * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - The effect's GL context.
-     * @param {MediaPlayerParamsText|object} params - The text params (raw object as passed to MediaPlayer.Create; not merged with defaults).
+     * @param {MediaPlayerParamsText|object} params - The text params (raw object as passed to MediaPlayer.Create; merged over the text defaults, as MediaPlayerText does: a link with only some style members still draws; EffectParams stays the same object).
      * @param {string} url - The text to render.
      */
     constructor(gl, params, url) {
         const t = this;
         const texture = gl.createTexture();
-        t.Params = params;
+        t.Params = Object.assign(new MediaPlayerParamsText(), params);
         t.Url = url;
         t.GL = gl;
         t.Texture = texture;

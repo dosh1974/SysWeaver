@@ -6,11 +6,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover" />
     <title>Media editor</title>
-    <!-- Media editor: MediaEdit.html?link=<url>[&type=][&props=] or ?get=<api>&id=<json>[&update=<api>][&editmask=<bits>]; see media.js / README.md -->
+    <!-- Media editor: MediaEdit.html[?link=<url>][&type=][&props=] or ?get=<api>&id=<json>[&update=<api>][&editmask=<bits>]; see mediaEdit.js / README.md -->
     <script defer src="../sw/core.js"></script>
     <script defer src="../sw/ui.js"></script>
     <script defer src="../common/anim.js"></script>
     <script defer src="media.js"></script>
+    <script defer src="mediaEdit.js"></script>
     <script defer src="mediaEditPage.js"></script>
     <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="../icon.svg">
@@ -19,6 +20,7 @@
     <link rel="stylesheet" href="../common/theme.css">
     <link rel="stylesheet" href="../sw/ui.css">
     <link rel="stylesheet" href="media.css">
+    <link rel="stylesheet" href="mediaEdit.css">
 </head>
 <!-- SwWeb:no-page-header (a full window media editor) -->
 <body class="sw-root media-edit-page">

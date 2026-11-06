@@ -218,6 +218,7 @@
         table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 10v10"/>',
         chart: '<path d="M4 20V11M10 20V4M16 20v-7M2 20h20"/>',
         globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+        fade: '<path d="M3 5v14h18L3 5z"/><path d="M3 12h9"/>',
         moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
         sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
         clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',

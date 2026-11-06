@@ -1,0 +1,490 @@
+/*
+ * mediaEdit.css - the media editor of MediaEdit.html (mediaEdit.js, Sw.MediaEdit): a bar (type, source, actions), the player
+ * stage (the MediaView player, media.css Media-View.MediaChrome) and the settings pane (Sw.PropertyEditor), split by Sw.Split.
+ * Loaded after ../sw/ui.css and media.css. Uses the Sw ui tokens only.
+ */
+
+/* The page fills the window (also the frame of the app shell: no padding of html.Embedded, which would push the bottom of the
+   editor, the player's control bar, out of the frame); only the settings pane scrolls */
+html.Embedded:has(> body.me-page) {
+    padding: 0;
+    height: 100%;
+}
+
+body.media-edit-page.me-page {
+    padding: 0;
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+}
+
+.me-app {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100vh;
+    height: 100dvh;
+    background: var(--sw-bg);
+    color: var(--sw-text);
+}
+
+/* ---------- The bar ---------- */
+
+.me-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2) var(--sw-space-4);
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border-bottom: 1px solid var(--sw-border);
+    background: var(--sw-surface);
+}
+
+.me-source {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    flex: 1 1 36rem;
+    min-width: 0;
+}
+
+    .me-source > .me-source-box {
+        flex: 1 1 auto;
+        min-width: 8rem;
+    }
+
+    .me-source > .sw-select,
+    .me-source > .sw-field {
+        flex: 0 0 auto;
+    }
+
+.me-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    margin-left: auto;
+}
+
+/* ---------- Body: stage | settings ---------- */
+
+.me-body {
+    min-height: 0;
+    position: relative;
+}
+
+    .me-body > .sw-split {
+        height: 100%;
+    }
+
+/* The stage holds the player (Media-View.MediaChrome fills it), the start state, the loading and popped out notes */
+.me-stage {
+    position: relative;
+    height: 100%;
+    min-height: 12rem;
+    overflow: hidden;
+    background: var(--sw-surface-sunken);
+}
+
+    .me-stage > Media-View {
+        position: absolute;
+        inset: 0;
+    }
+
+    /* A media that could not be shown (the error state, a refused link): centered in the stage */
+    .me-stage > Media-View:not(.MediaChrome) {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* A text is drawn edge to edge: some room around it */
+    .me-stage > Media-View.me-pad Media-Preview {
+        inset: 8%;
+    }
+
+.me-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-2);
+    color: var(--sw-text-2);
+    pointer-events: none;
+}
+
+/* The start state: a drop zone with examples */
+.me-empty {
+    position: absolute;
+    inset: var(--sw-space-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    gap: var(--sw-space-3);
+    padding: var(--sw-space-6);
+    border: 2px dashed var(--sw-border-strong);
+    border-radius: var(--sw-radius-lg);
+    text-align: center;
+    overflow: auto;
+}
+
+.me-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    background: var(--sw-surface-sunken);
+    color: var(--sw-text-2);
+}
+
+    .me-empty-icon svg {
+        width: 2rem;
+        height: 2rem;
+    }
+
+.me-empty-title {
+    margin: 0;
+    font-size: var(--sw-text-xl);
+    font-weight: var(--sw-head-weight);
+}
+
+.me-empty-text,
+.me-empty-or {
+    margin: 0;
+    max-width: 34rem;
+    color: var(--sw-text-2);
+}
+
+.me-empty-or {
+    margin-top: var(--sw-space-3);
+    font-size: var(--sw-text-sm);
+}
+
+.me-empty-actions,
+.me-empty-examples {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sw-space-2);
+}
+
+/* "Turn on the sound": on the player, top left (clear of its controls) */
+.me-sound {
+    position: absolute;
+    left: var(--sw-space-4);
+    top: var(--sw-space-4);
+    z-index: 6;
+}
+
+/* The popped out note covers the (paused) player */
+.me-undocked {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    padding: var(--sw-space-4);
+    background: var(--sw-surface-sunken);
+}
+
+/* A drop anywhere on the page */
+.me-drop {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: none;
+    place-items: center;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--sw-bg) 70%, transparent);
+    box-shadow: inset 0 0 0 4px var(--sw-accent1);
+}
+
+.me-dropping .me-drop {
+    display: grid;
+}
+
+.me-drop-text {
+    padding: var(--sw-space-3) var(--sw-space-5);
+    border-radius: var(--sw-radius-lg);
+    background: var(--sw-surface-raised);
+    font-size: var(--sw-text-lg);
+    font-weight: var(--sw-weight-medium);
+}
+
+/* ---------- The settings pane ---------- */
+
+.me-side {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+    background: var(--sw-bg);
+}
+
+.me-side-head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sw-space-2);
+    padding: var(--sw-space-3) var(--sw-space-4);
+    border-bottom: 1px solid var(--sw-border);
+}
+
+.me-side-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.me-side-title {
+    margin: 0;
+    font-size: var(--sw-text-lg);
+    font-weight: var(--sw-head-weight);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.me-side-sub {
+    margin-top: 2px;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+.me-side-tools {
+    display: flex;
+    flex: 0 0 auto;
+    gap: var(--sw-space-1);
+}
+
+.me-side-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--sw-space-2) var(--sw-space-4) var(--sw-space-6);
+}
+
+.me-fx:not(:empty) {
+    margin-top: var(--sw-space-4);
+}
+
+.me-props-note {
+    color: var(--sw-text-2);
+}
+
+.me-side-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sw-space-2);
+    padding: var(--sw-space-2) var(--sw-space-4);
+    border-top: 1px solid var(--sw-border);
+}
+
+    .me-side-foot[hidden] {
+        display: none;
+    }
+
+/* ---------- The share dialog ---------- */
+
+.me-share {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+    /* The same height for every choice: the tabs and buttons stay where they are */
+    min-height: min(38rem, 70vh);
+}
+
+.me-share-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sw-space-2) var(--sw-space-5);
+}
+
+    .me-share-opts > [hidden] {
+        display: none;
+    }
+
+.me-share-out textarea {
+    word-break: break-all;
+}
+
+.me-share-head {
+    margin-bottom: var(--sw-space-1);
+    font-size: var(--sw-text-xs);
+    font-weight: var(--sw-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sw-text-2);
+}
+
+.me-share-group[hidden],
+.me-share-sub[hidden] {
+    display: none;
+}
+
+.me-share-sub {
+    margin: var(--sw-space-1) 0 0;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+.me-share-what {
+    margin: 0;
+    color: var(--sw-text-2);
+}
+
+.me-share-note {
+    margin: 0;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+/* ---------- Narrow windows: the bar wraps, the stage is on top ---------- */
+
+@media (max-width: 760px) {
+    /* Two rows: the labelled actions (Open file…, Effects, Share), then the type, the source box and more */
+    .me-source,
+    .me-actions {
+        display: contents;
+    }
+
+        .me-source > .me-act,
+        .me-actions > .sw-primary {
+            order: 1;
+        }
+
+        .me-actions > .sw-primary {
+            margin-left: auto;
+        }
+
+        .me-source > :not(.me-act),
+        .me-actions > .sw-button:not(.sw-primary) {
+            order: 2;
+        }
+
+        .me-source > .me-source-box {
+            flex: 1 1 8rem;
+        }
+
+    /* The start state on a phone: the title, the buttons and the examples fit */
+    .me-empty {
+        padding: var(--sw-space-3);
+        gap: var(--sw-space-2);
+    }
+
+    .me-empty-text,
+    .me-empty-icon {
+        display: none;
+    }
+
+    /* A window of its own makes no sense on a phone */
+    .me-actions > .me-popout {
+        display: none;
+    }
+
+    /* Icon buttons on phones (the text stays the accessible name, visually hidden): the bar takes two rows, not four */
+    .me-actions > .sw-button:not(.sw-primary) .sw-button-text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .me-bar {
+        gap: var(--sw-space-2);
+    }
+}
+
+/* The crop of a picture with an effect (UpdateCropFrame): what it keeps in a dashed frame, the rest dimmed */
+.me-cropframe {
+    position: absolute;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.me-cropframe-keep {
+    position: absolute;
+    outline: 2px dashed var(--sw-accent1);
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.5); /* SwWeb:allow-design (dims the cut off part over any picture) */
+}
+
+/* The crop note of an effect, under its row in the object editor */
+.me-edit-help {
+    padding: 0 4px var(--sw-space-2);
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+    .me-edit-help[hidden] {
+        display: none;
+    }
+
+/* The settings in the object editor: the number boxes narrower, so the slider stays beside its box in the pane */
+.me-props .sw-edit.me-edit {
+    --sw-edit-number-w: 5.5rem;
+}
+
+.me-edit-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sw-space-2);
+    margin: 0 0 var(--sw-space-2);
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-2);
+}
+
+/* The ⋮ of a setting shows on hover / focus with a mouse (the right click menu is always there); touch keeps it visible */
+@media (hover: hover) {
+    .me-edit .sw-edit-row > .sw-edit-icon > * {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity var(--sw-dur-1, 0.12s), visibility 0s linear var(--sw-dur-1, 0.12s);
+    }
+
+    .me-edit .sw-edit-row:hover > .sw-edit-icon > *,
+    .me-edit .sw-edit-row:focus-within > .sw-edit-icon > *,
+    .me-edit .sw-edit-row > .sw-edit-icon > [aria-expanded="true"] {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity var(--sw-dur-1, 0.12s), visibility 0s;
+    }
+}
+
+/* One rule for every number row: box, unit, then the slider on the same line (it shrinks first) */
+.me-edit .sw-edit-hasslider {
+    flex-wrap: nowrap;
+}
+
+    .me-edit .sw-edit-hasslider > .sw-slider {
+        flex: 1 1 auto;
+        min-width: 3.5em;
+    }
+
+/* A help line spans the row (not only the name column of the side by side layout) */
+.me-edit .me-edit-help {
+    grid-column: 1 / -1;
+}
+
+/* The pane is narrow: a name column of one width for every media (longer names wrap), so the values stay put between media */
+.me-props .sw-edit-desktop.me-edit .sw-edit-body {
+    grid-template-columns: 9.5rem auto minmax(0, 1fr);
+}
+
+/* Colors on one line like the numbers: swatch | hex (9 characters: #rrggbbaa) | "Alpha" and its slider */
+.me-props .me-edit .sw-edit-color {
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+
+    .me-props .me-edit .sw-edit-color > .sw-edit-colortext {
+        flex: 0 0 calc(9ch + 1.75rem);
+        width: calc(9ch + 1.75rem);
+        min-width: 0;
+    }
+
+    .me-props .me-edit .sw-edit-coloralpha {
+        flex: 1 1 auto;
+        min-width: 3.5em;
+    }

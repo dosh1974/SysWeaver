@@ -437,6 +437,22 @@ iframe.sw-frame-modal {
     gap: var(--sw-space-3);
 }
 
+/* Form dialogs (Sw.Dialog.Form): the text above the fields */
+.sw-dialog-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+}
+
+/* A form has no "modified" marks: every field is an input the user fills, not a setting away from its default */
+.sw-dialog-form .sw-prop-label.sw-modified {
+    color: inherit;
+}
+
+.sw-dialog-form .sw-prop-dot {
+    display: none !important;
+}
+
 /* Text dialogs (json, long text, markdown cells) */
 .sw-text-dialog .sw-dialog-body {
     padding: var(--sw-space-3) var(--sw-space-4);

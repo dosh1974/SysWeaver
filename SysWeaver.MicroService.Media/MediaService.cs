@@ -13,6 +13,7 @@ namespace SysWeaver.MicroService
     [WebMenuEmbedded(null, "Debug/Media/ImageEffects", "Image effects", "mediaView/ImageEffectsLib.html", "Show all image effects available", "../icons/image.svg", 2, Roles.Dev)]
     [WebMenuEmbedded(null, "Debug/Media/CollageEffects", "Collage effects", "mediaView/CollageEffectsLib.html", "Show all collage effects available", "../icons/brick.svg", 3, Roles.Dev)]
     [WebMenuEmbedded(null, "Debug/Media/TextDemo", "Text demo", "mediaView/TextDemo.html", "A demo showcasing the render dynamic text to an image (with added effects)", "../icons/text.svg", 4, Roles.Dev)]
+    [WebMenuEmbedded(null, "Debug/Media/MediaEditor", "Media editor", "mediaView/MediaEdit.html?link=../logo.png&props=%7B%22Transparent%22%3Atrue%2C%22Effect%22%3A%22imageEffects%2FRain.glsl%22%7D", "The media editor (showing the logo, transparent, with the rain effect): open any media, change its settings and share a link to it", "../icons/edit.svg", 5, Roles.Dev)]
     [WebMenuEmbedded(null, "Debug/Media/GoogleMapDemo", "Google map demo", "mediaView/MapDemo.html", "A demo showcase of the Google map support", "../icons/table_country.svg", 8, Roles.Dev)]
     public sealed class MediaService : IDisposable
     { 

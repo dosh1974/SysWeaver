@@ -21,7 +21,9 @@
  * binary argument; only when the service reads deflate) and "Compressed result" (--compressed). The serializers and compressions come
  * from `Api/debug/GetApiIoInfo`; recomputed on every change.
  * Storage: `localStorage["SysWeaver.Api." + q]` = the last sent argument (without `$type`), `localStorage["SysWeaver.Tabs.Api.Args"]` /
- * `["SysWeaver.Tabs.Api.NoArgs"]` / `["SysWeaver.Tabs.Api.Results"]` = the selected tab index, `["SysWeaver.Api.Curl"]` = the curl options.
+ * `["SysWeaver.Tabs.Api.NoArgs"]` / `["SysWeaver.Tabs.Api.Results"]` = the selected tab index, `["SysWeaver.Api.Curl"]` = the curl options,
+ * `["SysWeaver.Api.Split"]` = the width of the input card (Sw.Split fraction), `["SysWeaver.Api.ArgsLines"]` / `["SysWeaver.Api.ResultLines"]` =
+ * the most lines of the argument / result json (the size grip of Sw.AceEditor; "all" or a count).
  * Keyboard: Ctrl+Enter (Cmd+Enter) sends the call from anywhere on the page.
  * Styled by explore/api.css.
  */
@@ -109,7 +111,7 @@
             _TF("Copy the result as json text to the clipboard", "Tool tip of the Copy button of the result json of the API inspector")).E));
         if (await loadAce()) {
             const ed = new Sw.AceEditor({
-                Mode: "json", ReadOnly: true, MinLines: 3, MaxLines: 40, Class: "api-ace",
+                Mode: "json", ReadOnly: true, MinLines: 3, MaxLines: 40, Class: "api-ace", Resizable: true, SizeKey: "SysWeaver.Api.ResultLines",
                 Label: _TF("Result as json", "Accessible name of the read only json text of the result of an API call"),
             });
             ed.Set(text);
@@ -179,8 +181,8 @@
             this.IsRaw = !!info.Mime;
             /** @type {object|null} The argument editor. */
             this.Input = null;
-            /** @type {HTMLElement} The page root (a Design v2 form page). */
-            this.E = el("main.api-page.sw-page-form.sw-root");
+            /** @type {HTMLElement} The page root (a Design v2 form page; the dashboard width, so the cards have room to be resized). */
+            this.E = el("main.api-page.sw-page-dash.sw-root");
             /** @type {HTMLElement} The body of the result card. */
             this.Results = el("div.api-results", { attrs: { "aria-live": "polite" } });
             /** @type {string} The method name (the last part of the url). */
@@ -204,9 +206,14 @@
                 OnClick: () => t.Send(),
             });
             t.E.append(t.PageHeader(), t.MetaLine(), t.Signature());
-            const grid = el("div.api-grid");
-            t.E.append(grid);
-            grid.append(await t.InputCard(), t.ResultCard());
+            //  The cards with a bar between them: drag it (or arrow keys) to give one more width, remembered; one column below 1100 px
+            const split = new Sw.Split({
+                A: await t.InputCard(), B: t.ResultCard(), Min: 280, Key: "SysWeaver.Api.Split",
+                Label: _TF("Width of the input and result cards", "Accessible name of the bar between the input and the result card of the API inspector"),
+            });
+            split.E.classList.add("api-grid");
+            split.Bar.title = _TF("Drag to make the input or the result wider. Double click: the same width.", "Tool tip of the bar between the input and the result card of the API inspector");
+            t.E.append(split.E);
             //  (Send is always enabled, like the original page: a refused call shows the server's answer)
             Sw.Keys.Add("Mod+Enter", () => t.SendB.Click(), { Title: _TF("Send API call", "The text of a button that when clicked will make a request to and API"), InInputs: true });
         }
@@ -518,7 +525,7 @@
                 //  The Ace editor of edit/text.html (Sw.AceEditor); without it the Sw code editor (ui/code.js), else a text area
                 if (await loadAce()) {
                     t.JsonEditor = new Sw.AceEditor({
-                        Mode: "json", TabSize: 2, MinLines: 6, MaxLines: 30, Class: "api-json-editor api-ace",
+                        Mode: "json", TabSize: 2, MinLines: 6, MaxLines: 30, Class: "api-json-editor api-ace", Resizable: true, SizeKey: "SysWeaver.Api.ArgsLines",
                         Placeholder: _TF("The parameters as json", "Placeholder of the json editor of the parameters of an API"),
                         Label: _TF("Parameters as json", "Accessible name of the json editor of the parameters of an API"),
                         OnChange: onChange,

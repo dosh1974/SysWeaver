@@ -113,17 +113,63 @@ body {
 
 /* ---------- The two cards: input | result (one column below 1100 px) ---------- */
 
+/* A Sw.Split (sw-split-h): the bar is the gap between the cards (a line shows on hover / focus / drag); the panes keep their natural
+   height and show their content (no clipping: the sticky form footer, focus rings) */
 .api-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--sw-space-4);
-    align-items: start;
+    align-items: flex-start;
 }
 
+    .api-grid > .sw-split-pane {
+        overflow: visible;
+    }
+
+    .api-grid > .sw-split-bar {
+        width: var(--sw-space-4);
+        align-self: stretch;
+        background: none;
+    }
+
+        .api-grid > .sw-split-bar::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: calc(50% - 1px);
+            width: 2px;
+        }
+
+        .api-grid.sw-split-dragging > .sw-split-bar::after, .api-grid > .sw-split-bar:focus-visible::after {
+            background: var(--sw-accent2);
+        }
+
+@media (hover: hover) {
+    .api-grid > .sw-split-bar:hover::after {
+        background: var(--sw-accent2);
+    }
+}
+
+        .api-grid > .sw-split-bar:focus-visible {
+            box-shadow: none;
+            outline: 2px solid var(--sw-focus);
+            outline-offset: -2px;
+        }
+
+/* One column below 1100 px: the panes take the full width (over the inline flex sizes of Sw.Split), no bar */
 @media (max-width: 1100px) {
     .api-grid {
-        grid-template-columns: minmax(0, 1fr);
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--sw-space-4);
     }
+
+        .api-grid > .sw-split-pane {
+            /* SwWeb:allow-design (overrides the inline flex size of the Sw.Split panes in the one column layout) */
+            flex: none !important;
+        }
+
+        .api-grid > .sw-split-bar {
+            display: none;
+        }
 }
 
 .api-card {
@@ -133,7 +179,7 @@ body {
 }
 
     /* Side by side cards start at the same line (no stacking margin of ui/page.css between cards in a column) */
-    .api-page .api-grid > .sw-card.api-card {
+    .api-page .api-grid > .sw-split-pane > .sw-card.api-card {
         margin: 0;
     }
 

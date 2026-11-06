@@ -237,7 +237,8 @@
                 }
                 const s = m[0];
                 if (m[1])
-                    out += '<span class="c">' + esc(s) + "</span>";
+                    //  A "// var: { ... }" setting comment (machine read, often long) is dimmed: the code before it stays the focus
+                    out += (/^\/\/\s*var:/.test(s) ? '<span class="c cv">' : '<span class="c">') + esc(s) + "</span>";
                 else if (m[2]) {
                     const e = line.indexOf("*/", i + 2);
                     const end = e < 0 ? n : e + 2;
@@ -385,6 +386,10 @@
      * OnAltClick(info, editor) (option: Alt + click in the text, info = the word under the mouse { Word, Start, End, Line, Col }, or the
      * selection (Sel: true) when the click is inside it), Undoable() (false while the editor is hidden: edits of a hidden editor, ex: an
      * inactive tab, are applied directly, without undo, since a hidden textarea can't take the focus).
+     * ContextMenu(info, editor, where, event) (option): a right click / the context menu key / Shift+F10 shows a menu: the items it
+     * returns (Sw.Menu items, or a promise of them) for the word under the pointer (info as Hover's, or the selection with Sel: true,
+     * null for none; where = { Pos, Line, Col, InComment }), then the editing items (cut, copy, paste, select all, find, replace, go to
+     * line, comment). Without the option the browser's menu shows.
      */
     class CodeEditor {
         constructor(o) {
@@ -435,6 +440,8 @@
             //  Hover information (option Hover)
             t.Input.addEventListener("mousemove", e => t.HoverMove(e));
             t.Input.addEventListener("mouseleave", () => t.HoverLeave());
+            //  Context menu (option ContextMenu)
+            t.Input.addEventListener("contextmenu", e => t.OnContextMenu(e));
             t.Input.addEventListener("mousedown", e => {
                 t.HideHover();
                 //  Alt + click: the identifier (or the selection) under the mouse (option OnAltClick)
@@ -980,6 +987,95 @@
             return { Word: word, Start: s, End: e, Line: line + 1, Col: s - t.Starts[line] + 1 };
         }
 
+        // -------------------------------------------------------------- context menu
+
+        /**
+         * Right click (mouse), the context menu key or Shift+F10 (keyboard), option ContextMenu: a menu with the page's items for what
+         * was clicked (the word or the selection), then the editing items. A right click outside the selection moves the cursor there
+         * first. A right click with a modifier key keeps the browser's menu (Sw.IsPureContextMenu), and so does a touch / pen long
+         * press (the text selection handles).
+         * @param {MouseEvent} e The contextmenu event.
+         */
+        async OnContextMenu(e) {
+            const t = this;
+            if (!t.O.ContextMenu || !Sw.Menu || (Sw.IsPureContextMenu && !Sw.IsPureContextMenu(e)) || e.pointerType === "touch" || e.pointerType === "pen")
+                return;
+            e.preventDefault();
+            t.HideHover();
+            t.CloseComplete();
+            const ta = t.Input;
+            if (!t.LH)
+                t.Metrics();
+            //  A pointer (coordinates in the text) or the keyboard (the cursor)
+            const mouse = !!(e.clientX || e.clientY) && e.pointerType !== "";
+            let pos = ta.selectionStart;
+            if (mouse) {
+                const r = ta.getBoundingClientRect();
+                const l = Math.floor((e.clientY - r.top + ta.scrollTop - t.PadTop) / t.LH);
+                if (l >= 0 && l < t.Lines.length) {
+                    const p = t.PosAt(e.clientX, e.clientY);
+                    //  past the end of a line: its end
+                    pos = p ? p.Pos : t.Starts[l] + t.Lines[l].length;
+                }
+                if (pos < ta.selectionStart || pos >= ta.selectionEnd || ta.selectionStart === ta.selectionEnd) {
+                    ta.focus({ preventScroll: true });
+                    ta.setSelectionRange(pos, pos);
+                }
+            }
+            const s = ta.selectionStart, en = ta.selectionEnd;
+            const line = t.LineOf(pos);
+            const sel = en > s;
+            const inComment = t.InComment(pos);
+            const info = sel && pos >= s && pos <= en
+                ? { Word: ta.value.slice(s, en), Start: s, End: en, Line: t.LineOf(s) + 1, Col: s - t.Starts[t.LineOf(s)] + 1, Sel: true }
+                : (!inComment && (t.WordAt(pos) || (pos > 0 ? t.WordAt(pos - 1) : null))) || null;
+            const where = { Pos: pos, Line: line + 1, Col: pos - t.Starts[line] + 1, InComment: inComment };
+            let own = [];
+            try {
+                own = ((await t.O.ContextMenu(info, t, where, e)) || []).filter(x => x);
+            }
+            catch (x) {
+                console.warn("Sw.CodeEditor ContextMenu", x);
+            }
+            const ro = ta.readOnly;
+            /** An item's action with the focus in the text (execCommand edits the focused element). */
+            const run = fn => () => {
+                ta.focus({ preventScroll: true });
+                fn();
+            };
+            const mod = /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
+            const paste = async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    t.Replace(ta.selectionStart, ta.selectionEnd, text.replace(/\r\n?/g, "\n"));
+                }
+                catch {
+                    if (Sw.Toast)
+                        Sw.Toast(_T("The browser doesn't allow pasting from a menu here: use {0}", mod + "V", "Code editor: the menu's paste was refused by the browser, {0} the shortcut"), { Kind: "warning" });
+                }
+            };
+            //  Cut / copy only with a selection; with one, the clipboard items come first (the likely action on selected text)
+            const clip = [
+                sel && !ro ? { Text: _TF("Cut", "Code editor menu: cut the selection"), Hint: mod + "X", OnClick: run(() => document.execCommand("cut")) } : null,
+                sel ? { Text: _TF("Copy", "Code editor menu: copy the selection"), Icon: "copy", Hint: mod + "C", OnClick: run(() => document.execCommand("copy")) } : null,
+                ro ? null : { Text: _TF("Paste", "Code editor menu: paste"), Hint: mod + "V", OnClick: run(paste) },
+                { Text: _TF("Select all", "Code editor menu: select everything"), Hint: mod + "A", OnClick: run(() => ta.select()) },
+            ].filter(x => x);
+            const head = sel ? clip.concat(["-"], own, own.length ? ["-"] : []) : own.concat(own.length ? ["-"] : [], clip, ["-"]);
+            const items = head.concat([
+                { Text: _TF("Find…", "Code editor menu: open the find bar"), Icon: "search", Hint: mod + "F", OnClick: () => t.Find(false) },
+                ro ? null : { Text: _TF("Replace…", "Code editor menu: open the find and replace bar"), Hint: mod + "H", OnClick: () => t.Find(true) },
+                { Text: _TF("Go to line…", "Code editor menu: ask for a line number and go there"), Hint: mod + "G", OnClick: () => t.GoToLine() },
+                ro || t.Lang !== Glsl ? null : { Text: _TF("Comment / uncomment lines", "Code editor menu: toggle line comments of the selected lines"), Hint: mod + "/", OnClick: run(() => t.ToggleComment()) },
+            ].filter(x => x));
+            const xy = t.PosXY(pos);
+            const mr = t.Main.getBoundingClientRect();
+            const at = mouse ? { X: e.clientX, Y: e.clientY } : { X: mr.left + xy.X, Y: mr.top + xy.Y + t.LH };
+            //  A mouse opened menu highlights nothing (Enter right after a right click must not run the first item); from the keyboard
+            //  the first item has the focus
+            Sw.Menu.Show(at, items, { Label: _TF("Code", "Accessible name of the code editor's context menu"), NoFocus: mouse });
+        }
+
         /** Mouse move: show the hover popup for the identifier under the mouse (after a short delay). */
         HoverMove(e) {
             const t = this;
@@ -1029,7 +1125,27 @@
                 return;
             if (!t.HoverBox) {
                 t.HoverBox = el("div.sw-code-hover.sw-scroll");
-                t.HoverBox.addEventListener("mouseleave", () => t.HoverLeave());
+                //  The popup can hold controls (ex: a slider): it stays while one is dragged or has the focus (typing in a box)
+                const inUse = () => t.HoverBox.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+                t.HoverBox.addEventListener("mouseleave", e => {
+                    if (!e.buttons && !inUse())
+                        t.HoverLeave();
+                });
+                t.HoverBox.addEventListener("pointerup", () => setTimeout(() => {
+                    if (!t.HoverBox.matches(":hover") && !inUse())
+                        t.HoverLeave();
+                }));
+                t.HoverBox.addEventListener("focusout", e => {
+                    if (!t.HoverBox.contains(e.relatedTarget) && !t.HoverBox.matches(":hover"))
+                        t.HoverLeave();
+                });
+                t.HoverBox.addEventListener("keydown", e => {
+                    if (e.key === "Escape") {
+                        e.stopPropagation();
+                        t.HideHover();
+                        t.Focus();
+                    }
+                });
                 t.HoverBox.addEventListener("mouseenter", () => clearTimeout(t.HoverHide));
                 t.E.append(t.HoverBox);
             }
@@ -1642,7 +1758,7 @@
     if (Sw.Work && typeof Sw.Work.RegisterOptions === "function")
         Sw.Work.RegisterOptions("Sw.CodeEditor", {
             Value: "string", Language: { Type: "string", Check: v => Languages[v] ? "" : '"' + v + '" is no language (' + Object.keys(Languages).join(", ") + ")." }, ReadOnly: "boolean", TabSize: "number",
-            AutoComplete: "boolean", Completions: "function", OnChange: "function", OnCursor: "function", Placeholder: "string", OnComplete: "function", Hover: "function", OnAltClick: "function", OnDot: "function",
+            AutoComplete: "boolean", Completions: "function", OnChange: "function", OnCursor: "function", Placeholder: "string", OnComplete: "function", Hover: "function", OnAltClick: "function", OnDot: "function", ContextMenu: "function",
         });
     Sw.CodeLanguages = Languages;
     Sw.GlslDocs = GlslDocs;

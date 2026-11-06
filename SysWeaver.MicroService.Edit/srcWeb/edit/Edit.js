@@ -56,7 +56,7 @@
     const OptionDefaults = Object.freeze({
         Title: true, Dev: true, ReadOnly: false, CanExpand: true, IsExpanded: true, KeyName: null, Border: true,
         ExpandAllCollections: false, MenuIcon: false, MenuIconClass: "SysWeaverEditIconMenu", MenuColorClass: "IconColorThemeAcc2",
-        AddToHeader: null, TypeHints: true, PlainHints: false, Summary: false,
+        AddToHeader: null, TypeHints: true, PlainHints: false, Summary: false, MarkChanged: false,
     });
 
     //  Inline icons used by the editor menus (stroked 24x24, follow the theme).
@@ -714,13 +714,31 @@
             this.Object = obj;
             const visible = members.filter(m => (m.Flags & Flags.Hide) === 0);
             const layout = this.Edit;
+            //  Units (member Unit) sit in a slot of one width on every number row, so the boxes and sliders line up
+            const unitLen = Math.max(0, ...visible.map(m => m.Unit ? String(m.Unit).length : 0));
+            e.style.setProperty("--sw-edit-suffix-w", unitLen ? (unitLen + 1) + "ch" : "0px");
+            e.classList.toggle("sw-edit-units", unitLen > 0);
+            let group = null;
             for (let i = 0; i < visible.length; ++i) {
                 const member = visible[i];
+                //  A heading before the first member of a group (member Group)
+                if (member.Group && member.Group !== group) {
+                    group = member.Group;
+                    body.append(el("div.sw-edit-group", { text: group, attrs: { role: "heading", "aria-level": "3" } }));
+                }
                 const item = await layout.AddMember(obj, this, body, member, this.MemberTitle(member), options, i === visible.length - 1);
                 if (!item)
                     continue;
                 this.MemberMap.set(member.Name, item);
                 this.WireHide(item, member, obj);
+            }
+            this.UpdateGroups();
+            //  Options.MarkChanged: a member that is not at its default gets an accent name and a dot (as the settings grid)
+            if (options.MarkChanged) {
+                const mark = () => this.MarkChanged();
+                mark();
+                e.addEventListener("EditChange", mark);
+                this.RemoveListerners.push(mark);
             }
             if (!visible.length)
                 body.append(el("div.sw-edit-empty", { text: _TF("No members", "Shown in an object editor when the object has no editable members") }));
@@ -817,6 +835,9 @@
          * @returns {string} The hint.
          */
         static MemberHint(member, options) {
+            //  A client type's own hint (member Hint; "" = none) wins over the automatic one
+            if (member.Hint !== undefined && member.Hint !== null)
+                return String(member.Hint);
             const th = options ? Edit.GetTypeHandler(member.TypeName, member) : null;
             if (th && typeof th.Hint === "function") {
                 const h = th.Hint(member, options);
@@ -994,15 +1015,24 @@
          */
         WireHide(item, member, obj) {
             const mt = member.Type;
-            if (!mt || !mt.startsWith("Hide:"))
-                return;
             let fn;
-            try {
-                fn = new Function("return " + mt.substring(5));
+            if (typeof member.HideIf === "function") {
+                //  A client type's own rule (keeps the Type slot for the editor spec, ex: a unit or a color format)
+                const hf = member.HideIf;
+                fn = function () {
+                    return hf(this);
+                };
             }
-            catch (x) {
-                console.warn("Invalid hide expression \"" + mt + "\": " + x);
-                return;
+            else {
+                if (!mt || !mt.startsWith("Hide:"))
+                    return;
+                try {
+                    fn = new Function("return " + mt.substring(5));
+                }
+                catch (x) {
+                    console.warn("Invalid hide expression \"" + mt + "\": " + x);
+                    return;
+                }
             }
             const apply = () => {
                 let hide = false;
@@ -1015,10 +1045,61 @@
                     item.Hide();
                 else
                     item.Show();
+                this.UpdateGroups();
             };
             apply();
             this.Element.addEventListener("EditChange", apply);
             this.RemoveListerners.push(apply);
+        }
+
+        /**
+         * Mark the members that differ from their default (Options.MarkChanged): the row gets `sw-edit-changed` (an accent name and a
+         * dot; the member menu's "Set default" resets it).
+         */
+        MarkChanged() {
+            const obj = this.Object;
+            if (!obj)
+                return;
+            const options = this.Options;
+            for (const member of this.Type.Members || []) {
+                const item = this.MemberMap.get(member.Name);
+                if (!item || !item.Row)
+                    continue;
+                let def = item.DefValue;
+                if (def === undefined && item.TypeHandler && typeof item.TypeHandler.GetDefault === "function")
+                    try {
+                        def = item.TypeHandler.GetDefault(member, options);
+                    }
+                    catch {
+                        def = undefined;
+                    }
+                item.Row.classList.toggle("sw-edit-changed", def !== undefined && Edit.IsDifferent(obj[member.Name], def));
+            }
+        }
+
+        /**
+         * Hide the group headings (member Group) whose members are all hidden.
+         */
+        UpdateGroups() {
+            const body = this.Body;
+            if (!body)
+                return;
+            let head = null;
+            let any = false;
+            const done = () => {
+                if (head)
+                    head.classList.toggle("sw-hide", !any);
+            };
+            for (const c of body.children) {
+                if (c.classList.contains("sw-edit-group")) {
+                    done();
+                    head = c;
+                    any = false;
+                }
+                else if (c.classList.contains("sw-edit-row") && !c.classList.contains("sw-hide"))
+                    any = true;
+            }
+            done();
         }
 
         /**
@@ -1328,14 +1409,27 @@
          * @param {object} member - Member (or type) description.
          * @param {object} handler - The type handler.
          * @param {object} options - Options.
+         * @param {boolean} [fromJson] - The text is json (a drag of an editor value): a string member reads a json string too.
          * @returns {{Ok: boolean, Value: *, Json: boolean, Reason: ?string}} The result.
          */
-        static ParseValue(text, member, handler, options) {
+        static ParseValue(text, member, handler, options, fromJson) {
             if (text === null || text === undefined || text === "")
                 return { Ok: false, Reason: _TF("No known data on clipboard", "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when there is no known data found on the clipboard.") };
             let obj = text;
             let json = false;
-            if (member.TypeName !== "System.String") {
+            if (member.TypeName === "System.String") {
+                //  A dragged string value is a json string ("\"#ffffff\""): the string, not the text with its quotes
+                if (fromJson && text[0] === "\"") {
+                    try {
+                        const s = JSON.parse(text);
+                        if (typeof s === "string")
+                            obj = s;
+                    }
+                    catch {
+                    }
+                }
+            }
+            else {
                 try {
                     obj = JSON.parse(text);
                     json = true;
@@ -1691,18 +1785,27 @@
                 const data = getJson();
                 if (!data)
                     return;
+                //  A string value is a json string in application/json and the plain string as text (text boxes, other apps)
+                let plain = data;
+                if (data[0] === "\"") {
+                    try {
+                        plain = JSON.parse(data);
+                    }
+                    catch {
+                    }
+                }
                 ev.dataTransfer.setData("application/json", data);
-                ev.dataTransfer.setData("text/plain", data);
+                ev.dataTransfer.setData("text/plain", plain);
                 ev.dataTransfer.effectAllowed = "copy";
                 ev.stopPropagation();
             });
         }
 
         /**
-         * Make an element a drop target: the dropped text is passed to `onDrop(text)`; the element gets class sw-edit-drop while
+         * Make an element a drop target: the dropped text is passed to `onDrop(text, json)`; the element gets class sw-edit-drop while
          * something is dragged over it.
          * @param {HTMLElement} e - The element.
-         * @param {function(string):Promise<void>} onDrop - Called with the dropped json (or plain text).
+         * @param {function(string, boolean):Promise<void>} onDrop - Called with the dropped json (json true) or plain text.
          */
         static DropTarget(e, onDrop) {
             e.addEventListener("dragover", ev => {
@@ -1717,12 +1820,13 @@
             e.addEventListener("dragleave", () => e.classList.remove("sw-edit-drop"));
             e.addEventListener("drop", async ev => {
                 e.classList.remove("sw-edit-drop");
-                const text = ev.dataTransfer.getData("application/json") || ev.dataTransfer.getData("text/plain");
+                const json = ev.dataTransfer.getData("application/json");
+                const text = json || ev.dataTransfer.getData("text/plain");
                 if (!text)
                     return;
                 ev.preventDefault();
                 ev.stopPropagation();
-                await onDrop(text);
+                await onDrop(text, !!json);
             });
         }
 
@@ -1798,8 +1902,8 @@
             }
             Edit.DragSource(c, () => editor.GetCopyMember(member, true));
             if (!readOnly) {
-                Edit.DropTarget(c, async text => {
-                    const r = Edit.ParseValue(text, member, th, options);
+                Edit.DropTarget(c, async (text, json) => {
+                    const r = Edit.ParseValue(text, member, th, options, json);
                     if (!r.Ok) {
                         //  The handler may take other values (a collection appends a dropped item of its element type)
                         if (!res.AcceptText || !await res.AcceptText(text, _T("Dropped: {0}", text, "Command text stored in a log when a property value was replaced by drag and drop.{0} is replaced with the value that was dragged onto the property.")))
@@ -1977,6 +2081,11 @@
             });
             //  Handler and editor items
             const extra = { Items: [] };
+            //  A client type's own actions of the member (member MenuItems(obj): Sw.Menu items, ex: "Use the play position")
+            if (typeof member.MenuItems === "function" && !readOnly)
+                for (const x of (await member.MenuItems(obj)) || [])
+                    if (x)
+                        extra.Items.push(x);
             if (item.AddMenuItems)
                 item.AddMenuItems(extra, () => { });
             if (Edit.IsPrimitive(this.Type) && this.AddMenuItems)
@@ -2431,13 +2540,14 @@
         /**
          * Interpret a text as a replacement of the whole value.
          * @param {?string} text - The text.
+         * @param {boolean} [fromJson] - The text is json (a drag of an editor value): a string value is a json string.
          * @returns {{Ok: boolean, Value: *, Reason: ?string}} The result.
          */
-        ParseObject(text) {
+        ParseObject(text, fromJson) {
             const type = this.Type;
             if (Edit.IsPrimitive(type)) {
                 const m = type.Members[0];
-                return Edit.ParseValue(text, m, Edit.GetTypeHandler(m.TypeName, m), this.Options);
+                return Edit.ParseValue(text, m, Edit.GetTypeHandler(m.TypeName, m), this.Options, fromJson);
             }
             const bad = _TF("Not a valid object on the clipboard", "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when there is no valid value on the clipboard.");
             if (!text)
@@ -2572,8 +2682,8 @@
             });
             Edit.DragSource(c, () => edit.GetCopyObject(true));
             if (!edit.IsObjectReadOnly()) {
-                Edit.DropTarget(c, async json => {
-                    const r = edit.ParseObject(json);
+                Edit.DropTarget(c, async (json, isJson) => {
+                    const r = edit.ParseObject(json, isJson);
                     if (!r.Ok) {
                         Sw.Fail(r.Reason);
                         return;
@@ -3589,6 +3699,9 @@
             text.setAttribute("aria-label", member.DisplayName || mn);
             Edit.FitNumberBox(text);
             cell.append(text);
+            //  The unit (member Unit, a plain text: "px", "%", "×") in a slot of one width on every number row of the editor
+            //  (--sw-edit-suffix-w, set by SetObject), so the boxes and sliders line up with and without a unit
+            cell.append(el("span.sw-edit-suffix", { text: member.Unit ? String(member.Unit) : "", attrs: { "aria-hidden": member.Unit ? null : "true" } }));
             let slider = null;
             if (useSlider && !readOnly) {
                 let token = null;

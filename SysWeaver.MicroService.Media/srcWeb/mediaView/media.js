@@ -295,6 +295,43 @@
     const LoadTimeoutMs = 30000;
 
     /**
+     * The error of a YouTube video that did not play, from YouTube's error code (the player's ErrorCode): why, and (except for a bad
+     * code) `Open` = "Watch on YouTube" for ShowLoadError. YouTube codes: 2 bad video code, 5 html5 player, 100 removed or private,
+     * 101 / 150 the owner allows no playing on other sites, 153 the request had no referrer.
+     * @param {number|undefined} code The error code (undefined: no onError, ex: a time out).
+     * @param {string} id The video code.
+     * @returns {Error} The error.
+     */
+    function YouTubeError(code, id) {
+        let text;
+        switch (code) {
+            case 101:
+            case 150:
+                text = _TF("The owner of this YouTube video does not allow it to be played on other sites: it can only be watched on YouTube.", "Reason on the media viewer error state when a YouTube video may not be embedded (YouTube error 101 / 150)");
+                break;
+            case 100:
+                text = _TF("This YouTube video was removed or is private.", "Reason on the media viewer error state for YouTube error 100");
+                break;
+            case 2:
+                text = _TF("This is not a valid YouTube video code.", "Reason on the media viewer error state for YouTube error 2");
+                break;
+            case 5:
+                text = _TF("The YouTube player can't play this video in this browser.", "Reason on the media viewer error state for YouTube error 5");
+                break;
+            case 153:
+                text = _TF("YouTube refused to play the video: the page sent no address (referrer). The site's Referrer-Policy must allow it.", "Reason on the media viewer error state for YouTube error 153");
+                break;
+            default:
+                text = _TF("YouTube could not play this video: it may be private, removed or not allowed on other sites.", "Reason on the media viewer error state when a YouTube video failed without a known reason");
+        }
+        const e = new Error(text);
+        e.YouTubeCode = code;
+        if (code !== 2)
+            e.Open = { Url: "https://www.youtube.com/watch?v=" + encodeURIComponent(id), Text: _TF("Watch on YouTube", "Button on the media viewer error state of a YouTube video, opens it on youtube.com in a new tab") };
+        return e;
+    }
+
+    /**
      * The reason text of a load error: a specific text for a web font that failed (MediaPlayerTools.LoadFont, the error
      * has FontLoad; the browser only says "A network error occurred."), else the error message.
      * @param {*} e The error.
@@ -310,11 +347,15 @@
 
     /**
      * Show the viewer's error state: a short reason and a "Try again" button (reloads the page); the reason is also
-     * announced to screen readers. Replaces the content of target.
+     * announced to screen readers. Replaces the content of target. An error with `Open: {Url, Text}` (ex: a YouTube video that
+     * may only be watched on YouTube) adds a button that opens that address in a new tab.
      * @param {HTMLElement} target The element to show it in.
-     * @param {string} reason The reason (text only).
+     * @param {string|Error} reason The reason (text only), or the error (FailReason gives its text).
      */
     function ShowLoadError(target, reason) {
+        const open = reason && typeof reason === "object" ? reason.Open : null;
+        if (typeof reason !== "string")
+            reason = FailReason(reason);
         console.warn("Media: failed to show the media: " + reason);
         target.textContent = "";
         target.classList.remove("MediaWithCaption");
@@ -322,6 +363,10 @@
         target.append(Sw.el("div.MediaRefused.MediaFailed", { attrs: { role: "alert" } },
             Sw.el("p.MediaRefusedText", null, Sw.el("strong", { text: text })),
             Sw.el("p.MediaRefusedText", { text: reason }),
+            open ? new Sw.Button({
+                Text: open.Text, Icon: "external", Kind: "primary",
+                OnClick: () => window.open(open.Url, "_blank", "noopener,noreferrer"),
+            }).E : null,
             new Sw.Button({
                 Text: _TF("Try again", "Button text on the media viewer error state, loads the media again"),
                 Icon: "IconReload",
@@ -838,6 +883,8 @@
             const text = _TF("Failed to cache the media", "Error when a media file could not be loaded");
             if (quiet) {
                 p.remove();
+                if (type === MediaTypes.YouTube)
+                    throw YouTubeError(player.ErrorCode, data);
                 throw new Error(_TF("The media could not be loaded: the file is missing or this browser can't show it.", "Reason on the media viewer error state when the media file could not be loaded"));
             }
             Sw.Fail(text, 100000);
@@ -969,15 +1016,17 @@
      * did not choose mute, a full page `<Media-NoAudio>` button ("Tap or click once to get audio!") un-mutes and plays on
      * click / Enter / Space (playback does not start before that).
      * @param {object} player - Player returned by CreatePlayer (needs `SetButtonState`).
+     * @param {{Muted: boolean, Loop: boolean}} [o] Instead of the stored preferences (ex: the `muted` / `loop` url options of MediaView.html).
      * @returns {Promise<void>}
      */
-    async function PlayWithPopup(player) {
-        if (Prefs.Loop())
+    async function PlayWithPopup(player, o) {
+        o = o || {};
+        if (o.Loop ?? Prefs.Loop())
             await player.Loop();
         else
             await player.Once();
         player.SetVolume(Prefs.Volume());
-        const muted = Prefs.Muted();
+        const muted = o.Muted ?? Prefs.Muted();
         if (!player.HaveAudio) {
             if (player.CanPlay)
                 await player.Play();
@@ -1429,7 +1478,7 @@
         }
         catch (e) {
             target.textContent = "";
-            ShowLoadError(target, FailReason(e));
+            ShowLoadError(target, e);
         }
         finally {
             remove();
@@ -1470,8 +1519,8 @@
 
     /**
      * Boot function of `MediaView.html`.
-     * URL params: `link`/`d` (required), `type`/`t`, `props` (JSON), `no_stats`, `no_controls`, `ctrl` (InterOp message
-     * prefix of a controlling editor). The media fills the `<Media-View>` grid (fill = false, automatic aspect, centered);
+     * URL params: `link`/`d` (required), `type`/`t`, `props` (JSON), `no_stats`, `no_controls`, `muted`, `loop` (start muted / looping instead of the stored preferences), `pos` (seconds to start at), `edit=false` (no "Edit" menu
+     * item / E key, which open the media in MediaEdit.html), `ctrl` (InterOp message prefix of a controlling editor). The media fills the `<Media-View>` grid (fill = false, automatic aspect, centered);
      * activating the media (click, Enter, Space) opens `MediaPreview.html?full&back&pos=...` in the same frame.
      * With `ctrl` the props are first requested from the editor and later `<ctrl>*` messages update the player:
      * Reload (rebuild), SetVolume, UpdateSize, Crop, Compile; matching message fields are copied into the props.
@@ -1508,7 +1557,12 @@
                 const np = await AskEditorProps(messagePrefix);
                 if (np)
                     props = np;
+                //  The editor docks its player again when this window goes
+                window.addEventListener("pagehide", () => Sw.InterOp.Post(messagePrefix + "Closed"));
             }
+            //  The media params as given (the url, the editor); `props` below becomes the player's params (for an image or a text
+            //  with an effect those are the effect's params), a rebuild uses these
+            let mediaProps = props;
             const mview = document.createElement("Media-View");
             target.appendChild(mview);
             const caption = type === MediaTypes.Text ? AddTextCaption(target) : null;
@@ -1523,7 +1577,7 @@
             async function create(before) {
                 //  The first player fails with a reason (shown as the error state), a rebuild keeps the toast.
                 //  With controls the player chrome (CreateChrome) replaces the button row and holds the stats
-                const pd = await CreatePlayer(mview, type, data, props, true, before, !stats, false, 0, 0, 0.5, 0.5, !before);
+                const pd = await CreatePlayer(mview, type, data, mediaProps, true, before, !stats, false, 0, 0, 0.5, 0.5, !before);
                 if (!pd)
                     throw new Error(_TF("Failed to cache the media", "Error when a media file could not be loaded"));
                 return pd;
@@ -1543,6 +1597,8 @@
             if (controls)
                 CreateChrome(mview, () => player, {
                     Stats: stats,
+                    StartHidden: true,
+                    Transparent: () => !!(mediaProps && mediaProps.Transparent),
                     FullPage: () => showFull(player),
                     Info: () => ({
                         Type: type,
@@ -1550,6 +1606,15 @@
                             : type === MediaTypes.Text ? null : new URL(data, window.location.href).href,
                     }),
                     Load: m => ShowLink(m),
+                    //  "Edit": this media with its settings in MediaEdit.html (edit=false hides it; not for a player linked to an editor)
+                    Edit: messagePrefix || /^(false|0|no)$/i.test(U.Get("edit") ?? "") ? null : () => {
+                        const q = new URLSearchParams();
+                        q.set("link", U.Get("link") ?? U.Get("d"));
+                        q.set("type", String(type));
+                        if (mediaProps)
+                            q.set("props", JSON.stringify(mediaProps));
+                        Sw.Page.Navigate("MediaEdit.html?" + q.toString(), "_self");
+                    },
                 });
             //  The caption sits directly above the text (a rebuild replaces the player: read it at each placing)
             if (caption)
@@ -1567,15 +1632,32 @@
                     const t = m && m.Type;
                     if (!t || !t.startsWith(messagePrefix))
                         return;
+                    const name = t.substring(messagePrefix.length);
+                    if (name === "Load") {
+                        //  Another media in the editor: this page with its link and type, still linked (the props come with GetProps)
+                        const u = new URL(window.location.href);
+                        u.searchParams.set("link", m.Link);
+                        u.searchParams.set("type", String(m.MediaType));
+                        u.searchParams.delete("props");
+                        u.searchParams.delete("pos");
+                        Sw.Page.Navigate(u.href, "_self");
+                        return;
+                    }
+                    if (name === "Reload") {
+                        //  The editor's complete media params (also new members, ex: a crop that was null)
+                        const np = Object.assign({}, m);
+                        for (const k of ["Type", "From", "To", "MagicXyz"])
+                            delete np[k];
+                        mediaProps = np;
+                        player = await RebuildPlayer(player, create);
+                        props = player.Params;
+                        return;
+                    }
                     Object.getOwnPropertyNames(m).forEach(pn => {
                         if (typeof props[pn] !== "undefined")
                             props[pn] = m[pn];
                     });
-                    switch (t.substring(messagePrefix.length)) {
-                        case "Reload":
-                            player = await RebuildPlayer(player, create);
-                            props = player.Params;
-                            break;
+                    switch (name) {
                         case "SetVolume":
                             player.ResetVolume();
                             break;
@@ -1593,14 +1675,17 @@
                     }
                 });
             }
-            //  A YouTube link with a start time ("t=90"): start there
-            if (mp.Start > 0)
-                await player.Seek(mp.Start);
-            await PlayWithPopup(player);
+            //  A YouTube link with a start time ("t=90"), or `pos` (seconds, ex: a window opened by the editor): start there
+            const pos = parseFloat(U.Get("pos") ?? "");
+            const start = pos > 0 ? pos : mp.Start;
+            if (start > 0)
+                await player.Seek(start);
+            //  `muted` / `loop` (ex: a background video of a page): instead of the visitor's stored preferences, which they don't change
+            await PlayWithPopup(player, { Muted: U.Has("muted") ? true : undefined, Loop: U.Has("loop") ? true : undefined });
         }
         catch (e) {
             //  An in-page error state with the reason and "Try again" (was a toast over an empty page)
-            ShowLoadError(target, FailReason(e));
+            ShowLoadError(target, e);
         }
     }
 
@@ -1670,6 +1755,12 @@
      * @param {object} o Options.
      * @param {boolean} o.Stats True: a Stats button and panel (the player's `Stats` element is moved into it).
      * @param {function():void} o.FullPage Called when the browser has no full screen for the element (opens the full page preview).
+     * @param {?function():void} [o.Edit] Opens the media in the editor: an "Edit" menu item and the E key (none: no edit).
+     * @param {function():boolean} [o.Transparent] True when the media is transparent (its settings; the player's own Params.Transparent
+     *   counts too, an image / text with an effect has the effect's params): class MediaTransparent, the theme background as the stage.
+     * @param {function():string} [o.Title] The name in the title bar (default: the page title).
+     * @param {boolean} [o.StartHidden] True: no controls and no title at the start (until a pointer move, a tap, a key or the focus;
+     *   shown when the media still doesn't play after 1.5 s; never for audio only media).
      */
     function CreateChrome(view, getPlayer, o) {
         const el = Sw.el;
@@ -1920,6 +2011,8 @@
                 { Text: _TF("Show url...", "Menu item of the media viewer that asks for a media address and shows it"), Icon: "link", Hint: "U", OnClick: askLink },
                 { Text: _TF("Copy information to clipboard", "Menu item of the media viewer that copies the address, the state, the statistics and the settings of the media"), Icon: "copy", OnClick: copyInfo },
                 { Text: _TF("Open the original file", "Menu item of the media viewer that opens the original file in a new tab (or its editor)"), Icon: "external", OnClick: () => Sw.Page.EditOrOpen(p.Source) });
+            if (o.Edit)
+                items.push({ Text: _TF("Edit", "Menu item of the media viewer that opens the media with its settings in the media editor"), Icon: "edit", Hint: "E", OnClick: o.Edit });
             return items;
         };
 
@@ -1967,7 +2060,7 @@
                 show();
             },
         });
-        const title = el("span.media-title", { text: document.title });
+        const title = el("span.media-title", { text: o.Title ? o.Title() : document.title });
         const top = el("div.media-top.media-chrome-part", null, title);
         const bar = el("div.media-bar.media-chrome-part", null,
             timeS.E,
@@ -2004,16 +2097,46 @@
             view.classList.remove("MediaChromeOn");
         }
         function show() {
+            view.classList.remove("MediaChromeFresh");
             view.classList.add("MediaChromeOn");
             clearTimeout(hideTimer);
             hideTimer = setTimeout(hide, ChromeHideMs);
         }
+        //  The start: no controls and no title over the picture (also while it loads, paused) until the first activity (a pointer move,
+        //  a tap, a key, the focus); a media that still doesn't play after a moment (the browser refused to start it) shows its Play
+        //  button and controls. Audio only media keep the controls (there is nothing else to see)
+        if (o.StartHidden && player0.HaveVisual) {
+            view.classList.add("MediaChromeFresh");
+            setTimeout(() => {
+                const p = getPlayer();
+                if (p && p.CanPlay && p.Paused)
+                    view.classList.remove("MediaChromeFresh");
+            }, 1500);
+        }
         let lastTouch = 0;
+        //  A mouse shows hidden controls only after it moved a little (RevealPx from where it was first seen since they hid): a bumped
+        //  mouse or a pointer resting on the media doesn't bring them back. While shown any move keeps them
+        const RevealPx = 24;
+        let anchor = null;
         view.addEventListener("pointermove", ev => {
-            if (ev.pointerType === "mouse")
+            if (ev.pointerType !== "mouse")
+                return;
+            if (view.classList.contains("MediaChromeOn")) {
+                anchor = null;
                 show();
+                return;
+            }
+            if (!anchor) {
+                anchor = { X: ev.clientX, Y: ev.clientY };
+                return;
+            }
+            if (Math.hypot(ev.clientX - anchor.X, ev.clientY - anchor.Y) < RevealPx)
+                return;
+            anchor = null;
+            show();
         });
         view.addEventListener("pointerleave", ev => {
+            anchor = null;
             if (ev.pointerType === "mouse" && !timeS.Dragging && !volS.Dragging) {
                 clearTimeout(hideTimer);
                 view.classList.remove("MediaChromeOn");
@@ -2082,9 +2205,9 @@
             }, 300);
         });
 
-        //  The context menu of the media: the ⋮ menu
+        //  The context menu of the media: the ⋮ menu (a pure right click; with Shift, Ctrl, Alt ... the browser's menu, UX guide INP-3)
         view.addEventListener("contextmenu", ev => {
-            if (!onMedia(ev) || !Sw.Menu)
+            if (!onMedia(ev) || !Sw.Menu || !Sw.IsPureContextMenu(ev))
                 return;
             ev.preventDefault();
             Sw.Menu.Show({ X: ev.clientX, Y: ev.clientY }, menuItems(), { Label: _TF("Media player", "Accessible name of the media player area of the media viewer") });
@@ -2179,6 +2302,11 @@
                 case "u":
                     askLink();
                     break;
+                case "e":
+                    if (!o.Edit)
+                        return;
+                    o.Edit();
+                    break;
                 case "m":
                     toggleMute();
                     break;
@@ -2218,12 +2346,15 @@
                 return;
             const p = getPlayer();
             if (p) {
+                //  A transparent media (its Transparent setting): the theme background shows through instead of the black stage
+                put("transparent", !!((p.Params && p.Params.Transparent) || (o.Transparent && o.Transparent())), v => view.classList.toggle("MediaTransparent", v));
                 const paused = !!p.Paused;
                 put("paused", paused, v => {
                     view.classList.toggle("MediaPaused", v);
                     playB.SetIcon(v ? "play" : "pause");
                     playB.SetTitle(v ? _TF("Play", "Tool tip of the play button of the media viewer") : _TF("Pause", "Tool tip of the pause button of the media viewer"));
-                    if (!v)
+                    //  Playing again: the bars hide after a moment (not at the start: they are not shown yet)
+                    if (!v && !view.classList.contains("MediaChromeFresh"))
                         show();
                 });
                 put("loop", !!p.Looping, v => loopB.SetPressed(v));
@@ -2255,12 +2386,13 @@
                     fullB.SetIcon(v ? "fullscreenExit" : "fullscreen");
                     fullB.SetTitle(v ? _TF("Leave full screen", "Tool tip of the full screen button of the media viewer in full screen") : _TF("Full screen", "Tool tip of the full screen button of the media viewer"));
                 });
-                put("title", document.title, v => title.textContent = v);
+                put("title", o.Title ? o.Title() : document.title, v => title.textContent = v);
             }
             requestAnimationFrame(update);
         }
         update();
-        show();
+        if (!view.classList.contains("MediaChromeFresh"))
+            show();
     }
 
     // ------------------------------------------------------------------ MediaPreview.html
@@ -2503,7 +2635,7 @@
                     Sw.Fail(FailReason(ex));
                 else {
                     target.classList.remove("MediaCaptioned", "MediaCollage");
-                    ShowLoadError(target, FailReason(ex));
+                    ShowLoadError(target, ex);
                 }
             }
             if (shost && !failed) {
@@ -2550,6 +2682,21 @@
         PreviewMain,
         SsHack,
         Ready: playerReady,
+        //  Shared with the media editor (mediaEdit.js, MediaEdit.html)
+        LoadEditor,
+        ReadMediaParams,
+        ReadEditSource,
+        ParseYouTube,
+        ParseMediaLink,
+        MediaLinkProblem,
+        ShowLinkProblem,
+        ShowLoadError,
+        FailReason,
+        CreateChrome,
+        MessagePrefix,
+        ParamTypeName,
+        FormatTime,
+        InApp,
     };
 
     //  Legacy global names (external host pages)

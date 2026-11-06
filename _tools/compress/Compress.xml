@@ -55,6 +55,12 @@
             If true, compress the files (even if it by default wouldn't)
             </summary>
         </member>
+        <member name="F:SysWeaver.CompressParams.FailOnTypeError">
+            <summary>
+            If true, a failed type specific step (minify, shader minifier, png) fails the run (exit code 4, an MSBuild error) instead of
+            compressing the original file with a warning
+            </summary>
+        </member>
         <member name="T:SysWeaver.CompressProgram">
             <summary>
             Shader optimization (.glsl / .frag).
@@ -92,12 +98,18 @@
         <member name="F:SysWeaver.CompressProgram.ShaderTypeVersion">
             <summary>
             Version of the shader optimization (added to the TypeVersion of shaders only, so other types keep their cached results).
+            9: "var:" annotations keep "unit" and "format" (the display of a value), the iMouse comments their optional range and unit parts.
             8: shaders are stripped (shader_minifier only with MinifyShaders), Effect Weaver shaders keep working: the variable candidates, the iMouse channel comments, vertexMain, conditionals on compiler macros (__VERSION__), the snippet macros (EW_...) and the functions they use / named like snippets (Ew...), one top level declaration per line; no new overloads; the smallest of minimized (with / without aggressive inlining), stripped and the source.
             </summary>
         </member>
         <member name="F:SysWeaver.CompressProgram.ExitCompressFailed">
             <summary>
             Exit code: a file couldn't be compressed using any of the compression methods (with OnlyBest).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ExitTypeCompressFailed">
+            <summary>
+            Exit code: the type specific step (minify, shader minifier, png) of a file failed (with FailOnTypeError).
             </summary>
         </member>
         <member name="F:SysWeaver.CompressProgram.ToolZopFliPng">
@@ -218,7 +230,7 @@
         </member>
         <member name="M:SysWeaver.CompressProgram.CompactAnnotation(System.String)">
             <summary>
-            A "var: {...}" annotation with the keys the parser reads (name, desc, type, min, max, step) in compact form, null if it can't be parsed
+            A "var: {...}" annotation with the keys the parser reads (name, desc, type, min, max, step, unit, format) in compact form, null if it can't be parsed
             </summary>
         </member>
         <member name="M:SysWeaver.CompressProgram.VarLines(SysWeaver.CompressProgram.ShaderVar)">

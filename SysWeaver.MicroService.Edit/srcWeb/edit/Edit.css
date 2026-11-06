@@ -292,6 +292,56 @@ textarea.sw-edit-multiline {
     min-width: 6em;
 }
 
+/* The unit of a number (member Unit): a slot of one width on every number row (--sw-edit-suffix-w, set by the editor from its
+   longest unit; 0 without units), so the boxes and sliders line up with and without a unit. */
+.sw-edit-suffix {
+    flex: 0 0 var(--sw-edit-suffix-w, 0px);
+    width: var(--sw-edit-suffix-w, 0px);
+    color: var(--sw-text-2);
+    white-space: nowrap;
+}
+
+.sw-edit:not(.sw-edit-units) .sw-edit-suffix {
+    display: none;
+}
+
+/* A group heading (member Group): a flat section row, 12 px uppercase secondary text over a hairline (as Sw.PropertyEditor) */
+.sw-edit-group {
+    grid-column: 1 / -1;
+    margin: var(--sw-space-4, 16px) 0 var(--sw-space-1, 4px);
+    padding: 0 4px 4px;
+    border-bottom: 1px solid var(--sw-border);
+    font-size: var(--sw-text-xs);
+    font-weight: var(--sw-weight-medium);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sw-text-2);
+}
+
+    .sw-edit-group:first-child {
+        margin-top: 0;
+    }
+
+    .sw-edit-group.sw-hide {
+        display: none;
+    }
+
+/* A member that is not at its default (Options.MarkChanged): an accent name and a dot after it (as Sw.PropertyEditor) */
+.sw-edit-changed > .sw-edit-label > .sw-edit-name {
+    color: var(--sw-text-accent);
+}
+
+    .sw-edit-changed > .sw-edit-label > .sw-edit-name::after {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-left: 6px;
+        vertical-align: middle;
+        border-radius: 50%;
+        background: var(--sw-accent1);
+    }
+
 /* Date / time: side by side, wrapping when narrow. */
 .sw-edit-datetime {
     display: flex;

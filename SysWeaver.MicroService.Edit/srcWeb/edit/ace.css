@@ -306,6 +306,44 @@
         outline-offset: 0;
     }
 
+    /* The size grip (Resizable): an "L" corner over the end of the scroll bars; drag up / down */
+    .sw-ace > .sw-ace-grip {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        z-index: 10;
+        width: 16px;
+        height: 16px;
+        cursor: ns-resize;
+        touch-action: none;
+        outline: none;
+    }
+
+        .sw-ace > .sw-ace-grip::after {
+            content: "";
+            position: absolute;
+            right: 3px;
+            bottom: 3px;
+            width: 7px;
+            height: 7px;
+            border-right: 2px solid var(--sw-text-3);
+            border-bottom: 2px solid var(--sw-text-3);
+        }
+
+        .sw-ace > .sw-ace-grip:focus-visible::after {
+            border-color: var(--sw-accent2);
+        }
+
+    @media (hover: hover) {
+        .sw-ace > .sw-ace-grip:hover::after {
+            border-color: var(--sw-accent2);
+        }
+    }
+
+        .sw-ace > .sw-ace-grip:focus-visible {
+            box-shadow: inset 0 0 0 2px var(--sw-focus);
+        }
+
     .sw-ace .ace_placeholder {
         font-family: var(--sw-mono);
         color: var(--sw-text-3);

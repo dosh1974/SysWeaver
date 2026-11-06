@@ -11,6 +11,7 @@
  * accessible name), `Get()`, `Set(text)` (no undo history: a new text), `Focus()`, `SetMarkers([{Line, Kind, Text}])` (gutter
  * annotations, Kind "error" / "warning" / "info"), plus `Editor` (the Ace editor), `SetReadOnly(on)`, `Resize()`.
  * Height: with MaxLines the editor grows with its text from MinLines to MaxLines lines (then scrolls); without it the host's css height.
+ * With Resizable a grip in the bottom right corner changes the most lines shown (remembered with SizeKey).
  */
 (function () {
     "use strict";
@@ -97,6 +98,9 @@
          * @param {boolean} [o.Wrap] - Soft wrap long lines.
          * @param {number} [o.MinLines] - Grow with the text from this many lines (with MaxLines).
          * @param {number} [o.MaxLines] - ... up to this many lines, then scroll.
+         * @param {boolean} [o.Resizable] - (with MaxLines) A grip in the bottom right corner sets how many lines are shown at most: drag
+         *   (or arrow keys, Shift = 10 lines), double click / End = all the text, Enter = MaxLines again.
+         * @param {string} [o.SizeKey] - (Resizable) Local storage key that remembers the size ("all" or a line count).
          * @param {string} [o.Placeholder] - Text shown while the editor is empty.
          * @param {string} [o.Label] - Accessible name of the text input.
          * @param {string} [o.Class] - Extra class(es) of the host element.
@@ -152,6 +156,82 @@
                 }
             };
             new ResizeObserver(() => ed.resize()).observe(t.E);
+            if (o.Resizable && o.MaxLines)
+                t.AddGrip();
+        }
+
+        /**
+         * The size grip (option Resizable): sets the most lines shown (Ace's maxLines; a shorter text keeps its own height).
+         */
+        AddGrip() {
+            const t = this;
+            const o = t.O;
+            const ed = t.Editor;
+            const def = o.MaxLines;
+            const min = o.MinLines || 1;
+            let lines = def;
+            if (o.SizeKey) {
+                try {
+                    const v = localStorage.getItem(o.SizeKey);
+                    const n = parseInt(v, 10);
+                    lines = v === "all" ? Infinity : n >= min ? n : def;
+                }
+                catch {
+                }
+            }
+            const grip = el("div.sw-ace-grip", {
+                tabIndex: 0,
+                title: _TF("Drag to show more or fewer lines. Double click: all the text, again: the normal size.", "Tool tip of the size grip in the bottom right corner of a code / json box"),
+                attrs: { role: "separator", "aria-orientation": "horizontal", "aria-label": _TF("Height of the text box", "Accessible name of the size grip of a code / json box") },
+            });
+            /**
+             * Show at most n lines.
+             * @param {number} n - Lines (Infinity: all).
+             * @param {boolean} [dragging] - While dragging: exactly n lines, so the box follows the pointer.
+             * @param {boolean} [keep] - Remember it (SizeKey).
+             */
+            const set = (n, dragging, keep) => {
+                lines = n === Infinity ? n : Math.max(min, Math.round(n));
+                ed.setOptions({ minLines: dragging && lines !== Infinity ? lines : min, maxLines: lines });
+                grip.setAttribute("aria-valuetext", lines === Infinity ? _TF("All lines", "Value of the size grip of a code / json box: the whole text is shown") : _T("{0} lines", lines, "Value of the size grip of a code / json box.{0} is the number of lines shown at most"));
+                if (!keep || !o.SizeKey)
+                    return;
+                try {
+                    if (lines === def)
+                        localStorage.removeItem(o.SizeKey);
+                    else
+                        localStorage.setItem(o.SizeKey, lines === Infinity ? "all" : String(lines));
+                }
+                catch {
+                }
+            };
+            /** @returns {number} The lines shown now. */
+            const shown = () => Math.max(min, Math.min(ed.session.getScreenLength(), lines));
+            let start = 0;
+            Sw.Drag(grip, {
+                Threshold: 0,
+                OnStart: e => {
+                    e.preventDefault();
+                    start = shown();
+                },
+                OnMove: (e, s) => set(start + s.DY / (ed.renderer.lineHeight || 16), true),
+                OnEnd: () => set(lines, false, true),
+            });
+            grip.addEventListener("dblclick", () => set(lines === Infinity ? def : Infinity, false, true));
+            grip.addEventListener("keydown", e => {
+                const step = e.shiftKey ? 10 : 1;
+                switch (e.key) {
+                    case "ArrowUp": set(shown() - step, false, true); break;
+                    case "ArrowDown": set(shown() + step, false, true); break;
+                    case "Home": set(min, false, true); break;
+                    case "End": set(Infinity, false, true); break;
+                    case "Enter": set(def, false, true); break;
+                    default: return;
+                }
+                e.preventDefault();
+            });
+            t.E.append(grip);
+            set(lines);
         }
 
         /** @returns {string} The text. */
