@@ -4,14 +4,45 @@
         <name>SysWeaver.HttpServer</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Net.ApiCallPermission">
+            <summary>
+            Whether the user of a session may call an API, returned by <see cref="M:SysWeaver.Net.ApiHttpServerModule.CanCall(System.String[],SysWeaver.Net.HttpServerRequest)"/> ("Api/auth/CanCall").
+            A small, purpose built answer for user interfaces (disable buttons the user may not use, name the role that is needed),
+            without the details of "Api/debug/GetApiInfo" (signature, types, assembly).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiCallPermission.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:SysWeaver.Net.ApiCallPermission.Url">
+            <summary>
+            The url as asked for (relative to the site root, ex: "Api/logFile/DeleteLogFile", "ServerManager/KillProcess").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiCallPermission.Found">
+            <summary>
+            True if an API exists at the url (false for an unknown url, or a url that isn't an API, ex: a page or a file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiCallPermission.Allowed">
+            <summary>
+            True if the user of the session may call the API (false if not found).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiCallPermission.Auth">
+            <summary>
+            The auth required by the API, the same text as ApiInfo.Auth: null = anyone (no sign in required), "" = any signed in user,
+            else a comma separated list of tokens (roles) where any one is enough, ex: "Admin, Debug". Null if not found.
+            </summary>
+        </member>
         <member name="T:SysWeaver.Net.ApiHttpEntry">
             <summary>
             A web API end point: an HTTP request handler bound to a single method on a service instance.
             Created through <see cref="M:SysWeaver.Net.ApiHttpEntry.Create(SysWeaver.Net.ApiIoParams,System.Object,System.Reflection.MethodInfo,System.String,SysWeaver.PerfMonitor,System.String,System.String,System.String,System.String,System.Action{System.Int64,SysWeaver.Net.HttpServerRequest,SysWeaver.Net.ApiHttpEntry,System.Object},System.Action{System.Int64,SysWeaver.Net.HttpServerRequest,SysWeaver.Net.ApiHttpEntry,System.Object},System.Action{System.Int64,SysWeaver.Net.HttpServerRequest,SysWeaver.Net.ApiHttpEntry,System.Exception})"/>, normally by <see cref="T:SysWeaver.Net.ApiHttpServerModule"/> for every <c>[WebApi]</c> method it discovers.
             </summary>
             <remarks>
-            The method may take zero or one argument, optionally followed by a trailing <see cref="T:SysWeaver.Net.HttpServerRequest"/> context parameter,
-            and may return void, a value, <see cref="T:System.Threading.Tasks.Task"/>/<see cref="T:System.Threading.Tasks.Task`1"/> or <see cref="T:System.Threading.Tasks.ValueTask"/>/<see cref="T:System.Threading.Tasks.ValueTask`1"/>.
+            The method may take zero or one argument, optionally followed by a trailing <see cref="T:SysWeaver.Net.HttpServerRequest"/> context parameter
+            (or <see cref="T:SysWeaver.Auth.IAuthorizedRequest"/>, for services that can't reference the http server), and may return void, a value, <see cref="T:System.Threading.Tasks.Task"/>/<see cref="T:System.Threading.Tasks.Task`1"/> or <see cref="T:System.Threading.Tasks.ValueTask"/>/<see cref="T:System.Threading.Tasks.ValueTask`1"/>.
             A strongly typed invoker is compiled (via expression trees) for GET and POST at creation time.
             GET reads the argument from the query string using <see cref="T:SysWeaver.Net.ApiIoParams"/>, POST reads it from the request body
             (decompressed according to <c>Content-Encoding</c> and deserialized according to <c>Content-Type</c>).
@@ -435,6 +466,15 @@
             Deserialize the input from the query string (everything after '?') using <see cref="T:SysWeaver.Net.ApiIoParams"/>, default if there is no query string.
             If deserialization fails for an audited API, the failure is audited (see <see cref="M:SysWeaver.Net.ApiHttpEntry.AuditInputFailed(SysWeaver.Net.ApiHttpEntry,SysWeaver.Net.HttpServerRequest,System.Exception)"/>).
             </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiHttpEntry.BadInput(System.Exception)">
+            <summary>
+            The input of a request could not be read: a mistake of the client, never a server failure (a 500 counted as a server problem).
+            An <see cref="T:SysWeaver.Net.HttpResponseException"/> (ex: 413 too large, 415 unknown type), a refusal, a client that went away or an I/O failure of the read
+            is kept, anything else (a parse error of the data) is a 400 with the reason.
+            </summary>
+            <param name="ex">The exception of the read / deserialization</param>
+            <returns>The exception to throw</returns>
         </member>
         <member name="M:SysWeaver.Net.ApiHttpEntry.Input_POST_Read(SysWeaver.Net.ApiHttpEntry,SysWeaver.Net.HttpServerRequest)">
             <summary>
@@ -1086,6 +1126,11 @@
             The value passed to the audit events when an audit filter throws (so that an unfiltered value, possibly containing secrets, is never audited).
             </summary>
         </member>
+        <member name="F:SysWeaver.Net.ApiHttpServerModule.IoParams">
+            <summary>
+            The serializers (input / output, the defaults) and request size limits shared by all API end points of this module.
+            </summary>
+        </member>
         <member name="M:SysWeaver.Net.ApiHttpServerModule.IsDataTable(System.Type,System.Type)">
             <summary>
             True if the API takes a <see cref="T:SysWeaver.Data.TableDataRequest"/> and returns a <see cref="T:SysWeaver.Data.TableData"/> or <see cref="T:SysWeaver.Data.TypedTableData`1"/> (used to populate the data table list).
@@ -1150,6 +1195,22 @@
             <summary>
             Performance monitor shared by all API entries of this module (enabled by <see cref="F:SysWeaver.Net.ApiHttpServerModuleParams.PerMon"/>).
             </summary>
+        </member>
+        <member name="F:SysWeaver.Net.ApiHttpServerModule.MaxCanCallUrls">
+            <summary>
+            The max number of urls that <see cref="M:SysWeaver.Net.ApiHttpServerModule.CanCall(System.String[],SysWeaver.Net.HttpServerRequest)"/> answers in one request.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.ApiHttpServerModule.CanCall(System.String[],SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Tell which of some APIs the current user (of the session) may call, used by user interfaces to disable actions before they are clicked
+            and to name the role that is needed (core/access.js: Sw.Access.CanCall / Guard).
+            Anyone may ask (the answer for a user that isn't signed in is "not allowed" for every protected API).
+            Only the required roles of the asked urls are returned (no signature, types or assembly as in "Api/debug/GetApiInfo").
+            </summary>
+            <param name="urls">The API urls relative to the site root, ex: "Api/logFile/DeleteLogFile" or "ServerManager/KillProcess" (a query string is ignored), max <see cref="F:SysWeaver.Net.ApiHttpServerModule.MaxCanCallUrls"/></param>
+            <param name="context">The request.</param>
+            <returns>One item per url (in the same order)</returns>
         </member>
         <member name="M:SysWeaver.Net.ApiHttpServerModule.ApiTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
             <summary>
@@ -1468,6 +1529,13 @@
             d = deflate, g = gzip, b = brotli, z = zstd (if available), u = uncompressed.
             </summary>
         </member>
+        <member name="F:SysWeaver.Net.ApiIoParams.BinaryArgTypes">
+            <summary>
+            The type characters of a binary query string argument ("_" + char + base64url data, see <see cref="M:SysWeaver.Net.ApiIoParams.Get``1(System.ReadOnlySpan{System.Char})"/>)
+            and the HTTP code of their compression (null = uncompressed). Lower case chars only: the upper case char is the same compression
+            with a named serializer.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Net.ApiIoParams.MaxStackBase64">
             <summary>
             The maximum number of base64 chars to fix up (base64url to base64 and padding) on the stack (4 KB), longer arguments use a pooled buffer.
@@ -1619,6 +1687,9 @@
             Create the exception with a fixed message.
             </summary>
         </member>
+        <member name="P:SysWeaver.Net.UserAlreadyLoggedInException.ResponseCode">
+            <inheritdoc/>
+        </member>
         <member name="T:SysWeaver.Net.UserNotAllowedException">
             <summary>
             Thrown when the current user (or anonymous session) lacks the tokens required to access a resource.
@@ -1640,6 +1711,9 @@
             </summary>
             <param name="userName">The user name that already exists (quoted in the message)</param>
         </member>
+        <member name="P:SysWeaver.Net.UserAlreadyExistException.ResponseCode">
+            <inheritdoc/>
+        </member>
         <member name="T:SysWeaver.Net.UserDoNotExistException">
             <summary>
             Thrown when a referenced user can't be found.
@@ -1650,6 +1724,9 @@
             Create the exception.
             </summary>
             <param name="userName">The user name (or id as text) that wasn't found (quoted in the message)</param>
+        </member>
+        <member name="P:SysWeaver.Net.UserDoNotExistException.ResponseCode">
+            <inheritdoc/>
         </member>
         <member name="T:SysWeaver.Net.UserNoLongerExistException">
             <summary>
@@ -1662,6 +1739,9 @@
             </summary>
             <param name="id">The id of the removed user</param>
         </member>
+        <member name="P:SysWeaver.Net.UserNoLongerExistException.ResponseCode">
+            <inheritdoc/>
+        </member>
         <member name="T:SysWeaver.Net.AuthenticationFailedException">
             <summary>
             Thrown when authentication (credentials, token etc) fails.
@@ -1670,6 +1750,433 @@
         <member name="M:SysWeaver.Net.AuthenticationFailedException.#ctor">
             <summary>
             Create the exception with a fixed message.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.AuthenticationFailedException.ResponseCode">
+            <inheritdoc/>
+        </member>
+        <member name="T:SysWeaver.Net.BackgroundJobStates">
+            <summary>
+            The states of a background job (see <see cref="F:SysWeaver.Net.BackgroundJobInfo.State"/>), the same names as the client's <c>Sw.Activity</c> job states.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobStates.Running">
+            <summary>
+            The job is running (also while it stops after a cancel, see <see cref="F:SysWeaver.Net.BackgroundJobInfo.Stopping"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobStates.Done">
+            <summary>
+            The job ended with a result (see <see cref="F:SysWeaver.Net.BackgroundJobInfo.ResultUrl"/> and <see cref="F:SysWeaver.Net.BackgroundJobInfo.ResultText"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobStates.Failed">
+            <summary>
+            The job failed (see <see cref="F:SysWeaver.Net.BackgroundJobInfo.Error"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobStates.Cancelled">
+            <summary>
+            The job was cancelled (by the user, or the server stopped) and the work stopped.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.BackgroundJobInfo">
+            <summary>
+            A snapshot of a background job, as sent to the client (see <see cref="T:SysWeaver.Net.BackgroundJobs"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobInfo.ToString">
+            <summary>
+            A short description, ex: "Exporting Log.csv" [running]
+            </summary>
+            <returns>A short description</returns>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Id">
+            <summary>
+            The id of the job (random, can't be guessed), use it with the job APIs (ex: "Api/jobs/GetJob").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Key">
+            <summary>
+            The key given when the job was started, null if none.
+            Only one running job per key and owner: starting a job with the key of a running one returns the running one (<see cref="F:SysWeaver.Net.BackgroundJobInfo.IsNew"/> false).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Kind">
+            <summary>
+            The kind of job, ex: "export", null if not given.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Title">
+            <summary>
+            What runs, ex: "Exporting Log 2026-10-20 15-04 UTC+2.csv".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.State">
+            <summary>
+            The state, one of the <see cref="T:SysWeaver.Net.BackgroundJobStates"/>: "running", "done", "failed" or "cancelled".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Progress">
+            <summary>
+            The progress from 0 to 1, null if unknown.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Text">
+            <summary>
+            What the job does right now (the phase), ex: "Reading the rows", null if nothing is reported.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Error">
+            <summary>
+            Why the job failed or was cancelled (a message for the user), null otherwise.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Started">
+            <summary>
+            When the job started (UTC).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Ended">
+            <summary>
+            When the job ended (UTC), null while it runs. Show this as the end time ("Done at"), also for a job restored after a reload.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Expires">
+            <summary>
+            When the job (and its result) is removed from the server (UTC), null while it runs.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.ResultName">
+            <summary>
+            The (file) name of the result, null until the job is done (or if the job has no file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.ResultMime">
+            <summary>
+            The mime type of the result, null until the job is done (or if the result is a link, see <see cref="T:SysWeaver.MemoryFile"/>, or the job has no file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.ResultSize">
+            <summary>
+            The size of the result in bytes, 0 until the job is done (or if the result is a link, or the job has no file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.ResultUrl">
+            <summary>
+            The url (relative to the site root) that returns the result as a <see cref="T:SysWeaver.MemoryFile"/>, ex: "Api/jobs/GetJobResult?\"id\"", null until the job is done
+            (and null for a job without a file).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.ResultText">
+            <summary>
+            The result of a job without a file, a text for the user, ex: "1 204 users imported" (see <see cref="T:SysWeaver.Net.BackgroundJobResult"/>), null otherwise.
+            A job can have both a file and a text.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.IsNew">
+            <summary>
+            True if the job was started by this request, false if a running job with the same <see cref="F:SysWeaver.Net.BackgroundJobInfo.Key"/> was returned (only set by the start APIs).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Removed">
+            <summary>
+            True if the job was removed (by <see cref="M:SysWeaver.Net.BackgroundJobs.Remove(System.Collections.Generic.IReadOnlyList{System.String},System.String)"/>), sent in the "sw.job" push message so other windows drop it too.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Stopping">
+            <summary>
+            True while the job stops: a cancel was asked for (<see cref="M:SysWeaver.Net.BackgroundJobs.Cancel(System.Collections.Generic.IReadOnlyList{System.String},System.String)"/>) but the work still runs.
+            The <see cref="F:SysWeaver.Net.BackgroundJobInfo.State"/> stays "running" (and the job keeps its running slot) until the work really stopped, then it is "cancelled"
+            (or "done" if the work finished before it could stop, see <see cref="F:SysWeaver.Net.BackgroundJobInfo.CancelRequested"/>). Show "Stopping…".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.CancelRequested">
+            <summary>
+            True if a cancel was asked for (stays true after the end): with <see cref="F:SysWeaver.Net.BackgroundJobInfo.State"/> "done" it means that the work finished before it could stop
+            (the result exists, ex: "Too late: the file was ready"); "cancelled" means it stopped without a result.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobInfo.Announced">
+            <summary>
+            True if the end of the job was shown to the user (acknowledged with "Api/jobs/AckJob", or the result was fetched with "Api/jobs/GetJobResult").
+            A client announces (toasts) an ended job only when this is false, then acknowledges it: a job restored after a reload, in a new session
+            or on another device of the user, with Announced true, is listed quietly.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.BackgroundJobResult">
+            <summary>
+            The result of a background job started with <see cref="M:SysWeaver.Net.BackgroundJobs.StartWork(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.Net.BackgroundJobResult}},System.String,System.String,System.Func{SysWeaver.Net.HttpServerRequest})"/> (or <see cref="M:SysWeaver.Net.HttpServerBase.StartWork(SysWeaver.Net.HttpServerRequest,System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.Net.BackgroundJobResult}},System.String,System.String)"/>): a file, a text for the user, both or nothing.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobResult.File">
+            <summary>
+            The file made by the job (the client offers "Open" / "Save"), null if none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobResult.Text">
+            <summary>
+            What the job did, a text for the user, ex: "1 204 users imported", null if none.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobResult.FromFile(SysWeaver.MemoryFile,System.String)">
+            <summary>
+            A result with a file.
+            </summary>
+            <param name="file">The file</param>
+            <param name="text">Optional text for the user</param>
+            <returns>The result</returns>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobResult.FromText(System.String)">
+            <summary>
+            A result without a file, only a text for the user.
+            </summary>
+            <param name="text">What the job did, ex: "1 204 users imported"</param>
+            <returns>The result</returns>
+        </member>
+        <member name="T:SysWeaver.Net.BackgroundJobContext">
+            <summary>
+            Passed to the work of a background job: the cancellation, the detached request and a way to report progress.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.BackgroundJobContext.Id">
+            <summary>
+            The id of the job.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.BackgroundJobContext.Cancel">
+            <summary>
+            Signalled when the job is cancelled (by the user, or the server stops), the work should stop as soon as it can:
+            throw (ex: <c>ctx.Cancel.ThrowIfCancellationRequested()</c>) to end as "cancelled". The job shows "stopping" (and keeps its running slot) until the work returned;
+            a work that returns a result anyway ends as "done" with <see cref="F:SysWeaver.Net.BackgroundJobInfo.CancelRequested"/> true (it finished before it could stop).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.BackgroundJobContext.Request">
+            <summary>
+            A detached copy of the request that started the job (the same session, user, url, prefix and client address, no body),
+            valid while the job runs (disposed when it ended). Use it in the work instead of the original request, which ends when the start api answered.
+            Null if the job was started without a request (<see cref="M:SysWeaver.Net.BackgroundJobs.Start(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.MemoryFile}},System.String,System.String)"/> / <see cref="M:SysWeaver.Net.BackgroundJobs.StartWork(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.Net.BackgroundJobResult}},System.String,System.String,System.Func{SysWeaver.Net.HttpServerRequest})"/> with owner keys only).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobContext.Report(System.Nullable{System.Double},System.String)">
+            <summary>
+            Report the progress. It is pushed to every session of the owner ("sw.job", so other tabs and devices follow it without polling):
+            a new text (phase) at once, a progress change at most once per <see cref="F:SysWeaver.Net.BackgroundJobs.ProgressPushInterval"/>.
+            </summary>
+            <param name="progress">The progress from 0 to 1, null if unknown (other values are clamped, NaN / infinity are unknown)</param>
+            <param name="text">What the job does right now (the phase), null to keep the current text</param>
+        </member>
+        <member name="T:SysWeaver.Net.BackgroundJobWaitRequest">
+            <summary>
+            The body of the "Api/jobs/WaitJob" long poll (see <see cref="M:SysWeaver.Net.BackgroundJobs.Wait(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Int32)"/>).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobWaitRequest.Id">
+            <summary>
+            The id of the job.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobWaitRequest.Ms">
+            <summary>
+            Wait at most this many milliseconds for the job to end (default 20000, at most <see cref="F:SysWeaver.Net.BackgroundJobs.MaxWaitMs"/>).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.BackgroundJobs">
+            <summary>
+            Background jobs of the clients of a server (one instance per <see cref="T:SysWeaver.Net.HttpServerBase"/>: <see cref="F:SysWeaver.Net.HttpServerBase.Jobs"/>): long work (an export, a report, an import)
+            whose result is kept on the server, so it survives a page reload or leaving the page.
+            <para>A job is owned by the signed in user that started it (any session of that user sees it) or, for a visitor that isn't signed in, by the session.
+            The client starts a job with an API of the service that does the work (ex: "Api/StartExportTableApi"), gets its state with "Api/jobs/GetJobs" (after a reload),
+            "Api/jobs/GetJob" (poll) or "Api/jobs/WaitJob" (long poll) and the "sw.job" push message (start, stop asked, end), fetches the result with "Api/jobs/GetJobResult",
+            cancels with "Api/jobs/CancelJob" and acknowledges the end it showed with "Api/jobs/AckJob" (<see cref="F:SysWeaver.Net.BackgroundJobInfo.Announced"/>).
+            Results are kept for <see cref="F:SysWeaver.Net.BackgroundJobs.KeepFor"/> after the job ended, then removed. Nothing is written to disk: jobs end with the process.</para>
+            <para>Cancel is honest: the job stays "running" with <see cref="F:SysWeaver.Net.BackgroundJobInfo.Stopping"/> true (and keeps its running slot) until the work returned.</para>
+            </summary>
+            <remarks>Thread safe. Owners are strings (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>), so the class can be used and tested without a server.</remarks>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobs.MaxWaitMs">
+            <summary>
+            The maximum wait of <see cref="M:SysWeaver.Net.BackgroundJobs.Wait(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Int32)"/> in milliseconds.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobs.KeepFor">
+            <summary>
+            How long a job and its result are kept after it ended (default 30 minutes).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobs.MaxRunningPerOwner">
+            <summary>
+            The maximum number of running jobs per owner (default 4), a start beyond that is refused (429 with a reason). A stopping job counts as running.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobs.MaxPerOwner">
+            <summary>
+            The maximum number of jobs (running or ended) kept per owner (default 20), the oldest ended ones are removed first.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobs.MaxJobs">
+            <summary>
+            The maximum number of jobs kept in total (default 2000), a start beyond that is refused (429 with a reason).
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Net.BackgroundJobs.OnChanged">
+            <summary>
+            Called when a job started, a stop was asked for (also a cancel that came too late: a done job with <see cref="F:SysWeaver.Net.BackgroundJobInfo.CancelRequested"/>), it ended or was removed,
+            and on progress (a new text at once, a progress change at most once per <see cref="F:SysWeaver.Net.BackgroundJobs.ProgressPushInterval"/>), with the job and its owner.
+            Used by the server to push "sw.job" messages to every session of the owner.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.BackgroundJobs.ProgressPushInterval">
+            <summary>
+            The least time between two progress changes reported by <see cref="E:SysWeaver.Net.BackgroundJobs.OnChanged"/> for one job (default 1 s; a new text is reported at once).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.#ctor">
+            <summary>
+            Create a job list.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Dispose">
+            <summary>
+            Cancel all running jobs and stop the expiry timer.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)">
+            <summary>
+            The owner keys of a caller: the first one owns new jobs ("u:" + user guid when signed in, else "s:" + session token), any of them gives access
+            (a visitor that signs in keeps the jobs of the session).
+            </summary>
+            <param name="userGuid">The guid of the signed in user, null if not signed in</param>
+            <param name="sessionToken">The session token, may be null</param>
+            <returns>The owner keys, the owner of new jobs first</returns>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.ResultUrlOf(System.String)">
+            <summary>
+            The url of the result of a job, relative to the site root.
+            </summary>
+            <param name="id">The job id</param>
+            <returns>The url, ex: "Api/jobs/GetJobResult?\"id\""</returns>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Start(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.MemoryFile}},System.String,System.String)">
+            <summary>
+            Start a job that makes a file (or return the running job with the same key and owner).
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>), the first one owns the job</param>
+            <param name="title">What runs, ex: "Exporting Log.csv"</param>
+            <param name="work">The work, runs on the thread pool, returns the file (null is a failure "The work made no result"), should stop when <see cref="P:SysWeaver.Net.BackgroundJobContext.Cancel"/> is signalled.
+            An exception fails the job with its message (an <see cref="T:SysWeaver.Net.HttpResponseException"/> message as is, others without sensitive information).</param>
+            <param name="key">Optional key, only one running job per key and owner</param>
+            <param name="kind">Optional kind, ex: "export"</param>
+            <returns>The job (<see cref="F:SysWeaver.Net.BackgroundJobInfo.IsNew"/> false if a running job with the key was returned)</returns>
+            <exception cref="T:System.ArgumentException">No owner or no work</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">429: too many running jobs for the owner, or in total</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.StartWork(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.Net.BackgroundJobResult}},System.String,System.String,System.Func{SysWeaver.Net.HttpServerRequest})">
+            <summary>
+            Start a job with any result: a file, a text for the user ("1 204 users imported"), both or nothing (or return the running job with the same key and owner).
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>), the first one owns the job</param>
+            <param name="title">What runs, ex: "Importing users"</param>
+            <param name="work">The work, runs on the thread pool, returns the result (null = done without a result), should stop when <see cref="P:SysWeaver.Net.BackgroundJobContext.Cancel"/> is signalled.
+            An exception fails the job with its message (an <see cref="T:SysWeaver.Net.HttpResponseException"/> message as is, others without sensitive information).</param>
+            <param name="key">Optional key, only one running job per key and owner</param>
+            <param name="kind">Optional kind, ex: "import"</param>
+            <param name="detach">Optional: makes the detached request of the job (<see cref="P:SysWeaver.Net.BackgroundJobContext.Request"/>), called once when the work asks for it, disposed when the job ended</param>
+            <returns>The job (<see cref="F:SysWeaver.Net.BackgroundJobInfo.IsNew"/> false if a running job with the key was returned)</returns>
+            <exception cref="T:System.ArgumentException">No owner or no work</exception>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">429: too many running jobs for the owner, or in total</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.List(System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            The jobs of a caller, newest first.
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <returns>The jobs</returns>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.GetInfo(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+            <summary>
+            Get a job of a caller.
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <param name="id">The job id</param>
+            <returns>The job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job for this caller (or it expired)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Wait(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Int32)">
+            <summary>
+            Wait for a job to end (a long poll), returns at once if it isn't running (a stopping job is still running).
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <param name="id">The job id</param>
+            <param name="ms">Wait at most this many milliseconds (clamped to 0..<see cref="F:SysWeaver.Net.BackgroundJobs.MaxWaitMs"/>)</param>
+            <returns>The job, as it is when it ended or the time is up</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job for this caller (or it expired)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.GetResult(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+            <summary>
+            Get the file of a job that is done (it can be fetched again until the job expires). Fetching it acknowledges the end (<see cref="F:SysWeaver.Net.BackgroundJobInfo.Announced"/>).
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <param name="id">The job id</param>
+            <returns>The result</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job for this caller (or it expired), 409: the job is running, failed, was cancelled or has no file (the message says which)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Cancel(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+            <summary>
+            Ask a running job to stop: the job stays "running" with <see cref="F:SysWeaver.Net.BackgroundJobInfo.Stopping"/> true (and keeps its running slot) until the work returned,
+            then it is "cancelled" (or "done" with <see cref="F:SysWeaver.Net.BackgroundJobInfo.CancelRequested"/> true if the work finished anyway).
+            A cancel of a job that is already done (it came too late) is recorded too: the job gets <see cref="F:SysWeaver.Net.BackgroundJobInfo.CancelRequested"/> true
+            (pushed to every session), so every tab and device of the user shows "finished before it could stop", never a plain "done".
+            A failed or cancelled job is returned unchanged.
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <param name="id">The job id</param>
+            <returns>The job after the cancel was asked for</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job for this caller (or it expired)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Ack(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+            <summary>
+            Acknowledge that the end of a job was shown to the user (<see cref="F:SysWeaver.Net.BackgroundJobInfo.Announced"/>): later lists (a reload, another session or device of the user)
+            show it quietly. A running job is returned unchanged.
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <param name="id">The job id</param>
+            <returns>The job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job for this caller (or it expired)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Remove(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+            <summary>
+            Remove a job (the user dismissed it). An ended job is removed at once; a running job is asked to stop and is removed when the work stopped
+            (until then it is listed as stopping, <see cref="F:SysWeaver.Net.BackgroundJobInfo.Removed"/> false).
+            </summary>
+            <param name="owners">The owner keys of the caller (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>)</param>
+            <param name="id">The job id</param>
+            <returns>The job as it was removed (<see cref="F:SysWeaver.Net.BackgroundJobInfo.Removed"/> true), or the stopping job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job for this caller (or it expired)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Prune">
+            <summary>
+            Remove the expired jobs (called every minute and on every access).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.BackgroundJobs.Count">
+            <summary>
+            The number of jobs kept (running or ended).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Job.RequestCancel(System.String)">
+            <summary>
+            Ask the work to stop once (later calls and ended jobs return false).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Job.MarkCancelTooLate">
+            <summary>
+            Record a cancel that came after the job was done (once): CancelRequested, the result is kept ("finished before it could stop").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.BackgroundJobs.Job.TryEnd(System.String,SysWeaver.Net.BackgroundJobResult,System.String,System.TimeSpan)">
+            <summary>
+            End the job once (later calls return false).
             </summary>
         </member>
         <member name="T:SysWeaver.Net.BaseHttpServerModuleParams">
@@ -2543,7 +3050,7 @@
         </member>
         <member name="F:SysWeaver.Net.FileHttpServerModuleFolder.DiscFolder">
             <summary>
-            The folder on disc (absolute or relative to the current directory), null means "web".
+            The folder on disc (absolute or relative to the current directory, path variables like $(ExecutableDir) are resolved, see PathTemplate), null means "web".
             </summary>
         </member>
         <member name="M:SysWeaver.Net.FileHttpServerModuleFolder.CopyTo(SysWeaver.Net.FileHttpServerModuleFolder)">
@@ -3171,12 +3678,13 @@
             A row in the request cache debug tables (<see cref="M:SysWeaver.Net.HttpServerBase.CacheEntries(SysWeaver.Data.TableDataRequest)"/> and <see cref="M:SysWeaver.Net.HttpServerBase.SessionCacheEntries(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
             </summary>
         </member>
-        <member name="M:SysWeaver.Net.HttpServerBase.CacheData.#ctor(System.Collections.Generic.KeyValuePair{System.String,SysWeaver.Net.HttpCacheEntry},System.DateTime)">
+        <member name="M:SysWeaver.Net.HttpServerBase.CacheData.#ctor(System.Collections.Generic.KeyValuePair{System.String,SysWeaver.Net.HttpCacheEntry},System.DateTime,System.Boolean)">
             <summary>
             Create a row from a cache entry.
             </summary>
             <param name="cs">The cache key (key, request type, accept encoding, method and optional language separated by '\n') and entry</param>
             <param name="utcNow">Not used</param>
+            <param name="flag">True if the server serves the language flags (<see cref="P:SysWeaver.Net.HttpServerBase.HaveIsoFlags"/>), else <see cref="F:SysWeaver.Net.HttpServerBase.CacheData.Flag"/> is null (no image that can't load)</param>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.CacheData.LocalUrl">
             <summary>
@@ -3458,7 +3966,84 @@
             <param name="language">The language</param>
             <returns>The text</returns>
         </member>
-        <member name="M:SysWeaver.Net.HttpServerBase.HandleAuth(System.Collections.Generic.IReadOnlyList{System.String},SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession,System.String,System.String,System.Boolean)">
+        <member name="F:SysWeaver.Net.HttpServerBase.ReasonHeader">
+            <summary>
+            The response header that marks the response text as a reason written for people (value "1"): the text is translated to the session language
+            and the client shows it as the reason ("why") of a refusal or failure, for any status, instead of a generic sentence for the status.
+            Set for every <see cref="T:SysWeaver.Net.HttpResponseException"/> with a message (<see cref="P:SysWeaver.Net.HttpResponseException.IsReason"/>) and for the server's own refusals (403 role, 401 sign in).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.NotAllowedReason">
+            <summary>
+            The reason of a 403 when the signed in user (or visitor) doesn't have the role (security token) an end point needs.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.SignInReason">
+            <summary>
+            The reason of a 401 when an end point needs a signed in user.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.DeniedHeader">
+            <summary>
+            The response header that says WHY the server refused, as a machine signal, separate from the reason text (<see cref="F:SysWeaver.Net.HttpServerBase.ReasonHeader"/>):
+            <list type="bullet">
+            <item><see cref="F:SysWeaver.Net.HttpServerBase.DeniedRole"/> ("role") on a 403 because the user (or visitor) doesn't have the role (security token) the end point needs:
+            the user can never do this, so a client may disable the control that asked (whatever the reason text is).</item>
+            <item><see cref="F:SysWeaver.Net.HttpServerBase.DeniedSignIn"/> ("signin") on a 401 because the end point needs a signed in user.</item>
+            </list>
+            Any other refusal (a 403 / 409 / 400 with a reason from an end point) has no such header: the action may work later or with other input.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.DeniedRole">
+            <summary>
+            The <see cref="F:SysWeaver.Net.HttpServerBase.DeniedHeader"/> value of a 403 for a missing role.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.DeniedSignIn">
+            <summary>
+            The <see cref="F:SysWeaver.Net.HttpServerBase.DeniedHeader"/> value of a 401 that asks to sign in.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.OutcomeHeader">
+            <summary>
+            The response header that says what a refusal means for the person that asked, one of the <see cref="T:SysWeaver.Net.HttpOutcomes"/>:
+            "AlreadyDone" (the goal is already met: "not needed"), "Refused" (not done, the reason says why), "Gone" (the target no longer exists)
+            or "Denied" (a missing role / not signed in, with <see cref="F:SysWeaver.Net.HttpServerBase.DeniedHeader"/>).
+            Sent on every 4xx refusal of the server (an <see cref="T:SysWeaver.Net.HttpResponseException"/>, an <see cref="T:SysWeaver.Net.IHttpRefusal"/>, the server's own 401 / 403),
+            next to <see cref="F:SysWeaver.Net.HttpServerBase.ReasonHeader"/>, so a client never guesses the meaning from the status code. The code that refuses picks the kind
+            (<see cref="P:SysWeaver.Net.HttpResponseException.Outcome"/>, <see cref="P:SysWeaver.Net.IHttpRefusal.Outcome"/>), else <see cref="M:SysWeaver.Net.HttpOutcomes.Default(System.Int32,System.String)"/> picks it from the status.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.SetOutcome(SysWeaver.Net.HttpServerRequest,System.Int32,System.String,System.String)">
+            <summary>
+            Set the <see cref="F:SysWeaver.Net.HttpServerBase.OutcomeHeader"/> of a refusal: the given kind, else the default of the status (<see cref="M:SysWeaver.Net.HttpOutcomes.Default(System.Int32,System.String)"/>), none for a non 4xx status.
+            </summary>
+            <param name="data">The request</param>
+            <param name="status">The status code</param>
+            <param name="outcome">The kind the code that refused gave, null for the default of the status</param>
+            <param name="denied">The <see cref="F:SysWeaver.Net.HttpServerBase.DeniedHeader"/> value, null for none</param>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.SetReason(SysWeaver.Net.HttpServerRequest,System.Int32,System.String)">
+            <summary>
+            Respond with a status and a reason for people (translated to the session language, marked with <see cref="F:SysWeaver.Net.HttpServerBase.ReasonHeader"/>).
+            </summary>
+            <param name="data">The request</param>
+            <param name="status">The status code, ex: 403</param>
+            <param name="reason">The reason in english, ex: <see cref="F:SysWeaver.Net.HttpServerBase.NotAllowedReason"/></param>
+            <returns>A task</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.SetReason(SysWeaver.Net.HttpServerRequest,System.Int32,System.String,System.String)">
+            <summary>
+            Respond with a status, a reason for people (translated to the session language, marked with <see cref="F:SysWeaver.Net.HttpServerBase.ReasonHeader"/>) and optionally the
+            machine signal of the refusal (<see cref="F:SysWeaver.Net.HttpServerBase.DeniedHeader"/>).
+            </summary>
+            <param name="data">The request</param>
+            <param name="status">The status code, ex: 403</param>
+            <param name="reason">The reason in english, ex: <see cref="F:SysWeaver.Net.HttpServerBase.NotAllowedReason"/></param>
+            <param name="denied">The <see cref="F:SysWeaver.Net.HttpServerBase.DeniedHeader"/> value, ex: <see cref="F:SysWeaver.Net.HttpServerBase.DeniedRole"/>, null for none</param>
+            <returns>A task</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.HandleAuth(System.Collections.Generic.IReadOnlyList{System.String},SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession,System.String,System.String,System.Boolean,System.Boolean)">
             <summary>
             Validate an enpoint against a session.
             </summary>
@@ -3468,6 +4053,7 @@
             <param name="localUrl"></param>
             <param name="url"></param>
             <param name="isHead"></param>
+            <param name="isApi">True if the handler is an API (<see cref="T:SysWeaver.Net.ApiHttpEntry"/>): a request without any auth then gets a 401 (with the sign in page in a "X-Login-Url" header) instead of a redirect to <see cref="F:SysWeaver.Net.HttpServerBaseParams.AuthRedirect"/>, unless it's a browser navigation (Sec-Fetch-Mode: navigate)</param>
             <returns>True if the request have been handled to completion, false if the request is allowed to continue</returns>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.HandleTrackers">
@@ -3624,6 +4210,16 @@
             The prefixes the server listens on.
             </summary>
         </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetLinkRoot(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            The root for absolute links that leave the request (ex: links in e-mails and text messages), ex: "https://host/".
+            The prefix of the request when it is one of the listener prefixes as is (a fixed host name, the client can't change it), else
+            (a wildcard listener prefix: the host part is the client supplied Host header, so anyone could make a mailed link point to
+            their own site) the configured <see cref="P:SysWeaver.Net.HttpServerBase.ExternalRootUri"/>; the prefix of the request only when no root is configured.
+            </summary>
+            <param name="request">The request, null for none</param>
+            <returns>The root (ends with "/"), "" if nothing is known</returns>
+        </member>
         <member name="P:SysWeaver.Net.HttpServerBase.Prefixes">
             <summary>
             The prefixes the server listens on (set by <see cref="M:SysWeaver.Net.HttpServerBase.SetPrefixes(System.Collections.Generic.IEnumerable{SysWeaver.Net.HttpServerPrefix},System.Boolean)"/>).
@@ -3679,6 +4275,13 @@
         <member name="F:SysWeaver.Net.HttpServerBase.PrefixMods">
             <summary>
             A tree with modules that respond to certain prefixes only
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.HttpServerBase.HaveIsoFlags">
+            <summary>
+            True if a module serves the language / country flag images under "iso_data/" (the optional IsoData module, a prefix module).
+            The flag columns of the debug tables (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>, the cache entries) are empty without one, so a page never
+            requests a flag that can't load (S7a-B-2: every row asked for "iso_data/language/en.svg" and got a 404).
             </summary>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.AddRawModule(SysWeaver.Net.IHttpServerRawModule)">
@@ -3755,6 +4358,33 @@
             Number of unique users that are logged in
             </summary>
         </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.CookieOptions">
+            <summary>
+            The cookie path and attributes for http requests ("/;HttpOnly;SameSite=Lax" by default, see <see cref="F:SysWeaver.Net.HttpServerBaseParams.CookieSameSite"/> and <see cref="F:SysWeaver.Net.HttpServerBaseParams.CorsCookies"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.CookieOptionsSecure">
+            <summary>
+            The cookie path and attributes for https requests (<see cref="F:SysWeaver.Net.HttpServerBase.CookieOptions"/> with "Secure")
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetCookieOptions(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the cookie path and attributes to use for a request ("Secure" is added for https requests)
+            </summary>
+            <param name="req">The request</param>
+            <returns>The cookie path and attributes</returns>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.FrameAncestorsCsp">
+            <summary>
+            The Content-Security-Policy header value sent with every response ("frame-ancestors 'self'" by default), null to not send one (see <see cref="F:SysWeaver.Net.HttpServerBaseParams.FrameAncestors"/>)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.FrameOptions">
+            <summary>
+            The X-Frame-Options header value sent with every response ("SAMEORIGIN" or "DENY"), null to not send one (see <see cref="F:SysWeaver.Net.HttpServerBaseParams.FrameAncestors"/>)
+            </summary>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerBase.GetAcceptLanguage(System.String)">
             <summary>
             Get the best supported language for an Accept-Language header value (cached for 24 hours per header value).
@@ -3797,6 +4427,19 @@
             <param name="session">The session, may be null</param>
             <returns>True if the session was active and has been removed</returns>
         </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.CloseSession(SysWeaver.Net.HttpSession,System.String)">
+            <summary>
+            Close (remove) a session, the user is logged out of the session.
+            </summary>
+            <param name="session">The session, may be null</param>
+            <param name="reason">The logout reason pushed to the session ("user.logout"), null for "Session expired"</param>
+            <returns>True if the session was active and has been removed</returns>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.ClosedSessionUsers">
+            <summary>
+            The user name that was signed in to a closed session (see <see cref="M:SysWeaver.Net.HttpServerBase.CloseSession(SysWeaver.Net.HttpSession,System.String)"/>), released with the session
+            </summary>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerBase.EnumEndPoints(System.String)">
             <summary>
             Enumerate all end points (forced end points, module end points and optional end points).
@@ -3832,6 +4475,36 @@
         <member name="M:SysWeaver.Net.HttpServerBase.GetStats">
             <inheritdoc/>
         </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.ClientGoneDesc">
+            <summary>
+            The description of the "ClientGone" statistics (not a problem: the client left).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.ClientGoneCodes">
+            <summary>
+            The Windows (http.sys) error codes of a client that closed the connection: 22 ERROR_BAD_COMMAND (a write after the client reset the connection), 64 ERROR_NETNAME_DELETED ("The specified network name is no longer available"),
+            995 ERROR_OPERATION_ABORTED, 1229 ERROR_CONNECTION_INVALID, 1236 ERROR_CONNECTION_ABORTED, 10053 / 10054 (a socket aborted / reset by the peer).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.IsClientGone(System.Exception)">
+            <summary>
+            True if an exception means that the client closed the connection (an aborted fetch, a closed tab, a lost network) while the request was handled
+            or the response was written: that is not a failure of the server, so it is counted as "ClientGone" (statistics) and logged as a debug line,
+            never as a problem.
+            Recognises (also as an inner exception): an <see cref="T:System.Net.HttpListenerException"/> with a "client gone" error code (22, 64, 995, 1229, 1236, 10053, 10054),
+            a <see cref="T:System.Net.Sockets.SocketException"/> connection reset / aborted / shut down, and the Kestrel connection reset / aborted exceptions.
+            </summary>
+            <param name="ex">The exception</param>
+            <returns>True if the client is gone</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.OnClientGone(System.Exception,System.String)">
+            <summary>
+            Count a request whose client closed the connection (see <see cref="M:SysWeaver.Net.HttpServerBase.IsClientGone(System.Exception)"/>), nothing else: not a problem and not logged
+            (clients end long polls such as GetMessages all the time), the "ClientGone" statistics is the only trace.
+            </summary>
+            <param name="ex">The exception</param>
+            <param name="url">The url of the request (if known)</param>
+        </member>
         <member name="F:SysWeaver.Net.HttpServerBase.ListenerExceptions">
             <summary>
             Exceptions thrown by the listener (connection problems).
@@ -3862,11 +4535,20 @@
             Invalidate the cache, this does not invalidate per session cache entries
             </summary>
         </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.InvalidateCacheEverywhere(System.Func{System.String,System.Boolean})">
+            <summary>
+            Invalidate the global cache and the cache of every session: the call to use after a change that the cached answers of an api
+            depend on. An api with [WebApiRequestCache] that takes an HttpServerRequest (or is per user) is cached per SESSION, which
+            <see cref="M:SysWeaver.Net.HttpServerBase.InvalidateCache(System.Func{System.String,System.Boolean})"/> alone doesn't reach (AS7-12).
+            </summary>
+            <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url (null: every entry)</param>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerBase.InvalidateCache(System.Func{System.String,System.Boolean})">
             <summary>
             Invalidate the cache if the predicate returns true, this does not invalidate per session cache entries
+            (see <see cref="M:SysWeaver.Net.HttpServerBase.InvalidateCacheEverywhere(System.Func{System.String,System.Boolean})"/>)
             </summary>
-            <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+            <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url</param>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.InvalidateAllSessionCaches">
             <summary>
@@ -3877,7 +4559,7 @@
             <summary>
             Invalidate all session caches if the predicate returns true, this does not invalidate the "global" cache
             </summary>
-            <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+            <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url</param>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.InvalidateUserSessionCaches(System.String)">
             <summary>
@@ -3890,7 +4572,7 @@
             Invalidate all user session caches the predicate returns true, this does not invalidate the "global" cache
             </summary>
             <param name="userGuid">The user to invalidate caches for</param>
-            <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+            <param name="shouldInvalidate">A function to determine if the entry should be cleared, the string is the local url</param>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.GetMessages(SysWeaver.Net.MessageStreamRequest,SysWeaver.Net.HttpServerRequest)">
             <summary>
@@ -3923,6 +4605,15 @@
             <param name="info">The ISO code of the language to describe</param>
             <param name="toLanguage">The language to localize the information to</param>
             <returns>The language information</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetSelectableLanguages(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            The languages a user can switch to (the language choice of the app shell's settings menu): the localized languages when this
+            service translates its texts (it has a translator), else null (without a translator the texts stay as written, so the shell
+            offers no choice).
+            </summary>
+            <param name="context">The request</param>
+            <returns>The languages (see <see cref="M:SysWeaver.Net.HttpServerBase.GetLocalizedLanguages(SysWeaver.Net.HttpServerRequest)"/>), null when the service doesn't translate</returns>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.SetLanguage(System.String,SysWeaver.Net.HttpServerRequest)">
             <summary>
@@ -3979,7 +4670,33 @@
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.MenuPath">
             <summary>
-            The menu path of the http server debug tables.
+            The legacy menu path of the http server debug tables (Development / Web server), kept for other services.
+            The framework's own tables use the main menu folders below.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.MenuMonitoring">
+            <summary>
+            Main menu folder id: run time information (logs, performance, statistics, sessions, audit), mostly for Ops.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.MenuOperations">
+            <summary>
+            Main menu folder id: operational tools (caches, folder sync, reverse proxy ...), mostly for Ops.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.MenuAdministration">
+            <summary>
+            Main menu folder id: user, API key and password administration (shown as "Administration").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.MenuData">
+            <summary>
+            Main menu folder id: reference data (countries, currencies, languages, MIME types ...).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.MenuDevelopment">
+            <summary>
+            Main menu folder id: developer tools (shown as "Development"); the id stays "Debug" so items of other services that use "Debug/..." land here.
             </summary>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.SendSessionMessage(System.String,SysWeaver.Net.HttpServerRequest)">
@@ -4014,11 +4731,12 @@
             <param name="message">The message text to send (no data is possible)</param>
             <param name="request"></param>
         </member>
-        <member name="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest)">
+        <member name="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
             <summary>
             Get all active (and recently expired) sessions, the tokens are redacted.
             </summary>
             <param name="r">Table parameters</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
             <returns>The table data</returns>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.ActiveUsers(SysWeaver.Data.TableDataRequest)">
@@ -4059,26 +4777,190 @@
             <param name="r">Table parameters</param>
             <returns>The table data</returns>
         </member>
-        <member name="T:SysWeaver.Net.HttpServerBase.SessionDebugData">
+        <member name="F:SysWeaver.Net.HttpServerBase.SessionEndKey">
             <summary>
-            A row in the active sessions debug table (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest)"/>).
+            Key of the session end tokens (see <see cref="M:SysWeaver.Net.HttpServerBase.SessionEndToken(System.String)"/>), random per process so tokens never survive a restart.
             </summary>
         </member>
-        <member name="M:SysWeaver.Net.HttpServerBase.SessionDebugData.#ctor(SysWeaver.Net.HttpSession,System.DateTime)">
+        <member name="M:SysWeaver.Net.HttpServerBase.SessionEndToken(System.String)">
+            <summary>
+            The token needed to end a session with <see cref="M:SysWeaver.Net.HttpServerBase.EndSession(System.String,SysWeaver.Net.HttpServerRequest)"/>.
+            It is sent with the (authenticated, same origin) <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/> table only, it can't be guessed and it doesn't reveal
+            the session token, so a crafted link, a deep link scan or an image (a plain GET, CSRF style) can't end a session.
+            </summary>
+            <param name="sessionToken">The (full) session token</param>
+            <returns>The end token, the first 128 bits (base64url) of a HMAC-SHA256 of the session token</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.EndSession(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            End (close) an active session: the user of that session is signed out and the browser gets a new, anonymous session on its next request.
+            Use this to end a suspicious session.
+            The token comes from the "End session" action of the active sessions table (it can't be guessed), your own session can't be ended here (sign out instead).
+            </summary>
+            <param name="token">The end token of the session (from the active sessions table)</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>True when the session was ended (it never returns false: a session that is not found is a 409 with the reason, so the client can show why nothing was done)</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">400: the token is missing; 409 with the reason: it is your own session, or the session has already ended (expired, ended or signed out)</exception>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.Jobs">
+            <summary>
+            The background jobs of the clients of this server (long work, ex: an export, whose result survives a page reload), see <see cref="T:SysWeaver.Net.BackgroundJobs"/>.
+            A service starts a job with <see cref="M:SysWeaver.Net.HttpServerBase.StartJob(SysWeaver.Net.HttpServerRequest,System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.MemoryFile}},System.String,System.String)"/> from one of its APIs and returns the <see cref="T:SysWeaver.Net.BackgroundJobInfo"/>, the client follows it with the "Api/jobs/*" APIs
+            and the "sw.job" push message.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.JobPushMessageType">
+            <summary>
+            The push message type sent when a background job started, made progress (at most once per <see cref="F:SysWeaver.Net.BackgroundJobs.ProgressPushInterval"/>),
+            was asked to stop, ended or was removed (to every session of the owner: every tab and device of the signed in user).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Net.HttpServerBase.JobPushMessage">
+            <summary>
+            The "sw.job" push message (see <see cref="F:SysWeaver.Net.HttpServerBase.JobPushMessageType"/>).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.JobPushMessage.#ctor(SysWeaver.Net.BackgroundJobInfo)">
+            <summary>
+            Create a message.
+            </summary>
+            <param name="job">The job</param>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.JobPushMessage.Job">
+            <summary>
+            The job, as it is now.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.JobOwners(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            The owner keys of the session of a request (see <see cref="M:SysWeaver.Net.BackgroundJobs.OwnersOf(System.String,System.String)"/>).
+            </summary>
+            <param name="request">The request</param>
+            <returns>The owner keys</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.StartJob(SysWeaver.Net.HttpServerRequest,System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.MemoryFile}},System.String,System.String)">
+            <summary>
+            Start a background job that makes a file, owned by the caller of a request (the signed in user, or the session).
+            The work must not use the original request (it ends when the response is sent): use <see cref="P:SysWeaver.Net.BackgroundJobContext.Request"/>, a detached copy.
+            </summary>
+            <param name="request">The request that starts the job</param>
+            <param name="title">What runs, ex: "Exporting Log.csv"</param>
+            <param name="work">The work, returns the file (null is a failure), see <see cref="M:SysWeaver.Net.BackgroundJobs.Start(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.MemoryFile}},System.String,System.String)"/></param>
+            <param name="key">Optional key, only one running job per key and owner (the running one is returned)</param>
+            <param name="kind">Optional kind, ex: "export"</param>
+            <returns>The job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">429: too many running jobs</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.StartWork(SysWeaver.Net.HttpServerRequest,System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.Net.BackgroundJobResult}},System.String,System.String)">
+            <summary>
+            Start a background job with any result (a file, a text for the user such as "1 204 users imported", both or nothing), owned by the caller of a request
+            (the signed in user, or the session). The work gets a detached copy of the request in <see cref="P:SysWeaver.Net.BackgroundJobContext.Request"/> (session, user, url, address):
+            use it instead of the original request, which ends when the response is sent.
+            <para>Ex: <c>return request.Server.StartWork(request, "Importing users", async ctx => { var n = await Import(ctx.Request, ctx.Cancel); return BackgroundJobResult.FromText(n + " users imported"); }, "import", "import");</c></para>
+            </summary>
+            <param name="request">The request that starts the job</param>
+            <param name="title">What runs, ex: "Importing users"</param>
+            <param name="work">The work, returns the result (null = done without a result), see <see cref="M:SysWeaver.Net.BackgroundJobs.StartWork(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Func{SysWeaver.Net.BackgroundJobContext,System.Threading.Tasks.Task{SysWeaver.Net.BackgroundJobResult}},System.String,System.String,System.Func{SysWeaver.Net.HttpServerRequest})"/></param>
+            <param name="key">Optional key, only one running job per key and owner (the running one is returned)</param>
+            <param name="kind">Optional kind, ex: "import"</param>
+            <returns>The job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">429: too many running jobs</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.OnJobChanged(SysWeaver.Net.BackgroundJobInfo,System.String)">
+            <summary>
+            Push a job change to the sessions of its owner.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetJobs(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get my background jobs (of the signed in user, or of this session), newest first. Use it after a page reload to show the jobs again.
+            Jobs are kept for 30 minutes after they ended.
+            </summary>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The jobs</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetJob(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get one of my background jobs (poll its state and progress).
+            </summary>
+            <param name="id">The id of the job</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job (it expired, was removed, or isn't yours)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.WaitJob(SysWeaver.Net.BackgroundJobWaitRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Wait until one of my background jobs ended, at most the given time (a long poll), returns at once if it isn't running.
+            </summary>
+            <param name="r">The job id and the maximum wait</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The job, as it is when it ended or the time was up</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job (it expired, was removed, or isn't yours)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetJobResult(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get the result of one of my background jobs that is done (as a file: name, mime type and data). It can be fetched again until the job expires.
+            </summary>
+            <param name="id">The id of the job</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The result</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job, 409: the job is still running, failed or was cancelled (the message says which)</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.AckJob(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Acknowledge that the end of one of my background jobs was shown to me (Announced true): it is then listed quietly after a reload,
+            in another session or on another device. A running job is returned unchanged.
+            </summary>
+            <param name="id">The id of the job</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The job</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job (with the reason); a body that is not the job id as JSON (ex: text/plain "{}") is a 400 / 415 with the reason, never a 500</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.CancelJob(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Cancel one of my background jobs: it stays "running" with Stopping true until the work stopped, then it is "cancelled"
+            (or "done" with CancelRequested true when the work finished before it could stop). A cancel of a job that is already done (too late) sets
+            CancelRequested too, pushed to every session, so every device shows "finished before it could stop"; a failed or cancelled job is returned unchanged.
+            </summary>
+            <param name="id">The id of the job</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The job after the cancel was asked for (Stopping true if it was running)</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job</exception>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.RemoveJob(System.String,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Remove one of my background jobs and its result (a running job is asked to stop, and removed when the work stopped).
+            </summary>
+            <param name="id">The id of the job</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>The job as it was removed</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">404: no such job</exception>
+        </member>
+        <member name="T:SysWeaver.Net.HttpServerBase.SessionDebugData">
+            <summary>
+            A row in the active sessions debug table (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
+            </summary>
+            <remarks>By default the table shows who (User, Address, UserAgent, Auth), when (Started, LastActivity), the state (Expired) and the
+            actions; the other columns are [TableDataHide] (still sent, the user can show them with the column picker).</remarks>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.SessionDebugData.#ctor(SysWeaver.Net.HttpSession,System.DateTime,System.Boolean,System.String,System.Boolean)">
             <summary>
             Create a snapshot of a session.
             </summary>
             <param name="s">The session</param>
             <param name="utcNow">The current UTC time</param>
+            <param name="ended">True if the session is no longer active (it expired or was ended), it is then shown as expired</param>
+            <param name="endedUser">The user that was signed in to an ended session (its auth is cleared when it ends), null if none or unknown</param>
+            <param name="flag">True if the server serves the language flags (<see cref="P:SysWeaver.Net.HttpServerBase.HaveIsoFlags"/>), else <see cref="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Flag"/> is null (no image that can't load)</param>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Token">
             <summary>
-            Session token, this is the full token, <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest)"/> redacts it after the table has been built.
+            Session token, this is the full token, <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/> redacts it after the table has been built.
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Expired">
             <summary>
-            True if the session has expired
+            True if the session has expired or was ended (it is no longer active)
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.Duration">
@@ -4182,6 +5064,23 @@
             User agent
             </summary>
         </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.EndToken">
+            <summary>
+            The token needed to end the session (see <see cref="M:SysWeaver.Net.HttpServerBase.SessionEndToken(System.String)"/>), null for expired sessions, the caller's own session and sessions without a signed in user
+            (ending an anonymous session only makes the browser start a new one with its next request, so it is not offered)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBase.SessionDebugData.IsCurrent">
+            <summary>
+            True on the row of the caller's own session (the session that asked for the table), so a page can mark it ("you").
+            Hidden by default (still sent, the user can show it with the column picker): the column name is "IsCurrent".
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.HttpServerBase.SessionDebugData.Actions">
+            <summary>
+            Actions on the session
+            </summary>
+        </member>
         <member name="T:SysWeaver.Net.HttpServerBase.Transformer">
             <summary>
             The chain of transformers registered for a mime type or file extension (replaced, never modified, under a lock).
@@ -4237,7 +5136,7 @@
             A row in the active users debug table (<see cref="M:SysWeaver.Net.HttpServerBase.ActiveUsers(SysWeaver.Data.TableDataRequest)"/>).
             </summary>
             <remarks>
-            <see cref="F:SysWeaver.Net.HttpServerBase.UserDebugData.Sessions"/> contains redacted session tokens (only the first 6 characters, same as <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest)"/>).
+            <see cref="F:SysWeaver.Net.HttpServerBase.UserDebugData.Sessions"/> contains redacted session tokens (only the first 6 characters, same as <see cref="M:SysWeaver.Net.HttpServerBase.ActiveSessions(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
             </remarks>
         </member>
         <member name="M:SysWeaver.Net.HttpServerBase.UserDebugData.#ctor(SysWeaver.Net.HttpServerBase.UserData,System.Int64)">
@@ -4377,9 +5276,38 @@
             Optional end point "logo_debug.svg", a generated logo using the color seed in the query string (requires the "debug" token).
             </summary>
         </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.HandleDebugSvg(SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession,System.String,System.Int32,System.Int32,System.Action{SysWeaver.Media.SvgScene,SysWeaver.HashColors})">
+            <summary>
+            A generated brand mark (icon, logo or banner) for the color seed in the query string (the app seed if none), requires the "debug" token.
+            Used by the logo designer and its theme preview (explore/logo.html, explore/themepreview.html).
+            </summary>
+            <param name="data">The request</param>
+            <param name="session">The session</param>
+            <param name="name">The end point name</param>
+            <param name="width">The scene width</param>
+            <param name="height">The scene height</param>
+            <param name="draw">Draws the mark with the colors of the seed</param>
+            <returns>The handler, or null (not found) without the "debug" token</returns>
+        </member>
         <member name="M:SysWeaver.Net.HttpServerBase.GetLogoBitmapRenderer(SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession)">
             <summary>
             Get the renderer for the current "logo.svg" (whatever module serves it), re-reading the svg at most every 15 seconds if it changed.
+            </summary>
+            <remarks>A replaced renderer is not disposed (other requests may still be rendering with it), it's released by the GC.</remarks>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.HandleBannerSvg(SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession)">
+            <summary>
+            Optional end point "banner.svg", a generated Banner (from the app name, display name and colors) used when no module serves one.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.HandleBannerDebugSvg(SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession)">
+            <summary>
+            Optional end point "banner_debug.svg", a generated Banner using the color seed in the query string (requires the "debug" token).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpServerBase.GetBannerBitmapRenderer(SysWeaver.Net.HttpServerRequest,SysWeaver.Net.HttpSession)">
+            <summary>
+            Get the renderer for the current "banner.svg" (whatever module serves it), re-reading the svg at most every 15 seconds if it changed.
             </summary>
             <remarks>A replaced renderer is not disposed (other requests may still be rendering with it), it's released by the GC.</remarks>
         </member>
@@ -4553,7 +5481,8 @@
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.TempVars">
             <summary>
-            Static template variables: the "Key=Value" pairs from <see cref="F:SysWeaver.Net.HttpServerBaseParams.Variables"/> and the application colors ("Color.Background", "Color.Color", "Color.Acc1", "Color.Acc2").
+            Static template variables: the "Key=Value" pairs from <see cref="F:SysWeaver.Net.HttpServerBaseParams.Variables"/> and the application colors ("Color.Background", "Color.Color", "Color.Acc1", "Color.Acc2")
+            and the web client options ("Client.OptimizedSend": "true" / "false", see <see cref="F:SysWeaver.Net.HttpServerBaseParams.OptimizedSend"/>).
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBase.TempVarGroups">
@@ -4692,7 +5621,28 @@
         <member name="F:SysWeaver.Net.HttpServerBaseParams.SessionCookieLifetime">
             <summary>
             Lifetime of the session cookie in minutes (capped to one year), at least 10 * <see cref="F:SysWeaver.Net.HttpServerBaseParams.SessionExtendLifetime"/> + 30 minutes.
-            The server side session expires earlier if it's not used (see <see cref="F:SysWeaver.Net.HttpServerBaseParams.SessionExtendLifetime"/>).
+            The server side session expires earlier if it's not used (see <see cref="F:SysWeaver.Net.HttpServerBaseParams.SessionExtendLifetime"/>), a cookie of an expired session is useless (a new session is created).
+            The cookie is only set when a session starts (or its token is rotated, ex: at a sign in), so this is also the longest time a continuously used session can live.
+            Default 7 days (it used to be one year).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBaseParams.CookieSameSite">
+            <summary>
+            The SameSite attribute of the session and device id cookies: "Lax" (default), "Strict" or empty (no attribute, the browser default).
+            "Lax": the cookies are sent for requests from this site and for top level navigations from other sites (ex: a link in an email opens the app signed in),
+            but not for requests that other sites make (images, forms, fetch, frames on another site): a basic cross site request forgery protection.
+            "Strict": the cookies are not even sent when following a link from another site (the user appears signed out on the first page).
+            Ignored when <see cref="F:SysWeaver.Net.HttpServerBaseParams.CorsCookies"/> is true (that uses "SameSite=None;Secure").
+            The "Secure" attribute is always added for https requests.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBaseParams.FrameAncestors">
+            <summary>
+            Who may show the pages of this server in a frame (clickjacking protection): the value of the Content-Security-Policy "frame-ancestors" directive that is sent with every response.
+            "'self'" (default): only pages of this site (same scheme, host and port) may frame it (also sends "X-Frame-Options: SAMEORIGIN" for old browsers).
+            "'none'": never in a frame (also sends "X-Frame-Options: DENY").
+            A space separated list of sources allows other sites, ex: "'self' https://portal.mydomain.com https://*.mydomain.com" (no X-Frame-Options is sent then).
+            Null, empty or "*" sends no header (anyone may frame the site, the old behaviour).
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBaseParams.SessionExtendLifetime">
@@ -4769,7 +5719,8 @@
         <member name="F:SysWeaver.Net.HttpServerBaseParams.CorsCookies">
             <summary>
             Allow the session and device id cookies to be sent cross origin ("SameSite=None;Secure", needed when the site is shown in an iframe on another site).
-            If false the cookies only use "HttpOnly" (no Secure or SameSite attribute).
+            If false the cookies use "HttpOnly" and the SameSite attribute of <see cref="F:SysWeaver.Net.HttpServerBaseParams.CookieSameSite"/> ("Secure" is added for https requests).
+            When the site is shown in a frame on another site, also allow that site in <see cref="F:SysWeaver.Net.HttpServerBaseParams.FrameAncestors"/>.
             </summary>
         </member>
         <member name="F:SysWeaver.Net.HttpServerBaseParams.ServerLimits">
@@ -4788,6 +5739,15 @@
             since compressing a few bytes costs more than it saves (the compressed output is often larger than the input).
             Pre-compressed data that the client doesn't accept is still decompressed.
             Zero (or a negative value) disables this, compressible responses are then always compressed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpServerBaseParams.OptimizedSend">
+            <summary>
+            If true, the web client of a DEBUG build also sends api arguments with the release ("optimized") encodings: GET with the json,
+            "_u" (base64url UTF-8) or "_d" (base64url deflated) query when small enough, else POST (see core/net.js Sw.Net.Send).
+            Release builds always do this (the client's debug-only code is stripped); by default debug builds POST every argument (easier to read in the browser tools),
+            so encoding problems that only happen in release builds are not seen while debugging. Set this to true to test the release encodings in a debug build.
+            Published to the client as the template variable "Client.OptimizedSend" ("true" / "false") in the templated "app/manifest.json" ("sysweaver_optimized_send").
             </summary>
         </member>
         <member name="T:SysWeaver.Net.HttpServerEndPoint">
@@ -5162,6 +6122,12 @@
             <see cref="F:SysWeaver.Net.HttpServerRequest.Url"/> and <see cref="F:SysWeaver.Net.HttpServerRequest.LocalUrl"/> are url decoded (path and query), <see cref="F:SysWeaver.Net.HttpServerRequest.RawUrl"/> is the url as received from the listener.
             Not thread safe unless stated, a request is normally handled by a single logical flow.
             </remarks>
+        </member>
+        <member name="P:SysWeaver.Net.HttpServerRequest.SysWeaver#Auth#IAuthorizedRequest#CallerAuth">
+            <summary>
+            The authorization of the session (<see cref="P:SysWeaver.Net.HttpSession.Auth"/>), null if there is no session or no one is signed in.
+            Web api methods of services that can't reference the http server take <see cref="T:SysWeaver.Auth.IAuthorizedRequest"/> as their trailing parameter.
+            </summary>
         </member>
         <member name="M:SysWeaver.Net.HttpServerRequest.Dispose">
             <summary>
@@ -6604,6 +7570,13 @@
             A file upload end point.
             </summary>
         </member>
+        <member name="F:SysWeaver.Net.HttpServerEndpointTypes.Builtin">
+            <summary>
+            An API like end point handled by the http server itself, outside the <see cref="T:SysWeaver.Net.ApiHttpServerModule"/>
+            (ex: "login", "logout", "basic_auth", "serverTime", "auth/redirect", "auth/logout_user").
+            The response is small dynamic data (or a redirect), it has no meaningful size.
+            </summary>
+        </member>
         <member name="T:SysWeaver.Net.IHaveUri">
             <summary>
             Implemented by objects that are associated with a server relative url.
@@ -6845,6 +7818,15 @@
             <param name="host">The host</param>
             <param name="queryStart">The index of the '?' in the url, -1 if there is no query string</param>
             <param name="didIndex">True if "index.html" was added to the url</param>
+        </member>
+        <member name="M:SysWeaver.Net.ManualHttpServerRequest.Detacher(SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Get a function that makes a detached copy of a request: the same method, url, prefix, host, session (so the same user) and client address, no body.
+            Work that runs after the request ended (a background job, see <see cref="P:SysWeaver.Net.BackgroundJobContext.Request"/>) uses the copy instead of the original request.
+            Call it while the request is alive (it reads the request at once); each call of the returned function makes a new copy (dispose it when done).
+            </summary>
+            <param name="request">The request (alive)</param>
+            <returns>A function that makes a copy</returns>
         </member>
         <member name="M:SysWeaver.Net.ManualHttpServerRequest.Dispose">
             <summary>
@@ -7655,7 +8637,7 @@
         </member>
         <member name="F:SysWeaver.Net.UserStorageDataRetention.DiscQuotaMb">
             <summary>
-            Maximum number of Mb of space that a user can have.
+            Maximum number of MB of space that a user can have.
             If exceeded, the files that would expire in the nearest future are deleted.
             0 or less to use defaults.
             </summary>
@@ -7664,7 +8646,7 @@
             <summary>
             Get the validated max number of bytes that a user may store.
             </summary>
-            <param name="defaultDiscQuotaMb">The quota in Mb to use if <see cref="F:SysWeaver.Net.UserStorageDataRetention.DiscQuotaMb"/> is 0 or less; if this is also 0 or less, 100 Mb is used.</param>
+            <param name="defaultDiscQuotaMb">The quota in MB to use if <see cref="F:SysWeaver.Net.UserStorageDataRetention.DiscQuotaMb"/> is 0 or less; if this is also 0 or less, 100 MB is used.</param>
             <returns>The quota in bytes.</returns>
         </member>
         <member name="M:SysWeaver.Net.UserStorageDataRetention.Get(System.TimeSpan[],SysWeaver.Net.UserStorageDataRetention)">
@@ -7696,7 +8678,7 @@
         </member>
         <member name="F:SysWeaver.Net.UserStorageScopes.Private">
             <summary>
-            Private data, can not be seen by other users
+            Private data, cannot be seen by other users
             </summary>
         </member>
         <member name="F:SysWeaver.Net.UserStorageScopes.Protected">
@@ -7810,8 +8792,21 @@
             <summary>
             Add an embedded resource (the same as <see cref="M:SysWeaver.Net.StaticDataHttpServerModule.AddEmbeddedResourceSplit(System.Reflection.Assembly,System.String,System.String,System.String,System.String,System.Nullable{System.Int32},SysWeaver.Net.HttpCompressionPriority,System.Boolean,System.DateTime,System.String,System.String,System.Boolean,System.Double)"/> with fewer allocations: no split parts and joins, one location string, the resource data is read once).
             </summary>
+            <param name="asm">The assembly that contains the embedded resource</param>
+            <param name="x">The manifest resource name (used to read the data and in the location)</param>
             <param name="name">A string that contains the served name</param>
             <param name="start">The index of the served name in <paramref name="name"/> (the served name is the rest of the string)</param>
+            <param name="sn">The end of the location string, "\" from assembly \"" + the assembly name + "\""</param>
+            <param name="urlRoot">An optional path prefix to the resource name</param>
+            <param name="dur">The client side cache duration (already resolved, the module default is not applied)</param>
+            <param name="runtimeComp">The runtime compression to apply (already resolved, null for no compression)</param>
+            <param name="disableCompession">True to disable any compression</param>
+            <param name="lwt">The last modified time</param>
+            <param name="etag">The etag to use</param>
+            <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
+            <param name="authTokens">The parsed <paramref name="auth"/> tokens, computed on first use if null (pass the same variable for all resources so that it's only parsed once)</param>
+            <param name="replace">If true, any existing resource with the same order will be replaced</param>
+            <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
             <returns>False if nothing was done because the name is unusual (no '.', a compressed name with a single '.' or a long extension), use <see cref="M:SysWeaver.Net.StaticDataHttpServerModule.AddEmbeddedResourceSplit(System.Reflection.Assembly,System.String,System.String,System.String,System.String,System.Nullable{System.Int32},SysWeaver.Net.HttpCompressionPriority,System.Boolean,System.DateTime,System.String,System.String,System.Boolean,System.Double)"/> for those</returns>
         </member>
         <member name="M:SysWeaver.Net.StaticDataHttpServerModule.GetResourceUrl(System.String,System.String,System.Int32,System.Int32,System.Int32)">

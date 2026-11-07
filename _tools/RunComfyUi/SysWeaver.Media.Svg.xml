@@ -4,6 +4,250 @@
         <name>SysWeaver.Media.Svg</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.Media.BrandFonts">
+            <summary>
+            The brand fonts (embedded resources, SIL Open Font License 1.1, see Fonts/OFL-*.txt).
+            Saira Semi Condensed SemiBold is the display font (initials, wordmarks), Barlow is the text font (sub titles).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandFonts.Saira">
+            <summary>
+            Saira Semi Condensed SemiBold, the display font
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandFonts.BarlowMedium">
+            <summary>
+            Barlow Medium, the text font (emphasis)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandFonts.BarlowRegular">
+            <summary>
+            Barlow Regular, the text font
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandFonts.OpenFile(System.String)">
+            <summary>
+            Get the raw font file data of an embedded font (ex: to use the font in SkiaSharp)
+            </summary>
+            <param name="file">The font file name, ex: "Barlow-Medium.ttf"</param>
+            <returns>A stream with the font file data, the caller must dispose it</returns>
+        </member>
+        <member name="T:SysWeaver.Media.BrandPaletteKind">
+            <summary>
+            The kind of palette, decides how the brand roles are mapped to the hues of a <see cref="T:SysWeaver.HashColors"/> theme
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPaletteKind.Dark">
+            <summary>
+            The brand look: a slate background (main hue, low value), steel (main hue, light) and copper (warm accent).
+            For the main hue 200 and complement hue 25 this is the actual brand palette (Slate 900, Steel 300, Copper 500).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPaletteKind.Bright">
+            <summary>
+            The bright brand look: a mist background, slate text, steel 600 and copper 600 threads
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPaletteKind.Deep">
+            <summary>
+            A dark background with a more saturated main hue (more colorful, still dark)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPaletteKind.Vivid">
+            <summary>
+            A saturated mid tone background in the main hue, light text on dark hues and dark text on luminous hues (yellow, green, cyan)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.BrandPalette">
+            <summary>
+            Brand color roles, derived from a <see cref="T:SysWeaver.HashColors"/> theme.
+            The brand palette is slate (dark blue grey, hue ~205), steel (light / mid blue grey) and copper (orange, hue ~24),
+            copper is roughly the complement of slate, so: slate + steel use the theme main hue and the accent is derived from the theme complement hue,
+            pulled into a warm "copper" band (gold to red copper), or into a cool "steel" band if the main hue itself is warm.
+            The saturation of the theme scales the saturation of the slate and steel colors (0.75x - 1.25x).
+            Minimum contrasts (WCAG) are enforced: main / secondary 4.5:1, text 7:1, threads 3:1, accent colored letters 4.5:1.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Kind">
+            <summary>
+            The kind of palette
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Background">
+            <summary>
+            The background (tile / panel) color, also used for the "gap" (halo) around woven threads and letters
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Surface">
+            <summary>
+            A raised surface color (tone on tone weave pattern)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Main">
+            <summary>
+            The main mark color (initials, steel thread), at least 4.5:1 against the background
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Text">
+            <summary>
+            The text color (wordmark), at least 7:1 against the background (4.5:1 for light text on a mid tone)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Secondary">
+            <summary>
+            The secondary text color (sub title), at least 4.5:1 against the background
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Accent">
+            <summary>
+            The accent color (copper thread), at least 3:1 against the background
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.AccentLetters">
+            <summary>
+            The accent color for letters, at least 4.5:1 against the background
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Accent2">
+            <summary>
+            The second thread color (steel thread), at least 3:1 against the background
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Edge">
+            <summary>
+            A thin edge around tiles, so that the tile is visible on any page or browser chrome (null for none)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.EdgeLarge">
+            <summary>
+            A subtle edge for large tiles (null for none)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.Tint">
+            <summary>
+            A letter color from the raw complement hue (more varied than the copper accent), at least 4.5:1 against the background
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandPalette.IsBright">
+            <summary>
+            True if the background is bright
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.Luminance(System.String)">
+            <summary>
+            The relative luminance (WCAG) of a "#rrggbb" color
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.Contrast(System.String,System.String)">
+            <summary>
+            The contrast ratio (WCAG) between two "#rrggbb" colors [1, 21]
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.Ensure(System.Double,System.Double,System.Double,System.String,System.Double)">
+            <summary>
+            Get a color with at least some contrast against a background, the value is moved away from the background (brighter on dark backgrounds, darker on bright).
+            On dark backgrounds the saturation is lowered if the value can't be increased any more.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.AccentHue(System.Double,System.Double)">
+            <summary>
+            The accent hue: the complement hue pulled into the warm copper band (10 - 40 degrees, 25 for the brand complement),
+            or into a muted cool steel band (197 - 213 degrees) if the main hue itself is copper like (red, orange)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.IsLuminousHue(System.Double)">
+            <summary>
+            True if a hue is perceived as bright (yellow, green, cyan)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.IsMuddyDark(System.Double)">
+            <summary>
+            True if a hue makes a muddy (olive / brown) dark background
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandPalette.Create(SysWeaver.HashColors,SysWeaver.Media.BrandPaletteKind,System.Int32)">
+            <summary>
+            Create a palette from a theme.
+            Contrast floors have a little headroom (4.7 for 4.5, 3.1 for 3) so rounding and anti aliasing can't push them below the target.
+            </summary>
+            <param name="c">The theme</param>
+            <param name="kind">The kind of palette</param>
+            <param name="shade">The lightness step of the background within the kind [0, 2], spreads apps of the same hue and kind apart</param>
+            <returns>The palette</returns>
+        </member>
+        <member name="T:SysWeaver.Media.BrandText">
+            <summary>
+            A shaped line of text (glyph paths at a fixed size), with the font metrics needed to place it using the cap height
+            (so that descenders, like the "y" in SysWeaver, don't change the size or position of the text).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandText.Paths">
+            <summary>
+            The glyph paths (absolute coordinates at the shaping size)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandText.CharIndex">
+            <summary>
+            The index of the char in the text for each glyph path, null if the mapping is unknown
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandText.Bounds">
+            <summary>
+            The bounds of all glyphs
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandText.CapTop">
+            <summary>
+            The y position of the top of a capital letter ("H")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.BrandText.Baseline">
+            <summary>
+            The y position of the base line
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandText.CapHeight">
+            <summary>
+            The cap height (Baseline - CapTop)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandText.WidthPerCap">
+            <summary>
+            The width of the text when the cap height is 1
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandText.DescentPerCap">
+            <summary>
+            The depth of the descenders (below the base line) when the cap height is 1
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Media.BrandText.IsEmpty">
+            <summary>
+            True if there are no glyphs
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.BrandText.HasGlyph(SysWeaver.Media.SvgFont,System.Char)">
+            <summary>
+            Check if a font have a visible glyph for a char
+            </summary>
+            <param name="font">The font</param>
+            <param name="c">The char</param>
+            <returns>True if the char produces an outline</returns>
+        </member>
+        <member name="M:SysWeaver.Media.BrandText.Place(System.Double,System.Double,System.Double)">
+            <summary>
+            Get the glyph paths scaled and translated
+            </summary>
+            <param name="capHeight">The cap height to use</param>
+            <param name="left">The left position of the text (glyph bounds)</param>
+            <param name="capTop">The y position of the top of the capital letters</param>
+            <returns>New glyph paths</returns>
+        </member>
+        <member name="M:SysWeaver.Media.BrandText.F(System.Double)">
+            <summary>
+            Format a number for svg (invariant, max 2 decimals)
+            </summary>
+        </member>
         <member name="T:SysWeaver.Media.ISvgCss">
             <summary>
             A style that can be converted to css declarations (used as a css class by <see cref="M:SysWeaver.Media.SvgScene.AddStyle(SysWeaver.Media.ISvgCss)"/>)
@@ -14,6 +258,130 @@
             Get the css declarations (without a selector or braces)
             </summary>
             <returns>The css declarations, may be empty</returns>
+        </member>
+        <member name="T:SysWeaver.Media.MarkMotif">
+            <summary>
+            The thread motif of a mark (drawn around / behind the initials)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkMotif.None">
+            <summary>
+            Just the initials
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkMotif.Swoosh">
+            <summary>
+            A curved thread under the initials, rising past the last letter (users: a gentle curve under the letters)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkMotif.WeavePanel">
+            <summary>
+            Plain weave background with a single copper thread, the initials on a solid band
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkMotif.Waves">
+            <summary>
+            Two sine shaped threads woven with each other (over / under) behind the initials
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkMotif.Underline">
+            <summary>
+            A short thread under the initials
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.LetterStyle">
+            <summary>
+            How the initials are colored
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.LetterStyle.Mono">
+            <summary>
+            All letters in the main color, threads in the accent color
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.LetterStyle.TwoTone">
+            <summary>
+            The first letter in the main color, the others in the accent color (like the S and W in the brand mark)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.LetterStyle.Accent">
+            <summary>
+            All letters in the accent color, threads in the main color
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.LetterStyle.Tint">
+            <summary>
+            All letters in the tint color (from the raw complement hue), threads in the accent color
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.LetterStyle.TintTwoTone">
+            <summary>
+            The first letter in the main color, the others in the tint color, threads in the accent color
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.MarkDesign">
+            <summary>
+            All (deterministic) design choices for a mark (icon) and logo, derived from the name, colors and seed.
+            The icon choices are made first (in a fixed order), so the icon of an app and the mark in its logo are the same.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.Shade">
+            <summary>
+            The lightness step of the palette [0, 2]
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.TwoToneFirst">
+            <summary>
+            The first letter color for <see cref="F:SysWeaver.Media.LetterStyle.TwoTone"/> (null if no color differs enough in luminance)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.TintFirst">
+            <summary>
+            The first letter color for <see cref="F:SysWeaver.Media.LetterStyle.TintTwoTone"/> (null if no color differs enough in luminance)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.TileRadius">
+            <summary>
+            The tile corner radius as a fraction of the size, 0.5 is a circle
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.SmallAccent">
+            <summary>
+            Small (favicon) variant accent shape: 0 = none, 1 = a solid band at the bottom, 2 = a solid bar at the left (a shape cue, not only a color cue)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.FallbackVariant">
+            <summary>
+            The layout of the mark used for names without drawable initials (ring count and arrangement)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.LogoHighlightStart">
+            <summary>
+            The index of the first char in the name to highlight (accent color) in the wordmark, -1 for none
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.MarkDesign.LogoHighlightLength">
+            <summary>
+            The number of chars to highlight
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.MarkDesign.SplitWords(System.String)">
+            <summary>
+            Split a name into words: on any non letter / digit char and on camel case boundaries ("SysWeaver" => "Sys", "Weaver", "HTTPServer" => "HTTP", "Server").
+            Words with only digits are removed (unless all words are digits).
+            </summary>
+            <param name="s">The name</param>
+            <returns>The start index and length of each word</returns>
+        </member>
+        <member name="M:SysWeaver.Media.MarkDesign.Create(System.String,SysWeaver.HashColors,System.Int32,System.Boolean)">
+            <summary>
+            Create the design for a name
+            </summary>
+            <param name="name">The app or user name</param>
+            <param name="color">The theme, null to derive it from the name and seed</param>
+            <param name="seed">The seed</param>
+            <param name="isUser">True for a user icon, false for an app icon / logo</param>
+            <returns>The design</returns>
         </member>
         <member name="T:SysWeaver.Media.Svg3dParams">
             <summary>
@@ -268,7 +636,7 @@
             The last typeface provider used by Svg.Skia (after the system font manager and the default typeface), only used if the font family isn't installed.
             The SkiaSharp Linux native library (without dependencies) has no system font manager: without this text elements would not be drawn at all.
             Uses the font files found by <see cref="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String,System.String,System.String,System.String[])"/> (font folders added with
-            <see cref="M:SysWeaver.Media.SvgFont.AddFontPath(System.String)"/> and the system font folder), else the embedded <see cref="P:SysWeaver.Media.SvgFont.MontserratBlack"/> font (like <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/>).
+            <see cref="M:SysWeaver.Media.SvgFont.AddFontPath(System.String)"/> and the system font folder), else the embedded <see cref="P:SysWeaver.Media.BrandFonts.BarlowRegular"/> font (like <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/>).
             </summary>
         </member>
         <member name="M:SysWeaver.Media.SvgBitmapRenderer.ToPng(System.IO.Stream,System.Int32,System.Int32,System.Boolean)">
@@ -434,7 +802,7 @@
             <summary>
             Replace all svg text elements with paths (glyph outlines), so that the document can be rendered without the fonts.
             The font is found using <see cref="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String,System.String,System.String,System.String[])"/> (font-family, font-style and font-weight of the style attribute,
-            the folder of <see cref="F:SysWeaver.Media.SvgCanvas.Filename"/> is also searched), <see cref="P:SysWeaver.Media.SvgFont.MontserratBlack"/> is used if no font is found.
+            the folder of <see cref="F:SysWeaver.Media.SvgCanvas.Filename"/> is also searched), <see cref="P:SysWeaver.Media.BrandFonts.BarlowRegular"/> is used if no font is found.
             Supported attributes: x, y (numbers, px or % of the canvas size), text-anchor (start, middle, end), the font-size of the style attribute (default 12),
             and the non standard "textLength" (max width), "max-height", "max-scale-up" (default 1) and "vertical-align" (baseline (default), top, middle, bottom).
             The other attributes (and the style without the font) are copied to the path element.
@@ -1235,41 +1603,6 @@
             <param name="name">The name of the embedded font, ex: "MontserratBlack"</param>
             <returns>The font file data</returns>
         </member>
-        <member name="P:SysWeaver.Media.SvgFont.AsianNinja">
-            <summary>
-            The embedded "Asian Ninja" font (loaded on first use, the same instance is returned)
-            </summary>
-        </member>
-        <member name="P:SysWeaver.Media.SvgFont.AstroSpace">
-            <summary>
-            The embedded "Astro Space" font (loaded on first use, the same instance is returned)
-            </summary>
-        </member>
-        <member name="P:SysWeaver.Media.SvgFont.AtariClassic">
-            <summary>
-            The embedded "Atari Classic" font (loaded on first use, the same instance is returned)
-            </summary>
-        </member>
-        <member name="P:SysWeaver.Media.SvgFont.MontserratBlack">
-            <summary>
-            The embedded "Montserrat Black" font (loaded on first use, the same instance is returned), the fallback font of <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/>
-            </summary>
-        </member>
-        <member name="P:SysWeaver.Media.SvgFont.RedemtionRegular">
-            <summary>
-            The embedded "Redemtion Regular" font (loaded on first use, the same instance is returned)
-            </summary>
-        </member>
-        <member name="P:SysWeaver.Media.SvgFont.RoTwimchRegular">
-            <summary>
-            The embedded "RoTwimch Regular" font (loaded on first use, the same instance is returned)
-            </summary>
-        </member>
-        <member name="P:SysWeaver.Media.SvgFont.VegapunkFree">
-            <summary>
-            The embedded "Vegapunk Free" font (loaded on first use, the same instance is returned)
-            </summary>
-        </member>
         <member name="M:SysWeaver.Media.SvgFont.GetOrCreateCreateFromStream(System.IO.Stream,System.String,System.Boolean)">
             <summary>
             Load a font from a stream (despite the name, nothing is cached, a new instance is returned on every call)
@@ -1290,7 +1623,7 @@
             <param name="weight">The font weight, ex: "bold", may be null</param>
             <param name="extraFontFolders">Additional folders to search first (null entries are ignored)</param>
             <returns>The best matching font (the file with the highest rank among the files whose name contains a word of <paramref name="family"/>),
-            or null if no such font file was found (callers choose their own fallback, ex: <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/> uses <see cref="P:SysWeaver.Media.SvgFont.MontserratBlack"/>)</returns>
+            or null if no such font file was found (callers choose their own fallback, ex: <see cref="M:SysWeaver.Media.SvgCanvas.RasterizeText(System.Int32)"/> uses <see cref="P:SysWeaver.Media.BrandFonts.BarlowRegular"/>)</returns>
         </member>
         <member name="M:SysWeaver.Media.SvgFont.GetOrCreate(System.String)">
             <summary>
@@ -2039,6 +2372,151 @@
             <param name="width">The image width, zero or less to use the scene width (each axis is scaled independently)</param>
             <param name="height">The image height, zero or less to use the scene height (each axis is scaled independently)</param>
             <returns>The png file data</returns>
+        </member>
+        <member name="T:SysWeaver.Media.SvgSceneBrandExt">
+            <summary>
+            Generated (deterministic) app icons, app logos and user icons in the style of the SysWeaver brand guide:
+            a "thread" mark on a soft square tile, slate / steel / copper colors (derived from a <see cref="T:SysWeaver.HashColors"/> theme, see <see cref="T:SysWeaver.Media.BrandPalette"/>),
+            Saira Semi Condensed SemiBold for initials and wordmarks and Barlow for sub titles, flat colors (no effects).
+            The initials are combined with one of several thread motifs (woven over / under the letters and each other), see <see cref="T:SysWeaver.Media.MarkMotif"/>.
+            The same name, colors and seed always gives the same result, and the logo of an app uses the same mark as the app icon.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.AddAppIcon(SysWeaver.Media.SvgScene,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)">
+            <summary>
+            Add a generated app icon (made for a 256 x 256 scene, other sizes are scaled to fit and centered)
+            </summary>
+            <param name="scene">The scene to add the icon to</param>
+            <param name="name">The name of the app</param>
+            <param name="color">The colors to use (should be the app colors, <see cref="P:SysWeaver.HashColors.AppColors"/>), null to derive them from the name and seed</param>
+            <param name="seed">A seed, used to derive the colors (if <paramref name="color"/> is null) and to vary the design</param>
+            <param name="opaque">If true the icon is full bleed (a square covering the scene), else a soft square with transparent corners</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.AddUserIcon(SysWeaver.Media.SvgScene,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)">
+            <summary>
+            Add a generated user icon (made for a 256 x 256 scene, other sizes are scaled to fit and centered).
+            The initials are the first letters of the first and last name (an email address uses the part before the '@').
+            </summary>
+            <param name="scene">The scene to add the icon to</param>
+            <param name="name">The user name</param>
+            <param name="color">The colors to use, null to derive them from the name and seed (recommended, makes users distinguishable)</param>
+            <param name="seed">A seed, used to derive the colors (if <paramref name="color"/> is null) and to vary the design</param>
+            <param name="opaque">If true the icon is full bleed (a square covering the scene), else a circle or soft square with a transparent background</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.AddAppLogo(SysWeaver.Media.SvgScene,System.String,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)">
+            <summary>
+            Add a generated app logo (made for a 512 x 384 scene, other sizes are scaled to fit and centered): the app mark (same as <see cref="M:SysWeaver.Media.SvgSceneBrandExt.AddAppIcon(SysWeaver.Media.SvgScene,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)"/>)
+            with the name as a wordmark and an optional sub title, stacked or side by side, on a solid panel (optionally framed by a plain weave).
+            </summary>
+            <param name="scene">The scene to add the logo to</param>
+            <param name="name">The name of the app</param>
+            <param name="subTitle">An optional sub title (ignored if null, empty or the same as the name)</param>
+            <param name="color">The colors to use (should be the app colors, <see cref="P:SysWeaver.HashColors.AppColors"/>), null to derive them from the name and seed</param>
+            <param name="seed">A seed, used to derive the colors (if <paramref name="color"/> is null) and to vary the design</param>
+            <param name="opaque">If true the panel covers the scene, else the panel is a soft rectangle with transparent corners</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.AddAppBanner(SysWeaver.Media.SvgScene,System.String,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)">
+            <summary>
+            Add a generated app banner (made for a 1260 x 280 scene, other sizes are scaled to fit and centered): the app icon (same as <see cref="M:SysWeaver.Media.SvgSceneBrandExt.AddAppIcon(SysWeaver.Media.SvgScene,System.String,SysWeaver.HashColors,System.Int32,System.Boolean)"/>) in the
+            left 280 x 280 square, with the tile background stretched to the full width, and the name as a wordmark with an optional sub title to the right.
+            </summary>
+            <param name="scene">The scene to add the banner to</param>
+            <param name="name">The name of the app</param>
+            <param name="subTitle">An optional sub title (ignored if null, empty or the same as the name)</param>
+            <param name="color">The colors to use (should be the app colors, <see cref="P:SysWeaver.HashColors.AppColors"/>), null to derive them from the name and seed</param>
+            <param name="seed">A seed, used to derive the colors (if <paramref name="color"/> is null) and to vary the design</param>
+            <param name="opaque">If true the banner covers the scene, else the banner is a soft rectangle with transparent corners (the same corners as the icon)</param>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.NameLines(System.String,SysWeaver.Media.BrandText,System.Double,System.Double,System.Double,System.Double@)">
+            <summary>
+            Layout a name: one line if it fits at a cap height of at least minCap, else split into two lines at the word (or camel case) boundary closest to the middle
+            </summary>
+            <param name="name">The name</param>
+            <param name="one">The name shaped as a single line</param>
+            <param name="maxCap">The max cap height</param>
+            <param name="minCap">The min cap height</param>
+            <param name="width">The available width</param>
+            <param name="cap">The cap height to use</param>
+            <returns>The lines and the char offset of each line in the name</returns>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.SubTitleLines(System.String,System.Double,System.Double,System.Double,System.Double@,System.Double@)">
+            <summary>
+            Layout a sub title: one line if it fits at (close to) the max cap height, else split into two lines (at the space closest to the middle).
+            Nothing is returned if the sub title would get smaller than minCap.
+            </summary>
+            <param name="sub">The sub title, null for none</param>
+            <param name="maxCap">The max cap height</param>
+            <param name="minCap">The min cap height</param>
+            <param name="width">The available width</param>
+            <param name="cap">The cap height to use</param>
+            <param name="maxWidth">The width of the widest line</param>
+            <returns>The lines (0, 1 or 2)</returns>
+        </member>
+        <member name="F:SysWeaver.Media.SvgSceneBrandExt.U">
+            <summary>
+            The size of the mark coordinate system
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Media.SvgSceneBrandExt.Thread">
+            <summary>
+            A thread (a stroked poly line with round caps)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgSceneBrandExt.Thread.OverThreads">
+            <summary>
+            Point index ranges where this thread goes over other threads (drawn before the letters)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Media.SvgSceneBrandExt.Thread.OverLetters">
+            <summary>
+            Point index ranges where this thread goes over the letters (drawn after the letters)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.Over(System.Text.StringBuilder,SysWeaver.Media.SvgSceneBrandExt.Thread,System.ValueTuple{System.Int32,System.Int32},System.String,System.Double)">
+            <summary>
+            Draw a part of a thread over what's already drawn, with a gap (in the background color) around it
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.Weave(System.Text.StringBuilder,System.Double,System.Double,System.Double,System.Double,System.Double,System.String,System.Int32,System.String)">
+            <summary>
+            Draw a tone on tone plain weave (like the brand weave pattern), covering 0, 0 - width, height (and a bit more)
+            </summary>
+            <param name="g">The output</param>
+            <param name="width">The width of the area</param>
+            <param name="height">The height of the area</param>
+            <param name="pitch">The distance between threads</param>
+            <param name="tw">The thread width</param>
+            <param name="gap">The gap between a thread and a crossing thread above it</param>
+            <param name="tone">The thread color</param>
+            <param name="copperColumn">The index of a vertical thread to draw in a different color, -1 for none</param>
+            <param name="copper">The color of that thread</param>
+        </member>
+        <member name="F:SysWeaver.Media.SvgSceneBrandExt.SmallSize">
+            <summary>
+            Scenes up to this size (in pixels) get the small (favicon) variant: initials only (one letter at 20 px and below), larger and bolder,
+            no thread motif (an optional solid accent band instead) and a one pixel edge, like the 32 px "small master" of the brand guide.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.KeepInside(System.Collections.Generic.List{System.ValueTuple{System.Double,System.Double}},System.Func{System.ValueTuple{System.Double,System.Double},System.Boolean})">
+            <summary>
+            Keep the longest run of points that are inside an area
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Media.SvgSceneBrandExt.DrawMark(SysWeaver.Media.SvgScene,System.Text.StringBuilder,SysWeaver.Media.MarkDesign,SysWeaver.Media.BrandPalette,System.Double,System.Double,System.Double,System.Boolean,System.Boolean,System.Double,System.Double)">
+            <summary>
+            Draw a mark (initials + thread motif, optionally on a tile), the mark is designed in a 256 x 256 coordinate system and scaled to the size.
+            </summary>
+            <param name="scene">The scene (used to add masks)</param>
+            <param name="g">The output</param>
+            <param name="d">The design</param>
+            <param name="pal">The palette to use</param>
+            <param name="x">The left position</param>
+            <param name="y">The top position</param>
+            <param name="size">The size</param>
+            <param name="tile">True to draw the tile (background)</param>
+            <param name="square">True to draw a full bleed square tile</param>
+            <param name="px">If greater than zero, draw the small variant made for this pixel size</param>
+            <param name="tileWidth">The width of the tile (in the 256 x 256 mark coordinate system), a wider tile stretches the background to the right (the mark itself is unchanged)</param>
         </member>
         <member name="T:SysWeaver.Media.SvgShadowParams">
             <summary>

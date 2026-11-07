@@ -123,10 +123,17 @@
             <summary>
             Get a deterministic fake salt for an unknown user.
             If all authorizers are <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
-            else a 24 char salt is returned (the format used by random salts, <see cref="M:SysWeaver.Auth.AuthTools.GetRandomSalt"/>).
+            else a 24 char salt is returned (the format used by random salts, <see cref="M:SysWeaver.Auth.AuthTools.GetRandomSalt"/>), keyed with
+            <see cref="F:SysWeaver.Auth.AuthManager.FakeSaltKey"/> so that nobody can compute it (an unkeyed hash of the user name told who has an account: a salt that
+            differs from the computed one is a real one). It is the same for the life time of the process.
             </summary>
             <param name="username">The user name</param>
             <returns>A fake salt</returns>
+        </member>
+        <member name="F:SysWeaver.Auth.AuthManager.FakeSaltKey">
+            <summary>
+            The secret key of the fake salts (random per process: a fake salt changes when the process restarts, a real one doesn't)
+            </summary>
         </member>
         <member name="M:SysWeaver.Auth.AuthManager.GetSalt(System.String)">
             <summary>
@@ -909,6 +916,18 @@
             Maximum number of chars in a generated nick name.
             </summary>
         </member>
+        <member name="T:SysWeaver.Auth.IAuthorizedRequest">
+            <summary>
+            The caller of a web api, for services that can't reference the http server (ex: <see cref="T:SysWeaver.Auth.SimpleAuthorizer"/>, to log who created an API key).
+            A web api method may take it as its trailing parameter instead of the http server's request type: the http server passes the request
+            (which implements this interface), it's not part of the api's input.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Auth.IAuthorizedRequest.CallerAuth">
+            <summary>
+            The authorization of the caller (the signed in user or API key of the request's session), null if no one is signed in.
+            </summary>
+        </member>
         <member name="T:SysWeaver.Auth.NameGen">
             <summary>
             Generates random, human friendly names (ex: for default nick names), formatted as "[adjective] [entity] [first name]".
@@ -1182,10 +1201,11 @@
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.UsersTable(SysWeaver.Data.TableDataRequest)">
             <summary>
-            Get information about all users handled by the simple authorizer
+            The built-in users: the users of the server configuration (handled by the simple authorizer), they can't be changed here
             </summary>
-            <param name="r">Paramaters</param>
-            <returns></returns>
+            <param name="r">Parameters</param>
+            <returns>The users</returns>
+            <remarks>Shown as Administration > "Built-in users", so it never clashes with the user accounts of a user manager (Administration > Users).</remarks>
         </member>
         <member name="M:SysWeaver.Auth.SimpleAuthorizer.GetAuthSalt(System.String)">
             <summary>
@@ -1274,16 +1294,22 @@
             </summary>
             <returns>An array of strings with the user/password pairs encoded as "user:key", or null if there are no keys</returns>
         </member>
-        <member name="M:SysWeaver.Auth.SimpleAuthorizer.RemoveApiKey(System.String)">
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.RemoveApiKey(System.String,SysWeaver.Auth.IAuthorizedRequest)">
             <summary>
             Remove an api key.
             Requires <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
             </summary>
             <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
             <returns>True if the key was removed, false if it doesn't exist</returns>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
             <exception cref="T:System.ArgumentNullException"><paramref name="keyName"/> is null (DEBUG builds only).</exception>
         </member>
-        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddApiKey(System.String)">
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.CallerName(SysWeaver.Auth.IAuthorizedRequest)">
+            <summary>
+            The quoted user name of a web api caller for log lines, "an unknown caller" when unknown (ex: a call from code).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Auth.SimpleAuthorizer.AddApiKey(System.String,SysWeaver.Auth.IAuthorizedRequest)">
             <summary>
             Add/create a new API key with a random 40 char alpha numerical key (from a secure RNG).
             Users authenticated with the key get the <see cref="F:SysWeaver.Auth.SimpleAuthorizerParams.ApiKeyAuth"/> tokens.
@@ -1292,6 +1318,7 @@
             <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
             <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
             <exception cref="T:System.ArgumentNullException">The key name is null.</exception>
+            <param name="context">The caller (handled internally by the web api), named in the log line, may be null</param>
             <exception cref="T:System.ArgumentException">The key name is empty (or only white spaces), contains a ':', starts with a '#' or "//" or is too long.</exception>
         </member>
         <member name="P:SysWeaver.Auth.SimpleAuthorizer.MethodAuths">
@@ -1385,6 +1412,11 @@
             Notification messages (markdown for web)
             </summary>
         </member>
+        <member name="F:SysWeaver.ManagedLanguageMessages.WhatsAppMessages">
+            <summary>
+            Notification messages (markdown for web)
+            </summary>
+        </member>
         <member name="P:SysWeaver.ManagedLanguageMessages.AllTexts">
             <summary>
             All text messages, key is the lower cased message name.
@@ -1396,6 +1428,11 @@
             </summary>
         </member>
         <member name="P:SysWeaver.ManagedLanguageMessages.AllNotifications">
+            <summary>
+            All notification (markdown for web) messages, key is the lower cased message name.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedLanguageMessages.AllWhatsAppMessages">
             <summary>
             All notification (markdown for web) messages, key is the lower cased message name.
             </summary>
@@ -1421,7 +1458,14 @@
             <param name="key">The key (one of the names supplied to <see cref="T:SysWeaver.ManagedMessages"/>, including any leading '*', case insensitive)</param>
             <returns>null if not found, else the text message template</returns>
         </member>
-        <member name="M:SysWeaver.ManagedLanguageMessages.#ctor(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedTextMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedMailMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedMarkDownMessage})">
+        <member name="M:SysWeaver.ManagedLanguageMessages.GetWhatsApp(System.String)">
+            <summary>
+            Get the WhatsApp (markdown) message for a given key.
+            </summary>
+            <param name="key">The key (one of the names supplied to <see cref="T:SysWeaver.ManagedMessages"/>, including any leading '*', case insensitive)</param>
+            <returns>null if not found, else the WhatsApp message template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedLanguageMessages.#ctor(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedTextMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedMailMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedNotificationMessage},System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.ManagedWhatsAppMessage})">
             <summary>
             Create the messages of a language.
             </summary>
@@ -1429,6 +1473,7 @@
             <param name="texts">The text messages, keys must be lower case</param>
             <param name="mails">The mail messages, keys must be lower case</param>
             <param name="notifications">The web notifications messages, keys must be lower case</param>
+            <param name="whatsApps">The whatsApps messages, keys must be lower case</param>
         </member>
         <member name="M:SysWeaver.ManagedLanguageMessages.#ctor(SysWeaver.ManagedLanguageMessages,System.Boolean)">
             <summary>
@@ -1532,63 +1577,11 @@
             </summary>
             <returns>A text template</returns>
         </member>
-        <member name="T:SysWeaver.ManagedMarkDownMessage">
+        <member name="M:SysWeaver.ManagedMailMessage.GetSendBody">
             <summary>
-            A mail message template (subject and body), where each part can be a file name, an embedded resource name or the template text itself.
+            The body template to send: the translation contexts are only for the translator, so they are removed from a html body.
+            They are removed from the template, so that a variable value is never changed.
             </summary>
-            <remarks>
-            Templates are parsed lazily and cached, if a part is read from a file the cached template is dropped when the file changes.
-            Thread safe.
-            </remarks>
-        </member>
-        <member name="M:SysWeaver.ManagedMarkDownMessage.#ctor">
-            <summary>
-            Create a mail message template that only uses the standard variables.
-            </summary>
-        </member>
-        <member name="M:SysWeaver.ManagedMarkDownMessage.#ctor(System.Collections.Generic.IReadOnlySet{System.String})">
-            <summary>
-            Create a mail message template that may use some additional variables.
-            </summary>
-            <param name="vars">Additional variables, ex: "[Amount]"</param>
-        </member>
-        <member name="F:SysWeaver.ManagedMarkDownMessage.Vars">
-            <summary>
-            Additional variables (in addition to <see cref="T:SysWeaver.ManagedVars"/>) that the templates may use, may be null.
-            </summary>
-        </member>
-        <member name="M:SysWeaver.ManagedMarkDownMessage.ToString">
-            <inheritdoc/>
-        </member>
-        <member name="P:SysWeaver.ManagedMarkDownMessage.Headline">
-            <summary>
-            The subject template, if this is an existing filename, the message is read from that
-            </summary>
-        </member>
-        <member name="P:SysWeaver.ManagedMarkDownMessage.Body">
-            <summary>
-            The body template, if this is an existing filename, the message is read from that
-            </summary>
-        </member>
-        <member name="M:SysWeaver.ManagedMarkDownMessage.GetMessage(System.String@,System.String@,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
-            <summary>
-            Evaluate the subject and body templates
-            </summary>
-            <param name="subject">The subject after evaluation</param>
-            <param name="body">The body after evaluation</param>
-            <param name="vars">The variables</param>
-        </member>
-        <member name="M:SysWeaver.ManagedMarkDownMessage.GetSubject">
-            <summary>
-            Get the text template for the subject
-            </summary>
-            <returns>A text template</returns>
-        </member>
-        <member name="M:SysWeaver.ManagedMarkDownMessage.GetBody">
-            <summary>
-            Get the text template for the body
-            </summary>
-            <returns>A text template</returns>
         </member>
         <member name="F:SysWeaver.ManagedMessageTypes.Text">
             <summary>
@@ -1613,6 +1606,11 @@
         <member name="F:SysWeaver.ManagedMessageTypes.NotificationBody">
             <summary>
             Markdown message body, intended for web display (md converted to html).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ManagedMessageTypes.WhatsApp">
+            <summary>
+            Markdown message body, intended to be sent through WhatsApp
             </summary>
         </member>
         <member name="F:SysWeaver.ManagedMessageTypes.Email">
@@ -1707,6 +1705,64 @@
             </summary>
             <param name="language">The language code (case insensitive), null returns <see cref="F:SysWeaver.ManagedMessages.Default"/></param>
             <returns>The messages, null only if no languages exist</returns>
+        </member>
+        <member name="T:SysWeaver.ManagedNotificationMessage">
+            <summary>
+            A mail message template (subject and body), where each part can be a file name, an embedded resource name or the template text itself.
+            </summary>
+            <remarks>
+            Templates are parsed lazily and cached, if a part is read from a file the cached template is dropped when the file changes.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.ManagedNotificationMessage.#ctor">
+            <summary>
+            Create a mail message template that only uses the standard variables.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedNotificationMessage.#ctor(System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a mail message template that may use some additional variables.
+            </summary>
+            <param name="vars">Additional variables, ex: "[Amount]"</param>
+        </member>
+        <member name="F:SysWeaver.ManagedNotificationMessage.Vars">
+            <summary>
+            Additional variables (in addition to <see cref="T:SysWeaver.ManagedVars"/>) that the templates may use, may be null.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedNotificationMessage.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="P:SysWeaver.ManagedNotificationMessage.Headline">
+            <summary>
+            The subject template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="P:SysWeaver.ManagedNotificationMessage.Body">
+            <summary>
+            The body template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedNotificationMessage.GetMessage(System.String@,System.String@,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Evaluate the subject and body templates
+            </summary>
+            <param name="subject">The subject after evaluation</param>
+            <param name="body">The body after evaluation</param>
+            <param name="vars">The variables</param>
+        </member>
+        <member name="M:SysWeaver.ManagedNotificationMessage.GetSubject">
+            <summary>
+            Get the text template for the subject
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedNotificationMessage.GetBody">
+            <summary>
+            Get the text template for the body
+            </summary>
+            <returns>A text template</returns>
         </member>
         <member name="T:SysWeaver.ManagedTextLookup">
             <summary>
@@ -1812,6 +1868,51 @@
             <param name="vars">Additional variables (in addition to <see cref="F:SysWeaver.ManagedVars.TextVars"/>), may be null</param>
         </member>
         <member name="F:SysWeaver.ManagedTextMessage.Vars">
+            <summary>
+            Additional variables that the template may use (frozen), may be null.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.ManagedWhatsAppMessage">
+            <summary>
+            A WhatsApp message template, where the body can be a file name, an embedded resource name or the template text itself.
+            </summary>
+            <remarks>
+            The template is parsed lazily and cached, if the body is read from a file the cached template is dropped when the file changes.
+            Thread safe.
+            </remarks>
+        </member>
+        <member name="P:SysWeaver.ManagedWhatsAppMessage.Body">
+            <summary>
+            The body template, if this is an existing filename, the message is read from that
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ManagedWhatsAppMessage.GetMessage(System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
+            <summary>
+            Evaluate the body template
+            </summary>
+            <param name="vars">The variables</param>
+            <returns>The message text</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedWhatsAppMessage.GetBody">
+            <summary>
+            Get the text template for the body
+            </summary>
+            <returns>A text template</returns>
+        </member>
+        <member name="M:SysWeaver.ManagedWhatsAppMessage.#ctor(System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a text message template, set <see cref="P:SysWeaver.ManagedWhatsAppMessage.Body"/> before use.
+            </summary>
+            <param name="vars">Additional variables (in addition to <see cref="F:SysWeaver.ManagedVars.TextVars"/>), may be null</param>
+        </member>
+        <member name="M:SysWeaver.ManagedWhatsAppMessage.#ctor(System.String,System.Collections.Generic.IReadOnlySet{System.String})">
+            <summary>
+            Create a text message template.
+            </summary>
+            <param name="body">A file name, embedded resource name or the template text</param>
+            <param name="vars">Additional variables (in addition to <see cref="F:SysWeaver.ManagedVars.TextVars"/>), may be null</param>
+        </member>
+        <member name="F:SysWeaver.ManagedWhatsAppMessage.Vars">
             <summary>
             Additional variables that the template may use (frozen), may be null.
             </summary>

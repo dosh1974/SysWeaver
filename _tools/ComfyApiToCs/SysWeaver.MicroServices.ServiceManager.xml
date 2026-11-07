@@ -549,7 +549,7 @@
             <summary>
             Get information about all registered services as table data
             </summary>
-            <param name="r">Paramaters</param>
+            <param name="r">Parameters</param>
             <returns></returns>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.GetStats(System.Boolean)">
@@ -568,7 +568,7 @@
             <summary>
             Get statistics for all registered services as table data
             </summary>
-            <param name="r">Paramaters</param>
+            <param name="r">Parameters</param>
             <param name="context">Automatically populated by the request handler, don't use</param>
             <returns>Table data</returns>
         </member>
@@ -576,7 +576,7 @@
             <summary>
             A list of all scheduled (upcoming) tasks
             </summary>
-            <param name="r">Paramaters</param>
+            <param name="r">Parameters</param>
             <returns>Table data</returns>
         </member>
         <member name="F:SysWeaver.MicroService.ServiceManager.DebugOpsTokens">
@@ -588,7 +588,7 @@
             <summary>
             Get performance information
             </summary>
-            <param name="r">Paramaters</param>
+            <param name="r">Parameters</param>
             <param name="context">Automatically populated by the request handler, don't use</param>
             <returns>Table data</returns>
         </member>
@@ -596,23 +596,39 @@
             <summary>
             Get performance monitor information
             </summary>
-            <param name="r">Paramaters</param>
+            <param name="r">Parameters</param>
             <param name="context">Automatically populated by the request handler, don't use</param>
             <returns>Table data</returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.PerfTableApis">
+            <summary>
+            The local urls of the performance tables (<see cref="M:SysWeaver.MicroService.ServiceManager.PerfTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>, <see cref="M:SysWeaver.MicroService.ServiceManager.PerfSystemsTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>): their cached responses are
+            removed when a performance monitor is toggled or reset (locked: the table requests add to it concurrently)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.InvalidatePerfTables">
+            <summary>
+            Remove the cached responses of the performance tables, so the next request shows the change.
+            Both tables take the request context, so they are cached per session (<see cref="F:SysWeaver.MicroService.WebApiCaches.AutoDetect"/>): the session
+            caches are cleared too. Before, only the global cache was, so the tables showed the old state for up to 30 s and a second
+            click on the "Enabled" switch toggled it back (owner report 4 #11).
+            </summary>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.TogglePerformanceMonitor(System.String)">
             <summary>
             Toggle performance monitor on/off
             </summary>
             <param name="systemName">The name of the system</param>
-            <returns></returns>
+            <returns>True when toggled (never false: an unknown system is a 409 with the reason)</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409: no performance monitor with that system name (any more)</exception>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.ResetPerformanceMonitor(System.String)">
             <summary>
             Reset a performance monitor
             </summary>
             <param name="systemName">The name of the system</param>
-            <returns></returns>
+            <returns>True when reset (never false: an unknown system is a 409 with the reason)</returns>
+            <exception cref="T:SysWeaver.Net.HttpResponseException">409: no performance monitor with that system name (any more)</exception>
         </member>
         <member name="M:SysWeaver.MicroService.ServiceManager.IsMicroService(System.Type)">
             <summary>
@@ -778,6 +794,76 @@
             <param name="context"></param>
             <returns>The data contained is the table ref</returns>
         </member>
+        <member name="T:SysWeaver.MicroService.ServiceManager.ProblemRow">
+            <summary>
+            A row in the problems table: the failures of one part of a system, as tracked by an <see cref="T:SysWeaver.ExceptionTracker"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemRow.System">
+            <summary>
+            The system that had the problems
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemRow.Source">
+            <summary>
+            The part of the system that had the problems (the name of the exception tracker)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemRow.Count">
+            <summary>
+            The number of failures since the service started
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemRow.LastTime">
+            <summary>
+            The time of the last failure (UTC)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemRow.LastException">
+            <summary>
+            The last exception (message and call stack)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.GetProblems">
+            <summary>
+            Get the problems (failures) of all systems, from the statistics of the exception trackers.
+            Not every failure is logged one by one (to avoid flooding the log, ex: a denial of service attempt, see LogNewProblems: rate limited warnings per part), but every tracked failure is counted here.
+            </summary>
+            <returns>One row per exception tracker with at least one failure</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.ProblemsTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)">
+            <summary>
+            Problems: how often each part of the system failed, when it last failed and why (from the exception trackers).
+            Use this to find problems, not every failure is written to the log.
+            </summary>
+            <param name="r">Parameters</param>
+            <param name="context">Automatically populated by the request handler, don't use</param>
+            <returns>Table data</returns>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemLogPruneCycles">
+            <summary>
+            The number of prune cycles (2 s each) between two scans for new problems (10 s)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemLogRepeatTicks">
+            <summary>
+            A part that keeps failing is logged at most this often (the Problems table and the exception trackers have the details)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.ServiceManager.ProblemLogMaxMessage">
+            <summary>
+            The longest message text logged (the first line of the last exception)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.ServiceManager.LogNewProblems">
+            <summary>
+            Log the failures that the exception trackers counted since the last scan (called every 10 s).
+            Not every failure is logged (a denial of service attempt or a dead end point could flood the log): each part (exception tracker) is logged
+            as a warning when it first fails, then at most once per hour while it keeps failing (with the number of failures since the last report).
+            A report with a new message includes the full exception.
+            All failures are counted in the problems table (<see cref="M:SysWeaver.MicroService.ServiceManager.ProblemsTable(SysWeaver.Data.TableDataRequest,SysWeaver.Net.HttpServerRequest)"/>).
+            </summary>
+        </member>
         <member name="P:SysWeaver.MicroService.ServiceManifest.Type">
             <summary>
             Fully qualified type name of the service type
@@ -850,7 +936,7 @@
         </member>
         <member name="F:SysWeaver.MicroService.GetIncomingEmailRequest.LastId">
             <summary>
-            The id of the last recieved email (start with null).
+            The id of the last received email (start with null).
             Will block until an email arrives that is newer than this.
             </summary>
         </member>
@@ -861,7 +947,7 @@
         </member>
         <member name="F:SysWeaver.MicroService.GetIncomingTextMessageRequest.LastId">
             <summary>
-            The id of the last recieved message (start with null).
+            The id of the last received message (start with null).
             Will block until a message arrives that is newer than this.
             </summary>
         </member>
@@ -882,7 +968,7 @@
             If the last id is null or unknown (ex: the service restarted), only recent emails are returned.
             </summary>
             <param name="request">Request parameters</param>
-            <returns>The new emails or null if no new emails was recieved</returns>
+            <returns>The new emails or null if no new emails was received</returns>
         </member>
         <member name="T:SysWeaver.MicroService.IncomingEmail">
             <summary>
@@ -921,7 +1007,7 @@
         </member>
         <member name="F:SysWeaver.MicroService.IncomingEmail.Time">
             <summary>
-            The UTC time stamp of when this email was recieved
+            The UTC time stamp of when this email was received
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.IncomingEmail.System">
@@ -981,7 +1067,7 @@
         </member>
         <member name="F:SysWeaver.MicroService.IncomingTextMessage.Time">
             <summary>
-            The UTC time stamp of when this message was recieved
+            The UTC time stamp of when this message was received
             </summary>
         </member>
         <member name="F:SysWeaver.MicroService.IncomingTextMessage.System">
@@ -1028,7 +1114,7 @@
             If the last id is null or unknown (ex: the service restarted), only recent messages are returned.
             </summary>
             <param name="request">Request parameters</param>
-            <returns>The new messages or null if no new messages was recieved</returns>
+            <returns>The new messages or null if no new messages was received</returns>
         </member>
         <member name="T:SysWeaver.MicroService.ITextMessageSender">
             <summary>
@@ -1057,7 +1143,7 @@
             If the last id is null or unknown (ex: the service restarted), only recent updates are returned.
             </summary>
             <param name="request">Request parameters</param>
-            <returns>The new updates or null if no new updates was recieved</returns>
+            <returns>The new updates or null if no new updates was received</returns>
         </member>
         <member name="T:SysWeaver.MicroService.NetworkService">
             <summary>
@@ -1232,7 +1318,7 @@
             Wait for items newer than the cursor
             </summary>
             <param name="lastId">The id of the last item received, null to start</param>
-            <param name="system">If non-empty, only return items for this system</param>
+            <param name="system">null or "" for all items, else only the items of this system (ignoring the letter case and white space around it; a blank one matches only items without a system)</param>
             <returns>The items (oldest first), or null if no new items arrived before the time out</returns>
         </member>
         <member name="T:SysWeaver.MicroService.TextMessageChannels">

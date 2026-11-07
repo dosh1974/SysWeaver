@@ -491,7 +491,7 @@
             <param name="title">The title (tool tip) to display</param>
             <param name="iconClass">A class name (maybe url supported later)</param>
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="data">Menu data</param>
             <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
@@ -511,7 +511,7 @@
             <param name="title">The title (tool tip) to display</param>
             <param name="iconClass">A class name (maybe url supported later)</param>
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
         </member>
@@ -531,15 +531,17 @@
             <param name="title">The title (tool tip) to display</param>
             <param name="iconClass">A class name (maybe url supported later)</param>
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="dynamic">
             Dynamically modify item, this is a type name followed by a . and then the method name to invoke or just the method name (of the existing type), ex:
             SomeOtherClass.Func or Func (in the type that the attribute is put on).
-            The method signature is:
+            The method signature is one of:
             Task&lt;bool&gt; Func(HttpServerRequest context, WebMenuItem item)
-            or
             Task&lt;bool&gt; Func(Authorization auth, WebMenuItem item)
+            Task&lt;bool&gt; Func(HttpServerRequest context)
+            Task&lt;bool&gt; Func(Authorization auth)
+            (the item forms can change the item, the others only decide if it is shown)
             </param>
         </member>
         <member name="T:SysWeaver.MicroService.WebMenuItem">
@@ -598,7 +600,7 @@
             <param name="title">The title (tool tip) to display</param>
             <param name="iconClass">A class name (maybe url supported later)</param>
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
         </member>
@@ -618,7 +620,7 @@
             <param name="title">The title (tool tip) to display</param>
             <param name="iconClass">A class name (maybe url supported later)</param>
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
         </member>
@@ -638,7 +640,7 @@
             <param name="title">The title (tool tip) to display</param>
             <param name="iconClass">A class name (maybe url supported later)</param>
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
-            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
         </member>

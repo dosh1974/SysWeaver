@@ -818,11 +818,11 @@
           }
         }
       },
-      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.12": {
+      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.14": {
         "runtime": {
           "lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
             "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1226.42308"
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
@@ -922,27 +922,27 @@
           }
         }
       },
-      "System.CodeDom/10.0.12": {
+      "System.CodeDom/10.0.14": {
         "runtime": {
           "lib/net10.0/System.CodeDom.dll": {
             "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1226.42308"
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
-      "System.Configuration.ConfigurationManager/10.0.12": {
+      "System.Configuration.ConfigurationManager/10.0.14": {
         "dependencies": {
-          "System.Diagnostics.EventLog": "10.0.12",
-          "System.Security.Cryptography.ProtectedData": "10.0.12"
+          "System.Diagnostics.EventLog": "10.0.14",
+          "System.Security.Cryptography.ProtectedData": "10.0.14"
         },
         "runtime": {
           "lib/net10.0/System.Configuration.ConfigurationManager.dll": {
             "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1226.42308"
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
-      "System.Diagnostics.EventLog/10.0.12": {
+      "System.Diagnostics.EventLog/10.0.14": {
         "runtime": {
           "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.Messages.dll": {
             "assemblyVersion": "10.0.0.0",
@@ -950,37 +950,37 @@
           },
           "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.dll": {
             "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1226.42308"
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
-      "System.Diagnostics.PerformanceCounter/10.0.12": {
+      "System.Diagnostics.PerformanceCounter/10.0.14": {
         "dependencies": {
-          "System.Configuration.ConfigurationManager": "10.0.12"
+          "System.Configuration.ConfigurationManager": "10.0.14"
         },
         "runtime": {
           "runtimes/win/lib/net10.0/System.Diagnostics.PerformanceCounter.dll": {
             "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1226.42308"
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
-      "System.Management/10.0.12": {
+      "System.Management/10.0.14": {
         "dependencies": {
-          "System.CodeDom": "10.0.12"
+          "System.CodeDom": "10.0.14"
         },
         "runtime": {
           "runtimes/win/lib/net10.0/System.Management.dll": {
-            "assemblyVersion": "10.0.0.12",
-            "fileVersion": "10.0.1226.42308"
+            "assemblyVersion": "10.0.0.14",
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
-      "System.Security.Cryptography.ProtectedData/10.0.12": {
+      "System.Security.Cryptography.ProtectedData/10.0.14": {
         "runtime": {
           "lib/net10.0/System.Security.Cryptography.ProtectedData.dll": {
             "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.1226.42308"
+            "fileVersion": "10.0.1426.52326"
           }
         }
       },
@@ -1056,8 +1056,8 @@
       "SysWeaver.Common.Windows/1.0.0": {
         "dependencies": {
           "SysWeaver.Common": "1.0.0",
-          "System.Diagnostics.PerformanceCounter": "10.0.12",
-          "System.Management": "10.0.12"
+          "System.Diagnostics.PerformanceCounter": "10.0.14",
+          "System.Management": "10.0.14"
         },
         "runtime": {
           "SysWeaver.Common.Windows.dll": {
@@ -1129,7 +1129,7 @@
       },
       "SysWeaver.Media.Svg/1.0.0": {
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.14",
           "Svg.Skia": "5.2.3",
           "SysWeaver.Common": "1.0.0",
           "SysWeaver.Compression": "1.0.0",
@@ -1288,12 +1288,12 @@
       "path": "harfbuzzsharp.nativeassets.win32/14.2.0",
       "hashPath": "harfbuzzsharp.nativeassets.win32.14.2.0.nupkg.sha512"
     },
-    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.12": {
+    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw==",
-      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.12",
-      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.10.0.12.nupkg.sha512"
+      "sha512": "sha512-QtpQzuSZVyTPCuHW058yCs9Nj0394uUkNyFHS813nOmK9UgUdBdaprJ5PPsBgsQIpxADTsTkbaMMonykem6qdw==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.14",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.10.0.14.nupkg.sha512"
     },
     "ShimSkiaSharp/5.2.3": {
       "type": "package",
@@ -1351,47 +1351,47 @@
       "path": "svg.skia/5.2.3",
       "hashPath": "svg.skia.5.2.3.nupkg.sha512"
     },
-    "System.CodeDom/10.0.12": {
+    "System.CodeDom/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-Kk3yEavoGHXCAFTLLegxztgSdj24JrkAHelwgWnu+YMFxezcU2DbABEOOIMdy04PExUtKQtlazaKqo0qSa1X6A==",
-      "path": "system.codedom/10.0.12",
-      "hashPath": "system.codedom.10.0.12.nupkg.sha512"
+      "sha512": "sha512-oJYTzyBcc2g06mU699LaJfm964mdlFg6l7BPeqdu8bmK6Fdy9fL9BWugGsZAqWtjnNWp4tanZZ9DlZwHJmmhgg==",
+      "path": "system.codedom/10.0.14",
+      "hashPath": "system.codedom.10.0.14.nupkg.sha512"
     },
-    "System.Configuration.ConfigurationManager/10.0.12": {
+    "System.Configuration.ConfigurationManager/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-6KP/CGB9YymJuhNorm5FS/urQJB40h6t4DIiXN8J1VT/jINZHNgjzcdWRHGYuXGLwO7SCOq5K/OMAnh6oRbeLg==",
-      "path": "system.configuration.configurationmanager/10.0.12",
-      "hashPath": "system.configuration.configurationmanager.10.0.12.nupkg.sha512"
+      "sha512": "sha512-F/bLtwG0JuJ2OnTCsvJbnulvN7hr+BIFJLtE3PzgmW3AWkV8LYO5XF0j+zB4tHn/b4yfR7PAO0dZmoYeaINtnQ==",
+      "path": "system.configuration.configurationmanager/10.0.14",
+      "hashPath": "system.configuration.configurationmanager.10.0.14.nupkg.sha512"
     },
-    "System.Diagnostics.EventLog/10.0.12": {
+    "System.Diagnostics.EventLog/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-sOZM+VyRj1pg/ItlHsvrSbjws6oGqZveTzTNBGZ9ziwRDyKsOF3ub6vhvOdxotCIqtlnyHAIwP5sLNvgiZC+pQ==",
-      "path": "system.diagnostics.eventlog/10.0.12",
-      "hashPath": "system.diagnostics.eventlog.10.0.12.nupkg.sha512"
+      "sha512": "sha512-O/RzNwWoDzehkLlAG9hR8xooY5L41U7VUaYlcKvE3+FhHohBJqF10oLUzuv0v59VeJ62hv3uw9VoeX12zej7Sg==",
+      "path": "system.diagnostics.eventlog/10.0.14",
+      "hashPath": "system.diagnostics.eventlog.10.0.14.nupkg.sha512"
     },
-    "System.Diagnostics.PerformanceCounter/10.0.12": {
+    "System.Diagnostics.PerformanceCounter/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-KnKUtQdlT2rkPwwqSkLgltzmF0TA8fVIVLon4ApETc6dDFlQv3Bk7FdUhZQI/SYD4CnoY7UpsNX1VobRs6sbGQ==",
-      "path": "system.diagnostics.performancecounter/10.0.12",
-      "hashPath": "system.diagnostics.performancecounter.10.0.12.nupkg.sha512"
+      "sha512": "sha512-R3SvY4OZXhcCU7mgit8uhBfICXonoNBrV6pi4bTQWrvh4h5EMV/3BXA9Kky52IMUp7/EG1L2K0l1meBqAXxArA==",
+      "path": "system.diagnostics.performancecounter/10.0.14",
+      "hashPath": "system.diagnostics.performancecounter.10.0.14.nupkg.sha512"
     },
-    "System.Management/10.0.12": {
+    "System.Management/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-ApUsYmsNG8aPiMxsO6ROGZnqJwSZY8zeMlAQcuQg+ilPFUcIyBUC0BL8qA6wmPLNVsvL4nyhUrhhxh6qn0cx0Q==",
-      "path": "system.management/10.0.12",
-      "hashPath": "system.management.10.0.12.nupkg.sha512"
+      "sha512": "sha512-ywAltakc72Oe7liNatclpyq8oiLYx0VMSjQvphlsbPbiQ9glrV3JKvn5M2xFbsOzzh8sV3QAiUdmu2AV/ffN7Q==",
+      "path": "system.management/10.0.14",
+      "hashPath": "system.management.10.0.14.nupkg.sha512"
     },
-    "System.Security.Cryptography.ProtectedData/10.0.12": {
+    "System.Security.Cryptography.ProtectedData/10.0.14": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-wO0W8VDMeRJZakRySOmemAnrBZMwEFRlbfBtATxUiLf2I3IhSRnCp1Vt157NWptdE4IJ7eftd5n8q9LtaKHFTQ==",
-      "path": "system.security.cryptography.protecteddata/10.0.12",
-      "hashPath": "system.security.cryptography.protecteddata.10.0.12.nupkg.sha512"
+      "sha512": "sha512-UuaBUHgmtc9h6CMxaQqFDDJxkS5JVy7XEB+DbtCvD68GFcVM9/AccuNwFpARx8nwCnvjaxzoOBjG3gPz32P1Eg==",
+      "path": "system.security.cryptography.protecteddata/10.0.14",
+      "hashPath": "system.security.cryptography.protecteddata.10.0.14.nupkg.sha512"
     },
     "WaterTrans.GlyphLoader/1.2.2": {
       "type": "package",

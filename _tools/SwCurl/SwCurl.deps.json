@@ -776,7 +776,7 @@
       },
       "Knapcode.TorSharp/2.15.0": {
         "dependencies": {
-          "SharpCompress": "0.50.5",
+          "SharpCompress": "0.50.7",
           "System.ServiceModel.Syndication": "6.0.0"
         },
         "runtime": {
@@ -786,11 +786,11 @@
           }
         }
       },
-      "SharpCompress/0.50.5": {
+      "SharpCompress/0.50.7": {
         "runtime": {
           "lib/net10.0/SharpCompress.dll": {
-            "assemblyVersion": "0.50.5.0",
-            "fileVersion": "0.50.5.0"
+            "assemblyVersion": "0.50.7.0",
+            "fileVersion": "0.50.7.0"
           }
         }
       },
@@ -903,7 +903,7 @@
       "SysWeaver.Tor/1.0.0": {
         "dependencies": {
           "Knapcode.TorSharp": "2.15.0",
-          "SharpCompress": "0.50.5",
+          "SharpCompress": "0.50.7",
           "SysWeaver.Common": "1.0.0"
         },
         "runtime": {
@@ -947,12 +947,12 @@
       "path": "knapcode.torsharp/2.15.0",
       "hashPath": "knapcode.torsharp.2.15.0.nupkg.sha512"
     },
-    "SharpCompress/0.50.5": {
+    "SharpCompress/0.50.7": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-wAEAxPV67rmS3IlIm+tvGNPJXEtZNqlwkZrwJZAvz0AagZP0qLtT4mM2hk8S+uO0Kx+wYoy/FsADQpHwsN5y3g==",
-      "path": "sharpcompress/0.50.5",
-      "hashPath": "sharpcompress.0.50.5.nupkg.sha512"
+      "sha512": "sha512-amxjOlPKUFb33ohAVahPCCBHLtToYOOb6JGyM40q8DnT6KYoBLW1TtW6uLEXbv40S7ej6ikf6VmAXGBaFL6Klg==",
+      "path": "sharpcompress/0.50.7",
+      "hashPath": "sharpcompress.0.50.7.nupkg.sha512"
     },
     "System.ServiceModel.Syndication/6.0.0": {
       "type": "package",

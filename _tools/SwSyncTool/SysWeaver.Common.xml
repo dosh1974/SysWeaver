@@ -355,7 +355,7 @@
         </member>
         <member name="M:SysWeaver.AppInfo.ToString">
             <summary>
-            Returns the current (global) application name, display name, seed and description.
+            Returns the current (global) application name, display name, version, seed and description.
             </summary>
             <returns>A display string.</returns>
         </member>
@@ -378,6 +378,13 @@
         <member name="F:SysWeaver.AppInfoParams.AppDescription">
             <summary>
             The description of the application
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.AppVersion">
+            <summary>
+            The version of the application (build / deployment), shown to users (ex: on the home page) and stored in <see cref="P:SysWeaver.EnvInfo.AppVersion"/>.
+            Optional: null or empty uses the version of the executable (<see cref="F:SysWeaver.EnvInfo.ExeAppVersion"/>, the informational version of the entry assembly).
+            Supports <see cref="T:SysWeaver.PathTemplate"/> variables, so a deployment can set it, ex: "2.4.1 (2026-10-19)".
             </summary>
         </member>
         <member name="F:SysWeaver.AppInfoParams.AppSeed">
@@ -5100,6 +5107,23 @@
             Title of the table.
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.CommonTableData.DefaultOrder">
+            <summary>
+            The default sort order of the table (<see cref="T:SysWeaver.Data.TableDataDefaultOrderAttribute"/> of the row type), used by the server when a request has no order.
+            Column names in priority order, a '-' prefix = descending. Only sent with the columns, null if the table has no default order.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.CommonTableData.Card">
+            <summary>
+            The card template that the web client should use to show the rows, null to only show the table.
+            Only sent with the columns (the client decides once), a card selected by the client ("card" url parameter of table.html) is used before this.
+            The format is "name@path" where path is the html file with the template, relative to the site root (".html" is added if needed, a ".css" file next to it is optional) and name is the id of the template:
+              "name@path" = Show cards by default, the viewer can switch to the table.
+              "+name@path" = Show the table by default, the viewer can switch to cards.
+              "-name@path" = Only show cards.
+            See <see cref="T:SysWeaver.Data.TableDataCardAttribute"/>.
+            </summary>
+        </member>
         <member name="M:SysWeaver.Data.CommonTableData.CopyFrom(SysWeaver.Data.CommonTableData)">
             <summary>
             Copy the common values from another instance (shallow copy).
@@ -5262,6 +5286,24 @@
             Number of ms to wait before a new refresh
             </summary>
         </member>
+        <member name="T:SysWeaver.Data.TableDataActionFlags">
+            <summary>
+            What a table row action does to its row's item, declared by the server (see <see cref="T:SysWeaver.Data.TableDataActionsFullAttribute"/>).
+            The web client never guesses this from the words of the action's text or tool tip, so rewording or translating them never
+            changes the behaviour (G47).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataActionFlags.None">
+            <summary>
+            The row's item stays: after the action succeeded the row is re-read and offers its actions again (ex: Force password reset, Disable, Enable, Reset).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataActionFlags.Final">
+            <summary>
+            The action ends or removes the row's item (ex: Delete, Kill, End session, Withdraw invitation): after it succeeded the web table keeps the row
+            in its place, muted and without actions, until the user refreshes, and does not offer the action again.
+            </summary>
+        </member>
         <member name="T:SysWeaver.Data.TableDataActionsAttribute">
             <summary>
             Action buttons.
@@ -5270,6 +5312,16 @@
             Each button is encoded as "text|title|url|icon", so the strings can't contain '|' (or ';', the format separator).
             The formats can use {0} (the current value), {1} (the next value) and {2} to {x} (populated from the value if it's a comma separated string).
             An invalid number of button strings throws an <see cref="T:System.ArgumentException"/> when the attribute is instantiated (i.e. when it's read using reflection).
+            Use <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/> to specify a confirmation question per action and/or to show an action only on some rows.
+            <para>The outcome of the API an action calls: the client shows a result once, by the row. Return true (or a value) when the work was done. When it can't be done
+            (the row is gone, already used, already ended, ...), throw a <see cref="T:SysWeaver.Net.HttpResponseException"/> with 409 (Conflict) and a reason for the user, ex:
+            "The invitation could not be withdrawn: it was already used, has expired or was withdrawn". The reason is shown in the row ("not done: reason"),
+            translated, and it is not counted as a failure of the server (Problems). Never return a bare false for "not done": a false result is shown as
+            "not done" without a reason. Use 403 with a reason for refusals (the token of the row is missing or expired, the row may not be changed).</para>
+            <para>Say what the refusal means, never let the client guess it from the status (the "X-Sw-Outcome" header, see <see cref="T:SysWeaver.Net.HttpOutcomes"/>):
+            <c>throw HttpResponseException.AlreadyDone("Process #12 has already ended")</c> when the goal is already met (the client shows "not needed"),
+            <c>HttpResponseException.Gone(...)</c> when the item of the row no longer exists, and a plain 409 / 403 (or <c>HttpResponseException.Refused(...)</c>)
+            for everything else (the client shows "not done" with the reason).</para>
             </remarks>
         </member>
         <member name="M:SysWeaver.Data.TableDataActionsAttribute.#ctor(System.String,System.String,System.String,System.String,System.String[])">
@@ -5290,12 +5342,120 @@
             <param name="buttons">An array of buttons, 4 strings per button following a: "text", "title", "url" and "icon" pattern</param>
             <exception cref="T:System.ArgumentException">The number of strings in <paramref name="buttons"/> isn't a multiple of 4 (debug builds only; release builds throw an <see cref="T:System.IndexOutOfRangeException"/>)</exception>
         </member>
+        <member name="T:SysWeaver.Data.TableDataActionsExAttribute">
+            <summary>
+            Action buttons with an optional confirmation question and an optional per row visibility (an extended <see cref="T:SysWeaver.Data.TableDataActionsAttribute"/>).
+            </summary>
+            <remarks>
+            Each button is described by 6 strings: "text", "title", "url", "icon", "confirm" and "visible", encoded as "text|title|url|icon|confirm|visible",
+            so the strings can't contain '|' (or ';', the format separator).
+            All strings can use {0} (the value; its first part when it is a comma separated string), {1} (the next value) and {2} to {x} (the following comma separated parts of the value).
+            <para>"confirm": the question to ask (in a confirmation dialog) before the action is performed, ex: "Kill the process?".
+            A line break separates the question (the dialog title) from an explanation (the dialog text), ex: "Force a password reset for {2}?\nThey must choose
+            a new password at the next sign in.". With an explanation the server text is all the dialog says (no generic "This cannot be undone." warning),
+            so say it in the explanation when it is true.
+            An empty string (or null) means not specified: the renderer decides (the web client asks before actions that look destructive, ex: "Delete", "Kill").
+            Use <see cref="F:SysWeaver.Data.TableDataActionsExAttribute.NoConfirm"/> to never ask.</para>
+            <para>"visible": an empty string (or null) means always visible, else the action is hidden on a row when the formatted text is
+            empty, "0", "false" or "no" (case insensitive), ex: "{2}" with a member value like "1234,0" (hidden) or "1234,1" (visible).</para>
+            Renderers that only know <see cref="T:SysWeaver.Data.TableDataActionsAttribute"/> ignore the extra parts (the action is then always shown and the renderer decides about confirmations).
+            An invalid number of button strings throws an <see cref="T:System.ArgumentException"/> when the attribute is instantiated (i.e. when it's read using reflection).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataActionsExAttribute.NoConfirm">
+            <summary>
+            Use as the "confirm" string to never ask for a confirmation (even if the action looks destructive).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataActionsExAttribute.#ctor(System.String[])">
+            <summary>
+            Action buttons with an optional confirmation question and an optional per row visibility.
+            </summary>
+            <param name="buttons">An array of buttons, 6 strings per button following a: "text", "title", "url", "icon", "confirm" and "visible" pattern.
+            "url": the url of the get request that will be performed on click, if it start's with a '@' the url will be opened in a new tab, if it start's with a '&amp;' the url will be opened in the same tab.
+            "icon": an icon class name or url.
+            "confirm": the confirmation question, empty = the renderer decides, <see cref="F:SysWeaver.Data.TableDataActionsExAttribute.NoConfirm"/> = never ask.
+            "visible": empty = always visible, else hidden when the formatted text is empty, "0", "false" or "no".</param>
+            <exception cref="T:System.ArgumentException">The number of strings in <paramref name="buttons"/> isn't a multiple of 6</exception>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataActionsFullAttribute">
+            <summary>
+            Action buttons with an optional confirmation question, an optional per row visibility and an optional done text (an extended
+            <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/>).
+            </summary>
+            <remarks>
+            Each button is described by 7 strings: "text", "title", "url", "icon", "confirm", "visible" and "done", encoded as
+            "text|title|url|icon|confirm|visible|done", so the strings can't contain '|' (or ';', the format separator).
+            "confirm" and "visible" are as in <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/>, and all strings can use the same {0}, {1}, {2} .. {x}.
+            <para>"done": the text the web client shows after the action succeeded (the result note in the row and the announcement), instead of
+            its generic "&lt;text&gt;: done (&lt;row&gt;)", ex: "{2} must choose a new password at the next sign in". An empty string (or null) means
+            the generic text. A done text that the request's own outcome carries still wins.</para>
+            <para>The encoded format has an 8th part per button, "final": "final" when the button's <see cref="T:SysWeaver.Data.TableDataActionFlags"/> include
+            <see cref="F:SysWeaver.Data.TableDataActionFlags.Final"/> (the action ends or removes the row's item, ex: Delete, Kill, Withdraw invitation), else empty. Every button of
+            this attribute has the part, so the web client knows what each action does from the server and never guesses it from the words (G47);
+            set the flags with <see cref="M:SysWeaver.Data.TableDataActionsFullAttribute.#ctor(SysWeaver.Data.TableDataActionFlags[],System.String[])"/>. Actions without the part (<see cref="T:SysWeaver.Data.TableDataActionsAttribute"/>,
+            <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/>) are not final: the table re-reads the row after them, as it always did.</para>
+            Renderers that only know <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/> ignore the extra parts.
+            An invalid number of button strings throws an <see cref="T:System.ArgumentException"/> when the attribute is instantiated (i.e. when it's read using reflection).
+            </remarks>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataActionsFullAttribute.StringsPerButton">
+            <summary>
+            The number of strings per button.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataActionsFullAttribute.PartsPerButton">
+            <summary>
+            The number of encoded parts per button in <see cref="F:SysWeaver.Data.TableDataRawFormatAttribute.Value"/>: the <see cref="F:SysWeaver.Data.TableDataActionsFullAttribute.StringsPerButton"/> strings and "final".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataActionsFullAttribute.FinalPart">
+            <summary>
+            The 8th part of a button whose action is final (<see cref="F:SysWeaver.Data.TableDataActionFlags.Final"/>), else the part is empty.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataActionsFullAttribute.#ctor(System.String[])">
+            <summary>
+            Action buttons with an optional confirmation question, an optional per row visibility and an optional done text.
+            </summary>
+            <param name="buttons">An array of buttons, 7 strings per button following a: "text", "title", "url", "icon", "confirm", "visible" and "done" pattern.
+            "url": the url of the get request that will be performed on click, if it start's with a '@' the url will be opened in a new tab, if it start's with a '&amp;' the url will be opened in the same tab.
+            "icon": an icon class name or url.
+            "confirm": the confirmation question, empty = the renderer decides, <see cref="F:SysWeaver.Data.TableDataActionsExAttribute.NoConfirm"/> = never ask.
+            "visible": empty = always visible, else hidden when the formatted text is empty, "0", "false" or "no".
+            "done": the text shown after the action succeeded, empty = the generic text.</param>
+            <exception cref="T:System.ArgumentException">The number of strings in <paramref name="buttons"/> isn't a multiple of 7</exception>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataActionsFullAttribute.#ctor(SysWeaver.Data.TableDataActionFlags[],System.String[])">
+            <summary>
+            Action buttons with an optional confirmation question, an optional per row visibility, an optional done text and declared flags
+            (ex: which actions are final).
+            </summary>
+            <param name="flags">The flags of each button, in the order of the buttons, ex: new[] { TableDataActionFlags.None, TableDataActionFlags.Final }
+            for "Edit" and "Delete". Buttons after the end of the array have no flags (<see cref="F:SysWeaver.Data.TableDataActionFlags.None"/>).</param>
+            <param name="buttons">An array of buttons, 7 strings per button, as in <see cref="M:SysWeaver.Data.TableDataActionsFullAttribute.#ctor(System.String[])"/>.</param>
+            <exception cref="T:System.ArgumentException">The number of strings in <paramref name="buttons"/> isn't a multiple of 7, or there are more flags than buttons</exception>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataAuthAttribute">
+            <summary>
+            Format values as an auth requirement (a <see cref="F:SysWeaver.Data.TableDataFormats.Tags"/> column with the "Auth" option):
+            null = open to anyone (shown as an accent "Open" tag, so open end points stand out),
+            "" = any signed in user (shown as an "Any signed in user" tag),
+            else a comma separated list of tokens where at least one is required (one tag per token).
+            Clicking a tag copies it, clicking the cell copies the raw value.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataAuthAttribute.#ctor">
+            <summary>
+            Format values as an auth requirement.
+            </summary>
+        </member>
         <member name="T:SysWeaver.Data.TableDataBooleanToggleAttribute">
             <summary>
             Add a boolean toggle button.
             </summary>
         </member>
-        <member name="M:SysWeaver.Data.TableDataBooleanToggleAttribute.#ctor(System.String,System.String,System.String,System.String,System.String)">
+        <member name="M:SysWeaver.Data.TableDataBooleanToggleAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.String)">
             <summary>
             Add a boolean toggle button.
             </summary>
@@ -5324,10 +5484,11 @@
             {1} is the next value.
             Optionally {2} to {x} is populated from the value if it's a comma separated string.
             </param>
+            <param name="confirmOff">Ask this question before switching off (null: no question). Optionally "question\nexplanation". Can't contain ';'.</param>
         </member>
         <member name="T:SysWeaver.Data.TableDataByteSizeAttribute">
             <summary>
-            Format the value using bytes, kb, Mb and so on
+            Format the value using bytes, KB, MB and so on
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataByteSizeAttribute.Instance">
@@ -5337,7 +5498,7 @@
         </member>
         <member name="M:SysWeaver.Data.TableDataByteSizeAttribute.#ctor">
             <summary>
-            Format the value using bytes, kb, Mb and so on
+            Format the value using bytes, KB, MB and so on
             </summary>
         </member>
         <member name="T:SysWeaver.Data.TableDataUptimeAttribute">
@@ -5357,12 +5518,39 @@
         </member>
         <member name="T:SysWeaver.Data.TableDataByteSpeedAttribute">
             <summary>
-            Format the value using bytes/s, kb/s, Mb/s and so on
+            Format the value using bytes/s, KB/s, MB/s and so on
             </summary>
         </member>
         <member name="M:SysWeaver.Data.TableDataByteSpeedAttribute.#ctor">
             <summary>
-            Format the value using bytes/s, kb/s, Mb/s and so on
+            Format the value using bytes/s, KB/s, MB/s and so on
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataCardAttribute">
+            <summary>
+            Put on a row type to show its data tables using a card template, see <see cref="F:SysWeaver.Data.CommonTableData.Card"/>.
+            </summary>
+            <example>
+            <code>
+            [TableDataCard("drive@ServerManager/cards")]    // Cards by default, the viewer can switch to the table
+            [TableDataCard("+user@auth/cards")]             // Rows by default, the viewer can switch to the cards
+            sealed class DriveRow { ... }
+            </code>
+            </example>
+            <remarks>
+            Only used by tables made from the row type (<c>TableDataTools.Get</c>), other tables can use <c>TableDataTools.WithCard</c>.
+            The html and css of a card goes in a "srcWeb" folder of the same project as the api.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataCardAttribute.#ctor(System.String)">
+            <summary>
+            Set the card template.
+            </summary>
+            <param name="card">The card template, see <see cref="F:SysWeaver.Data.CommonTableData.Card"/> for the format</param>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataCardAttribute.Card">
+            <summary>
+            The card template, see <see cref="F:SysWeaver.Data.CommonTableData.Card"/> for the format
             </summary>
         </member>
         <member name="T:SysWeaver.Data.TableDataBaseColumn">
@@ -5526,6 +5714,13 @@
             Allow automatic word wrapping (hint)
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.TableDataColumnProps.NoTitle">
+            <summary>
+            Don't show the column title in the header (hint), typically for narrow icon only columns (ex: a "📊" chart link).
+            The title (and description) is still used for tool tips, accessibility, phone card labels and exports; sorting and filtering are not affected.
+            Set using <see cref="T:SysWeaver.Data.TableDataNoTitleAttribute"/>.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Data.TableDataColumnProps.AnyFilters">
             <summary>
             Mask of all filter flags
@@ -5609,6 +5804,33 @@
         <member name="F:SysWeaver.Data.TableDataConsts.ExternalInfoRoot">
             <summary>
             Absolute root path for external information
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataDefaultOrderAttribute">
+            <summary>
+            Put on a row type to give its data tables a default sort order, used when a request has no sort order (<see cref="T:SysWeaver.Data.TableDataOrderRequest"/>.Order null or empty).
+            The order is also sent to the client with the columns (<see cref="F:SysWeaver.Data.CommonTableData.DefaultOrder"/>), so a table can show which column it is sorted by.
+            </summary>
+            <example>
+            <code>
+            [TableDataDefaultOrder("-LastTime")]   // The latest first
+            sealed class ProblemRow { ... }
+            </code>
+            </example>
+            <remarks>
+            Uses the request syntax: column names in priority order, a '-' prefix sorts descending. Unknown names are ignored.
+            A text search still orders the result by rank.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataDefaultOrderAttribute.#ctor(System.String[])">
+            <summary>
+            Set the default sort order.
+            </summary>
+            <param name="order">Column names in priority order, a '-' prefix sorts descending (ex: "-LastActivity")</param>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataDefaultOrderAttribute.Order">
+            <summary>
+            Column names in priority order, a '-' prefix sorts descending
             </summary>
         </member>
         <member name="T:SysWeaver.Data.TableDataDescAttribute">
@@ -5739,14 +5961,14 @@
         </member>
         <member name="T:SysWeaver.Data.TableDataMdAttribute">
             <summary>
-            Format some long multiline Mark Down (MD) text.
+            Format some long multiline Markdown (MD) text.
             Will show a capped version of the text (not formatted using MD).
             Will show the full version of the text on click.
             </summary>
         </member>
         <member name="M:SysWeaver.Data.TableDataMdAttribute.#ctor(System.Int32,System.String,System.String)">
             <summary>
-            Format some long multiline Mark Down (MD) text.
+            Format some long multiline Markdown (MD) text.
             Will show a capped version of the text (not formatted using MD).
             Will show the full version of the text on click.
             </summary>
@@ -5843,6 +6065,7 @@
         <member name="T:SysWeaver.Data.TableDataUserAgentAttribute">
             <summary>
             Format values (user agent strings) as a link to information about the user agent.
+            The server sends the full string, Sw.Cells shows it short ("Edge 140 on Windows") with the full string in the tool tip.
             </summary>
         </member>
         <member name="M:SysWeaver.Data.TableDataUserAgentAttribute.#ctor(System.String)">
@@ -6206,7 +6429,8 @@
             First argument is the text formatting:
             {0} = Value.
             {1} = Next value (must exist). 
-            The second argument is the title formatting. 
+            The second argument is the         /// text|title|getUri|icon[|confirm|visible[|done[|final]]]
+            The optional confirm and visible parts are set by <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/> (and <see cref="T:SysWeaver.Data.TableDataActionsFullAttribute"/>): formatting. 
             {0} = Formatted value.
             {1} = Next value (must exist). 
             {2} = Value before formatting.
@@ -6226,6 +6450,10 @@
             {2} = Value before formatting.
             {3} = The text (after formatting). 
             If the fourth argument is true, the original value will be copied to the clipboard on click.
+            The optional fifth argument is a currency (ISO 4217 code) format, if not empty the value is an amount in that currency (see <see cref="T:SysWeaver.Data.TableDataCurrencyAttribute"/>):
+            {0} = Formatted value.
+            {1} = Next value (must exist).
+            {2} = Value before formatting.
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.Url">
@@ -6262,7 +6490,10 @@
             {1} = Value without optional, ex "Banana", "Apple", "Orange". 
             {2} = Optional, ex: "Yellow", "Green", "Orange". 
             {3} = The text (after formatting). 
-            {4} = The title (after formatting). 
+            {4} = The title (after formatting).
+            Fourth argument: "true" = clicking the cell copies the raw value.
+            Fifth argument: "Auth" = the value is an auth requirement (<see cref="T:SysWeaver.Data.TableDataAuthAttribute"/>): null = open to anyone (an accent "Open" tag),
+            "" = any signed in user (a tag), else the tokens where one is required.
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.PerRowFormat">
@@ -6272,21 +6503,21 @@
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.ByteSize">
             <summary>
-            Format the value using bytes, kb, Mb and so on
+            Format the value using bytes, KB, MB and so on
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.ByteSpeed">
             <summary>
-            Format the value using bytes/s, kb/s, Mb/s and so on
+            Format the value using bytes/s, KB/s, MB/s and so on
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.Toggle">
             <summary>
             Add a boolean toggle button.
             First argument is the true text.
-            {0} is the current value.
+            {0} is the value (its first part when it is a comma separated string).
             {1} is the next value.
-            Optionally {2} to {x} is populated from the value if it's a comma separated string.
+            Optionally {2} to {x} are the following comma separated parts of the value (ex: "token,who": {0} = token, {2} = who).
             Second argument is the false text.
             {0} is the current value.
             {1} is the next value.
@@ -6309,10 +6540,15 @@
             <summary>
             Action buttons.
             Each argument is a button, the button is a string with the following format:
-            text|title|getUri|icon
-            {0} is the current value.
+            text|title|getUri|icon[|confirm|visible[|done[|final]]]
+            The optional confirm and visible parts are set by <see cref="T:SysWeaver.Data.TableDataActionsExAttribute"/> (all three by <see cref="T:SysWeaver.Data.TableDataActionsFullAttribute"/>):
+            confirm = the confirmation question (empty = the renderer decides, "-" = never ask),
+            visible = empty for always visible, else the action is hidden on a row when the formatted text is empty, "0", "false" or "no".
+            done = the text shown after the action succeeded (empty = the generic text), set by <see cref="T:SysWeaver.Data.TableDataActionsFullAttribute"/>.
+            final = "final" when the action ends or removes the row's item (Delete, Kill, Withdraw ...), else empty; set by <see cref="T:SysWeaver.Data.TableDataActionsFullAttribute"/> (<see cref="F:SysWeaver.Data.TableDataActionFlags.Final"/>). Without the part the action is not final.
+            {0} is the value (its first part when it is a comma separated string).
             {1} is the next value.
-            Optionally {2} to {x} is populated from the value if it's a comma separated string.
+            Optionally {2} to {x} are the following comma separated parts of the value (ex: "token,who": {0} = token, {2} = who).
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.Img">
@@ -6352,7 +6588,7 @@
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.MD">
             <summary>
-            Format as multiline mark down, only the first line (or max length) is shown.
+            Format as multiline Markdown, only the first line (or max length) is shown.
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFormats.Uptime">
@@ -6470,6 +6706,17 @@
             <remarks>
             Note: The current table data implementation still reports the column as sortable (<see cref="F:SysWeaver.Data.TableDataColumnProps.CanSort"/>),
             but sorts it using the string representation of the values instead of the values themselves.
+            </remarks>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataNoTitleAttribute">
+            <summary>
+            Put on a member to tell any renderer to not show the column title in the table header (sets <see cref="F:SysWeaver.Data.TableDataColumnProps.NoTitle"/>).
+            Use it for narrow columns that only show an icon (ex: a "📊" link to a chart), give the column a meaningful title / description
+            (ex: using <see cref="T:SysWeaver.Data.TableDataTitleAttribute"/> and <see cref="T:SysWeaver.Data.TableDataDescAttribute"/> or an XML summary), since it's still used for
+            tool tips, accessibility (screen readers), phone card labels, column menus and exports.
+            </summary>
+            <remarks>
+            Sorting and filtering are not affected (they still apply when the column allows them, see <see cref="T:SysWeaver.Data.TableDataNoSortAttribute"/>).
             </remarks>
         </member>
         <member name="T:SysWeaver.Data.TableDataNumberAttribute">
@@ -6602,6 +6849,36 @@
             <summary>
             True if the column is a potential key
             </summary>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataCurrencyAttribute">
+            <summary>
+            Format a numeric value as an amount in a currency, the currency (an ISO 4217 code) is given per column or per row.
+            The value is sent as a number (sorting, filtering and exports work on the number), the web client formats it using the currency
+            information in "iso_data/currencies.js" (symbol and under units, ex: "$1 234.50", "1 234.50 kr"), with the same decimal and thousands separators
+            for all currencies so that a column reads the same on every row.
+            </summary>
+            <remarks>
+            The format is a <see cref="F:SysWeaver.Data.TableDataFormats.Number"/> format with a fifth option: the currency format, so renderers and exporters that
+            don't know about currencies show (and export) a plain number.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataCurrencyAttribute.#ctor(System.String,System.Int32,System.String,System.Boolean)">
+            <summary>
+            Format a numeric value as an amount in a currency.
+            </summary>
+            <param name="currencyFormat">The ISO 4217 currency code, ex: "USD", or a format of it where:
+            {0} = Formatted value.
+            {1} = Next value (must exist), ex: "{1}" when the next column is the currency code of the row.
+            {2} = Value before formatting.
+            </param>
+            <param name="decimals">The number of decimals, a negative value means the decimals of the currency (the web client) or -decimals (when the currency is unknown and in exports).</param>
+            <param name="titleFormat">
+            {0} = Formatted value (decimals and thousands separator applied)
+            {1} = Next value (must exist).
+            {2} = Value before formatting.
+            {3} = The text (after formatting).
+            </param>
+            <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
         </member>
         <member name="T:SysWeaver.Data.TableDataAmountUSDAttribute">
             <summary>
@@ -6951,7 +7228,9 @@
             Put on a member to sort this column in descending order by default (sets <see cref="F:SysWeaver.Data.TableDataColumnProps.SortedDesc"/>).
             </summary>
             <remarks>
-            The ascending and descending sort functions of the column are swapped, so a request ordering by "Name" sorts descending and "-Name" sorts ascending.
+            Only a hint for the client (<see cref="F:SysWeaver.Data.TableDataColumnProps.SortedDesc"/>): its first sort on this column is descending, so it asks for "-Name".
+            The server never changes the direction: "Name" always sorts ascending and "-Name" descending (the sort functions used to be swapped,
+            so the web client's "-Name" returned ascending rows). A server side default order is set with <see cref="T:SysWeaver.Data.TableDataDefaultOrderAttribute"/>.
             Ignored if the column can't be sorted.
             </remarks>
         </member>
@@ -7333,6 +7612,117 @@
             True if the member may be null
             </summary>
         </member>
+        <member name="T:SysWeaver.EditColorFormat">
+            <summary>
+            How a color is stored in a member marked with <see cref="T:SysWeaver.EditColorAttribute"/>.
+            Components are red, green, blue and (optional) alpha; "0..1" means normalized floats.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Auto">
+            <summary>
+            Decide from the member type: String = <see cref="F:SysWeaver.EditColorFormat.Css"/>, integers = <see cref="F:SysWeaver.EditColorFormat.UInt32Argb"/>,
+            byte arrays = <see cref="F:SysWeaver.EditColorFormat.Rgb8"/> / <see cref="F:SysWeaver.EditColorFormat.Rgba8"/> (by length), float / double arrays = <see cref="F:SysWeaver.EditColorFormat.Rgb"/> / <see cref="F:SysWeaver.EditColorFormat.Rgba"/> (by length),
+            objects with R, G, B (, A) members = a struct of floats in 0..1.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Css">
+            <summary>
+            A css color string, stored as "#rrggbb" (or "#rrggbbaa" when <see cref="F:SysWeaver.EditColorAttribute.Alpha"/> is true).
+            Any css color can be typed or pasted (named colors, rgb(), hsl() ...); a valid typed css color is kept as typed.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Rgb">
+            <summary>
+            float[3] / double[3] (or an R, G, B struct) with components in 0..1.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Rgba">
+            <summary>
+            float[4] / double[4] (or an R, G, B, A struct) with components in 0..1.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.HdrRgb">
+            <summary>
+            float[3] / double[3] (or an R, G, B struct), high dynamic range: components may exceed 1 (up to <see cref="F:SysWeaver.EditColorAttribute.MaxIntensity"/>).
+            The editor shows the color and an intensity (the stored value is color × intensity).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.HdrRgba">
+            <summary>
+            float[4] / double[4] (or an R, G, B, A struct), high dynamic range: r, g, b may exceed 1, alpha is 0..1.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Rgb8">
+            <summary>
+            byte[3] with components in 0..255.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Rgba8">
+            <summary>
+            byte[4] with components in 0..255.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.UInt32Rgb">
+            <summary>
+            An integer 0xRRGGBB (no alpha).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.UInt32Rgba">
+            <summary>
+            An integer 0xRRGGBBAA.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.UInt32Argb">
+            <summary>
+            An integer 0xAARRGGBB (System.Drawing.Color.ToArgb, Windows COLORREF with alpha). Signed members (int) store the bit pattern as a signed value.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.UInt32Abgr">
+            <summary>
+            An integer 0xAABBGGRR (the bytes R, G, B, A in memory order on little endian machines, ex: ImageData32 pixels).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorFormat.Hex">
+            <summary>
+            A css color string that is always stored as "#rrggbb" (or "#rrggbbaa" when <see cref="F:SysWeaver.EditColorAttribute.Alpha"/> is true):
+            a typed or pasted css color (named, rgb(), hsl() ...) is converted, for members that are read as hex only.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.EditColorAttribute">
+            <summary>
+            Put this on a member to edit it with the color editor (a swatch with a color picker, a text box that takes any css color,
+            an alpha slider for formats with alpha and an intensity box for HDR formats), and to say how the color is stored.
+            Example: [EditColor] on a string ("#rrggbb"), [EditColor(EditColorFormat.HdrRgba)] on a float[4], [EditColor(EditColorFormat.UInt32Rgba)] on a uint.
+            </summary>
+            <remarks>
+            This is an editor type (encoded as "Color:&lt;Format&gt;:&lt;Alpha&gt;:&lt;MaxIntensity&gt;", see <see cref="F:SysWeaver.EditTypes.Color"/>), so it can't be combined with
+            another <see cref="T:SysWeaver.EditTypeAttribute"/> (ex: <see cref="T:SysWeaver.EditHideIfAttribute"/>).
+            For a list of colors (ex: String[]), put it on the element with <see cref="T:SysWeaver.EditElementAttributesAttribute"/>; numeric arrays are one color.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.EditColorAttribute.#ctor(SysWeaver.EditColorFormat,System.Boolean,System.Single)">
+            <summary>
+            Edit this member as a color
+            </summary>
+            <param name="format">How the color is stored (Auto: decided by the member type)</param>
+            <param name="alpha">Css strings only: allow an alpha channel ("#rrggbbaa"); the other formats have alpha when their layout has it</param>
+            <param name="maxIntensity">HDR formats only: the largest intensity (brightness above white), default 16</param>
+        </member>
+        <member name="F:SysWeaver.EditColorAttribute.Format">
+            <summary>
+            How the color is stored
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorAttribute.Alpha">
+            <summary>
+            Css strings: allow an alpha channel
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditColorAttribute.MaxIntensity">
+            <summary>
+            HDR formats: the largest intensity
+            </summary>
+        </member>
         <member name="T:SysWeaver.EditDefaultAttribute">
             <summary>
             Put this to specify the default value to use when editing
@@ -7700,12 +8090,116 @@
         </member>
         <member name="F:SysWeaver.EditTypes.Email">
             <summary>
-            Editor for email validation
+            Editor for email addresses (validated, e-mail keyboard on phones)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditTypes.Url">
+            <summary>
+            Editor for urls (absolute urls are validated, relative paths are allowed), with the url keyboard on phones
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditTypes.Phone">
+            <summary>
+            Editor for phone numbers (digits, spaces, "-", "(", ")" and a leading "+"), with the phone keyboard on phones
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditTypes.Color">
+            <summary>
+            Color editor, use <see cref="T:SysWeaver.EditColorAttribute"/> (it writes "Color:&lt;Format&gt;:&lt;Alpha&gt;:&lt;MaxIntensity&gt;")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditTypes.Unit">
+            <summary>
+            A number with a unit (durations, byte sizes, percent / ratio), use <see cref="T:SysWeaver.EditUnitAttribute"/> (it writes "Unit:&lt;Unit&gt;")
             </summary>
         </member>
         <member name="F:SysWeaver.EditTypes.Inline">
             <summary>
             Valid on objects, makes the object show inlined
+            </summary>
+        </member>
+        <member name="T:SysWeaver.EditUnits">
+            <summary>
+            The unit of a number member marked with <see cref="T:SysWeaver.EditUnitAttribute"/>.
+            The stored value is always a plain number in this unit; the editor shows the unit, a readable form ("= 2 h 30 min", "= 2 MB", "= 25 %")
+            and converts typed values with a unit ("90s", "1h 30m", "2 MB", "512k", "25%").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Milliseconds">
+            <summary>
+            A duration in milliseconds
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Seconds">
+            <summary>
+            A duration in seconds
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Minutes">
+            <summary>
+            A duration in minutes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Hours">
+            <summary>
+            A duration in hours
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Days">
+            <summary>
+            A duration in days
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Bytes">
+            <summary>
+            A size in bytes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.KiloBytes">
+            <summary>
+            A size in kilo bytes (1024 bytes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.MegaBytes">
+            <summary>
+            A size in mega bytes (1024 * 1024 bytes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.GigaBytes">
+            <summary>
+            A size in giga bytes (1024 * 1024 * 1024 bytes)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Percent">
+            <summary>
+            A percentage, 100 is all (use <see cref="T:SysWeaver.EditRangeAttribute"/> for the limits, ex: 0 to 100)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EditUnits.Ratio">
+            <summary>
+            A ratio, 1 is all (shown as a percent, "25%" is typed as 0.25)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.EditUnitAttribute">
+            <summary>
+            Put this on a number member (int, long, double ...) to say what unit the value is in, ex: [EditUnit(EditUnits.Seconds)] on "NetworkTimeout".
+            The editor shows the unit after the value and a readable form, and accepts values typed with a unit ("90s", "1h 30m", "2 MB", "25%"), converted to the member's unit.
+            <see cref="T:SysWeaver.EditRangeAttribute"/>, <see cref="T:SysWeaver.EditMinAttribute"/>, <see cref="T:SysWeaver.EditMaxAttribute"/>, <see cref="T:SysWeaver.EditSliderAttribute"/> and <see cref="T:SysWeaver.EditDefaultAttribute"/> work as for any number (in the member's unit).
+            </summary>
+            <remarks>
+            This is an editor type (encoded as "Unit:&lt;Unit&gt;", see <see cref="F:SysWeaver.EditTypes.Unit"/>), so it can't be combined with another <see cref="T:SysWeaver.EditTypeAttribute"/> (ex: <see cref="T:SysWeaver.EditHideIfAttribute"/>).
+            Clients that don't know the spec show the plain number editor.
+            </remarks>
+        </member>
+        <member name="M:SysWeaver.EditUnitAttribute.#ctor(SysWeaver.EditUnits)">
+            <summary>
+            The value of this number member is in a unit
+            </summary>
+            <param name="unit">The unit of the stored value</param>
+        </member>
+        <member name="F:SysWeaver.EditUnitAttribute.Unit">
+            <summary>
+            The unit of the stored value
             </summary>
         </member>
         <member name="T:SysWeaver.EnumerableExt">
@@ -8086,6 +8580,25 @@
             Setting null or empty restores the default.
             </summary>
         </member>
+        <member name="F:SysWeaver.EnvInfo.ExeAppVersion">
+            <summary>
+            The default application version: the informational version of the entry assembly (ex: "1.2.3" or "1.2.3+3f2c1a9" with a source revision),
+            else its file version, else its assembly version, else "0.0.0".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.EnvInfo.AppBuildTime">
+            <summary>
+            The time (UTC) the application executable was built (the last write time of the entry assembly file), formatted using "yyyy-MM-dd HH:mm:ss".
+            Empty if unknown (ex: single file apps).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.EnvInfo.AppVersion">
+            <summary>
+            Application (build / deployment) version, defaults to <see cref="F:SysWeaver.EnvInfo.ExeAppVersion"/> (can be changed using <see cref="F:SysWeaver.AppInfoParams.AppVersion"/>).
+            Shown to users (ex: on the home page) so that ops can tell which build is running.
+            Setting null or empty restores the default.
+            </summary>
+        </member>
         <member name="F:SysWeaver.EnvInfo.ProcessId">
             <summary>
             The current process Id
@@ -8130,6 +8643,7 @@
                         "AppName" = Application name.
                         "AppDisplayName" = Application display name.
                         "AppDescription" = Application description name.
+                        "AppVersion" = Application version (see <see cref="P:SysWeaver.EnvInfo.AppVersion"/>), "AppBuildTime" = build time (UTC) of the executable.
                         "AppStart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
                         "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "AppGuid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -8150,6 +8664,7 @@
                         "appname" = Application name.
                         "appdisplayname" = Application display name.
                         "appdescription" = Application description name.
+                        "appversion" = Application version, "appbuildtime" = build time (UTC) of the executable.
                         "appstart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
                         "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "appguid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -8169,6 +8684,7 @@
                         $(AppName) = Application name.
                         $(AppDisplayName) = Application display name.
                         $(AppDescription) = Application description name.
+                        $(AppVersion) = Application version, $(AppBuildTime) = build time (UTC) of the executable.
                         $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
                         $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
                         $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -8183,6 +8699,7 @@
                         $(AppName) = Application name.
                         $(AppDisplayName) = Application display name.
                         $(AppDescription) = Application description name.
+                        $(AppVersion) = Application version, $(AppBuildTime) = build time (UTC) of the executable.
                         $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
                         $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
                         $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
@@ -9296,6 +9813,21 @@
             <param name="prefix">A prefix for the statistics names (null is treated as empty)</param>
             <returns>The statistics</returns>
         </member>
+        <member name="F:SysWeaver.ExceptionTracker.StatsCountDesc">
+            <summary>
+            The description of the "Count" statistics returned by <see cref="M:SysWeaver.ExceptionTracker.GetStats(System.String,System.String)"/> (used to find the statistics of exception trackers, ex: a problems table)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExceptionTracker.StatsTimeDesc">
+            <summary>
+            The description of the "Time" statistics returned by <see cref="M:SysWeaver.ExceptionTracker.GetStats(System.String,System.String)"/>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExceptionTracker.StatsExceptionDesc">
+            <summary>
+            The description of the "Exception" statistics returned by <see cref="M:SysWeaver.ExceptionTracker.GetStats(System.String,System.String)"/>
+            </summary>
+        </member>
         <member name="T:SysWeaver.ExternalProcess">
             <summary>
             Helpers for running an external process, waiting for it to exit and capturing its output.
@@ -9842,7 +10374,7 @@
         </member>
         <member name="M:SysWeaver.FastMemCache`2.InternalPrune(System.DateTime)">
             <summary>
-            Perform the actual prune, moved to it's own method to make it easier for the JIT to inline the Prune method (checking for pruning)
+            Perform the actual prune, moved to its own method to make it easier for the JIT to inline the Prune method (checking for pruning)
             </summary>
             <param name="exp">Items that expires at or before this time are removed</param>
         </member>
@@ -10051,7 +10583,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.OpenWrite(System.String)">
             <summary>
@@ -10074,7 +10606,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.WriteMemoryAsync(System.String,System.ReadOnlyMemory{System.Byte},System.Boolean)">
             <summary>
@@ -10087,7 +10619,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.ReadOnlyMemory{System.Byte},System.String,System.Boolean)">
             <summary>
@@ -10100,7 +10632,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.Memory{System.Byte},System.String,System.Boolean)">
             <summary>
@@ -10113,7 +10645,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.WriteSpan(System.String,System.ReadOnlySpan{System.Byte},System.Boolean)">
             <summary>
@@ -10126,7 +10658,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.WriteToFile(System.ReadOnlySpan{System.Byte},System.String,System.Boolean)">
             <summary>
@@ -10139,7 +10671,7 @@
             <exception cref="T:System.ArgumentException"><paramref name="filename"/> is empty or invalid.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: the file is read only, hidden or a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured (ex: the file is open by someone else).</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred (ex: the file is open by someone else).</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadBytesAsync(System.String)">
             <summary>
@@ -10153,7 +10685,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadBytes(System.String)">
             <summary>
@@ -10167,7 +10699,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadTextAsync(System.String,System.Text.Encoding)">
             <summary>
@@ -10182,7 +10714,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadText(System.String,System.Text.Encoding)">
             <summary>
@@ -10197,7 +10729,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadLinesAsync(System.String,System.Text.Encoding,System.Boolean,System.Boolean)">
             <summary>
@@ -10214,7 +10746,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadLines(System.String,System.Text.Encoding,System.Boolean,System.Boolean)">
             <summary>
@@ -10231,7 +10763,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.IsCommentOrBlank(System.String@,System.Boolean)">
             <summary>
@@ -10254,7 +10786,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadNonCommentLines(System.String,System.Boolean)">
             <summary>
@@ -10268,7 +10800,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadNonCommentStringAsync(System.String,System.Boolean)">
             <summary>
@@ -10282,7 +10814,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.ReadNonCommentLinesAsync(System.String,System.Boolean)">
             <summary>
@@ -10296,7 +10828,7 @@
             <exception cref="T:System.IO.FileNotFoundException">The file doesn't exist.</exception>
             <exception cref="T:System.IO.DirectoryNotFoundException">The folder of the file doesn't exist.</exception>
             <exception cref="T:System.UnauthorizedAccessException">Access denied (ex: it's a directory).</exception>
-            <exception cref="T:System.IO.IOException">An I/O error occured.</exception>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
         </member>
         <member name="M:SysWeaver.FileExt.TryReadBytesAsync(System.String,System.Int32,System.Int32,System.Int32)">
             <summary>
@@ -16331,12 +16863,12 @@
         </member>
         <member name="F:SysWeaver.MimeTypeMap.ExtensionEntry.Extension">
             <summary>
-            The file extension
+            The file extension (with the leading dot, ex: ".pdf")
             </summary>
         </member>
         <member name="F:SysWeaver.MimeTypeMap.ExtensionEntry.I">
             <summary>
-            The file extension (displayed as an icon of the file extension)
+            File type icon
             </summary>
         </member>
         <member name="F:SysWeaver.MimeTypeMap.ExtensionEntry.Mime">
@@ -16722,6 +17254,8 @@
             <summary>
             Throw this from a http request handler to respond with a specific http status code and message (instead of a 500 error).
             Also thrown by http clients when the server responds with an unexpected status code.
+            <para>Write the message for the person that asked (what happened and, when it helps, what to do), without a status prefix ("Forbidden - ") or suffix (" [403]"):
+            the client shows it as the reason (see <see cref="P:SysWeaver.Net.HttpResponseException.IsReason"/>). Ex: 409 "The invitation could not be withdrawn: it was already used, has expired or was withdrawn".</para>
             </summary>
             <remarks>
             The http server translates the message from <see cref="F:SysWeaver.Net.HttpResponseException.Translate"/> to the session language (if a translator is available).
@@ -16743,6 +17277,109 @@
         <member name="F:SysWeaver.Net.HttpResponseException.Translate">
             <summary>
             The language of the message (used for translation), null if the message shouldn't be translated
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.HttpResponseException.IsReason">
+            <summary>
+            True if the message is a reason written for people (the default when a message is given): the http server then marks the response
+            with the "X-Sw-Reason: 1" header, so the client shows the text as the reason (the "why") instead of a generic sentence for the status.
+            False for the default message (no message given); set it to false for texts that aren't meant for people (ex: a status relayed from another server).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.HttpResponseException.Outcome">
+            <summary>
+            What the refusal means for the person that asked, sent as the "X-Sw-Outcome" response header (one of the <see cref="T:SysWeaver.Net.HttpOutcomes"/>), so a client
+            never guesses it from the status code. Null (the default) lets the http server pick it from the status (<see cref="M:SysWeaver.Net.HttpOutcomes.Default(System.Int32,System.String)"/>):
+            401 / a missing role <see cref="F:SysWeaver.Net.HttpOutcomes.Denied"/>, 404 / 410 <see cref="F:SysWeaver.Net.HttpOutcomes.Gone"/>, any other 4xx <see cref="F:SysWeaver.Net.HttpOutcomes.Refused"/>, a 5xx none.
+            <para>Set it when the status alone would mislead, most of all for <see cref="F:SysWeaver.Net.HttpOutcomes.AlreadyDone"/> ("the goal is already met, nothing was needed"),
+            ex: <c>throw HttpResponseException.AlreadyDone("Process #12 has already ended")</c>.</para>
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpResponseException.AlreadyDone(System.String,System.Int32)">
+            <summary>
+            A 409 that says the goal of the request is already met (ex: the process to kill has already ended, the session to end has already ended),
+            so nothing was needed: the client shows "not needed" (<see cref="F:SysWeaver.Net.HttpOutcomes.AlreadyDone"/>).
+            </summary>
+            <param name="message">The reason for people, ex: "Process #12 has already ended"</param>
+            <param name="responseCode">The status, default 409</param>
+            <returns>The exception to throw</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpResponseException.Refused(System.String,System.Int32)">
+            <summary>
+            A refusal: the goal of the request is NOT met and the reason says why (ex: "This is your own session: sign out instead"),
+            the client shows "not done" (<see cref="F:SysWeaver.Net.HttpOutcomes.Refused"/>).
+            </summary>
+            <param name="message">The reason for people</param>
+            <param name="responseCode">The status, default 409</param>
+            <returns>The exception to throw</returns>
+        </member>
+        <member name="M:SysWeaver.Net.HttpResponseException.Gone(System.String,System.Int32)">
+            <summary>
+            The target of the request is gone (it no longer exists, or never did), so nothing was done (<see cref="F:SysWeaver.Net.HttpOutcomes.Gone"/>):
+            the client may mark the row as no longer listed.
+            </summary>
+            <param name="message">The reason for people, ex: "There is no performance monitor named "x" (any more): refresh the table"</param>
+            <param name="responseCode">The status, default 409 (404 / 410 when they fit)</param>
+            <returns>The exception to throw</returns>
+        </member>
+        <member name="T:SysWeaver.Net.HttpOutcomes">
+            <summary>
+            The outcome kinds of a refused request, sent by the http server as the "X-Sw-Outcome" response header (HttpServerBase.OutcomeHeader) on every 4xx
+            answer of a refusal (an <see cref="T:SysWeaver.Net.HttpResponseException"/>, an <see cref="T:SysWeaver.Net.IHttpRefusal"/>, a missing role, not signed in), next to "X-Sw-Reason"
+            (the body is the reason) and "X-Sw-Denied" (role / signin).
+            The server says the kind, the client never guesses it from the status code: only <see cref="F:SysWeaver.Net.HttpOutcomes.AlreadyDone"/> means "not needed".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpOutcomes.AlreadyDone">
+            <summary>
+            The goal is already met (ex: the process has already ended, the session has already ended): nothing was needed. Shown as "not needed", calm.
+            Only sent when the code that refused said so (<see cref="M:SysWeaver.Net.HttpResponseException.AlreadyDone(System.String,System.Int32)"/>), never picked from a status.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpOutcomes.Refused">
+            <summary>
+            Refused: the goal is NOT met, the reason says why (ex: the process is protected, it is your own session, the input is wrong). Shown as "not done".
+            The default for a 4xx other than 401 / 404 / 410 / a missing role.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpOutcomes.Gone">
+            <summary>
+            The target no longer exists (or never did): nothing was done, a row may be shown as "no longer listed". The default for 404 and 410.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Net.HttpOutcomes.Denied">
+            <summary>
+            The user (or visitor) may not do this at all: a missing role (with "X-Sw-Denied: role") or not signed in (401, "X-Sw-Denied: signin").
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Net.HttpOutcomes.Default(System.Int32,System.String)">
+            <summary>
+            The outcome kind of a 4xx answer when the code that refused didn't say it: <see cref="F:SysWeaver.Net.HttpOutcomes.Denied"/> for 401 or a "X-Sw-Denied" signal,
+            <see cref="F:SysWeaver.Net.HttpOutcomes.Gone"/> for 404 / 410, <see cref="F:SysWeaver.Net.HttpOutcomes.Refused"/> for any other 4xx, null for any other status (a 5xx is a failure, not a refusal).
+            </summary>
+            <param name="status">The http status</param>
+            <param name="denied">The "X-Sw-Denied" value, null if none</param>
+            <returns>The outcome kind, null if none</returns>
+        </member>
+        <member name="T:SysWeaver.Net.IHttpRefusal">
+            <summary>
+            Implement this on an exception type that means "the request was refused" (a mistake of the user or a state that changed: a link that no longer works,
+            an address in use, a wrong password ...) rather than "the server failed": the http server answers <see cref="P:SysWeaver.Net.IHttpRefusal.ResponseCode"/> (a 4xx) with the exception's
+            message as the reason for people (marked "X-Sw-Reason: 1", translated from english), like a <see cref="T:SysWeaver.Net.HttpResponseException"/>, instead of a 500,
+            and it is not counted as a server problem.
+            <para>Use it for the exceptions of a library that code also catches by type (ex: <c>catch (TokenExpiredException)</c>), so the type can stay
+            and still answer the right status. Write the message for the person that asked (what happened and, when it helps, what to do).</para>
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.IHttpRefusal.ResponseCode">
+            <summary>
+            The http status code to answer, ex: 400, 404, 409 or 410
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Net.IHttpRefusal.Outcome">
+            <summary>
+            The outcome kind (one of the <see cref="T:SysWeaver.Net.HttpOutcomes"/>, sent as "X-Sw-Outcome"), null (the default) to pick it from <see cref="P:SysWeaver.Net.IHttpRefusal.ResponseCode"/>
+            (<see cref="M:SysWeaver.Net.HttpOutcomes.Default(System.Int32,System.String)"/>). Return <see cref="F:SysWeaver.Net.HttpOutcomes.AlreadyDone"/> only when the goal of the request is already met.
             </summary>
         </member>
         <member name="T:SysWeaver.NiceRound">
@@ -17967,6 +18604,17 @@
         <member name="M:SysWeaver.PathExt.SafeFilename(System.String)">
             <summary>
             Replaces all bad filename chars in the input string with '_'
+            </summary>
+            <param name="s">The string to make into a safe filename, can be null or empty</param>
+            <returns>A string of the same length as the input where every char that is invalid in a file name (see <see cref="M:SysWeaver.PathExt.IsValidFilename(System.String)"/>) is replaced with a '_'.
+            If no chars needs to be replaced (or if the input is null or empty) the input instance is returned.
+            The rules of the OS that the process runs on are used: on Linux only '\0', '/' and ':' are replaced (ex: "a\b*c" is kept as is), so the result may not be a valid file name on Windows.</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.SafeUniqueFilename(System.String)">
+            <summary>
+            Replaces all bad filename chars with a sequence that makes it unique. 
+            "+" in the source is considered invalid.
+            All invalid chars are replaced with "+xxxx" where xxxx is the hexadecimal 
             </summary>
             <param name="s">The string to make into a safe filename, can be null or empty</param>
             <returns>A string of the same length as the input where every char that is invalid in a file name (see <see cref="M:SysWeaver.PathExt.IsValidFilename(System.String)"/>) is replaced with a '_'.
@@ -19348,6 +19996,23 @@
             <param name="ticksToNextFree">If over the limit, the number of <see cref="T:System.TimeSpan"/> ticks until the oldest registered call leaves the window (a slot is free), else zero</param>
             <returns>True if the rate exceeds the limit (the call should be rejected or delayed)</returns>
         </member>
+        <member name="M:SysWeaver.RateLimiter.IsAtLimit(System.Int64@)">
+            <summary>
+            Test if a call would be over the limit, without registering it (use <see cref="M:SysWeaver.RateLimiter.Add"/> to register a call)
+            </summary>
+            <param name="ticksToNextFree">If at the limit, the number of <see cref="T:System.TimeSpan"/> ticks until the oldest registered call leaves the window (a slot is free), else zero</param>
+            <returns>True if a call now would exceed the limit</returns>
+        </member>
+        <member name="M:SysWeaver.RateLimiter.Add">
+            <summary>
+            Register a call, also when over the limit (use with <see cref="M:SysWeaver.RateLimiter.IsAtLimit(System.Int64@)"/>, when only some calls should count, ex: wrong tries)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.RateLimiter.IsIdle">
+            <summary>
+            True if no call is registered within the time window (the limiter can be dropped)
+            </summary>
+        </member>
         <member name="F:SysWeaver.RateLimiter.MaxCount">
             <summary>
             Maximum number of requests within the time window
@@ -20138,7 +20803,7 @@
             <param name="name">An optional name (for debugging)</param>
             <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
             It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="F:SysWeaver.Scheduler.TaskExceptions"/>.</param>
-            <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+            <param name="runAsync">If true the task runs in its own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
             <returns>The scheduled <see cref="T:SysWeaver.Scheduler.Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         </member>
         <member name="M:SysWeaver.Scheduler.AddTask(System.DateTime,System.Func{System.Threading.Tasks.Task},System.String,System.Func{System.DateTime,System.DateTime},System.Boolean)">
@@ -20154,7 +20819,7 @@
             <param name="name">An optional name (for debugging)</param>
             <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
             It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="F:SysWeaver.Scheduler.TaskExceptions"/>.</param>
-            <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+            <param name="runAsync">If true the task runs in its own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
             <returns>The scheduled <see cref="T:SysWeaver.Scheduler.Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         </member>
         <member name="M:SysWeaver.Scheduler.AddValueTask(System.DateTime,System.Func{System.Threading.Tasks.ValueTask},System.String,System.Func{System.DateTime,System.DateTime},System.Boolean)">
@@ -20170,7 +20835,7 @@
             <param name="name">An optional name (for debugging)</param>
             <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
             It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="F:SysWeaver.Scheduler.TaskExceptions"/>.</param>
-            <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+            <param name="runAsync">If true the task runs in its own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
             <returns>The scheduled <see cref="T:SysWeaver.Scheduler.Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         </member>
         <member name="F:SysWeaver.Scheduler.TaskExceptions">
@@ -20220,7 +20885,7 @@
         </member>
         <member name="P:SysWeaver.Scheduler.Entry.RunAsync">
             <summary>
-            True if the task runs in it's own async chain, false if it's executed (one after another) together with other non async tasks that are due at the same time
+            True if the task runs in its own async chain, false if it's executed (one after another) together with other non async tasks that are due at the same time
             </summary>
         </member>
         <member name="P:SysWeaver.Scheduler.Entry.RunAt">
@@ -20936,6 +21601,224 @@
             Outgoing traffic
             </summary>
         </member>
+        <member name="T:SysWeaver.Security.SubjectTokens">
+            <summary>
+            Tokens that belong to a subject (ex: a user) and a purpose (ex: "reset password"), so that only ONE token per subject and purpose is live:
+            issuing a new one revokes the older ones, and an event (ex: a password change) can revoke every token of a subject.
+            <para>Use it for every link or code that is sent to a person or handed to a client (reset links, invitations, confirmation tokens),
+            so that an older, unused link can't be used after a newer one was sent or after the account changed.</para>
+            <para>Two flavours:
+            <list type="bullet">
+            <item><see cref="M:SysWeaver.Security.SubjectTokens.Create(System.String,System.String,System.Int32)"/> / <see cref="M:SysWeaver.Security.SubjectTokens.Tag(System.String,System.String)"/>: for tokens kept in a database: the token starts with a tag (16 hex characters) made from the purpose and the subject,
+            so the older tokens of a subject and purpose can be found with a "starts with" query (ex: <c>DELETE ... WHERE Type = purpose AND Token LIKE 'TAG%'</c>).</item>
+            <item><see cref="T:SysWeaver.Security.OneTimeTokens`1"/>: an in-memory store that does all of it (one live per subject and purpose, one use, expiry).</item>
+            </list></para>
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Security.SubjectTokens.TagLength">
+            <summary>
+            The number of characters of the tag at the start of a token from <see cref="M:SysWeaver.Security.SubjectTokens.Create(System.String,System.String,System.Int32)"/> (upper case hex).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Security.SubjectTokens.Tag(System.String,System.String)">
+            <summary>
+            The tag of a subject and purpose: the first 64 bits of a SHA256 of the purpose and the subject, as 16 upper case hex characters
+            (no characters that are special in a SQL LIKE pattern, and the same in any letter case comparison).
+            </summary>
+            <param name="purpose">The purpose, ex: "RstPwd" (case sensitive)</param>
+            <param name="subject">The subject, ex: "user:42" (case sensitive, normalize it first, ex: lower case an email address)</param>
+            <returns>The tag</returns>
+            <exception cref="T:System.ArgumentException">The purpose or the subject is null or empty</exception>
+        </member>
+        <member name="M:SysWeaver.Security.SubjectTokens.Create(System.String,System.String,System.Int32)">
+            <summary>
+            Create a new random token for a subject and purpose: the <see cref="M:SysWeaver.Security.SubjectTokens.Tag(System.String,System.String)"/> followed by random base64 characters ([A-Za-z0-9+/]).
+            </summary>
+            <param name="purpose">The purpose, ex: "RstPwd"</param>
+            <param name="subject">The subject, ex: "user:42"</param>
+            <param name="length">The total length of the token (at least 40, 32+ random characters = 192+ bits), the default 48 fits a 48 character column</param>
+            <returns>The token</returns>
+            <exception cref="T:System.ArgumentException">The purpose or the subject is null or empty, or the length is below 40</exception>
+        </member>
+        <member name="M:SysWeaver.Security.SubjectTokens.HasTag(System.String,System.String,System.String)">
+            <summary>
+            True if a token was created for this subject and purpose (with <see cref="M:SysWeaver.Security.SubjectTokens.Create(System.String,System.String,System.Int32)"/>).
+            </summary>
+            <param name="token">The token</param>
+            <param name="purpose">The purpose</param>
+            <param name="subject">The subject</param>
+            <returns>True if the token starts with the tag of the subject and purpose</returns>
+        </member>
+        <member name="M:SysWeaver.Security.SubjectTokens.Random">
+            <summary>
+            A random token without a subject (22 characters, url safe: [A-Za-z0-9_-], 128 bits).
+            </summary>
+            <returns>The token</returns>
+        </member>
+        <member name="T:SysWeaver.Security.OneTimeTokens`1">
+            <summary>
+            An in-memory store of one time tokens with ONE live token per subject and purpose (see <see cref="T:SysWeaver.Security.SubjectTokens"/>):
+            <see cref="M:SysWeaver.Security.OneTimeTokens`1.Issue(System.String,System.String,`0,System.DateTime@)"/> revokes the older token of the same subject and purpose, <see cref="M:SysWeaver.Security.OneTimeTokens`1.TryUse(System.String,System.String,System.String,`0@)"/> consumes a token (once),
+            <see cref="M:SysWeaver.Security.OneTimeTokens`1.Revoke(System.String,System.String)"/> / <see cref="M:SysWeaver.Security.OneTimeTokens`1.RevokeSubject(System.String)"/> revoke tokens when something changed (ex: the password), and tokens expire.
+            <para>Ex: a confirmation token for a dangerous action, bound to the session: <c>var t = Tokens.Issue("delete-log", session.Token, info, out var expires);</c>
+            then <c>if (!Tokens.TryUse(r.Token, "delete-log", session.Token, out var info)) throw new HttpResponseException(409, "...");</c></para>
+            </summary>
+            <typeparam name="T">The data kept with a token</typeparam>
+            <remarks>Thread safe. Tokens never survive a restart of the process.</remarks>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.#ctor(System.TimeSpan)">
+            <summary>
+            Create a token store.
+            </summary>
+            <param name="lifetime">How long a token is valid (at least 1 second)</param>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.#ctor(System.TimeSpan,SysWeaver.Security.TokenGroups)">
+            <summary>
+            Create a token store whose purposes are declared in groups: <see cref="M:SysWeaver.Security.OneTimeTokens`1.RevokeOn(System.String,System.String,System.String)"/> revokes, for an event (ex: "the password changed"),
+            every live token of a subject whose purpose belongs to a group that the event revokes.
+            </summary>
+            <param name="lifetime">How long a token is valid (at least 1 second)</param>
+            <param name="groups">The declared purposes and groups (see <see cref="T:SysWeaver.Security.TokenGroups"/>); <see cref="M:SysWeaver.Security.OneTimeTokens`1.Issue(System.String,System.String,`0,System.DateTime@)"/> refuses an undeclared purpose</param>
+            <exception cref="T:System.ArgumentNullException">The groups are null</exception>
+        </member>
+        <member name="F:SysWeaver.Security.OneTimeTokens`1.Groups">
+            <summary>
+            The declared purposes and groups, null if the store has none (then only <see cref="M:SysWeaver.Security.OneTimeTokens`1.Revoke(System.String,System.String)"/> / <see cref="M:SysWeaver.Security.OneTimeTokens`1.RevokeSubject(System.String)"/> revoke).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Security.OneTimeTokens`1.Lifetime">
+            <summary>
+            How long a token is valid after it was issued.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.Issue(System.String,System.String,`0,System.DateTime@)">
+            <summary>
+            Issue a new token for a subject and purpose, the older live token of the same subject and purpose is revoked.
+            </summary>
+            <param name="purpose">The purpose, ex: "delete-log"</param>
+            <param name="subject">The subject, ex: a session token or "user:42"</param>
+            <param name="data">The data kept with the token (returned by <see cref="M:SysWeaver.Security.OneTimeTokens`1.TryUse(System.String,System.String,System.String,`0@)"/>)</param>
+            <param name="expires">When the token expires (UTC)</param>
+            <returns>The token (url safe, 128 random bits)</returns>
+            <exception cref="T:System.ArgumentException">The purpose or the subject is null or empty</exception>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.TryUse(System.String,System.String,System.String,`0@)">
+            <summary>
+            Use (consume) a token: it is removed, whether it matches or not, so it can be tried once.
+            </summary>
+            <param name="token">The token</param>
+            <param name="purpose">The purpose it must have</param>
+            <param name="subject">The subject it must belong to, null for any subject</param>
+            <param name="data">The data kept with the token</param>
+            <returns>True if the token was live, for this purpose (and subject)</returns>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.Revoke(System.String,System.String)">
+            <summary>
+            Revoke the live token of a subject and purpose.
+            </summary>
+            <param name="purpose">The purpose</param>
+            <param name="subject">The subject</param>
+            <returns>True if a token was revoked</returns>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.RevokeSubject(System.String)">
+            <summary>
+            Revoke every token of a subject (all purposes), ex: when the user's password changed or the session ended.
+            </summary>
+            <param name="subject">The subject</param>
+            <returns>The number of tokens revoked</returns>
+        </member>
+        <member name="M:SysWeaver.Security.OneTimeTokens`1.RevokeOn(System.String,System.String,System.String)">
+            <summary>
+            Something happened to a subject (ex: its password changed): revoke every live token of the subject whose purpose is in a group that the event revokes
+            (see <see cref="T:SysWeaver.Security.TokenGroups"/>).
+            </summary>
+            <param name="evt">The event, ex: "PasswordChanged" (an event that no group declares revokes nothing)</param>
+            <param name="subject">The subject</param>
+            <param name="keep">A token to keep (ex: the one just issued because of the event), null for none</param>
+            <returns>The number of tokens revoked</returns>
+            <exception cref="T:System.InvalidOperationException">The store was created without groups</exception>
+        </member>
+        <member name="P:SysWeaver.Security.OneTimeTokens`1.Count">
+            <summary>
+            The number of live (not used, not revoked; maybe expired but not pruned yet) tokens.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Security.TokenGroups">
+            <summary>
+            Declares which events revoke which token purposes, by group: a group is revoked by a set of events, a purpose belongs to groups.
+            When something changes on a subject (ex: its password, its e-mail address), every live token whose meaning depends on the old state must stop working:
+            raise the event and revoke the purposes of <see cref="M:SysWeaver.Security.TokenGroups.RevokedBy(System.String)"/> (a database, with <see cref="M:SysWeaver.Security.SubjectTokens.Tag(System.String,System.String)"/>) or call <see cref="M:SysWeaver.Security.OneTimeTokens`1.RevokeOn(System.String,System.String,System.String)"/> (memory).
+            <para>A new token kind joins the rules by declaration (<see cref="M:SysWeaver.Security.TokenGroups.Purpose(System.String,System.String[])"/>), so it can't be forgotten in one of the places that revoke;
+            a unit test can generate the whole matrix (<see cref="P:SysWeaver.Security.TokenGroups.Purposes"/> x <see cref="P:SysWeaver.Security.TokenGroups.Events"/>, <see cref="M:SysWeaver.Security.TokenGroups.IsRevokedBy(System.String,System.String)"/>).</para>
+            <para>Ex:
+            <code>
+            static readonly TokenGroups Groups = new TokenGroups()
+                .Group("Credential", "PasswordChanged", "EmailChanged")
+                .Group("Email", "PasswordChanged", "EmailChanged", "EmailRemoved")
+                .Purpose("ResetPassword", "Credential")
+                .Purpose("ChangeEmail", "Email")
+                .Purpose("Invitation");   // declared, revoked by no event
+            </code></para>
+            </summary>
+            <remarks>Declare everything once (ex: in a static field), then only read it: reading is thread safe.</remarks>
+        </member>
+        <member name="M:SysWeaver.Security.TokenGroups.Group(System.String,System.String[])">
+            <summary>
+            Declare a group and the events that revoke its tokens (declare it before the purposes that use it).
+            </summary>
+            <param name="group">The group name, ex: "Credential"</param>
+            <param name="revokedBy">The events that revoke every token of the group, ex: "PasswordChanged"</param>
+            <returns>This (to chain declarations)</returns>
+            <exception cref="T:System.ArgumentException">The group is empty or already declared, or an event is empty</exception>
+        </member>
+        <member name="M:SysWeaver.Security.TokenGroups.Purpose(System.String,System.String[])">
+            <summary>
+            Declare a token purpose and the groups it belongs to (none = declared, but no event revokes it, ex: an invitation that belongs to no account yet).
+            </summary>
+            <param name="purpose">The purpose, ex: "RstPwd"</param>
+            <param name="groups">The groups (declared with <see cref="M:SysWeaver.Security.TokenGroups.Group(System.String,System.String[])"/>)</param>
+            <returns>This (to chain declarations)</returns>
+            <exception cref="T:System.ArgumentException">The purpose is empty or already declared, or a group isn't declared</exception>
+        </member>
+        <member name="M:SysWeaver.Security.TokenGroups.IsDeclared(System.String)">
+            <summary>
+            True if a purpose is declared.
+            </summary>
+            <param name="purpose">The purpose</param>
+            <returns>True if declared with <see cref="M:SysWeaver.Security.TokenGroups.Purpose(System.String,System.String[])"/></returns>
+        </member>
+        <member name="P:SysWeaver.Security.TokenGroups.Purposes">
+            <summary>
+            The declared purposes (in declaration order).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Security.TokenGroups.Events">
+            <summary>
+            Every event that revokes something (in declaration order).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Security.TokenGroups.GroupsOf(System.String)">
+            <summary>
+            The groups a purpose belongs to.
+            </summary>
+            <param name="purpose">The purpose</param>
+            <returns>The groups (empty if none or not declared)</returns>
+        </member>
+        <member name="M:SysWeaver.Security.TokenGroups.RevokedBy(System.String)">
+            <summary>
+            The purposes whose tokens an event revokes.
+            </summary>
+            <param name="evt">The event</param>
+            <returns>The purposes (empty for an unknown event)</returns>
+        </member>
+        <member name="M:SysWeaver.Security.TokenGroups.IsRevokedBy(System.String,System.String)">
+            <summary>
+            True if an event revokes the tokens of a purpose.
+            </summary>
+            <param name="purpose">The purpose</param>
+            <param name="evt">The event</param>
+            <returns>True if the event revokes the purpose (through one of its groups)</returns>
+        </member>
         <member name="T:SysWeaver.SemiFrozenDictionary`2">
             <summary>
             A dictionary for data where the number of reads far exceeds the number of modifications.
@@ -21527,6 +22410,38 @@
             <summary>
             The lower case hexadecimal digits, indexed by the nibble value (0 - 15).
             </summary>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.Byte,System.Int32)">
+            <summary>
+            Write a Byte as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.UInt16,System.Int32)">
+            <summary>
+            Write a UInt16 as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.UInt32,System.Int32)">
+            <summary>
+            Write a UInt32 as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
+        </member>
+        <member name="M:SysWeaver.SpanExt.WriteHex(System.Span{System.Char},System.UInt64,System.Int32)">
+            <summary>
+            Write a UInt64 as hex chars to a span
+            </summary>
+            <param name="dest">The target span</param>
+            <param name="value">The value to write</param>
+            <param name="offset">An offest into the span</param>
         </member>
         <member name="M:SysWeaver.SpanExt.ToHexString(System.Span{System.Byte})">
             <summary>
@@ -23474,7 +24389,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.Boolean,System.Boolean)">
             <summary>
-            Split a string into two parts (keeping the left part) on the first occurance of a char.
+            Split a string into two parts (keeping the left part) on the first occurrence of a char.
             Example:
             "name@example.com".SplitFirst('@') => "name"
             </summary>
@@ -23486,7 +24401,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.String@,System.Boolean,System.Boolean)">
             <summary>
-            Split a string into two parts on the first occurance of a char.
+            Split a string into two parts on the first occurrence of a char.
             Example:
             var left = "name@example.com".SplitFirst('@', out var right);
             left = "name";
@@ -23501,7 +24416,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char)">
             <summary>
-            Split a string into two parts (keeping the left part) on the first occurance of a char.
+            Split a string into two parts (keeping the left part) on the first occurrence of a char.
             Example:
             "name@example.com".SplitFirst('@') => "name"
             </summary>
@@ -23511,7 +24426,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.String@)">
             <summary>
-            Split a string into two parts on the first occurance of a char.
+            Split a string into two parts on the first occurrence of a char.
             Example:
             var left = "name@example.com".SplitFirst('@', out var right);
             left = "name";
@@ -23524,7 +24439,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.SplitLast(System.String,System.Char,System.String@)">
             <summary>
-            Split a string into two parts on the last occurance of a char.
+            Split a string into two parts on the last occurrence of a char.
             Example:
             var right = "name@example.com".SplitLast('.', out var left);
             left = "name@example";
@@ -23537,7 +24452,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.SplitLast(System.String,System.Char)">
             <summary>
-            Split a string into two parts on the last occurance of a char.
+            Split a string into two parts on the last occurrence of a char.
             Example:
             var right = "name@example.com".SplitLast('.');
             right = "com";
@@ -23651,7 +24566,7 @@
         </member>
         <member name="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean,System.Boolean)">
             <summary>
-            Escape some text to work inside mark down, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
+            Escape some text to work inside Markdown, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
             Doesn't escape +, - and . unless all is true
             A text that starts with the char 1 is considered to be markdown already, it's returned as is (without the first char).
             </summary>
@@ -25578,8 +26493,8 @@
               £ = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
               ¤ = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
               * = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-              ! = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-              / = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+              ! = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+              / = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
             Only one of @, #, %, $, £, ¤, *, ! and / may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -25615,8 +26530,8 @@
             $(£Var) = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
             $(¤Var) = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
             $(*Var) = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-            $(!Var) = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-            $(/Var) = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+            $(!Var) = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            $(/Var) = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
             Only one of @, #, %, $, £, ¤, *, ! and / may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -25658,8 +26573,8 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+            [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
             Only one of @, #, %, $, £, ¤, *, ! and / may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -25687,8 +26602,8 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+            [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
             Only one of @, #, %, $, £, ¤, *, ! and / may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -25836,8 +26751,8 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+            [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
             Only one of @, #, %, $, £, ¤, *, ! and / may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -25867,8 +26782,8 @@
             [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
             [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
-            [!Var] = Make mark down (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
-            [/Var] = Make mark down (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
+            [!Var] = Make Markdown (.md) safe (StringTools.EscapeMD), ex: "** Hello **" => "\*\* Hello \*\*".
+            [/Var] = Make Markdown (.md) safe and prevent word wrapping (StringTools.EscapeMD), ex: "** Hello **" => "\*\*\u00A0Hello\u00A0\*\*".
             Only one of _ , ^ and ~ may be used.
             Only one of @, #, %, $, £, ¤, *, ! and / may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤, *, ! and /. 
@@ -26340,7 +27255,7 @@
         <member name="P:SysWeaver.Translation.TranslateMultipleRequest.Texts">
             <summary>
             The texts to translate.
-            Use <see cref="P:SysWeaver.Translation.TranslateMultipleRequest.ContentType"/> to specify mark down or html.
+            Use <see cref="P:SysWeaver.Translation.TranslateMultipleRequest.ContentType"/> to specify Markdown or html.
             </summary>
         </member>
         <member name="P:SysWeaver.Translation.TranslateMultipleRequest.Context">
@@ -26360,7 +27275,7 @@
         </member>
         <member name="P:SysWeaver.Translation.TranslateMultipleRequest.ContentType">
             <summary>
-            The type of text (plain text, mark down or html)
+            The type of text (plain text, Markdown or html)
             </summary>
         </member>
         <member name="T:SysWeaver.Translation.TranslateRequest">
@@ -26383,7 +27298,7 @@
         <member name="P:SysWeaver.Translation.TranslateRequest.Text">
             <summary>
             The text to translate.
-            Use <see cref="P:SysWeaver.Translation.TranslateRequest.ContentType"/> to specify mark down or html.
+            Use <see cref="P:SysWeaver.Translation.TranslateRequest.ContentType"/> to specify Markdown or html.
             Texts starting with <see cref="F:SysWeaver.Translation.TranslationTools.NoTranslatePrefix"/> are not translated.
             </summary>
         </member>
@@ -26404,7 +27319,7 @@
         </member>
         <member name="P:SysWeaver.Translation.TranslateRequest.ContentType">
             <summary>
-            The type of text (plain text, mark down or html)
+            The type of text (plain text, Markdown or html)
             </summary>
         </member>
         <member name="P:SysWeaver.Translation.TranslateRequest.ServiceName">
@@ -26475,7 +27390,7 @@
         </member>
         <member name="F:SysWeaver.Translation.TranslationContentTypes.MarkDown">
             <summary>
-            Mark down (aka MD) formatted text
+            Markdown (aka MD) formatted text
             </summary>
         </member>
         <member name="F:SysWeaver.Translation.TranslationContentTypes.Html">

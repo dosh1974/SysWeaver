@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
-using System.Text;
 using System.Linq;
+using System.Text;
 using SysWeaver.Data;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace SysWeaver
 {
@@ -611,6 +612,7 @@ namespace SysWeaver
                 {".map", "text/plain"},
                 {".master", "application/xml"},
                 {".mbox", "application/mbox"},
+                {".md", "text/x-markdown"},
                 {".mda", "application/msaccess"},
                 {".mdb", "application/x-msaccess"},
                 {".mde", "application/msaccess"},

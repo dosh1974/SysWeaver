@@ -9,12 +9,14 @@
             Export table data as a UTF-8 CSV text file.
             </summary>
             <remarks>
-            Any occurrence of the separator char in a header or value is replaced by a replacement char (separators are never quoted).
-            Headers and values containing a line break (CR or LF) or starting with a double quote are wrapped in double quotes (RFC 4180), with any embedded double quotes doubled.
+            Headers and values containing the separator, a double quote or a line break (CR or LF) are wrapped in double quotes, with any embedded double quotes doubled (RFC 4180).
             Hidden columns (<see cref="F:SysWeaver.Data.TableDataColumnProps.Hide"/>) are omitted.
-            <see cref="T:System.Single"/>, <see cref="T:System.Double"/> and <see cref="T:System.Decimal"/> values (also in nullable columns) are written using the invariant culture,
-            other values using <see cref="M:System.Object.ToString"/> (current culture, ex: dates). Null values are written as empty texts.
-            Values are not quoted for other reasons (ex: leading / trailing spaces, embedded quotes) and no protection against spreadsheet formula injection is done.
+            <see cref="T:System.Single"/>, <see cref="T:System.Double"/> and <see cref="T:System.Decimal"/> values (also in nullable columns) are written using the invariant culture
+            (rounded to the decimals of a <see cref="F:SysWeaver.Data.TableDataFormats.Number"/> column format that names them, see <see cref="M:SysWeaver.Data.CsvTableDataExporter.RoundedToString(SysWeaver.Data.TableDataColumn)"/>),
+            dates using the invariant culture as "yyyy-MM-dd HH:mm:ss" (UTC by convention; the header of a date time column ends with " (UTC)", see <see cref="M:SysWeaver.Data.TableDataExporterTools.GetHeader(SysWeaver.Data.TableDataColumn)"/>),
+            enum values (also numbers from a serializer) as their names (ex: "Debug", see <see cref="M:SysWeaver.Data.TableDataExporterTools.GetEnumType(System.String)"/>),
+            other values using <see cref="M:System.Object.ToString"/>. Null values are written as empty texts.
+            No protection against spreadsheet formula injection is done.
             Rows without values (null or empty) are skipped, values beyond the column definitions are written using <see cref="F:SysWeaver.Data.CsvTableDataExporter.DefToString"/>.
             The exporter is stateless and thread safe.
             </remarks>
@@ -27,17 +29,17 @@
         </member>
         <member name="F:SysWeaver.Data.CsvTableDataExporter.Comma">
             <summary>
-            Comma separated values, commas in values are replaced with '_'.
+            Comma separated values.
             </summary>
         </member>
         <member name="F:SysWeaver.Data.CsvTableDataExporter.Tab">
             <summary>
-            Tab separated values, tabs in values are replaced with '_'.
+            Tab separated values.
             </summary>
         </member>
         <member name="F:SysWeaver.Data.CsvTableDataExporter.SemiColon">
             <summary>
-            Semi colon separated values, semi colons in values are replaced with '_'.
+            Semicolon separated values.
             </summary>
         </member>
         <member name="M:SysWeaver.Data.CsvTableDataExporter.#ctor(System.String,System.Char,System.Char,System.Double,System.String)">
@@ -46,7 +48,7 @@
             </summary>
             <param name="name">The display name of the exporter.</param>
             <param name="sep">The column separator char.</param>
-            <param name="rep">The char that replaces any <paramref name="sep"/> found in headers and values.</param>
+            <param name="rep">Not used (kept for compatibility): headers and values containing the separator are quoted instead.</param>
             <param name="order">Sort order of the exporter in UI lists.</param>
             <param name="desc">A description of the exporter.</param>
         </member>
@@ -87,16 +89,32 @@
             Converts a value to a <see cref="T:System.Decimal"/> and formats it using the invariant culture (empty for null).
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.CsvTableDataExporter.DateToString">
+            <summary>
+            Converts a date (<see cref="T:System.DateTime"/>, <see cref="T:System.DateTimeOffset"/> converted to UTC, or <see cref="T:System.DateOnly"/>) to an invariant text (empty for null),
+            see <see cref="M:SysWeaver.Data.TableDataExporterTools.DateToText(System.Object)"/>.
+            </summary>
+        </member>
         <member name="F:SysWeaver.Data.CsvTableDataExporter.DefToStrings">
             <summary>
-            Value to text conversions keyed on the full type name of the column (<see cref="T:System.Single"/>, <see cref="T:System.Double"/>, <see cref="T:System.Decimal"/> and their nullable versions),
+            Value to text conversions keyed on the full type name of the column (<see cref="T:System.Single"/>, <see cref="T:System.Double"/>, <see cref="T:System.Decimal"/>, the date types and their nullable versions),
             types not found use <see cref="F:SysWeaver.Data.CsvTableDataExporter.DefToString"/>.
             </summary>
         </member>
-        <member name="M:SysWeaver.Data.CsvTableDataExporter.Escape(System.String)">
+        <member name="M:SysWeaver.Data.CsvTableDataExporter.Escape(System.String,System.Char)">
             <summary>
-            Wrap a value in double quotes (doubling embedded quotes) if it contains a line break or starts with a double quote, else return it as is.
+            Wrap a value in double quotes (doubling embedded quotes) if it contains the separator, a double quote or a line break, else return it as is (RFC 4180).
             </summary>
+        </member>
+        <member name="M:SysWeaver.Data.CsvTableDataExporter.RoundedToString(SysWeaver.Data.TableDataColumn)">
+            <summary>
+            A floating point column (<see cref="T:System.Single"/>, <see cref="T:System.Double"/>, <see cref="T:System.Decimal"/>, also nullable) with a <see cref="F:SysWeaver.Data.TableDataFormats.Number"/> format
+            that names its decimals ("Number;4", a currency "Number;-2;..."; the absolute value is used, 0 = not named) is written rounded to those decimals,
+            as the web client shows it (ex: 6865.67 instead of 6865.67164179104), using the invariant culture; a tiny non zero value that would round to 0 keeps
+            two significant digits (as the web client). Other columns are written unchanged.
+            </summary>
+            <param name="col">The column.</param>
+            <returns>The conversion, null if the column is not rounded.</returns>
         </member>
         <member name="M:SysWeaver.Data.CsvTableDataExporter.Export(SysWeaver.Data.BaseTableData,System.Object,SysWeaver.Data.TableDataExportOptions)">
             <summary>
@@ -869,7 +887,8 @@
         <member name="M:SysWeaver.Data.HtmlTableDataExporter.Vars.SetTitle(System.Object)">
             <summary>
             Set the <see cref="F:SysWeaver.Data.HtmlTableDataExporter.Vars.Title"/> to the text of value?.ToString() ?? "".
-            The CoreLib types whose ToString() is the same text as TryFormat without a format and provider (the current culture) are formatted into the reused buffer.
+            The CoreLib types that are span formattable are formatted into the reused buffer using the invariant culture (the same text on every server,
+            ex: "1086.95", not "1086,95"), date times as "yyyy-MM-dd HH:mm:ss" (UTC by convention).
             </summary>
             <param name="value">The cell value</param>
         </member>
@@ -1637,6 +1656,7 @@
             <remarks>
             Numbers (columns of the built-in numeric types and their nullable versions) are formatted using <c>ToValueString</c>
             (with the decimal count from a <see cref="F:SysWeaver.Data.TableDataFormats.Number"/> column format, default 3), other values using <see cref="M:System.Object.ToString"/>.
+            Dates are formatted using the invariant culture as <see cref="F:SysWeaver.Data.TableDataExporterTools.DateTimeFormat"/> (UTC by convention, see <see cref="F:SysWeaver.Data.TableDataExporterTools.UtcSuffix"/> and <see cref="M:SysWeaver.Data.TableDataExporterTools.GetHeader(SysWeaver.Data.TableDataColumn)"/>).
             Null values are formatted as empty texts.
             If the column format is <see cref="F:SysWeaver.Data.TableDataFormats.Default"/> or <see cref="F:SysWeaver.Data.TableDataFormats.Number"/> with a format string part,
             the text is formatted using <see cref="M:System.String.Format(System.String,System.Object,System.Object)"/> with {0} = the value text and {1} = the next column's value.
@@ -1685,6 +1705,76 @@
             <summary>
             The length of the longest safe scheme ("mailto")
             </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataExporterTools.DateTimeFormat">
+            <summary>
+            The invariant date and time format used by the exporters for <see cref="T:System.DateTime"/> values ("2026-10-19 16:37:00").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataExporterTools.DateOnlyFormat">
+            <summary>
+            The invariant date format used by the exporters for <see cref="T:System.DateOnly"/> values ("2026-10-19").
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataExporterTools.UtcSuffix">
+            <summary>
+            The text appended to the header of date time columns (<see cref="M:SysWeaver.Data.TableDataExporterTools.IsUtcColumn(SysWeaver.Data.TableDataColumn)"/>): table data date times are UTC by convention,
+            and servers often run in another time zone than the reader, so the zone is always stated.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.DateToText(System.Object)">
+            <summary>
+            Format a date time (UTC by convention) or a date time offset (converted to UTC) using the invariant <see cref="F:SysWeaver.Data.TableDataExporterTools.DateTimeFormat"/>,
+            a <see cref="T:System.DateOnly"/> using <see cref="F:SysWeaver.Data.TableDataExporterTools.DateOnlyFormat"/>, an ISO 8601 date time text (json) as a UTC date time, null as an empty text
+            and anything else using <see cref="M:System.Object.ToString"/>.
+            </summary>
+            <param name="data">The value, may be null.</param>
+            <returns>The text.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.IsDateType(System.String)">
+            <summary>
+            True if the column type is a date (<see cref="T:System.DateTime"/>, <see cref="T:System.DateTimeOffset"/> or <see cref="T:System.DateOnly"/>, nullable or not).
+            </summary>
+            <param name="typeName">The full type name of the column (<see cref="F:SysWeaver.Data.TableDataBaseColumn.Type"/>), may be null.</param>
+            <returns>True for date columns.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.GetEnumType(System.String)">
+            <summary>
+            Get the enum type of a column (an enum or a nullable enum), the values of such a column are written as names, as the web client shows them
+            (exported table data often comes through a serializer, so the values are numbers, ex: a log level "1" instead of "Debug").
+            </summary>
+            <param name="typeName">The full type name of the column (<see cref="F:SysWeaver.Data.TableDataBaseColumn.Type"/>), may be null.</param>
+            <returns>The enum type, or null if the column isn't an enum (or the type isn't known or allowed here).</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.EnumToText(System.Type,System.Object)">
+            <summary>
+            Get the name of an enum value (the names of the flags for a flags enum, ex: "Read, Write").
+            </summary>
+            <param name="enumType">The enum type.</param>
+            <param name="value">The value: an enum, a number (of any type, ex: from a serializer) or a text (returned as is), may be null.</param>
+            <returns>The name, an empty text for null, the value text if it isn't a number.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.GetEnumToText(System.String)">
+            <summary>
+            Get a value to text conversion for an enum column (see <see cref="M:SysWeaver.Data.TableDataExporterTools.GetEnumType(System.String)"/> and <see cref="M:SysWeaver.Data.TableDataExporterTools.EnumToText(System.Type,System.Object)"/>).
+            </summary>
+            <param name="typeName">The full type name of the column (<see cref="F:SysWeaver.Data.TableDataBaseColumn.Type"/>), may be null.</param>
+            <returns>The conversion, or null if the column isn't an enum.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.IsUtcColumn(SysWeaver.Data.TableDataColumn)">
+            <summary>
+            True if the column holds date times that are exported as UTC: a <see cref="T:System.DateTime"/> or <see cref="T:System.DateTimeOffset"/> column (nullable or not)
+            without a special format (no format, "Default", or the "utc" / "local" display hints).
+            </summary>
+            <param name="col">The column, may be null.</param>
+            <returns>True if the column header should be labeled with <see cref="F:SysWeaver.Data.TableDataExporterTools.UtcSuffix"/>.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExporterTools.GetHeader(SysWeaver.Data.TableDataColumn)">
+            <summary>
+            The header text of a column in an export: the title (or the name), with <see cref="F:SysWeaver.Data.TableDataExporterTools.UtcSuffix"/> appended for date time columns (<see cref="M:SysWeaver.Data.TableDataExporterTools.IsUtcColumn(SysWeaver.Data.TableDataColumn)"/>).
+            </summary>
+            <param name="col">The column.</param>
+            <returns>The header text.</returns>
         </member>
         <member name="M:SysWeaver.Data.TableDataExporterTools.Get(System.String,System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,SysWeaver.Data.TableDataExporterTools.SpecialFormatter})">
             <summary>
@@ -1847,7 +1937,7 @@
             </summary>
             <typeparam name="T">The row type.</typeparam>
             <param name="order">The column names to sort by in priority order (names are trimmed and case sensitive), a '-' prefix reverses the order.
-            Unknown names are ignored. Columns with a <see cref="T:SysWeaver.Data.TableDataSortDescAttribute"/> sort descending by default (ascending with '-').</param>
+            Unknown names are ignored. "-" always means descending (a <see cref="T:SysWeaver.Data.TableDataSortDescAttribute"/> is only a client hint). A null or empty order uses the <see cref="T:SysWeaver.Data.TableDataDefaultOrderAttribute"/> of the row type, if any.</param>
             <param name="data">Source data</param>
             <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
             <remarks>
@@ -1933,7 +2023,8 @@
             <see cref="T:SysWeaver.Data.TableDataSearchAttribute"/>, ordered by descending <see cref="T:SysWeaver.Data.TableDataSearchAttribute"/> weight (weight zero or less excludes a member).
             The rank of each member is multiplied by its weight (default 1) times 0.95 per preceding searched member (in that order).
             Compiler generated members (auto property backing fields) are never searched, a member is only searched once.
-            Rows without a match are removed and the result is ordered by rank (after filtering and sorting, so the rank order wins).
+            A row matches only when every word and number of the search text is found (AND, each in any searched member); rows without a match are removed
+            and the result is ordered by rank (after filtering and sorting, so the rank order wins).
             <see cref="F:SysWeaver.Data.CommonTableData.RowCount"/> is the start row plus the number of returned rows plus the number of look ahead rows found.
             </remarks>
         </member>
@@ -1944,6 +2035,16 @@
             <typeparam name="T">The row type.</typeparam>
             <param name="data">Source data</param>
             <returns>Some table data with all columns, <see cref="F:SysWeaver.Data.CommonTableData.RowCount"/> is not set.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataTools.FilterAndSearch``1(SysWeaver.Data.TableDataRequest,System.Collections.Generic.IEnumerable{``0})">
+            <summary>
+            Apply the column filters and free text search of a request to a sequence (no sorting or paging),
+            returning the same instances that survive, see <see cref="M:SysWeaver.Data.TableDataType`1.FilterAndSearch(SysWeaver.Data.TableDataRequest,System.Collections.Generic.IEnumerable{`0})"/>.
+            </summary>
+            <typeparam name="T">The row type.</typeparam>
+            <param name="request">The request (only Filters and SearchText are used), may be null.</param>
+            <param name="data">The source data.</param>
+            <returns>The filtered sequence (same instances).</returns>
         </member>
         <member name="M:SysWeaver.Data.TableDataTools.Get``1(SysWeaver.Data.TableDataRequest,System.Int64,System.Collections.Generic.IEnumerable{``0},System.String,System.Int64)">
             <summary>
@@ -2460,6 +2561,25 @@
             <param name="title">The title to set when columns are sent, if null the existing title is kept.</param>
             <returns>The source table data.</returns>
         </member>
+        <member name="M:SysWeaver.Data.TableDataTools.WithDefaultOrder``1(``0,System.String[])">
+            <summary>
+            Set <see cref="F:SysWeaver.Data.CommonTableData.DefaultOrder"/> when the columns are included (sent), see <see cref="T:SysWeaver.Data.TableDataDefaultOrderAttribute"/>.
+            </summary>
+            <typeparam name="X">The table type.</typeparam>
+            <param name="data">The table to update (in place).</param>
+            <param name="order">The default order of the row type, may be null.</param>
+            <returns>The source table data.</returns>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataTools.WithCard``1(``0,System.String)">
+            <summary>
+            Set <see cref="F:SysWeaver.Data.CommonTableData.Card"/> when the columns are included (sent), else it's cleared (the client only decides once, this limits the bandwidth).
+            Call after the column logic (HandleCc), a null card keeps the existing value (if columns are included).
+            </summary>
+            <typeparam name="X">The table type.</typeparam>
+            <param name="data">The table to update (in place).</param>
+            <param name="card">The card template, may be null, see <see cref="F:SysWeaver.Data.CommonTableData.Card"/> for the format.</param>
+            <returns>The source table data.</returns>
+        </member>
         <member name="M:SysWeaver.Data.TableDataTools.HandleCc``1(SysWeaver.Data.TypedTableData{``0},System.Int64,SysWeaver.Data.TableDataColumn[],System.String)">
             <summary>
             Apply the column change counter logic to a typed table, see <see cref="M:SysWeaver.Data.TableDataTools.HandleCc(SysWeaver.Data.TableData,System.Int64,SysWeaver.Data.TableDataColumn[],System.String)"/>.
@@ -2529,6 +2649,16 @@
             Parameters: translator, target language, values array, effort, retention.
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.TableDataType`1.DefaultOrder">
+            <summary>
+            The default sort order of the row type (<see cref="T:SysWeaver.Data.TableDataDefaultOrderAttribute"/>), used when a request has no order, null if none.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataType`1.Card">
+            <summary>
+            The card template of the row type (<see cref="T:SysWeaver.Data.TableDataCardAttribute"/>), null if none.
+            </summary>
+        </member>
         <member name="M:SysWeaver.Data.TableDataType`1.GetTranslateColumnExp(System.Reflection.MemberInfo,System.Int32,System.Collections.Generic.IReadOnlyDictionary{System.Reflection.MemberInfo,System.Int32})">
             <summary>
             Build an expression that translates the value at <paramref name="colIndex"/> in the values array (if the member has an <see cref="T:SysWeaver.AutoTranslateAttribute"/>),
@@ -2590,17 +2720,23 @@
             Sort data (lazily, using LINQ).
             </summary>
             <param name="o">Column names to sort by, in priority order, a '-' prefix sorts in reverse. Unknown names are ignored.
-            Columns with a <see cref="T:SysWeaver.Data.TableDataSortDescAttribute"/> sort descending by default (and ascending with '-').</param>
+            "-" always means descending (a <see cref="T:SysWeaver.Data.TableDataSortDescAttribute"/> is only a client hint). A null or empty order uses the <see cref="T:SysWeaver.Data.TableDataDefaultOrderAttribute"/> of the row type, if any.</param>
             <param name="data">The source data.</param>
             <returns>The sorted sequence, null if <paramref name="data"/> is null.</returns>
         </member>
-        <member name="M:SysWeaver.Data.TableDataType`1.SortAndFilter(SysWeaver.Data.TableDataOrderRequest,System.Collections.Generic.IEnumerable{`0})">
+        <member name="M:SysWeaver.Data.TableDataType`1.FilterAndSearch(SysWeaver.Data.TableDataRequest,System.Collections.Generic.IEnumerable{`0})">
             <summary>
             Apply the filters and then the sort order of a request (lazily), see <see cref="M:SysWeaver.Data.TableDataType`1.Filter(SysWeaver.Data.TableDataFilter[],System.Collections.Generic.IEnumerable{`0})"/> and <see cref="M:SysWeaver.Data.TableDataType`1.Sort(System.String[],System.Collections.Generic.IEnumerable{`0})"/>.
             </summary>
             <param name="request">The request, may not be null.</param>
             <param name="data">The source data.</param>
             <returns>The resulting sequence, null if <paramref name="data"/> is null.</returns>
+            <summary>
+            Apply the column filters (<see cref="F:SysWeaver.Data.TableDataSortAndFilterRequest.Filters"/>) and the free text search
+            (<see cref="F:SysWeaver.Data.TableDataRequest.SearchText"/>) of a request, without sorting or paging.
+            The surviving sequence contains the same instances as the source (useful to keep the original objects).
+            </summary>
+            <returns>The filtered sequence (same instances), null if <paramref name="data"/> is null.</returns>
         </member>
         <member name="M:SysWeaver.Data.TableDataType`1.SortAndFilterAndLimit(SysWeaver.Data.TableDataOrderRequest,System.Collections.Generic.IEnumerable{`0},System.Int64)">
             <summary>
@@ -2691,6 +2827,18 @@
             times 0.95 per preceding searched member, see <see cref="M:SysWeaver.Search.ITextRanker.Rank(System.Double[],System.String[])"/>.
             Null if the type has no searchable members.
             </summary>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataType`1.TextSearch(System.Collections.Generic.IEnumerable{`0},System.String,SysWeaver.Search.ITextSearch)">
+            <summary>
+            The text search of a request: a row matches when every word and number of the search text is found in its searched texts (AND,
+            in any of the texts; UX guide LST-7 "all words must match"), the matches are ordered by the rank of the whole search text.
+            Each word is tested with a ranker of its own (<see cref="M:SysWeaver.Search.ITextSearch.CreateRanker(System.String)"/> of the word), so a custom search keeps its own
+            matching per word. A search text with one word is a plain ranked search.
+            </summary>
+            <param name="data">The rows (filtered and sorted).</param>
+            <param name="st">The trimmed, non empty search text.</param>
+            <param name="search">The text search, null for <see cref="F:SysWeaver.Data.TableDataTools.DefaultSearch"/>.</param>
+            <returns>The matching rows by descending rank, the input if the type has no searchable members.</returns>
         </member>
         <member name="M:SysWeaver.Data.TableDataType`1.Get(SysWeaver.Data.TableDataRequest,System.Collections.Generic.IEnumerable{`0},System.String,SysWeaver.Search.ITextSearch,System.Int64)">
             <summary>
@@ -2807,9 +2955,9 @@
         </member>
         <member name="M:SysWeaver.Data.TypeDocumentation.AddTypeTableToMD(System.Text.StringBuilder,System.Type,System.Collections.Generic.HashSet{System.Type},System.Func{System.Type,System.Boolean},System.Func{System.Reflection.MemberInfo,System.Boolean},System.String)">
             <summary>
-            Append Mark Down documentation (a heading, the description and a member table per type) for a type and all types that it references.
+            Append Markdown documentation (a heading, the description and a member table per type) for a type and all types that it references.
             </summary>
-            <param name="sb">The string builder to append the Mark Down to</param>
+            <param name="sb">The string builder to append the Markdown to</param>
             <param name="type">The type to document</param>
             <param name="seenTypes">Optional set of types that have already been documented, types in the set are skipped and newly documented types are added to it.
             Use this to avoid duplicates when documenting multiple types into the same output</param>
