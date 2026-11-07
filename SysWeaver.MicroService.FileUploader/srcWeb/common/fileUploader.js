@@ -239,7 +239,7 @@ const UploadStatus = Object.freeze({
             progress("check", 0, l);
             const csr = await Sw.Net.Send(apiBase + "CheckStatus", { Repo: repo, Files: infos }, { Reload: true, Post: true });
             if (!csr)
-                return { Error: new Error("Couldn't check status!") };
+                return { Error: new Error(_TF("Couldn't check status!", "Error of a file upload: the service did not answer when asked which of the files it already has")) };
             const stats = csr.map(x => x.Result);
             const urls = csr.map(x => x.Url ?? null);
             let redirect = null;

@@ -404,6 +404,9 @@ class EffectProgramData {
              * @returns {void}
              */
             t.ScriptPropsApply = v => apply.forEach(x => x(v));
+            // (the player also runs on lean pages without the core)
+            const propsName = typeof _TF === "function" ? _TF("Effect props", "Name of a setting in the media editor: the group with the own settings of an effect") : "Effect props";
+            const propsSummary = typeof _T === "function" ? _T('Effect properties for effect "{0}"', c, "Tool tip of a setting in the media editor: the group with the own settings of an effect. {0} is the file name of the effect, ex: Stripes.glsl") : 'Effect properties for effect "' + c + '"';
             t.ScriptTypeInfo = {
                 Asm: "EffectProps",
                 Members: members,
@@ -411,13 +414,13 @@ class EffectProgramData {
                 ElementTypeName: null,
                 KeyTypeName: null,
                 Ext: null,
-                DisplayName: "Effect props",
+                DisplayName: propsName,
                 Min: null,
                 Max: null,
                 Default: scriptDefText,
                 Flags: 512,
                 EditParams: null,
-                Summary: "Effect properties for effect \"" + c + "\"",
+                Summary: propsSummary,
                 Remarks: null,
                 Type: null,
                 KeyInst: null,
@@ -428,13 +431,13 @@ class EffectProgramData {
                 TypeName: tnn,
                 ElementTypeName: null,
                 Ext: null,
-                DisplayName: "Effect props",
+                DisplayName: propsName,
                 Min: null,
                 Max: null,
                 Default: scriptDefText,
                 Flags: 512,
                 EditParams: null,
-                Summary: "Effect properties for effect \"" + c + "\"",
+                Summary: propsSummary,
                 Remarks: null,
                 Type: null,
                 KeyInst: null,

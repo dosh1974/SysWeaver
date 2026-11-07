@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Fake Mail</title>
+    <title data-translation_context="Browser tab title of Fake Mail, a developer tool that imitates a mail client: an inbox for the emails the system sends and receives without a real mail server">Fake Mail</title>
     <script defer src="../sw/core.js"></script>
     <script defer src="../sw/ui.js"></script>
     <script defer src="email.js"></script>
@@ -15,95 +15,95 @@
     <link rel="stylesheet" href="email.css">
 </head>
 <!-- SwWeb:no-page-header (a full window mail client: its own app bar and folders; the list and the reading pane are the shared Sw.ListDetail + Sw.SelectList) -->
-<body class="sw-root" onload="fakeEmailMain()">
+<body class="sw-root" onload="fakeEmailMain()" data-translation_context="Fake Mail, a developer tool that imitates a mail client: an inbox for the emails the system sends and receives without a real mail server. The system is the application under test, the user is the person who would receive or send the email">
     <header class="top">
-        <a id="backToApp" class="app-back" href="../" hidden>
+        <a id="backToApp" class="app-back" href="../" hidden data-translation_context="Link in the top bar that goes back to the main application">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>Back</span>
         </a>
         <div class="brand">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
             <div>
-                <h1>Fake Mail</h1>
-                <span id="fromAddress" class="muted" title="The address that the system sends emails from"></span>
+                <h1 data-translation_context="The name of this developer tool, shown in the top bar: an imitation mail client">Fake Mail</h1>
+                <span id="fromAddress" class="muted" title="The address that the system sends emails from" data-translation_context="Tool tip of the email address shown in the top bar"></span>
             </div>
         </div>
         <label class="search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <input id="search" type="search" placeholder="Search emails  ( / )" aria-label="Search emails" autocomplete="off">
+            <input id="search" type="search" placeholder="Search emails  ( / )" aria-label="Search emails" autocomplete="off" data-translation_context="Search box that filters the list of emails; the slash in parentheses is its keyboard shortcut, keep it">
         </label>
         <div class="actions">
-            <span id="statusBox" class="status-box" title="Connecting...">
+            <span id="statusBox" class="status-box" title="Connecting..." data-translation_context="Connection state of the page to the server, in the top bar: it is connecting right now">
                 <span id="status" class="status" role="status" aria-label="Connecting..."></span>
                 <span id="statusText" class="tlabel" aria-hidden="true"></span>
             </span>
             <!-- "More": the bulk actions of the sidebar footer (Mark all as read, Delete all) where it is hidden (<= 1100px, email.css) -->
             <!-- The bulk actions as page header actions on wide screens (email.js names them, Delete all is the danger outline) -->
-            <button id="markAllReadTop" type="button" class="head-act">Mark all as read</button>
-            <button id="clearAllTop" type="button" class="head-act danger">Delete all</button>
-            <button id="more" type="button" class="icon-btn more-btn" title="More" aria-label="More" aria-haspopup="menu">
+            <button id="markAllReadTop" type="button" class="head-act" data-translation_context="Button in the top bar that marks every email in the list as read">Mark all as read</button>
+            <button id="clearAllTop" type="button" class="head-act danger" data-translation_context="Button in the top bar that deletes every email in the list">Delete all</button>
+            <button id="more" type="button" class="icon-btn more-btn" title="More" aria-label="More" aria-haspopup="menu" data-translation_context="Icon button in the top bar that opens a menu with more actions">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
             </button>
-            <button id="theme" type="button" class="icon-btn" title="Theme" aria-label="Theme" aria-haspopup="menu">
+            <button id="theme" type="button" class="icon-btn" title="Theme" aria-label="Theme" aria-haspopup="menu" data-translation_context="Icon button in the top bar that opens a menu to choose the color theme of the page">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
             </button>
         </div>
     </header>
 
     <div class="layout">
-        <nav class="side" aria-label="Folders">
-            <button id="compose" type="button" class="primary compose-btn" title="Fake an email from a user to the system  ( c )" aria-label="Compose">
+        <nav class="side" aria-label="Folders" data-translation_context="Side bar with the email folders, as in a mail client">
+            <button id="compose" type="button" class="primary compose-btn" title="Fake an email from a user to the system  ( c )" aria-label="Compose" data-translation_context="Button that opens the form to write a new email (the verb); to fake means to imitate. The letter in parentheses is its keyboard shortcut, keep it">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span>Compose</span>
             </button>
             <ul id="folders" class="folders">
-                <li data-folder="all"><span class="dot all"></span><span class="label">All mail</span><span class="count" data-count="all"></span></li>
-                <li data-folder="out"><span class="dot out"></span><span class="label">Sent by system</span><span class="count" data-count="out"></span></li>
-                <li data-folder="in"><span class="dot in"></span><span class="label">Received by system</span><span class="count" data-count="in"></span></li>
-                <li data-folder="failed"><span class="dot failed"></span><span class="label">Failed</span><span class="count" data-count="failed"></span></li>
+                <li data-folder="all" data-translation_context="Name of the folder with every email"><span class="dot all"></span><span class="label">All mail</span><span class="count" data-count="all"></span></li>
+                <li data-folder="out" data-translation_context="Name of the folder with the emails that the system sent"><span class="dot out"></span><span class="label">Sent by system</span><span class="count" data-count="out"></span></li>
+                <li data-folder="in" data-translation_context="Name of the folder with the emails that the system received"><span class="dot in"></span><span class="label">Received by system</span><span class="count" data-count="in"></span></li>
+                <li data-folder="failed" data-translation_context="Name of the folder with the emails that could not be delivered"><span class="dot failed"></span><span class="label">Failed</span><span class="count" data-count="failed"></span></li>
             </ul>
             <div id="systemsBox" class="systems" hidden>
-                <h2>Systems</h2>
+                <h2 data-translation_context="Heading in the side bar above the list of systems: the software parts that sent emails, not computers">Systems</h2>
                 <ul id="systems" class="folders"></ul>
             </div>
             <div class="side-foot">
-                <button id="markAllRead" type="button" class="link-btn">Mark all as read</button>
-                <button id="clearAll" type="button" class="link-btn danger">Delete all</button>
+                <button id="markAllRead" type="button" class="link-btn" data-translation_context="Button in the side bar that marks every email in the list as read">Mark all as read</button>
+                <button id="clearAll" type="button" class="link-btn danger" data-translation_context="Button in the side bar that deletes every email in the list">Delete all</button>
             </div>
         </nav>
 
         <section class="list-pane" aria-labelledby="folderTitle">
             <div class="list-head">
-                <h2 id="folderTitle">All mail</h2>
+                <h2 id="folderTitle" data-translation_context="Heading of the email list: the name of the folder with every email">All mail</h2>
                 <span id="listInfo" class="muted"></span>
             </div>
             <!-- The email list: a Sw.SelectList (keyboard, selection, empty state) built by email.js -->
             <div id="listHost" class="list-host"></div>
         </section>
 
-        <section id="reader" class="reader" aria-label="Email">
+        <section id="reader" class="reader" aria-label="Email" data-translation_context="The reading pane that shows one email message: email as a noun for a message">
             <!-- No email selected: the shared Sw.StateView (email.js) and the key hints -->
             <div id="readerEmpty" class="reader-empty">
-                <p class="muted kbd-help"><kbd>j</kbd>/<kbd>k</kbd> navigate &middot; <kbd>r</kbd> reply &middot; <kbd>c</kbd> compose &middot; <kbd>Del</kbd> delete</p>
+                <p class="muted kbd-help" data-translation_context="Keyboard help when no email is selected: each key in the boxes is followed by what it does (verbs)"><kbd translate="no">j</kbd>/<kbd translate="no">k</kbd> navigate &middot; <kbd translate="no">r</kbd> reply &middot; <kbd translate="no">c</kbd> compose &middot; <kbd translate="no">Del</kbd> delete</p>
             </div>
             <article id="mail" class="mail" hidden>
                 <div class="mail-toolbar">
-                    <button id="back" type="button" class="icon-btn back" title="Back" aria-label="Back">
+                    <button id="back" type="button" class="icon-btn back" title="Back" aria-label="Back" data-translation_context="Icon button that goes back from the reading pane to the email list">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
-                    <div class="seg" id="viewMode" role="group" aria-label="Body view">
-                        <button type="button" data-view="render" class="on" aria-pressed="true">Rendered</button>
-                        <button type="button" data-view="source" aria-pressed="false">Source</button>
+                    <div class="seg" id="viewMode" role="group" aria-label="Body view" data-translation_context="Accessible name of the buttons that choose how the body of the email is shown">
+                        <button type="button" data-view="render" class="on" aria-pressed="true" data-translation_context="Button that shows the body of the email rendered as it would look in a mail client">Rendered</button>
+                        <button type="button" data-view="source" aria-pressed="false" data-translation_context="Button that shows the source code of the body of the email">Source</button>
                     </div>
                     <span class="grow"></span>
-                    <button id="reply" type="button" title="Fake a reply from the user  ( r )">
+                    <button id="reply" type="button" title="Fake a reply from the user  ( r )" data-translation_context="Button that opens the form to write a reply to the shown email (the verb); to fake means to imitate. The letter in parentheses is its keyboard shortcut, keep it">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8 4 13l6 5v-3.5c5 0 8 1.5 10 5-1-5-4-9.5-10-10z" fill="currentColor"/></svg>
                         <span>Reply</span>
                     </button>
-                    <button id="openTab" type="button" class="icon-btn" title="Open the body in a new tab" aria-label="Open in new tab">
+                    <button id="openTab" type="button" class="icon-btn" title="Open the body in a new tab" aria-label="Open in new tab" data-translation_context="Icon button that opens the body of the shown email in a new browser tab">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
-                    <button id="delete" type="button" class="icon-btn" title="Delete  ( Del )" aria-label="Delete">
+                    <button id="delete" type="button" class="icon-btn" title="Delete  ( Del )" aria-label="Delete" data-translation_context="Icon button that deletes the shown email; the key name in parentheses is its keyboard shortcut, keep it">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                     </button>
                 </div>
@@ -112,7 +112,7 @@
                     <div id="mailAvatar" class="avatar big"></div>
                     <div class="mail-meta">
                         <div><strong id="mailFromName"></strong> <span id="mailFrom" class="muted"></span></div>
-                        <div class="muted"><span>to</span> <span id="mailTo"></span></div>
+                        <div class="muted"><span data-translation_context="Label before the recipient address in the head of the shown email, in lower case: to whom the email was sent">to</span> <span id="mailTo"></span></div>
                         <div id="mailTags" class="tags"></div>
                     </div>
                     <time id="mailTime" class="muted"></time>
@@ -127,34 +127,34 @@
     <div id="composerHost" hidden>
         <form id="composeForm" class="composer" novalidate>
             <div class="composer-head">
-                <div class="seg" id="composeMode" role="group" aria-label="Direction">
-                    <button type="button" data-mode="in" class="on" aria-pressed="true" title="Fake an email that a user sends to the system">User &rarr; System</button>
-                    <button type="button" data-mode="out" aria-pressed="false" title="Send an email as the system (using the email service)">System &rarr; User</button>
+                <div class="seg" id="composeMode" role="group" aria-label="Direction" data-translation_context="Accessible name of the buttons in the compose form that choose who sends the email">
+                    <button type="button" data-mode="in" class="on" aria-pressed="true" title="Fake an email that a user sends to the system" data-translation_context="Button in the compose form: the email goes from a user to the system. To fake means to imitate">User &rarr; System</button>
+                    <button type="button" data-mode="out" aria-pressed="false" title="Send an email as the system (using the email service)" data-translation_context="Button in the compose form: the email goes from the system to a user, and is really sent">System &rarr; User</button>
                 </div>
             </div>
             <div class="fields">
-                <label class="in-only"><span>From</span><input id="cFrom" type="email" placeholder="user@example.com" autocomplete="email"></label>
-                <label class="in-only"><span>Name</span><input id="cName" type="text" placeholder="Fake user"></label>
-                <label><span>To</span><input id="cTo" type="email" placeholder="user@example.com"></label>
-                <label class="wide"><span>Subject</span><input id="cSubject" type="text"></label>
-                <label class="in-only"><span>System</span><input id="cSystem" type="text" placeholder="(optional)"></label>
+                <label class="in-only"><span data-translation_context="Label of the sender address field in the compose form">From</span><input id="cFrom" type="email" placeholder="user@example.com" autocomplete="email" translate="no"></label>
+                <label class="in-only"><span data-translation_context="Label of the sender name field in the compose form">Name</span><input id="cName" type="text" placeholder="Fake user" data-translation_context="Sample sender name shown in the empty field in the compose form: an imitated user"></label>
+                <label><span data-translation_context="Label of the recipient address field in the compose form">To</span><input id="cTo" type="email" placeholder="user@example.com" translate="no"></label>
+                <label class="wide"><span data-translation_context="Label of the email subject field in the compose form">Subject</span><input id="cSubject" type="text"></label>
+                <label class="in-only"><span data-translation_context="Label of the optional field in the compose form with the name of the software part that handles the email">System</span><input id="cSystem" type="text" placeholder="(optional)" data-translation_context="Shown in the empty field to say that it may stay empty"></label>
             </div>
             <div class="body-tools">
-                <div class="seg" id="composeFormat" role="group" aria-label="Format">
-                    <button type="button" data-format="text" class="on" aria-pressed="true">Plain text</button>
-                    <button type="button" data-format="html" aria-pressed="false">HTML</button>
+                <div class="seg" id="composeFormat" role="group" aria-label="Format" data-translation_context="Accessible name of the buttons in the compose form that choose the format of the message">
+                    <button type="button" data-format="text" class="on" aria-pressed="true" data-translation_context="Button in the compose form: the message is unformatted text">Plain text</button>
+                    <button type="button" data-format="html" aria-pressed="false" translate="no">HTML</button>
                 </div>
                 <span class="grow"></span>
-                <button type="button" id="cPreviewBtn" class="link-btn" hidden>Preview</button>
+                <button type="button" id="cPreviewBtn" class="link-btn" hidden data-translation_context="Button in the compose form that shows how the HTML message will look (the verb)">Preview</button>
             </div>
-            <textarea id="cBody" rows="12" placeholder="Write your message..." aria-label="Message"></textarea>
-            <iframe id="cPreview" class="preview" sandbox="allow-popups allow-popups-to-escape-sandbox" hidden title="Preview"></iframe>
+            <textarea id="cBody" rows="12" placeholder="Write your message..." aria-label="Message" data-translation_context="The text box for the body of the email in the compose form; message is the email text"></textarea>
+            <iframe id="cPreview" class="preview" sandbox="allow-popups allow-popups-to-escape-sandbox" hidden title="Preview" data-translation_context="Accessible name of the frame that shows how the HTML message will look (the noun)"></iframe>
             <input id="cReplyTo" type="hidden">
             <div class="composer-foot sw-form-foot">
                 <span id="composeHint" class="muted"></span>
                 <span class="grow"></span>
-                <button type="button" id="composeCancel">Cancel</button>
-                <button type="submit" class="primary" id="composeSend">Send <kbd>Ctrl+Enter</kbd></button>
+                <button type="button" id="composeCancel" data-translation_context="Button that closes the compose form without sending">Cancel</button>
+                <button type="submit" class="primary" id="composeSend" data-translation_context="Button that sends the email; the key combination beside it is its keyboard shortcut">Send <kbd translate="no">Ctrl+Enter</kbd></button>
             </div>
         </form>
     </div>

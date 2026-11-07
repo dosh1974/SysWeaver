@@ -174,8 +174,8 @@
     t("Sw.I18n.FormatArgs(format, args)", () => Sw.I18n.FormatArgs("{0}-{1}", ["a", "b"]), eq("a-b"));
     t("Sw.I18n.Format(format, ...args)", () => Sw.I18n.Format("{0}!", "x"), eq("x!"));
     t("Sw.I18n.Language() → text", () => Sw.I18n.Language(), isText);
-    t("translation marker with arguments → formatted text", () => _T("{0} items", 3, "contract test"), eq("3 items"));
-    t("plain translation marker → text", () => _TF("Close", "contract test"), eq("Close"));
+    t("translation marker with arguments → formatted text", () => _T("{0} items", 3, "Sample text of the developer contract test page, checks that a translated text is formatted. {0} is a number, ex: 3"), eq("3 items"));
+    t("plain translation marker → text", () => _TF("Close", "Sample text of the developer contract test page, checks that a plain translated text is returned"), eq("Close"));
     t("Sw.Url.Root → ends with /", () => Sw.Url.Root, v => (typeof v === "string" && v.endsWith("/")) || "an url ending with /, got " + show(v));
     t("Sw.Url.Params() → object", () => Sw.Url.Params(), isObj);
     t("Sw.Url.Has(name) → boolean", () => Sw.Url.Has("nothere"), eq(false));

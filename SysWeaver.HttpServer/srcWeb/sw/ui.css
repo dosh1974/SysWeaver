@@ -1656,6 +1656,7 @@ textarea.sw-input {
 
 .sw-input::placeholder {
     color: var(--sw-text-3);
+    font-style: italic;
     opacity: 1;
 }
 

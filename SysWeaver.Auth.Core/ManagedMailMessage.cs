@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace SysWeaver
 {
@@ -63,7 +64,7 @@ namespace SysWeaver
         public void GetMessage(out string subject, out string body, IReadOnlyDictionary<String, String> vars)
         {
             subject = GetSubject().Get(vars);
-            body = GetBody().Get(vars);
+            body = GetSendBody().Get(vars);
         }
 
         /// <summary>
@@ -108,6 +109,28 @@ namespace SysWeaver
                 return t;
             }
         }
+        /// <summary>
+        /// The body template to send: the translation contexts are only for the translator, so they are removed from a html body.
+        /// They are removed from the template, so that a variable value is never changed.
+        /// </summary>
+        TextTemplate GetSendBody()
+        {
+            var body = GetBody();
+            if (!IsHtml)
+                return body;
+            var t = TempSendBody;
+            if (t?.Item1 == body)
+                return t.Item2;
+            var text = body.Template;
+            var stripped = TranslationContextAttribute.Replace(text, "");
+            var send = stripped.Length == text.Length ? body : new TextTemplate(stripped, AllVars, true);
+            TempSendBody = Tuple.Create(body, send);
+            return send;
+        }
+
+        static readonly Regex TranslationContextAttribute = new Regex("\\s+data-translation_context\\s*=\\s*(?:\"[^\"]*\"|'[^']*')", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        volatile Tuple<TextTemplate, TextTemplate> TempSendBody;
         volatile TextTemplate TempSubject;
         volatile TextTemplate TempBody;
     }

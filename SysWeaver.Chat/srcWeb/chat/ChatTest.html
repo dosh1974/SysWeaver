@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover" />
-    <title>Chat test</title>
+    <title data-translation_context="Browser tab title of a developer test page that sends commands to an embedded chat frame">Chat test</title>
     <!-- The core runs the session manager: same origin frames only receive server push messages through their top window -->
     <script defer src="../sw/core.js"></script>
     <link rel="stylesheet" href="../common/theme.css">
@@ -59,7 +59,7 @@
         <button type="button" class="sw-button sw-ghost" data-cmd="chat.showall" title="Show the content of all messages">Show all</button>
         <button type="button" class="sw-button sw-ghost" data-cmd="chat.hideall" title="Hide the content of all messages">Hide all</button>
     </nav>
-    <iframe title="Chat" data-src="Chat.html?id=Simple.Generic&options={%22UserColor%22:false}"></iframe>
+    <iframe title="Chat" data-src="Chat.html?id=Simple.Generic&options={%22UserColor%22:false}" data-translation_context="Accessible name of the frame that shows the chat conversation under test"></iframe>
     <script>
         "use strict";
         /** Post the command of a clicked button to the chat frame; log ViewProfile messages from it. */

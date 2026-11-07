@@ -316,6 +316,7 @@ namespace SysWeaver.Media
             { "voc", MediaTypes.Audio },
             { "w64", MediaTypes.Audio },
             { "wav", MediaTypes.Audio },
+            { "weba", MediaTypes.Audio },
             { "wave", MediaTypes.Audio },
             { "wax", MediaTypes.Audio },
             { "wma", MediaTypes.Audio },

@@ -2743,7 +2743,7 @@
             //  A one line summary (Design v2: "Fixed · 25"), else the json; the tool tip has the json
             if (!text)
                 text = Edit.Summary(obj, type) || json;
-            text = text || "Value";
+            text = text || _TF("Value", "Shown in an object editor in place of a value that has no text or summary of its own");
             element.textContent = text;
             element.title = json && json !== text ? json : "";
         }

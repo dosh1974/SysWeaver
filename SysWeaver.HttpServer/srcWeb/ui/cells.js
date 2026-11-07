@@ -712,7 +712,7 @@
                             return text;
                         if (Sw.Url && Sw.Url.IsAbsolute && !Sw.Url.IsAbsolute(href) && Sw.Url.AppendTheme)
                             href = Sw.Url.AppendTheme(href);
-                        const title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an URL can be opened by clicking on the element");
+                        const title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an URL can be opened by clicking on the element. {0} is the url, ex: https://example.com/docs");
                         return '<a target="_blank" rel="noopener" title="' + H(title) + '" href="' + H(href) + '"' + (text.startsWith("<img") ? ' class="Image sw-link-image"' : "") + ">" + text + "</a>";
                     },
                     image(l) {
@@ -721,7 +721,7 @@
                         const href = l.href;
                         if (!safeHref(href))
                             return H(l.text || "");
-                        let title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an image can be opened by clicking on the element");
+                        let title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an image can be opened by clicking on the element. {0} is the url of the image, ex: https://example.com/logo.png");
                         if (l.text)
                             title = l.text + "\n\n" + title;
                         return '<a class="Image sw-link-image" target="_blank" rel="noopener" title="' + H(title) + '" href="' + H(href) + '"><img src="' + H(href) + '" alt="' + H(l.text || "") + '"></a>';
@@ -813,7 +813,7 @@
         if (Reset(e, "Default"))
             e.classList.add(Classes.Text);
         const text = value === null || value === undefined ? "" : sf(formats[1] ?? "{0}", value, nextValue);
-        let title = sf(formats[2] ?? (text != value ? "Raw: {2}" : ""), text, nextValue, value);
+        let title = sf(formats[2] ?? (text != value ? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text") : ""), text, nextValue, value);
         const copy = formats[3];
         if (copy || copy === undefined) {
             let cv = value;
@@ -831,7 +831,7 @@
      */
     function Type(e, value, formats, nextValue, flash, type, onRefresh) {
         if (!formats.length)
-            formats = ["Url", "{0}", "*../edit/type.html?q={2}", _TF('Show information about the type "{0}".', "Tool tip to indicate that extra information about a C# type can be viewed by clicking on the element")];
+            formats = ["Url", "{0}", "*../edit/type.html?q={2}", _TF('Show information about the type "{0}".', "Tool tip to indicate that extra information about a C# type can be viewed by clicking on the element. {0} is the type name, filled in later, ex: System.String")];
         Url(e, value, formats, nextValue, flash, type, onRefresh);
     }
 
@@ -908,7 +908,7 @@
         let text = sf(formats[2] ?? "{0}", vs, nextValue, value);
         if (code && vs !== "")
             text = cur ? (cur.SymbolPrefix || "") + text + (cur.SymbolSuffix || "") : text + " " + code;
-        let title = sf(formats[3] ?? "Raw: {2}", vs, nextValue, value, text);
+        let title = sf(formats[3] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), vs, nextValue, value, text);
         if (code)
             title = F().JoinNonEmpty("\n", cur && cur.Name ? cur.Name + " (" + cur.Iso4217 + ")" : code, title);
         const copy = formats[4];
@@ -966,7 +966,7 @@
         const ut = UrlTarget(sf(formats[2] ?? "{2}", value, nextValue, text));
         const url = absUrl(ut[0]);
         const target = ut[1];
-        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element") : ""), value, nextValue, text, url);
+        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element. {3} is the url, filled in later, ex: https://example.com/docs. {0}, {1} and {2} are other values of the cell, not used in this text") : ""), value, nextValue, text, url);
         const ext = External(url);
         if (ext && ext.Offline) {
             //  An internet link without internet: plain text, the address in the tool tip
@@ -1078,7 +1078,7 @@
 
     /**
      * Renderer "Img": formats[1] = src template (a leading '-' aligns left, '+' right, '*' none), formats[2] = click url template (target prefix allowed),
-     * formats[3] = title, formats[4] / [5] = max width / height (px, scaled by --ThemeIconSize), formats[6] = prefix for relative values.
+     * formats[3] = title, formats[4] / [5] = max width / height (px, scaled by --ThemeIconSize and the text size), formats[6] = prefix for relative values.
      * A picture that fails to load shows the cell value as text (ex: "SE", "GET") instead of a broken image; iso_data/ flags are not requested
      * a flag that fails to load (no IsoDataService) shows the value as text.
      * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
@@ -1097,7 +1097,7 @@
         const ut = UrlTarget(formats[2] ? sf(formats[2], value, nextValue, src) : null);
         const url = absUrl(ut[0]);
         const target = ut[1];
-        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an image can be viewed by clicking on an element") : ""), value, nextValue, src, url);
+        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an image can be viewed by clicking on an element. {3} is the url of the image, filled in later, ex: https://example.com/logo.png. {0}, {1} and {2} are other values of the cell, not used in this text") : ""), value, nextValue, src, url);
         //  A short word value (ex: "POST" / "GET" drawn as an icon) names the picture: alt text and tool tip say the value, not the image
         //  url that a generic server title ("Click to open "{3}".") would show
         const raw = String(value).trim();
@@ -1137,9 +1137,9 @@
                 }, { once: true });
             i.className = "sw-cell-img";
             if (maxW > 0)
-                i.style.maxWidth = "calc(var(--ThemeIconSize, 1) * " + maxW + "px)";
+                i.style.maxWidth = "calc(var(--ThemeIconSize, 1) * var(--sw-text-scale, 1) * " + maxW + "px)";
             if (maxH > 0)
-                i.style.maxHeight = "calc(var(--ThemeIconSize, 1) * " + maxH + "px)";
+                i.style.maxHeight = "calc(var(--ThemeIconSize, 1) * var(--sw-text-scale, 1) * " + maxH + "px)";
             //  The text alternative names what the image (link) does, not the mouse action or a raw url ("Click to open "http://.../post.svg"."):
             //  a server title as an action, else "Open <file name>"
             let file = url ? (src.split(/[?#]/)[0].split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "") : "";
@@ -1287,7 +1287,7 @@
         formats = formats || [];
         const c = spanText(value, formats[4]);
         const text = sf(formats[1] ?? "{0}", c, nextValue, value);
-        let title = sf(formats[2] ?? "Raw: {2}", c, nextValue, value, text);
+        let title = sf(formats[2] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), c, nextValue, value, text);
         //  The server's "forever" (∞, ex: the 50 year request cache of static files) says so in words above the raw value (S7a-D10: the
         //  tool tip only said "1581120000 s")
         if (c === "∞" || c === "- ∞")
@@ -1486,7 +1486,7 @@
             }
             const vs = speed ? F().ByteSpeed(+value || 0) : F().Bytes(+value || 0);
             const text = sf(formats[2] ?? "{0}", vs, nextValue, value);
-            let title = sf(formats[3] ?? "Raw: {2}", vs, nextValue, value, text);
+            let title = sf(formats[3] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), vs, nextValue, value, text);
             title = F().JoinNonEmpty("\n\n", title, copyClick(e, value));
             SetText(e, text, title, flash);
             return e;
@@ -1716,12 +1716,12 @@
         const final = kind === "AlreadyDone" || kind === "Gone";
         const neutral = final;
         //  The short text the row shows (Admin N26 / Ops R4-5: visible, never only a tool tip; wraps on a phone): "Kill: not done. <reason>"
-        const verb = (n, ctx) => kind === "AlreadyDone"
-            ? _T("{0}: not needed.", n, "Start of the result of a table row action that the server says was done already (its goal is met). {0} is the action" + ctx + "; the reason follows")
+        const verb = n => kind === "AlreadyDone"
+            ? _T("{0}: not needed.", n, "Start of the result of a table row action that the server says was done already (its goal is met). {0} is the action, sometimes with its row, ex: Kill or Kill msedge (63564); the reason follows")
             : (kind === "Gone"
-                ? _T("{0}: no longer there.", n, "Start of the result of a table row action whose item the server says is gone. {0} is the action" + ctx + "; the reason follows")
-                : _T("{0}: not done.", n, "Start of the result of a table row action that failed or was refused. {0} is the action" + ctx + "; the reason follows"));
-        const note = out.Ok || out.Aborted ? "" : compose(verb(name, ", ex: 'Kill'"), reason);
+                ? _T("{0}: no longer there.", n, "Start of the result of a table row action whose item the server says is gone. {0} is the action, sometimes with its row, ex: Kill or Kill msedge (63564); the reason follows")
+                : _T("{0}: not done.", n, "Start of the result of a table row action that failed or was refused. {0} is the action, sometimes with its row, ex: Kill or Kill msedge (63564); the reason follows"));
+        const note = out.Ok || out.Aborted ? "" : compose(verb(name), reason);
         const detail = {
             Ok: out.Ok, Aborted: out.Aborted, Value: out.Value, Error: out.Ok ? null : (why || null), Text: name, Name: rowName, Work: work, Url: url,
             Ms: Date.now() - start, InPlace: false, Gone: gone, Status: status, Reason: reason, Note: note, Neutral: neutral,
@@ -1730,7 +1730,7 @@
         b.dispatchEvent(new CustomEvent("sw-cell-result", { bubbles: true, detail }));
         const inPlace = !!detail.InPlace;
         //  (one verdict: the row note, the tool tip, the activity item and the toast say the same)
-        const failText = compose(verb(work, " and its row, ex: 'Kill msedge (63564)'"), reason);
+        const failText = compose(verb(work), reason);
         if (job) {
             if (final) {
                 //  the goal is met / the item is gone: not a failure, the same words as the row
@@ -1796,7 +1796,7 @@
         const on = v0 === "true" || v0 === "1";
         args[0] = on;
         args.splice(1, 0, nextValue);
-        const text = on ? sfa(formats[1] ?? "True", args) : sfa(formats[2] ?? "False", args);
+        const text = on ? sfa(formats[1] ?? _TF("True", "Label of a check box in a table cell when it is checked (the default text of a toggle cell)"), args) : sfa(formats[2] ?? _TF("False", "Label of a check box in a table cell when it is not checked (the default text of a toggle cell)"), args);
         const title = on
             ? sfa(formats[3] ?? _TF("Uncheck", "Tool tip to indicate that something can be unchecked (unselected) by clicking on the element)"), args)
             : sfa(formats[4] ?? _TF("Check", "Tool tip to indicate that something can be checked (selected) by clicking on the element)"), args);

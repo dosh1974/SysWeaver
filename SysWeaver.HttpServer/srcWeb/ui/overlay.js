@@ -1120,7 +1120,7 @@
                 const cur = S.Get();
                 items.push({
                     Text: _TF("Text size", "Menu: the submenu that picks the text size of the user interface"), Icon: "search",
-                    Items: S.Sizes.map(n => ({ Text: _T("{0} %", n), Radio: true, Checked: cur === n, OnClick: () => S.Set(n) })),
+                    Items: S.Sizes.map(n => ({ Text: _T("{0} %", n, "Menu: a choice of the submenu that picks the text size of the user interface. {0} is the size in percent of normal, ex: 125"), Radio: true, Checked: cur === n, OnClick: () => S.Set(n) })),
                 });
             }
             return items;
@@ -2671,8 +2671,8 @@
     function elapsedText(ms) {
         const s = Math.max(0, Math.floor(ms / 1000));
         if (s < 60)
-            return _T("{0} s", s, "Time so far of busy work, in whole seconds, ex: 12 s");
-        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Time so far of busy work, minutes and seconds, ex: 1 min 5 s");
+            return _T("{0} s", s, "Time so far of busy work, ex: 12 s. {0} is the whole number of seconds, ex: 12");
+        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Time so far of busy work, ex: 1 min 5 s. {0} is the whole number of minutes, ex: 1. {1} is the whole number of seconds, ex: 5");
     }
 
     /**
@@ -5118,7 +5118,6 @@
             const footDefs = () => footBtns().filter(b => b.SwDialogButton && !isOff(b)).map(b => b.SwDialogButton);
             /** The text of the rejection line for the current state, naming only the visible buttons by their labels. */
             const rejectText = kind => {
-                const ctx = "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel";
                 if (st.Stopping && st.Busy) {
                     const w = busyWhat();
                     return w ? _T("Stopping {0}: the dialog closes when it has stopped", w, "Line of a dialog after Cancel while its work is being stopped (a close attempt now). {0}: what runs, ex: Save")
@@ -5131,7 +5130,7 @@
                 }
                 if (st.Busy) {
                     const w = busyWays();
-                    return w.length >= 2 ? _T("Still working: use {0} or {1}", w[0], w[1], ctx)
+                    return w.length >= 2 ? _T("Still working: use {0} or {1}", w[0], w[1], "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel")
                         : w.length ? _T("Still working: use {0}", w[0], "The rejection line of a busy dialog after a close attempt. {0}: the label of the button to use, ex: Cancel")
                             : _TF("Still working: please wait until it is done", "The rejection line of a busy dialog that has no way out yet (a close attempt was refused)");
                 }
@@ -5140,7 +5139,7 @@
                     const save = defs.find(x => !x.Dismiss && (x.Def.Kind === "primary" || x.Def.Kind === "danger" || x.Def.Kind === "danger-solid")) || defs.find(x => !x.Dismiss);
                     const cancel = defs.find(x => x.Dismiss);
                     if (save && cancel)
-                        return _T("Unsaved changes: use {0} or {1}", save.Text, cancel.Text, ctx);
+                        return _T("Unsaved changes: use {0} or {1}", save.Text, cancel.Text, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel");
                     const one = (save || cancel) ? (save || cancel).Text : closeTitle;
                     return _T("Unsaved changes: use {0}", one, "The rejection line of a dialog with unsaved changes after a close attempt. {0}: the label of the button to use, ex: Save");
                 }
@@ -5669,7 +5668,6 @@
                 const samples = ["M"];
                 if (!low) {
                     const labs = footBtns().map(b => b.textContent.trim()).filter(x => x);
-                    const ctx0 = "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel";
                     samples.push(_TF("Still working: please wait until it is done", "The rejection line of a busy dialog that has no way out yet (a close attempt was refused)"),
                         _TF("Still working: you can change the fields again when it is done", "Line of a busy dialog when the user tries to change a field while its work runs"));
                     //  (the idle lines: unsaved changes, a dialog that closes only with its buttons; every pair of labels)
@@ -5678,7 +5676,7 @@
                             _T("Use {0}", a, "The rejection line of a dialog that only closes with its button, after a close attempt. {0}: the button label, ex: OK"));
                         for (const c of labs)
                             if (a !== c)
-                                samples.push(_T("Unsaved changes: use {0} or {1}", a, c, ctx0),
+                                samples.push(_T("Unsaved changes: use {0} or {1}", a, c, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel"),
                                     _T("Use {0} or {1}", a, c, "The rejection line of a dialog that only closes with its buttons, after a close attempt (an outside click, Escape). {0}, {1}: the button labels, ex: Cancel, Save"));
                     }
                     if (work) {
@@ -5691,7 +5689,7 @@
                                 : _TF("Stop waiting (the work may still finish)", "Button of a busy dialog whose work can't be cancelled: closes it without waiting; the work may still be done");
                             samples.push(_T("Still working: use {0}", stop, "The rejection line of a busy dialog after a close attempt. {0}: the label of the button to use, ex: Cancel"));
                             for (const c of outs)
-                                samples.push(_T("Still working: use {0} or {1}", stop, c, ctx0), _T("Still working: use {0} or {1}", c, stop, ctx0));
+                                samples.push(_T("Still working: use {0} or {1}", stop, c, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel"), _T("Still working: use {0} or {1}", c, stop, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel"));
                             if (w)
                                 samples.push(_T("{0} is running: you can change the fields again when it is done", w, "Line of a busy dialog when the user tries to change a field while its work runs (the fields are read only then, so nothing typed is lost). {0}: what runs, ex: Save"),
                                     _T("Stopping {0}: the dialog closes when it has stopped", w, "Line of a dialog after Cancel while its work is being stopped (a close attempt now). {0}: what runs, ex: Save"));

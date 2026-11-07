@@ -3471,7 +3471,7 @@ window.Sw.Sources["shell/shell.js"] = "sw/compat.js";
                 else if (j.Running) {
                     const secs = Math.floor((Date.now() - j.Started.getTime()) / 1000);
                     const el2 = secs < 60 || !(Sw.Format && Sw.Format.DurationMs)
-                        ? _T("{0} s", secs, "Time so far of a running job in the activity list, in whole seconds, ex: 12 s")
+                        ? _T("{0} s", secs, "Time so far of a running job in the activity list, ex: 12 s. {0} is the whole number of seconds, ex: 12")
                         : Sw.Format.DurationMs(secs * 1000);
                     state = j.Progress !== null
                         ? _T("Running: {0} %, {1}", Math.round(j.Progress * 100), el2, "State of a running job in the activity list.{0} is replaced with the progress in percent, {1} with the time so far")
@@ -3481,7 +3481,7 @@ window.Sw.Sources["shell/shell.js"] = "sw/compat.js";
                     //  The end time is the server's for a server job (restored after a reload: not the reload time), and when the file goes
                     state = _T("Done at {0}", fmtTime(j.Ended || new Date()), "State of a finished job in the activity list.{0} is replaced with the time it finished");
                     if (j.Expires && j.Expires.getTime() > Date.now())
-                        state += " · " + _T("kept until {0}", fmtTime(j.Expires), "Added to the state of a finished server job in the activity list: the time its file is removed on the server, ex: kept until 21:33");
+                        state += " · " + _T("kept until {0}", fmtTime(j.Expires), "Added to the state of a finished server job in the activity list: when its file is removed on the server. {0} is a local time of day, ex: 21:33");
                     if (j.AfterCancel && j.Text)
                         state += " · " + j.Text;
                 }
@@ -7399,7 +7399,7 @@ window.Sw.Sources["ui/compat_common.js"] = "sw/compat.js";
             const e = document.createElement("video");
             e.setAttribute("muted", "");
             e.muted = true;
-            e.setAttribute("title", "No Sleep");
+            e.setAttribute("title", _TF("No Sleep", "Title of an invisible looping video that keeps the screen awake: it may show in the media controls of the system"));
             e.setAttribute("playsinline", "");
             e.setAttribute("loop", "");
             const add = (type, uri) => {
@@ -8628,7 +8628,7 @@ window.Sw.Sources["ui/compat_common.js"] = "sw/compat.js";
                 e.oncopy = copy;
             }
             const title = v !== null
-                ? _T('Click to copy "{0}" to the clipboard', v, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element')
+                ? _T('Click to copy "{0}" to the clipboard', v, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element. {0} is the text to copy, ex: 192.168.1.10')
                 : _T('Click to copy text to the clipboard', 'Tool tip to indicate that some text can be copied to the clipboard by clicking on an element');
             if (addTitleToElement)
                 e.title = e.title ? (e.title + "\n\n" + title) : title;

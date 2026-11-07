@@ -1462,8 +1462,8 @@ window.Sw.Sources["core/include.js"] = "sw/session.js";
                     s.addEventListener("error", ev => {
                         s.remove();
                         r.error = isCss
-                            ? _T('Failed to load "{0}"', url, "Indicates a failure to dynamically load a css file.")
-                            : _T('Failed to load "{0}"', url, "Indicates a failure to dynamically load a js file.");
+                            ? _T('Failed to load "{0}"', url, "Error text when a css file could not be loaded dynamically. {0} is the url of the file, ex: ../ui/theme.css")
+                            : _T('Failed to load "{0}"', url, "Error text when a js file could not be loaded dynamically. {0} is the url of the file, ex: ../ui/chart.js");
                         r.errorEv = ev;
                         includes.delete(url);
                         resolve(r);

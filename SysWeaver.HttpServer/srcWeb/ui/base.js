@@ -1667,8 +1667,8 @@
     function elapsedText(ms) {
         const s = Math.max(0, Math.round(ms / 1000));
         if (s < 60)
-            return _T("{0} s", s, "Elapsed time in seconds of running work, ex: '3 s'");
-        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Elapsed time of running work, ex: '1 min 5 s'");
+            return _T("{0} s", s, "Elapsed time in seconds of running work, ex: '3 s'. {0} is the whole number of seconds, ex: 3");
+        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Elapsed time of running work, ex: '1 min 5 s'. {0} is the whole number of minutes, ex: 1. {1} is the whole number of seconds, ex: 5");
     }
 
     /**
@@ -3362,9 +3362,9 @@
                 return _T("{0} copied", o.What, "Message after a copy to the clipboard (button tool tip, announcement, toast). {0} names what was copied, ex: 'API key', 'The url of MailService'");
             //  Never the value when it is (or looks like) a secret (UX guide SEC-1): a screen reader would speak it, a toast would show it
             if (o.Generic || o.Secret || (!o.Show && Clipboard.LooksSecret(text)))
-                return _TF("Copied text to the clipboard", "Message displayed when some text is copied to the clipboard.");
+                return _TF("Copied text to the clipboard", "Message displayed when some text is copied to the clipboard. {0} is the copied text (may be shortened), ex: 192.168.1.10");
             const shown = text.length > 80 ? text.substring(0, 77) + "..." : text;
-            return _T('Copied "{0}" to the clipboard', shown, "Message displayed when some text is copied to the clipboard.");
+            return _T('Copied "{0}" to the clipboard', shown, "Message displayed when some text is copied to the clipboard. {0} is the copied text (may be shortened), ex: 192.168.1.10");
         },
         /**
          * True for a text that looks like a secret (an api key "name:key", a token, a long random string, a password field's value): its
@@ -3540,7 +3540,7 @@
             };
             e.SwCopyMenu = LongPress(e, menu, { Skip: () => HasSelectionIn(e) });
             const title = shown !== null
-                ? _T('Click to copy "{0}" to the clipboard', shown, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element')
+                ? _T('Click to copy "{0}" to the clipboard', shown, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element. {0} is the text to copy (may be shortened), ex: 192.168.1.10')
                 : _T('Click to copy text to the clipboard', 'Tool tip to indicate that some text can be copied to the clipboard by clicking on an element');
             if (o.AddTitle)
                 e.title = e.title ? (e.title + "\n\n" + title) : title;

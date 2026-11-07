@@ -1020,7 +1020,7 @@
             const e = document.createElement("video");
             e.setAttribute("muted", "");
             e.muted = true;
-            e.setAttribute("title", "No Sleep");
+            e.setAttribute("title", _TF("No Sleep", "Title of an invisible looping video that keeps the screen awake: it may show in the media controls of the system"));
             e.setAttribute("playsinline", "");
             e.setAttribute("loop", "");
             const add = (type, uri) => {
@@ -2249,7 +2249,7 @@
                 e.oncopy = copy;
             }
             const title = v !== null
-                ? _T('Click to copy "{0}" to the clipboard', v, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element')
+                ? _T('Click to copy "{0}" to the clipboard', v, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element. {0} is the text to copy, ex: 192.168.1.10')
                 : _T('Click to copy text to the clipboard', 'Tool tip to indicate that some text can be copied to the clipboard by clicking on an element');
             if (addTitleToElement)
                 e.title = e.title ? (e.title + "\n\n" + title) : title;

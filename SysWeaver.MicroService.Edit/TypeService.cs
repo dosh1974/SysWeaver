@@ -45,31 +45,28 @@ namespace SysWeaver.MicroService
         /// Should be synched with the extensions supported in text.js
         /// </summary>
         static readonly String[] TextExtensions = [
-                "bat",
-                "cmd",
-                "c", 
-                "c++", 
-                "cpp", 
-                "h", 
-                "hpp", 
-                "cs", 
-                "css", 
-                "csv", 
-                "glsl", 
-                "htm", 
-                "html", 
-                "js", 
-                "json", 
-                "md", 
-                "txt", 
-                "sql", 
-                "svg", 
-                "xml", 
-                "config", 
-                "csproj", 
-                "log",
-                "err",
-                "cfg",
+                //  Text and logs
+                "txt", "log", "err",
+                //  Windows scripts
+                "bat", "cmd", "ps1", "psm1", "psd1", "reg",
+                //  Other scripts
+                "sh", "bash", "zsh", "py", "rb", "php", "pl", "pm", "lua", "r", "tcl",
+                //  C and C++
+                "c", "c++", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx", "inl", "ipp", "ino",
+                //  .NET
+                "cs", "csx", "cshtml", "razor", "vb", "vbs", "fs", "fsx", "fsi", "sln", "slnx", "csproj", "vbproj", "fsproj", "props", "targets", "nuspec", "resx", "xaml", "axaml", "config",
+                //  Other languages
+                "go", "rs", "java", "kt", "kts", "swift", "dart", "scala", "groovy", "gradle", "asm",
+                //  Shaders
+                "glsl", "vert", "frag", "geom", "comp", "hlsl", "hlsli", "fx",
+                //  Web
+                "htm", "html", "xhtml", "css", "less", "scss", "sass", "js", "mjs", "cjs", "jsx", "ts", "mts", "cts", "tsx", "vue", "svg",
+                //  Data and configuration
+                "csv", "tsv", "json", "jsonc", "json5", "xml", "xsd", "xsl", "xslt", "yaml", "yml", "toml", "ini", "inf", "cfg", "conf", "properties", "sql", "proto", "gql",
+                //  Documents
+                "md", "rst", "tex", "adoc", "nfo", "diff", "patch",
+                //  Build and repository
+                "cmake", "make", "mk", "dockerfile", "tf", "gitignore", "gitattributes", "editorconfig",
             ];
 
 

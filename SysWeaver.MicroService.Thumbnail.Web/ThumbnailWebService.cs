@@ -177,7 +177,7 @@ namespace SysWeaver.MicroService
             return new DynamicDataHttpRequestHandler(PngMime, async r =>
             {
                 var d = await GetAdaptiveImageAsync(src, width, height).ConfigureAwait(false);
-                return d.Item1.AsMemory();
+                return ThrowOnPageError(d).Item1.AsMemory();
             }, Options);
         }
 
@@ -236,7 +236,7 @@ namespace SysWeaver.MicroService
             using var __ = PerfMon.Track(nameof(GetAdaptiveImageAsync));
             M.AddMessage(MessageLevels.Debug, $"{prefix}Creating browser");
             using var b = await Browser.OpenWindow().ConfigureAwait(false);
-            using var a = new AdaptiveSize(M, prefix, format, quality, optimizeForSpeed, extraDelayMs);
+            using var a = new AdaptiveSize(M, prefix, format, quality, optimizeForSpeed, extraDelayMs, scale);
             await b.AddJsObject("ScreenShotHost", a).ConfigureAwait(false);
             var error = new TextResult();
             await b.AddJsObject("ErrorText", error).ConfigureAwait(false);
@@ -247,7 +247,7 @@ namespace SysWeaver.MicroService
             M.AddMessage(MessageLevels.Debug, $"{prefix}Loading url {url.ToQuoted()}");
             a.Win = b;
             await b.LoadUrl(url).ConfigureAwait(false);
-            await b.WaitLoaded().ConfigureAwait(false);
+            await Task.WhenAny(b.WaitLoaded(false), a.WhenSupported).ConfigureAwait(false);
             Byte[] data = null;
             MediaInfo n = new MediaInfo
             {
@@ -301,6 +301,17 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// A page reporting an error doesn't have any data
+        /// </summary>
+        static Tuple<Byte[], MediaInfo> ThrowOnPageError(Tuple<Byte[], MediaInfo> r)
+        {
+            var desc = r.Item2?.Desc ?? "";
+            if (desc.FastStartsWith("Error:"))
+                throw new Exception(desc);
+            return r;
+        }
+
         static readonly ITextSerializerType JsonSer = SerManager.GetText("json");
 
 
@@ -331,6 +342,10 @@ namespace SysWeaver.MicroService
                         desc = x.Item2?.Desc ?? "";
                         if (desc.FastStartsWith("Error:"))
                             throw new Exception(desc);
+                    }
+                    else
+                    {
+                        throw new Exception(desc);
                     }
                 }
                 else
@@ -363,6 +378,10 @@ namespace SysWeaver.MicroService
                         desc = x.Item2?.Desc ?? "";
                         if (desc.FastStartsWith("Error:"))
                             throw new Exception(desc);
+                    }
+                    else
+                    {
+                        throw new Exception(desc);
                     }
                 }
                 else
@@ -590,7 +609,7 @@ namespace SysWeaver.MicroService
             }
             var res = await GetAdaptiveImageAsync(url, width, height, 1, format, quality, r.OptimizeForSpeed, r.ExtraDelayMs).ConfigureAwait(false);
             //            var res = await GetAdaptivePngAsync(url, width, height, dpi / 100.0).ConfigureAwait(false);
-            return res.Item1;
+            return ThrowOnPageError(res).Item1;
         }
 
         #endregion//Media Map
@@ -607,16 +626,21 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.Service)]
         public async Task<ScreenshotImageResponse> GetImage(ScreenshotImageRequest r)
         {
+            if (String.IsNullOrEmpty(r?.Url))
+                throw new ArgumentException("An url is required!");
+            //  The request is in percent, the browser wants a factor
+            var scale = r.Scale > 0 ? (r.Scale / 100.0) : 1.0;
             if (r.Control)
             {
-                var x = await GetAdaptiveImageAsync(r.Url, r.Width, r.Height, r.Scale, r.Format, r.Quality, r.OptimizeForSpeed, r.ExtraDelayMs).ConfigureAwait(false);
+                var x = await GetAdaptiveImageAsync(r.Url, r.Width, r.Height, scale, r.Format, r.Quality, r.OptimizeForSpeed, r.ExtraDelayMs).ConfigureAwait(false);
+                ThrowOnPageError(x);
                 return new ScreenshotImageResponse
                 {
                     Data = x.Item1,
                     Info = x.Item2,
                 };
             }
-            var y = await GetImageAsync(r.Url, r.Width, r.Height, r.Scale, r.Format, r.Quality, r.OptimizeForSpeed, r.ExtraDelayMs).ConfigureAwait(false);
+            var y = await GetImageAsync(r.Url, r.Width, r.Height, scale, r.Format, r.Quality, r.OptimizeForSpeed, r.ExtraDelayMs).ConfigureAwait(false);
             return new ScreenshotImageResponse
             {
                 Data = y,
@@ -633,7 +657,7 @@ namespace SysWeaver.MicroService
         [WebApiRaw("image/png", true)]
         [WebApi("WebScreenshot.png")]
         public async Task<ReadOnlyMemory<Byte>> WebScreenshotPng(ScreenshotPngRequest r)
-            => (await GetImage(ScreenshotImageRequest.From(r)).ConfigureAwait(false)).Data;
+            => (await GetImage(ScreenshotImageRequest.From(r ?? throw new ArgumentException("A request is required!"))).ConfigureAwait(false)).Data;
 
         /// <summary>
         /// Get a jpeg (screenshot) from an url
@@ -645,7 +669,7 @@ namespace SysWeaver.MicroService
         [WebApiRaw("image/jpeg", true)]
         [WebApi("WebScreenshot.jpg")]
         public async Task<ReadOnlyMemory<Byte>> WebScreenshotJpg(ScreenshotJpegRequest r)
-            => (await GetImage(ScreenshotImageRequest.From(r)).ConfigureAwait(false)).Data;
+            => (await GetImage(ScreenshotImageRequest.From(r ?? throw new ArgumentException("A request is required!"))).ConfigureAwait(false)).Data;
 
 
         static readonly String[] Flags = [
@@ -681,25 +705,20 @@ namespace SysWeaver.MicroService
             "wf", "ws", "xk", "xx", "ye", "yt", "za", "zm", "zw",
         ];
 
+        /// <summary>
+        /// The effects of the media service, used for stress testing
+        /// </summary>
         static readonly String[] Effects = [
-            "_SpeedTest", "2D clouds", "3D dot zoom", "3D flag", "3D maze lattice", "3D tile map", "3D Truchet pattern zoom", "60s",
-            "Abstract box scape", "Alien nursery", "Alien underwater base", "Analog clock", "Animated cube scape", "Animated grafitti", "Anti gravity", "Aurora",
-            "Blobby fractal", "Blue blobs", "Blue lines", "Blue waves", "Bokeh", "Bouncing light balls", "BPM machine", "Bubbles",
-            "Bubbly cloth", "Cable tunnel", "Cartoon factory", "Cartoon mandela", "Cell", "Chase RGB", "Chase", "Chromatic blob",
-            "Chrome fractal", "Chrome tiles", "Clock icon", "Closing doors", "Cloud fly through", "Cloud tunnel", "Clouds", "Color ring",
-            "Color zoom", "Colorful octupus fractal", "Colorful pencils", "Coral worms", "Crazy squares", "Cube cave", "Cubes", "Dancing lights",
-            "Deep space", "Digital clock", "Disco room", "Disco stars", "Disco", "Endless 3d grid", "Fractal grid", "Funky blobs",
-            "Gears", "Gel pearls", "Ghost aurora", "Glass cave", "Glitter", "Glowing lines", "Gold dust", "Golden lines",
-            "Green lines", "Green spiral", "Heart", "Hex core", "Hexgrid", "Hologram marble", "Hologram projection", "Knots",
-            "Light rays", "Liquid cubes", "Mandela", "Mario", "Matrix", "Maze", "Menger sponge", "Metal plates",
-            "Misty mountain", "Muscle", "Neon Caleidoscope", "Neon grid", "Neon hart", "Neon parallax", "Neural", "Night sky",
-            "Noise contours", "Ocean", "Papercut landscape", "Planet surface", "Polka torus", "Red sea", "Retro clipbook", "Rotating color tiles",
-            "Rotating tiles", "Rotating transparent discs", "Science", "Scientific UI", "Scrolling discs", "Sea of balls", "Shifting patterns", "Simple gears",
-            "Simple line", "Sine lines", "Slow caustics", "Smiley", "Smooth bands", "Snow flakes", "Snow", "Soft bokeh",
-            "Soft waves", "Space fractal", "Space", "Spiral balls", "Spiral circles", "Star tunnel", "Steel plasma", "Subdivision",
-            "Sun flare", "Toon cloud", "Triangle landscape", "Truchet pattern", "Underwater", "Voroni gems", "Voroni rgb", "Voroni",
-            "Voxel Pacman", "Wavy blobs", "White blob",
+            "2D-clouds", "Blobs", "Bubbles", "Bubbles2", "CarbonFabric", "Caustics", "ChaseRGB", "ChromaticBlob",
+            "ChromeTiles", "CloudFlight", "Clouds", "ColorBubbles", "CubistApollonianCircles", "CyberCube", "DancingLights", "DiatomArrangement",
+            "Fire", "Fireworks", "Flow", "GlowingLines", "Grass", "Grid", "HexPulse", "HexWave",
+            "LargeBubbles", "LightRays", "Lines", "LiquidMetal", "MacPaint", "Mario", "Matrix", "MetaBalls",
+            "MetallicVoronotRoses", "MetalPlates", "Meters", "MorningSilhouettes", "Pulse", "RaceBanner", "RainbowCells", "Silk",
+            "SimpleTiles", "SlowCaustics", "SmoothBands", "SoftBokeh", "SoftWaves", "SphereMandala", "Spin", "Terrain",
+            "TwinklingTunnel", "VerticalMeters",
             ];
+
+        String EffectUrl(String name) => InternalGetMediaUrl(new GetMediaEffectRequest { Url = "backgroundEffects/" + name + ".glsl" }, null);
 
         [WebApi]
         [WebApiAuth(Roles.Debug)]
@@ -717,6 +736,7 @@ namespace SysWeaver.MicroService
                 String flag = flags[i % fl];
                 var p = new ScreenshotImageRequest
                 {
+                    Url = EffectUrl(flag),
                     Control = true,
                     Width = 320,
                     Height = 180,
@@ -748,6 +768,7 @@ namespace SysWeaver.MicroService
                 String flag = flags[i % fl];
                 var p = new ScreenshotImageRequest
                 {
+                    Url = EffectUrl(flag),
                     Control = true,
                     Width = 320,
                     Height = 180,

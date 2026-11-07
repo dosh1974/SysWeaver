@@ -907,6 +907,7 @@ namespace SysWeaver
                 {".wdb", "application/vnd.ms-works"},
                 {".wdp", "image/vnd.ms-photo"},
                 {".webarchive", "application/x-safari-webarchive"},
+                {".weba", "audio/webm"},
                 {".webm", "video/webm"},
                 {".webp", "image/webp"}, /* https://en.wikipedia.org/wiki/WebP */
                 {".webtest", "application/xml"},

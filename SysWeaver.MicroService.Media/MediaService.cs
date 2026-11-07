@@ -116,24 +116,37 @@ namespace SysWeaver.MicroService
         const string MediaEditor = "mediaView/MediaView.html?link={0}";
 
         /// <summary>
-        /// Should be synched with the extensions supported in text.js
+        /// Should be synched with the image, video and audio extensions in core/format.js (Sw.Format.Ext)
         /// </summary>
         static readonly String[] MediaExtensions = [
             "png",
             "gif",
             "jpg",
             "jpeg",
+            "jpe",
+            "jfif",
             "avif",
             "webp",
+            "apng",
+            "bmp",
+            "ico",
             "tiff",
             "tif",
             "svg",
-            "jfif",
             "webm",
             "mp4",
+            "m4v",
             "ogg",
+            "ogv",
             "mov",
+            "mkv",
             "mp3",
+            "flac",
+            "m4a",
+            "m4b",
+            "opus",
+            "oga",
+            "weba",
             "wav",
             "aac",
             "glsl",

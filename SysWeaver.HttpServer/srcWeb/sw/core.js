@@ -2951,8 +2951,8 @@ window.Sw.Sources["core/include.js"] = "sw/core.js";
                     s.addEventListener("error", ev => {
                         s.remove();
                         r.error = isCss
-                            ? _T('Failed to load "{0}"', url, "Indicates a failure to dynamically load a css file.")
-                            : _T('Failed to load "{0}"', url, "Indicates a failure to dynamically load a js file.");
+                            ? _T('Failed to load "{0}"', url, "Error text when a css file could not be loaded dynamically. {0} is the url of the file, ex: ../ui/theme.css")
+                            : _T('Failed to load "{0}"', url, "Error text when a js file could not be loaded dynamically. {0} is the url of the file, ex: ../ui/chart.js");
                         r.errorEv = ev;
                         includes.delete(url);
                         resolve(r);
@@ -3197,23 +3197,23 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         }
         const prefix = isNeg ? "-" : "";
         if (value < 100)
-            return prefix + _T("{0} ms", number(value, 0), 'Text formatting for elapsed number of milli seconds, example: "13 ms"');
+            return prefix + _T("{0} ms", number(value, 0), 'Text formatting for an elapsed time in milliseconds, example: "13 ms". {0} is the formatted number of milliseconds, example: 13');
         value /= 1000;
         if (value < 10)
-            return prefix + _T("{0} seconds", number(value, 1), 'Text formatting for elapsed number of seconds, example: "48 seconds"');
+            return prefix + _T("{0} seconds", number(value, 1), 'Text formatting for an elapsed time in seconds, example: "48 seconds". {0} is the formatted number of seconds, it may have one decimal, example: 48');
         if (value < 600)
-            return prefix + _T("{0} seconds", number(value, 0), 'Text formatting for elapsed number of seconds, example: "48 seconds"');
+            return prefix + _T("{0} seconds", number(value, 0), 'Text formatting for an elapsed time in seconds, example: "48 seconds". {0} is the formatted number of seconds, it may have one decimal, example: 48');
         value /= 60;
         if (value < 600)
-            return prefix + _T("{0} minutes", number(value, 0), 'Text formatting for elapsed number of minutes, example: "5 minutes"');
+            return prefix + _T("{0} minutes", number(value, 0), 'Text formatting for an elapsed time in minutes, example: "5 minutes". {0} is the formatted number of minutes, example: 5');
         value /= 60;
         if (value < (3 * 24))
-            return prefix + _T("{0} hours", number(value, 0), 'Text formatting for elapsed number of hours, example: "9 hours"');
+            return prefix + _T("{0} hours", number(value, 0), 'Text formatting for an elapsed time in hours, example: "9 hours". {0} is the formatted number of hours, example: 9');
         value /= 24;
         if (value < (3 * 365))
-            return prefix + _T("{0} days", number(value, 0), 'Text formatting for elapsed number of days, example: "5 days"');
+            return prefix + _T("{0} days", number(value, 0), 'Text formatting for an elapsed time in days, example: "5 days". {0} is the formatted number of days, example: 5');
         value /= 365.242374;
-        return prefix + _T("{0} years", number(value, 0), 'Text formatting for elapsed number of years, example: "7 years"');
+        return prefix + _T("{0} years", number(value, 0), 'Text formatting for an elapsed time in years, example: "7 years". {0} is the formatted number of years, example: 7');
     }
 
     /**
@@ -3248,26 +3248,26 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         const dhl = dh.length;
         const days = dhl > 1 ? parseInt(dh[0]) : 0;
         if (days >= (3 * 365))
-            return prefix + _T("{0} years", number(days / 365.242374, 0), 'Text formatting for elapsed number of years, example: "7 years"');
+            return prefix + _T("{0} years", number(days / 365.242374, 0), 'Text formatting for an elapsed time in years, example: "7 years". {0} is the formatted number of years, example: 7');
         if (days >= 3)
-            return prefix + _T("{0} days", number(days, 0), 'Text formatting for elapsed number of days, example: "5 days"');
+            return prefix + _T("{0} days", number(days, 0), 'Text formatting for an elapsed time in days, example: "5 days". {0} is the formatted number of days, example: 5');
         const hours = parseInt(dh[dhl - 1]) + (days * 24);
         if (hours >= 10)
-            return prefix + _T("{0} hours", number(hours, 0), 'Text formatting for elapsed number of hours, example: "9 hours"');
+            return prefix + _T("{0} hours", number(hours, 0), 'Text formatting for an elapsed time in hours, example: "9 hours". {0} is the formatted number of hours, example: 9');
         const minutes = parseInt(parts[1]) + (hours * 60);
         if (minutes >= 10)
-            return prefix + _T("{0} minutes", number(minutes, 0), 'Text formatting for elapsed number of minutes, example: "5 minutes"');
+            return prefix + _T("{0} minutes", number(minutes, 0), 'Text formatting for an elapsed time in minutes, example: "5 minutes". {0} is the formatted number of minutes, example: 5');
         const seconds = parseFloat(parts[2]) + (minutes * 60);
         if (seconds == 0)
             return zeroAsThis ? zeroAsThis : "0";
         if (whole && seconds === 1)
             return prefix + _TF("1 second", 'Text formatting for an elapsed time of exactly one second');
         if (seconds >= 10 || whole)
-            return prefix + _T("{0} seconds", number(seconds, whole ? 0 : 1), 'Text formatting for elapsed number of seconds, example: "48 seconds"');
+            return prefix + _T("{0} seconds", number(seconds, whole ? 0 : 1), 'Text formatting for an elapsed time in seconds, example: "48 seconds". {0} is the formatted number of seconds, it may have one decimal, example: 48');
         const ms = seconds * 1000;
         if (ms >= 10)
-            return prefix + _T("{0} ms", number(ms, 1), 'Text formatting for elapsed number of milli seconds, example: "13 ms"');
-        return prefix + _T("{0} µs", number(ms * 1000, 1), 'Text formatting for elapsed number of micro seconds, example: "27 µs"');
+            return prefix + _T("{0} ms", number(ms, 1), 'Text formatting for an elapsed time in milliseconds, example: "13 ms". {0} is the formatted number of milliseconds, example: 13');
+        return prefix + _T("{0} µs", number(ms * 1000, 1), 'Text formatting for an elapsed time in microseconds, example: "27 µs". {0} is the formatted number of microseconds, example: 27');
     }
 
     /**
@@ -3575,14 +3575,14 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         });
     }
 
-    /** Lower-case extension tables (value 1 = member). */
+    /** Lower-case extension tables (value 1 = member). Image, Video and Audio: keep in sync with MediaExtensions in MediaService.cs. */
     const Ext = Object.freeze({
         /** Image extensions. */
-        Image: Object.freeze({ png: 1, gif: 1, jpg: 1, jpeg: 1, avif: 1, webp: 1, tiff: 1, tif: 1, svg: 1, jfif: 1 }),
+        Image: Object.freeze({ png: 1, gif: 1, jpg: 1, jpeg: 1, avif: 1, webp: 1, tiff: 1, tif: 1, svg: 1, jfif: 1, jpe: 1, apng: 1, bmp: 1, ico: 1 }),
         /** Video extensions. */
-        Video: Object.freeze({ webm: 1, mp4: 1, ogg: 1, mov: 1 }),
+        Video: Object.freeze({ webm: 1, mp4: 1, m4v: 1, ogg: 1, ogv: 1, mov: 1, mkv: 1 }),
         /** Audio extensions. */
-        Audio: Object.freeze({ mp3: 1, wav: 1, aac: 1 }),
+        Audio: Object.freeze({ mp3: 1, wav: 1, aac: 1, flac: 1, m4a: 1, m4b: 1, opus: 1, oga: 1, weba: 1 }),
         /** Source code / markup extensions. */
         Programming: Object.freeze({ js: 1, json: 1, css: 1, html: 1, xml: 1, cs: 1, cpp: 1, c: 1, h: 1, vbs: 1, bat: 1, vb: 1 }),
         /** Other well compressible (text) extensions. */
@@ -4034,7 +4034,7 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
                     if (decimals < 0)
                         decimals = decimalTypes[type] ? -decimals : 0;
                     const vs = number(value, decimals);
-                    return { Kind: kind, Text: fmt(formats[2] ?? "{0}", vs, nextValue, value), Title: fmt(formats[3] ?? "Raw: {2}", vs, nextValue, value) };
+                    return { Kind: kind, Text: fmt(formats[2] ?? "{0}", vs, nextValue, value), Title: fmt(formats[3] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), vs, nextValue, value) };
                 }
                 case "Boolean":
                     return {
@@ -4050,12 +4050,12 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
                 }
                 case "Duration": {
                     const c = timeSpan(value, formats[4]);
-                    return { Kind: kind, Text: fmt(formats[1] ?? "{0}", c, nextValue, value), Title: fmt(formats[2] ?? "Raw: {2}", c, nextValue, value) };
+                    return { Kind: kind, Text: fmt(formats[1] ?? "{0}", c, nextValue, value), Title: fmt(formats[2] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), c, nextValue, value) };
                 }
                 case "ByteSize":
                 case "ByteSpeed": {
                     const vs = kind === "ByteSize" ? Sw.Format.Bytes(value) : Sw.Format.ByteSpeed(value);
-                    return { Kind: kind, Text: fmt(formats[2] ?? "{0}", vs, nextValue, value), Title: fmt(formats[3] ?? "Raw: {2}", vs, nextValue, value) };
+                    return { Kind: kind, Text: fmt(formats[2] ?? "{0}", vs, nextValue, value), Title: fmt(formats[3] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), vs, nextValue, value) };
                 }
                 case "Uptime": {
                     const t = Sw.Format.Uptime(value);
@@ -4064,7 +4064,7 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
                 }
             }
             const text = value === null ? "" : fmt(formats[1] ?? "{0}", value, nextValue);
-            return { Kind: "Default", Text: text, Title: fmt(formats[2] ?? (text != value ? "Raw: {2}" : ""), text, nextValue, value) ?? "" };
+            return { Kind: "Default", Text: text, Title: fmt(formats[2] ?? (text != value ? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text") : ""), text, nextValue, value) ?? "" };
         },
     };
 

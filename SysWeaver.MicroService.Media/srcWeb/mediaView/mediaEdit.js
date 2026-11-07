@@ -303,14 +303,14 @@
             {
                 Key: "StartAt", Label: _TF("Start at", "Setting in the media editor: the play position to start at"), Type: "float", Min: 0, Max: max, Step: 0.1, Unit: "s", Default: 0, Group: g,
                 Desc: _TF("Playback starts here, and returns here on Stop and when it loops", "Description of a setting in the media editor"),
-                Menu: () => ctx.Pos ? [{ Text: _T("Use the play position ({0})", MV.FormatTime(ctx.Pos()), "Item of the menu of a time setting in the media editor"), Icon: "target", OnClick: () => ctx.SetFromPos("StartAt") }] : [],
+                Menu: () => ctx.Pos ? [{ Text: _T("Use the play position ({0})", MV.FormatTime(ctx.Pos()), "Item of the menu of a time setting in the media editor. {0} is the current play position as a time, ex: 1:23"), Icon: "target", OnClick: () => ctx.SetFromPos("StartAt") }] : [],
                 MenuTitle: _TF("More for Start at", "Tool tip of the menu button of the start setting in the media editor"),
             },
             {
                 Key: "EndAt", Label: _TF("End at", "Setting in the media editor: the play position to stop at"), Type: "float", Min: 0, Max: max, Step: 0.1, Unit: "s", Default: 0, Group: g,
                 Hint: _TF("0 = to the end", "Hint of a setting in the media editor"),
                 Desc: _TF("Playback stops (or loops) here; 0 plays to the end", "Description of a setting in the media editor"),
-                Menu: () => ctx.Pos ? [{ Text: _T("Use the play position ({0})", MV.FormatTime(ctx.Pos()), "Item of the menu of a time setting in the media editor"), Icon: "target", OnClick: () => ctx.SetFromPos("EndAt") }] : [],
+                Menu: () => ctx.Pos ? [{ Text: _T("Use the play position ({0})", MV.FormatTime(ctx.Pos()), "Item of the menu of a time setting in the media editor. {0} is the current play position as a time, ex: 1:23"), Icon: "target", OnClick: () => ctx.SetFromPos("EndAt") }] : [],
                 MenuTitle: _TF("More for End at", "Tool tip of the menu button of the end setting in the media editor"),
             },
             {

@@ -396,7 +396,7 @@
     function ExporterName(x) {
         switch (x.Id) {
             case "Mark down": return "Markdown";
-            case "CSV (semi colon)": return "CSV (semicolon)";
+            case "CSV (semi colon)": return _TF("CSV (semicolon)", "Name of a table export format in the export menu: a CSV file whose values are separated by semicolons");
             default: return String(x.Name || x.Id || "");
         }
     }
@@ -1581,6 +1581,7 @@
         OnCount: "function",
         Page: "boolean",
         Header: "boolean",
+        HeaderTitle: "boolean",
         Fill: "boolean",
         HostFit: "boolean",
         EmptyTitle: "string",
@@ -6545,7 +6546,7 @@
                 return;
             const W = Sw.Work;
             const s = Math.max(0, Math.round(ms / 1000));
-            const text = W && typeof W.Elapsed === "function" ? W.Elapsed(ms) : _T("{0} s", s, "Note next to a busy row action of a data table (ex: Kill) that still runs after 2 seconds: the seconds so far");
+            const text = W && typeof W.Elapsed === "function" ? W.Elapsed(ms) : _T("{0} s", s, "Note next to a busy row action of a data table (ex: Kill) that still runs after 2 seconds: the seconds so far. {0} is the whole number of seconds, ex: 3");
             const tr = t.ActRow(p);
             if (tr && tr.isConnected) {
                 //  (short, so the actions column does not grow over the data: the time; the tool tip says what it waits for; the

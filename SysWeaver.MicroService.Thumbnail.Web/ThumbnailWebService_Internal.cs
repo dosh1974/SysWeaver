@@ -15,7 +15,7 @@ namespace SysWeaver.MicroService
         [ComVisible(true)]
         public sealed class AdaptiveSize : IDisposable
         {
-            public AdaptiveSize(IMessageHost m, String prefix, ScreenshotImageFormats format, int quality, bool optimizeForSpeed, int extraDelay)
+            public AdaptiveSize(IMessageHost m, String prefix, ScreenshotImageFormats format, int quality, bool optimizeForSpeed, int extraDelay, double scale = 1)
             {
                 M = m;
                 Prefix = prefix;
@@ -23,7 +23,9 @@ namespace SysWeaver.MicroService
                 Quality = quality;
                 OptimizeForSpeed = optimizeForSpeed;
                 ExtraDelay = extraDelay;
+                Scale = scale;
             }
+            readonly double Scale;
             readonly ScreenshotImageFormats Format;
             readonly int Quality;
             readonly bool OptimizeForSpeed;
@@ -40,8 +42,16 @@ namespace SysWeaver.MicroService
             public void isSupported()
             {
                 JsIsInControl = true;
+                Supported.TrySetResult();
             }
 
+
+            /// <summary>
+            /// Completed when the page has told that it will take the screen shot, there is no need to wait for it to load after that
+            /// </summary>
+            internal Task WhenSupported => Supported.Task;
+
+            readonly TaskCompletionSource Supported = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             internal void AllowJsControl()
             {
@@ -49,7 +59,13 @@ namespace SysWeaver.MicroService
             }
 
 
-            public async Task setSize(int width, int height, double scale)
+            /// <summary>
+            /// Called by the page to change the size of the window
+            /// </summary>
+            /// <param name="width">The width in pixels</param>
+            /// <param name="height">The height in pixels</param>
+            /// <param name="scale">The scale, 0 (pages usually only supply the size) keeps the scale of the request</param>
+            public async Task setSize(int width, int height, double scale = 0)
             {
                 if (Dead)
                     return;
@@ -58,7 +74,7 @@ namespace SysWeaver.MicroService
                 try
                 {
                     M.AddMessage(MessageLevels.Debug, $"{Prefix}Page is changing size to {width}x{height}");
-                    await Win.Resize(width, height, scale).ConfigureAwait(false);
+                    await Win.Resize(width, height, scale > 0 ? scale : Scale).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -106,29 +122,25 @@ namespace SysWeaver.MicroService
                     Fps = fps;
                     LoadTime = loadTime;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    M.AddMessage($"{Prefix}Failed to take the screen shot requested by the page", ex, MessageLevels.Warning);
                 }
+                IsCapturing = false;
                 b.Release();
                 CsBlocker.Release();
-                IsCapturing = false;
             }
 
             internal async Task<Byte[]> WaitScreenShot(int timeOut = 10000)
             {
-                for (; ; )
+                //  A capture that is running when timing out is allowed to finish
+                while (!await CsBlocker.WaitAsync(timeOut + ExtraDelay).ConfigureAwait(false))
                 {
-
-                    try
+                    if (!IsCapturing)
                     {
-                        await CsBlocker.WaitAsync(timeOut + ExtraDelay).ConfigureAwait(false);
+                        M.AddMessage($"{Prefix}The page didn't take a screen shot in time", MessageLevels.Warning);
+                        break;
                     }
-                    catch //(Exception ex)
-                    {
-                        if (IsCapturing)
-                            continue;
-                    }
-                    break;
                 }
                 Dead = true;
                 return Data;

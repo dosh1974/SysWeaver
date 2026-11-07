@@ -55,17 +55,29 @@
     /** Ace mode by file extension (keep in sync with TextExtensions in TypeService.cs). .log files use the log mode sw_log (level
      * colors); a plain text that looks like a SysWeaver log does too (LooksLikeLog). */
     const Modes = {
-        c: "c_cpp", "c++": "c_cpp", cpp: "c_cpp", h: "c_cpp", hpp: "c_cpp", cs: "csharp", css: "css", csv: "csv", glsl: "glsl",
-        htm: "html", html: "html", js: "javascript", json: "json", md: "markdown", err: "plain_text", txt: "plain_text",
-        log: "sw_log", cfg: "plain_text", bat: "batchfile", cmd: "batchfile", sql: "mysql", svg: "svg", xml: "xml",
-        config: "xml", csproj: "xml",
+        err: "plain_text", txt: "plain_text", log: "sw_log", cfg: "plain_text", nfo: "plain_text", sln: "plain_text", cmake: "plain_text",
+        bat: "batchfile", cmd: "batchfile", ps1: "powershell", psm1: "powershell", psd1: "powershell", sh: "sh", bash: "sh", zsh: "sh",
+        py: "python", rb: "ruby", php: "php", pl: "perl", pm: "perl", lua: "lua", r: "r", tcl: "tcl",
+        c: "c_cpp", "c++": "c_cpp", cc: "c_cpp", cpp: "c_cpp", cxx: "c_cpp", h: "c_cpp", hh: "c_cpp", hpp: "c_cpp", hxx: "c_cpp", inl: "c_cpp", ipp: "c_cpp", ino: "c_cpp",
+        cs: "csharp", csx: "csharp", cshtml: "razor", razor: "razor", vb: "vbscript", vbs: "vbscript", fs: "fsharp", fsx: "fsharp", fsi: "fsharp",
+        go: "golang", rs: "rust", java: "java", kt: "kotlin", kts: "kotlin", swift: "swift", dart: "dart", scala: "scala", groovy: "groovy", gradle: "groovy", asm: "assembly_x86",
+        glsl: "glsl", vert: "glsl", frag: "glsl", geom: "glsl", comp: "glsl", hlsl: "c_cpp", hlsli: "c_cpp", fx: "c_cpp",
+        htm: "html", html: "html", xhtml: "html", css: "css", less: "less", scss: "scss", sass: "sass", js: "javascript", mjs: "javascript", cjs: "javascript", jsx: "jsx",
+        ts: "typescript", mts: "typescript", cts: "typescript", tsx: "tsx", vue: "vue", svg: "svg",
+        csv: "csv", tsv: "tsv", json: "json", jsonc: "json5", json5: "json5", yaml: "yaml", yml: "yaml", toml: "toml", properties: "properties", sql: "mysql", proto: "protobuf", gql: "graphqlschema",
+        ini: "ini", inf: "ini", conf: "ini", reg: "ini", editorconfig: "ini",
+        xml: "xml", xsd: "xml", xsl: "xml", xslt: "xml", config: "xml", slnx: "xml", csproj: "xml", vbproj: "xml", fsproj: "xml", props: "xml", targets: "xml", nuspec: "xml", resx: "xml", xaml: "xml", axaml: "xml",
+        md: "markdown", rst: "rst", tex: "latex", adoc: "asciidoc", diff: "diff", patch: "diff",
+        make: "makefile", mk: "makefile", dockerfile: "dockerfile", tf: "terraform", gitignore: "gitignore", gitattributes: "gitignore",
     };
 
     /** Display names of Ace modes whose name is not just the capitalized mode id. */
     const ModeNames = {
-        plain_text: "Plain text", sw_log: "Log file", c_cpp: "C/C++", csharp: "C#", javascript: "JavaScript", typescript: "TypeScript",
+        plain_text: _TF("Plain text", "Name of a file type in the status line of the text editor: a text file without a language"), sw_log: _TF("Log file", "Name of a file type in the status line of the text editor: a log file of the server"), c_cpp: "C/C++", csharp: "C#", javascript: "JavaScript", typescript: "TypeScript",
         json: "JSON", json5: "JSON5", html: "HTML", css: "CSS", xml: "XML", svg: "SVG", csv: "CSV", glsl: "GLSL", mysql: "SQL",
-        sql: "SQL", batchfile: "Batch file", markdown: "Markdown", yaml: "YAML", php: "PHP",
+        sql: "SQL", batchfile: _TF("Batch file", "Name of a file type in the status line of the text editor: a Windows command script"), markdown: "Markdown", yaml: "YAML", php: "PHP", powershell: "PowerShell", sh: _TF("Shell", "Name of a file type in the status line of the text editor: a Unix shell script"),
+        vbscript: "Visual Basic", fsharp: "F#", golang: "Go", tsx: "TSX", jsx: "JSX", scss: "SCSS", toml: "TOML", ini: "INI", tsv: "TSV",
+        protobuf: "Protocol Buffers", graphqlschema: "GraphQL", latex: "LaTeX", rst: "reStructuredText", asciidoc: "AsciiDoc", assembly_x86: _TF("Assembly", "Name of a file type in the status line of the text editor: source code in assembly language"), gitignore: _TF("Git ignore", "Name of a file type in the status line of the text editor: the file that lists what Git must ignore"),
     };
 
     /**

@@ -281,7 +281,7 @@ class MediaPlayerEffect {
             }
         }
         if (!gl)
-            throw new Error("Can't initiate WebGL!");
+            throw new Error(typeof _TF === "function" ? _TF("Can't initiate WebGL!", "Reason on the error state of the media viewer: the browser can't draw the effect, WebGL is not available") : "Can't initiate WebGL!"); // (the player also runs on lean pages without the core)
         t.GL = gl;
         gl.getExtension("OES_standard_derivatives");
         gl.getExtension("EXT_shader_texture_lod");

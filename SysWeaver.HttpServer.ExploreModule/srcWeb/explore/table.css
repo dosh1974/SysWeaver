@@ -901,7 +901,7 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
    (ui/cells.js Img, --ThemeIconSize); only the compact rows lower it, never a smaller image is enlarged */
 .sw-table.sw-table-dense:not(.sw-table-cards) .sw-table-body td img.sw-cell-img {
     vertical-align: top;
-    max-height: 22px !important;
+    max-height: calc(22px * var(--sw-text-scale, 1)) !important;
 }
 
 /* Numbers in the text font with tabular digits (Design v2, PORTING.md B13: no monospace), so columns of numbers line up */
@@ -1934,6 +1934,8 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
     }
 
 .sw-table-live-dot {
+    /* While a request runs the dot is scaled by 1.75 (3 px on each side): room for it, the page clips at the edge of the header */
+    margin-inline-start: 3px;
     flex: none;
     width: 8px;
     height: 8px;
@@ -3078,7 +3080,7 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
    explore pages), at the explore icon size */
 .sw-table-body img.sw-table-ftype {
     width: auto;
-    height: 22px;
+    height: calc(22px * var(--sw-text-scale, 1));
     vertical-align: middle;
 }
 

@@ -262,7 +262,7 @@
             if (roles.length)
                 roles.forEach(x => {
                     const t = el("span.sw-tag.api-tag", { text: x });
-                    t.title = _T('The user must have the "{0}" security token to use this API.', x, "A tool tip description on a security token that is required to use this API") + "\n\n" + Sw.Clipboard.CopyOnClick(t, x, { Keyboard: true });
+                    t.title = _T('The user must have the "{0}" security token to use this API.', x, "A tool tip description on a security token that is required to use this API. {0} is the name of the token, ex: Admin") + "\n\n" + Sw.Clipboard.CopyOnClick(t, x, { Keyboard: true });
                     s.append(t);
                 });
             else

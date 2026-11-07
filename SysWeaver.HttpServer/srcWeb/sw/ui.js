@@ -1689,8 +1689,8 @@ window.Sw.Sources["ui/base.js"] = "sw/ui.js";
     function elapsedText(ms) {
         const s = Math.max(0, Math.round(ms / 1000));
         if (s < 60)
-            return _T("{0} s", s, "Elapsed time in seconds of running work, ex: '3 s'");
-        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Elapsed time of running work, ex: '1 min 5 s'");
+            return _T("{0} s", s, "Elapsed time in seconds of running work, ex: '3 s'. {0} is the whole number of seconds, ex: 3");
+        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Elapsed time of running work, ex: '1 min 5 s'. {0} is the whole number of minutes, ex: 1. {1} is the whole number of seconds, ex: 5");
     }
 
     /**
@@ -3384,9 +3384,9 @@ window.Sw.Sources["ui/base.js"] = "sw/ui.js";
                 return _T("{0} copied", o.What, "Message after a copy to the clipboard (button tool tip, announcement, toast). {0} names what was copied, ex: 'API key', 'The url of MailService'");
             //  Never the value when it is (or looks like) a secret (UX guide SEC-1): a screen reader would speak it, a toast would show it
             if (o.Generic || o.Secret || (!o.Show && Clipboard.LooksSecret(text)))
-                return _TF("Copied text to the clipboard", "Message displayed when some text is copied to the clipboard.");
+                return _TF("Copied text to the clipboard", "Message displayed when some text is copied to the clipboard. {0} is the copied text (may be shortened), ex: 192.168.1.10");
             const shown = text.length > 80 ? text.substring(0, 77) + "..." : text;
-            return _T('Copied "{0}" to the clipboard', shown, "Message displayed when some text is copied to the clipboard.");
+            return _T('Copied "{0}" to the clipboard', shown, "Message displayed when some text is copied to the clipboard. {0} is the copied text (may be shortened), ex: 192.168.1.10");
         },
         /**
          * True for a text that looks like a secret (an api key "name:key", a token, a long random string, a password field's value): its
@@ -3562,7 +3562,7 @@ window.Sw.Sources["ui/base.js"] = "sw/ui.js";
             };
             e.SwCopyMenu = LongPress(e, menu, { Skip: () => HasSelectionIn(e) });
             const title = shown !== null
-                ? _T('Click to copy "{0}" to the clipboard', shown, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element')
+                ? _T('Click to copy "{0}" to the clipboard', shown, 'Tool tip to indicate that some known text can be copied to the clipboard by clicking on an element. {0} is the text to copy (may be shortened), ex: 192.168.1.10')
                 : _T('Click to copy text to the clipboard', 'Tool tip to indicate that some text can be copied to the clipboard by clicking on an element');
             if (o.AddTitle)
                 e.title = e.title ? (e.title + "\n\n" + title) : title;
@@ -9874,7 +9874,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                 const cur = S.Get();
                 items.push({
                     Text: _TF("Text size", "Menu: the submenu that picks the text size of the user interface"), Icon: "search",
-                    Items: S.Sizes.map(n => ({ Text: _T("{0} %", n), Radio: true, Checked: cur === n, OnClick: () => S.Set(n) })),
+                    Items: S.Sizes.map(n => ({ Text: _T("{0} %", n, "Menu: a choice of the submenu that picks the text size of the user interface. {0} is the size in percent of normal, ex: 125"), Radio: true, Checked: cur === n, OnClick: () => S.Set(n) })),
                 });
             }
             return items;
@@ -11425,8 +11425,8 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
     function elapsedText(ms) {
         const s = Math.max(0, Math.floor(ms / 1000));
         if (s < 60)
-            return _T("{0} s", s, "Time so far of busy work, in whole seconds, ex: 12 s");
-        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Time so far of busy work, minutes and seconds, ex: 1 min 5 s");
+            return _T("{0} s", s, "Time so far of busy work, ex: 12 s. {0} is the whole number of seconds, ex: 12");
+        return _T("{0} min {1} s", Math.floor(s / 60), s % 60, "Time so far of busy work, ex: 1 min 5 s. {0} is the whole number of minutes, ex: 1. {1} is the whole number of seconds, ex: 5");
     }
 
     /**
@@ -13872,7 +13872,6 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
             const footDefs = () => footBtns().filter(b => b.SwDialogButton && !isOff(b)).map(b => b.SwDialogButton);
             /** The text of the rejection line for the current state, naming only the visible buttons by their labels. */
             const rejectText = kind => {
-                const ctx = "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel";
                 if (st.Stopping && st.Busy) {
                     const w = busyWhat();
                     return w ? _T("Stopping {0}: the dialog closes when it has stopped", w, "Line of a dialog after Cancel while its work is being stopped (a close attempt now). {0}: what runs, ex: Save")
@@ -13885,7 +13884,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                 }
                 if (st.Busy) {
                     const w = busyWays();
-                    return w.length >= 2 ? _T("Still working: use {0} or {1}", w[0], w[1], ctx)
+                    return w.length >= 2 ? _T("Still working: use {0} or {1}", w[0], w[1], "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel")
                         : w.length ? _T("Still working: use {0}", w[0], "The rejection line of a busy dialog after a close attempt. {0}: the label of the button to use, ex: Cancel")
                             : _TF("Still working: please wait until it is done", "The rejection line of a busy dialog that has no way out yet (a close attempt was refused)");
                 }
@@ -13894,7 +13893,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                     const save = defs.find(x => !x.Dismiss && (x.Def.Kind === "primary" || x.Def.Kind === "danger" || x.Def.Kind === "danger-solid")) || defs.find(x => !x.Dismiss);
                     const cancel = defs.find(x => x.Dismiss);
                     if (save && cancel)
-                        return _T("Unsaved changes: use {0} or {1}", save.Text, cancel.Text, ctx);
+                        return _T("Unsaved changes: use {0} or {1}", save.Text, cancel.Text, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel");
                     const one = (save || cancel) ? (save || cancel).Text : closeTitle;
                     return _T("Unsaved changes: use {0}", one, "The rejection line of a dialog with unsaved changes after a close attempt. {0}: the label of the button to use, ex: Save");
                 }
@@ -14423,7 +14422,6 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                 const samples = ["M"];
                 if (!low) {
                     const labs = footBtns().map(b => b.textContent.trim()).filter(x => x);
-                    const ctx0 = "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel";
                     samples.push(_TF("Still working: please wait until it is done", "The rejection line of a busy dialog that has no way out yet (a close attempt was refused)"),
                         _TF("Still working: you can change the fields again when it is done", "Line of a busy dialog when the user tries to change a field while its work runs"));
                     //  (the idle lines: unsaved changes, a dialog that closes only with its buttons; every pair of labels)
@@ -14432,7 +14430,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                             _T("Use {0}", a, "The rejection line of a dialog that only closes with its button, after a close attempt. {0}: the button label, ex: OK"));
                         for (const c of labs)
                             if (a !== c)
-                                samples.push(_T("Unsaved changes: use {0} or {1}", a, c, ctx0),
+                                samples.push(_T("Unsaved changes: use {0} or {1}", a, c, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel"),
                                     _T("Use {0} or {1}", a, c, "The rejection line of a dialog that only closes with its buttons, after a close attempt (an outside click, Escape). {0}, {1}: the button labels, ex: Cancel, Save"));
                     }
                     if (work) {
@@ -14445,7 +14443,7 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
                                 : _TF("Stop waiting (the work may still finish)", "Button of a busy dialog whose work can't be cancelled: closes it without waiting; the work may still be done");
                             samples.push(_T("Still working: use {0}", stop, "The rejection line of a busy dialog after a close attempt. {0}: the label of the button to use, ex: Cancel"));
                             for (const c of outs)
-                                samples.push(_T("Still working: use {0} or {1}", stop, c, ctx0), _T("Still working: use {0} or {1}", c, stop, ctx0));
+                                samples.push(_T("Still working: use {0} or {1}", stop, c, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel"), _T("Still working: use {0} or {1}", c, stop, "The rejection line of a dialog after a close attempt. {0}, {1}: the visible labels of the buttons to use, ex: Save, Cancel"));
                             if (w)
                                 samples.push(_T("{0} is running: you can change the fields again when it is done", w, "Line of a busy dialog when the user tries to change a field while its work runs (the fields are read only then, so nothing typed is lost). {0}: what runs, ex: Save"),
                                     _T("Stopping {0}: the dialog closes when it has stopped", w, "Line of a dialog after Cancel while its work is being stopped (a close attempt now). {0}: what runs, ex: Save"));
@@ -19127,7 +19125,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
                             return text;
                         if (Sw.Url && Sw.Url.IsAbsolute && !Sw.Url.IsAbsolute(href) && Sw.Url.AppendTheme)
                             href = Sw.Url.AppendTheme(href);
-                        const title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an URL can be opened by clicking on the element");
+                        const title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an URL can be opened by clicking on the element. {0} is the url, ex: https://example.com/docs");
                         return '<a target="_blank" rel="noopener" title="' + H(title) + '" href="' + H(href) + '"' + (text.startsWith("<img") ? ' class="Image sw-link-image"' : "") + ">" + text + "</a>";
                     },
                     image(l) {
@@ -19136,7 +19134,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
                         const href = l.href;
                         if (!safeHref(href))
                             return H(l.text || "");
-                        let title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an image can be opened by clicking on the element");
+                        let title = l.title || _T('Open "{0}" in a new tab', href, "Tool tip that informs the user that an image can be opened by clicking on the element. {0} is the url of the image, ex: https://example.com/logo.png");
                         if (l.text)
                             title = l.text + "\n\n" + title;
                         return '<a class="Image sw-link-image" target="_blank" rel="noopener" title="' + H(title) + '" href="' + H(href) + '"><img src="' + H(href) + '" alt="' + H(l.text || "") + '"></a>';
@@ -19228,7 +19226,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         if (Reset(e, "Default"))
             e.classList.add(Classes.Text);
         const text = value === null || value === undefined ? "" : sf(formats[1] ?? "{0}", value, nextValue);
-        let title = sf(formats[2] ?? (text != value ? "Raw: {2}" : ""), text, nextValue, value);
+        let title = sf(formats[2] ?? (text != value ? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text") : ""), text, nextValue, value);
         const copy = formats[3];
         if (copy || copy === undefined) {
             let cv = value;
@@ -19246,7 +19244,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
      */
     function Type(e, value, formats, nextValue, flash, type, onRefresh) {
         if (!formats.length)
-            formats = ["Url", "{0}", "*../edit/type.html?q={2}", _TF('Show information about the type "{0}".', "Tool tip to indicate that extra information about a C# type can be viewed by clicking on the element")];
+            formats = ["Url", "{0}", "*../edit/type.html?q={2}", _TF('Show information about the type "{0}".', "Tool tip to indicate that extra information about a C# type can be viewed by clicking on the element. {0} is the type name, filled in later, ex: System.String")];
         Url(e, value, formats, nextValue, flash, type, onRefresh);
     }
 
@@ -19323,7 +19321,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         let text = sf(formats[2] ?? "{0}", vs, nextValue, value);
         if (code && vs !== "")
             text = cur ? (cur.SymbolPrefix || "") + text + (cur.SymbolSuffix || "") : text + " " + code;
-        let title = sf(formats[3] ?? "Raw: {2}", vs, nextValue, value, text);
+        let title = sf(formats[3] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), vs, nextValue, value, text);
         if (code)
             title = F().JoinNonEmpty("\n", cur && cur.Name ? cur.Name + " (" + cur.Iso4217 + ")" : code, title);
         const copy = formats[4];
@@ -19381,7 +19379,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         const ut = UrlTarget(sf(formats[2] ?? "{2}", value, nextValue, text));
         const url = absUrl(ut[0]);
         const target = ut[1];
-        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element") : ""), value, nextValue, text, url);
+        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element. {3} is the url, filled in later, ex: https://example.com/docs. {0}, {1} and {2} are other values of the cell, not used in this text") : ""), value, nextValue, text, url);
         const ext = External(url);
         if (ext && ext.Offline) {
             //  An internet link without internet: plain text, the address in the tool tip
@@ -19493,7 +19491,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
 
     /**
      * Renderer "Img": formats[1] = src template (a leading '-' aligns left, '+' right, '*' none), formats[2] = click url template (target prefix allowed),
-     * formats[3] = title, formats[4] / [5] = max width / height (px, scaled by --ThemeIconSize), formats[6] = prefix for relative values.
+     * formats[3] = title, formats[4] / [5] = max width / height (px, scaled by --ThemeIconSize and the text size), formats[6] = prefix for relative values.
      * A picture that fails to load shows the cell value as text (ex: "SE", "GET") instead of a broken image; iso_data/ flags are not requested
      * a flag that fails to load (no IsoDataService) shows the value as text.
      * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
@@ -19512,7 +19510,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         const ut = UrlTarget(formats[2] ? sf(formats[2], value, nextValue, src) : null);
         const url = absUrl(ut[0]);
         const target = ut[1];
-        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an image can be viewed by clicking on an element") : ""), value, nextValue, src, url);
+        let title = sf(formats[3] ?? (url ? _TF('Open "{3}".', "Tool tip that indicates that an image can be viewed by clicking on an element. {3} is the url of the image, filled in later, ex: https://example.com/logo.png. {0}, {1} and {2} are other values of the cell, not used in this text") : ""), value, nextValue, src, url);
         //  A short word value (ex: "POST" / "GET" drawn as an icon) names the picture: alt text and tool tip say the value, not the image
         //  url that a generic server title ("Click to open "{3}".") would show
         const raw = String(value).trim();
@@ -19552,9 +19550,9 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
                 }, { once: true });
             i.className = "sw-cell-img";
             if (maxW > 0)
-                i.style.maxWidth = "calc(var(--ThemeIconSize, 1) * " + maxW + "px)";
+                i.style.maxWidth = "calc(var(--ThemeIconSize, 1) * var(--sw-text-scale, 1) * " + maxW + "px)";
             if (maxH > 0)
-                i.style.maxHeight = "calc(var(--ThemeIconSize, 1) * " + maxH + "px)";
+                i.style.maxHeight = "calc(var(--ThemeIconSize, 1) * var(--sw-text-scale, 1) * " + maxH + "px)";
             //  The text alternative names what the image (link) does, not the mouse action or a raw url ("Click to open "http://.../post.svg"."):
             //  a server title as an action, else "Open <file name>"
             let file = url ? (src.split(/[?#]/)[0].split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "") : "";
@@ -19702,7 +19700,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         formats = formats || [];
         const c = spanText(value, formats[4]);
         const text = sf(formats[1] ?? "{0}", c, nextValue, value);
-        let title = sf(formats[2] ?? "Raw: {2}", c, nextValue, value, text);
+        let title = sf(formats[2] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), c, nextValue, value, text);
         //  The server's "forever" (∞, ex: the 50 year request cache of static files) says so in words above the raw value (S7a-D10: the
         //  tool tip only said "1581120000 s")
         if (c === "∞" || c === "- ∞")
@@ -19901,7 +19899,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
             }
             const vs = speed ? F().ByteSpeed(+value || 0) : F().Bytes(+value || 0);
             const text = sf(formats[2] ?? "{0}", vs, nextValue, value);
-            let title = sf(formats[3] ?? "Raw: {2}", vs, nextValue, value, text);
+            let title = sf(formats[3] ?? _TF("Raw: {2}", "Tool tip of a value in a table cell: the unformatted value. {2} is the raw value, ex: 1234567.5. {0} and {1} are other values of the cell, not used in this text"), vs, nextValue, value, text);
             title = F().JoinNonEmpty("\n\n", title, copyClick(e, value));
             SetText(e, text, title, flash);
             return e;
@@ -20131,12 +20129,12 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         const final = kind === "AlreadyDone" || kind === "Gone";
         const neutral = final;
         //  The short text the row shows (Admin N26 / Ops R4-5: visible, never only a tool tip; wraps on a phone): "Kill: not done. <reason>"
-        const verb = (n, ctx) => kind === "AlreadyDone"
-            ? _T("{0}: not needed.", n, "Start of the result of a table row action that the server says was done already (its goal is met). {0} is the action" + ctx + "; the reason follows")
+        const verb = n => kind === "AlreadyDone"
+            ? _T("{0}: not needed.", n, "Start of the result of a table row action that the server says was done already (its goal is met). {0} is the action, sometimes with its row, ex: Kill or Kill msedge (63564); the reason follows")
             : (kind === "Gone"
-                ? _T("{0}: no longer there.", n, "Start of the result of a table row action whose item the server says is gone. {0} is the action" + ctx + "; the reason follows")
-                : _T("{0}: not done.", n, "Start of the result of a table row action that failed or was refused. {0} is the action" + ctx + "; the reason follows"));
-        const note = out.Ok || out.Aborted ? "" : compose(verb(name, ", ex: 'Kill'"), reason);
+                ? _T("{0}: no longer there.", n, "Start of the result of a table row action whose item the server says is gone. {0} is the action, sometimes with its row, ex: Kill or Kill msedge (63564); the reason follows")
+                : _T("{0}: not done.", n, "Start of the result of a table row action that failed or was refused. {0} is the action, sometimes with its row, ex: Kill or Kill msedge (63564); the reason follows"));
+        const note = out.Ok || out.Aborted ? "" : compose(verb(name), reason);
         const detail = {
             Ok: out.Ok, Aborted: out.Aborted, Value: out.Value, Error: out.Ok ? null : (why || null), Text: name, Name: rowName, Work: work, Url: url,
             Ms: Date.now() - start, InPlace: false, Gone: gone, Status: status, Reason: reason, Note: note, Neutral: neutral,
@@ -20145,7 +20143,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         b.dispatchEvent(new CustomEvent("sw-cell-result", { bubbles: true, detail }));
         const inPlace = !!detail.InPlace;
         //  (one verdict: the row note, the tool tip, the activity item and the toast say the same)
-        const failText = compose(verb(work, " and its row, ex: 'Kill msedge (63564)'"), reason);
+        const failText = compose(verb(work), reason);
         if (job) {
             if (final) {
                 //  the goal is met / the item is gone: not a failure, the same words as the row
@@ -20211,7 +20209,7 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
         const on = v0 === "true" || v0 === "1";
         args[0] = on;
         args.splice(1, 0, nextValue);
-        const text = on ? sfa(formats[1] ?? "True", args) : sfa(formats[2] ?? "False", args);
+        const text = on ? sfa(formats[1] ?? _TF("True", "Label of a check box in a table cell when it is checked (the default text of a toggle cell)"), args) : sfa(formats[2] ?? _TF("False", "Label of a check box in a table cell when it is not checked (the default text of a toggle cell)"), args);
         const title = on
             ? sfa(formats[3] ?? _TF("Uncheck", "Tool tip to indicate that something can be unchecked (unselected) by clicking on the element)"), args)
             : sfa(formats[4] ?? _TF("Check", "Tool tip to indicate that something can be checked (selected) by clicking on the element)"), args);
