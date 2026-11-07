@@ -7,6 +7,7 @@ namespace SysWeaver.MicroService
 {
     public sealed partial class LanCertificateManagerService
     {
+        [SysWeaver.Data.TableDataCard("domain@lancert/cards")]
         sealed class Data
         {
             public Data(Domain d)

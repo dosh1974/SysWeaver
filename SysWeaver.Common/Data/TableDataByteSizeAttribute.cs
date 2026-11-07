@@ -3,7 +3,7 @@ using System;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Format the value using bytes, kb, Mb and so on
+    /// Format the value using bytes, KB, MB and so on
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataByteSizeAttribute : TableDataRawFormatAttribute
@@ -15,7 +15,7 @@ namespace SysWeaver.Data
         public static readonly TableDataByteSizeAttribute Instance = new TableDataByteSizeAttribute();
 
         /// <summary>
-        /// Format the value using bytes, kb, Mb and so on
+        /// Format the value using bytes, KB, MB and so on
         /// </summary>
         public TableDataByteSizeAttribute() : base(TableDataFormats.ByteSize) 
         { 

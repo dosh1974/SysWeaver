@@ -8,7 +8,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Used RAM as a percentage
         /// </summary>
-        [TableDataNumber(2, "{0}%")]
+        [TableDataNumber(2, "{0} %")]
         public double Used;
 
         /// <summary>
@@ -27,6 +27,7 @@ namespace SysWeaver.MicroService
 
 
     [TableDataPrimaryKey(nameof(Drive), nameof(Label))]
+    [TableDataCard("drive@ServerManager/cards")]
     public sealed class SmDriveInfo
     {
         /// <summary>
@@ -49,7 +50,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Used disc space as a percentage
         /// </summary>
-        [TableDataNumber(2, "{0}%")]
+        [TableDataNumber(2, "{0} %")]
         public double Used;
 
         /// <summary>

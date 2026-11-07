@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card template of the simulated text messages table, never shown to a user">Text message cards</title>
+</head>
+<body>
+    <!-- AnyTextMessage (MessageTable), table by default -->
+    <template id="message">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" inert aria-hidden="true">${+Country}</span>
+                <div class="sw-card-lead-text">
+                    <h3>${PhoneNumber}</h3>
+                    <div class="sw-card-sub">${Name}</div>
+                </div>
+                <span data-on="${Incoming}">
+                    <span class="sw-badge sw-info sw-when-on" data-translation_context="Label on the card of a simulated text message: the message was received">Received</span>
+                    <span class="sw-badge sw-info sw-when-off" data-translation_context="Label on the card of a simulated text message: the message was sent">Sent</span>
+                </span>
+            </header>
+            <p class="sw-card-text">${Text}</p>
+            <dl class="sw-facts" data-on="${Incoming}">
+                <div><dt data-translation_context="Label on the card of a simulated text message: the time it was sent or received">Time</dt><dd>${+Time}</dd></div>
+                <div><dt data-translation_context="Label on the card of a simulated text message: how it was sent, ex: Sms">Channel</dt><dd>${+Channel}</dd></div>
+                <div class="sw-when-off"><dt data-translation_context="Label on the card of a simulated text message: the delivery status">Delivery</dt><dd>${+Status}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

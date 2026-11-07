@@ -6,6 +6,7 @@ namespace SysWeaver.Net.ExploreModule
 {
 
     [TableDataPrimaryKey(nameof(Name))]
+    [TableDataCard("+compression@explore/cards")]
     sealed class CompData
     {
         public CompData(ICompInfo i)

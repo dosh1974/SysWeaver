@@ -27,6 +27,7 @@ namespace SysWeaver.ReverseProxy
         /// <summary>
         /// The connection status of a reverse proxy client
         /// </summary>
+        [SysWeaver.Data.TableDataCard("connection@reverseproxy/cards")]
         [TableDataPrimaryKey(nameof(ClientId))]
         public sealed class ConnectionStatus
         {

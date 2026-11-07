@@ -48,6 +48,18 @@ namespace SysWeaver.Data
         public String[] DefaultOrder;
 
         /// <summary>
+        /// The card template that the web client should use to show the rows, null to only show the table.
+        /// Only sent with the columns (the client decides once), a card selected by the client ("card" url parameter of table.html) is used before this.
+        /// The format is "name@path" where path is the html file with the template, relative to the site root (".html" is added if needed, a ".css" file next to it is optional) and name is the id of the template:
+        ///   "name@path" = Show cards by default, the viewer can switch to the table.
+        ///   "+name@path" = Show the table by default, the viewer can switch to cards.
+        ///   "-name@path" = Only show cards.
+        /// See <see cref="TableDataCardAttribute"/>.
+        /// </summary>
+        [AiIgnore]
+        public String Card;
+
+        /// <summary>
         /// Copy the common values from another instance (shallow copy).
         /// </summary>
         /// <param name="s">The instance to copy from</param>
@@ -57,6 +69,7 @@ namespace SysWeaver.Data
             Cols = s.Cols;
             Title = s.Title;
             DefaultOrder = s.DefaultOrder;
+            Card = s.Card;
         }
 
     }
@@ -170,6 +183,7 @@ namespace SysWeaver.Data
                 Cols = Cols,
                 RowCount = RowCount,
                 Title = Title,
+                Card = Card,
             };
 
         /// <summary>
@@ -188,6 +202,7 @@ namespace SysWeaver.Data
                 Cols = Cols,
                 RowCount = RowCount,
                 Title = Title,
+                Card = Card,
             };
 
     }

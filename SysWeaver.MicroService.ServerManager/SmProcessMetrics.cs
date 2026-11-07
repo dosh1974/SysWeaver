@@ -3,6 +3,7 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+    [SysWeaver.Data.TableDataCard("+process@ServerManager/cards")]
     [TableDataPrimaryKey(nameof(Id), nameof(Name))]
     internal sealed class SmProcessMetrics
     {
@@ -168,12 +169,12 @@ namespace SysWeaver.MicroService
         //  The value is "pid,canKill,killToken" ({0}, {2} and {3} in the action formats): the Kill action is only shown if the process can be killed,
         //  and the kill request must include the kill token (so a plain link or GET request can't kill a process).
         //  Kill is final (G47, declared, never guessed from the words): the web table keeps the row muted without actions until the user refreshes.
-        [TableDataActionsFull(new[] { TableDataActionFlags.Final },
-    "Kill",
-    "Kill the process",
+        [TableDataActionsFull(new[] { TableDataActionFlags.Final },
+    "Terminate",
+    "Terminate the process",
     "../ServerManager/KillProcess?\"{3}\"",
     "kill",
-    "Kill the process?",
+    "Terminate the process?",
     "{2}",
     ""
     )]

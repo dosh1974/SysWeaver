@@ -51,11 +51,11 @@ namespace SysWeaver.MicroService
             return null;
         }
 
-            /// <summary>
-            /// Restart the process
-            /// </summary>
-            /// <returns>True if successful</returns>
-            public bool RestartProcess()
+        /// <summary>
+        /// Restart the process
+        /// </summary>
+        /// <returns>True if successful</returns>
+        public bool RestartProcess()
         {
             var h = Interlocked.Exchange(ref HostRestart, null);
             if (h == null)
@@ -166,6 +166,7 @@ namespace SysWeaver.MicroService
             {
                 ShowProgress = registerFromManifestFile;
                 HostRestart = restartFn;
+                Register(this, null, false, null);
                 if (Debugger.IsAttached)
                 {
 #if DEBUG
@@ -1946,7 +1947,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
         [WebMenuTable(null, "Monitoring/{0}", "Scheduled tasks", null, "icons/clock.svg", 31)]
-        public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks");
+        public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks").WithCard("+task@services/cards");
 
         /// <summary>
         /// The pre-processed tokens of "debug,ops" (users that can see the system performance entries)

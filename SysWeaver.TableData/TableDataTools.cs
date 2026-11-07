@@ -1924,6 +1924,7 @@ namespace SysWeaver.Data
                 data.Cc = requestCc;
                 data.Cols = null;
                 data.Title = null;
+                data.Card = null;
                 return data;
             }
             var cc = EnvInfo.Cc;
@@ -1932,6 +1933,7 @@ namespace SysWeaver.Data
                 data.Cc = cc;
                 data.Cols = null;
                 data.Title = null;
+                data.Card = null;
                 return data;
             }
             data.Cc = cc;
@@ -1952,6 +1954,25 @@ namespace SysWeaver.Data
         {
             if ((data != null) && (data.Cols != null))
                 data.DefaultOrder = order;
+            return data;
+        }
+
+        /// <summary>
+        /// Set <see cref="CommonTableData.Card"/> when the columns are included (sent), else it's cleared (the client only decides once, this limits the bandwidth).
+        /// Call after the column logic (HandleCc), a null card keeps the existing value (if columns are included).
+        /// </summary>
+        /// <typeparam name="X">The table type.</typeparam>
+        /// <param name="data">The table to update (in place).</param>
+        /// <param name="card">The card template, may be null, see <see cref="CommonTableData.Card"/> for the format.</param>
+        /// <returns>The source table data.</returns>
+        public static X WithCard<X>(this X data, String card) where X : CommonTableData
+        {
+            if (data == null)
+                return null;
+            if (data.Cols == null)
+                data.Card = null;
+            else if (card != null)
+                data.Card = card;
             return data;
         }
 
@@ -1985,6 +2006,7 @@ namespace SysWeaver.Data
                 data.Cc = requestCc;
                 data.Cols = null;
                 data.Title = null;
+                data.Card = null;
                 return data;
             }
             var cc = EnvInfo.Cc;
@@ -1993,6 +2015,7 @@ namespace SysWeaver.Data
                 data.Cc = cc;
                 data.Cols = null;
                 data.Title = null;
+                data.Card = null;
                 return data;
             }
             data.Cc = cc;

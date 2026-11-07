@@ -2423,3 +2423,550 @@ html.SwMobile:not([data-density]) :is(.sw-button.sw-small, .sw-chip, .sw-chip-re
     }
 }
 
+
+/* ===== Card template parts (explore/README "Card templates"): use with .sw-card and .sw-badge ===== */
+
+/* A value rendered with a column's format (`${+Name}`) and rendered markdown (`${-Name}`) */
+.sw-card-cell {
+    display: inline;
+    overflow-wrap: anywhere;
+}
+
+.sw-card-md > :first-child {
+    margin-top: 0;
+}
+
+.sw-card-md > :last-child {
+    margin-bottom: 0;
+}
+
+/* Label and value lines: <dl class="sw-card-fields"><dt>Label</dt><dd>Value</dd></dl> */
+.sw-card-fields {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    gap: var(--sw-space-1, 4px) var(--sw-space-3, 12px);
+    margin: 0;
+}
+
+    .sw-card-fields > dt {
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-sm, 0.875rem);
+    }
+
+    .sw-card-fields > dd {
+        margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+/* Badges on one wrapping line */
+.sw-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sw-space-1, 4px);
+}
+
+/* A meter, the value (0-100) is given with: style="--sw-card-value: ${Used}" */
+.sw-card-meter {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--sw-surface-sunken);
+}
+
+    .sw-card-meter::before {
+        content: "";
+        display: block;
+        height: 100%;
+        width: clamp(0%, calc(var(--sw-card-value, 0) * 1%), 100%);
+        background: var(--sw-accent1);
+    }
+
+/* An icon value in a card head (`<span class="sw-card-icon">${+Icon}</span>`): keeps its size and stays on one line */
+.sw-card-icon {
+    flex: none;
+    white-space: nowrap;
+}
+
+/* A richer card (explore/README "Card templates"): <article class="sw-card sw-card-rich sw-tone-2">. The tone is a chart slot, set per kind of card, or the state of the
+   item (data-sw-level, a value graded by the table). Colour never carries a state alone: pair a state with a .sw-when-* badge. */
+.sw-card-rich {
+    --sw-card-tone: var(--sw-chart-1);
+    display: flex;
+    flex-direction: column;
+    border-top: 3px solid var(--sw-card-tone);
+    transition: border-color var(--sw-dur-1);
+}
+
+.sw-tone-2 { --sw-card-tone: var(--sw-chart-2); }
+.sw-tone-3 { --sw-card-tone: var(--sw-chart-3); }
+.sw-tone-4 { --sw-card-tone: var(--sw-chart-4); }
+.sw-tone-5 { --sw-card-tone: var(--sw-chart-5); }
+.sw-tone-6 { --sw-card-tone: var(--sw-chart-6); }
+.sw-tone-7 { --sw-card-tone: var(--sw-chart-7); }
+
+.sw-card-rich[data-sw-level="warn"] { --sw-card-tone: var(--sw-warning); }
+.sw-card-rich[data-sw-level="danger"] { --sw-card-tone: var(--sw-danger); }
+
+/* The head: a tile, the title with a line under it, a state at the end */
+.sw-card-lead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--sw-space-3);
+    padding: var(--sw-space-3) var(--sw-space-4) var(--sw-space-2);
+}
+
+.sw-card-lead-text {
+    flex: 1 1 7rem;
+    min-width: 0;
+}
+
+    .sw-card-lead-text > h3 {
+        margin: 0;
+        color: var(--sw-text);
+        font-family: var(--sw-head);
+        font-size: var(--sw-text-lg);
+        font-weight: var(--sw-head-weight);
+        line-height: var(--sw-lh-tight);
+        overflow-wrap: anywhere;
+    }
+
+    .sw-card-lead-text > .sw-card-sub {
+        color: var(--sw-text-2);
+        font-size: var(--sw-text-sm);
+        overflow-wrap: anywhere;
+    }
+
+        .sw-card-lead-text > .sw-card-sub:empty {
+            display: none;
+        }
+
+/* A square with an icon, a picture or letters. .sw-card-mono shows only the first letter of its text (the whole text stays for a copy, hide the tile from screen readers) */
+.sw-card-tile {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    overflow: hidden;
+    border-radius: var(--sw-radius-md);
+    background: color-mix(in srgb, var(--sw-card-tone) 14%, transparent);
+    color: color-mix(in srgb, var(--sw-card-tone) 55%, var(--sw-text));
+    font-family: var(--sw-head);
+    font-weight: var(--sw-weight-medium);
+    transition: color var(--sw-dur-1), background-color var(--sw-dur-1);
+}
+
+    .sw-card-tile :is(img, svg:not(.sw-icon)) {
+        width: 2rem;
+        height: 2rem;
+        object-fit: contain;
+    }
+
+    .sw-card-tile a.sw-link.sw-link-ext.sw-link-image .sw-link-ext-icon, .sw-card-tile .sw-link-ext-icon {
+        display: none;
+    }
+
+    .sw-card-tile > .sw-icon {
+        width: 1.375rem;
+        height: 1.375rem;
+    }
+
+.sw-card-tile.sw-card-mono {
+    display: block;
+    font-size: 0;
+    line-height: 2.5rem;
+    text-align: center;
+}
+
+    .sw-card-tile.sw-card-mono::first-letter {
+        font-size: var(--sw-text-lg);
+    }
+
+/* Big values: the figures that matter, a label under each */
+.sw-card-figures {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sw-space-2) var(--sw-space-6);
+    padding: var(--sw-space-1) var(--sw-space-4) var(--sw-space-3);
+}
+
+.sw-card-figure {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+    .sw-card-figure > dd {
+        order: 1;
+        margin: 0;
+        color: var(--sw-text);
+        font-family: var(--sw-head);
+        font-size: var(--sw-text-xl);
+        font-weight: var(--sw-head-weight);
+        line-height: var(--sw-lh-tight);
+        overflow-wrap: anywhere;
+    }
+
+    .sw-card-figure > dd * {
+        color: inherit;
+        font: inherit;
+    }
+
+    .sw-card-figure > dt {
+        order: 2;
+        color: var(--sw-text);
+        font-size: var(--sw-text-md);
+        font-weight: var(--sw-weight-medium);
+    }
+
+/* Free text, a meter, tags and actions in a rich card */
+.sw-card-text {
+    margin: 0;
+    padding: 0 var(--sw-space-4) var(--sw-space-3);
+    color: var(--sw-text-2);
+    overflow-wrap: anywhere;
+}
+
+    .sw-card-text:empty {
+        display: none;
+    }
+
+.sw-card-rich > .sw-meter {
+    margin: 0 var(--sw-space-4) var(--sw-space-3);
+}
+
+    .sw-card-rich > .sw-meter > i {
+        width: clamp(0%, calc(var(--sw-card-value, 0) * 1%), 100%);
+    }
+
+.sw-card-rich > .sw-card-tags {
+    padding: 0 var(--sw-space-4) var(--sw-space-3);
+}
+
+    .sw-card-rich > .sw-card-tags:empty {
+        display: none;
+    }
+
+/* The facts and the actions sit at the bottom, so they line up in the cards of a line */
+.sw-card-rich > .sw-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+    border-top: 1px solid var(--sw-border);
+}
+
+    .sw-card-rich > .sw-facts > div {
+        padding: var(--sw-space-2) var(--sw-space-3);
+    }
+
+    /* A fact holding tags takes the whole line of the strip */
+    .sw-card-rich > .sw-facts > div:has(.sw-tag) {
+        grid-column: 1 / -1;
+    }
+
+.sw-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sw-space-2);
+    min-height: 2.75rem;
+    padding: var(--sw-space-1) var(--sw-space-3);
+    border-top: 1px solid var(--sw-border);
+}
+
+.sw-card-rich:not(:has(> .sw-facts)) > .sw-card-foot {
+    margin-top: auto;
+}
+
+/* Actions of the item (a ${+Actions} cell in a span) sit at the end of the line, the links before them; the buttons wrap among themselves, not as a whole line */
+.sw-card-foot > [data-sw-optional] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-1) var(--sw-space-2);
+    margin-inline-start: auto;
+}
+
+    .sw-card-foot > [data-sw-optional] > .sw-card-cell {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--sw-space-1) var(--sw-space-2);
+    }
+
+    .sw-card-foot > [data-sw-optional] .sw-cell-action {
+        margin: 0;
+    }
+
+/* Links in the foot are as calm as the other links of a card */
+.sw-card-foot .sw-linkbtn {
+    color: var(--sw-text);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .sw-card-foot .sw-linkbtn:hover {
+        color: var(--sw-text-accent);
+    }
+}
+
+/* Parts that show only with a state: .sw-when-ok / -warn / -danger follow the grade of the card (data-sw-level), .sw-when-on / -off follow the parent's data-on="${Flag}" (neither with no value), .sw-if-empty the parent's data-v="${Name}" when it has no value */
+.sw-card:not([data-sw-level="ok"]) .sw-when-ok, .sw-card:not([data-sw-level="warn"]) .sw-when-warn, .sw-card:not([data-sw-level="danger"]) .sw-when-danger,
+.sw-card:not([data-sw-level="warn"], [data-sw-level="danger"]) .sw-when-trouble,
+[data-on]:not([data-on="true"], [data-on="True"]) > .sw-when-on, [data-on]:not([data-on="false"], [data-on="False"]) > .sw-when-off,
+[data-v]:not([data-v=""]) > .sw-if-empty {
+    display: none;
+}
+
+/* An error of an item */
+.sw-card-rich > .sw-card-error {
+    color: var(--sw-danger);
+}
+
+/* A footer without an action takes no room */
+.sw-card-foot:not(:has(button, a)) {
+    display: none;
+}
+
+/* The small value next to a label: text, not code */
+.sw-card-rich .sw-facts dd, .sw-card-rich .sw-facts dd * {
+    font-family: inherit;
+    font-size: inherit;
+    font-variant-numeric: tabular-nums;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
+.sw-card-rich .sw-facts dd:empty::before, .sw-card-rich .sw-facts dd[data-on=""]::before, .sw-card-figure > dd:empty::before {
+    content: "\2013";
+    content: "\2013" / "";
+    color: var(--sw-text-3);
+}
+
+.sw-card-rich .sw-facts dt {
+    color: var(--sw-text);
+    font-size: var(--sw-text-md);
+}
+
+.sw-card-rich .sw-facts dd {
+    font-weight: var(--sw-weight-medium);
+}
+
+/* Links in a card are calmer, so the figures and the status words stand out */
+.sw-card-rich .sw-card-cell a.sw-link {
+    color: var(--sw-text);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    transition: color var(--sw-dur-1);
+}
+
+@media (hover: hover) {
+    .sw-card-rich .sw-card-cell a.sw-link:hover {
+        color: var(--sw-text-accent);
+    }
+}
+
+/* A link in the title is quiet at rest, the underline comes back on hover (links in sub titles and facts keep theirs) */
+.sw-card-rich .sw-card-lead-text > h3 a.sw-link {
+    text-decoration: none;
+}
+
+@media (hover: hover) {
+    .sw-card-rich .sw-card-lead-text > h3 a.sw-link:hover {
+        color: var(--sw-text-accent);
+        text-decoration: underline;
+    }
+}
+
+/* Technical text (a browser's name for itself, a fingerprint): all of it, a little smaller */
+.sw-card-rich > .sw-card-text.sw-card-tech, .sw-card-rich .sw-facts dd.sw-card-tech {
+    font-size: var(--sw-text-sm);
+}
+
+.sw-card-rich .sw-facts dd.sw-card-tech {
+    word-break: break-all;
+}
+
+/* Tags with a label take a line of the facts strip */
+.sw-card-rich .sw-facts dd .sw-card-tags {
+    margin-top: 2px;
+}
+
+/* A value in the line under a title is text too */
+.sw-card-lead-text > .sw-card-sub * {
+    font-family: inherit;
+    font-size: inherit;
+    white-space: normal;
+}
+
+/* Tags in a card are facts: quiet, a status keeps the colour */
+.sw-card-rich .sw-tag {
+    border: 1px solid var(--sw-border-strong);
+    background: var(--sw-surface-sunken);
+    color: var(--sw-text);
+}
+
+/* Technical details on demand: <details class="sw-card-more"><summary>...</summary>...</details> */
+.sw-card-more {
+    padding: 0 var(--sw-space-4) var(--sw-space-3);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+    overflow-wrap: anywhere;
+}
+
+    .sw-card-more > summary {
+        width: fit-content;
+        color: var(--sw-text);
+        cursor: pointer;
+        transition: color var(--sw-dur-1);
+    }
+
+    @media (hover: hover) {
+        .sw-card-more > summary:hover {
+            color: var(--sw-text-accent);
+        }
+    }
+
+    .sw-card-more > summary:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 2px;
+    }
+
+    .sw-card-more > * + * {
+        margin-top: var(--sw-space-1);
+    }
+
+/* A date as the big value: it must not outrank the name of the item */
+.sw-card-figures.sw-card-figures-small .sw-card-figure > dd {
+    font-size: var(--sw-text-lg);
+}
+
+/* Facts with long values: wider columns (.sw-card-facts-wide) or a line each (.sw-card-facts-lines), so a value never breaks inside a word */
+.sw-card-rich > .sw-facts.sw-card-facts-wide {
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+}
+
+.sw-card-rich > .sw-facts.sw-card-facts-lines {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+/* A fact alone on its row takes the whole row (before a fact with tags, or the last one of an odd count) */
+.sw-card-rich > .sw-facts.sw-card-facts-wide > div:nth-child(odd):has(+ div .sw-tag), .sw-card-rich > .sw-facts.sw-card-facts-wide > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}
+
+/* A destructive action (Final) in a card looks destructive */
+.sw-card-foot .sw-cell-action.sw-cell-action-final {
+    border-color: var(--sw-danger);
+    color: var(--sw-danger);
+    transition: background-color var(--sw-dur-1), color var(--sw-dur-1), border-color var(--sw-dur-1);
+}
+
+    .sw-card-foot .sw-cell-action.sw-cell-action-final .sw-icon {
+        color: currentColor;
+    }
+
+@media (hover: hover) {
+    .sw-card-foot .sw-cell-action.sw-cell-action-final:hover:not(:disabled) {
+        border-color: var(--sw-danger);
+        background: color-mix(in srgb, var(--sw-danger) 12%, transparent);
+    }
+}
+
+/* A value at the end of a compact head (a figure instead of a badge) */
+.sw-card-lead-figure {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: none;
+    margin-inline-start: auto;
+    font-family: var(--sw-head);
+    font-size: var(--sw-text-lg);
+    font-weight: var(--sw-head-weight);
+    font-variant-numeric: tabular-nums;
+}
+
+    .sw-card-lead-figure * {
+        font: inherit;
+    }
+
+    /* No value, no bare label */
+    .sw-card-lead-figure:has(> b:empty) {
+        display: none;
+    }
+
+    /* The label under the value */
+    .sw-card-lead-figure > span {
+        color: var(--sw-text-2);
+        font-family: var(--sw-font);
+        font-size: var(--sw-text-xs);
+        font-weight: normal;
+        line-height: var(--sw-lh-tight);
+        text-align: end;
+    }
+
+/* A small label before a control in a foot */
+.sw-card-foot-label {
+    margin-inline-end: auto;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+/* The switch in a foot is calm, so it doesn't outweigh the status: outlined, on and off differ by the word and the check mark ([aria-checked] beats the states of ui/cells.css) */
+.sw-card-foot .sw-cell-toggle[aria-checked] {
+    background: transparent;
+    color: var(--sw-text);
+    border: 1px solid var(--sw-border-strong);
+}
+
+@media (hover: hover) {
+    .sw-card-foot .sw-cell-toggle[aria-checked]:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--sw-text) 8%, transparent);
+        border-color: var(--sw-border-strong);
+    }
+}
+
+/* A message in a badge: no empty badge */
+.sw-card-text:has(> .sw-badge:empty) {
+    display: none;
+}
+
+.sw-card-lead > .sw-badge:empty {
+    display: none;
+}
+
+.sw-card-text > .sw-badge {
+    height: auto;
+    white-space: normal;
+}
+
+/* The lines of a rich card (explore/table.css shares them between the cards of a line) */
+.sw-card-rich > .sw-card-lead { grid-row: 1; }
+.sw-card-rich > .sw-card-figures { grid-row: 2; }
+.sw-card-rich > .sw-meter { grid-row: 3; }
+.sw-card-rich > .sw-card-text { grid-row: 4; }
+.sw-card-rich > .sw-card-text:has(> .sw-badge) { grid-row: 5; }
+.sw-card-rich > .sw-card-more { grid-row: 5; }
+.sw-card-rich > .sw-card-tags { grid-row: 6; }
+.sw-card-rich > .sw-facts { grid-row: 7; }
+.sw-card-rich > .sw-card-foot { grid-row: 8; }
+
+/* Small print: darker everywhere, a size larger in the phone layout */
+.sw-card-lead-text > .sw-card-sub, .sw-card-rich > .sw-card-text, .sw-card-more {
+    color: color-mix(in srgb, var(--sw-text-2) 45%, var(--sw-text));
+}
+
+html.SwMobile .sw-card-rich :is(.sw-facts dt, .sw-facts dd, .sw-card-figure > dt, .sw-card-sub, .sw-card-more, .sw-linkbtn) {
+    font-size: var(--sw-text-md);
+}
+
+/* A status from a data-sw-match part sets the tone of a rich card, like a grade does (the error after the warning) */
+.sw-card-rich:has(> .sw-card-lead > [data-sw-match] > .sw-badge.sw-warning) { --sw-card-tone: var(--sw-warning); }
+.sw-card-rich:has(> .sw-card-lead > [data-sw-match] > .sw-badge.sw-error) { --sw-card-tone: var(--sw-danger); }

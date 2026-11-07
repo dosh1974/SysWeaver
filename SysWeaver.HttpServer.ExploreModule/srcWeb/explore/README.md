@@ -194,6 +194,105 @@ await t.SetRows(polled, true);        // a live update: tinted changes, the orde
 - The state (page size, sort, filters) is stored under `"local:" + Name` (else the page path), as for an api table.
 - **Row cap:** a page never draws more rows than its page size. An api that ignores `MaxRowCount` (answers 10 000 rows for a page of 20) gets its page cut out of the reply (from the asked row when the reply is the whole list) and one console warning ("Sw.Table ...: the api answered 10000 rows for a page of 20 ..."). Fix such an api to honor `Row` / `MaxRowCount`, or give the rows as local data.
 
+### Infinite scrolling (`Scroll`)
+
+`table.html?q=...&scroll` (not `scroll=0` or `scroll=false`), or the option `Scroll: true`, shows one long list instead of pages:
+
+- The rows load on demand. The table measures how many items fit one screen and keeps at least half a screen loaded below the view; every request asks for at least a full screen (fewer, larger requests).
+- A running request shows a loading animation at the bottom of the view, a failed one a "Try again" there, and after the last item the list ends with "End of the list: 500 rows".
+- There is no pager or page size. Sort, filter and search start the list again. `Page Up` / `Page Down` move a screen.
+- A live refresh reads the rows in view and the part below them, not the whole list. When they changed, the rows below are dropped and load again when needed (a row could otherwise show twice), rows above are updated when they are in view at a refresh.
+- The export "Current view" is the rows in view, also the partly visible ones. "Filtered" and "All" are unchanged.
+- All loaded rows stay in the page (no virtualization), so a very long scroll gets slower. Use filters or pages for huge lists.
+
+### Card templates (`Card`)
+
+A table can show each row as an html card. The card is chosen once, with the first answer: the url parameter `card` of `table.html` (or the option `Card`) first, then `Card` of the table data (C#: `[TableDataCard("...")]` on the row type, or `.WithCard("...")`, sent only with the columns). `card=0` or `card=false` (option `Card: false`) turns it off, also the server's.
+
+The value is `name@path`:
+
+| Value | Default view | Can switch |
+|---|---|---|
+| `name@path` | Cards | Yes, to the table |
+| `+name@path` | Table | Yes, to cards |
+| `-name@path` | Cards | No, cards only |
+
+- `path` uses the same rule as `q`: `ServerManager/cards` is relative to the site root, `../x` to `explore/`. It must be on this site. `.html` is added unless it ends with `.html` or `.htm`. A file that can't be loaded is an error shown in place of the table.
+- The `.css` file next to it is optional and is loaded once per page. Set the width of the items with `--sw-card-min`, ex: `.sw-table-cardlist[data-card="drive"] { --sw-card-min: 18rem; }`.
+- `name` is the id of a `<template>` in the file, it holds the html of one item. A missing template is an error. On compact screens a template with the id `<name>-mobile` is used when it exists. A card template replaces the built in cards of compact screens.
+- The viewer's choice of view is remembered per table.
+- With cards, the column header is replaced by the sort menu in the tool bar and the filter dialog; the Columns button is not shown. The layout button (or the "More tools" menu on phones) switches view.
+
+```html
+<template id="drive">
+    <article class="sw-card">
+        <header class="sw-card-head"><h3>${Drive}</h3><span class="sw-badge sw-push">${Type}</span></header>
+        <div class="sw-card-body">
+            <div class="sw-card-meter" style="--sw-card-value: ${Used}"></div>
+            <dl class="sw-card-fields"><dt data-translation_context="Label on the card of a drive: the free space">Free</dt><dd>${+Free}</dd></dl>
+        </div>
+    </article>
+</template>
+```
+
+A variable is `${Name}`, in any attribute value or element text, where `Name` is a column name (also the columns the server hides by default). A column that doesn't exist is left as written, with a developer warning. As in C# `TextTemplate`, one format and then one encoder can be put before the name, ex: `${_#Name}`:
+
+| Modifier | Kind | Result |
+|---|---|---|
+| `_` | Format | Lower case |
+| `^` | Format | Upper case |
+| `~` | Format | Remove camel case, "MyCoolType" => "My cool type" |
+| `+` | Format | The column's cell format (`Sw.Cells`: links, sizes, times, row actions). As text in an attribute, or when an encoder follows |
+| `@` | Encoder | Safe in an html attribute |
+| `#` | Encoder | Safe as an html value |
+| `%` | Encoder | Url encoded, "Hello world!" => "Hello+world!" |
+| `-` | Encoder | The value is markdown, converted with `Sw.Markdown` (sanitized). As text in an attribute |
+
+**Values can't add markup.** The variables are filled through the DOM, not as html text, so a value is always shown as text: `${Name}`, `${@Name}` and `${#Name}` give the same safe result (in C#, a template without an encoder writes the value as raw html). Only `+` and `-` add elements, made by the cell renderers and the markdown sanitizer. Because `card` can come from a link, the template is cleaned when it is compiled: `script`, `iframe`, `object`, `embed`, `base`, `meta`, `link`, `on*` attributes and `srcdoc` are removed, and a `javascript:`, `vbscript:` or non image `data:` url is dropped, also one that comes from a row value.
+
+**Translation:** static text is translated like on any page: give it a `data-translation_context`. An element whose text is only one variable is left alone. Text that mixes a variable with anything else is sent to the translator as a whole, so put the variable in its own element, or use `translate="no"` when there are no words to translate (ex: `<div translate="no">${+Free} / ${+Total}</div>`).
+
+A row action (`${+Actions}`) in a card runs with its confirmation and result from `Sw.Cells`, then the rows are read again. Row results in the row, kept rows and the keyboard grid are for the table view.
+
+The server replaces its own template variables in `.html` files that match a template pattern, so a column named like one of them (see the "Template variables" table) should not be used in a card file that is served that way.
+
+**A richer card** (`<article class="sw-card sw-card-rich sw-tone-2">`, the framework's own cards use it, ex: `ServerManager/cards.html`): `.sw-tone-2` to `-7` pick the accent of the kind of card (a chart slot). `.sw-card-lead` is the head: a `.sw-card-tile` (with an icon, a picture or letters; `.sw-card-mono` shows only the first letter of its text), `.sw-card-lead-text` (`h3`, `.sw-card-sub`) and a status badge. `dl.sw-card-figures` > `.sw-card-figure` > `dt` + `dd` are the big values (`.sw-card-figures-small` for a date), `dl.sw-facts` the small ones at the bottom (`.sw-card-facts-wide` or `.sw-card-facts-lines` when the values are long), `.sw-card-text` free text, `.sw-card-tags` tags, `details.sw-card-more` long technical text on demand, `footer.sw-card-foot` the links and actions (`.sw-card-foot-label` is a small label before a control in it), `.sw-card-lead-figure` a value at the end of a compact head (`<b class="sw-card-lead-figure">${+Size}</b>`, for the `-mobile` templates). A status badge made by `data-sw-match` in the lead sets the tone of the card like a grade does (`.sw-warning` the warning tone, `.sw-error` the danger tone). The design rules of `_docs/UX_Guide.md` apply: no shadows or gradients, facts in a facts strip and badges only for a status, a state always has a word and an icon. An empty `dd` shows a dash, an empty `.sw-card-text` or `.sw-card-tags` takes no room.
+
+**Reacting to a value**, without code in the page:
+
+| Write | What it does |
+|---|---|
+| `<i data-sw-icon="drive"></i>` | An icon of the framework's set (`Sw.Icons.List()`) |
+| `<div class="sw-meter" data-level="${Used}" data-warn="80" data-danger="92"><i style="--sw-card-value: ${Used}"></i></div>` | Grades a number: high is bad, or low is bad when `data-danger` is below `data-warn`. The element (a meter also gets `is-warn` / `is-danger`) and its `.sw-card` get `data-sw-level` (`ok`, `warn`, `danger`; the card keeps its worst), which sets the tone of a rich card and shows the `.sw-when-ok` / `-warn` / `-danger` parts of the card |
+| `data-days="${To}" data-warn="30" data-danger="0"` | The same for a date: the days left until it, low is bad |
+| `<p class="sw-card-text sw-when-trouble">...</p>` | A part that shows only when the card is graded `warn` or `danger` (`data-sw-level`), ex: a row of badges that explain the problem |
+| `<span data-on="${Incoming}"><span class="sw-when-on">...</span><span class="sw-when-off">...</span></span>` | A flag: the child that fits a true or false value; neither without a value |
+| `<span data-sw-match="${Status}"><span data-when="Running,Started" class="sw-badge sw-ok">Running</span><span data-when="*" class="sw-badge sw-warning">Unknown</span></span>` | The children whose `data-when` names the value stay (else the `*` child), so a state can have its own translated word, icon and colour |
+| `<h3 data-v="${User}"><span class="sw-if-empty">Not signed in</span>${User}</h3>` | A text for a missing value |
+| `<footer data-sw-optional>${+Actions}</footer>` | The element goes away when the table doesn't send that column (ex: actions only an admin gets) instead of showing the variable as written |
+| `<span class="sw-card-tile" inert aria-hidden="true">${+Flag}</span>` | A decoration made by a cell renderer, without its link |
+| `<h3 class="sw-card-path">${Folder}</h3>` | A path that may break after a slash, not inside a word |
+| `<dd data-sw-days-left="${To}"></dd>` | The whole number of days left until the date (rounded up, at least 0) as a plain number; a missing or invalid date leaves it empty, so the css dash shows |
+| `<a href="...">https://example.com/a/b</a>` in `.sw-card-sub` or `.sw-facts` | A web address or a path in a link (`://`, `/` or `\`) may break after `/`, `\`, `.` and `:`, not inside a word (nothing to write; the icon of the link stays) |
+
+A card names its actions: a button or an icon only link in a `${+...}` value, and a link in `.sw-card-foot`, gets "text: heading of the card" as its accessible name (UX guide TIP-2), so give the card a heading that tells the items apart. A sub title equal to the heading is removed. A card file without a style sheet says so with `<meta name="sw-card-css" content="none" />`: no request, so no 404 in the console.
+
+The shared parts for cards are `.sw-card` (`.sw-card-head`, `.sw-card-sub`, `.sw-card-body`) and `.sw-badge` (`.sw-ok`, `.sw-warning`, `.sw-error`, `.sw-info`), and in `ui/components.css`: `.sw-card-fields` (a `dl` of label and value lines), `.sw-card-tags` (a wrapping line of badges), `.sw-card-icon` (an icon value in a card head), `.sw-card-meter` (`style="--sw-card-value: ${Used}"`, 0 to 100).
+
+Tables with cards today:
+
+| Project | File | Row type (api) | Value |
+|---|---|---|---|
+| `SysWeaver.MicroService.ServerManager` | `ServerManager/cards.html` | `SmDriveInfo` (`DriveInfoTable`) | `drive@ServerManager/cards` (and `drive-mobile`) |
+| | | `SmServiceBrief` (`ServicesTable`) | `+service@ServerManager/cards` |
+| `SysWeaver.HttpServer.ExploreModule` | `explore/cards.html` | `CompData` (`CompressionTable`) | `compression@explore/cards` |
+| | | `SerData` (`SerializerTable`) | `serializer@explore/cards` |
+| `SysWeaver.AI` | `ai/cards/models.html` | `AiLlmModel` (`GetLlmModelTable`) | `llm@ai/cards/models` |
+| | | `AiImageModel` (`GetImageModelTable`) | `image@ai/cards/models` |
+| `SysWeaver.HttpServer.IsoDataModule` | `iso_data/cards/iso.html` | `IsoCountry` (`IsoCountryTable`) | `+country@iso_data/cards/iso` |
+| `SysWeaver.Auth.Core` | `auth/cards.html` | `SimpleAuthorizer.Info` (`UsersTable`) | `+user@auth/cards` |
+| `SysWeaver.Email.Fake` | `fakeEmail/cards.html` | `AnyEmail` (`MessageTable`) | `+email@fakeEmail/cards` |
+
 ### Lists of rows: use `Sw.Table`, not a hand-made table
 
 Any list of rows a page shows (records, results, a preview, a polled status list) is a `Sw.Table`: with a table api (`Url`) or with the rows the page already has (`Rows`, above). A hand-made `<table>` / `createElement("table")`, or a list of row `div`s with a click listener, gets none of the rules the UX guide asks for, and each page then has to build them again (and usually forgets some):

@@ -3,6 +3,7 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+    [SysWeaver.Data.TableDataCard("storage@ServerManager/cards")]
     [TableDataPrimaryKey(nameof(Folder))]
     public sealed class SmChunkFolderStats
     {

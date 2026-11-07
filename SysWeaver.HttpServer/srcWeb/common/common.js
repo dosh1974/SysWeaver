@@ -3189,6 +3189,9 @@ window.Sw.Sources["core/format.js"] = "common/common.js";
     /** Default unit prefixes of suffix (k^1..k^5). */
     const suffixPrefixes = ["k", "M", "G", "T", "E"];
 
+    /** Unit prefixes of byte values (K^1..K^5, upper case K as in KB). */
+    const bytePrefixes = ["K", "M", "G", "T", "E"];
+
 
     /**
      * Format a duration in ms as one translated unit: ms (< 100), seconds (1 decimal below 10 s), minutes,
@@ -3676,20 +3679,20 @@ window.Sw.Sources["core/format.js"] = "common/common.js";
         Suffix: suffix,
 
         /**
-         * Format a byte count as the original ValueFormat.formatByteSize, e.g. "1 000 bytes", "12.3 kb", "5.0 Mb", "63.4 Gb" (k = 1024).
+         * Format a byte count as the original ValueFormat.formatByteSize, e.g. "1 000 bytes", "12.3 KB", "5.0 MB", "63.4 GB" (k = 1024).
          * @param {number} value - Bytes.
-         * @param {number} [decimals=1] - Decimals of kb and larger values (e.g. 2 to match a server text like "63.35 Gb").
+         * @param {number} [decimals=1] - Decimals of KB and larger values (e.g. 2 to match a server text like "63.35 GB").
          * @returns {string}
          */
-        Bytes: (value, decimals) => suffix(value, "b", "bytes", 1024, decimals),
+        Bytes: (value, decimals) => suffix(value, "B", "bytes", 1024, decimals, bytePrefixes),
 
         /**
-         * Format a byte speed as the original, e.g. "12.3 kb/s".
+         * Format a byte speed, e.g. "12.3 KB/s".
          * @param {number} value - Bytes per second.
-         * @param {number} [decimals=1] - Decimals of kb/s and larger values.
+         * @param {number} [decimals=1] - Decimals of KB/s and larger values.
          * @returns {string}
          */
-        ByteSpeed: (value, decimals) => suffix(value, "b/s", "bytes/s", 1024, decimals),
+        ByteSpeed: (value, decimals) => suffix(value, "B/s", "bytes/s", 1024, decimals, bytePrefixes),
 
         /** Elapsed ms as text (value, blankIfNeg). */
         DurationMs: durationMs,
@@ -36013,6 +36016,30 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
     }
 
     /**
+     * The short form of a user agent string, ex: "Edge 140 on Windows". The full string stays the value of the cell (tool tip, copy, sorting,
+     * filtering, the lookup link). A string it doesn't know is returned as it is.
+     * @param {*} value The user agent string.
+     * @returns {string} The text to show.
+     */
+    function UserAgentText(value) {
+        const s = String(value ?? "");
+        const hit = (rx, name) => {
+            const m = rx.exec(s);
+            return m ? name + (m[1] ? " " + m[1] : "") : null;
+        };
+        const browser = hit(/\bEdg(?:e|A|iOS)?\/(\d+)/, "Edge") || hit(/\bOPR\/(\d+)/, "Opera") || hit(/\bSamsungBrowser\/(\d+)/, "Samsung Internet")
+            || hit(/\b(?:Firefox|FxiOS)\/(\d+)/, "Firefox") || hit(/\b(?:Chrome|CriOS)\/(\d+)/, "Chrome") || hit(/\bVersion\/(\d+)[\d.]*(?: Mobile\/\S+)? Safari\//, "Safari")
+            || hit(/\b(?:MSIE |Trident\/.*rv:)(\d+)/, "Internet Explorer");
+        if (!browser) {
+            const tool = /^(curl|Wget|python-requests|PostmanRuntime|okhttp|Go-http-client|axios|node-fetch)\/(\d+)/i.exec(s);
+            return tool ? tool[1] + " " + tool[2] : s;
+        }
+        const os = /Windows/.test(s) ? "Windows" : /Android/.test(s) ? "Android" : /iPhone/.test(s) ? "iPhone" : /iPad/.test(s) ? "iPad"
+            : /Mac OS X|Macintosh/.test(s) ? "macOS" : /CrOS/.test(s) ? "ChromeOS" : /Linux|X11/.test(s) ? "Linux" : null;
+        return os ? _T("{0} on {1}", browser, os, "The short name of the browser of a user, in a data table. {0}: the browser and its version, ex: Edge 140; {1}: the operating system, ex: Windows") : browser;
+    }
+
+    /**
      * Renderer "Url": text = formats[1] (default "{0}"), url = formats[2] (default "{2}" = the text; a target prefix + _blank, * _self, ^ _top, - _parent),
      * title = formats[3] (default 'Click to open "{3}".'). Args: {0} value, {1} nextValue, {2} text, {3} absolute url. Plain text without an url.
      * @param {HTMLElement} e The cell. @param {*} value The value. @param {string[]} formats The format arguments. @param {*} nextValue The next value.
@@ -36024,7 +36051,8 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
             SetText(e, "", "", flash);
             return;
         }
-        const text = sf(formats[1] ?? "{0}", value, nextValue);
+        const ua = formats[4] === "UserAgent";
+        const text = ua ? UserAgentText(value) : sf(formats[1] ?? "{0}", value, nextValue);
         const ut = UrlTarget(sf(formats[2] ?? "{2}", value, nextValue, text));
         const url = absUrl(ut[0]);
         const target = ut[1];
@@ -36040,6 +36068,8 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
             e.classList.add(Classes.Link);
             if (ext)
                 title = ext.Search ? ext.Title : F().JoinNonEmpty("\n", title, ext.Title);
+            if (ua)
+                title = F().JoinNonEmpty("\n", String(value), title);
             SetNodes(e, "u" + url + "\n" + target + "\n" + text + (ext ? "\ne" : ""), () => [ext ? ExternalLink(url, text, ext) : CreateLink(url, text, target)], title, flash);
             return;
         }
@@ -36612,6 +36642,10 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
             const text = sf(ft, tag, k, v);
             let title = sf(fti, tag, k, v, text);
             const s = el("span.sw-tag", { text });
+            if (keyTitle) {
+                s.setAttribute("role", "img");
+                s.setAttribute("aria-label", keyTitle);
+            }
             if (fc) {
                 const cp = sf(fc, tag, k, v, text, title);
                 title = F().JoinNonEmpty("\n\n", title, copyClick(s, cp));
@@ -36878,8 +36912,17 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
                 if (Sw.BadClick(ev) || busy || !api)
                     return;
                 busy = true;
-                await runAction(b, api, onRefresh);
-                busy = false;
+                try {
+                    //  The optional question before switching off (C# confirmOff, format part 6, "question[\nexplanation]"): the same danger
+                    //  dialog as an action's confirmation, Cancel has the focus; Cancel sends nothing. Switching on never asks (UX guide SAF-1 / 2 / 3)
+                    const q = on && formats[6] ? sfa(formats[6], args) : "";
+                    if (q && !await confirmOff(e, q, b))
+                        return;
+                    await runAction(b, api, onRefresh);
+                }
+                finally {
+                    busy = false;
+                }
             });
             return [b];
         }, "", flash);
@@ -37057,6 +37100,28 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
             Item: item,
             OkText: d.Text,
             OkIcon: d.Image || null,
+            Row: btn,
+        });
+    }
+
+    /**
+     * Ask before a Toggle switches off (the server's confirmOff question): the danger dialog of the actions, titled with the question
+     * (the part after a line break is the explanation), naming the row by its name and short facts; Cancel has the focus.
+     * @param {HTMLElement} cell The toggle cell.
+     * @param {string} q The server's "question[\nexplanation]".
+     * @param {HTMLElement} btn The toggle button.
+     * @returns {Promise<boolean>} True to switch off.
+     */
+    async function confirmOff(cell, q, btn) {
+        const nl = q.indexOf("\n");
+        const name = RowName(cell);
+        return ConfirmDanger({
+            Title: (nl > 0 ? q.substring(0, nl) : q).trim(),
+            Text: nl > 0 ? q.substring(nl + 1).trim() || undefined : undefined,
+            Item: name && name.Value ? (name.Label ? name.Label + ": " : "") + name.Value : ItemName(cell),
+            Facts: rowFacts(cell, name ? [name.Label] : [], 4, name ? [name.Value] : []),
+            Warning: "",
+            OkText: _TF("Switch off", "The button of the confirmation dialog of a toggle (ex: an enabled network adapter) that switches it off"),
             Row: btn,
         });
     }
@@ -37492,6 +37557,9 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
                 : d.Title;
             const b = el("button.sw-cell-action", { type: "button", title: title || null, attrs: { "aria-label": d.Text || d.Title || null, "data-sw-done": d.Done || null, "data-sw-final": d.Final === undefined ? null : String(d.Final) } },
                 d.Image ? Icon(d.Image) : null, d.Text ? el("span", { text: d.Text }) : null);
+            //  A destructive action (the server's "final" flag): a card styles it as such
+            if (d.Final === true)
+                b.classList.add("sw-cell-action-final");
             //  Not possible: aria-disabled (focusable, a click or Enter says why; UX guide INP-12)
             if (!d.Link || na)
                 Sw.Disabled.Set(b, true, na ? title : (d.Title || _TF("Not available for this item", "Tool tip of a disabled table cell action that has no request for this row")));
@@ -37588,6 +37656,16 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
      * @returns {HTMLElement} The cell.
      */
     function Update(e, type, value, flash, format, nextValue, onRefresh) {
+        //  A nullable column shows its values like the plain type; a missing value stays empty (a date cell without a value would show the current time)
+        const nullable = /^System\.Nullable`1\[\[([^,\]]+)/.exec(type || "");
+        if (nullable) {
+            if (value === null || value === undefined) {
+                Reset(e, "Null");
+                e.textContent = "";
+                return e;
+            }
+            type = nullable[1];
+        }
         const formats = format ? String(format).split(";") : [];
         let fn = TypeFormatters.get(type) || Default;
         let kind = null;
@@ -37628,6 +37706,7 @@ window.Sw.Sources["ui/cells.js"] = "common/common.js";
         ShowMarkdown,
         TypeFormatters,
         FormatFormatters,
+        UserAgentText,
         Default,
         Type,
         Number: NumberCell,

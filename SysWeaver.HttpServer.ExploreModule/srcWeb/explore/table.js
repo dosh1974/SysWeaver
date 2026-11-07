@@ -38,6 +38,10 @@
  * sends more than twice its refresh rate's requests without user input (a loop) and warns the developer (Sw.DevWarn).
  * Framed (window.parent is another window): each server request first posts `{Type: "TableSearchParams", Param, Filters, SearchText}`
  * to the parent (an external host, ex: Fenrir, scopes a background search to the shown rows).
+ * Infinite scrolling (option Scroll, table.html `?scroll`): the rows load on demand (ScrollEnsure) instead of pages; loading more is not part
+ * of the update loop (ScrollMore: a held refresh must not block it), a live refresh reads the rows in view (ScrollPlan / ScrollMerge).
+ * Card templates (option Card, table.html `?card=name@path`, TableData.Card): each row is an item of an html template (CardTemplate,
+ * RenderCards), with a switch to the table view unless the name starts with "-"; see explore/README "Card templates".
  * Styled by explore/table.css.
  */
 
@@ -1529,6 +1533,483 @@
         }
     }
 
+    // ------------------------------------------------------------------ card templates
+
+    /** @type {RegExp} A variable of a card template: `${Name}`, with optional modifiers before the name. */
+    const CardVarRx = /\$\{([^{}]*)\}/g;
+
+    /** @type {string} Elements a card template may not contain (removed when it is compiled): a crafted `card=` link must not run script. */
+    const CardBlocked = "script,object,embed,applet,iframe,frame,frameset,base,meta,link";
+
+    /**
+     * Is this the type of a date column (also a nullable one)?
+     * @param {string} type The type name of the column.
+     * @returns {boolean} True for a date.
+     */
+    function isDateType(type) {
+        return type === "System.DateTime" || (type || "").startsWith("System.Nullable`1[[System.DateTime,");
+    }
+
+    /** @type {Set<string>} File types without an icon (CardTemplate.Ext). */
+    const CardNoExt = new Set();
+
+    /** @type {string[]} The grades of CardTemplate.Level, the worst last. */
+    const CardLevels = ["ok", "warn", "danger"];
+
+    /** @type {RegExp} Attributes that hold a url: a value with a variable is checked when it is rendered (cardUrlOk). */
+    const CardUrlAttr = /^(?:href|src|action|formaction|data|poster|ping|background|xlink:href)$/i;
+
+    /**
+     * Test the url of an attribute (a script url is never rendered, also not from a row value).
+     * @param {string} v The url.
+     * @returns {boolean} True if the attribute may have this value.
+     */
+    function cardUrlOk(v) {
+        const s = String(v).replace(/[\u0000- ]+/g, "").toLowerCase();
+        return !/^(?:javascript|vbscript):/.test(s) && (!s.startsWith("data:") || s.startsWith("data:image/"));
+    }
+
+    /**
+     * An error of a card template (a missing file or template, a bad `name@path`): permanent, it is shown as is and not retried by
+     * itself ("Try again" does).
+     * @param {string} text The message.
+     * @returns {Error} The error.
+     */
+    function cardError(text) {
+        const e = new Error(text);
+        e.SwCardError = true;
+        return e;
+    }
+
+    /**
+     * Parse a card selection ("name@path").
+     * @param {string} card The selection. The name may start with "-" (cards only, no table view) or "+" (the table view is the default).
+     * @returns {{Name: string, Path: string, Mode: string}} Mode is "cards" (the default view), "table" ("+") or "only" ("-").
+     */
+    function parseCard(card) {
+        const s = String(card).trim();
+        const at = s.indexOf("@");
+        let name = at > 0 ? s.substring(0, at) : "";
+        const path = at > 0 ? s.substring(at + 1).trim() : "";
+        const c = name.charAt(0);
+        const mode = c === "-" ? "only" : c === "+" ? "table" : "cards";
+        if (mode !== "cards")
+            name = name.substring(1);
+        if (!name || !path)
+            throw cardError(_T('The card "{0}" is not valid: it must be written as name@path.', s, "Error shown instead of a data table when its card template selection has the wrong format, {0} is the selection"));
+        return { Name: name, Path: path, Mode: mode };
+    }
+
+    /** @type {Map<string, Promise<Document>>} The loaded card files by url. */
+    const CardFiles = new Map();
+
+    /**
+     * Load a card file once: the html file (required) and the css file next to it (optional, errors are ignored). Only files of this
+     * site are loaded, the path may come from a link.
+     * @param {string} path The path (Sw.Url.SiteUrl rule). ".html" is added unless it ends with .html or .htm.
+     * @returns {Promise<Document>} The parsed (inert) html.
+     */
+    function loadCardFile(path) {
+        const abs = Sw.Url.SafeSameOrigin(Sw.Url.SiteUrl(path));
+        if (!abs)
+            return Promise.reject(cardError(_T('The card file "{0}" cannot be used: it must be on this site.', path, "Error shown instead of a data table when its card template file is on another web site (not allowed), {0} is the path")));
+        const u = new URL(abs);
+        if (!/\.html?$/i.test(u.pathname))
+            u.pathname += ".html";
+        const key = u.href;
+        let p = CardFiles.get(key);
+        if (p)
+            return p;
+        p = (async () => {
+            let res;
+            try {
+                res = await fetch(key, { credentials: "same-origin" });
+            }
+            catch (e) {
+                throw cardError(_T('The card file "{0}" could not be loaded: {1}', u.pathname, e && e.message ? e.message : String(e), "Error shown instead of a data table when its card template file could not be loaded, {0} is the path, {1} the reason"));
+            }
+            if (!res.ok)
+                throw cardError(_T('The card file "{0}" could not be loaded: {1}', u.pathname, String(res.status), "Error shown instead of a data table when its card template file could not be loaded, {0} is the path, {1} the reason"));
+            const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+            //  (a file without a style sheet can say so: <meta name="sw-card-css" content="none">, no request and no 404 in the console)
+            if (doc.querySelector('meta[name="sw-card-css"][content="none"]'))
+                return doc;
+            //  The optional style sheet: waited for (so the first cards are styled), a missing one is ignored
+            const css = new URL(u.href);
+            css.pathname = css.pathname.replace(/\.html?$/i, ".css");
+            await new Promise(done => {
+                const link = el("link", { rel: "stylesheet", href: css.href });
+                const timer = setTimeout(done, 3000);
+                const end = () => {
+                    clearTimeout(timer);
+                    done();
+                };
+                link.addEventListener("load", end);
+                link.addEventListener("error", () => {
+                    link.remove();
+                    end();
+                });
+                document.head.append(link);
+            });
+            return doc;
+        })();
+        CardFiles.set(key, p);
+        //  (a failed load may work the next time: "Try again")
+        p.catch(() => CardFiles.delete(key));
+        return p;
+    }
+
+    /**
+     * A compiled card template: the html of one item, with the variables replaced by slots, so a card is a fast clone of the prepared
+     * nodes plus its slots. A variable is `${Name}`, in any attribute value or element text; Name is a column name. Before the name, like
+     * C# TextTemplate, one format and one encoder may be given (in that order, ex: `${_#Name}`):
+     * formats `_` lower case, `^` upper case, `~` remove camel case, `+` the column's cell format (Sw.Cells: links, sizes, times, row
+     * actions); encoders `@` html attribute, `#` html value, `%` url, `-` the value is markdown (sanitized, Sw.Markdown).
+     *
+     * The slots are filled through the DOM, so a value can't add markup: `@`, `#` and a variable without an encoder all show the value
+     * as text. Only `+` and `-` add elements, made by the cell renderer and the markdown sanitizer. A variable with an unknown column stays
+     * as written (as in C#), with a developer warning.
+     */
+    class CardTemplate {
+        /**
+         * @param {HTMLTemplateElement} tpl The template element (of an inert document).
+         * @param {string} name The name.
+         */
+        constructor(tpl, name) {
+            /** @type {string} The name of the template. */
+            this.Name = name;
+            /** @type {DocumentFragment} The prepared nodes, without the variables. */
+            this.Proto = tpl.content.cloneNode(true);
+            /** @type {Array<object>} What to fill: { Path, Var } text, or { Path, Attr, Ns, Parts } an attribute. */
+            this.Slots = [];
+            /** @type {?string} The column signature the variables are bound to (Bind). */
+            this.Sig = null;
+            /** @type {boolean} True when an element has data-level or data-days (Level). */
+            this.Levels = false;
+            this.Compile(this.Proto, []);
+        }
+
+        /**
+         * Grade the value of an element, so a card can react to a number or a date without code:
+         * data-level="${Used}" data-warn="80" data-danger="92" (high is bad; low is bad when danger is below warn), or
+         * data-days="${To}" data-warn="30" data-danger="7" (a date: the days left until it).
+         * A meter (.sw-meter) gets its is-warn / is-danger class; the element and its card get data-sw-level (ok, warn, danger; a card keeps
+         * its worst), which shows the .sw-when-ok / -warn / -danger parts. A value that isn't a number or a date grades nothing.
+         * @param {Element} e The element.
+         */
+        static Level(e) {
+            const d = e.dataset;
+            const days = d.days !== undefined;
+            const v = days ? (Date.parse(d.days) - Date.now()) / 864e5 : parseFloat(d.level);
+            if (isNaN(v))
+                return;
+            const warn = parseFloat(d.warn);
+            const danger = parseFloat(d.danger);
+            const low = days || danger < warn;
+            const hit = t => !isNaN(t) && (low ? v <= t : v >= t);
+            const level = hit(danger) ? "danger" : hit(warn) ? "warn" : "ok";
+            e.setAttribute("data-sw-level", level);
+            if (e.classList.contains("sw-meter")) {
+                e.classList.toggle("is-warn", level === "warn");
+                e.classList.toggle("is-danger", level === "danger");
+            }
+            const card = e.closest(".sw-card");
+            if (card && card !== e) {
+                const was = CardLevels.indexOf(card.getAttribute("data-sw-level"));
+                if (CardLevels.indexOf(level) > was)
+                    card.setAttribute("data-sw-level", level);
+            }
+        }
+
+        /**
+         * The file type icon of a value: <span class="sw-card-tile" data-sw-ext="${Name}" data-sw-fallback="fileKey"></span>. The extension is taken
+         * from the end of the first word of the value ("Auth.key", ".gz .gzip", "json"). A type without an icon shows the fallback icon, and is
+         * asked for only once per page.
+         * @param {Element} e The element.
+         */
+        static Ext(e) {
+            const m = /(?:^|\.)([a-z0-9_+-]{1,16})$/.exec(String(e.getAttribute("data-sw-ext") || "").trim().split(/[\s,]+/)[0].toLowerCase());
+            const fallback = () => {
+                const icon = Sw.Icon(e.getAttribute("data-sw-fallback") || "file");
+                icon.setAttribute("aria-hidden", "true");
+                e.replaceChildren(icon);
+            };
+            if (!m || CardNoExt.has(m[1])) {
+                fallback();
+                return;
+            }
+            const img = el("img", { attrs: { alt: "", src: "../icons/ext/" + m[1] + ".svg" } });
+            img.addEventListener("error", () => {
+                CardNoExt.add(m[1]);
+                fallback();
+            });
+            e.replaceChildren(img);
+        }
+
+        /**
+         * The days left until a date, as a plain number: <dd data-sw-days-left="${To}"></dd>. The whole number of days, rounded up and at least 0.
+         * A missing or invalid date leaves the element empty (the card css shows a dash).
+         * @param {Element} e The element.
+         */
+        static DaysLeft(e) {
+            const t = Date.parse(e.getAttribute("data-sw-days-left"));
+            if (isNaN(t))
+                return;
+            const days = Math.max(0, Math.ceil((t - Date.now()) / 864e5));
+            e.textContent = Sw.Format && typeof Sw.Format.Number === "function" ? Sw.Format.Number(days, 0, " ") : String(days);
+        }
+
+        /**
+         * Show the part that fits a value: <span data-sw-match="${Status}"><span data-when="Running,Started" class="sw-badge sw-ok">Running</span>...</span>.
+         * The children whose data-when names the value stay (a data-when="*" child when none does), so a state can have its own word, icon and colour.
+         * @param {Element} e The element.
+         */
+        static Match(e) {
+            const v = e.getAttribute("data-sw-match");
+            const kids = Array.from(e.children);
+            const hit = k => (k.getAttribute("data-when") || "").split(",").includes(v);
+            const any = kids.some(hit);
+            for (const k of kids)
+                if (any ? !hit(k) : k.getAttribute("data-when") !== "*")
+                    k.remove();
+        }
+
+        /**
+         * Parse the text of a variable.
+         * @param {string} key The text between the braces.
+         * @returns {{Key: string, Name: string, Format: string, Encoder: string, Col: ?object, Index: number}} The variable.
+         */
+        static Parse(key) {
+            let i = 0;
+            let f = "";
+            let e = "";
+            if (key && "_^~+".includes(key.charAt(0)))
+                f = key.charAt(i++);
+            if (i < key.length && "@#%-".includes(key.charAt(i)))
+                e = key.charAt(i++);
+            return { Key: key, Name: key.substring(i), Format: f, Encoder: e, Col: null, Index: -1 };
+        }
+
+        /**
+         * Split a text at its variables.
+         * @param {string} text The text.
+         * @returns {Array<string|object>} The static texts and the variables, in order.
+         */
+        static Split(text) {
+            const parts = [];
+            let last = 0;
+            for (const m of text.matchAll(CardVarRx)) {
+                if (m.index > last)
+                    parts.push(text.substring(last, m.index));
+                parts.push(CardTemplate.Parse(m[1]));
+                last = m.index + m[0].length;
+            }
+            if (last < text.length)
+                parts.push(text.substring(last));
+            return parts;
+        }
+
+        /**
+         * Prepare the children of a node: remove what may not run, turn the variables into slots.
+         * @param {Node} node The node.
+         * @param {number[]} path The child indices from the root to the node.
+         */
+        Compile(node, path) {
+            for (let i = 0; i < node.childNodes.length; ++i) {
+                const c = node.childNodes[i];
+                if (c.nodeType === 1) {
+                    if (c.matches(CardBlocked)) {
+                        c.remove();
+                        --i;
+                        continue;
+                    }
+                    //  <i data-sw-icon="drive"></i>: an icon of the framework's set, made once here
+                    if (c.hasAttribute("data-sw-icon")) {
+                        const icon = Sw.Icon(c.getAttribute("data-sw-icon"));
+                        icon.setAttribute("aria-hidden", "true");
+                        c.replaceWith(icon);
+                        continue;
+                    }
+                    const at = path.concat(i);
+                    if (c.matches("[data-level],[data-days],[data-sw-match],[data-sw-ext],[data-sw-days-left]"))
+                        this.Levels = true;
+                    for (const a of Array.from(c.attributes)) {
+                        const n = a.name.toLowerCase();
+                        if (n.startsWith("on") || n === "srcdoc") {
+                            c.removeAttributeNode(a);
+                            continue;
+                        }
+                        const parts = a.value.indexOf("${") >= 0 ? CardTemplate.Split(a.value) : null;
+                        if (parts && parts.some(x => typeof x !== "string")) {
+                            this.Slots.push({ Path: at, Attr: a.name, Ns: a.namespaceURI, Parts: parts, Url: CardUrlAttr.test(a.name) });
+                            //  (never in the prepared nodes: an image must not load "${Url}")
+                            c.removeAttributeNode(a);
+                        }
+                        else if (CardUrlAttr.test(a.name) && !cardUrlOk(a.value))
+                            c.removeAttributeNode(a);
+                    }
+                    if (!c.matches("template,style"))
+                        this.Compile(c, at);
+                    continue;
+                }
+                if (c.nodeType !== 3 || c.nodeValue.indexOf("${") < 0)
+                    continue;
+                const parts = CardTemplate.Split(c.nodeValue);
+                if (!parts.some(x => typeof x !== "string"))
+                    continue;
+                //  One text node per part; the empty ones of the variables are cloned too, so the paths hold
+                const nodes = parts.map(x => document.createTextNode(typeof x === "string" ? x : ""));
+                c.replaceWith(...nodes);
+                parts.forEach((x, k) => {
+                    if (typeof x !== "string")
+                        this.Slots.push({ Path: path.concat(i + k), Var: x });
+                });
+                i += parts.length - 1;
+            }
+        }
+
+        /**
+         * All variables of the template.
+         * @returns {Array<object>} The variables.
+         */
+        Vars() {
+            const res = [];
+            for (const s of this.Slots) {
+                if (s.Var)
+                    res.push(s.Var);
+                else
+                    s.Parts.forEach(x => {
+                        if (typeof x !== "string")
+                            res.push(x);
+                    });
+            }
+            return res;
+        }
+
+        /**
+         * Bind the variables to the columns (once per column set): by name, else ignoring the case; a column whose name starts with a
+         * modifier character is found by the whole text.
+         * @param {Array<object>} cols The columns.
+         * @param {string} sig The column signature.
+         */
+        Bind(cols, sig) {
+            if (this.Sig === sig)
+                return;
+            this.Sig = sig;
+            const unknown = [];
+            for (const v of this.Vars()) {
+                const low = v.Name.toLowerCase();
+                let i = cols.findIndex(c => c.Name === v.Key);
+                if (i >= 0) {
+                    v.Format = "";
+                    v.Encoder = "";
+                }
+                else {
+                    i = cols.findIndex(c => c.Name === v.Name);
+                    if (i < 0)
+                        i = cols.findIndex(c => String(c.Name).toLowerCase() === low);
+                }
+                v.Index = i;
+                v.Col = i >= 0 ? cols[i] : null;
+                if (i < 0)
+                    unknown.push(v.Key);
+            }
+            if (unknown.length && Sw.DevWarn)
+                Sw.DevWarn("Sw.Table: the card template \"" + this.Name + "\" uses unknown columns: " + unknown.join(", ") + ". They are shown as written. Columns: " + cols.map(c => c.Name).join(", "), "table:card:" + this.Name + ":" + unknown.join(","));
+        }
+
+        /**
+         * The text of a variable for a row.
+         * @param {object} v The variable.
+         * @param {object} x The render values: { Row, Get, Cell }.
+         * @returns {string} The text.
+         */
+        static Text(v, x) {
+            if (!v.Col)
+                return "${" + v.Key + "}";
+            let s;
+            if (v.Format === "+")
+                s = x.Cell(v).textContent;
+            else {
+                const raw = x.Get(x.Row, v.Index);
+                s = raw === null || raw === undefined ? "" : typeof raw === "object" ? JSON.stringify(raw) : String(raw);
+                if (v.Format === "_")
+                    s = s.toLowerCase();
+                else if (v.Format === "^")
+                    s = s.toUpperCase();
+                else if (v.Format === "~")
+                    s = Sw.Format.RemoveCamelCase(s);
+            }
+            return v.Encoder === "%" ? encodeURIComponent(s).replace(/%20/g, "+") : s;
+        }
+
+        /**
+         * Make the nodes of one item.
+         * @param {object} row The row.
+         * @param {function(object, number): *} get The value of a column index.
+         * @param {function(object, object): HTMLElement} cell Render a `+` variable (the variable, the row).
+         * @returns {DocumentFragment} The nodes.
+         */
+        Render(row, get, cell) {
+            const frag = this.Proto.cloneNode(true);
+            const x = { Row: row, Get: get, Cell: v => cell(v, row) };
+            //  (the nodes first: a slot may replace its text node with elements, the later paths must still hold)
+            const nodes = this.Slots.map(s => {
+                let n = frag;
+                for (const i of s.Path)
+                    n = n.childNodes[i];
+                return n;
+            });
+            this.Slots.forEach((s, i) => {
+                const n = nodes[i];
+                //  A part that needs a column this table may not send (ex: the actions only an admin gets) goes away with it
+                if (s.Var && !s.Var.Col && n.parentNode && n.parentNode.closest) {
+                    const opt = n.parentNode.closest("[data-sw-optional]");
+                    if (opt) {
+                        opt.remove();
+                        return;
+                    }
+                }
+                if (s.Parts) {
+                    const value = s.Parts.map(p => typeof p === "string" ? p : CardTemplate.Text(p, x)).join("");
+                    if (!s.Url || cardUrlOk(value)) {
+                        if (s.Ns)
+                            n.setAttributeNS(s.Ns, s.Attr, value);
+                        else
+                            n.setAttribute(s.Attr, value);
+                    }
+                    return;
+                }
+                const v = s.Var;
+                const textOnly = n.parentNode && n.parentNode.nodeType === 1 && n.parentNode.matches("textarea,option,title");
+                if (v.Col && v.Encoder === "-" && !textOnly) {
+                    const md = el("div.sw-card-md");
+                    const text = CardTemplate.Text(v, x);
+                    md.textContent = text;
+                    n.replaceWith(md);
+                    Sw.Markdown.ToHtml(text).then(html => md.innerHTML = html, e => console.warn("Card markdown: " + e));
+                }
+                else if (v.Col && v.Format === "+" && !v.Encoder && !textOnly) {
+                    const c = x.Cell(v);
+                    //  (an empty value, and a date that isn't set, "-", look the same: nothing)
+                    if ((c.textContent.trim() && c.textContent.trim() !== "-") || c.querySelector("img, svg, button, a"))
+                        n.replaceWith(c);
+                    else
+                        n.nodeValue = "";
+                }
+                else
+                    n.nodeValue = CardTemplate.Text(v, x);
+            });
+            if (this.Levels) {
+                frag.querySelectorAll("[data-level],[data-days]").forEach(CardTemplate.Level);
+                frag.querySelectorAll("[data-sw-match]").forEach(CardTemplate.Match);
+                frag.querySelectorAll("[data-sw-ext]").forEach(CardTemplate.Ext);
+                frag.querySelectorAll("[data-sw-days-left]").forEach(CardTemplate.DaysLeft);
+            }
+            return frag;
+        }
+    }
+
     // ------------------------------------------------------------------ the table
 
     /**
@@ -1553,7 +2034,8 @@
      * matching rows" with "Clear search and filters"), `ColumnLines` (true: subtle rules between the columns; default: row hairlines
      * only), `RowActions` ("always", the default and only mode, kept for compatibility: the row action buttons of an Actions column show
      * on every row, quiet at rest; UX guide LST-2), `CardTitle` (the column name of the card title and of the row in action messages; default: TitleCol), `MenuName` (a promise of the page header title, table.html: the menu item name; the
-     * title stays hidden until it resolves, so it never changes after the first frame), `AutoHideEmpty` (true: a grid wider than its area hides
+     * title stays hidden until it resolves, so it never changes after the first frame), `Scroll` (true: infinite scrolling instead of pages, the rows load on demand with half a
+     * screen ready below the view; "Current view" of an export is the rows in view), `Card` ("name@path": a card template, explore/README "Card templates"; default TableData.Card; false: none), `AutoHideEmpty` (true: a grid wider than its area hides
      * the columns that are empty on the shown rows; default false: every column is shown, like the original table).
      *
      * Members: `E` (root element), `State`, `Data` (last TableData), `Cols`, `UpdateNow()`, `SetRows(rows)` (local data), `Destroy()`.
@@ -1591,6 +2073,8 @@
         CardTitle: "string",
         MenuName: ["promise", "string"],
         Timeout: { Type: "number", Min: 1 },
+        Card: ["string", "boolean"],
+        Scroll: "boolean",
     };
 
     /**
@@ -1791,6 +2275,30 @@
             this.ColW = [];
             /** @type {string} What ColW was measured for (LockWidths). */
             this.ColWKey = "";
+            /** @type {?{Name: string, Path: string, Mode: string}} The card template selection (SetupCard), null = no card template. */
+            this.CardSpec = null;
+            /** @type {?CardTemplate} The card template. */
+            this.CardMain = null;
+            /** @type {?CardTemplate} The card template of compact screens ("<name>-mobile"), null = none. */
+            this.CardMobile = null;
+            /** @type {string} The view of a table with a card template: "cards" or "table". */
+            this.View = "table";
+            /** @type {boolean} Infinite scrolling instead of pages (option Scroll): Req.Row stays 0, Data.Rows has all loaded rows. */
+            this.ScrollOn = !!o.Scroll;
+            /** @type {Array<object>} The loaded rows (infinite scrolling). */
+            this.SRows = [];
+            /** @type {boolean} More rows follow the loaded ones (infinite scrolling). */
+            this.SMore = false;
+            /** @type {boolean} The next request starts the list again: first load, other sort, filter or search (infinite scrolling). */
+            this.ScrollReset = true;
+            /** @type {number} Changes when the tail of the loaded rows changes: the answer of a running ScrollMore is then dropped. */
+            this.SVer = 0;
+            /** @type {boolean} ScrollMore runs. */
+            this.SLoading = false;
+            /** @type {boolean} The last ScrollMore failed (the end of the list offers "Try again"). */
+            this.SFailed = false;
+            /** @type {number} The first row a render has to look at (ScrollMore appends; 0 = all). */
+            this.AppendFrom = 0;
         }
 
         /**
@@ -1879,6 +2387,9 @@
                 this.Req.Row = 0;
                 //  Other rows now (sort, filter, search): close the opened cards
                 this.OpenRows.clear();
+                //  (infinite scrolling: the list starts again, a running ScrollMore is for the old rows)
+                this.ScrollReset = true;
+                ++this.SVer;
             }
             this.Save();
             this.UserChange = true;
@@ -1927,7 +2438,12 @@
             t.FilterBody = el("tbody.sw-table-filters");
             t.Body = el("tbody.sw-table-body");
             t.Grid.append(t.Head, t.FilterBody, t.Body);
-            t.Scroll = el("div.sw-table-scroll", null, t.Grid);
+            /** @type {HTMLElement} The items of a card template (RenderCards), shown instead of the grid (class sw-table-tmpl). */
+            t.CardList = el("div.sw-table-cardlist", { tabIndex: 0, attrs: { role: "list", "aria-label": t.Name } });
+            /** @type {HTMLElement} The end of an infinite list: loading, "try again" or the last item message (UpdateScrollEnd). */
+            t.ScrollEnd = el("div.sw-table-scrollend", { attrs: { role: "status" } });
+            t.ScrollEnd.hidden = true;
+            t.Scroll = el("div.sw-table-scroll", null, t.Grid, t.CardList, t.ScrollEnd);
             /** @type {HTMLElement} The title of the empty state (UpdateEmpty). */
             t.EmptyTitle = el("h3.sw-table-state-title");
             /** @type {HTMLElement} The sentence of the empty state (UpdateEmpty). */
@@ -2048,6 +2564,8 @@
             //  Calm grid options (table.css): column rules (row actions are always shown: RowActions "always" is the only mode)
             if (o.ColumnLines)
                 t.E.classList.add("sw-table-vlines");
+            //  (infinite scrolling: no pager, table.css)
+            t.E.classList.toggle("sw-table-scrollmode", t.ScrollOn);
             t.UpdateZebra();
             t.BuildCardBar();
             t.BuildFoot();
@@ -2150,6 +2668,13 @@
             const menuOpts = { Label: _TF("Cell options", "Accessible name of the menu with the options of a data table cell") };
             t.Offs.push(Sw.Menu.Context(t.Head, ev => t.HeadMenu(ev.target), menuOpts));
             t.Offs.push(Sw.Menu.Context(t.Body, ev => t.CellMenu(ev.target), menuOpts));
+            t.Offs.push(Sw.Menu.Context(t.CardList, ev => t.CardMenu(ev.target), { Label: _TF("Card options", "Accessible name of the menu with the options of a card of a data table") }));
+            //  Infinite scrolling: load when the view comes near the end (also a page that scrolls around an embedded table)
+            if (t.ScrollOn) {
+                const near = () => t.ScrollEnsure();
+                window.addEventListener("scroll", near, { capture: true, passive: true });
+                t.Offs.push(() => window.removeEventListener("scroll", near, { capture: true }));
+            }
 
             //  User input in the page (the request guard counts the requests sent since the last one, RequestGuard)
             const input = () => {
@@ -2259,24 +2784,33 @@
             const compact = narrow || (mobile && w < (E.contains("sw-table-compact") ? 1000 + band : 1000));
             const pref = Sw.Storage.Local.Get(LayoutKey, "");
             const low = window.innerHeight <= 500;
-            const cards = compact && (low ? pref === "cards" : pref !== "grid");
+            //  (a card template replaces the built in cards of compact screens: its table view is the compact grid)
+            const cards = !t.CardSpec && compact && (low ? pref === "cards" : pref !== "grid");
+            const tmpl = t.CardsOn();
             E.toggle("sw-table-narrow", narrow);
             const changed = E.contains("sw-table-cards") !== cards;
             E.toggle("sw-table-cards", cards);
             E.toggle("sw-table-compact", compact);
             const b = t.LayoutB;
             if (b) {
-                b.E.hidden = !compact;
-                b.E.replaceChildren(lineIcon(cards ? "table" : "layers"));
-                b.SetTitle(cards
+                //  (with a card template the switch is always there, unless it is cards only: "-name@path")
+                const asCards = t.CardSpec ? tmpl : cards;
+                b.E.hidden = t.CardSpec ? t.CardSpec.Mode === "only" : !compact;
+                b.E.replaceChildren(lineIcon(asCards ? "table" : "layers"));
+                b.SetTitle(asCards
                     ? _TF("Show the rows as a grid (scroll sideways to see all columns)", "Tool tip of a button below a data table on phones that shows the rows as a grid instead of cards")
                     : _TF("Show each row as a card (all columns, no sideways scrolling)", "Tool tip of a button below a data table on phones that shows each row as a card instead of a grid"));
-                b.SetLabel(cards
+                b.SetLabel(asCards
                     ? _TF("Table view", "Short label of a button below a data table on phones that shows the rows as a table grid (one row per line, scroll sideways) instead of cards")
                     : _TF("Card view", "Short label of a button below a data table on phones that shows each row as a card (one line per column) instead of a table grid"));
             }
             if (t.CardSortB)
-                t.CardSortB.E.hidden = !cards;
+                t.CardSortB.E.hidden = !(cards || tmpl);
+            //  (the template of this screen size, "<name>-mobile" on compact screens)
+            if (tmpl && t.Data && t.CardList.SwTpl && t.CardList.SwTpl !== t.CardTpl()) {
+                t.QuietChange = true;
+                t.RenderRows(t.Data, true);
+            }
             t.UpdateSnapPadding();
             if (changed) {
                 t.ColWKey = "";
@@ -2311,7 +2845,7 @@
                 t.EdgeFrame = 0;
                 const s = t.Scroll;
                 const max = s.scrollWidth - s.clientWidth;
-                const on = !t.E.classList.contains("sw-table-cards") && !t.Dead && max > 2 && s.clientHeight > 0;
+                const on = !t.E.classList.contains("sw-table-cards") && !t.CardsOn() && !t.Dead && max > 2 && s.clientHeight > 0;
                 const left = on && s.scrollLeft > 2;
                 const right = on && s.scrollLeft < max - 2;
                 t.EdgeL.hidden = !left;
@@ -2387,8 +2921,565 @@
         /** Switch between cards and grid on compact screens (the layout button; the choice is remembered). */
         ToggleLayout() {
             const t = this;
+            if (t.CardSpec) {
+                t.SetView(t.CardsOn() ? "table" : "cards", true);
+                return;
+            }
             Sw.Storage.Local.Set(LayoutKey, t.E.classList.contains("sw-table-cards") ? "grid" : "cards");
             t.UpdateLayout();
+        }
+
+        // -------------------------------------------------------------- card templates
+
+        /**
+         * The card template is shown (not the table view).
+         * @returns {boolean}
+         */
+        CardsOn() {
+            return !!this.CardSpec && this.View === "cards";
+        }
+
+        /**
+         * The card template of the current screen size: "<name>-mobile" on compact screens when it exists.
+         * @returns {CardTemplate} The template.
+         */
+        CardTpl() {
+            return (this.E.classList.contains("sw-table-compact") && this.CardMobile) || this.CardMain;
+        }
+
+        /**
+         * Choose the card template, once, with the first answer (the option Card, table.html's "card" url parameter, comes first, then
+         * TableData.Card). A file or template that can't be found stops the table with its error (cardError).
+         * @param {?(string|boolean)} card "name@path"; empty: none; false: no card template, also not the server's.
+         * @returns {Promise<void>}
+         */
+        async SetupCard(card) {
+            const t = this;
+            if (!card || t.CardSpec)
+                return;
+            const spec = parseCard(card);
+            const doc = await loadCardFile(spec.Path);
+            const find = name => Array.from(doc.querySelectorAll("template")).find(x => x.id === name) || null;
+            const tpl = find(spec.Name);
+            if (!tpl)
+                throw cardError(_T('The card template "{0}" was not found in "{1}".', spec.Name, spec.Path, "Error shown instead of a data table when its card template file has no template with that name, {0} is the name, {1} the file"));
+            const mobile = find(spec.Name + "-mobile");
+            t.CardMain = new CardTemplate(tpl, spec.Name);
+            t.CardMobile = mobile ? new CardTemplate(mobile, spec.Name + "-mobile") : null;
+            t.CardSpec = spec;
+            //  The viewer's choice per table, unless the table has no other view
+            const pref = Sw.Storage.Local.Get(t.Key + ".View", "");
+            const view = spec.Mode === "only" ? "cards" : pref === "cards" || pref === "table" ? pref : spec.Mode === "table" ? "table" : "cards";
+            t.SetView(view, false);
+        }
+
+        /**
+         * Show the cards or the table.
+         * @param {string} view "cards" or "table".
+         * @param {boolean} save Remember the viewer's choice.
+         */
+        SetView(view, save) {
+            const t = this;
+            t.View = view;
+            if (save)
+                Sw.Storage.Local.Set(t.Key + ".View", view);
+            const E = t.E.classList;
+            E.toggle("sw-table-tmpl", view === "cards");
+            //  (one of the two holds the rows: the other is empty, so nothing measures or updates it)
+            if (view === "cards") {
+                t.Body.replaceChildren();
+                t.ActiveEl = null;
+                t.TabRow = null;
+                t.E.style.removeProperty("--sw-row-fill");
+                E.remove("sw-table-dense");
+            }
+            else {
+                t.CardList.replaceChildren();
+                t.CardList.SwTpl = null;
+                t.ColWKey = "";
+                t.AutoKey = "";
+                t.FitKey = "";
+            }
+            /** @type {string} What the page size of paged cards was measured for (FitCards). */
+            t.CardFitKey = "";
+            t.UpdateLayout();
+            if (!t.Data)
+                return;
+            t.QuietChange = true;
+            t.Render(t.Data, true);
+            requestAnimationFrame(() => {
+                t.UpdateFit(true);
+                t.Fit();
+            });
+        }
+
+        /**
+         * Say what the actions and the icon links of a card act on (UX guide TIP-2: not 20 times "Remove"). The item is named by the heading
+         * of the card; a sub title equal to the heading is removed, a text with slashes may break after them (.sw-card-path).
+         * @param {HTMLElement} item The card item.
+         */
+        NameCardActions(item) {
+            item.querySelectorAll('[data-v]:not([data-v=""]) > .sw-if-empty').forEach(e => e.remove());
+            const h = item.querySelector("h1, h2, h3, h4");
+            const name = h ? h.textContent.trim() : "";
+            //  (a confirmation dialog of an action on the card names the item: Sw.Cells RowName)
+            if (name)
+                item.dataset.swName = name;
+            item.querySelectorAll(".sw-card-cell button, .sw-card-cell a, .sw-card-foot > a").forEach(b => {
+                const text = (b.getAttribute("aria-label") || b.textContent || "").trim();
+                const word = /[\p{L}\p{N}]/u.test(text);
+                if (word && ((b.tagName === "A" && !b.closest(".sw-card-foot")) || !name || text.includes(name)))
+                    return;
+                const label = word ? text : b.closest(".sw-card-cell").dataset.swTitle;
+                b.setAttribute("aria-label", name ? _T("{0}: {1}", label, name, "Accessible name of a button or link on a card of a data table. {0}: what it does, ex: Remove; {1}: the item it acts on, ex: OrderService") : label);
+            });
+            //  The status of an item (a badge, a flag, a matched value): a group with a name, unless it shows nothing (the levels are set by Render before this)
+            const level = (item.querySelector(".sw-card") || item).getAttribute("data-sw-level");
+            item.querySelectorAll(".sw-card-lead").forEach(lead => Array.from(lead.children).forEach(s => {
+                if (!s.matches(".sw-badge, [data-on], [data-sw-match]"))
+                    return;
+                //  (a badge with no text, ex: no error, shows nothing)
+                if (s.matches(".sw-badge") && !s.textContent.trim())
+                    return;
+                if (s.matches("[data-on]")) {
+                    const on = s.getAttribute("data-on");
+                    const sel = on === "true" || on === "True" ? ":scope > .sw-when-on" : on === "false" || on === "False" ? ":scope > .sw-when-off" : null;
+                    if (!sel || !s.querySelector(sel))
+                        return;
+                }
+                const when = ["ok", "warn", "danger"].filter(l => s.classList.contains("sw-when-" + l));
+                if (when.length && !when.includes(level))
+                    return;
+                s.setAttribute("role", "group");
+                s.setAttribute("aria-label", _TF("Status", "Accessible name of the status of an item on a card of a data table, ex: Running"));
+            }));
+            const sub = item.querySelector(".sw-card-lead-text > .sw-card-sub");
+            if (sub && name && sub.textContent.trim() === name)
+                sub.remove();
+            //  Only the text nodes are replaced, so a link or another element inside stays; a <wbr> follows each separator
+            const breakAfter = (root, re, need) => {
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                const nodes = [];
+                for (let n = walker.nextNode(); n; n = walker.nextNode())
+                    nodes.push(n);
+                nodes.forEach(n => {
+                    const text = n.nodeValue;
+                    if (need && !need(text))
+                        return;
+                    const parts = text.split(re);
+                    if (parts.length > 1)
+                        n.replaceWith(...parts.flatMap((p, i) => i < parts.length - 1 ? [p, el("wbr")] : [p]));
+                });
+            };
+            item.querySelectorAll(".sw-card-path").forEach(e => breakAfter(e, /(?<=[\\/])/));
+            //  An address or a path in a link may break after its separators, not inside a word
+            item.querySelectorAll(".sw-card-sub a, .sw-facts a").forEach(a => breakAfter(a, /(?<=[\\/.:])/, text => /^[a-z]+:\/\//i.test(text) || /[\\/]/.test(text)));
+            item.querySelectorAll(".sw-meter[aria-label]").forEach(m => {
+                if (name)
+                    m.setAttribute("aria-label", _T("{0}: {1}", m.getAttribute("aria-label"), name, "Accessible name of a meter on a card of a data table. {0}: what it measures, ex: Used; {1}: the item, ex: C:"));
+            });
+        }
+
+        /**
+         * Render the rows as card template items. An unchanged row keeps its item; a live refresh that would move items while the pointer
+         * or the focus is in them waits (ReleaseHold, UX guide FBK-7).
+         * @param {object} data TableData.
+         * @param {boolean} user Caused by the user (no flashing).
+         */
+        RenderCards(data, user) {
+            const t = this;
+            const cols = t.Cols;
+            const rows = data.Rows || [];
+            const generic = rows.length <= 0 || Array.isArray(rows[0].Values);
+            const get = generic ? (row, i) => row.Values[i] : (row, i) => row[cols[i].Name];
+            const list = t.CardList;
+            const tpl = t.CardTpl();
+            tpl.Bind(cols, t.ColSig);
+            if (list.SwTpl !== tpl) {
+                list.replaceChildren();
+                list.SwTpl = tpl;
+                list.dataset.card = tpl.Name;
+            }
+            const items = list.children;
+            /** @type {boolean} A live refresh waits for the pointer or the focus to leave the items (ReleaseHold). */
+            t.CardHeld = false;
+            if (!user && items.length && t.HoldOrder()) {
+                const n = Math.min(items.length, rows.length);
+                for (let i = 0; i < n; ++i)
+                    if (items[i].SwItem !== t.ItemText(rows[i], get)) {
+                        t.CardHeld = true;
+                        return;
+                    }
+            }
+            const timeMode = t.State.TimeMode;
+            //  (a row action in a card: the rows are read again, Sw.Cells shows its result)
+            const onRefresh = () => {
+                t.QuietChange = true;
+                t.Changed(true);
+            };
+            const cell = (v, row) => {
+                const c = v.Col;
+                let fmt = c.Format;
+                if (isDateType(c.Type) && !fmt)
+                    fmt = timeMode;
+                fmt = cellFormat(fmt);
+                const next = v.Index + 1 < cols.length ? get(row, v.Index + 1) : undefined;
+                const value = get(row, v.Index);
+                const e = el("span.sw-card-cell");
+                e.dataset.swTitle = c.Title || c.Name;
+                Sw.Cells.Update(e, c.Type, value, null, fmt, next, onRefresh);
+                const en = fmt ? null : enumText(c.Type, value);
+                if (en !== null && en !== String(value))
+                    e.textContent = en;
+                return e;
+            };
+            const from = Math.min(t.AppendFrom, items.length);
+            for (let i = from; i < rows.length; ++i) {
+                const row = rows[i];
+                const key = (timeMode || "") + JSON.stringify(row);
+                const old = items[i];
+                if (old && old.SwKey === key)
+                    continue;
+                const item = el("div.sw-table-carditem", { attrs: { role: "listitem" } });
+                item.append(tpl.Render(row, get, cell));
+                t.NameCardActions(item);
+                item.SwKey = key;
+                item.SwRow = row;
+                item.SwItem = t.ItemText(row, get);
+                if (old) {
+                    const focused = old.contains(document.activeElement);
+                    //  (changed values of the same item get the tint of the grid's live refresh)
+                    if (!user && old.SwItem === item.SwItem) {
+                        item.classList.add("sw-flash");
+                        setTimeout(() => item.classList.remove("sw-flash"), 1050);
+                    }
+                    old.replaceWith(item);
+                    if (focused)
+                        list.focus({ preventScroll: true });
+                }
+                else
+                    list.append(item);
+            }
+            while (items.length > rows.length)
+                items[items.length - 1].remove();
+            t.KeptShown = 0;
+            t.KeptStates = [];
+            t.Moves = null;
+            t.HoldE.hidden = true;
+            t.Empty.hidden = rows.length > 0;
+            t.UpdateFit();
+        }
+
+        /**
+         * The menu of a card: copy its row.
+         * @param {EventTarget} target The event target.
+         * @returns {?Array<object>} The items, null outside a card.
+         */
+        CardMenu(target) {
+            const t = this;
+            const item = target && target.closest ? target.closest(".sw-table-carditem") : null;
+            const row = item ? item.SwRow : null;
+            if (!row)
+                return null;
+            const obj = {};
+            t.Cols.forEach((c, i) => obj[c.Name] = Array.isArray(row.Values) ? row.Values[i] : row[c.Name]);
+            return [{
+                Text: _TF("Copy row as JSON", "The text of a menu item on a table cell that copies all values of the row as JSON to the clipboard"), Icon: "IconCopy",
+                OnClick: () => Sw.Clipboard.Copy(JSON.stringify(obj, null, 4)),
+            }];
+        }
+
+        /**
+         * The automatic page size of paged cards: the items that fit the rows area. Measured once per window size, template and column set,
+         * so the size never follows the answers (no request loop, see Fit).
+         */
+        FitCards() {
+            const t = this;
+            const key = [t.Scroll.clientWidth, t.Scroll.clientHeight, t.CardTpl().Name, t.ColSig].join("|");
+            if (key === t.CardFitKey)
+                return;
+            const m = t.ScrollMetrics();
+            if (!m || !t.CardList.children.length)
+                return;
+            t.CardFitKey = key;
+            const n = Math.max(1, Math.min(100, m.Screen));
+            if (n === t.Req.MaxRowCount)
+                return;
+            t.Req.MaxRowCount = n;
+            t.UpdateSizeSel();
+            t.AutoFetch();
+        }
+
+        // -------------------------------------------------------------- infinite scrolling
+
+        /**
+         * The elements of the shown items, one per row, in order.
+         * @returns {HTMLCollection} Card items or table rows.
+         */
+        ScrollItems() {
+            return this.CardsOn() ? this.CardList.children : this.Body.rows;
+        }
+
+        /**
+         * Measure what the rows area shows: the view (the rows area inside the window, below the sticky header), the items that are at
+         * least partly in it and how many items fit one screen (cards may lie side by side).
+         * @returns {?{First: number, Last: number, Screen: number}} First / Last are -1 without items. Null when the table isn't rendered.
+         */
+        ScrollMetrics() {
+            const t = this;
+            if (!t.E.getClientRects().length)
+                return null;
+            const sr = t.Scroll.getBoundingClientRect();
+            const top = Math.max(sr.top, 0) + (t.CardsOn() ? 0 : t.Head.offsetHeight);
+            const bottom = Math.min(sr.bottom, window.innerHeight);
+            const vh = bottom - top;
+            if (!(vh > 0))
+                return null;
+            const items = t.ScrollItems();
+            const n = items.length;
+            if (!n)
+                return { First: -1, Last: -1, Screen: Math.max(1, Math.ceil(vh / 28)) };
+            const r0 = items[0].getBoundingClientRect();
+            if (!(r0.height > 0))
+                return null;
+            let perRow = 1;
+            while (perRow < n && Math.abs(items[perRow].getBoundingClientRect().top - r0.top) < 1)
+                ++perRow;
+            const lines = Math.ceil(n / perRow);
+            const pitch = Math.max(1, (items[n - 1].getBoundingClientRect().bottom - r0.top) / lines);
+            const screen = Math.max(1, Math.ceil(vh / pitch)) * perRow;
+            //  The first item that ends below the top of the view, the last one that starts above its bottom
+            let lo = 0, hi = n;
+            while (lo < hi) {
+                const m = (lo + hi) >> 1;
+                if (items[m].getBoundingClientRect().bottom > top)
+                    hi = m;
+                else
+                    lo = m + 1;
+            }
+            const first = lo;
+            hi = n;
+            while (lo < hi) {
+                const m = (lo + hi) >> 1;
+                if (items[m].getBoundingClientRect().top < bottom)
+                    lo = m + 1;
+                else
+                    hi = m;
+            }
+            return { First: first < n ? first : -1, Last: lo - 1, Screen: screen };
+        }
+
+        /**
+         * The rows at least partly in view ("Current view" of an export).
+         * @returns {Array<object>} The rows.
+         */
+        VisibleRows() {
+            const m = this.ScrollMetrics();
+            if (!m || m.First < 0 || m.Last < m.First)
+                return [];
+            return Array.prototype.slice.call(this.ScrollItems(), m.First, m.Last + 1).map(x => x.SwRow).filter(x => x);
+        }
+
+        /**
+         * What the next request of the update loop asks for: from the first row when the list starts again (about 1.5 screens: the size
+         * of the items is not known yet, ScrollEnsure corrects it), else the rows in view and the part below them (a live refresh of the
+         * whole list would grow with it).
+         * @returns {{Row: number, Max: number, Reset: boolean}} The request.
+         */
+        ScrollPlan() {
+            const t = this;
+            if (t.ScrollReset) {
+                const h = t.Area.clientHeight > 28 ? t.Area.clientHeight : window.innerHeight;
+                return { Row: 0, Max: Math.max(10, Math.min(200, Math.ceil(h / 28 * 1.5))), Reset: true };
+            }
+            const m = t.ScrollMetrics();
+            const from = m && m.First > 0 ? m.First : 0;
+            const shown = m && m.First >= 0 ? m.Last - m.First + 1 : 0;
+            return { Row: from, Max: Math.min(1000, Math.max(10, shown, Math.ceil((m ? m.Screen : 25) * 1.5))), Reset: false };
+        }
+
+        /**
+         * Merge an answer of the update loop into the loaded rows.
+         * A changed part of the list drops the rows below it: they are stale (a row may have moved over the seam, and would show twice) and
+         * load again on demand; the rows above stay until they are in view at a refresh.
+         * @param {object} d The answer.
+         * @param {{Row: number, Max: number, Reset: boolean}} p The request (ScrollPlan).
+         * @returns {?object} The table data to render (all loaded rows), null when nothing changed.
+         */
+        ScrollMerge(d, p) {
+            const t = this;
+            const rows = d.Rows;
+            const end = p.Row + rows.length;
+            const more = rows.length > 0 && (d.RowCount || 0) > end;
+            const old = t.SRows;
+            let changed = true;
+            if (p.Reset) {
+                t.ScrollReset = false;
+                ++t.SVer;
+                t.SRows = rows.slice();
+                t.SMore = more;
+                t.SFailed = false;
+                t.ScrollTop = true;
+            }
+            else if (!rows.length && p.Row > 0) {
+                //  The list got shorter than the part in view: start again
+                t.ScrollReset = true;
+                ++t.SVer;
+                t.Schedule(0);
+                return null;
+            }
+            else {
+                changed = !more && old.length > end;
+                for (let i = 0; i < rows.length && !changed; ++i)
+                    changed = JSON.stringify(rows[i]) !== JSON.stringify(old[p.Row + i]);
+                if (changed) {
+                    ++t.SVer;
+                    t.SRows = old.slice(0, p.Row).concat(rows);
+                    t.SMore = more;
+                }
+                //  (only the last part of the list says if more rows follow; a row added at the end continues the list)
+                else if (old.length <= end && t.SMore !== more) {
+                    t.SMore = more;
+                    changed = true;
+                }
+            }
+            if (!changed && !d.Cols)
+                return null;
+            return t.ScrollData(d);
+        }
+
+        /**
+         * The table data of all loaded rows, with the counts of the answer.
+         * @param {object} d The answer.
+         * @returns {object} The table data.
+         */
+        ScrollData(d) {
+            const t = this;
+            const n = t.SRows.length;
+            return Object.assign({}, d, { Rows: t.SRows, RowCount: t.SMore ? Math.max(n + 1, d.RowCount || 0) : n });
+        }
+
+        /**
+         * Keep half a screen of items loaded below the view. Runs at most once per frame, after a scroll, a render or a layout change.
+         */
+        ScrollEnsure() {
+            const t = this;
+            if (!t.ScrollOn || t.ScrollFrame || t.Dead)
+                return;
+            /** @type {number} The pending animation frame of ScrollEnsure. */
+            t.ScrollFrame = requestAnimationFrame(() => {
+                t.ScrollFrame = 0;
+                if (t.Dead || !t.Data || t.First || t.ScrollReset || t.SLoading || t.SFailed || !t.SMore)
+                    return;
+                const m = t.ScrollMetrics();
+                if (!m)
+                    return;
+                const need = Math.max(m.Last, 0) + 1 + Math.ceil(m.Screen * 0.5);
+                if (t.SRows.length < need)
+                    t.ScrollMore(Math.max(m.Screen, need - t.SRows.length));
+            });
+        }
+
+        /**
+         * Load the next rows and append them. Not a cycle of the update loop: a refresh may be held by the server until the data changes,
+         * and scrolling must not wait for it (and the refresh timer goes on as it was).
+         * @param {number} count The rows to ask for (at least a screen: fewer, larger requests).
+         * @returns {Promise<void>}
+         */
+        async ScrollMore(count) {
+            const t = this;
+            const ver = t.SVer;
+            const from = t.SRows.length;
+            const max = Math.min(1000, count);
+            t.SLoading = true;
+            t.UpdateScrollEnd();
+            const body = Object.assign({}, t.Req, { Row: from, MaxRowCount: max, Cc: t.Cc });
+            const busy = t.Local ? null : t.LiveDot();
+            let d;
+            try {
+                d = t.Local ? t.Local.Query(body) : await Sw.Net.Send(t.Url, body, {});
+                if (!d || !Array.isArray(d.Rows))
+                    throw new Error(_TF("The service sent data in an unexpected format", "An error message displayed when the service reply to a table data request was json but not table data"));
+            }
+            catch (e) {
+                t.SLoading = false;
+                if (busy)
+                    busy();
+                if (t.Dead || ver !== t.SVer) {
+                    t.UpdateScrollEnd();
+                    t.ScrollEnsure();
+                    return;
+                }
+                console.warn("Sw.Table " + t.Url + ": " + (e && e.message ? e.message : e));
+                t.SFailed = true;
+                t.UpdateScrollEnd();
+                return;
+            }
+            t.SLoading = false;
+            if (busy)
+                busy();
+            if (t.Dead)
+                return;
+            //  The rows changed meanwhile (a refresh, another sort): this answer doesn't fit them
+            if (ver !== t.SVer) {
+                t.UpdateScrollEnd();
+                t.ScrollEnsure();
+                return;
+            }
+            //  Other columns: the rows are read again with them
+            if (d.Cols && JSON.stringify(d.Cols) !== t.ColSig) {
+                t.Changed();
+                return;
+            }
+            let rows = d.Rows;
+            if (rows.length > max)
+                rows = from > 0 && (d.RowCount || 0) <= rows.length ? rows.slice(from, from + max) : rows.slice(0, max);
+            t.SRows.push(...rows);
+            t.SMore = rows.length > 0 && (d.RowCount || 0) > from + rows.length;
+            t.AppendFrom = from;
+            t.QuietChange = true;
+            try {
+                t.Render(t.ScrollData(Object.assign({}, d, { Cols: null })), true);
+            }
+            finally {
+                t.AppendFrom = 0;
+            }
+            t.UpdateScrollEnd();
+            t.ScrollEnsure();
+        }
+
+        /**
+         * The end of an infinite list: the loading animation while a request runs, "try again" after a failure, the last item message when
+         * all rows are loaded (nothing while more rows wait to be scrolled to).
+         */
+        UpdateScrollEnd() {
+            const t = this;
+            const e = t.ScrollEnd;
+            if (!t.ScrollOn)
+                return;
+            const n = t.SRows.length;
+            const state = t.SLoading ? "load" : t.SFailed ? "fail" : !t.SMore && n > 0 ? "end" + n : "";
+            if (e.SwState === state)
+                return;
+            e.SwState = state;
+            e.hidden = !state;
+            //  (half a screen is loaded ahead, so the end of the list is often below the view: loading and a failure stay in view, table.css)
+            e.classList.toggle("sw-table-scrollnow", t.SLoading || t.SFailed);
+            if (t.SLoading)
+                e.replaceChildren(new Sw.Spinner({ Class: "sw-table-scrollspin" }).E, el("span", { text: _TF("Loading more rows...", "Text next to the loading animation at the bottom of a data table with infinite scrolling, while more rows are requested") }));
+            else if (t.SFailed)
+                e.replaceChildren(el("span", { text: _TF("Could not load more rows.", "Text at the bottom of a data table with infinite scrolling when loading more rows failed") }), new Sw.Button({
+                    Text: _TF("Try again", "Text of a button that retries loading the data of a table after an error"), Icon: "refresh", Small: true,
+                    OnClick: () => {
+                        t.SFailed = false;
+                        t.UpdateScrollEnd();
+                        t.ScrollEnsure();
+                    },
+                }).E);
+            else if (state)
+                e.replaceChildren(el("span", { text: n === 1
+                    ? _TF("End of the list: 1 row", "Text at the bottom of a data table with infinite scrolling after the last item (one row in all)")
+                    : _T("End of the list: {0} rows", Sw.Format.Number(n, 0, " "), "Text at the bottom of a data table with infinite scrolling after the last item, {0} is the number of rows in all") }));
         }
 
         // -------------------------------------------------------------- tool bar (search, Filter, Sort, Columns, Density, Download, Refresh)
@@ -2423,7 +3514,7 @@
             t.FilterTB = new Sw.Button({
                 Kind: "ghost", Class: "sw-table-tbtn sw-table-filterbtn2",
                 Title: _TF("Show only the rows that match some values", "Tool tip of the filter button above the cards of a data table on phones"),
-                OnClick: b => t.E.classList.contains("sw-table-cards") ? t.FilterSheet() : t.FilterMenu(b.E),
+                OnClick: b => t.E.classList.contains("sw-table-cards") || t.CardsOn() ? t.FilterSheet() : t.FilterMenu(b.E),
             });
             t.FilterTB.E.setAttribute("aria-haspopup", "menu");
             t.FilterTB.E.append(Sw.Icon("filter"), el("span.sw-table-tlabel", { text: _TF("Filter", "Text of the filter button above the cards of a data table on phones (no active filters)") }), t.FilterBadge);
@@ -3978,7 +5069,7 @@
             let n = t.HiddenIdx.size - srv;
             if (t.HiddenIdx.has(0))
                 --n;
-            b.E.hidden = t.E.classList.contains("sw-table-cards") || t.Vis.length < 2;
+            b.E.hidden = t.E.classList.contains("sw-table-cards") || t.CardsOn() || t.Vis.length < 2;
             t.ColsBadge.textContent = n > 0 ? String(n) : "";
             t.ColsBadge.hidden = n <= 0;
             b.SetTitle(n
@@ -4294,6 +5385,9 @@
                 //  Retry like the original table (every RetryDelay, also in the error, offline, not allowed and not found states; "Try
                 //  again" and "net.online" fetch at once)
                 next = t.OnlineAgain ? 0 : RetryDelay;
+                //  (a card template that can't be used stays that way: "Try again" tries again)
+                if (e && e.SwCardError)
+                    next = -1;
             }
             finally {
                 clearTimeout(busy);
@@ -4339,6 +5433,9 @@
                     fl.push(f);
             }));
             r.Filters = fl.length ? fl : null;
+            //  Infinite scrolling: the part of the list this cycle asks for (the request itself stays at row 0)
+            const plan = t.ScrollOn ? t.ScrollPlan() : null;
+            const body = plan ? Object.assign({}, r, { Row: plan.Row, MaxRowCount: plan.Max }) : r;
             //  Tell a hosting window (ex: Fenrir) the current filters, so it can scope a background search to the shown rows
             //  (only framed server tables; any origin, as the host may be another site)
             try {
@@ -4370,7 +5467,7 @@
                 //  The live dot of the page header grows while the request runs (LiveDot)
                 const busy = t.Local ? null : t.LiveDot();
                 try {
-                    d = t.Local ? t.Local.Query(r) : await Sw.Net.Send(t.Url, r, { Reload: reload, Signal: ac.signal });
+                    d = t.Local ? t.Local.Query(body) : await Sw.Net.Send(t.Url, body, { Reload: reload, Signal: ac.signal });
                 }
                 catch (e) {
                     superseded();
@@ -4390,16 +5487,16 @@
                         : _TF("The service sent data in an unexpected format", "An error message displayed when the service reply to a table data request was json but not table data"));
                 //  Never more rows than the page: an api that ignores MaxRowCount (ex: answers all 10 000 rows) gets its page cut out (from
                 //  the asked row when the reply is the whole list), with one console warning, so the page never draws thousands of rows
-                const max = Math.max(1, r.MaxRowCount || 25);
+                const max = Math.max(1, body.MaxRowCount || 25);
                 if (d.Rows.length > max) {
-                    const whole = r.Row > 0 && (d.RowCount || 0) <= d.Rows.length;
+                    const whole = body.Row > 0 && (d.RowCount || 0) <= d.Rows.length;
                     if (!t.CapWarned) {
                         /** @type {boolean} The too many rows warning was written (once per table). */
                         t.CapWarned = true;
                         console.warn("Sw.Table " + t.Url + ": the api answered " + d.Rows.length + " rows for a page of " + max + "; only " + max +
                             " are shown (the api should honor TableDataRequest.Row / MaxRowCount; for rows that are all in the page use the option Rows)");
                     }
-                    d.Rows = whole ? d.Rows.slice(r.Row, r.Row + max) : d.Rows.slice(0, max);
+                    d.Rows = whole ? d.Rows.slice(body.Row, body.Row + max) : d.Rows.slice(0, max);
                 }
                 return d;
             };
@@ -4407,7 +5504,7 @@
             //  (TableData.DefaultOrder, the server's order for a request without one, is not copied into the request: the original table
             //  sent no order until the viewer chose one)
             if (t.First) {
-                if (data.Rows.length <= 0 && r.Row > 0) {
+                if (data.Rows.length <= 0 && r.Row > 0 && !plan) {
                     //  The stored page is beyond the end: go to the first page
                     r.Row = 0;
                     t.Save();
@@ -4422,16 +5519,31 @@
                 if (t.PHTitle && !t.HeadNamed && !(t.MenuNameP && t.PHTitle.classList.contains("sw-table-ph-pending") && !t.MenuDone))
                     t.SetHeaderName(t.Name, false);
                 data.Title = t.Name;
+                //  The card template: chosen once, like the columns (the option first, then the server's). false = none, also not the server's
+                await t.SetupCard(t.O.Card === false ? null : (t.O.Card || data.Card));
+                superseded();
             }
             const first = t.First;
             t.First = false;
+            const cc = data.Cc;
+            //  (infinite scrolling: the rows of the answer join the loaded rows; nothing to show when a refresh found no change)
+            const shown = plan ? t.ScrollMerge(data, plan) : data;
             try {
-                t.Render(data, user || first || !!auto);
+                if (shown)
+                    t.Render(shown, user || first || !!auto);
+                if (plan) {
+                    if (t.ScrollTop) {
+                        t.ScrollTop = false;
+                        t.Scroll.scrollTop = 0;
+                    }
+                    t.UpdateScrollEnd();
+                    t.ScrollEnsure();
+                }
             }
             catch (e) {
                 console.error("Failed to render table: " + (e && e.stack ? e.stack : e));
             }
-            t.Cc = data.Cc;
+            t.Cc = cc;
             t.ClearError();
             /** @type {Date} The time of the last successful update (ShowOffline: "Not updated since"). */
             t.LastOk = new Date();
@@ -4489,7 +5601,7 @@
                 //  the site root, so a wrong url is obvious) behind a "Technical details" disclosure with a Copy button
                 const abs = Sw.Url.Absolute(t.Url) || "";
                 const detail = text + " (" + (abs.startsWith(Sw.Url.Root) ? abs.substring(Sw.Url.Root.length) : t.Url) + ")";
-                t.ErrorText.textContent = ErrorSummary(msg);
+                t.ErrorText.textContent = e && e.SwCardError ? msg : ErrorSummary(msg);
                 t.ErrorDetailText.textContent = detail;
                 t.Error.hidden = false;
                 t.Empty.hidden = true;
@@ -4732,12 +5844,22 @@
             const t = this;
             const r = t.Req;
             t.HostFit();
+            //  Infinite scrolling has no pages
+            if (t.ScrollOn) {
+                t.ScrollEnsure();
+                return;
+            }
             if (t.Dead || !t.State.AutoRowCount || r.Row !== 0) {
                 //  (a size the user chose: the rows keep their own height; a later page keeps the first page's fill)
                 if (!t.Dead && !t.State.AutoRowCount) {
                     t.E.style.removeProperty("--sw-row-fill");
                     t.E.classList.remove("sw-table-dense");
                 }
+                return;
+            }
+            //  (a card template has its own measure: the rows of the grid are empty)
+            if (t.CardsOn()) {
+                t.FitCards();
                 return;
             }
             const rows = t.Body.rows;
@@ -5104,7 +6226,7 @@
         /** Show the server's order of a held live refresh (HoldRows) once nothing holds it any more (HoldOrder). */
         ReleaseHold() {
             const t = this;
-            if (!t.Moves || t.Dead || !t.Data || t.HoldOrder())
+            if ((!t.Moves && !t.CardHeld) || t.Dead || !t.Data || t.HoldOrder())
                 return;
             t.RenderRows(t.Data, false);
         }
@@ -5355,6 +6477,10 @@
          */
         RenderRows(data, user) {
             const t = this;
+            if (t.CardsOn()) {
+                t.RenderCards(data, user);
+                return;
+            }
             const cols = t.Cols;
             let rows = data.Rows || [];
             const generic = rows.length <= 0 || Array.isArray(rows[0].Values);
@@ -5428,7 +6554,13 @@
             let num = t.Req.Row + 1;
             const hadFocus = t.Grid.contains(document.activeElement);
             let flashed = false;
+            //  (rows appended by infinite scrolling: the rows before them did not change)
+            const from = kept.length ? 0 : Math.min(t.AppendFrom, body.rows.length);
             rows.forEach((row, ri) => {
+                if (ri < from) {
+                    ++num;
+                    return;
+                }
                 let tr = body.rows[ri];
                 if (!tr) {
                     tr = body.insertRow();
@@ -5471,7 +6603,7 @@
                     }
                     const value = get(row, i);
                     let fmt = c.Format;
-                    if (c.Type === "System.DateTime" && !fmt)
+                    if (isDateType(c.Type) && !fmt)
                         fmt = timeMode;
                     fmt = cellFormat(fmt);
                     const key = value + "|" + fmt;
@@ -7565,7 +8697,7 @@
         FocusFilter(vi) {
             const t = this;
             //  Card layout: the filter rows are hidden, the filter dialog has the same fields
-            if (t.E.classList.contains("sw-table-cards")) {
+            if (t.E.classList.contains("sw-table-cards") || t.CardsOn()) {
                 t.FilterSheet();
                 const focus = () => {
                     const inputs = document.querySelectorAll(".sw-table-fdialog .sw-table-frow2");
@@ -7704,6 +8836,10 @@
          */
         FocusGrid(noScroll) {
             const t = this;
+            if (t.CardsOn()) {
+                t.CardList.focus({ preventScroll: true });
+                return;
+            }
             const a = t.Active;
             const r = t.CellAt(a.R, a.C) ? a.R : (t.Body.rows.length ? 1 : 0);
             const c = t.CellAt(a.R, a.C) ? a.C : 1;
@@ -7765,7 +8901,7 @@
             const list = el("table.sw-table-keys", null,
                 ...Sw.Keys.List().map(k => row(k.Combo, k.Title)),
                 row(_TF("Arrows, Home, End", "Keys of a data table, shown in the keyboard help"), _TF("Move between the cells", "Description of the arrow keys in the keyboard help of a data table")),
-                row(_TF("Page Up, Page Down", "Keys of a data table, shown in the keyboard help"), _TF("Previous / next page", "Description of the page keys in the keyboard help of a data table")),
+                row(_TF("Page Up, Page Down", "Keys of a data table, shown in the keyboard help"), this.ScrollOn ? _TF("One screen up / down", "Description of the page keys in the keyboard help of a data table with infinite scrolling") : _TF("Previous / next page", "Description of the page keys in the keyboard help of a data table")),
                 row(_TF("Enter", "Key name shown in the keyboard help"), _TF("Sort by the column (header), open a link or the cell menu", "Description of the Enter key in the keyboard help of a data table")),
                 row(_TF("Space, Shift+F10", "Keys of a data table, shown in the keyboard help"), _TF("Open the menu of the cell or column", "Description of the menu keys in the keyboard help of a data table")),
                 row(_TF("Alt+Down", "Keys of a data table, shown in the keyboard help"), _TF("Open the column menu (header)", "Description of Alt+Down in the keyboard help of a data table")),
@@ -8198,13 +9334,17 @@
                 case "Home": t.FocusCell(ctrl ? (rows ? 1 : 0) : a.R, head ? 1 : 0); break;
                 case "End": t.FocusCell(ctrl ? rows : a.R, last); break;
                 case "PageDown":
-                    if (t.NextB.E.disabled)
+                    if (t.ScrollOn)
+                        t.FocusCell(Math.min(rows, a.R + (t.ScrollMetrics() || { Screen: 10 }).Screen), a.C);
+                    else if (t.NextB.E.disabled)
                         t.FocusCell(rows, a.C);
                     else
                         t.Page(1);
                     break;
                 case "PageUp":
-                    if (t.Req.Row <= 0)
+                    if (t.ScrollOn)
+                        t.FocusCell(Math.max(rows ? 1 : 0, a.R - (t.ScrollMetrics() || { Screen: 10 }).Screen), a.C);
+                    else if (t.Req.Row <= 0)
                         t.FocusCell(rows ? 1 : 0, a.C);
                     else
                         t.Page(-1);
@@ -8297,6 +9437,8 @@
             });
             const d = t.Data;
             const shown = d && d.Rows ? d.Rows.length : 0;
+            //  (infinite scrolling: "Current view" is the rows in view, partly or fully, not all loaded rows)
+            const inView = t.ScrollOn ? t.VisibleRows().length : shown;
             //  The number of matching rows, when the server counted them all (the range text "1-40 of 250"; not "540+")
             const total = d && !(d.RowCount - (t.Req.Row + shown) <= Math.max(1, t.Req.LookAheadCount || 0) && d.RowCount > t.Req.Row + shown) ? (d.RowCount || 0) : -1;
             //  Exports of this table that still run: first, each with its Cancel (the same as in the activity list)
@@ -8320,7 +9462,7 @@
                 { Title: _TF("Download the data as a file", "The heading of the export menu of a data table (the items below it choose which rows to download)") },
                 sub(_TF("Current view", "The text of a menu item that can contains child items with export options for exporting the data table using the applied filters and sort including just the visible page"),
                     _TF("Export what you currently see", "The tool tip description of a menu item that can contains child items with export options for exporting the data table using the applied filters and sort including just the visible page"),
-                    _T("The {0} rows you see on this page", shown, "One line description of the export menu item that downloads only the rows of the current page of a data table, {0} is the number of rows"), 0),
+                    _T("The {0} rows you see on this page", inView, "One line description of the export menu item that downloads only the rows of the current page of a data table, {0} is the number of rows"), 0),
                 sub(_TF("Filtered", "The text of a menu item that can contains child items with export options for exporting the data table using the applied filters and sort including all pages"),
                     _TF("Export all data with the current filters applied.", "The tool tip description of a menu item that can contains child items with export options for exporting the data table using the applied filters and sort including all pages") + "\n" + limit,
                     total >= 0
@@ -8420,7 +9562,7 @@
                     //  list that does not know DoneTitle ignores it)
                     const jo = { DoneText: readyText(shownName), DoneTitle: shown, Kind: "export" };
                     sj = mode === 0
-                        ? await A.StartServer(Sw.Net.Api("StartExportTableData"), { Data: Object.assign({}, t.Data, { Cols: t.Cols }), ExportAs: x.Id, Options: opt, Key: key, Title: title }, jo)
+                        ? await A.StartServer(Sw.Net.Api("StartExportTableData"), { Data: t.ExportData(), ExportAs: x.Id, Options: opt, Key: key, Title: title }, jo)
                         : await A.StartServer(Sw.Net.Api("StartExportTableApi"), { Api: t.Url, Req: exportReq(t.Req, mode), ExportAs: x.Id, Options: opt, Key: key, Title: title }, jo);
                 }
                 catch (e) {
@@ -8590,8 +9732,7 @@
                 const opt = { Filename: base };
                 let file;
                 if (mode === 0) {
-                    const d = Object.assign({}, t.Data, { Cols: t.Cols });
-                    file = await exportJob("ExportTableData", { Data: d, ExportAs: x.Id, Options: opt, Key: key, Title: title }, sendOpt, ctl);
+                    file = await exportJob("ExportTableData", { Data: t.ExportData(), ExportAs: x.Id, Options: opt, Key: key, Title: title }, sendOpt, ctl);
                 }
                 else
                     file = await exportJob("ExportTableApi", { Api: t.Url, Req: exportReq(t.Req, mode), ExportAs: x.Id, Options: opt, Key: key, Title: title }, sendOpt, ctl);
@@ -8712,6 +9853,20 @@
                 t.UpdateExportBusy();
             }
             return ok;
+        }
+
+        /**
+         * The table data of the export "Current view": the shown page, with infinite scrolling the rows in view (partly or fully).
+         * @returns {object} The table data.
+         */
+        ExportData() {
+            const t = this;
+            const d = Object.assign({}, t.Data, { Cols: t.Cols });
+            if (t.ScrollOn) {
+                d.Rows = t.VisibleRows();
+                d.RowCount = d.Rows.length;
+            }
+            return d;
         }
 
         /**
@@ -8860,7 +10015,7 @@
      * Page entry of explore/table.html (`<body onload="tableMain()">`). Url parameters: `q` table api url (required; resolved with Sw.Url.SiteUrl, the same rule as api.html: `../Api/x` relative to explore/ or `Api/x` relative to the site root;
      * only urls of this site are accepted, another origin shows an error and nothing is fetched), `p` Param (the old `jp`, javascript
      * source run to compute the Param, was removed for security, no producer exists in any SysWeaver project; a link with it
-     * shows a message in place of the table and fetches nothing), `uniqueParam` (opts this table into its own saved filter / sort state: folded into the storage key, option
+     * shows a message in place of the table and fetches nothing), `scroll` (infinite scrolling instead of pages, unless `scroll=0` or `scroll=false`; option Scroll), `card` (`name@path`, the card template, before the server's TableData.Card; `card=0` or `card=false`: none; option Card; explore/README "Card templates"), `uniqueParam` (opts this table into its own saved filter / sort state: folded into the storage key, option
      * KeyParam; used alone it also supplies the request Param, so only one url param is needed; with `p` it only seeds the key and `p`
      * stays the Param, so a high-cardinality Param can share one stable state keyed by a table-type label), `n` title / name (untrusted: Sw.Page.SetLinkTitle, at most 80 characters, shown as plain text), `r` rows per page (accepted, unused: the page size is automatic), `s` state json, `f` filter json.
      * @returns {Promise<void>}
@@ -8917,6 +10072,12 @@
             const hdr = String(U.Get("header") || "").toLowerCase();
             //  "title=false": the page header without its title (the host shows the name, ex: the title bar of a pop-up window), the live line stays
             const ttl = String(U.Get("title") || "").toLowerCase();
+            //  "scroll": infinite scrolling instead of pages, unless "scroll=0" or "scroll=false"
+            const sc = U.Get("scroll");
+            const scroll = sc !== null && sc !== undefined && !/^(?:0|false)$/i.test(sc);
+            //  "card=name@path": the card template (before the server's TableData.Card); "card=0" or "card=false": no card template at all
+            const cardArg = U.Get("card");
+            const card = !cardArg ? null : /^(?:0|false)$/i.test(cardArg) ? false : cardArg;
             //  Security: "jp" (javascript from the url, run to compute the Param) was removed: a crafted link could run script in
             //  the signed in user's session. Nothing in any SysWeaver project produced it; links pass the Param as "p".
             //  An old jp link must not silently show other rows (the original used the computed Param, the rewrite can't): the page
@@ -8938,6 +10099,7 @@
                 Url: abs === U.SafeSameOrigin(url) ? url : abs, Param: p, KeyParam: uniqueParam || undefined, Name: name, State: U.Get("s"), Filter: U.Get("f"), Page: true,
                 MenuName: menuP,
                 Header: hdr === "false" || hdr === "0" ? false : undefined, HeaderTitle: ttl === "false" || ttl === "0" ? false : undefined, EmptyTitle: plain(U.Get("et")), EmptyText: plain(U.Get("ed")),
+                Card: card, Scroll: scroll,
                 OnFirstLoad: remove,
                 OnFirstData: (data, t) => {
                     //  (in the shell the document title is the menu name, set by the table with its header)

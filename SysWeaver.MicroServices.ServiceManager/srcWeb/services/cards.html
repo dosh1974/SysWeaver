@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the monitoring tables, never shown to a user">Monitoring cards</title>
+</head>
+<body>
+    <!-- ProblemRow (ProblemsTable), cards by default -->
+    <template id="problem">
+        <article class="sw-card sw-card-rich sw-tone-5">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="alert"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${System}</h3>
+                    <div class="sw-card-sub">${+Source}</div>
+                </div>
+                <span class="sw-badge sw-warning sw-when-warn" title="5 or more failures" data-translation_context="Status on the card of a system problem: it has failed a few times">Some failures</span>
+                <span class="sw-badge sw-error sw-when-danger" title="50 or more failures" data-translation_context="Status on the card of a system problem: it has failed many times">Many failures</span>
+            </header>
+            <dl class="sw-card-figures" data-level="${Count}" data-warn="5" data-danger="50">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a system problem: how many times this part failed">Failures</dt><dd>${+Count}</dd></div>
+            </dl>
+            <p class="sw-card-text">${LastException}</p>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a system problem: the time of the last failure">Last time</dt><dd>${+LastTime}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- Scheduler.Entry (SchedulerTable), table by default -->
+    <template id="task">
+        <article class="sw-card sw-card-rich sw-tone-6">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="clock"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                </div>
+                <span data-on="${IsRunning}"><span class="sw-badge sw-ok sw-when-on" data-translation_context="Status on the card of a scheduled task: it is running now">Running</span></span>
+            </header>
+            <dl class="sw-card-figures sw-card-figures-small">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big value on the card of a scheduled task: when it runs the next time">Next run</dt><dd>${+RunAt}</dd></div>
+            </dl>
+            <dl class="sw-facts" data-on="${Repeat}">
+                <div class="sw-when-on"><dt data-translation_context="Label on the card of a scheduled task: how often it runs">Every</dt><dd>${+RepeatFrequency}</dd></div>
+                <div class="sw-when-off"><dt data-translation_context="Label on the card of a scheduled task: how often it runs">Repeats</dt><dd data-translation_context="Value on the card of a scheduled task: it runs one time and does not repeat">Only once</dd></div>
+                <div><dt data-translation_context="Label on the card of a scheduled task: how many times it has run">Runs</dt><dd>${+Count}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

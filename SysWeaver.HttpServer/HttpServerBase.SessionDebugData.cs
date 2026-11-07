@@ -10,6 +10,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <remarks>By default the table shows who (User, Address, UserAgent, Auth), when (Started, LastActivity), the state (Expired) and the
         /// actions; the other columns are [TableDataHide] (still sent, the user can show them with the column picker).</remarks>
+        [SysWeaver.Data.TableDataCard("+session@monitoring/cards")]
         [TableDataPrimaryKey(nameof(Token))]
         [TableDataDefaultOrder("-" + nameof(LastActivity))]
         sealed class SessionDebugData

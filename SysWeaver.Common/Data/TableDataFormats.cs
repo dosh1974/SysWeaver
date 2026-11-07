@@ -86,12 +86,12 @@ namespace SysWeaver.Data
         PerRowFormat,
 
         /// <summary>
-        /// Format the value using bytes, kb, Mb and so on
+        /// Format the value using bytes, KB, MB and so on
         /// </summary>
         ByteSize,
 
         /// <summary>
-        /// Format the value using bytes/s, kb/s, Mb/s and so on
+        /// Format the value using bytes/s, KB/s, MB/s and so on
         /// </summary>
         ByteSpeed,
 

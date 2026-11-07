@@ -21,6 +21,7 @@ namespace SysWeaver.IsoData
     /// (and the land area of XK).
     /// </remarks>
     [TableDataPrimaryKey(nameof(CommonName))]
+    [TableDataCard("+country@iso_data/cards/iso")]
     public sealed class IsoCountry
     {
         /// <summary>

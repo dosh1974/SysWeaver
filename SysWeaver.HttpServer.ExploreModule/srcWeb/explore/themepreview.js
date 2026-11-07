@@ -153,7 +153,7 @@
             kpi("server", _TF("Services", "Demo KPI label in the theme preview"), "12", _TF("11 running", "Demo KPI note in the theme preview")),
             kpi("clock", _TF("Uptime", "Demo KPI label in the theme preview"), _TF("4 days", "Demo KPI value in the theme preview"), _TF("Since Monday", "Demo KPI note in the theme preview")),
             kpi("alert", _TF("Problems", "Demo KPI label in the theme preview"), "3", _TF("Last 24 h", "Demo KPI note in the theme preview")),
-            kpi("memory", _TF("Memory", "Demo KPI label in the theme preview"), "63 %", _TF("40.2 of 64 Gb", "Demo KPI note in the theme preview")));
+            kpi("memory", _TF("Memory", "Demo KPI label in the theme preview"), "63 %", _TF("40.2 of 64 GB", "Demo KPI note in the theme preview")));
 
         const buttons = card(_TF("Buttons", "Card title in the theme preview"),
             row(new Sw.Button({ Text: _TF("Primary", "Demo button text in the theme preview"), Kind: "primary", Icon: "save" }),

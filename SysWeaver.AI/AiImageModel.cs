@@ -5,6 +5,7 @@ namespace SysWeaver.AI
     /// <summary>
     /// Information about an image generation model available from an AI service
     /// </summary>
+    [SysWeaver.Data.TableDataCard("+image@ai/cards/models")]
     public sealed class AiImageModel
     {
         public override string ToString() => String.IsNullOrEmpty(Name) ? Id : String.Concat(Id, " (", Name, ')');

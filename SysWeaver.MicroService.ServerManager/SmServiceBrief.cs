@@ -8,6 +8,7 @@ namespace SysWeaver.MicroService
 {
 
     [TableDataPrimaryKey(nameof(Name))]
+    [TableDataCard("+service@ServerManager/cards")]
     public class SmServiceBrief
     {
         /// <summary>

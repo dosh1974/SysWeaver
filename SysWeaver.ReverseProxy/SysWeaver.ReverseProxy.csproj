@@ -13,4 +13,11 @@
     <ProjectReference Include="..\SysWeaver.Remote.Connection\SysWeaver.Remote.Connection.csproj" />
   </ItemGroup>
 
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\reverseproxy\* .\web\reverseproxy" />
+    <ItemGroup>
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
+
 </Project>

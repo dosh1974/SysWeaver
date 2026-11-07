@@ -26,7 +26,7 @@ namespace SysWeaver.Net
         public int PublicDays = 30;
 
         /// <summary>
-        /// Maximum number of Mb of space that a user can have.
+        /// Maximum number of MB of space that a user can have.
         /// If exceeded, the files that would expire in the nearest future are deleted.
         /// 0 or less to use defaults.
         /// </summary>
@@ -35,7 +35,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get the validated max number of bytes that a user may store.
         /// </summary>
-        /// <param name="defaultDiscQuotaMb">The quota in Mb to use if <see cref="DiscQuotaMb"/> is 0 or less; if this is also 0 or less, 100 Mb is used.</param>
+        /// <param name="defaultDiscQuotaMb">The quota in MB to use if <see cref="DiscQuotaMb"/> is 0 or less; if this is also 0 or less, 100 MB is used.</param>
         /// <returns>The quota in bytes.</returns>
         public long GetMaxDiscBytes(int defaultDiscQuotaMb) => 
             ((long)(DiscQuotaMb <= 0 ?

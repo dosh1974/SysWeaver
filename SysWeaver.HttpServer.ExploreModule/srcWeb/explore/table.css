@@ -3436,3 +3436,109 @@ html.sw-table-padded:has(body.sw-table-pagebody) {
         display: none;
     }
 }
+
+/* ===== Card templates (table.js RenderCards, explore/README "Card templates"): the items replace the grid inside the scrolled area ===== */
+
+.sw-table-cardlist {
+    display: none;
+}
+
+.sw-table-tmpl .sw-table-grid {
+    display: none;
+}
+
+/* The width of an item is set with --sw-card-min, ex: in the card's own css: .sw-table-cardlist[data-card="drive"] { --sw-card-min: 16rem; } */
+.sw-table-tmpl .sw-table-cardlist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--sw-card-min, 20rem), 100%), 1fr));
+    gap: var(--sw-space-3, 12px);
+    padding: var(--sw-space-3, 12px);
+    outline: none;
+}
+
+.sw-table-tmpl .sw-table-cardlist:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--sw-focus);
+}
+
+/* (an item fills its grid cell, so the cards of one line have the same height) */
+.sw-table-carditem {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+    .sw-table-carditem > * {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+/* Changed values of a live refresh: the same 1 s colour fade as a grid cell (no movement) */
+.sw-table-carditem.sw-flash > * {
+    --sw-table-flash: color-mix(in srgb, var(--sw-accent2) 25%, var(--sw-bg));
+    /* SwWeb:allow ux-mot-2 (the 1 s colour fade of the grid's changed values: no movement) */
+    animation: sw-table-flash 1s ease;
+}
+
+/* The empty state takes the room of the grid header's place */
+.sw-table-tmpl .sw-table-area:has(> .sw-table-empty:not([hidden])) > .sw-table-scroll {
+    display: none;
+}
+
+/* ===== Infinite scrolling (table.js ScrollEnsure): no pager, the end of the list says what happens ===== */
+
+.sw-table-scrollmode .sw-table-pps,
+.sw-table-scrollmode .sw-table-nav {
+    display: none;
+}
+
+/* (sticky: stays in view while a wide grid scrolls sideways) */
+.sw-table-scrollend {
+    position: sticky;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-2, 8px);
+    min-height: var(--sw-row-h, 2.5rem);
+    padding: var(--sw-space-2, 8px) var(--sw-space-3, 12px);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 0.875rem);
+    text-align: center;
+}
+
+.sw-table-scrollend[hidden] {
+    display: none;
+}
+
+.sw-table-scrollspin {
+    flex: none;
+    width: 1.25em;
+    height: 1.25em;
+}
+
+.sw-table-scrollend.sw-table-scrollnow {
+    bottom: 0;
+    z-index: 2;
+    background: var(--sw-bg);
+    border-top: 1px solid var(--sw-border);
+}
+
+/* Rich cards: the cards of a line share their rows (subgrid), so the figures, meters and facts sit on the same lines; a part that a card doesn't have takes no room */
+.sw-table-tmpl .sw-table-cardlist:has(> .sw-table-carditem > .sw-card-rich) {
+    row-gap: 0;
+}
+
+.sw-table-carditem:has(> .sw-card-rich) {
+    display: grid;
+    grid-row: span 8;
+    grid-template-rows: subgrid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: var(--sw-space-3, 12px);
+}
+
+    .sw-table-carditem > .sw-card-rich {
+        display: grid;
+        grid-row: 1 / -1;
+        grid-template-rows: subgrid;
+        grid-template-columns: minmax(0, 1fr);
+    }

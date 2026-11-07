@@ -15,6 +15,7 @@ namespace SysWeaver.IsoData
     /// All instances are created once from built-in static data and are immutable, so the type is thread safe.
     /// Also includes a non-ISO "DEM" (number 999) currency intended for demo purposes.
     /// </remarks>
+    [SysWeaver.Data.TableDataCard("+currency@iso_data/cards/iso")]
     [TableDataPrimaryKey(nameof(Iso4217))]
     public sealed class IsoCurrency
     {

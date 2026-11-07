@@ -5,6 +5,7 @@ using SysWeaver.Data;
 
 namespace SysWeaver.ReverseProxy
 {
+    [SysWeaver.Data.TableDataCard("proxyclient@reverseproxy/cards")]
     public sealed class ReverseProxyClientDetail
     {
 

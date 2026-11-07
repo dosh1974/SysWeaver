@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the explore tables, never shown to a user">Explore cards</title>
+</head>
+<body>
+    <!-- CompData (CompressionTable), cards by default -->
+    <template id="compression">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" data-sw-ext="${FileExtensions}" data-sw-fallback="archive"></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                </div>
+            </header>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div title="1 is tried first"><dt data-translation_context="Label on the card of a compression format: which of the formats is preferred, 1 is tried first">Order of use</dt><dd>${Prio}</dd></div>
+                <div><dt data-translation_context="Label on the card of a compression format: the name of the format in web requests, ex: br">Web name</dt><dd>${HttpCode}</dd></div>
+                <div><dt data-translation_context="Label on the card of a compression format: the file extensions of the format">File extensions</dt><dd>${FileExtensions}</dd></div>            </dl>
+        </article>
+    </template>
+
+    <!-- SerData (SerializerTable), cards by default -->
+    <template id="serializer">
+        <article class="sw-card sw-card-rich sw-tone-4">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" data-sw-ext="${Extension}" data-sw-fallback="braces"></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                </div>
+            </header>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div title="1 is tried first"><dt data-translation_context="Label on the card of a serializer: which of the serializers is preferred, 1 is tried first">Order of use</dt><dd>${Prio}</dd></div>
+                <div><dt data-translation_context="Label on the card of a serializer: the file extension of the data, ex: json">File extension</dt><dd>${Extension}</dd></div>
+                <div><dt data-translation_context="Label on the card of a serializer: the mime type of the data">Content type</dt><dd>${Mime}</dd></div>
+                <div><dt data-translation_context="Label on the card of a serializer: the text encoding of the data">Text encoding</dt><dd>${Encoding}</dd></div>            </dl>
+        </article>
+    </template>
+</body>
+</html>

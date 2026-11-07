@@ -4,6 +4,7 @@ using SysWeaver.Data;
 namespace SysWeaver.MicroService
 {
 
+    [SysWeaver.Data.TableDataCard("key@ServerManager/cards")]
     [TableDataPrimaryKey(nameof(Name))]
     public sealed class SmKeyFile
     {

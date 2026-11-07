@@ -359,6 +359,7 @@ namespace SysWeaver.Auth
         IReadOnlyDictionary<String, Task<Authorization>> BearerAuths = new Dictionary<String, Task<Authorization>>(StringComparer.Ordinal).Freeze();
 
 
+        [TableDataCard("+user@auth/cards")]
         sealed class Info
         {
             /// <summary>

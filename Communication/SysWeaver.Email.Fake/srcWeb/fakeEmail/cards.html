@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card template of the simulated emails table, never shown to a user">Email cards</title>
+</head>
+<body>
+    <!-- AnyEmail (MessageTable), table by default -->
+    <template id="email">
+        <article class="sw-card sw-card-rich sw-tone-5">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="mail"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Subject}</h3>
+                    <div class="sw-card-sub">${+Time}</div>
+                </div>
+                <span data-on="${Incoming}">
+                    <span class="sw-badge sw-info sw-when-on" data-translation_context="Label on the card of a simulated email: the email was received">Received</span>
+                    <span class="sw-badge sw-info sw-when-off" data-translation_context="Label on the card of a simulated email: the email was sent">Sent</span>
+                </span>
+                <span class="sw-badge sw-error">${Error}</span>
+            </header>
+            <div class="sw-card-text">${Body}</div>
+            <dl class="sw-facts sw-card-facts-lines">
+                <div><dt data-translation_context="Label on the card of a simulated email: the sender">From</dt><dd><div>${SenderName}</div><div>${From}</div></dd></div>
+                <div><dt data-translation_context="Label on the card of a simulated email: the receiver">To</dt><dd>${To}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

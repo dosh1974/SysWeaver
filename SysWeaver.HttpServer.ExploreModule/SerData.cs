@@ -5,6 +5,7 @@ using System;
 namespace SysWeaver.Net.ExploreModule
 {
     [TableDataPrimaryKey(nameof(Name))]
+    [TableDataCard("+serializer@explore/cards")]
     sealed class SerData
     {
         public SerData(ISerializerInfo i)

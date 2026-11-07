@@ -15,4 +15,11 @@
     <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
   </ItemGroup>
 
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\exchange\* .\web\exchange" />
+    <ItemGroup>
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
+
 </Project>

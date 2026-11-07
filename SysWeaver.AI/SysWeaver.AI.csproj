@@ -25,6 +25,7 @@
 		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\ai\icons\*.svg .\srcWeb\ai\icons\.opt\" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ai\icons\.opt\* .\web\ai\icons" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ai\icons\no_opt\* .\web\ai\icons" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ai\cards\* .\web\ai\cards" />
 		<ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />
 		</ItemGroup>

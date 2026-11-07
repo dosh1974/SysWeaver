@@ -36,10 +36,13 @@ namespace SysWeaver.Data
         /// {1} is the next value.
         /// Optionally {2} to {x} is populated from the value if it's a comma separated string.
         /// </param>
-        public TableDataBooleanToggleAttribute(String toggleApiUrl, String trueText = "True", String falseText = "False", String trueTitle = "Click to uncheck", String falseTitle = "Click to check") 
-            : 
+        /// <param name="confirmOff">Ask this question before switching off (null: no question). Optionally "question\nexplanation". Can't contain ';'.</param>
+        public TableDataBooleanToggleAttribute(String toggleApiUrl, String trueText = "True", String falseText = "False", String trueTitle = "Click to uncheck", String falseTitle = "Click to check", String confirmOff = null)
+            :
             base(TableDataFormats.Toggle,
-                trueText, falseText, trueTitle, falseTitle, toggleApiUrl)
+                confirmOff == null
+                    ? new Object[] { trueText, falseText, trueTitle, falseTitle, toggleApiUrl }
+                    : new Object[] { trueText, falseText, trueTitle, falseTitle, toggleApiUrl, confirmOff })
         {
         }
     }

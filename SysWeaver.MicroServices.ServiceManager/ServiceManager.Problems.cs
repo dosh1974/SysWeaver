@@ -11,6 +11,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// A row in the problems table: the failures of one part of a system, as tracked by an <see cref="ExceptionTracker"/>
         /// </summary>
+        [SysWeaver.Data.TableDataCard("problem@services/cards")]
         [TableDataPrimaryKey(nameof(System), nameof(Source))]
         [TableDataDefaultOrder("-" + nameof(LastTime))]
         public sealed class ProblemRow

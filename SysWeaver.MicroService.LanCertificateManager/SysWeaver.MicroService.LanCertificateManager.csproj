@@ -12,4 +12,11 @@
     <ProjectReference Include="..\SysWeaver.Security.Acme\SysWeaver.Security.Acme.csproj" />
   </ItemGroup>
 
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\lancert\* .\web\lancert" />
+    <ItemGroup>
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
+
 </Project>

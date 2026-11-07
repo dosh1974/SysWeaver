@@ -14,6 +14,7 @@ namespace SysWeaver.Net
         /// </remarks>
         [TableDataPrimaryKey(nameof(Name))]
 
+        [SysWeaver.Data.TableDataCard("+activeuser@monitoring/cards")]
         sealed class UserDebugData
         {
             /// <summary>
@@ -78,7 +79,7 @@ namespace SysWeaver.Net
             /// <summary>
             /// Auth information, null = open, empty = auth required or comma separted tokens that are required
             /// </summary>
-            [TableDataTags("{^0}", null, "{0}", true)]
+            [TableDataTags("{0}", null, "{0}", true)]
             public String Auth;
 
             /// <summary>

@@ -223,20 +223,20 @@ class SmServiceInfo {
             _T("Started {0}", t.Service, "Message when a service was started.{0} is replaced with the service name"));
         add("Uninstall", _TF("Disable", "Text of a button that disables (uninstalls) a service"), _TF("Disable the service", "Tool tip of a button that disables a service"), "close",
             _T("Disabled {0}", t.Service, "Message when a service was disabled.{0} is replaced with the service name"));
-        add("Kill", _TF("Kill...", "Text of a button that kills a service process (asks for a confirmation first)"),
+        add("Kill", _TF("Terminate...", "Text of a button that stops a service process at once (asks for a confirmation first)"),
             SmShared.Lines(
-                _TF("Kill the service process.", "Tool tip of a button that kills a service process"),
+                _TF("Terminate the service process.", "Tool tip of a button that stops a service process at once"),
                 _TF("WARNING! This can cause problems!", "Tool tip of a button that kills a service process"),
                 _TF("Try to stop the service first.", "Tool tip of a button that kills a service process")),
             "kill",
             _T("Terminated {0}", t.Service, "Message when a service process was killed.{0} is replaced with the service name"),
             //  The shared danger confirmation (names the service; "Cancel" focused, the danger button names the action)
             () => Sw.Cells.ConfirmDanger({
-                Title: SmShared.DangerTitle(_TF("Kill", "Verb in the title of a dialog asking to kill a service process (Kill <service>?)"), t.Service, () => _T("Kill the process of {0}?", t.Service, "Title of a dialog asking to kill a service process, {0} is the service name")),
+                Title: SmShared.DangerTitle(_TF("Terminate", "Verb in the title of a dialog asking to stop a service process at once (Terminate <service>?)"), t.Service, () => _T("Kill the process of {0}?", t.Service, "Title of a dialog asking to kill a service process, {0} is the service name")),
                 Item: t.Service,
                 ItemLabel: _TF("Service:", "Label before the service name in a confirmation dialog"),
                 Text: _TF("The process is ended at once, without shutting down: work in progress is lost and errors may follow. Try Stop first.", "Text of a dialog asking to kill a service process"),
-                OkText: _T("Kill {0}", t.Service, "Text of the danger button that confirms killing a service process, {0} is the service name"),
+                OkText: _T("Terminate {0}", t.Service, "Text of the danger button that confirms stopping a service process at once, {0} is the service name"),
                 OkIcon: "kill",
                 CancelTitle: _TF("Close this dialog, the service keeps running", "Tool tip of the Cancel button of the dialog asking to kill a service process"),
             }));

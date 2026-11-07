@@ -5,6 +5,7 @@ using SysWeaver.MicroService;
 namespace SysWeaver.TextMessage
 {
 
+    [SysWeaver.Data.TableDataCard("+message@fakeText/cards")]
     public class AnyTextMessage : IncomingTextMessage
     {
         public bool Incoming;

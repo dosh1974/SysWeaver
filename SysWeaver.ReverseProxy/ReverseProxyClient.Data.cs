@@ -8,6 +8,7 @@ namespace SysWeaver.ReverseProxy
 
     public sealed partial class ReverseProxyClient
     {
+        [SysWeaver.Data.TableDataCard("endpoint@reverseproxy/cards")]
         sealed class Data
         {
             public Data(String serverBase, String internalBase, LocalEndPoint p)

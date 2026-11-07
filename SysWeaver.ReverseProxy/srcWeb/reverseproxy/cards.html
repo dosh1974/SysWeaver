@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the reverse proxy tables, never shown to a user">Reverse proxy cards</title>
+</head>
+<body>
+    <!-- ReverseProxyClient.ConnectionStatus (ReverseProxyConnectionTable), one row: cards by default -->
+    <template id="connection">
+        <article class="sw-card sw-card-rich sw-tone-2">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="network"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${ClientId}</h3>
+                    <div class="sw-card-sub">${+Server}</div>
+                </div>
+                <span data-sw-match="${Status}">
+                    <span class="sw-badge sw-ok" data-when="Connected" data-translation_context="Status on the card of a reverse proxy connection: the connection works">Connected</span>
+                    <span class="sw-badge sw-info" data-when="Connecting" data-translation_context="Status on the card of a reverse proxy connection: it is trying to connect">Connecting</span>
+                    <span class="sw-badge sw-warning" data-when="No answer" data-translation_context="Status on the card of a reverse proxy connection: the server does not answer">No answer</span>
+                    <span class="sw-badge sw-error" data-when="*" data-translation_context="Status on the card of a reverse proxy connection: there is no connection">Not connected</span>
+                </span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy connection: how many waiting requests to the server are open">Open requests</dt><dd>${+ActivePolls}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy connection: how many workers handle requests">Worker threads</dt><dd>${+Workers}</dd></div>
+            </dl>
+            <p class="sw-card-text">${LastFail}</p>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a reverse proxy connection: the address visitors use">Public address</dt><dd>${+PublicUrl}</dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy connection: the last time the connection worked">Last worked</dt><dd>${+LastOk}</dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy connection: how many times connecting failed">Failed connects</dt><dd>${+ConnectFails}</dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy connection: how many waiting requests failed">Failed requests</dt><dd>${+PollFails}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- ReverseProxyClient.Data (ReverseProxyEndPointsTable), few rows: cards by default -->
+    <template id="endpoint">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="link"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${+ServerName}</h3>
+                    <div class="sw-card-sub">${+LocalUrl}</div>
+                </div>
+                <span class="sw-badge sw-warning sw-when-warn" title="1 or more requests have failed" data-translation_context="Status on the card of a reverse proxy end point: some requests have failed">Some failures</span>
+                <span class="sw-badge sw-error sw-when-danger" title="50 or more requests have failed" data-translation_context="Status on the card of a reverse proxy end point: many requests have failed">Many failures</span>
+            </header>
+            <dl class="sw-card-figures" data-level="${FailCount}" data-warn="1" data-danger="50">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy end point: how many requests were handled">Requests handled</dt><dd>${+Completed}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy end point: how many requests are being handled now">In progress</dt><dd>${+InProgress}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy end point: how many requests failed">Failures</dt><dd>${+FailCount}</dd></div>
+            </dl>
+            <p class="sw-card-text">${LastFail}</p>
+            <dl class="sw-facts sw-card-facts-wide" data-on="${IsInternal}">
+                <div><dt data-translation_context="Label on the card of a reverse proxy end point: where it is served from">Served by</dt><dd data-on="${IsInternal}"><span class="sw-when-on" data-translation_context="Value on the card of a reverse proxy end point: by this program">This program</span><span class="sw-when-off" data-translation_context="Value on the card of a reverse proxy end point: by another web server">Another web server</span></dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy end point: the time of the last failed request">Last failure</dt><dd>${+LastFailTime}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- ReverseProxyClientDetail (GetClientDetails), few rows: cards by default -->
+    <template id="proxyclient">
+        <article class="sw-card sw-card-rich sw-tone-4">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="server"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${+Client}</h3>
+                    <div class="sw-card-sub">${+Ip}</div>
+                </div>
+                <span class="sw-badge sw-warning sw-when-warn" title="10 or more requests are waiting" data-translation_context="Status on the card of a reverse proxy client: requests are waiting in a queue">Requests waiting</span>
+                <span class="sw-badge sw-error sw-when-danger" title="100 or more requests are waiting" data-translation_context="Status on the card of a reverse proxy client: many requests are waiting in a queue">Many requests waiting</span>
+            </header>
+            <dl class="sw-card-figures" data-level="${Pending}" data-warn="10" data-danger="100">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy client: how many requests it has answered">Requests answered</dt><dd>${+Completed}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a reverse proxy client: how many of the page requests were answered from the cache, in percent">From the cache</dt><dd>${+GetHitRatio}</dd></div>
+            </dl>
+            <div class="sw-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${GetHitRatio}" aria-valuetext="${+GetHitRatio}" aria-label="From the cache" data-translation_context="Accessible name of the meter on the card of a reverse proxy client: how many of the page requests were answered from the cache, in percent"><i style="--sw-card-value: ${GetHitRatio}"></i></div>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a reverse proxy client: the number of open connections">Connections</dt><dd>${+Connections}</dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy client: requests waiting for a free connection">Waiting</dt><dd>${+Pending}</dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy client: requests being handled now">In progress</dt><dd>${+InProgress}</dd></div>
+                <div><dt data-translation_context="Label on the card of a reverse proxy client: the last time it connected">Last connected</dt><dd>${+LastConnected}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

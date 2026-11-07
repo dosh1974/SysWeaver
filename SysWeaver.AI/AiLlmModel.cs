@@ -5,6 +5,7 @@ namespace SysWeaver.AI
     /// <summary>
     /// Information about a large language model (chat / text generation) available from an AI service
     /// </summary>
+    [SysWeaver.Data.TableDataCard("llm@ai/cards/models")]
     public sealed class AiLlmModel
     {
         public override string ToString() => String.IsNullOrEmpty(Name) ? Id : String.Concat(Id, " (", Name, ')');

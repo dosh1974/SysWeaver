@@ -39,7 +39,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Predefined percentage attribute (2 decimals for floating point types)
         /// </summary>
-        public static readonly TableDataNumberAttribute Percentage = new TableDataNumberAttribute(-2, "{0}%");
+        public static readonly TableDataNumberAttribute Percentage = new TableDataNumberAttribute(-2, "{0} %");
 
         /// <summary>
         /// Predefined multiplier attribute (2 decimals for floating point types)

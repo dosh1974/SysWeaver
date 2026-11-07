@@ -47,9 +47,10 @@ namespace SysWeaver.Data
 
     /// <summary>
     /// Format values (user agent strings) as a link to information about the user agent.
+        /// The server sends the full string, Sw.Cells shows it short ("Edge 140 on Windows") with the full string in the tool tip.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public sealed class TableDataUserAgentAttribute : TableDataUrlAttribute
+    public sealed class TableDataUserAgentAttribute : TableDataRawFormatAttribute
     {
         /// <summary>
         /// Format values (user agent strings) as a link to information about the user agent.
@@ -57,9 +58,11 @@ namespace SysWeaver.Data
         /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataUserAgentAttribute(String textFormat = "{0}")
             : base(
+                  TableDataFormats.Url,
                   textFormat,
                   TableDataConsts.ExternalInfoRoot + "useragent/{0}",
-                  "Click show information about this user agent"
+                  "Click show information about this user agent",
+                  "UserAgent"
             )
         {
         }

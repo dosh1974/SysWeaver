@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the ISO data tables, never shown to a user">ISO data cards</title>
+</head>
+<body>
+    <!-- IsoCountry (IsoCountryTable), table by default -->
+    <template id="country">
+        <article class="sw-card sw-card-rich sw-tone-2">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" inert aria-hidden="true">${+Flag}</span>
+                <div class="sw-card-lead-text">
+                    <h3>${+CommonName}</h3>
+                    <div class="sw-card-sub">${OfficialName}</div>
+                </div>
+                <span class="sw-card-sub" translate="no">${Iso3166a2}</span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a country: the number of people living in the country">People</dt><dd>${+Population}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a country: the land area of the country">Area</dt><dd>${+LandArea}</dd></div>
+            </dl>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a country: the currency of the country">Currency</dt><dd>${+Currency}</dd></div>
+                <div><dt data-translation_context="Label on the card of a country: the languages spoken in the country">Languages</dt><dd>${Languages}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- IsoCurrency (IsoCurrencyTable), table by default -->
+    <template id="currency">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" translate="no">${Symbol}</span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                    <div class="sw-card-sub">${+Iso4217}</div>
+                </div>
+            </header>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a currency: an example of how an amount is written">Example amount</dt><dd>${Example}</dd></div>
+                <div><dt data-translation_context="Label on the card of a currency: the main country that uses it">Country</dt><dd>${+Country}</dd></div>
+                <div><dt data-translation_context="Label on the card of a currency: the number of decimals in an amount">Decimals</dt><dd>${DecimalNumbers}</dd></div>
+                <div><dt data-translation_context="Label on the card of a currency: the ISO number of the currency">Numeric code</dt><dd>${Number}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

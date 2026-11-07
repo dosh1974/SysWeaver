@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the AI model tables, never shown to a user">AI model cards</title>
+</head>
+<body>
+    <!-- AiLlmModel (GetLlmModelTable), cards by default -->
+    <template id="llm">
+        <article class="sw-card sw-card-rich sw-tone-4">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="sparkle"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Id}</h3>
+                    <div class="sw-card-sub">${Owner}</div>
+                </div>
+            </header>
+            <div class="sw-card-text">${-Description}</div>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of an AI language model: the most tokens it takes as input">Input tokens</dt><dd>${+InputTokenLimit}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of an AI language model: the most tokens it can output">Output tokens</dt><dd>${+OutputTokenLimit}</dd></div>
+            </dl>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of an AI language model: its display name">Name</dt><dd>${Name}</dd></div>
+                <div><dt data-translation_context="Label on the card of an AI language model: if the model can reason (think in steps)">Can reason</dt><dd data-on="${CanReason}"><span class="sw-when-on" data-translation_context="Value on the card of an AI language model: it can reason">Yes</span><span class="sw-when-off" data-translation_context="Value on the card of an AI language model: it can not reason">No</span></dd></div>
+                <div><dt data-translation_context="Label on the card of an AI language model: when the model was created">Created</dt><dd>${+Created}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- AiImageModel (GetImageModelTable), cards by default -->
+    <template id="image">
+        <article class="sw-card sw-card-rich sw-tone-5">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="image"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Id}</h3>
+                    <div class="sw-card-sub">${Owner}</div>
+                </div>
+            </header>
+            <div class="sw-card-text">${-Description}</div>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of an AI image model: its display name">Name</dt><dd>${Name}</dd></div>
+                <div><dt data-translation_context="Label on the card of an AI image model: when the model was created">Created</dt><dd>${+Created}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

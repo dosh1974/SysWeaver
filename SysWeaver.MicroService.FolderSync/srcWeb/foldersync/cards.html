@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card template of the managed folders table, never shown to a user">Managed folder cards</title>
+</head>
+<body>
+    <!-- ManagedFolderData (ManagedFoldersTable), table by default -->
+    <template id="folder">
+        <article class="sw-card sw-card-rich sw-tone-7">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="folderArrow"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${+DiscFolder}</h3>
+                    <div class="sw-card-sub">${+Name}</div>
+                </div>
+                <span data-on="${IsActive}">
+                    <span class="sw-badge sw-ok sw-when-on" data-translation_context="Status on the card of a managed folder: this is the version in use">Active</span>
+                    <span class="sw-badge sw-info sw-when-off" data-translation_context="Status on the card of a managed folder: this version is not in use">Not active</span>
+                </span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a managed folder: the size of the files">Size</dt><dd>${+Size}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a managed folder: the number of files">Files</dt><dd>${+Count}</dd></div>
+            </dl>
+            <p class="sw-card-text">${Comment}</p>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a managed folder: when this version was uploaded">Uploaded</dt><dd>${+Uploaded}</dd></div>
+                <div><dt data-translation_context="Label on the card of a managed folder: the user that uploaded this version">By</dt><dd>${User}</dd></div>
+                <div><dt data-translation_context="Label on the card of a managed folder: the machine that uploaded this version">From</dt><dd>${Machine}</dd></div>
+            </dl>
+            <footer class="sw-card-foot" data-sw-optional>${+Actions}</footer>
+        </article>
+    </template>
+
+    <!-- SharedFolderData (SharedFoldersTable), table by default -->
+    <template id="shared">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="share"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${+Name}</h3>
+                    <div class="sw-card-sub sw-card-path">${DiscFolder}</div>
+                </div>
+            </header>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a shared folder: the version of its files">Version</dt><dd>${Version}</dd></div>
+                <div><dt data-translation_context="Label on the card of a shared folder: the roles that may read it">Roles</dt><dd>${+Auth}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- RemoteFolderData (RemoteFoldersTable), few rows and a state: cards by default -->
+    <template id="remote">
+        <article class="sw-card sw-card-rich sw-tone-4">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="folderCheck"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                    <div class="sw-card-sub">${+RemoteAddress}</div>
+                </div>
+                <span class="sw-badge sw-ok sw-when-ok" data-translation_context="Status on the card of a folder synchronized from another server: no failures">Up to date</span>
+                <span class="sw-badge sw-warning sw-when-warn" title="1 or more synchronizing failures" data-translation_context="Status on the card of a folder synchronized from another server: synchronizing has failed">Some failures</span>
+                <span class="sw-badge sw-error sw-when-danger" title="20 or more synchronizing failures" data-translation_context="Status on the card of a folder synchronized from another server: synchronizing has failed many times">Many failures</span>
+            </header>
+            <dl class="sw-card-figures" data-level="${ExCount}" data-warn="1" data-danger="20">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big value on the card of a folder synchronized from another server: the version it has now">Version</dt><dd>${Version}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a folder synchronized from another server: how many times synchronizing failed">Failures</dt><dd>${+ExCount}</dd></div>
+            </dl>
+            <p class="sw-card-text">${LastException}</p>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a folder synchronized from another server: the name on that server">Name on that server</dt><dd>${RemoteName}</dd></div>
+                <div><dt data-translation_context="Label on the card of a folder synchronized from another server: the address where its files are served, if they are">Web address</dt><dd>${+WebFolder}</dd></div>
+                <div><dt data-translation_context="Label on the card of a folder synchronized from another server: the time of the last failure">Last failure</dt><dd>${+ExLastTime}</dd></div>
+                <div><dt data-translation_context="Label on the card of a folder synchronized from another server: the roles that may read it">Roles</dt><dd>${+Auth}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

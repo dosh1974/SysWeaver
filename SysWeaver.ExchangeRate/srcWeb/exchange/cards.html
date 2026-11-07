@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card template of the exchange rate sources table, never shown to a user">Exchange rate cards</title>
+</head>
+<body>
+    <!-- SourceRow (SourcesTable), cards by default -->
+    <template id="source">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="banknotes"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                    <div class="sw-card-sub">${+Reference}</div>
+                </div>
+                <span data-on="${IsCurrent}"><span class="sw-badge sw-ok sw-when-on" data-translation_context="Status on the card of an exchange rate source: the rates of this source are the ones in use">In use</span></span>
+                <span class="sw-badge sw-warning sw-when-warn" title="1 or more failures" data-translation_context="Status on the card of an exchange rate source: getting the rates has failed">Some failures</span>
+                <span class="sw-badge sw-error sw-when-danger" title="10 or more failures" data-translation_context="Status on the card of an exchange rate source: getting the rates has failed many times">Many failures</span>
+            </header>
+            <dl class="sw-card-figures" data-level="${Fails}" data-warn="1" data-danger="10">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of an exchange rate source: how many rates it has">Exchange rates</dt><dd>${+Count}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of an exchange rate source: how many times getting the rates failed">Failures</dt><dd>${+Fails}</dd></div>
+            </dl>
+            <p class="sw-card-text">${LastFail}</p>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of an exchange rate source: when the rates were last updated">Updated</dt><dd>${+Updated}</dd></div>
+                <div><dt data-translation_context="Label on the card of an exchange rate source: when the rates are updated next">Next update</dt><dd>${+NextUpdate}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- RateRow (RatesTable), many rows: table by default -->
+    <template id="rate">
+        <article class="sw-card sw-card-rich sw-tone-5">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" inert aria-hidden="true">${+Flag}</span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                    <div class="sw-card-sub">${+Iso4217}</div>
+                </div>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a currency: how much of this currency one US dollar buys">Per US dollar</dt><dd>${+Rate}</dd></div>
+            </dl>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a currency: the amount in the currency itself">Amount</dt><dd>${+From}</dd></div>
+                <div><dt data-translation_context="Label on the card of a currency: what the amount is worth in US dollars">Worth in US dollars</dt><dd>${+To}</dd></div>
+                <div><dt data-translation_context="Label on the card of a currency: the main country that uses it">Country</dt><dd>${+Country}</dd></div>
+                <div><dt data-translation_context="Label on the card of a currency: when the rate was updated">Updated</dt><dd>${+Updated}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

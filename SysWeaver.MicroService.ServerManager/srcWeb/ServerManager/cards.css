@@ -1,0 +1,15 @@
+/*
+ * ServerManager/cards.css - styles of the card templates in cards.html (loaded by Sw.Table with them, explore/README "Card templates").
+ */
+
+.sw-table-cardlist[data-card="drive"], .sw-table-cardlist[data-card="drive-mobile"] {
+    --sw-card-min: 18rem;
+}
+
+.sm-card-used {
+    flex: none;
+    font-family: var(--sw-head);
+    font-size: var(--sw-text-lg);
+    font-variant-numeric: tabular-nums;
+}
+

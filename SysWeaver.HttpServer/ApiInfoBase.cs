@@ -76,7 +76,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// The compression methods to use (in order of preference) or null if no compression should be applied.
         /// </summary>
-        [TableDataTags("{^1}", "Compression quality: {2}", "{0}", true)]
+        [TableDataTags("{1}", "Compression quality: {2}", "{0}", true)]
         public String CompPreference;
 
         /// <summary>

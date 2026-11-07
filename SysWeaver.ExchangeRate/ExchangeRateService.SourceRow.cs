@@ -7,6 +7,7 @@ namespace SysWeaver.ExchangeRate
     {
         [TableDataPrimaryKey(nameof(Name))]
 
+        [SysWeaver.Data.TableDataCard("source@exchange/cards")]
         sealed class SourceRow
         {
             public SourceRow(RateSource s, RateSource current)

@@ -15,7 +15,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Format values as an auth requirement.
         /// </summary>
-        public TableDataAuthAttribute() : base(TableDataFormats.Tags, "{^0}", "{2}", "{0}", true, "Auth")
+        public TableDataAuthAttribute() : base(TableDataFormats.Tags, "{0}", "{2}", "{0}", true, "Auth")
         {
         }
     }

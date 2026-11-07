@@ -81,7 +81,7 @@
     }
 
     /**
-     * Fill a size cell: strings as is, null "-" (unknown), numbers with a kb / Mb / Gb tooltip (the original units) and a copy action (a click copies, as the original; Sw.Clipboard.CopyOnClick).
+     * Fill a size cell: strings as is, null "-" (unknown), numbers with a KB / MB / GB tooltip (the original units) and a copy action (a click copies, as the original; Sw.Clipboard.CopyOnClick).
      * @param {HTMLElement} c The cell.
      * @param {number|string|null} size The size.
      */
@@ -101,13 +101,13 @@
         let t = Sw.Clipboard.CopyOnClick(c, size, { Keyboard: true });
         const kb = (size + 512) >> 10;
         if (kb > 0) {
-            t += "\n\n" + _T("{0} kb", intText(kb), "Tool tip of the size column of a web resource listing: the size in kilobytes. {0} is the formatted whole number, ex: 12");
+            t += "\n\n" + _T("{0} KB", intText(kb), "Tool tip of the size column of a web resource listing: the size in kilobytes. {0} is the formatted whole number, ex: 12");
             const mb = Math.round(size / 1048576);
             if (mb > 0)
-                t += "\n" + _T("{0} Mb", intText(mb), "Tool tip of the size column of a web resource listing: the size in megabytes. {0} is the formatted whole number, ex: 12");
+                t += "\n" + _T("{0} MB", intText(mb), "Tool tip of the size column of a web resource listing: the size in megabytes. {0} is the formatted whole number, ex: 12");
             const gb = Math.round(size / 1073741824);
             if (gb > 0)
-                t += "\n" + _T("{0} Gb", intText(gb), "Tool tip of the size column of a web resource listing: the size in gigabytes. {0} is the formatted whole number, ex: 12");
+                t += "\n" + _T("{0} GB", intText(gb), "Tool tip of the size column of a web resource listing: the size in gigabytes. {0} is the formatted whole number, ex: 12");
         }
         c.title = t;
     }

@@ -7,6 +7,7 @@ namespace SysWeaver.ExchangeRate
     public sealed partial class ExchangeRateService
     {
 
+        [SysWeaver.Data.TableDataCard("+rate@exchange/cards")]
         [TableDataPrimaryKey(nameof(Name))]
         class RateRow
         {

@@ -7,6 +7,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
+        [SysWeaver.Data.TableDataCard("+folder@foldersync/cards")]
         public sealed class ManagedFolderData
         {
  
@@ -108,6 +109,7 @@ namespace SysWeaver.MicroService
         }
 
 
+        [SysWeaver.Data.TableDataCard("+shared@foldersync/cards")]
         public sealed class SharedFolderData
         {
             /// <summary>
@@ -142,6 +144,7 @@ namespace SysWeaver.MicroService
 
 
 
+        [SysWeaver.Data.TableDataCard("remote@foldersync/cards")]
         public sealed class RemoteFolderData
         {
             /// <summary>

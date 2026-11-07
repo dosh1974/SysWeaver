@@ -16,4 +16,11 @@
     <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
   </ItemGroup>
 
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\services\* .\web\services" />
+    <ItemGroup>
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
+
 </Project>

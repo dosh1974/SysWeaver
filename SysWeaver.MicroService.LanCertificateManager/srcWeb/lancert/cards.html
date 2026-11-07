@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card template of the domains table, never shown to a user">Domain cards</title>
+</head>
+<body>
+    <!-- LanCertificateManagerService.Data (DomainTable), cards by default -->
+    <template id="domain">
+        <article class="sw-card sw-card-rich sw-tone-2">
+            <header class="sw-card-lead" data-days="${To}" data-warn="30" data-danger="0">
+                <span class="sw-card-tile"><i data-sw-icon="shield"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${+DomainName}</h3>
+                </div>
+                <span class="sw-badge sw-ok sw-when-ok" data-translation_context="Status on the card of a domain: its certificate is valid for a long time">Valid</span>
+                <span class="sw-badge sw-warning sw-when-warn" title="30 days or less are left until the certificate runs out" data-translation_context="Status on the card of a domain: its certificate runs out within a month">Expires soon</span>
+                <span class="sw-badge sw-error sw-when-danger" title="0 days or less are left, the certificate has run out" data-translation_context="Status on the card of a domain: its certificate has run out">Expired</span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a domain: how many days its certificate is still valid">Days left</dt><dd data-sw-days-left="${To}"></dd></div>
+                <div class="sw-card-figure"><dt><span class="sw-when-ok" data-translation_context="Label under a big value on the card of a domain: when its certificate runs out">Valid until</span><span class="sw-when-warn" data-translation_context="Label under a big value on the card of a domain: when its certificate runs out">Valid until</span><span class="sw-when-danger" data-translation_context="Label under a big value on the card of a domain: the time its certificate ran out">Ran out on</span></dt><dd>${+To}</dd></div>
+            </dl>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a domain: when its certificate was last checked">Last checked</dt><dd>${+LastChecked}</dd></div>
+            </dl>
+            <details class="sw-card-more">
+                <summary data-translation_context="Text that opens the fingerprint of the certificate of a domain">Certificate fingerprint</summary>
+                <div translate="no">${+Thumbprint}</div>
+            </details>
+            <footer class="sw-card-foot" data-sw-optional>${+Actions}</footer>
+        </article>
+    </template>
+</body>
+</html>

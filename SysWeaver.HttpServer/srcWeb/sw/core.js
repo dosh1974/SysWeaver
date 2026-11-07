@@ -3180,6 +3180,9 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
     /** Default unit prefixes of suffix (k^1..k^5). */
     const suffixPrefixes = ["k", "M", "G", "T", "E"];
 
+    /** Unit prefixes of byte values (K^1..K^5, upper case K as in KB). */
+    const bytePrefixes = ["K", "M", "G", "T", "E"];
+
 
     /**
      * Format a duration in ms as one translated unit: ms (< 100), seconds (1 decimal below 10 s), minutes,
@@ -3667,20 +3670,20 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         Suffix: suffix,
 
         /**
-         * Format a byte count as the original ValueFormat.formatByteSize, e.g. "1 000 bytes", "12.3 kb", "5.0 Mb", "63.4 Gb" (k = 1024).
+         * Format a byte count as the original ValueFormat.formatByteSize, e.g. "1 000 bytes", "12.3 KB", "5.0 MB", "63.4 GB" (k = 1024).
          * @param {number} value - Bytes.
-         * @param {number} [decimals=1] - Decimals of kb and larger values (e.g. 2 to match a server text like "63.35 Gb").
+         * @param {number} [decimals=1] - Decimals of KB and larger values (e.g. 2 to match a server text like "63.35 GB").
          * @returns {string}
          */
-        Bytes: (value, decimals) => suffix(value, "b", "bytes", 1024, decimals),
+        Bytes: (value, decimals) => suffix(value, "B", "bytes", 1024, decimals, bytePrefixes),
 
         /**
-         * Format a byte speed as the original, e.g. "12.3 kb/s".
+         * Format a byte speed, e.g. "12.3 KB/s".
          * @param {number} value - Bytes per second.
-         * @param {number} [decimals=1] - Decimals of kb/s and larger values.
+         * @param {number} [decimals=1] - Decimals of KB/s and larger values.
          * @returns {string}
          */
-        ByteSpeed: (value, decimals) => suffix(value, "b/s", "bytes/s", 1024, decimals),
+        ByteSpeed: (value, decimals) => suffix(value, "B/s", "bytes/s", 1024, decimals, bytePrefixes),
 
         /** Elapsed ms as text (value, blankIfNeg). */
         DurationMs: durationMs,

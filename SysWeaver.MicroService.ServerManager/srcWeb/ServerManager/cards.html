@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the server manager tables, never shown to a user">Server manager cards</title>
+</head>
+<body>
+    <!-- SmDriveInfo (DriveInfoTable), cards by default -->
+    <template id="drive">
+        <article class="sw-card sw-card-rich sw-tone-2">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="drive"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Drive}</h3>
+                    <div class="sw-card-sub">${Label}</div>
+                </div>
+                <span class="sw-badge sw-warning sw-when-warn" title="80 % or more of the drive is used" data-translation_context="Status on the card of a server drive: the drive has little free space left">Almost full</span>
+                <span class="sw-badge sw-error sw-when-danger" title="92 % or more of the drive is used" data-translation_context="Status on the card of a server drive: the drive is about to run out of space">Nearly out of space</span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a server drive: how much of the drive is used, in percent">Used</dt><dd>${+Used}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a server drive: the free space on the drive">Free</dt><dd>${+Free}</dd></div>
+            </dl>
+            <div class="sw-meter" data-level="${Used}" data-warn="80" data-danger="92" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Used}" aria-valuetext="${+Used}" aria-label="Used" data-translation_context="Accessible name of the meter on the card of a server drive: how much of the drive is used"><i style="--sw-card-value: ${Used}"></i></div>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a server drive: the size of the drive">Total</dt><dd>${+Total}</dd></div>
+                <div><dt data-translation_context="Label on the card of a server drive: the file system of the drive, ex: NTFS">Format</dt><dd>${Format}</dd></div>
+                <div><dt data-translation_context="Label on the card of a server drive: the kind of drive, ex: Fixed">Type</dt><dd>${Type}</dd></div>
+            </dl>
+            <footer class="sw-card-foot"><a class="sw-linkbtn" href="../ServerManager/server_metrics.html?q1=GetDriveChart?${Index}&amp;q2=GetDriveHistoryShortChart?${Index}&amp;q3=GetDriveHistoryChart?${Index}&amp;title=Disc use" data-translation_context="Link on the card of a server drive: opens the charts of how the drive was used over time">Show history</a></footer>
+        </article>
+    </template>
+
+    <!-- The drive on a compact screen -->
+    <template id="drive-mobile">
+        <article class="sw-card sw-card-rich sw-tone-2">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="drive"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Drive}</h3>
+                    <div class="sw-card-sub" translate="no">${+Free} / ${+Total}</div>
+                </div>
+                <span class="sw-badge sw-warning sw-when-warn" title="80 % or more of the drive is used" data-translation_context="Status on the card of a server drive: the drive has little free space left">Almost full</span>
+                <span class="sw-badge sw-error sw-when-danger" title="92 % or more of the drive is used" data-translation_context="Status on the card of a server drive: the drive is about to run out of space">Nearly out of space</span>
+                <b class="sm-card-used">${+Used}</b>
+            </header>
+            <div class="sw-meter" data-level="${Used}" data-warn="80" data-danger="92" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Used}" aria-valuetext="${+Used}" aria-label="Used" data-translation_context="Accessible name of the meter on the card of a server drive: how much of the drive is used"><i style="--sw-card-value: ${Used}"></i></div>
+            <footer class="sw-card-foot"><a class="sw-linkbtn" href="../ServerManager/server_metrics.html?q1=GetDriveChart?${Index}&amp;q2=GetDriveHistoryShortChart?${Index}&amp;q3=GetDriveHistoryChart?${Index}&amp;title=Disc use" data-translation_context="Link on the card of a server drive: opens the charts of how the drive was used over time">Show history</a></footer>
+        </article>
+    </template>
+
+    <!-- SmServiceBrief / SmServiceBriefActions (ServicesTable), table by default -->
+    <template id="service">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile sw-card-mono" aria-hidden="true" translate="no">${^Name}</span>
+                <div class="sw-card-lead-text">
+                    <h3>${+Name}</h3>
+                    <div class="sw-card-sub">${Machine}</div>
+                </div>
+                <span data-sw-match="${Status}">
+                    <span class="sw-badge sw-ok" data-when="Running" data-translation_context="Status on the card of a managed service: the program is running">Running</span>
+                    <span class="sw-badge sw-warning" data-when="Stopped" data-translation_context="Status on the card of a managed service: the program is not running">Stopped</span>
+                    <span class="sw-badge sw-warning" data-when="Paused,PausePending" data-translation_context="Status on the card of a managed service: the program is paused">Paused</span>
+                    <span class="sw-badge sw-info" data-when="StartPending,ContinuePending" data-translation_context="Status on the card of a managed service: the program is starting">Starting</span>
+                    <span class="sw-badge sw-info" data-when="StopPending" data-translation_context="Status on the card of a managed service: the program is stopping">Stopping</span>
+                    <span class="sw-badge sw-error" data-when="NotInstalled" data-translation_context="Status on the card of a managed service: the program is not installed on the server">Not installed</span>
+                    <span class="sw-badge sw-warning" data-when="*" data-translation_context="Status on the card of a managed service: the state can't be read">Unknown</span>
+                </span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a managed service: how much memory it uses">Memory</dt><dd>${+MemUsage}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a managed service: how much of the processor it uses">Processor</dt><dd>${+CpuUsage}</dd></div>
+            </dl>
+            <p class="sw-card-text">${Comment}</p>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a managed service: the number of uploaded versions">Versions</dt><dd>${+VersionCount}</dd></div>
+                <div><dt data-translation_context="Label on the card of a managed service: when the current version was uploaded">Uploaded</dt><dd>${+Uploaded}</dd></div>
+                <div><dt data-translation_context="Label on the card of a managed service: the user that uploaded the current version">By</dt><dd>${User}</dd></div>
+            <div><dt data-translation_context="Label on the card of a managed service: the roles that may manage it">Roles</dt><dd>${+Auth}</dd></div>
+            </dl>
+            <footer class="sw-card-foot" data-sw-optional>${+Actions}</footer>
+        </article>
+    </template>
+
+    <!-- SmProcessMetrics (ProcessInfoTable), table by default -->
+    <template id="process">
+        <article class="sw-card sw-card-rich sw-tone-4">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="cpu"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                </div>
+                <span class="sw-badge sw-warning sw-when-warn" title="60 % or more of the processor is used" data-translation_context="Status on the card of a running process: it uses a lot of the processor">Busy</span>
+                <span class="sw-badge sw-error sw-when-danger" title="90 % or more of the processor is used" data-translation_context="Status on the card of a running process: it uses nearly all of the processor">Very busy</span>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a running process: how much of the processor it uses">Processor</dt><dd>${+CpuUsage}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a running process: how much memory it uses">Memory</dt><dd>${+MemUsage}</dd></div>
+            </dl>
+            <div class="sw-meter" data-level="${CpuUsage}" data-warn="60" data-danger="90" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${CpuUsage}" aria-valuetext="${+CpuUsage}" aria-label="Processor" data-translation_context="Accessible name of the meter on the card of a running process: how much of the processor it uses"><i style="--sw-card-value: ${CpuUsage}"></i></div>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a running process: its number in the operating system">Process ID</dt><dd>${Id}</dd></div>
+                <div><dt data-translation_context="Label on the card of a running process: how long it has been running">Running for</dt><dd>${+Duration}</dd></div>
+                <div><dt data-translation_context="Label on the card of a running process: the most memory it has used">Peak memory</dt><dd>${+PeakMemUsage}</dd></div>
+                <div><dt data-translation_context="Label on the card of a running process: the number of open handles (operating system resources)">Open resources</dt><dd>${+HandleCount}</dd></div>
+            </dl>
+            <footer class="sw-card-foot">
+                <a class="sw-linkbtn" href="../ServerManager/server_metrics.html?q1=GetProcessCpuChart?${Id}&amp;q2=GetProcessCpuHistoryShortChart?${Id}&amp;q3=GetProcessCpuHistoryChart?${Id}&amp;title=Process ${Id} CPU use" data-translation_context="Link on the card of a running process: opens the charts of its processor use over time">CPU history</a>
+                <a class="sw-linkbtn" href="../ServerManager/server_metrics.html?q1=GetProcessMemChart?${Id}&amp;q2=GetProcessMemHistoryShortChart?${Id}&amp;q3=GetProcessMemHistoryChart?${Id}&amp;title=Process ${Id} memory use" data-translation_context="Link on the card of a running process: opens the charts of its memory use over time">Memory history</a>
+                <span data-sw-optional>${+Actions}</span>
+            </footer>
+        </article>
+    </template>
+
+    <!-- SmKeyFile (KeysTable), cards by default -->
+    <template id="key">
+        <article class="sw-card sw-card-rich sw-tone-7">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile" data-sw-ext="${Name}" data-sw-fallback="fileKey"></span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                </div>
+                <span data-on="${Backup}"><span class="sw-badge sw-when-on" data-translation_context="Label on the card of a key file: this file is a backup of a key">Backup</span></span>
+            </header>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a key file: the size of the file">Size</dt><dd>${+Size}</dd></div>
+                <div><dt data-translation_context="Label on the card of a key file: when the file was last changed">Changed</dt><dd>${+LastModified}</dd></div>
+            </dl>
+        </article>
+    </template>
+
+    <!-- SmChunkFolderStats (StorageStatsTable), cards by default -->
+    <template id="storage">
+        <article class="sw-card sw-card-rich sw-tone-5">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="folder"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3 class="sw-card-path">${Folder}</h3>
+                </div>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a storage folder: the space the folder takes on the disc">On disc</dt><dd>${+DiscSize}</dd></div>
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a storage folder: the number of stored file parts (chunks)">Stored pieces</dt><dd>${+ChunkCount}</dd></div>
+            </dl>
+            <dl class="sw-facts sw-card-facts-wide">
+                <div><dt data-translation_context="Label on the card of a storage folder: the size of the stored file parts">Content size</dt><dd>${+ChunkSize}</dd></div>
+                <div><dt data-translation_context="Label on the card of a storage folder: the number of old file parts that can be removed">Pieces to remove</dt><dd>${+OldCount}</dd></div>
+                <div><dt data-translation_context="Label on the card of a storage folder: the size of the old file parts">Space to free</dt><dd>${+OldSize}</dd></div>
+                <div><dt data-translation_context="Label on the card of a storage folder: parts unused since this time count as old">Unused since</dt><dd>${+Old}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>

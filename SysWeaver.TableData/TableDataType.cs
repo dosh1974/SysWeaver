@@ -81,6 +81,11 @@ namespace SysWeaver.Data
         /// </summary>
         public static readonly String[] DefaultOrder = GetDefaultOrder();
 
+        /// <summary>
+        /// The card template of the row type (<see cref="TableDataCardAttribute"/>), null if none.
+        /// </summary>
+        public static readonly String Card = typeof(T).GetCustomAttribute<TableDataCardAttribute>(true)?.Card;
+
         static String[] GetDefaultOrder()
         {
             var o = typeof(T).GetCustomAttribute<TableDataDefaultOrderAttribute>(true)?.Order;
@@ -1405,7 +1410,7 @@ namespace SysWeaver.Data
             {
                 Rows = rows,
                 RowCount = count,
-            }.HandleCc(request.Cc, Cols, title).WithDefaultOrder(DefaultOrder);
+            }.HandleCc(request.Cc, Cols, title).WithDefaultOrder(DefaultOrder).WithCard(Card);
         }
 
         /// <summary>
@@ -1445,7 +1450,7 @@ namespace SysWeaver.Data
             {
                 Rows = rows,
                 RowCount = count,
-            }.HandleCc<T, R>(request.Cc, TypedCols, title).WithDefaultOrder(DefaultOrder);
+            }.HandleCc<T, R>(request.Cc, TypedCols, title).WithDefaultOrder(DefaultOrder).WithCard(Card);
 
         }
 

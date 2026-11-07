@@ -8,6 +8,7 @@ using SysWeaver.MicroService;
 namespace SysWeaver.Email
 {
 
+    [SysWeaver.Data.TableDataCard("+email@fakeEmail/cards")]
     public class AnyEmail : IncomingEmail
     {
         /// <summary>

@@ -15,8 +15,10 @@
   
   <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
     <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\*+ .\data" />
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\foldersync\* .\web\foldersync" />
     <ItemGroup>
       <EmbeddedResource Include="data\**\*.br" Visible="false" />
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
     </ItemGroup>
   </Target>
 </Project>

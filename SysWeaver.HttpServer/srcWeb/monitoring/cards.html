@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="sw-card-css" content="none" />
+    <!-- SwWeb:no-framework (not a page: card templates for Sw.Table, explore/README "Card templates") -->
+    <title data-translation_context="Browser tab title of a file that only holds the card templates of the session and user tables, never shown to a user">Session cards</title>
+</head>
+<body>
+    <!-- SessionDebugData (ActiveSessions), table by default -->
+    <template id="session">
+        <article class="sw-card sw-card-rich sw-tone-2">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile"><i data-sw-icon="session"></i></span>
+                <div class="sw-card-lead-text">
+                    <h3 data-v="${User}"><span class="sw-if-empty" data-translation_context="Title on the card of a user session when nobody is signed in in that session">Not signed in</span>${User}</h3>
+                    <div class="sw-card-sub">${+Address}</div>
+                </div>
+                <span data-on="${Expired}">
+                    <span class="sw-badge sw-info sw-when-on" data-translation_context="Status on the card of a user session: the session has ended">Ended</span>
+                    <span class="sw-badge sw-ok sw-when-off" data-translation_context="Status on the card of a user session: the session is active">Active</span>
+                </span>
+            </header>
+            <dl class="sw-facts">
+                <div><dt data-translation_context="Label on the card of a user session: the time of the last request">Last seen</dt><dd>${+LastActivity}</dd></div>
+                <div><dt data-translation_context="Label on the card of a user session: when the session started">Started</dt><dd>${+Started}</dd></div>
+            <div><dt data-translation_context="Label on the card of a user session: the browser and system of the user">Browser</dt><dd>${+UserAgent}</dd></div>
+                <div><dt data-translation_context="Label on the card of a user session: the roles of the user">Roles</dt><dd>${+Auth}</dd></div>
+            </dl>
+            <footer class="sw-card-foot" data-sw-optional>${+Actions}</footer>
+        </article>
+    </template>
+
+    <!-- UserDebugData (ActiveUsers), table by default -->
+    <template id="activeuser">
+        <article class="sw-card sw-card-rich sw-tone-3">
+            <header class="sw-card-lead">
+                <span class="sw-card-tile sw-card-mono" aria-hidden="true" translate="no">${^Name}</span>
+                <div class="sw-card-lead-text">
+                    <h3>${Name}</h3>
+                    <div class="sw-card-sub">${Email}</div>
+                </div>
+            </header>
+            <dl class="sw-card-figures">
+                <div class="sw-card-figure"><dt data-translation_context="Label under a big number on the card of a signed in user: the number of sessions of the user">Open sessions</dt><dd>${+SessionCount}</dd></div>
+            </dl>
+            <dl class="sw-facts sw-card-facts-lines">
+                <div><dt data-translation_context="Label on the card of a signed in user: the nick name of the user">Nickname</dt><dd>${NickName}</dd></div>
+                <div><dt data-translation_context="Label on the card of a signed in user: the roles of the user">Roles</dt><dd>${+Auth}</dd></div>
+            </dl>
+        </article>
+    </template>
+</body>
+</html>
