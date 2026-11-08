@@ -16803,7 +16803,7 @@ window.Sw.Sources["ui/layout.js"] = "sw/ui.js";
         },
         "Tabs tab": { Id: "any", Title: Str, Icon: "any", Tip: Str, Content: "any", Closable: "boolean", Data: "any", Select: "boolean", End: "boolean" },
         Split: { A: "any", B: "any", Vertical: "boolean", Size: "number", Min: "number", Key: Str, Label: Str, OnResize: "function" },
-        Pager: { OnChange: "function", Swipe: "boolean" },
+        Pager: { OnChange: "function", Swipe: "boolean", Mouse: "boolean" },
         Columns: { MinWidth: "number", Gap: "string|number", Max: "number", Class: Str, Content: "any" },
         PageHeader: {
             Title: Str, Description: Str, Status: "any", Actions: "any", Compact: "boolean", Level: "number", Class: Str,
@@ -17222,7 +17222,8 @@ window.Sw.Sources["ui/layout.js"] = "sw/ui.js";
      * Items are the children of .Content and should have the same width.
      * The offset is always a whole number of items (the stride = item width + gap), so several pagers with the same item size
      * stay aligned (the last page may end with empty space).
-     * Options: OnChange(pager) (page / page count changed, update your buttons with CanPrev() / CanNext()), Swipe (default true).
+     * Options: OnChange(pager) (page / page count changed, update your buttons with CanPrev() / CanNext()), Swipe (default true: touch / pen
+     * drag follows the finger, a flick glides on by its speed, snapped to whole items), Mouse (default false: the mouse drags / flicks too).
      * Methods: Next(), Prev(), CanPrev(), CanNext(), Reveal(item), Go(offset, animate), CancelSwipe().
      */
     class Pager {
@@ -17394,7 +17395,10 @@ window.Sw.Sources["ui/layout.js"] = "sw/ui.js";
             this.CancelSwipeFn && this.CancelSwipeFn();
         }
 
-        /** Set up touch / pen swiping. */
+        /**
+         * Set up swiping: touch / pen (and the mouse with the option Mouse: true). The strip follows the finger; on release a flick glides
+         * on by its speed (whole items), a slow drag snaps to the nearest item. The click after a drag is not a tap.
+         */
         BindSwipe() {
             const t = this;
             let drag = null;
@@ -17403,16 +17407,16 @@ window.Sw.Sources["ui/layout.js"] = "sw/ui.js";
                     drag = null;
             };
             t.E.addEventListener("pointerdown", e => {
-                if (e.pointerType === "mouse" || drag)
+                if ((e.pointerType === "mouse" && (!t.O.Mouse || e.button !== 0)) || drag)
                     return;
-                drag = { Id: e.pointerId, X: e.clientX, Y: e.clientY, Off: t.Offset, Active: false };
+                drag = { Id: e.pointerId, X: e.clientX, Y: e.clientY, Off: t.Offset, Active: false, Samples: [{ T: performance.now(), X: e.clientX }] };
             });
             t.E.addEventListener("pointermove", e => {
                 if (!drag || e.pointerId !== drag.Id)
                     return;
                 const dx = e.clientX - drag.X;
                 if (!drag.Active) {
-                    if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(e.clientY - drag.Y))
+                    if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - drag.Y))
                         return;
                     drag.Active = true;
                     try {
@@ -17421,7 +17425,13 @@ window.Sw.Sources["ui/layout.js"] = "sw/ui.js";
                     catch {
                     }
                     t.E.classList.add("sw-dragging");
+                    t.Content.style.transition = "none";
                 }
+                //  The speed of the last 100 ms (the flick)
+                const now = performance.now();
+                drag.Samples.push({ T: now, X: e.clientX });
+                while (drag.Samples.length > 2 && now - drag.Samples[0].T > 100)
+                    drag.Samples.shift();
                 const max = t.MaxOffset();
                 let off = drag.Off - dx;
                 //  Rubber band at the ends
@@ -17446,12 +17456,13 @@ window.Sw.Sources["ui/layout.js"] = "sw/ui.js";
                 };
                 t.E.addEventListener("click", block, { capture: true, once: true });
                 setTimeout(() => t.E.removeEventListener("click", block, { capture: true }), 50);
+                t.Content.style.transition = "";
                 const dx = e.clientX - d.X;
-                const step = t.PageStep();
-                if (Math.abs(dx) > 40)
-                    t.Go(d.Off + (dx < 0 ? step : -step));
-                else
-                    t.Go(d.Off);
+                //  Flick: glide on by the release speed (px / ms × 280 ms), then snap to whole items (Go)
+                const first = d.Samples[0], dt = performance.now() - first.T;
+                const v = dt > 0 && dt < 160 ? (e.clientX - first.X) / dt : 0;
+                const glide = Math.abs(v) > 0.3 ? v * 280 : 0;
+                t.Go(d.Off - dx - glide);
             };
             t.E.addEventListener("pointerup", end);
             t.E.addEventListener("pointercancel", end);
