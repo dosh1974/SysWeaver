@@ -134,8 +134,26 @@ namespace SysWeaver.MicroService.Media
         [EditMultiline]
         public string FxProps;
 
+        /// <summary>
+        /// The live controls of an Effect Weaver effect (the effect reads them from iMouse x, y, z and w, see its "// iMouse.x = Name | ..." comments): up to 4 values in [0, 1].
+        /// Null (or a missing value) uses the effect's defaults.
+        /// </summary>
+        public double[] Controls;
+
         public virtual void Validate()
         {
+            var c = Controls;
+            if (c != null)
+            {
+                if (c.Length > 4)
+                    Array.Resize(ref c, 4);
+                for (int i = 0; i < c.Length; ++i)
+                {
+                    var x = c[i];
+                    c[i] = double.IsNaN(x) ? 0.5 : x < 0 ? 0 : x > 1 ? 1 : x;
+                }
+                Controls = c;
+            }
             var v = Speed;
             Speed = v < -100 ? -100 : v > 100 ? 100 : v;
             var w = Width;
@@ -207,6 +225,8 @@ namespace SysWeaver.MicroService.Media
             if (ShowVars != other.ShowVars)
                 return false;
             if (FxProps != other.FxProps)
+                return false;
+            if (!((Controls ?? []).AsSpan().SequenceEqual(other.Controls ?? [])))
                 return false;
             return true;
         }

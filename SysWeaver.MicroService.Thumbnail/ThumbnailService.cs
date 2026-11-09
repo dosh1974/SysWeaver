@@ -45,6 +45,7 @@ namespace SysWeaver.MicroService
             Fs = fs;
             PngMime = MimeTypeMap.GetMimeType("png");
             SvgMime = MimeTypeMap.GetMimeType("svg");
+            MediaInfo.RetryFailedSeconds = Math.Max(p.RetryFailedSeconds, 1);
             var cacheDuration = TimeSpan.FromSeconds(Math.Max(p.CacheSeconds, 1));
             CacheDuration = cacheDuration;
             var prefix = p.Prefix ?? "";

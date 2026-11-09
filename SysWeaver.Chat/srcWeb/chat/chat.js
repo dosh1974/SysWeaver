@@ -22,7 +22,7 @@
  * chat has an `UploadRepo`).
  *
  * Frame contract: commands from the parent window `{Type: "chat.scrolltop" | "chat.scrollbottom" | "chat.showall" | "chat.hideall" |
- * "chat.clear"}`; posts `{Type: "ViewProfile", Name, Image}` to the parent.
+ * "chat.clear"}`; posts `{Type: "ViewProfile", Name, Image}` to the parent (or calls the opt-in option OnViewProfile).
  *
  * Globals defined (legacy, kept for other pages): `Chat` (`addChat`, `chatColor`, `FlagIsWorking`, `FlagCanRemove`, `IsMobile`,
  * `Platform`), `ChatOptions`, `chatMain`.
@@ -287,6 +287,16 @@
          * @type {?string}
          */
         SettingsName = null;
+        /**
+         * If true the text box gets the focus when the chat is ready (the chat page). False for a chat that is a part of a page
+         * (Sw.Chat.Add in an item page): the page keeps its focus and scroll position (UX guide FOC). @type {boolean}
+         */
+        AutoFocus = true;
+        /**
+         * Opt-in: called by "View profile" of a message with { Name, Image } (the sender), instead of posting ViewProfile to the parent
+         * window (for a chat inside an app page, where no parent handles it). @type {?function(object):void}
+         */
+        OnViewProfile = null;
     }
 
     /** @type {Map<string, string[]>} Sender name -> colors cache. */
@@ -2290,12 +2300,16 @@
                 t.SetMicState(false, false);
         }
 
-        /** Final start up: apply the format, enable the send button, focus the textarea without forcing the on screen keyboard. */
-        Ready() {
+        /**
+         * Final start up: apply the format, enable the send button, focus the textarea without forcing the on screen keyboard.
+         * @param {boolean} [focus] False: leave the focus where it is (Options.AutoFocus false: a chat in a page).
+         */
+        Ready(focus) {
             const t = this;
             t.FormatChanged();
             t.Changed();
-            t.Focus();
+            if (focus !== false)
+                t.Focus();
         }
 
         /** Focus the textarea without forcing the on screen keyboard (read only while focusing). */
@@ -2555,7 +2569,7 @@
             }
             t.List.StickForAwhile(true);
             if (t.Composer)
-                t.Composer.Ready();
+                t.Composer.Ready(t.Options.AutoFocus !== false);
             return t.List.E;
         }
 
@@ -2813,6 +2827,10 @@
                     Icon: "IconProfile",
                     Title: _T("View the public profile page for \"{0}\"", m.From, "Tool tip description of a menu item that when clicked will view the profile of a web site member.{0} is replaced with the nick name of the member"),
                     OnClick: () => {
+                        if (typeof t.Options.OnViewProfile === "function") {
+                            t.Options.OnViewProfile({ Name: m.From, Image: m.FromImage });
+                            return;
+                        }
                         Sw.Frame.PostParent("ViewProfile", { Name: m.From, Image: m.FromImage });
                         console.log("Chat: sent ViewProfile for \"" + m.From + "\"");
                     },

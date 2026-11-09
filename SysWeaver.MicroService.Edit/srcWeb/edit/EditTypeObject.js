@@ -179,6 +179,7 @@
                 }
                 else
                     child = null;
+                info.hidden = !!options.ExpandObjects && expanded && !!obj[mn];
                 data.classList.toggle("EditorExpanded", expanded);
                 row.classList.toggle("EditorExpanded", expanded);
                 row.classList.toggle("sw-edit-expanded", expanded);
@@ -223,6 +224,9 @@
                 if (!!on !== expanded)
                     await toggle();
             };
+            //  ExpandObjects: a nested object that exists starts open (forms for people)
+            if (options.ExpandObjects && obj[mn] !== null && obj[mn] !== undefined)
+                await toggle();
             return item;
         }
     }

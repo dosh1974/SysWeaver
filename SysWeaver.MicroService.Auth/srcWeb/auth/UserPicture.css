@@ -1,0 +1,66 @@
+/* auth/UserPicture.css - the user picture dialog (UserPicture.js, Sw.UserPicture.Choose) */
+
+.sw-userpic-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-4);
+}
+
+.sw-userpic-current {
+    width: 6rem;
+    height: 6rem;
+    flex: none;
+    border-radius: var(--sw-radius-md);
+    border: 1px solid var(--sw-border);
+    background: var(--sw-surface-sunken);
+    object-fit: cover;
+}
+
+.sw-userpic-title {
+    margin: var(--sw-space-4) 0 var(--sw-space-2);
+    font-size: var(--sw-text-md);
+}
+
+.sw-userpic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+    gap: var(--sw-space-2);
+}
+
+.sw-userpic-pick {
+    aspect-ratio: 1;
+    padding: var(--sw-space-1);
+    border: 2px solid transparent;
+    border-radius: var(--sw-radius-md);
+    background: var(--sw-surface-sunken);
+    cursor: pointer;
+}
+
+.sw-userpic-pick img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+@media (hover: hover) {
+    .sw-userpic-pick:hover {
+        border-color: var(--sw-border-strong);
+    }
+}
+
+.sw-userpic-pick[aria-checked="true"] {
+    border-color: var(--sw-accent1);
+}
+
+.sw-userpic-pick:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+.sw-userpic-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sw-space-2);
+    justify-content: flex-end;
+    margin-top: var(--sw-space-3);
+}

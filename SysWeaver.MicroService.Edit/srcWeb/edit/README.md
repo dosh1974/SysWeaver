@@ -90,6 +90,8 @@ Root editors without a forced style switch between the desktop and the mobile la
 | `CleanHints` / `CleanHintsReadOnly` | no | no | yes, for people (`PlainHints`) | no | A settings form in a card or dialog (the hint line says "1 to 10", "up to 20 characters", "7 to 365 days"; no type names) |
 | `CleanMenu` / `CleanReadOnlyMenu` | no (a menu button per member) | no | no | no | Embedded values with member menus |
 
+**`ExpandObjects` (default `false`, opt in, forms for people).** Nested objects that exist (a page's Title / Text / Media, a quiz's Layout / Options) start expanded as normal grouped fields instead of a collapsed row with a one line summary (the summary is hidden while open; the expand button still collapses it; a `null` object stays "Set a value"). It reaches every nested editor and the items of collections, and an item of a list of plain values reads "Item 1", "Item 2" instead of "[0]", "[1]". Combine with `PlainHints: true`, `Title: false`, `CanExpand: false`.
+
 **In a card.** An editor placed directly in a card body (`Sw.Card`: `section.sw-card > div.sw-card-body > editor.Element`) uses the card as its frame, with any options (Design v2, no card in a card): it gets `sw-edit-incard` (no own frame), and when the card has a title its title row (the editor menu: copy / paste / JSON / set default of the whole value, and its drag / drop) moves into the card's tools (`.sw-edit-head-incard`: the menu button only; the card title names the value). Nothing else changes (rows, hints, Dev tool tips). The class `sw-edit-framed` on `editor.Element` before it is shown keeps the old framed look; an editor with `CanExpand` and `IsExpanded: false` keeps its own title row (the expand button). `card.SetTools(...)` after the editor was shown replaces the tools, so add card tools first.
 
 ```js
@@ -268,6 +270,7 @@ Selected by the member spec `Color[:<Format>[:Alpha][:<MaxIntensity>]]`, written
 | `Rgb`, `Rgba` | `float[3]` / `float[4]` in 0..1 | `[EditColor(EditColorFormat.Rgba)] public float[] Tint;` |
 | `HdrRgb`, `HdrRgba` | float arrays, rgb above 1 up to `maxIntensity` | `[EditColor(EditColorFormat.HdrRgb, maxIntensity: 8)]` |
 | `Rgb8`, `Rgba8` | `byte[3]` / `byte[4]` in 0..255 | `[EditColor(EditColorFormat.Rgba8)] public byte[] Pixel;` |
+| `Struct8` | an object with integer `R`, `G`, `B` in 0..255 and optionally `A` (0..255) or `Opacity` (0..100 percent) | `[EditColor(EditColorFormat.Struct8, true)] public CssColor Text;` or `Sw.Edit.Register("My.CssColor", new Sw.Edit.Handlers.Color("My.CssColor", ["Color", "Struct8", "Alpha"]))` for every member of a type |
 | `UInt32Rgb` / `UInt32Rgba` / `UInt32Argb` / `UInt32Abgr` | one integer `0xRRGGBB` / `0xRRGGBBAA` / `0xAARRGGBB` (System.Drawing `ToArgb`; an `int` member stores the signed bit pattern) / `0xAABBGGRR` (RGBA bytes, little endian) | `[EditColor(EditColorFormat.UInt32Rgba)] public uint Color;` |
 
 A `String[]` of colors is a collection: put the attribute on the element (`EditElementAttributes`); numeric arrays are one color.
@@ -335,7 +338,7 @@ One `UndoStack` per editor tree. Changes are recorded with dotted paths (`Edit.M
 
 | File | API |
 |---|---|
-| Edit.js (EditOptions.js is a compatibility stub) | `Sw.Edit.Options` (`EditOptions`, usable before `Ready`): `Title`, `Dev`, `ReadOnly`, `CanExpand`, `IsExpanded`, `KeyName`, `Border`, `ExpandAllCollections`, `MenuIcon`, `MenuIconClass`, `MenuColorClass`, `AddToHeader`, `MarkChanged` (a member that is not at its default gets `sw-edit-changed`: an accent name and a dot), plus `Name`, `UndoStack`; `Clone()`; presets |
+| Edit.js (EditOptions.js is a compatibility stub) | `Sw.Edit.Options` (`EditOptions`, usable before `Ready`): `Title`, `Dev`, `ReadOnly`, `CanExpand`, `IsExpanded`, `KeyName`, `Border`, `ExpandAllCollections`, `ExpandObjects`, `MenuIcon`, `MenuIconClass`, `MenuColorClass`, `AddToHeader`, `MarkChanged` (a member that is not at its default gets `sw-edit-changed`: an accent name and a dot), plus `Name`, `UndoStack`; `Clone()`; presets |
 | UndoStack.js | `Invoke`, `Undo`, `Redo`, `CanUndo`, `CanRedo`, `UndoTitle`, `RedoTitle`, `OnChange(fn)`, `Clear`, `Pos`, `Ops` |
 | EditDesktop.js / EditMobile.js | `Sw.Edit.Layouts.Desktop/Mobile`: `AddTypeInfo(editor, head, type, title, options)`, `AddMember(obj, editor, body, member, title, options, isLast)`; classes `EditDesktop`, `EditMobile` |
 | EditCollectionArray.js / EditCollectionMap.js | `Sw.Edit.Collections.Array/Map` (`EditCollectionArray.Inst`, `EditCollectionMap.Inst`): `Indexed`, `createVal`, `countVal`, `getVal`, `setVal`, `getKeyName`, `keys`, `iterate` (old name `íterate`), `onKeys`, `addVal`, `removeVal`, `insertAt` (+ arrays: `insertAfter`, `move`; maps: `hasKey`) |

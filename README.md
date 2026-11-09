@@ -509,6 +509,7 @@ flowchart LR
 | [SysWeaver.Media.Audio](SysWeaver.Media.Audio/README.md) | Audio file information (duration, format) and waveform icons using NAudio. |
 | [SysWeaver.Media.Png](SysWeaver.Media.Png/README.md) | A managed PNG decoder and chunk reader/writer with no native dependencies. |
 | [SysWeaver.Media.Psd](SysWeaver.Media.Psd/README.md) | Reader/writer for Adobe Photoshop (PSD / PSB) files: layers, masks, channels, groups and image resources, plus helpers to decode RGB images and extract text layers. |
+| [SysWeaver.Media.Shader](SysWeaver.Media.Shader/README.md) | GLSL effects in the Effect Weaver format: parsing, the Ew snippet library, the vertex stage and the final WebGL program (shared with Effect Weaver, used by the media player through `MediaService.BuildEffect`). |
 | [SysWeaver.Media.Svg](SysWeaver.Media.Svg/README.md) | Programmatic SVG creation and rendering: a canvas/scene API with paths, shapes, gradients, shadows, 3D-style extrusion, text with embedded fonts, barcodes, composition templates, and SVG-to-bitmap rendering. |
 | [SysWeaver.Media.Video](SysWeaver.Media.Video/README.md) | Video decoding and information through FFmpeg, with native FFmpeg libraries shipped per platform. |
 | [SysWeaver.Minifier.Svg](SysWeaver.Minifier.Svg/README.md) | SVG minifier/optimiser, used at build time (through the SvgOpt tool) for the framework's icons and at runtime by the SVG transformer. |
