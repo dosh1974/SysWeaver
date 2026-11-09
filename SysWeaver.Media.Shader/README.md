@@ -32,11 +32,11 @@ This library turns such a source into a complete WebGL program, the same code fo
 | `SnippetExpander.cs` | Inserts the snippets a source uses (and their dependencies) before the first declaration using them; `#line` keeps the line numbers |
 | `SnippetLibrary.cs` | The snippet library: `Builtin` (embedded, see below) or `Load(folder)` (the editor) |
 | `ShaderStages.cs` | The vertex stage: splits a source into the two stages, rewrites the varyings, `main()` of the vertex shader, `Marker` / `SplitProgram` |
-| `Snippets/` | The built in snippets (`<folder>/<Id>.glsl`, embedded as `snippets/<folder>/<Id>.glsl`) |
+| `srcData/` | The built in snippets (`<folder>/<Id>.glsl`), compressed by the build to `data/<folder>/<Id>.glsl.br` (brotli, `..\_tools\compress\Compress.exe -OptimizeShaders False`: stored as is, never stripped or minified) and embedded as `snippets/<folder>/<Id>.glsl.br`; decompressed when the library loads |
 
 ## The snippets
 
-The source of the snippets is Effect Weaver's `_snippets` folder (edited and documented there, `D:\EffectWeaver\_snippets`). `Snippets/` is a copy: when the Effect Weaver repository is next to this one the build copies its `.glsl` files here first (`SyncEwSnippets` in the csproj), so the copy stays in sync and a checkout without Effect Weaver builds the same library. Snippets removed from `_snippets` must be removed here by hand.
+The source of the snippets is Effect Weaver's `_snippets` folder (edited and documented there, `D:\EffectWeaver\_snippets`). `srcData/` is a copy: when the Effect Weaver repository is next to this one the build copies its `.glsl` files here first (`SyncEwSnippets` in the csproj), so the copy stays in sync and a checkout without Effect Weaver builds the same library. Snippets removed from `_snippets` must be removed here by hand (and their `.br` from `data/`, or clean it: it is generated and not in git).
 
 ## Notes
 

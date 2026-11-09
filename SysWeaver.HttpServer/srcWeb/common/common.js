@@ -25878,6 +25878,21 @@ window.Sw.Sources["ui/overlay.js"] = "common/common.js";
             if (on || !appDim)
                 dimmed = true;
         }
+        //  Covered dialogs: every dialog box sits above every layer (z-index), so the scrim of a dialog stacked on another never
+        //  reaches the one below; a dialog below the top most dimming entry is dimmed itself (sw-covered), so the top one stands out.
+        //  A dialog with Above (the session time-out warning) stays bright under a normal dialog opened after it (it is drawn above it)
+        let topDim = -1;
+        for (let i = stack.length - 1; i >= 0; --i)
+            if (stack[i].Layer && stack[i].DimLayer && !stack[i].Closed) {
+                topDim = i;
+                break;
+            }
+        const topAbove = topDim >= 0 && stack[topDim].Above;
+        for (let i = 0; i < stack.length; ++i) {
+            const p = stack[i];
+            if (p.IsDialog && p.Box)
+                p.Box.classList.toggle("sw-covered", i < topDim && !p.Closed && !(p.Above && !topAbove));
+        }
         //  Toasts and the live region inside the top dialog
         const td = topDialogEntry();
         const host = td && !td.Closed ? td.Box : b;

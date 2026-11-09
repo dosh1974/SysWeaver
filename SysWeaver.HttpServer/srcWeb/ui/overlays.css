@@ -298,6 +298,28 @@ iframe.sw-frame-modal {
     width: min(70rem, calc(100vw - 32px));
 }
 
+/* A dialog under another dialog (overlay.js refreshModal): dimmed with the same scrim as the page and slightly blurred, so the top most
+   dialog is the only bright, sharp surface (the scrim of the top dialog's layer is below every dialog box) */
+.sw-dialog.sw-covered {
+    filter: blur(1px);
+}
+
+.sw-dialog.sw-covered::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: var(--sw-scrim);
+    pointer-events: none;
+    animation: sw-fade-in var(--sw-dur-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sw-dialog.sw-covered::after {
+        animation: none;
+    }
+}
+
 .sw-dialog.sw-full {
     height: calc(100vh - 64px);
     height: calc(100dvh - 64px);

@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -108,7 +109,7 @@ public sealed class SnippetLibrary
     }
 
     /// <summary>
-    /// The built in library: the snippets of Effect Weaver's _snippets, embedded in SysWeaver.Media.Shader (Snippets/, a copy refreshed by the build; code only, no descriptions).
+    /// The built in library: the snippets of Effect Weaver's _snippets, embedded in SysWeaver.Media.Shader (srcData/, a copy refreshed by the build, embedded brotli compressed as snippets/&lt;folder&gt;/&lt;Id&gt;.glsl.br; code only, no descriptions).
     /// Used when an effect is built (<see cref="ShaderParser.BuildParts"/>), so Effect Saver, Effect Vj and the SysWeaver media player run effects that call snippets;
     /// the editor loads the folder itself (descriptions, admin edits) and inserts the snippets before.
     /// </summary>
@@ -120,14 +121,15 @@ public sealed class SnippetLibrary
         var list = new List<Snippet>();
         foreach (var name in asm.GetManifestResourceNames())
         {
-            if (!name.StartsWith("snippets/", StringComparison.Ordinal) || !name.EndsWith(".glsl", StringComparison.OrdinalIgnoreCase))
+            if (!name.StartsWith("snippets/", StringComparison.Ordinal) || !name.EndsWith(".glsl.br", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var parts = name["snippets/".Length..].Split('/', '\\');
+            var parts = name["snippets/".Length..^".br".Length].Split('/', '\\');
             if (parts.Length != 2 || Skip.Contains(parts[0]))
                 continue;
             using var stream = asm.GetManifestResourceStream(name)!;
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            list.Add(Create(System.IO.Path.GetFileNameWithoutExtension(parts[1]), parts[0], reader.ReadToEnd(), "", name, null));
+            using var brotli = new BrotliStream(stream, CompressionMode.Decompress);
+            using var reader = new StreamReader(brotli, Encoding.UTF8);
+            list.Add(Create(System.IO.Path.GetFileNameWithoutExtension(parts[1]), parts[0], reader.ReadToEnd(), "", name[..^".br".Length], null));
         }
         return new SnippetLibrary("(built in)", list);
     });
