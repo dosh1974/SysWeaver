@@ -16,6 +16,12 @@ namespace SysWeaver.MicroService
         public int CacheSeconds = 120;
 
         /// <summary>
+        /// Number of seconds before a failed media information build (ex: the remote thumbnail service was down) is tried again.
+        /// The failure time is stored with the cached info, so a failure is never retried more often than this (sets MediaInfo.RetryFailedSeconds).
+        /// </summary>
+        public int RetryFailedSeconds = 300;
+
+        /// <summary>
         /// The resolutions to support (and cache) for, as "WIDTHxHEIGHT" strings.
         /// </summary>
         public String[] Resolutions = new[]

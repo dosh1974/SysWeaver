@@ -18,6 +18,7 @@
 	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
 	  <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
 	  <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Media.Shader\SysWeaver.Media.Shader.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

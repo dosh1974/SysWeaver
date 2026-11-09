@@ -18,6 +18,7 @@
  * | Rgb8, Rgba8 | byte arrays [r, g, b(, a)] in 0..255 |
  * | UInt32Rgb, UInt32Rgba, UInt32Argb, UInt32Abgr | one integer 0xRRGGBB, 0xRRGGBBAA, 0xAARRGGBB (System.Drawing ToArgb), 0xAABBGGRR (RGBA bytes little endian) |
  * | Struct | an object with R, G, B(, A) (or r, g, b, a / X, Y, Z, W) float members in 0..1 (HDR when the format is HdrRgb / HdrRgba) |
+ * | Struct8 | an object with R, G, B integer members in 0..255 and optionally A (0..255) or Opacity (0..100 percent): css style colour objects |
  * Signed integer members (System.Int32 / Int64) store the bit pattern as the signed value.
  */
 (function () {
@@ -86,6 +87,8 @@
         HasAlpha(k, v) {
             if (k === "Css" || k === "Hex")
                 return this.Alpha;
+            if (k === "Struct8")
+                return !!(v && EditTypeColor.Keys8(v)[3]);
             if (k === "Struct")
                 return !!(v && EditTypeColor.Keys(v)[3]);
             return AlphaFormats.has(k);
@@ -98,6 +101,17 @@
          */
         IsHdr(k) {
             return k === "HdrRgb" || k === "HdrRgba" || (k === "Struct" && /^Hdr/.test(this.Format));
+        }
+
+        /**
+         * The member names of a color struct.
+         * @param {object} v - The object.
+         * @returns {string[]} [r, g, b, a] member names (a may be undefined).
+         */
+        static Keys8(v) {
+            if (!v || typeof v !== "object" || !["R", "G", "B"].every(k => typeof v[k] === "number"))
+                return [];
+            return ["R", "G", "B", typeof v.A === "number" ? "A" : (typeof v.Opacity === "number" ? "Opacity" : undefined)];
         }
 
         /**
@@ -130,6 +144,13 @@
                     return null;
                 const s = k === "Rgb8" || k === "Rgba8" ? 255 : 1;
                 return [v[0] / s, v[1] / s, v[2] / s, v.length > 3 ? v[3] / s : 1].map(x => Math.max(0, x));
+            }
+            if (typeof v === "object" && k === "Struct8") {
+                const ks = EditTypeColor.Keys8(v);
+                if (!ks.length)
+                    return null;
+                const a = ks[3] === "A" ? v.A / 255 : (ks[3] === "Opacity" ? v.Opacity / 100 : 1);
+                return [v.R / 255, v.G / 255, v.B / 255, a].map(x => clamp(x, 0, 1));
             }
             if (typeof v === "object") {
                 const ks = EditTypeColor.Keys(v);
@@ -165,6 +186,18 @@
                     return [byte(r), byte(g), byte(b)];
                 case "Rgba8":
                     return [byte(r), byte(g), byte(b), byte(a)];
+                case "Struct8": {
+                    const o = Object.assign({}, prev);
+                    const ks = EditTypeColor.Keys8(prev);
+                    o.R = byte(r);
+                    o.G = byte(g);
+                    o.B = byte(b);
+                    if (ks[3] === "A")
+                        o.A = byte(a);
+                    else if (ks[3] === "Opacity")
+                        o.Opacity = Math.round(a * 1000) / 10;
+                    return o;
+                }
                 case "Struct": {
                     const o = Object.assign({}, prev);
                     const ks = EditTypeColor.Keys(prev);
@@ -206,6 +239,9 @@
             if (Array.isArray(v))
                 return v.join(", ");
             const c = this.ToColor(v);
+            //  Byte structs (css style colours): the css hex form, the alpha has its own slider
+            if (c && this.Kind(v) === "Struct8")
+                return "#" + c.slice(0, 3).map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, "0")).join("");
             return c ? c.slice(0, EditTypeColor.Keys(v)[3] ? 4 : 3).join(", ") : JSON.stringify(v);
         }
 
@@ -370,7 +406,7 @@
             if ((member.Flags & F.AcceptNull) !== 0)
                 return null;
             const k = this.Kind();
-            if (k === "Struct")
+            if (k === "Struct" || k === "Struct8")
                 return null;
             return this.FromColor([0, 0, 0, 1], k === "Rgba" || k === "HdrRgba" ? [0, 0, 0, 1] : k === "Rgba8" ? [0, 0, 0, 255] : undefined);
         }

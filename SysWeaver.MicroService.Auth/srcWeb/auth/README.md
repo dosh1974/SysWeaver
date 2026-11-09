@@ -34,6 +34,7 @@ Processing (SVG optimisation, Brotli compression, embedding) is described in [`s
 | [`Auth.js`](Auth.js) | `Sw.Auth`: login protocol, Basic fallback, logout, password proof / hashes, policy text and checks, password generator, leak check, e-mail / phone validation, phone prefix lookup, short codes, token urls, post sign in navigation; legacy globals |
 | [`AuthUi.js`](AuthUi.js) | `Sw.AuthUi`: page frame (`Page`), `Field`, `PhoneField`, `Status`, `Text`, `Heading`, `Buttons`, `Button`, `InfoButton`, `Segments`, `ShortCode`, `UserHtml`, the login / logout pages; legacy `Auth*` globals |
 | [`Auth.css`](Auth.css) | Styles of the card, fields, status line, lists, segments (classes `auth-*`) |
+| [`UserPicture.js`](UserPicture.js), [`UserPicture.css`](UserPicture.css) | `Sw.UserPicture.Choose({ SetSeed, HasPhoto, CanUpload, CanRemove })`: the picture of the signed in user in one dialog: generated pictures (AvatarService `Avatars/<seed>.svg`, the app stores the seed through `SetSeed`), upload a photo (CustomUserImageService, repository `UserImage`), remove the photo (`Api/RemoveUserImage`, confirmed); posts the InterOp message `UserImageChanged`. Loaded on demand by app pages (QuizzWeaver profile). |
 
 ## Relationships
 

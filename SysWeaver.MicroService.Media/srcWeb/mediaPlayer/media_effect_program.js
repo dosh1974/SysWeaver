@@ -87,10 +87,13 @@ class EffectProgramData {
      * @param {WebGLRenderingContext|WebGL2RenderingContext} gl - Context used for compilation.
      * @param {string} src - GLSL source text of the effect.
      * @param {string} [fileName] - Source name/URL used in log messages and the editor summary ("[String]" if missing).
+     * @param {boolean} [built] - src is a program built by the server (MediaService.BuildEffect, an Effect Weaver effect): complete (no
+     * prefix / suffix is added), with the vertex shader after the EffectProgramData.VertexMarker line when the effect has a vertex stage.
      */
-    constructor(gl, src, fileName) {
+    constructor(gl, src, fileName, built) {
         const t = this;
         t.Url = fileName;
+        t.Built = !!built;
         //  Setup async compilation
         if (typeof gl.PCompile === "undefined")
             gl.PCompile = gl.getExtension("KHR_parallel_shader_compile");
@@ -345,6 +348,19 @@ class EffectProgramData {
                 }
                 const name = desc.name ?? varName;
                 const editType = desc.type ?? null;
+                const ii = i;
+                /** Rewrites line ii with the value of the variable (when present in obj). @param {object} obj - Values keyed by variable name. */
+                const applyLine = obj => {
+                    const val = obj[varName];
+                    if (typeof val === "undefined")
+                        return;
+                    lines[ii] = "const " + typeName + " " + varName + "=" + type.toString(val, editType) + ";";
+                };
+                //  A built program with a vertex stage declares the variables in both shaders: one parameter, both lines change
+                if (Object.hasOwn(scriptProps, varName)) {
+                    apply.push(applyLine);
+                    continue;
+                }
                 const defValue = type.parseDef(defValueText.replaceAll(" ", ""), editType);
                 scriptProps[varName] = defValue;
                 const member = {};
@@ -381,13 +397,7 @@ class EffectProgramData {
                 if (dynTypeName.length > 0)
                     dynTypeName += "_";
                 dynTypeName += typeName + "_" + varName;
-                const ii = i;
-                apply.push(obj => {
-                    const val = obj[varName];
-                    if (typeof val === "undefined")
-                        return;
-                    lines[ii] = "const " + typeName + " " + varName + "=" + type.toString(val, editType) + ";";
-                });
+                apply.push(applyLine);
             }
             catch (e) {
                 console.warn(c + "(" + (i + 1) + "): Failed to parse variable, error: " + e);
@@ -459,12 +469,15 @@ class EffectProgramData {
         t.GL = gl;
         t.Prefix = "";
         t.Suffix = "";
+        t.HaveLod = haveLod;
+        //  A built program is complete (version, extensions, precision, uniforms, main)
+        if (t.Built)
+            return;
         if (haveDer && (!haveDerExt)) {
             t.Prefix +=
                 `#extension GL_OES_standard_derivatives : enable
 `;
         }
-        t.HaveLod = haveLod;
         if (haveLod) {
             if (!haveLodExt) {
                 t.Prefix +=
@@ -559,7 +572,17 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         const src = t.Prefix + t.Lines.join("\n") + t.Suffix;
         let vsSrc;
         let fsSrc;
-        if ((src.indexOf("#ifdef VERTEX") >= 0) && (src.indexOf("#ifdef FRAGMENT") >= 0)) {
+        if (t.Built) {
+            //  A built program: the effect's own vertex shader (vertexMain) follows the marker line, else the full screen triangle
+            //  in the version of the fragment shader (GLSL ES 3.00 and 1.00 can't be linked together)
+            const at = src.indexOf(EffectProgramData.VertexMarker);
+            fsSrc = at < 0 ? src : src.substring(0, at);
+            vsSrc = at >= 0 ? src.substring(at + EffectProgramData.VertexMarker.length)
+                : fsSrc.startsWith("#version 300 es") ? "#version 300 es\nin vec2 position;void main(){gl_Position=vec4(position, 0, 1);}" : defaultVS;
+            //  The vertex shader of a GLSL ES 1.00 vertex stage reads the triangle corner from this attribute (bound to the location of "position")
+            gl.bindAttribLocation(p, 0, at >= 0 ? "effectSaverPosition" : "position");
+        }
+        else if ((src.indexOf("#ifdef VERTEX") >= 0) && (src.indexOf("#ifdef FRAGMENT") >= 0)) {
             vsSrc = "#define VERTEX\n" + src;
             fsSrc = "#define FRAGMENT\n" + src;
         }
@@ -667,6 +690,42 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
      * @type {object|null}
      */
     ScriptMember;
+
+    /** @type {boolean} The source is a program built by the server (see the constructor), no prefix / suffix. */
+    Built = false;
+
+    /**
+     * Separates the fragment shader (first) and the vertex shader in a built program (Effect Weaver's ShaderStages.Marker).
+     * @type {string}
+     */
+    static VertexMarker = "\n//@ew-vertex-shader\n";
+
+    /**
+     * Effect Weaver features in a source: calls of the Ew snippet library (Ew... functions, EW_... macros / constants), a vertex stage
+     * (vertexMain) or iMouse control comments ("// iMouse.x = Name | Description | Default").
+     * @type {RegExp[]}
+     */
+    static EffectWeaverRx = [
+        /\bEw[A-Z]\w*\s*\(|\bEW_[A-Z]\w*/,
+        /\bvoid\s+vertexMain\s*\(/,
+        /^\s*(?:\/\/+|\/\*+|\*+)?\s*iMouse\s*\.\s*[xyzw]\s*[=:]/mi,
+    ];
+
+    /**
+     * Tests if an effect source is in the Effect Weaver format and must be built by the server (MediaService.BuildEffect) the way
+     * Effect Weaver builds it: snippets inserted, the vertex stage, iMouse = the effect's controls (in [0, 1], not the mouse position).
+     * @param {string} src - GLSL source text of the effect.
+     * @returns {boolean} True if the source uses an Effect Weaver feature.
+     */
+    static NeedsBuild(src) {
+        if (typeof src !== "string")
+            return false;
+        //  The iMouse control comments, then the code without comments
+        if (EffectProgramData.EffectWeaverRx[2].test(src))
+            return true;
+        const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, " ");
+        return EffectProgramData.EffectWeaverRx[0].test(code) || EffectProgramData.EffectWeaverRx[1].test(code);
+    }
 
     //  Special type handling
     /**

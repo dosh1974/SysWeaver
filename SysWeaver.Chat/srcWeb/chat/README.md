@@ -74,7 +74,7 @@ The page is normally embedded in an iframe by a host app and can be controlled w
 
 ### Menus
 
-- Message menu: view profile (`CanShowProfile`: posts `{Type: "ViewProfile", Name, Image}` to the parent), copy markdown / html (desktop) / text, copy time stamp, copy user name, hide / show this message (and the default for new messages of the sender), hide / show all messages from this user, the server items of the message (`ChatMenuItem`, a leaf sends `SetValue {ChatId, Key, Value, Id}`), remove message (`RemoveMessage {ChatId, MessageId}` when `CanClear` or `Flags & 256`; confirmation unless `Flags & 256`). The preview row: attach file, copy, clear.
+- Message menu: view profile (`CanShowProfile`: posts `{Type: "ViewProfile", Name, Image}` to the parent, or calls the option `OnViewProfile({Name, Image})` when set), copy markdown / html (desktop) / text, copy time stamp, copy user name, hide / show this message (and the default for new messages of the sender), hide / show all messages from this user, the server items of the message (`ChatMenuItem`, a leaf sends `SetValue {ChatId, Key, Value, Id}`), remove message (`RemoveMessage {ChatId, MessageId}` when `CanClear` or `Flags & 256`; confirmation unless `Flags & 256`). The preview row: attach file, copy, clear.
 - Chat menu (button never over the messages: top right inside the text box when the user can post, beside the language flag; else a slim bar above the list sized by `MenuIconSize`): scroll to top / bottom (disabled when there), show all, time vs age; (CanPost) text vs markdown + markdown help, show / hide preview, set input language, clear draft, attach file, auto send toggle, open mic toggle (tool tip lists the wake words); speech synthesis toggle and volume (25 / 50 / 75 / 100, radio items); the server menus (`Join.Menus`); remove ALL messages (`ClearAllMessages`, confirmation unless `DoNotConfirmClear`).
 - Menus use `Sw.Menu` (keyboard: arrows, type ahead, Enter, Escape; touch: drill down submenus), confirmations `Sw.Dialog.Confirm`.
 
@@ -104,7 +104,7 @@ The flag of a message toggles between the original and the translation (`Transla
 |---|---|
 | `Add(container, chatId, apiBase, options)` → `Promise<HTMLElement>` | Create a chat in `container` (gets class `chat-root`). `apiBase` prefixes the api calls (`""` / null for pages in `chat/`, `"../chat/"` from a sibling folder). Returns the list element; its expando `SwChatView` is the `ChatView`. |
 | `Main()` | The page entry of Chat.html (url parameters `id`, `options`, `nobackground`). |
-| `Options` | Class: `MenuIconSize`, `AudioIconSize`, `SendIconSize` (px, 48), `UserColor` (true), `SettingsName` (null / "*" / name). |
+| `Options` | Class: `MenuIconSize`, `AudioIconSize`, `SendIconSize` (px, 48), `UserColor` (true), `SettingsName` (null / "*" / name), `AutoFocus` (true: the text box gets the focus when ready; false for a chat that is part of a page, so the page keeps its focus and scroll position), `OnViewProfile` (null; opt-in: a function called by "View profile" with `{Name, Image}` of the sender instead of the post to the parent, for a chat inside an app page). |
 | `Color(name)` | `[border, headerBackground, headerText]` colors of a sender (cached). |
 | `Flags`, `Formats`, `LooksLikeMarkDown(text)` | `{IsWorking: 1, CanRemove: 256}`, `{Text: 0, MarkDown: 1, Html: 2}`; markdown syntax test of the automatic input format (`MarkDownSyntax` patterns). |
 | `Settings` | Class: `Keys` (the storage key names), `Get(name)`, `Set(name, value)` (null removes), `Bool(name, def, store)`. |

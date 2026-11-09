@@ -56,7 +56,7 @@
     const OptionDefaults = Object.freeze({
         Title: true, Dev: true, ReadOnly: false, CanExpand: true, IsExpanded: true, KeyName: null, Border: true,
         ExpandAllCollections: false, MenuIcon: false, MenuIconClass: "SysWeaverEditIconMenu", MenuColorClass: "IconColorThemeAcc2",
-        AddToHeader: null, TypeHints: true, PlainHints: false, Summary: false, MarkChanged: false,
+        AddToHeader: null, TypeHints: true, PlainHints: false, Summary: false, MarkChanged: false, ExpandObjects: false,
     });
 
     //  Inline icons used by the editor menus (stroked 24x24, follow the theme).
@@ -2753,17 +2753,19 @@
          * @param {HTMLElement} element - Target.
          * @param {?(Array|Map|object)} collection - The collection.
          * @param {object} container - The collection strategy (countVal).
+         * @param {boolean} [plain] - Forms for people (PlainHints): a missing collection reads "none" instead of "null".
          */
-        static SetCollectionCount(element, collection, container) {
+        static SetCollectionCount(element, collection, container, plain) {
             element.classList.toggle("sw-edit-nulltoken", collection === null || collection === undefined);
             if (collection === null || collection === undefined) {
-                element.textContent = "null";
+                element.textContent = plain ? _TF("none", "Text of a list that has no items (forms for end users), in place of null") : "null";
                 element.title = _TF("The collection is non existent", "Tool tip description on a property value that is a .NET collection when there is no collection (it's null)");
                 return;
             }
             const c = container.countVal(collection);
             if (c <= 0) {
-                element.textContent = _TF("empty", "Text used to indicate that a list of items is empty");
+                //  Forms for people (PlainHints): an empty list reads "none", like a missing one
+                element.textContent = plain ? _TF("none", "Text of a list that has no items (forms for end users), in place of null") : _TF("empty", "Text used to indicate that a list of items is empty");
                 element.title = _TF("The collection is empty", "Tool tip description on a property value that is a .NET collection when the collection is empty");
                 return;
             }

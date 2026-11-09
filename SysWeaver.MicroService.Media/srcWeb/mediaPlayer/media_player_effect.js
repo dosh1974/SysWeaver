@@ -92,6 +92,10 @@ class MediaPlayerParamsEffect {
     CustomAnimZ = null;
     /** @type {number} Seconds added to the time uniform (after Speed scaling). Default 0. */
     Offset = 0;
+    /** @type {number[]|null} The live controls of an Effect Weaver effect (iMouse x, y, z, w in [0, 1]); null or a missing value = the effect's default. Default null. */
+    Controls = null;
+    /** @type {boolean} An Effect Weaver effect with a still next to it (same name, .jpg or .png) shows the still while it compiles and cross-fades to the effect on its first frame (the player counts as loaded at once). Default true. */
+    Poster = true;
 }
 
 /**
@@ -123,6 +127,112 @@ class MediaPlayerEffect {
      * @type {number}
      */
     static GetImageFirstSampleMs = 400;
+
+    /**
+     * The url of the server api that builds Effect Weaver effects (MediaService.BuildEffect, "mediaView/Api/BuildEffect" next to this
+     * script's folder), null when the script url is unknown.
+     * @type {string|null}
+     */
+    static BuildApiUrl = (() => {
+        try {
+            const s = document.currentScript?.src;
+            return s ? new URL("../mediaView/Api/BuildEffect", s).href : null;
+        }
+        catch {
+            return null;
+        }
+    })();
+
+    /** @type {number} The cross-fade (ms) from the still (poster) to the effect's first frame. */
+    static PosterFadeMs = 500;
+
+    /**
+     * Loads the still of an effect: the file next to it with the same name, .jpg, else .png.
+     * @param {string} url - URL of the .glsl effect.
+     * @returns {Promise<HTMLImageElement|null>} The decoded image, null when there is none.
+     */
+    static async LoadPoster(url) {
+        let u;
+        try {
+            u = new URL(url, location.href);
+        }
+        catch {
+            return null;
+        }
+        if (!/\.glsl$/i.test(u.pathname))
+            return null;
+        for (const ext of [".jpg", ".png"]) {
+            const img = new Image();
+            //  (a still of another site is only usable as a texture with cors)
+            if (u.origin !== location.origin)
+                img.crossOrigin = "anonymous";
+            u.pathname = u.pathname.replace(/\.(glsl|jpg)$/i, ext);
+            img.src = u.href;
+            try {
+                await img.decode();
+                return img;
+            }
+            catch {
+            }
+        }
+        return null;
+    }
+
+    /** @type {Map<string, Promise<object|null>>} Recent builds (key: target + source), so galleries and context restores don't ask again. */
+    static Builds = new Map();
+
+    /**
+     * Builds an Effect Weaver effect on the server the way Effect Weaver builds it (the same code as Effect Saver, VjWeaver and the
+     * editor): the Ew snippets the effect calls inserted, the ShaderToy uniforms and main(), the vertex stage.
+     * @param {string} src - The effect source.
+     * @param {string} name - The effect name or url (messages).
+     * @param {boolean} gl2 - Build for WebGL2 (GLSL ES 3.00), else WebGL1 (GLSL ES 1.00).
+     * @param {boolean} alpha - Keep the alpha output of the effect (transparent canvas).
+     * @returns {Promise<{Program:string, Es3:boolean, Vertex:boolean, Controls:number[], ControlNames:string[]}|null>} The build, null when
+     * the server can't build it (no api: a page without the media service, or an error; logged).
+     */
+    static BuildEffect(src, name, gl2, alpha) {
+        const url = MediaPlayerEffect.BuildApiUrl;
+        if (!url)
+            return Promise.resolve(null);
+        const key = (gl2 ? "2" : "1") + (alpha ? "a" : "o") + src;
+        const builds = MediaPlayerEffect.Builds;
+        let b = builds.get(key);
+        if (b)
+            return b;
+        b = (async () => {
+            try {
+                const res = await fetch(new Request(url, {
+                    method: "POST",
+                    mode: "cors",
+                    cache: "default",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ Source: src, Name: name, Gl2: gl2, Alpha: alpha }),
+                }));
+                if (res.status !== 200) {
+                    console.warn("Failed to build effect \"" + name + "\", status: " + res.status);
+                    return null;
+                }
+                const r = await res.json();
+                if (!r?.Program)
+                    console.warn("Failed to build effect \"" + name + "\"");
+                return r?.Program ? r : null;
+            }
+            catch (e) {
+                console.warn("Failed to build effect \"" + name + "\", " + e.message);
+                return null;
+            }
+        })();
+        if (builds.size >= 32)
+            builds.delete(builds.keys().next().value);
+        builds.set(key, b);
+        //  A failed build is asked again next time
+        b.then(r => {
+            if ((!r) && (builds.get(key) === b))
+                builds.delete(key);
+        });
+        return b;
+    }
 
 
     /** Create a screenshot of an effect.
@@ -163,6 +273,8 @@ class MediaPlayerEffect {
                 console.warn("Failed to load cached effect image: " + ce.message);
             }
             const effect = new MediaPlayerEffect(url, mp, ct);
+            //  (the image of the effect itself, never its still)
+            effect.NoPoster = true;
             const ee = effect.Element;
             ee.style.position = "absolute";
             ee.style.top = "-10000px";
@@ -258,10 +370,11 @@ class MediaPlayerEffect {
      * OES_standard_derivatives and EXT_shader_texture_lod, creates the fullscreen-triangle vertex buffer Pos
      * ([-1,1, 3,1, -1,-3]), creates Texture via CreateTextureFn(gl) and a timer Query
      * ({E: ext, Q: query, IsQ: false}) when EXT_disjoint_timer_query exists.
+     * @param {boolean} [preferGl2] - Use "webgl2" when available (an Effect Weaver effect, built for GLSL ES 3.00 like Effect Weaver does), else "webgl".
      * @throws {Error} "Can't initiate WebGL!" when no context can be created.
      * @returns {void}
      */
-    InitGL() {
+    InitGL(preferGl2) {
         const t = this;
         const params = t.Params;
         const e = t.Element;
@@ -272,7 +385,7 @@ class MediaPlayerEffect {
             alpha: params.Transparent,
             preserveDrawingBuffer: false,
         };
-        let glver = params.WebGL2 ? "webgl2" : "webgl";
+        let glver = (params.WebGL2 || preferGl2) ? "webgl2" : "webgl";
         let gl = e.getContext(glver, glp);
         if (!gl) {
             if (glp.antialias) {
@@ -280,6 +393,8 @@ class MediaPlayerEffect {
                 gl = e.getContext(glver, glp);
             }
         }
+        if ((!gl) && preferGl2 && (!params.WebGL2))
+            gl = e.getContext("webgl", glp);
         if (!gl)
             throw new Error(typeof _TF === "function" ? _TF("Can't initiate WebGL!", "Reason on the error state of the media viewer: the browser can't draw the effect, WebGL is not available") : "Can't initiate WebGL!"); // (the player also runs on lean pages without the core)
         t.GL = gl;
@@ -575,6 +690,7 @@ class MediaPlayerEffect {
         const gl = t.GL;
         if (!gl)
             return;
+        t.ReleasePoster();
         t.GL = null;
         if (t.Texture)
             t.Texture.Dispose();
@@ -663,6 +779,149 @@ class MediaPlayerEffect {
     }
 
     /**
+     * Waits until the effect itself is shown: at once without a still, else when the effect compiled after the still (see Params.Poster).
+     * A screenshot host waits for this, so it gets the effect and not the still.
+     * @returns {Promise<boolean>} True when the effect compiled.
+     */
+    WhenReady() {
+        return this.FirstFrame ?? Promise.resolve(this.CompilationTime >= 0);
+    }
+
+    /**
+     * Creates the GL objects that draw the still (a tiny GLSL ES 1.00 program, compiled at once, and the image as a texture on unit 1).
+     * @param {HTMLImageElement} img - The decoded still.
+     * @returns {boolean} False when the still can't be drawn (then the effect loads as without a still).
+     */
+    InitPoster(img) {
+        const t = this;
+        const gl = t.GL;
+        try {
+            const vs = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vs, "attribute vec2 position;uniform vec2 scale;varying vec2 uv;void main(){uv=(position*0.5)*scale+0.5;gl_Position=vec4(position,0,1);}");
+            gl.compileShader(vs);
+            const fs = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fs, "precision mediump float;uniform sampler2D still;uniform float alpha;varying vec2 uv;void main(){gl_FragColor=vec4(texture2D(still,uv).rgb,alpha);}");
+            gl.compileShader(fs);
+            const p = gl.createProgram();
+            gl.attachShader(p, vs);
+            gl.attachShader(p, fs);
+            gl.bindAttribLocation(p, 0, "position");
+            gl.linkProgram(p);
+            gl.deleteShader(vs);
+            gl.deleteShader(fs);
+            if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+                gl.deleteProgram(p);
+                return false;
+            }
+            const tex = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.activeTexture(gl.TEXTURE0);
+            t.PosterImage = img;
+            t.PosterGL = {
+                P: p,
+                T: tex,
+                A: gl.getUniformLocation(p, "alpha"),
+                S: gl.getUniformLocation(p, "scale"),
+                I: gl.getUniformLocation(p, "still"),
+                R: img.naturalWidth / Math.max(1, img.naturalHeight),
+            };
+            return true;
+        }
+        catch (e) {
+            console.warn("Failed to show the still of \"" + t.Url + "\", " + e.message);
+            return false;
+        }
+    }
+
+    /**
+     * Draws the still over the canvas (cover: cropped to the canvas aspect), blended with alpha.
+     * @param {number} alpha - Opacity 0..1 (1 = the still only).
+     * @param {number} w - Backing-store width.
+     * @param {number} h - Backing-store height.
+     * @returns {void}
+     */
+    DrawPoster(alpha, w, h) {
+        const t = this;
+        const ps = t.PosterGL;
+        const gl = t.GL;
+        gl.useProgram(ps.P);
+        const ca = w / Math.max(1, h);
+        const ia = ps.R;
+        if (ca > ia)
+            gl.uniform2f(ps.S, 1, ia / ca);
+        else
+            gl.uniform2f(ps.S, ca / ia, 1);
+        gl.uniform1f(ps.A, alpha);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, ps.T);
+        gl.uniform1i(ps.I, 1);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, t.Pos);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        if (alpha < 1) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        }
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.disable(gl.BLEND);
+        if (t.Program)
+            gl.useProgram(t.Program.Program);
+    }
+
+    /**
+     * Deletes the GL objects of the still (after the cross-fade, or with the context).
+     * @returns {void}
+     */
+    ReleasePoster() {
+        const t = this;
+        const ps = t.PosterGL;
+        t.PosterGL = null;
+        t.PosterFade = 0;
+        const gl = t.GL;
+        if ((!ps) || (!gl))
+            return;
+        gl.deleteProgram(ps.P);
+        gl.deleteTexture(ps.T);
+    }
+
+    /**
+     * The live controls of an Effect Weaver effect (iMouse x, y, z, w in [0, 1]): Params.Controls, a missing value is the effect's default
+     * (its "// iMouse.x = Name | Description | Default" comment, else 0.5 like Effect Weaver).
+     * @returns {number[]} 4 values.
+     */
+    GetControls() {
+        const t = this;
+        const c = t.Params.Controls;
+        const d = t.Built?.Controls;
+        const r = [0.5, 0.5, 0.5, 0.5];
+        for (let i = 0; i < 4; ++i) {
+            const v = Array.isArray(c) ? c[i] : undefined;
+            r[i] = ((typeof v === "number") && isFinite(v)) ? Math.min(1, Math.max(0, v)) : (d?.[i] ?? 0.5);
+        }
+        return r;
+    }
+
+    /**
+     * Sets the live controls of an Effect Weaver effect (no re-compile) and renders when paused.
+     * @param {number[]|null} controls - Up to 4 values in [0, 1] (iMouse x, y, z, w), null = the effect's defaults.
+     * @returns {void}
+     */
+    SetControls(controls) {
+        const t = this;
+        t.Params.Controls = controls;
+        t.GetRender()();
+    }
+
+    /**
      * Testing aid (MediaDebugLoseContext message): forces a WebGL context loss via WEBGL_lose_context and logs a warning.
      * @returns {void}
      */
@@ -700,7 +959,13 @@ class MediaPlayerEffect {
         const p = program.Program;
         const gl = t.GL;
         gl.useProgram(p);
-        t.AttrPos = gl.getAttribLocation(p, "position");
+        //  A built program (Effect Weaver effect): uniforms like Effect Weaver sets them (iResolution.z = 1, iMouse = the controls, iDate)
+        const built = t.ProgramData.Built;
+        //  A GLSL ES 1.00 vertex stage reads the corner from effectSaverPosition, a GLSL ES 3.00 one from gl_VertexID (no attribute: location 0 is fed anyway)
+        let attrPos = gl.getAttribLocation(p, "position");
+        if (attrPos < 0)
+            attrPos = gl.getAttribLocation(p, "effectSaverPosition");
+        t.AttrPos = attrPos < 0 ? 0 : attrPos;
         //  Time
         const pt = gl.getUniformLocation(p, "time") ?? gl.getUniformLocation(p, "iTime");
         /** Sets time (or iTime) in seconds; no-op when absent. @type {function(number):void} */
@@ -722,22 +987,34 @@ class MediaPlayerEffect {
             /** Sets resolution (vec2). @param {number} w - Width. @param {number} h - Height. */
             t.UniformResolution = (w, h) => gl.uniform2f(pr, w, h);
         const pr3 = gl.getUniformLocation(p, "iResolution");
+        const prz = built ? 1 : 0;
         if (pr3)
-            /** Sets iResolution (vec3, z = 0); takes precedence over resolution. @param {number} w - Width. @param {number} h - Height. */
-            t.UniformResolution = (w, h) => gl.uniform3f(pr3, w, h, 0);
+            /** Sets iResolution (vec3, z = 0, 1 for a built program); takes precedence over resolution. @param {number} w - Width. @param {number} h - Height. */
+            t.UniformResolution = (w, h) => gl.uniform3f(pr3, w, h, prz);
+        //  Frame rate
+        const pfr = gl.getUniformLocation(p, "iFrameRate");
+        /** Sets iTimeDelta and iFrameRate from the seconds since the previous frame; no-op when absent. @type {function(number):void} */
+        const setTimeDelta = t.UniformTimeDelta;
+        t.UniformTimeDelta = pfr ? timeDelta => {
+            setTimeDelta(timeDelta);
+            gl.uniform1f(pfr, timeDelta > 0 ? 1 / timeDelta : 60);
+        } : setTimeDelta;
         //  Frame
         const pf = gl.getUniformLocation(p, "iFrame");
         /** Sets iFrame (frame index); no-op when absent. @type {function(number):void} */
         t.UniformFrameIndex = pf ? frameIndex => gl.uniform1i(pf, frameIndex) : frameIndex => { };
         //  Date
         const pd = gl.getUniformLocation(p, "iDate");
-        /** Sets iDate = (year, month 1-12, day, seconds of day); no-op when absent. @type {function(Date):void} */
-        t.UniformDate = pd ? date => gl.uniform4f(pd, date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getSeconds() + date.getMinutes() * 60 + date.getHours() * 3600) : date => { };
+        /** Sets iDate = (year, month 1-12, day, seconds of day), for a built program like Effect Weaver / ShaderToy (month 0-11, seconds with fraction); no-op when absent. @type {function(Date):void} */
+        t.UniformDate = pd ? (built
+            ? date => gl.uniform4f(pd, date.getFullYear(), date.getMonth(), date.getDate(), date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds() + date.getMilliseconds() * 0.001)
+            : date => gl.uniform4f(pd, date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getSeconds() + date.getMinutes() * 60 + date.getHours() * 3600)) : date => { };
         //  Mouse
         const pm = gl.getUniformLocation(p, "mouse");
         const pm2 = gl.getUniformLocation(p, "iMouse");
         /**
          * Sets mouse (vec2) and/or iMouse (vec4, zw = 0) when present.
+         * A built program (Effect Weaver effect) gets its controls in iMouse instead (see GetControls).
          * @param {number} x - Mouse x.
          * @param {number} y - Mouse y.
          * @returns {void}
@@ -745,8 +1022,14 @@ class MediaPlayerEffect {
         t.UniformMouse = (x, y) => {
             if (pm)
                 gl.uniform2f(pm, x, y);
-            if (pm2)
-                gl.uniform4f(pm2, x, y, 0, 0);
+            if (pm2) {
+                if (built) {
+                    const c = t.GetControls();
+                    gl.uniform4f(pm2, c[0], c[1], c[2], c[3]);
+                }
+                else
+                    gl.uniform4f(pm2, x, y, 0, 0);
+            }
         };
         //  Scroll
         const sc = gl.getUniformLocation(p, "scroll");
@@ -819,11 +1102,19 @@ class MediaPlayerEffect {
         const props = t.Params;
         const c = t.Url;
 
-        t.InitGL();
+        //  An Effect Weaver effect (Ew snippets, a vertex stage, iMouse controls) is built by the server the way Effect Weaver builds it,
+        //  for WebGL2 (GLSL ES 3.00) when available; without the server api it is compiled as is (as before)
+        const ew = EffectProgramData.NeedsBuild(t.Src);
+        t.InitGL(ew);
 
         const gl = t.GL;
 
-        const programData = new EffectProgramData(gl, t.Src, c);
+        //  The still of an Effect Weaver effect (a .jpg / .png next to the .glsl) is shown while the effect compiles (loaded meanwhile)
+        const posterLoad = (ew && (props.Poster !== false) && (!t.NoPoster)) ? (t.PosterImage ? Promise.resolve(t.PosterImage) : MediaPlayerEffect.LoadPoster(c)) : null;
+
+        const built = ew ? await MediaPlayerEffect.BuildEffect(t.Src, c, (typeof WebGL2RenderingContext !== "undefined") && (gl instanceof WebGL2RenderingContext), !!props.Transparent) : null;
+        t.Built = built;
+        const programData = new EffectProgramData(gl, built ? built.Program : t.Src, c, !!built);
         const p = t.Params;
         t.ProgramData = programData;
 
@@ -883,7 +1174,36 @@ class MediaPlayerEffect {
 
 
 
-        if (!await t.Compile())
+        /**
+         * Compiles the effect.
+         * @returns {Promise<boolean>} True when the program is ready.
+         */
+        const compile = async () => {
+            if (await t.Compile())
+                return true;
+            //  Like Effect Weaver: a GLSL ES 3.00 build that fails is built again for GLSL ES 1.00 (some effects redefine built in functions etc)
+            const built1 = built?.Es3 ? await MediaPlayerEffect.BuildEffect(t.Src, c, false, !!props.Transparent) : null;
+            if ((!built1) || (built1.Program === built.Program))
+                return false;
+            t.Built = built1;
+            t.ProgramData = new EffectProgramData(gl, built1.Program, c, true);
+            return !!(await t.Compile());
+        };
+        const poster = posterLoad ? await posterLoad : null;
+        if (poster && t.InitPoster(poster)) {
+            //  The still is the first frame (the player counts as loaded), the effect cross-fades in when it is compiled (a big effect
+            //  takes seconds); an effect that fails keeps the still
+            t.FirstFrame = (async () => {
+                const ok = await compile();
+                if (ok && t.GL) {
+                    t.PosterFade = performance.now();
+                    t.Rendered = false;
+                    t.GetRender()();
+                }
+                return ok;
+            })();
+        }
+        else if (!await compile())
             return false;
 
         gl.disable(gl.DEPTH_TEST);
@@ -1034,6 +1354,18 @@ class MediaPlayerEffect {
 
     /** @type {HTMLElement|null} Element whose scroll position feeds the scroll uniform (set by Create). */
     ScrollElement = null;
+    /** @type {{Program:string, Es3:boolean, Vertex:boolean, Controls:number[], ControlNames:string[]}|null} The server build of an Effect Weaver effect (set by Create), null for other effects. */
+    Built = null;
+    /** @type {object|null} The GL objects of the still shown while the effect compiles (InitPoster), null when none / after the cross-fade. */
+    PosterGL = null;
+    /** @type {HTMLImageElement|null} The still (kept for a context restore). */
+    PosterImage = null;
+    /** @type {number} performance.now() when the cross-fade from the still started, 0 = none. */
+    PosterFade = 0;
+    /** @type {boolean} Never show the still (GetImage: the image of the effect itself). */
+    NoPoster = false;
+    /** @type {Promise<boolean>|null} Resolves when the effect compiled after its still was shown (see WhenReady), null without a still. */
+    FirstFrame = null;
     /** @type {number} Last mouse client x (set by OnMouseMove). */
     MouseX = 0.5;
     /** @type {number} Last mouse client y (set by OnMouseMove). */
@@ -1063,7 +1395,8 @@ class MediaPlayerEffect {
      * @returns {void}
      */
     static render(t, animTime) {
-        if (!t.Program)
+        //  (before the program is compiled: the still, if there is one)
+        if ((!t.Program) && (!t.PosterGL))
             return;
         let time = t.CurrentPosition;
         const isRunning = typeof animTime !== "undefined";
@@ -1136,7 +1469,17 @@ class MediaPlayerEffect {
 
         const gl = t.GL;
         gl.viewport(0, 0, w, h);
-        t.UniformTime(time * p.Speed + p.Offset);
+        if (!t.Program) {
+            t.DrawPoster(1, w, h);
+            return;
+        }
+        const fxTime = time * p.Speed + p.Offset;
+        t.UniformTime(fxTime);
+        //  The effect time since the previous frame (a frame at 60 fps for the first one / a jump back)
+        const prevFxTime = t.PrevFxTime;
+        t.PrevFxTime = fxTime;
+        const timeDelta = (typeof prevFxTime === "number") && (fxTime > prevFxTime) ? fxTime - prevFxTime : 1 / 60;
+        t.UniformTimeDelta(timeDelta);
         t.UniformResolution(w, h);
 
 
@@ -1227,6 +1570,24 @@ class MediaPlayerEffect {
             t.PrevTime = ts;
             draw();
         }
+        //  The cross-fade from the still to the effect (frames of its own when the effect is paused / static)
+        const fade = t.PosterFade;
+        if (fade && t.PosterGL) {
+            const k = (performance.now() - fade) / MediaPlayerEffect.PosterFadeMs;
+            if (k >= 1)
+                t.ReleasePoster();
+            else {
+                t.DrawPoster(1 - k, w, h);
+                if (((!isRunning) || p.Static) && (!t.FadeFrame))
+                    t.FadeFrame = requestAnimationFrame(() => {
+                        t.FadeFrame = 0;
+                        if (t.IsAnimating && (!p.Static))
+                            return;
+                        t.Rendered = false;
+                        MediaPlayerEffect.render(t);
+                    });
+            }
+        }
     }
 
     /**
@@ -1238,6 +1599,9 @@ class MediaPlayerEffect {
         const t = this;
         const gl = t.GL;
         if (gl && (!gl.isContextLost()))
+            return;
+        //  The effect never loaded (a missing / failed file, Cache returned false): nothing to rebuild (Play / Show of a failed effect)
+        if (typeof t.Src !== "string")
             return;
         const e = t.Element;
         t.ReleaseGL();

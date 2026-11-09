@@ -66,6 +66,10 @@ namespace SysWeaver
         /// a typed or pasted css color (named, rgb(), hsl() ...) is converted, for members that are read as hex only.
         /// </summary>
         Hex,
+        /// <summary>
+        /// An object with integer R, G, B members in 0..255 and optionally A (0..255) or Opacity (0..100 percent), ex: a css colour class.
+        /// </summary>
+        Struct8,
     }
 
 

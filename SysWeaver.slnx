@@ -93,6 +93,7 @@
   <Project Path="SysWeaver.Media.Audio/SysWeaver.Media.Audio.csproj" />
   <Project Path="SysWeaver.Media.Png/SysWeaver.Media.Png.csproj" />
   <Project Path="SysWeaver.Media.Psd/SysWeaver.Media.Psd.csproj" />
+  <Project Path="SysWeaver.Media.Shader/SysWeaver.Media.Shader.csproj" />
   <Project Path="SysWeaver.Media.Svg/SysWeaver.Media.Svg.csproj" />
   <Project Path="SysWeaver.Media.Video/SysWeaver.Media.Video.csproj" />
   <Project Path="SysWeaver.Media/SysWeaver.Media.csproj" />

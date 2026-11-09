@@ -28,6 +28,11 @@ namespace SysWeaver.Media
         /// </summary>
         public static volatile GetMediaInfoDel GetAudioInfoFunc;
 
+        /// <summary>
+        /// Number of seconds before a failed build (see FailedAt) is tried again, the ThumbnailService sets it from its params (RetryFailedSeconds, default 300)
+        /// </summary>
+        public static volatile int RetryFailedSeconds = 300;
+
 
 
         static readonly IReadOnlyDictionary<String, String> Keep = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -202,6 +207,8 @@ namespace SysWeaver.Media
             var ext = Path.GetExtension(filename);
             ext = ext.Length > 1 ? ext.Substring(1).FastToLower() : "Unknown";
             MediaTypes type = MediaTypes.None;
+            //  An external creator (ex: a remote thumbnail service) threw: the result is stored as failed and retried after RetryFailedSeconds
+            bool failed = false;
             if (ExternalMedia.TryGetValue(ext, out var et))
             {
                 using var __ = mon?.Track(monName + ".External." + ext);
@@ -213,6 +220,7 @@ namespace SysWeaver.Media
                 }
                 catch
                 {
+                    failed = true;
                 }
             }
             using var _ = mon?.Track(monName + "." + ext);
@@ -223,13 +231,20 @@ namespace SysWeaver.Media
                 {
                     var mt = await t(filename, width, height, fill, baseName).ConfigureAwait(false);
                     if (mt != null)
+                    {
+                        if (failed)
+                            mt.FailedAt = DateTime.UtcNow.Ticks;
                         return mt;
+                    }
                 }
                 catch
                 {
                 }
             }
-            return Empty;
+            return new MediaInfo
+            {
+                FailedAt = DateTime.UtcNow.Ticks,
+            };
         }
 
         static readonly ConcurrentDictionary<(int Width, int Height, bool Fill), FileMetaDataDbAsync<MediaInfo>> Dbs = new ConcurrentDictionary<(int Width, int Height, bool Fill), FileMetaDataDbAsync<MediaInfo>>();
@@ -249,6 +264,15 @@ namespace SysWeaver.Media
                 {
                     if (existing != null)
                     {
+                        //  A failed build is kept until RetryFailedSeconds have passed since the failure, then built again
+                        var failedAt = existing.FailedAt;
+                        if ((failedAt != 0) && ((DateTime.UtcNow.Ticks - failedAt) < (TimeSpan.TicksPerSecond * RetryFailedSeconds)))
+                            return null;
+                        if (failedAt != 0)
+                        {
+                            using (mon?.Track(monName))
+                                return await GetMediaInfo(filename, width, height, fill, baseName, mon, monName).ConfigureAwait(false);
+                        }
                         var f = existing.IconFile;
                         if (String.IsNullOrEmpty(f))
                             return null;
@@ -288,8 +312,6 @@ namespace SysWeaver.Media
             }
         }
 
-        static readonly MediaInfo Empty = new MediaInfo();
-
 
         /// <summary>
         /// Width in pixels (0 for audio)
@@ -307,6 +329,11 @@ namespace SysWeaver.Media
         /// The icon (thumbnail) file name, null if none
         /// </summary>
         public String IconFile;
+        /// <summary>
+        /// The time (UTC ticks) when building the info failed (no handler could read the file, or an external creator threw and a fallback was used), 0 if it didn't fail.
+        /// A failed result is cached and built again when RetryFailedSeconds have passed.
+        /// </summary>
+        public long FailedAt;
         /// <summary>
         /// Frames per second (videos)
         /// </summary>

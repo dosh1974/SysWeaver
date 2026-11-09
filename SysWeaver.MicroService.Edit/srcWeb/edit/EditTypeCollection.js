@@ -201,7 +201,7 @@
             const keyMap = new Map();
             const count = () => C.countVal(obj[mn]);
             const setInfo = () => {
-                E.SetCollectionCount(info, obj[mn], C);
+                E.SetCollectionCount(info, obj[mn], C, options && options.PlainHints);
                 expBtn.SetIcon(expanded ? "down" : "right");
                 expBtn.E.setAttribute("aria-expanded", expanded ? "true" : "false");
                 expBtn.SetTitle(expanded
@@ -548,9 +548,11 @@
              */
             const addItemEditor = async key => {
                 const kn = C.getKeyName(key);
-                const t = await EditTypeCollection.ItemType(member, kn);
+                //  ExpandObjects (forms for people): an array item reads "Item 3", not "[2]"
+                const label = (options.ExpandObjects && indexed && isPrimitive) ? _T("Item {0}", (+key) + 1, "Label of an item of a list in a form, {0} is its number (1 based)") : kn;
+                const t = await EditTypeCollection.ItemType(member, label);
                 const o = new E.Options();
-                o.KeyName = kn;
+                o.KeyName = label;
                 o.Name = mn;
                 o.Title = !isPrimitive;
                 o.Dev = options.Dev;
@@ -558,6 +560,8 @@
                 o.ExpandAllCollections = options.ExpandAllCollections;
                 o.MenuIcon = options.MenuIcon;
                 o.TypeHints = options.TypeHints;
+                o.PlainHints = options.PlainHints;
+                o.ExpandObjects = options.ExpandObjects;
                 //  Object items: a one line summary in the title row; long lists start collapsed (the item just added / moved is open)
                 o.Summary = !isPrimitive;
                 o.IsExpanded = count() <= 3 || (openKey !== null && openKey !== undefined && "" + openKey === "" + key);
@@ -584,7 +588,7 @@
                 };
                 if (!isPrimitive)
                     o.AddToHeader = headButtons;
-                const ie = new E(t || { TypeName: member.ElementTypeName, Flags: F.IsPrimitive, Members: [{ Name: "Value", DisplayName: kn, TypeName: member.ElementTypeName, Flags: F.ReadOnly }] },
+                const ie = new E(t || { TypeName: member.ElementTypeName, Flags: F.IsPrimitive, Members: [{ Name: "Value", DisplayName: label, TypeName: member.ElementTypeName, Flags: F.ReadOnly }] },
                     editor.ForcedStyle, o, editor, member.ElementInst || member, ev => {
                         const det = ev.detail;
                         if (!det.Next && (isPrimitive || !det.Member))
@@ -654,7 +658,7 @@
 
             const item = E.Handler.Item(obj, editor, member, {
                 Focus: expBtn.E, Title: tip, DefValue: def,
-                DefValueText: def === null ? "null" : _TF("empty", "Text used to indicate that a list of items is empty"),
+                DefValueText: def === null ? "null" : (options.PlainHints ? _TF("none", "Text of a list that has no items (forms for end users), in place of null") : _TF("empty", "Text used to indicate that a list of items is empty")),
             });
             item.DataRow = data;
             /**
@@ -829,4 +833,4 @@
     E.Handlers.Collection = EditTypeCollection;
     if (!window.EditTypeCollection)
         window.EditTypeCollection = EditTypeCollection;
-})();
+})();

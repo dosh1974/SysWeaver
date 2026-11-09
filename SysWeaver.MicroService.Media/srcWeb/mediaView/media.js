@@ -2584,6 +2584,9 @@
             try {
                 if (!(await player.Cache(true)))
                     throw new Error(_TF("Failed to cache the media", "Error when a media file could not be loaded"));
+                //  A screenshot host gets the effect itself, not the still shown while it compiles
+                if (shost && player.WhenReady)
+                    await player.WhenReady();
                 if (fontError && realHost)
                     throw fontError;
                 const adapt = !!player.Params.AdaptiveSize;

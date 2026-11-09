@@ -1,0 +1,218 @@
+/* mediaView/mediaPicker.css - the media picker dialog (mediaPicker.js, Sw.MediaPicker.Pick) */
+
+.sw-mpick {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+    height: 100%;
+    min-height: 0;
+}
+
+.sw-mpick-main {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(16rem, 4fr);
+    gap: var(--sw-space-4);
+    flex: 1;
+    min-height: 0;
+}
+
+.sw-mpick-left {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-3);
+    min-height: 0;
+    overflow: auto;
+}
+
+.sw-mpick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: var(--sw-space-2);
+}
+
+.sw-mpick-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sw-space-1);
+    padding: var(--sw-space-1);
+    border: 2px solid transparent;
+    border-radius: var(--sw-radius-md);
+    background: var(--sw-surface-sunken);
+    color: var(--sw-text);
+    cursor: pointer;
+    text-align: center;
+}
+
+.sw-mpick-pic {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--sw-radius-sm);
+    background: var(--sw-surface-2, rgba(127, 127, 127, 0.12));
+    overflow: hidden;
+}
+
+.sw-mpick-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* A short fact on the tile (kind, length) */
+.sw-mpick-badge {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    padding: 1px 6px;
+    border-radius: var(--sw-radius-sm);
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: var(--sw-text-xs, 0.75rem);
+    line-height: 1.4;
+    pointer-events: none;
+}
+
+.sw-mpick-tile.sw-mpick-nothumb img {
+    visibility: hidden;
+}
+
+.sw-mpick-tname {
+    font-size: var(--sw-text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (hover: hover) {
+    .sw-mpick-tile:hover {
+        border-color: var(--sw-border-strong);
+    }
+}
+
+.sw-mpick-tile[aria-pressed="true"] {
+    border-color: var(--sw-accent1);
+}
+
+.sw-mpick-tile:focus-visible,
+.sw-mpick-drop:focus-visible {
+    outline: 2px solid var(--sw-focus);
+    outline-offset: 2px;
+}
+
+.sw-mpick-right {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-2);
+    min-height: 0;
+}
+
+/* The player: sized by mediaPicker.js to the aspect ratio of the media */
+.sw-mpick-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
+    align-self: center;
+    border: 1px solid var(--sw-border);
+    border-radius: var(--sw-radius-md);
+    background: #000;
+    overflow: hidden;
+}
+
+.sw-mpick-frame,
+.sw-mpick-empty {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.sw-mpick-empty {
+    background: var(--sw-surface-sunken);
+}
+
+/* Search and sort on one row, the kind filter below */
+.sw-mpick-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sw-space-2);
+    align-items: center;
+}
+
+.sw-mpick-bar > :first-child {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+
+.sw-mpick-kinds {
+    align-self: flex-start;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.sw-mpick-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sw-space-4);
+    color: var(--sw-text-2);
+    text-align: center;
+}
+
+.sw-mpick-name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.sw-mpick-info,
+.sw-mpick-state {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
+.sw-mpick-drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sw-space-1);
+    min-height: 12rem;
+    padding: var(--sw-space-6);
+    border: 2px dashed var(--sw-border-strong);
+    border-radius: var(--sw-radius-lg);
+    color: var(--sw-text-2);
+    cursor: pointer;
+    text-align: center;
+}
+
+.sw-mpick-drop.sw-mpick-over {
+    border-color: var(--sw-accent1);
+    background: var(--sw-surface-sunken);
+}
+
+/* Narrow (phones): the preview above the list */
+@media (max-width: 40rem) {
+    .sw-mpick-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .sw-mpick-right {
+        order: -1;
+    }
+}
+
+/* The search, sort and kind filter stay on top while the list scrolls */
+.sw-mpick-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-2);
+    padding-bottom: var(--sw-space-2);
+    background: var(--sw-surface, var(--sw-bg));
+}

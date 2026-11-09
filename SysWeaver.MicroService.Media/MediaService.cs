@@ -1,6 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
+using EffectWeaver.Shaders;
+using SysWeaver.MicroService.Media;
 using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
@@ -86,6 +92,65 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(28, WebApiCaches.Globally)]
         public String[] GetCounterEffects(HttpServerRequest context)
             => InternalGet("mediaView/counterEffects", context);
+
+
+        /// <summary>
+        /// The longest effect source BuildEffect accepts (characters)
+        /// </summary>
+        const int MaxEffectSource = 1 << 20;
+
+        /// <summary>
+        /// The most builds BuildEffect keeps (all are dropped when it's reached)
+        /// </summary>
+        const int MaxBuildCache = 256;
+
+        /// <summary>
+        /// Recent builds of BuildEffect, key: SHA256 of the source + target (GLSL version, alpha). A response is never changed after it's cached.
+        /// </summary>
+        readonly ConcurrentDictionary<String, MediaEffectBuildResponse> BuildCache = new();
+
+        /// <summary>
+        /// Build an effect the way Effect Weaver does (SysWeaver.Media.Shader, the same code as Effect Saver, VjWeaver and the editor):
+        /// the Ew snippets the effect calls are inserted, ShaderToy style effects get the uniforms and a main(), an effect with a vertex stage
+        /// (vertexMain) gets its vertex shader. Used by the media player (media_player_effect.js) for effects in the Effect Weaver format.
+        /// </summary>
+        /// <param name="r">The effect source and the target</param>
+        /// <returns>The program and the effect's control defaults, null if the source is empty, too long or can't be parsed</returns>
+        [WebApi]
+        public MediaEffectBuildResponse BuildEffect(MediaEffectBuildRequest r)
+        {
+            var src = r?.Source;
+            if (String.IsNullOrEmpty(src) || (src.Length > MaxEffectSource))
+                return null;
+            //  The same effect is built again and again (every player, page and thumbnail): keep the recent builds (source hash + target)
+            var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(src))) + (r.Gl2 ? "2" : "1") + (r.Alpha ? "a" : "o");
+            var cache = BuildCache;
+            if (cache.TryGetValue(key, out var cached))
+                return cached;
+            try
+            {
+                var fx = ShaderParser.Parse("Effect", src, null);
+                var program = ShaderParser.BuildSource(fx, null, r.Gl2, r.Alpha);
+                var (fragment, vertex) = ShaderStages.SplitProgram(program);
+                var res = new MediaEffectBuildResponse
+                {
+                    Program = program,
+                    Es3 = fragment.StartsWith("#version 300", StringComparison.Ordinal),
+                    Vertex = vertex != null,
+                    Controls = fx.MouseDefault,
+                    ControlNames = fx.Mouse.Select(x => x.Known ? x.Name : "").ToArray(),
+                };
+                if (cache.Count >= MaxBuildCache)
+                    cache.Clear();
+                cache[key] = res;
+                return res;
+            }
+            catch (Exception ex)
+            {
+                Manager.AddMessage("Failed to build the effect " + (r.Name ?? "").ToQuoted() + ": " + ex.Message, MessageLevels.Warning);
+                return null;
+            }
+        }
 
 
         String[] InternalGet(String path, HttpServerRequest context)
