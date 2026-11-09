@@ -9856,16 +9856,23 @@
         }
 
         /**
-         * The table data of the export "Current view": the shown page, with infinite scrolling the rows in view (partly or fully).
+         * The table data of the export "Current view": the shown page, with infinite scrolling the rows in view (partly or fully; all
+         * loaded rows if none can be measured). The server reads generic rows ({Values: [...]} in column order, TableData): the rows of a
+         * typed table (TypedTableData, one object per row with a member per column) are converted, else they export empty.
          * @returns {object} The table data.
          */
         ExportData() {
             const t = this;
             const d = Object.assign({}, t.Data, { Cols: t.Cols });
+            let rows = d.Rows || [];
             if (t.ScrollOn) {
-                d.Rows = t.VisibleRows();
-                d.RowCount = d.Rows.length;
+                const vis = t.VisibleRows();
+                rows = vis.length ? vis : (t.SRows || []);
             }
+            const cols = t.Cols || [];
+            d.Rows = rows.map(row => Array.isArray(row && row.Values) ? row : { Values: cols.map(c => row ? row[c.Name] : null) });
+            if (t.ScrollOn)
+                d.RowCount = d.Rows.length;
             return d;
         }
 
