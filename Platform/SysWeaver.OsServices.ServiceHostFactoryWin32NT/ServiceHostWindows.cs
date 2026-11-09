@@ -303,10 +303,16 @@ namespace SysWeaver.OsServices
                 return ServiceResponse.GenericError;
             if (status == ServiceState.Stop)
                 return ServiceResponse.NotRunning;
+            //  The SCM reports stopped as soon as the service says so, the process may still be running (and holding files) after that.
+            //  Open the process before stopping (an open handle keeps the process id from being reused).
+            using var proc = OpenServiceProcess(name);
             if (status == ServiceState.Stopping)
             {
                 if (WaitForWhile(name, ServiceState.Stopping, ServiceState.Stop) == ServiceState.Stop)
+                {
+                    WaitForProcessExit(proc);
                     return ServiceResponse.NotRunning;
+                }
             }
             if (status == ServiceState.Starting)
                 if (WaitForWhile(name, ServiceState.Starting, ServiceState.Run) != ServiceState.Run)
@@ -316,14 +322,59 @@ namespace SysWeaver.OsServices
                     return ServiceResponse.NotRunning;
             try
             {
+                using var runProc = proc == null ? OpenServiceProcess(name) : null;
                 Win32ServiceManager.Stop(name);
                 if (WaitForWhile(name, ServiceState.Stopping, ServiceState.Stop) == ServiceState.Stop)
+                {
+                    WaitForProcessExit(proc ?? runProc);
                     return ServiceResponse.Ok;
+                }
             }
             catch
             {
             }
             return ServiceResponse.StopFailed;
+        }
+
+        /// <summary>
+        /// Open the process of a running service.
+        /// </summary>
+        /// <param name="name">The service name</param>
+        /// <returns>The process or null if the service isn't running (or the process couldn't be opened)</returns>
+        static System.Diagnostics.Process OpenServiceProcess(String name)
+        {
+            try
+            {
+                var pid = Win32ServiceManager.GetServiceProcessId(name);
+                if (pid == 0)
+                    return null;
+                var p = System.Diagnostics.Process.GetProcessById(pid);
+                //  Make sure that a handle is opened now (the handle is opened lazily)
+                _ = p.Handle;
+                return p;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Wait for a (stopped) service process to exit, so that it no longer holds any files (images, logs etc).
+        /// Gives up after 60 seconds (the service is stopped, so this is best effort).
+        /// </summary>
+        /// <param name="proc">The process of the service, null does nothing</param>
+        static void WaitForProcessExit(System.Diagnostics.Process proc)
+        {
+            if (proc == null)
+                return;
+            try
+            {
+                proc.WaitForExit(60 * 1000);
+            }
+            catch
+            {
+            }
         }
 
         /// <summary>

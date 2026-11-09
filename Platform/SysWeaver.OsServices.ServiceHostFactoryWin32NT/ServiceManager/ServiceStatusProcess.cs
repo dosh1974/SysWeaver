@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace SysWeaver.OsServices.ServiceManager
 {
     /// <summary>
-    /// Managed version of the Win32 SERVICE_STATUS_PROCESS structure (currently unused).
+    /// Managed version of the Win32 SERVICE_STATUS_PROCESS structure.
     /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     sealed class ServiceStatusProcess

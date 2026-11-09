@@ -55,7 +55,8 @@ namespace SysWeaver.MicroService
                 }
             }
             var bakName = FolderSyncer.GetBakName(target);
-            var ex = await PathExt.TryFolderSwapAsync(target, bakName, from).ConfigureAwait(false);
+            //  A stopped process can hold on to it's files (images, logs) for a while, retry for up to ~20 seconds
+            var ex = await PathExt.TryFolderSwapAsync(target, bakName, from, SwapRetryCount, SwapRetryDelayMs).ConfigureAwait(false);
             if (ex == null)
             {
                 new DirectoryInfo(target).LastAccessTimeUtc = DateTime.UtcNow;
@@ -94,6 +95,16 @@ namespace SysWeaver.MicroService
 
             return ex;
         }
+
+        /// <summary>
+        /// Number of times to try to swap in a new folder on activation
+        /// </summary>
+        const int SwapRetryCount = 100;
+
+        /// <summary>
+        /// The delay in milli seconds between swap attempts on activation
+        /// </summary>
+        const int SwapRetryDelayMs = 200;
 
         static Object AuditInputFilter_SyncFolder(long id, HttpServerRequest request, Object obj)
         {
@@ -408,10 +419,16 @@ namespace SysWeaver.MicroService
 
 
 
+        /// <summary>
+        /// Finalize a sync job (write the manifest and activate or store the uploaded folder).
+        /// </summary>
+        /// <returns>True</returns>
+        /// <exception cref="Exception">The folder couldn't be activated or stored, the exception is passed on to the client (that made the last upload request)</exception>
         async Task<bool> Finalize(String jobId, Sync sync, HttpServerRequest context, bool isError = false)
         {
             var dest = sync.DestPath;
             var target = sync.Target;
+            bool reported = false;
             try
             {
                 if (isError)
@@ -433,7 +450,8 @@ namespace SysWeaver.MicroService
                         {
                             Exs.OnException(exx);
                             Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}[{jobId}] Sync failed, activating folder \"{target.Name}\"", exx);
-                            return false;
+                            reported = true;
+                            throw new Exception($"Sync failed, activating folder \"{target.Name}\": {exx.Message}", exx);
                         }
                     }
                     else
@@ -450,7 +468,8 @@ namespace SysWeaver.MicroService
                         {
                             Exs.OnException(exx);
                             Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}[{jobId}] Sync failed, creating folder \"{target.Name}\"", exx);
-                            return false;
+                            reported = true;
+                            throw new Exception($"Sync failed, creating folder \"{target.Name}\": {exx.Message}", exx);
                         }
                     }
                 }
@@ -458,8 +477,11 @@ namespace SysWeaver.MicroService
             }
             catch (Exception exx)
             {
-                Exs.OnException(exx);
-                Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}[{jobId}] Sync failed for folder \"{target.Name}\"", exx);
+                if (!reported)
+                {
+                    Exs.OnException(exx);
+                    Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}[{jobId}] Sync failed for folder \"{target.Name}\"", exx);
+                }
                 throw;
             }
             finally

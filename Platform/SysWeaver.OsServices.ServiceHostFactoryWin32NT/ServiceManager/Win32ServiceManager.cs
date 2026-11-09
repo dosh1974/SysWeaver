@@ -648,7 +648,18 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Query extended service status (QueryServiceStatusEx) into a marshalled class (currently unused).
+        /// Get the process id of a running service (SC_STATUS_PROCESS_INFO).
+        /// </summary>
+        /// <param name="serviceName">The service name</param>
+        /// <returns>The process id, or 0 if the service isn't running (or the status couldn't be queried)</returns>
+        public static int GetServiceProcessId(string serviceName)
+        {
+            const uint SC_STATUS_PROCESS_INFO = 0;
+            return GetServiceStatus<ServiceStatusProcess>(serviceName, SC_STATUS_PROCESS_INFO)?.processID ?? 0;
+        }
+
+        /// <summary>
+        /// Query extended service status (QueryServiceStatusEx) into a marshalled class.
         /// </summary>
         static T GetServiceStatus<T>(string serviceName, uint infoLevel, bool failSilent = true) where T : class, new()
         {

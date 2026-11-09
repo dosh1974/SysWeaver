@@ -860,8 +860,10 @@ namespace SysWeaver
                     l = s.Position;
                 }
             }
-            catch
+            catch (InvalidDataException)
             {
+                //  Only remove chunks with corrupt data (so that they can be uploaded again).
+                //  Any other error (ex: a sharing violation) is transient, and removing the chunk would break every compacted file that references it.
                 var fileName = GetFilename(hashStr, props);
                 await PathExt.TryDeleteFileAsync(fileName).ConfigureAwait(false);
                 throw;
