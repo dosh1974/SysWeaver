@@ -24,6 +24,7 @@
   <Folder Name="/Internet/">
     <Project Path="Internet/SysWeaver.WebBrowser.Cef/SysWeaver.WebBrowser.Cef.csproj" />
     <Project Path="Internet/SysWeaver.WebBrowser.WebView2/SysWeaver.WebBrowser.WebView2.csproj" />
+    <Project Path="Internet/SysWeaver.Browser.Playwright/SysWeaver.WebBrowser.Playwright.csproj" />
   </Folder>
   <Folder Name="/Platform/">
     <Project Path="Platform/SysWeaver.Common.Linux/SysWeaver.Common.Linux.csproj" />

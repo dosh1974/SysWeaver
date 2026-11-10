@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+		<RootNamespace>SysWeaver.WebBrowser</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />
+	</ItemGroup>
+
+</Project>
