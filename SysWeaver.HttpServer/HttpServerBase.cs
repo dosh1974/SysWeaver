@@ -124,7 +124,8 @@ namespace SysWeaver.Net
             Translator = p.AutoTranslate ? translator : null;
             FirewallHandler = firewallHandler;
             ExternalRootUri = p.ExternalRootUri;
-            var envVars = new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);
+            TrustedProxyNets = ParseTrustedProxies(p.TrustedProxies);
+            var envVars =new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);
             foreach (var k in EnvInfo.TextVarsCaseInsensitive)
                 envVars[String.Join(k.Key, '[', ']')] = k.Value;
             Audit = audit;
@@ -2893,6 +2894,82 @@ namespace SysWeaver.Net
                 return ext;
             return p ?? ext ?? "";
         }
+
+        #region Trusted proxies
+
+        /// <summary>
+        /// The networks of the proxies that may tell the client address (see <see cref="HttpServerBaseParams.TrustedProxies"/>), empty = none
+        /// </summary>
+        readonly System.Net.IPNetwork[] TrustedProxyNets;
+
+        static readonly String[] DefaultTrustedProxies = ["loopback", "private"];
+
+        static readonly System.Net.IPNetwork[] LoopbackNets = [System.Net.IPNetwork.Parse("127.0.0.0/8"), System.Net.IPNetwork.Parse("::1/128")];
+
+        static readonly System.Net.IPNetwork[] PrivateNets =
+        [
+            System.Net.IPNetwork.Parse("10.0.0.0/8"),
+            System.Net.IPNetwork.Parse("172.16.0.0/12"),
+            System.Net.IPNetwork.Parse("192.168.0.0/16"),
+            System.Net.IPNetwork.Parse("169.254.0.0/16"),
+            System.Net.IPNetwork.Parse("fc00::/7"),
+            System.Net.IPNetwork.Parse("fe80::/10"),
+        ];
+
+        /// <summary>
+        /// Parse the trusted proxy entries (addresses, networks, "loopback", "private"); an invalid entry is reported and ignored
+        /// </summary>
+        System.Net.IPNetwork[] ParseTrustedProxies(String[] entries)
+        {
+            var res = new List<System.Net.IPNetwork>();
+            foreach (var x in entries ?? DefaultTrustedProxies)
+            {
+                var e = x?.Trim();
+                if (String.IsNullOrEmpty(e))
+                    continue;
+                if (String.Equals(e, "loopback", StringComparison.OrdinalIgnoreCase))
+                {
+                    res.AddRange(LoopbackNets);
+                    continue;
+                }
+                if (String.Equals(e, "private", StringComparison.OrdinalIgnoreCase))
+                {
+                    res.AddRange(PrivateNets);
+                    continue;
+                }
+                if (System.Net.IPNetwork.TryParse(e, out var n))
+                {
+                    res.Add(n);
+                    continue;
+                }
+                if (System.Net.IPAddress.TryParse(e, out var a))
+                {
+                    res.Add(new System.Net.IPNetwork(a, a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
+                    continue;
+                }
+                Msg?.AddMessage("Invalid trusted proxy \"" + e + "\" (use an address, a network like 10.0.0.0/8, \"loopback\" or \"private\"), ignored", MessageLevels.Warning);
+            }
+            return res.ToArray();
+        }
+
+        /// <summary>
+        /// True if a connection from this address may tell the address of the client (a trusted proxy, see <see cref="HttpServerBaseParams.TrustedProxies"/>)
+        /// </summary>
+        /// <param name="ip">The address of the connection (IPv4 addresses mapped to IPv6 are handled as IPv4)</param>
+        /// <returns>True if trusted</returns>
+        public bool IsTrustedProxy(System.Net.IPAddress ip)
+        {
+            if (ip == null)
+                return false;
+            if (ip.IsIPv4MappedToIPv6)
+                ip = ip.MapToIPv4();
+            foreach (var n in TrustedProxyNets)
+                if (n.Contains(ip))
+                    return true;
+            return false;
+        }
+
+        #endregion//Trusted proxies
 
         /// <summary>
         /// The prefixes the server listens on (set by <see cref="SetPrefixes"/>).

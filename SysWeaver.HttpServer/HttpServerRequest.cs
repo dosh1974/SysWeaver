@@ -507,18 +507,145 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Get the client IP address as text, "?" if unknown.
-        /// Forwarded / X-Forwarded-For headers are not used (yet), so this is the address of the closest peer.
+        /// When the connection comes from a trusted proxy (<see cref="HttpServerBaseParams.TrustedProxies"/>) the client address is taken from its
+        /// "Forwarded" (RFC 7239) or "X-Forwarded-For" header: then <see cref="IsForwarded"/> is true and <see cref="ProxyIpAddress"/> is the
+        /// address of the proxy. Else this is the address of the connection (see <see cref="GetIP"/>).
         /// </summary>
         /// <returns>The address as text</returns>
         /// <remarks>IPv4 addresses mapped to IPv6 (ex: "::ffff:192.168.1.5") are returned as IPv4 addresses (ex: "192.168.1.5").</remarks>
         public String GetIpAddress()
         {
-            // TODO: Use "Forwarded" (https://datatracker.ietf.org/doc/html/rfc7239) and "X-Forwarded-For" (https://en.wikipedia.org/wiki/X-Forwarded-For) from trusted proxies.
-            // The headers were read but not used, the lookups are removed until implemented.
-            var ip = GetIP();
-            if (ip == null)
-                return "?";
-            return ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4().ToString() : ip.ToString();
+            ResolveClientIp();
+            return LazyClientIp;
+        }
+
+        /// <summary>
+        /// True if the client address (<see cref="GetIpAddress"/>) was told by a trusted proxy (a "Forwarded" or "X-Forwarded-For" header), false if it
+        /// is the address of the connection.
+        /// </summary>
+        public bool IsForwarded
+        {
+            get
+            {
+                ResolveClientIp();
+                return LazyProxyIp != null;
+            }
+        }
+
+        /// <summary>
+        /// The address of the proxy the request came through (the connection) when <see cref="IsForwarded"/> is true, else null.
+        /// </summary>
+        public String ProxyIpAddress
+        {
+            get
+            {
+                ResolveClientIp();
+                return LazyProxyIp;
+            }
+        }
+
+        String LazyClientIp;
+        String LazyProxyIp;
+
+        static String IpText(IPAddress ip) => ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4().ToString() : ip.ToString();
+
+        /// <summary>
+        /// Find the client address once per request: the connection, or (from a trusted proxy) the first address from the right of the forwarded chain
+        /// that is not a trusted proxy itself (the addresses to the left of it could be set by the client).
+        /// </summary>
+        void ResolveClientIp()
+        {
+            if (LazyClientIp != null)
+                return;
+            var peer = GetIP();
+            if (peer == null)
+            {
+                LazyClientIp = "?";
+                return;
+            }
+            var server = Server;
+            if ((server == null) || !server.IsTrustedProxy(peer))
+            {
+                LazyClientIp = IpText(peer);
+                return;
+            }
+            var chain = ForwardedChain();
+            if (chain == null)
+            {
+                LazyClientIp = IpText(peer);
+                return;
+            }
+            IPAddress client = null;
+            for (int i = chain.Count - 1; i >= 0; --i)
+            {
+                var a = chain[i];
+                if (a == null)
+                    break;     //  (an unknown or obfuscated entry: no address further left can be trusted)
+                client = a;
+                if (!server.IsTrustedProxy(a))
+                    break;
+            }
+            if (client == null)
+            {
+                LazyClientIp = IpText(peer);
+                return;
+            }
+            LazyProxyIp = IpText(peer);
+            LazyClientIp = IpText(client);
+        }
+
+        /// <summary>
+        /// The client addresses of the "Forwarded" header ("for=" values), else of the "X-Forwarded-For" header, from the client to the last proxy.
+        /// An entry that isn't an address (ex: "unknown", "_hidden") is null. Null if there is no such header.
+        /// </summary>
+        List<IPAddress> ForwardedChain()
+        {
+            var fw = GetReqHeader("Forwarded");
+            if (!String.IsNullOrWhiteSpace(fw))
+            {
+                var res = new List<IPAddress>();
+                foreach (var element in fw.Split(','))
+                    foreach (var pair in element.Split(';'))
+                    {
+                        var kv = pair.Trim();
+                        if (!kv.StartsWith("for=", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        res.Add(ParseForwardedAddress(kv.Substring(4)));
+                    }
+                if (res.Count > 0)
+                    return res;
+            }
+            var xff = GetReqHeader("X-Forwarded-For");
+            if (String.IsNullOrWhiteSpace(xff))
+                return null;
+            var list = new List<IPAddress>();
+            foreach (var x in xff.Split(','))
+                list.Add(ParseForwardedAddress(x));
+            return list;
+        }
+
+        /// <summary>
+        /// Parse an address of a forwarding header: "1.2.3.4", "1.2.3.4:5678", "\"[2001:db8::1]:4711\"", "2001:db8::1"; null if not an address
+        /// </summary>
+        static IPAddress ParseForwardedAddress(String s)
+        {
+            s = s?.Trim().Trim('"').Trim();
+            if (String.IsNullOrEmpty(s))
+                return null;
+            if (s[0] == '[')
+            {
+                var e = s.IndexOf(']');
+                if (e < 0)
+                    return null;
+                s = s.Substring(1, e - 1);
+            }
+            else
+            {
+                var c = s.IndexOf(':');
+                if ((c > 0) && (s.IndexOf(':', c + 1) < 0))
+                    s = s.Substring(0, c);     //  (one colon: an IPv4 address with a port)
+            }
+            return IPAddress.TryParse(s, out var a) ? a : null;
         }
 
 

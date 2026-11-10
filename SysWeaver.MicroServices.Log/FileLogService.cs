@@ -171,7 +171,7 @@ namespace SysWeaver.MicroService
             String ip = null;
             try
             {
-                ip = context?.GetIP()?.ToString();
+                ip = context?.GetIpAddress();
             }
             catch
             {

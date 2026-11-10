@@ -119,6 +119,18 @@ namespace SysWeaver.Net
         public String ExternalRootUri;
 
         /// <summary>
+        /// The proxies that may tell the address of the client (the "Forwarded" or "X-Forwarded-For" header): when the connection comes from
+        /// one of them, <see cref="HttpServerRequest.GetIpAddress"/> is the forwarded client address (and <see cref="HttpServerRequest.IsForwarded"/>
+        /// is true). Every entry is an address ("10.0.0.5", "fd00::1"), a network ("10.0.0.0/8", "fd00::/8"), "loopback" (127.0.0.0/8, ::1)
+        /// or "private" (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, fc00::/7, fe80::/10).
+        /// Null (the default) = "loopback" and "private" (a proxy on the same machine or network, ex: a SysWeaver reverse proxy).
+        /// An empty array = never (the address of the connection is always used).
+        /// A client that connects directly from a trusted network can set the header itself: only trust networks where every machine is a proxy
+        /// or is trusted not to lie about its address.
+        /// </summary>
+        public String[] TrustedProxies;
+
+        /// <summary>
         /// If true and a translator exists, enable automatic translations of web assets and API responses.
         /// </summary>
         public bool AutoTranslate;

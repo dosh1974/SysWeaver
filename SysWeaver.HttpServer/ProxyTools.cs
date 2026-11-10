@@ -62,7 +62,7 @@ namespace SysWeaver.Net
     /// </summary>
     /// <remarks>
     /// All request headers except Host, Upgrade-Insecure-Requests and Transfer-Encoding are forwarded, including Cookie and Authorization.
-    /// No X-Forwarded-For / Forwarded headers are added.
+    /// <see cref="GetFromRequest"/> adds the address of the connection to the X-Forwarded-For header (appended to the value it may already have).
     /// </remarks>
     public static class ProxyTools
     {
@@ -182,6 +182,11 @@ namespace SysWeaver.Net
             var headers = ProxyTools.EncodeHeaders(r.AllReqHeaders);
             var hl = headers.Length;
             var pl = prefixLength ?? r.Host.Len;
+            //  The address of the connection is added to X-Forwarded-For, so the server behind the proxy knows the client (see
+            //  HttpServerRequest.GetIpAddress / HttpServerBaseParams.TrustedProxies)
+            var peer = r.GetIP();
+            var peerText = peer == null ? null : (peer.IsIPv4MappedToIPv6 ? peer.MapToIPv4().ToString() : peer.ToString());
+            bool haveXff = false;
             for (int i = 0; i < hl; ++i)
             {
                 var h = headers[i];
@@ -190,7 +195,19 @@ namespace SysWeaver.Net
                     //  One allocation (an invalid prefix length throws the same exception as before)
                     var t = h.AsSpan(8).Trim();
                     headers[i] = ((uint)pl <= (uint)t.Length) ? String.Concat("Referer:", t.Slice(pl)) : ("Referer:" + h.Substring(8).Trim().Substring(pl));
+                    continue;
                 }
+                if ((peerText != null) && h.StartsWith("X-Forwarded-For:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var prev = h.Substring(16).Trim();
+                    headers[i] = String.IsNullOrEmpty(prev) ? ("X-Forwarded-For:" + peerText) : String.Concat("X-Forwarded-For:", prev, ", ", peerText);
+                    haveXff = true;
+                }
+            }
+            if ((peerText != null) && !haveXff)
+            {
+                Array.Resize(ref headers, hl + 1);
+                headers[hl] = "X-Forwarded-For:" + peerText;
             }
             return new ProxyData(m, headers, data);
         }
@@ -244,7 +261,6 @@ namespace SysWeaver.Net
                 }
                 var h = localRequest.Headers;
                 var ch = ProxyTools.ContentHeaders;
-                // TODO: Set: X-Forwarded-For:
                 foreach (var x in data.Headers.Nullable())
                 {
                     var key = x.SplitFirst(':', out var value);
