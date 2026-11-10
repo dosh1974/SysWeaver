@@ -1,0 +1,87 @@
+/*
+ * markdown.css - the markdown viewer view/markdown.html (markdown.js): main.sw-page-read.md-main > the page header + section.sw-card.md-card
+ * > div.sw-md.md-doc (the rendered document; the shared .sw-md styles of ui.css) + div.md-grip (the width grip on the right edge).
+ */
+
+.md-card {
+    position: relative;
+}
+
+.md-doc {
+    min-height: 0;
+    padding: var(--sw-space-4) var(--sw-space-5);
+    user-select: text;
+}
+
+    .md-doc > :first-child {
+        margin-top: 0;
+    }
+
+    .md-doc img {
+        height: auto;
+    }
+
+    .md-doc table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .md-doc h1, .md-doc h2 {
+        padding-bottom: var(--sw-space-1);
+        border-bottom: 1px solid var(--sw-border);
+    }
+
+/* The width grip: a 16 px wide strip over the right edge of the card; its bar stays in view (sticky) on long documents */
+.md-grip {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -9px;
+    width: 16px;
+    cursor: ew-resize;
+    touch-action: none;
+    z-index: 1;
+}
+
+    .md-grip:focus-visible {
+        outline: none;
+    }
+
+.md-grip-bar {
+    position: sticky;
+    top: calc(50vh - 24px);
+    display: block;
+    width: 6px;
+    height: 48px;
+    margin: 24px auto;
+    border-radius: var(--sw-radius-pill, 999px);
+    background: var(--sw-border-strong, var(--sw-border));
+    transition: background-color var(--sw-dur-1, 0.1s);
+}
+
+.md-grip:hover .md-grip-bar, .md-grip-active .md-grip-bar {
+    background: var(--sw-accent1, var(--sw-text-2));
+}
+
+.md-grip:focus-visible .md-grip-bar {
+    outline: 2px solid var(--sw-focus, var(--sw-accent1));
+    outline-offset: 2px;
+}
+
+/* Phones (portrait): the document card is edge to edge, no grip */
+@media (max-width: 600px) {
+    .md-main.sw-page-read > .md-card {
+        margin-inline: calc(-1 * var(--sw-page-px, 16px));
+        border-width: 1px 0;
+        border-radius: 0;
+    }
+
+    .md-doc {
+        padding: var(--sw-space-3) var(--sw-page-px, 16px);
+    }
+
+    .md-grip {
+        display: none;
+    }
+}

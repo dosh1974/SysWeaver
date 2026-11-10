@@ -43,6 +43,8 @@
  * the log is at its end (Follow, or opened at the end) starts at the newest match.
  * Phones: the header text goes (the top bar names the page), the action row and the one row tool bar stay; the card is
  * edge to edge in portrait.
+ * View (the first header action): the file in its registered extension viewer (FindViewer: Api/GetExtensionViewer, else
+ * Api/GetExtensionViewerFormat for the extension of the name), only when there is one and it is not this editor.
  * InterOp messages: `FileSaved {Url, Name, Content}`, `FileDeleted {Url, Name}`.
  * Keys: Ace defaults (Ctrl+H replace, Ctrl+Z / Y, Ctrl+Space, Ctrl+/ ...) plus Ctrl+F (toolbar find), F3 / Shift+F3, F8 / Shift+F8 (logs)
  * and Ctrl+S = Save (when saving is possible). Unsaved changes are marked in the title bar and the page asks before it is left.
@@ -429,6 +431,51 @@
     }
 
     /**
+     * Test if a viewer url from the server is another page than this editor (the server falls back to the extension editor, text.html,
+     * when an extension has no viewer).
+     * @param {*} v - The url (absolute, or relative to the site root).
+     * @returns {boolean} True for a viewer to offer.
+     */
+    function IsOtherViewer(v) {
+        if (typeof v !== "string" || !v)
+            return false;
+        try {
+            return !/\/edit\/text\.html$/i.test(new URL(v, Sw.Url.Root).pathname);
+        }
+        catch {
+            return false;
+        }
+    }
+
+    /**
+     * The registered viewer page of a file (the server's extension viewers, Api/GetExtensionViewer, as used by Sw.Page.View: ex: markdown
+     * rendered, csv / tsv as a table, an html page or an svg image itself), when it is another page than this editor. A read url without
+     * an extension (an api, ex: ReadTextFile?"x.md") asks for the viewer of the name's extension (Api/GetExtensionViewerFormat).
+     * @param {string} url - The read url (r).
+     * @param {string} name - The file name (n, else from r).
+     * @returns {Promise<?string>} The viewer url (absolute, or relative to the site root), null when there is none or the lookup failed.
+     */
+    async function FindViewer(url, name) {
+        const root = Sw.Url.Root;
+        const read = Sw.Url.Absolute(url);
+        try {
+            const v = await Sw.Net.Send(root + "Api/GetExtensionViewer", read);
+            if (IsOtherViewer(v))
+                return v;
+            const i = name.lastIndexOf(".");
+            const ext = i > 0 ? name.substring(i + 1).replace(/["']/g, "").toLowerCase() : "";
+            if (!/^[a-z0-9+_]{1,16}$/.test(ext))
+                return null;
+            const f = await Sw.Net.Send(root + "Api/GetExtensionViewerFormat", ext);
+            const u = typeof f === "string" && f.includes("{0}") ? f.split("{0}").join(read) : null;
+            return IsOtherViewer(u) ? u : null;
+        }
+        catch {
+            return null;
+        }
+    }
+
+    /**
      * The page.
      */
     const TextPage = {
@@ -517,6 +564,8 @@
                     name = lastSeg;
                 }
             document.title = name;
+            //  (asked at once, in parallel with the text; the View action waits for it, so the header is built once)
+            const viewerP = FindViewer(url, name);
             let mode = U.Get("t");
             if (!mode) {
                 const seg = pathName.substring(pathName.lastIndexOf("/") + 1) || lastSeg;
@@ -722,7 +771,18 @@
                     Sw.Fail(_TF("Failed to reload the file", "Error message displayed when a file reload failed") + ":\n" + (e.message || e));
                 }
             };
-            const actions = [reloadBtn];
+            const actions = [];
+            //  View: the file in its registered viewer (markdown rendered, a table, the page or image itself); only when there is one
+            const viewer = await viewerP;
+            t.ViewerUrl = viewer;
+            if (viewer) {
+                actions.push(new Sw.Button({
+                    Icon: "eye", Text: _TF("View", "Text on a button of the text editor that opens the file in its viewer (ex: markdown shown as a document, csv as a table, an svg as an image)"),
+                    Title: _TF("Show the file in its viewer (ex: markdown as a document, a table, a page or an image). With unsaved changes it opens in a new tab and shows the saved file.", "Tool tip of the View button of the text editor"),
+                    OnClick: () => t.View(),
+                }));
+            }
+            actions.push(reloadBtn);
             t.FetchText = fetchText;
             t.DoBeautify = doBeautify;
             if (beautify) {
@@ -991,6 +1051,18 @@
             host.classList.remove("text-loading");
             if (!scrollToEnd)
                 editor.focus();
+        },
+
+        /**
+         * Open the file in its viewer (ViewerUrl, FindViewer), like Sw.Page.View: a root relative viewer in this window, an absolute one
+         * (an html page or svg image itself) in a new tab; with unsaved changes always a new tab, so the edits stay.
+         */
+        View() {
+            const v = this.ViewerUrl;
+            if (!v)
+                return;
+            const abs = Sw.Url.IsAbsolute(v);
+            Sw.Page.Navigate(abs ? v : Sw.Url.Root + v, abs || this.IsDirty() ? "_blank" : "_self");
         },
 
         /**

@@ -1,0 +1,16 @@
+/*
+ * view.css - the shared parts of the file viewer pages (view/view.js Sw.FileView): the file name in the page header and the state card
+ * (empty file, failed load) that takes the place of the content.
+ */
+
+.sw-fileview-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: text;
+}
+
+.sw-fileview-state {
+    display: grid;
+    place-items: center;
+}

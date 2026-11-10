@@ -1,0 +1,31 @@
+/* csv.css - the csv / tsv viewer explore/csv.html (csv.js): the compact page header, div.csv-bar (the separator and first row drop downs:
+ * what was used, and to change it), then the table (Sw.FillTable, table.css); a state (empty file, error, ../view/view.css) takes the place
+ * of the table. */
+
+.csv-bar {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2) var(--sw-space-5);
+    margin-bottom: var(--sw-space-2);
+}
+
+.csv-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    min-width: 0;
+}
+
+.csv-label {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 90%);
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .csv-bar {
+        gap: var(--sw-space-1) var(--sw-space-3);
+    }
+}

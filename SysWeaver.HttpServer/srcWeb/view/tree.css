@@ -1,0 +1,202 @@
+/*
+ * tree.css - the tree viewer view/tree.html (tree.js): main.sw-page-fill.tv-main > the compact page header + section.sw-card.sw-fill.tv-card
+ * > div.tv-bar (filter, expand / collapse all, status) + div.tv-scroll > ul.tv-tree[role=tree] > li.tv-item > div.tv-row + ul.tv-group.
+ * Token colours: json keys / xml tags in accent 1, strings / attribute values in the success hue, numbers in the info hue, literals in
+ * accent 2, punctuation and sizes muted (contrast from the theme tokens; the text says the type too, colour is never the only cue).
+ */
+
+.tv-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tv-card-state {
+    display: grid;
+    place-items: center;
+}
+
+.tv-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    min-height: 48px;
+    padding: 6px 8px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--sw-border);
+}
+
+.tv-filterbox {
+    position: relative;
+    display: flex;
+    flex: 0 1 20rem;
+    min-width: 7rem;
+}
+
+.tv-filter {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.tv-found {
+    position: absolute;
+    right: 2em;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 90%);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.tv-spacer {
+    flex: 1 1 0;
+}
+
+.tv-status {
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm, 90%);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tv-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--sw-space-2) var(--sw-space-2) var(--sw-space-4);
+}
+
+/* The tree */
+.tv-tree, .tv-group {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tv-group {
+    margin-left: 9px;
+    padding-left: 12px;
+    border-left: 1px solid var(--sw-border);
+}
+
+.tv-item[aria-expanded="false"] > .tv-group {
+    display: none;
+}
+
+.tv-item {
+    outline: none;
+}
+
+.tv-row {
+    display: block;
+    padding: 1px 6px 1px 0;
+    border-radius: var(--sw-radius-sm);
+    font-family: var(--sw-mono);
+    font-size: var(--sw-mono-size);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    cursor: default;
+    user-select: text;
+}
+
+.tv-item[aria-expanded] > .tv-row {
+    cursor: pointer;
+}
+
+.tv-row:hover {
+    background: color-mix(in oklab, var(--sw-accent1, var(--sw-info)) 7%, transparent);
+}
+
+.tv-item:focus-visible > .tv-row {
+    outline: 2px solid var(--sw-focus, var(--sw-accent1));
+    outline-offset: -2px;
+}
+
+/* The fold mark: a chevron for items that fold, room for one for leaves */
+.tv-tog {
+    display: inline-block;
+    width: 18px;
+    text-align: center;
+    color: var(--sw-text-2);
+}
+
+.tv-item[aria-expanded] > .tv-row > .tv-tog::before {
+    content: "\25B8";
+}
+
+.tv-item[aria-expanded="true"] > .tv-row > .tv-tog::before {
+    content: "\25BE";
+}
+
+.tv-punct, .tv-sum, .tv-idx {
+    color: var(--sw-text-2);
+}
+
+.tv-key, .tv-tag {
+    color: var(--sw-accent1-fg, var(--sw-accent1));
+}
+
+.tv-attr {
+    color: color-mix(in oklab, var(--sw-accent1-fg, var(--sw-accent1)) 70%, var(--sw-text));
+}
+
+.tv-str, .tv-aval {
+    color: color-mix(in oklab, var(--sw-success, #2a7) 75%, var(--sw-text));
+}
+
+.tv-num {
+    color: color-mix(in oklab, var(--sw-info, #37c) 80%, var(--sw-text));
+}
+
+.tv-bool, .tv-null {
+    color: var(--sw-accent2, var(--sw-text));
+    font-style: italic;
+}
+
+.tv-text {
+    color: var(--sw-text);
+}
+
+.tv-comment {
+    color: var(--sw-text-2);
+    font-style: italic;
+}
+
+.tv-hit {
+    background: color-mix(in srgb, var(--sw-warning) 35%, transparent);
+    color: inherit;
+    border-radius: 2px;
+}
+
+/* Narrow: the tools show their icons only (the text stays the accessible name), the status goes */
+@media (max-width: 600px) {
+    .tv-main.sw-page-fill > .tv-card {
+        margin-inline: calc(-1 * var(--sw-page-px, 16px));
+        border-width: 1px 0 0;
+        border-radius: 0;
+    }
+
+    .tv-status {
+        display: none;
+    }
+
+    .tv-filterbox {
+        flex: 1 1 auto;
+    }
+
+    .tv-tool .sw-button-text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}

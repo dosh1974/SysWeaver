@@ -4423,6 +4423,14 @@
             /** @type {boolean} The last UpdateNote argument (the in memory log table). */
             t.NoteRun = !!run;
             if (t.PH) {
+                //  Local rows (option Rows) have no live refresh: the description says nothing about refreshing
+                if (t.Local && !run) {
+                    if (t.PHSig !== "local") {
+                        t.PHSig = "local";
+                        t.PHDesc.replaceChildren();
+                    }
+                    return;
+                }
                 const rate = t.Data && t.Data.RefreshRate > 0 ? t.Data.RefreshRate : 5000;
                 const secs = Math.max(1, Math.round(rate / 1000));
                 //  While the connection is lost the live refresh is paused (ShowOffline): the header says so, not "Live" (UX guide FBK-9)

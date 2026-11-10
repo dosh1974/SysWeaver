@@ -36,8 +36,42 @@ namespace SysWeaver.MicroService
             manager.OnServiceAdded += OnServiceAdded;
             manager.OnServiceRemoved += OnServiceRemoved;
             manager.Register(server, instanceName, false, paramType);
+            //  The viewers of the pages every http server serves (SysWeaver.HttpServer srcWeb); the first server registers them
+            foreach (var (ext, viewer) in Viewers)
+                if (manager.TryAddExtensionViewer(ext, viewer))
+                    AddedViewers.Add(ext);
             start?.Invoke();
         }
+
+        /// <summary>
+        /// The markdown viewer (view/markdown.html, renders the file with the shared markdown converter), {0} is the read url
+        /// </summary>
+        const String MarkdownViewer = "view/markdown.html?r={0}";
+
+        /// <summary>
+        /// The html viewer (view/html.html, the page in a sandboxed frame below the page header), {0} is the read url
+        /// </summary>
+        const String HtmlViewer = "view/html.html?r={0}";
+
+        /// <summary>
+        /// The tree viewer (view/tree.html, json and xml as a tree), {0} is the read url
+        /// </summary>
+        const String TreeViewer = "view/tree.html?r={0}";
+
+        /// <summary>
+        /// The extension viewers of the pages in the view folder (extension, viewer url format)
+        /// </summary>
+        static readonly (String, String)[] Viewers = [
+            ("md", MarkdownViewer), ("markdown", MarkdownViewer),
+            ("html", HtmlViewer), ("htm", HtmlViewer), ("xhtml", HtmlViewer),
+            ("json", TreeViewer),
+            ("xml", TreeViewer), ("xsd", TreeViewer), ("xsl", TreeViewer), ("xslt", TreeViewer),
+        ];
+
+        /// <summary>
+        /// The extension viewers this instance registered (removed again on dispose)
+        /// </summary>
+        readonly List<String> AddedViewers = new List<String>();
 
         /// <summary>
         /// Create the http server instance
@@ -272,6 +306,9 @@ namespace SysWeaver.MicroService
         public void Dispose()
         {
             var server = Server;
+            foreach (var x in AddedViewers)
+                Manager.TryRemoveExtensionViewer(x, out var _);
+            AddedViewers.Clear();
             Manager.Unregister(server);
             server.Dispose();
         }

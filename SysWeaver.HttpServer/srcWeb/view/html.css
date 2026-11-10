@@ -1,0 +1,29 @@
+/*
+ * html.css - the html viewer view/html.html (html.js): main.sw-page-fill.html-main > the compact page header + section.sw-card.sw-fill.html-card
+ * > iframe.html-frame (the page, sandboxed).
+ */
+
+.html-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* The page on white: pages expect the browser's default background, also in the dark themes */
+.html-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    border: 0;
+    background: #fff;
+    color-scheme: light;
+}
+
+/* Phones (portrait): the card is edge to edge */
+@media (max-width: 600px) {
+    .html-main.sw-page-fill > .html-card {
+        margin-inline: calc(-1 * var(--sw-page-px, 16px));
+        border-width: 1px 0 0;
+        border-radius: 0;
+    }
+}

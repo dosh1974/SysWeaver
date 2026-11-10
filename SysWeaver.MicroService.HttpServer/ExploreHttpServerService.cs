@@ -67,7 +67,25 @@ namespace SysWeaver.MicroService
                 AddExporter(x as IHaveTableDataExporters);
             manager.OnServiceAdded += Manager_OnServiceAdded;
             manager.OnServiceRemoved += Manager_OnServiceRemoved;
+            foreach (var x in CsvExtensions)
+                if (manager.TryAddExtensionViewer(x, CsvViewer))
+                    AddedViewers.Add(x);
         }
+
+        /// <summary>
+        /// The csv / tsv viewer (explore/csv.html, the file as a table in Sw.Table), {0} is the read url
+        /// </summary>
+        const String CsvViewer = "explore/csv.html?r={0}";
+
+        /// <summary>
+        /// The extensions shown by the <see cref="CsvViewer"/>
+        /// </summary>
+        static readonly String[] CsvExtensions = ["csv", "tsv"];
+
+        /// <summary>
+        /// The extension viewers this instance registered (removed again on dispose)
+        /// </summary>
+        readonly List<String> AddedViewers = new List<String>();
 
         #region Table exporters
 
@@ -502,6 +520,9 @@ namespace SysWeaver.MicroService
             var manager = Manager;
             manager.OnServiceRemoved -= Manager_OnServiceRemoved;
             manager.OnServiceAdded -= Manager_OnServiceAdded;
+            foreach (var x in AddedViewers)
+                manager.TryRemoveExtensionViewer(x, out var _);
+            AddedViewers.Clear();
             manager.Unregister(Mod);
         }
 
