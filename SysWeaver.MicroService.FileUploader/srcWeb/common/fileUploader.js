@@ -83,7 +83,7 @@ const UploadStatus = Object.freeze({
             case -9:
                 return _TF("Another upload is in progress and concurrent uploads are not allowed", "This is the description of a status code for a service that upload file(s) to a repository");
             case -8:
-                return _TF("The file data was invalid (some processing went wrong)", "This is the description of a status code for a service that upload file(s) to a repository");
+                return _TF("The file can not be used: it is empty, damaged or its content is not allowed", "This is the description of a status code for a service that upload file(s) to a repository");
             case -7:
                 return _TF("Disc quota exceeded", "This is the description of a status code for a service that upload file(s) to a repository");
             case -6:

@@ -499,8 +499,9 @@ class MediaPlayerTools {
      * "AudioEnabled" CustomEvent on document.body. On failure installs one-shot keydown/mousedown/click
      * listeners on document.body that set Result = true and dispatch "AudioEnabled" on the first user gesture.
      * media_player_audio.js is loaded first when needed (MediaPlayer.Include).
+     * The probe gets at most 3 s to load and 3 s to start (no answer in time counts as blocked).
      * @returns {Promise<boolean>} True if unmuted playback works now; false if blocked, the audio failed to
-     * load, or MediaPlayerAudio can't be loaded
+     * load, the browser gave no answer in time, or MediaPlayerAudio can't be loaded
      */
     static async CanUnMute() {
         if (MediaPlayerTools.HaveTested)
@@ -513,11 +514,26 @@ class MediaPlayerTools {
             return false;
         const e = document.createElement("audio");
         let res = false;
-        if (await MediaPlayerAudio.LoadAudio(e, "data:audio/mpeg;base64,/+MYxAAAAANIAUAAAASEEB/jwOFM/0MM/90b/+RhST//w4NFwOjf///PZu////9lns5GFDv//l9GlUIEEIAAAgIg8Ir/JGq3/+MYxDsLIj5QMYcoAP0dv9HIjUcH//yYSg+CIbkGP//8w0bLVjUP///3Z0x5QCAv/yLjwtGKTEFNRTMuOTeqqqqqqqqqqqqq/+MYxEkNmdJkUYc4AKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")) {
+        //  The probe gets at most 3 s to load and 3 s to start: a browser can keep it waiting (a background tab, a frame where it
+        //  defers media), and everything that waits for the players (MediaPlayer.Ready) waited with it, ex: a slide show stayed
+        //  empty until the page was loaded again. No answer in time = the sound needs a click, as when the browser refuses.
+        const timeUp = () => MediaPlayerTools.delay(3000).then(() => "timeout");
+        const loaded = await Promise.race([MediaPlayerAudio.LoadAudio(e, "data:audio/mpeg;base64,/+MYxAAAAANIAUAAAASEEB/jwOFM/0MM/90b/+RhST//w4NFwOjf///PZu////9lns5GFDv//l9GlUIEEIAAAgIg8Ir/JGq3/+MYxDsLIj5QMYcoAP0dv9HIjUcH//yYSg+CIbkGP//8w0bLVjUP///3Z0x5QCAv/yLjwtGKTEFNRTMuOTeqqqqqqqqqqqqq/+MYxEkNmdJkUYc4AKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"), timeUp()]);
+        if (loaded === "timeout")
+            e.SwCancelLoad = true;
+        //  (no answer: the click listeners below, like a refused play)
+        if (loaded) {
             try {
+                if (loaded === "timeout")
+                    throw new Error("The sound probe did not load in time");
                 e.muted = false;
                 e.volume = 0.01;
-                await e.play();
+                const played = e.play();
+                if (await Promise.race([played.then(() => "played"), timeUp()]) !== "played") {
+                    //  (it may still start later: then it stops at once)
+                    played.then(() => e.pause(), () => { });
+                    throw new Error("The sound probe did not start in time");
+                }
                 res = true;
                 await e.pause();
                 document.body.dispatchEvent(new CustomEvent("AudioEnabled"));

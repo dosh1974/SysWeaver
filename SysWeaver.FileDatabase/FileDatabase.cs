@@ -438,6 +438,57 @@ namespace SysWeaver.FileDatabase
 
         ConcurrentDictionary<String, bool> CompletedFiles = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Insert or update the row of a completely written file now (ex: right after an upload), instead of when the folder watcher gets to it.
+        /// Works before <see cref="Init(string[])"/> is done (the row is then simply up to date when the sync gets to it).
+        /// The entry function is called as usual; the file must be inside one of the folders of this database (not checked).
+        /// </summary>
+        /// <param name="file">The full path of the file</param>
+        /// <returns>True if the row was inserted or updated, false if the file doesn't exist, has a too long name or extension, or the entry function skipped it</returns>
+        public async Task<bool> AddOrUpdateNow(String file)
+        {
+            using var _ = PerfMon.Track(nameof(AddOrUpdateNow));
+            var fi = new FileInfo(file);
+            if (!fi.Exists)
+                return false;
+            var fname = fi.FullName;
+            if (fname.Length > DbFileData.MaxNameLen)
+                return false;
+            var ext = fi.Extension;
+            var el = ext.Length;
+            if (el > (DbFileData.MaxExtLen + 1))
+                return false;
+            if (el > 0)
+                ext = ext.Substring(1);
+            using var c = await Db.GetAsync().ConfigureAwait(false);
+            using var tr = await c.BeginTransactionAsync().ConfigureAwait(false);
+            var data = await c.FirstOrDefaultAsync<T>(x => x.FullPath == fname).ConfigureAwait(false);
+            bool isNew = data == null;
+            data ??= new T
+            {
+                FullPath = fname,
+                Ext = ext.FastToLower(),
+            };
+            data.LastModified = fi.LastWriteTimeUtc.Ticks;
+            data.Size = fi.Length;
+            data.Changed = DateTime.UtcNow.Ticks;
+            if (!await EntryFn(data).ConfigureAwait(false))
+                return false;
+            if (isNew)
+            {
+                await c.InsertAsync(data).ConfigureAwait(false);
+                Interlocked.Increment(ref InsertCount);
+            }
+            else
+            {
+                await c.UpdateAsync(data).ConfigureAwait(false);
+                Interlocked.Increment(ref UpdateCount);
+            }
+            await tr.CommitAsync().ConfigureAwait(false);
+            Interlocked.Increment(ref Cc);
+            return true;
+        }
+
         async Task<bool> ProcessUpdates()
         {
             using var _ = PerfMon.Track(nameof(ProcessUpdates));

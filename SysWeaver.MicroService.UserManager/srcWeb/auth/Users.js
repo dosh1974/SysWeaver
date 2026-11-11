@@ -335,14 +335,31 @@ function usersMain() {
                 Title: _TF("Delete a user account, ex: one nobody can sign in with any more", "Tool tip of the delete user button on the users page"),
                 OnClick: usersDeleteUser,
             }));
-        if (canInvite !== false)
+        if (canInvite !== false) {
+            //  How an invitation can be sent (the coms of the server: Email; Sms and WhatsApp send to a phone number): none = no way to
+            //  invite, the button says why (an older server without the props: by e-mail, as before)
+            let coms = null;
+            try {
+                const p = await Sw.Net.Send(root + "Api/auth/UserManagerProps");
+                coms = p && Array.isArray(p.Coms) ? p.Coms : null;
+            }
+            catch {
+            }
+            const byEmail = !coms || coms.includes("Email");
+            const byPhone = !!coms && coms.some(x => x === "Sms" || x === "WhatsApp");
             page.Header.AddAction(new Sw.Button({
                 Text: _TF("Invite user", "Button on the users page that opens the invite user page"),
                 Icon: "plus",
                 Kind: "primary",
-                Title: _TF("Invite a new user by email", "Tool tip of the invite user button on the users page"),
+                Title: byEmail && byPhone
+                    ? _TF("Invite a new user by email or phone", "Tool tip of the invite user button on the users page when invitations can be sent by email and to phone numbers")
+                    : (byPhone
+                        ? _TF("Invite a new user by phone", "Tool tip of the invite user button on the users page when invitations can only be sent to phone numbers")
+                        : _TF("Invite a new user by email", "Tool tip of the invite user button on the users page")),
+                Disabled: (byEmail || byPhone) ? false : _TF("Invitations can't be sent: this site has no way to send emails or text messages", "Why the invite user button on the users page is disabled"),
                 OnClick: () => Sw.Page.Navigate("InviteUser.html", "_self"),
             }));
+        }
         const usersHost = Sw.el("div.sw-fill.um-users-table");
         //  A viewer without the right to manage users (ex: Debug, Ops) gets no row action: it reads the plain users table, as the original
         //  "View users" (explore/table.html?q=../Api/auth/UserDataTable): the same columns without an empty Actions column (Admin N45)

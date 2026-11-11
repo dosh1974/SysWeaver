@@ -2340,7 +2340,11 @@ namespace SysWeaver.Net
                         if (ccd > 1)
                             ccd = 1;
                     data.SetResHeader("Cache-Control", GetCacheControl(ccd));
- 
+                    //  A dynamic response (an api) can depend on the session language: the client sends the page language (X-Sw-Lang, core/net.js)
+                    //  and the browser keeps one cached copy per language, so a language change doesn't show cached texts of the old language
+                    if ((ccd > 0) && t.IsDynamic)
+                        data.SetResHeader("Vary", "X-Sw-Lang");
+
                     //  Determine compression
                     var acc = data.AcceptEncoding;
                     //  The accepted encoders are only parsed / looked up when needed (the encoder choice is cached per Accept-Encoding value)

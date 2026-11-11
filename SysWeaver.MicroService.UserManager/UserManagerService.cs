@@ -203,8 +203,21 @@ namespace SysWeaver.MicroService
             DisableLogin = p.DisableLogin;
             //  Add and setup communication methods
             var allComs = manager.GetAllInfo<IUserManagerComs>(ServiceInstanceTypes.LocalOnly, ServiceInstanceOrders.Oldest).ToList();
+            //  No coms services: e-mail through an e-mail sender, if there is one (without a sender nothing can be sent: no e-mail coms,
+            //  the pages then don't offer e-mail). EmailInstance may name the sender (an e-mail coms named so doesn't exist then): it is
+            //  used, and the default coms is found by that name too.
+            EmailComs defaultEmail = null;
             if ((allComs.Count == 0) && (!p.DisableLogin))
-                allComs.Add(new KeyValuePair<IUserManagerComs, ServiceInfo>(new EmailComs(manager, null), null));
+            {
+                var sender = DefaultEmailSender(manager, p.EmailInstance);
+                if (sender == null)
+                    manager.AddMessage("There is no e-mail sender (IEmailSender) and no other communication service: invitations, sign ups and password resets can't be sent", MessageLevels.Warning);
+                else
+                {
+                    defaultEmail = new EmailComs(manager, new EmailComsParams { Instance = sender });
+                    allComs.Add(new KeyValuePair<IUserManagerComs, ServiceInfo>(defaultEmail, null));
+                }
+            }
             Dictionary<String, IUserManagerComs> valid = new Dictionary<string, IUserManagerComs>(StringComparer.Ordinal);
             foreach (var x in allComs)
             {
@@ -215,34 +228,54 @@ namespace SysWeaver.MicroService
                     valid[$"{name}\n{inst}"] = i;
                 valid[name] = i;
             }
+            if ((defaultEmail != null) && !String.IsNullOrEmpty(p.EmailInstance))
+                valid[$"Email\n{p.EmailInstance}"] = defaultEmail;
+
+            //  A coms by its name and the configured instance. An instance that doesn't exist: the coms of that name (with a warning), before
+            //  this a wrong instance name left the coms out and nothing could be sent ("Enter a valid e-mail address or phone number" for
+            //  every invitation)
+            IUserManagerComs find(String comName, String instance)
+            {
+                if (String.IsNullOrEmpty(instance))
+                    return valid.TryGetValue(comName, out var c) ? c : null;
+                if (valid.TryGetValue($"{comName}\n{instance}", out var ci))
+                    return ci;
+                if (valid.TryGetValue(comName, out var cn))
+                {
+                    manager.AddMessage(MessageLevels.Warning, $"There is no {comName} communication service named {instance.ToQuoted()}, using the {comName} service there is");
+                    return cn;
+                }
+                return null;
+            }
 
             List<IUserManagerComs> orderedComs = new(allComs.Count);
             var comsOrder = p.ComsOrder?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             SendAllComs = (comsOrder?.Length ?? 0) <= 0;
+            void addCom(IUserManagerComs com)
+            {
+                if ((com != null) && !orderedComs.Contains(com))
+                    orderedComs.Add(com);
+            }
             if (SendAllComs)
             {
-                if (valid.TryGetValue(String.IsNullOrEmpty(p.EmailInstance) ? "Email" : $"Email\n{p.EmailInstance}", out var com))
-                    orderedComs.Add(com);
-                if (valid.TryGetValue(String.IsNullOrEmpty(p.WhatsAppInstance) ? "WhatsApp" : $"WhatsApp\n{p.WhatsAppInstance}", out com))
-                    orderedComs.Add(com);
-                if (valid.TryGetValue(String.IsNullOrEmpty(p.SmsInstance) ? "Sms" : $"Sms\n{p.SmsInstance}", out com))
-                    orderedComs.Add(com);
+                addCom(find("Email", p.EmailInstance));
+                addCom(find("WhatsApp", p.WhatsAppInstance));
+                addCom(find("Sms", p.SmsInstance));
             }
             else
             {
                 foreach (var x in comsOrder)
                 {
                     if (x.FastEquals("Email"))
-                        if (valid.TryGetValue(String.IsNullOrEmpty(p.EmailInstance) ? "Email" : $"Email\n{p.EmailInstance}", out var com))
-                            orderedComs.Add(com);
+                        addCom(find("Email", p.EmailInstance));
                     if (x.FastEquals("WhatsApp"))
-                        if (valid.TryGetValue(String.IsNullOrEmpty(p.WhatsAppInstance) ? "WhatsApp" : $"WhatsApp\n{p.WhatsAppInstance}", out var com))
-                            orderedComs.Add(com);
+                        addCom(find("WhatsApp", p.WhatsAppInstance));
                     if (x.FastEquals("Sms"))
-                        if (valid.TryGetValue(String.IsNullOrEmpty(p.SmsInstance) ? "Sms" : $"Sms\n{p.SmsInstance}", out var com))
-                            orderedComs.Add(com);
+                        addCom(find("Sms", p.SmsInstance));
                 }
             }
+            if ((orderedComs.Count == 0) && !p.DisableLogin)
+                manager.AddMessage("The user manager has no way to send messages (no e-mail, WhatsApp or text message service): invitations, sign ups and password resets can't be sent", MessageLevels.Warning);
 
             Coms = orderedComs.ToArray();
             ComsMethods = orderedComs.ToDictionary(x => x.Name, StringComparer.Ordinal).Freeze();
@@ -320,6 +353,44 @@ namespace SysWeaver.MicroService
         }
 
         readonly UserManagerProps ManProps;
+
+        /// <summary>
+        /// The e-mail sender of the default e-mail coms (used when no coms service is configured)
+        /// </summary>
+        /// <param name="manager">The service manager</param>
+        /// <param name="preferred">The configured instance (UserManagerParams.EmailInstance): used when an e-mail sender has that name</param>
+        /// <returns>The instance name of the sender: the preferred one, else "useradmin" (the default of EmailComsParams), else "" (any
+        /// sender); null if there is no e-mail sender</returns>
+        static String DefaultEmailSender(ServiceManager manager, String preferred)
+        {
+            preferred = preferred?.Trim();
+            if (!String.IsNullOrEmpty(preferred) && (manager.TryGet<IEmailSender>(preferred) != null))
+                return preferred;
+            const String usual = "useradmin";
+            if (manager.TryGet<IEmailSender>(usual) != null)
+                return usual;
+            return manager.TryGet<IEmailSender>() != null ? "" : null;
+        }
+
+        /// <summary>
+        /// The text of a target that no coms can send to: names what can be used (only e-mail, only phone numbers, or both)
+        /// </summary>
+        /// <param name="target">The given target</param>
+        /// <param name="signUp">True for a sign up: only the coms that allow it</param>
+        /// <returns>The error to throw</returns>
+        HttpResponseException InvalidTargetError(String target, bool signUp = false)
+        {
+            var coms = signUp ? Coms.Where(x => x.AllowSignUp).ToArray() : Coms;
+            if (coms.Length == 0)
+                return signUp && (Coms.Length > 0)
+                    ? new HttpResponseException(403, "Signing up is not available on this site")
+                    : new HttpResponseException(503, "Messages can't be sent: there is no e-mail or text message service set up");
+            var email = coms.Any(x => x.Name == "Email");
+            var phone = coms.Any(x => x.Name != "Email");
+            var what = email && phone ? "a valid e-mail address or phone number"
+                : (email ? "a valid e-mail address" : "a valid phone number (with the country code, ex: +46 70 123 45 67)");
+            return new HttpResponseException(400, "Enter " + what + " (" + (target ?? "").ToQuoted() + " is not)");
+        }
 
         /// <summary>
         /// Use this when sendig text messages as system
@@ -550,10 +621,14 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="target"></param>
         /// <returns></returns>
-        IUserManagerComs GetComs(ref String target)
+        /// <param name="signUp">True for a sign up: only the coms that allow it (<see cref="IUserManagerComs.AllowSignUp"/>, the sign up
+        /// methods the sign up page offers)</param>
+        IUserManagerComs GetComs(ref String target, bool signUp = false)
         {
             foreach (var com in Coms)
             {
+                if (signUp && !com.AllowSignUp)
+                    continue;
                 if (com.CleanAndValidate(ref target))
                     return com;
             }
@@ -1954,9 +2029,10 @@ namespace SysWeaver.MicroService
         internal async Task<bool> SignUp(String target, HttpServerRequest context)
         {
             target = target?.Trim();
-            var com = GetComs(ref target);
+            //  Only the sign up methods (the coms that allow it: what the sign up page offers), not every coms
+            var com = GetComs(ref target, true);
             if (com == null)
-                throw new HttpResponseException(400, "Enter a valid e-mail address or phone number (" + (target ?? "").ToQuoted() + " is neither)");
+                throw InvalidTargetError(target, true);
             var s = context?.Session;
             if (s == null)
                 throw new NoSessionException();

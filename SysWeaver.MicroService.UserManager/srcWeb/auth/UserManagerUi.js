@@ -1060,8 +1060,8 @@
             // The server names the phone coms "Sms" and "WhatsApp" (older servers: "Phone"); all of them sign up with a phone number: one tab.
             const methods = [...new Set(((await UM.SignUpMethods()) || []).map(m => (m === "Sms" || m === "WhatsApp") ? "Phone" : m))].filter(m => m === "Email" || m === "Phone");
             if (methods.length === 0) {
-                const m = _TF("No supported sign up methods found!", "Error message displayed when there are no supported sign up methods");
-                new U.Status(page).Set(m, "error");
+                const m = _TF("Signing up is not available on this site.", "Message on the sign up page when the server has no sign up methods (no email or text message service that allows signing up)");
+                new U.Status(page).Set(m, "warning");
                 return;
             }
             const seg = methods.length > 1 ? new U.Segments(page, {
@@ -1096,9 +1096,12 @@
             const status = new U.Status(page);
             const button = U.Button(U.Buttons(page), {
                 Text: _TF("Sign up", "Text on a button that when pressed will sign up to a service using the supplied user id (phone number or email address)"),
-                Title: _TF("Send an message with further instructions", "Tool tip on a button that when pressed will sign up to a service using the supplied user id (phone number or email address)"),
                 Icon: "IconAuthPost", Submit: true, Disabled: fillFirst(),
             }, page);
+            //  The tool tip says how the code comes: by e-mail or by text message (the method shown)
+            const buttonTitles = methods.map(m => m === "Email"
+                ? _TF("Send a code to your email address to create your account", "Tool tip of the sign up button when signing up with an email address")
+                : _TF("Send a code to your phone number to create your account", "Tool tip of the sign up button when signing up with a phone number (the code comes as a text message or by WhatsApp)"));
             let current = 0;
             const update = liveValidation(status, button, async () => {
                 const f = fields[current];
@@ -1115,6 +1118,7 @@
             function show(i) {
                 current = i;
                 fields.forEach((f, j) => f.E.hidden = j !== i);
+                button.SetTitle?.(buttonTitles[i]);
                 update();
                 fields[i].Focus();
             }
@@ -1155,9 +1159,10 @@
             const user = new U.Field(page, {
                 Label: _TF("User ID", "Label text for an input field where the user should enter their user id (username, email, phone)"),
                 Placeholder: _TF("Enter your user id", "Placeholder text for an input field where the user should enter their user id (username, email, phone)"),
-                Hint: _TF("Your user id is your email address, phone number or username","Tool tip description for an input field where the user should enter their user id (username, email, phone)"),
                 AutoComplete: "username", Name: "username", OnInput: () => update(),
             });
+            //  What a user id can be here: the user name, and e-mail / phone only when the server can reach them (Sw.Auth.UserIdHint)
+            A.UserIdHint().then(h => user.Input.title = h, () => { });
             const status = new U.Status(page);
             const buttons = U.Buttons(page);
             const button = U.Button(buttons, {
@@ -1228,11 +1233,33 @@
      * @returns {Promise<void>}
      */
     async function inviteUserMain() {
-        await accountPage("IconAuthInviteUser", _TF("Invite a new user by email.", "One line description of the invite user page"), async page => {
+        //  How an invitation can be sent: the server's coms (Email; Sms and WhatsApp send to a phone number). A way that is set up is
+        //  offered, one that isn't is not (a site without text messages invites by e-mail only); no way at all: no form
+        let props = null;
+        try {
+            props = await UM.Props();
+        }
+        catch {
+        }
+        const methods = props && Array.isArray(props.Coms)
+            ? [...new Set(props.Coms.map(m => (m === "Sms" || m === "WhatsApp") ? "Phone" : m))].filter(m => m === "Email" || m === "Phone")
+            : ["Email"];
+        const byPhone = methods.includes("Phone"), byEmail = methods.includes("Email");
+        const description = byEmail && byPhone
+            ? _TF("Invite a new user by email or phone.", "One line description of the invite user page when invitations can be sent by email and to phone numbers")
+            : (byPhone
+                ? _TF("Invite a new user by phone.", "One line description of the invite user page when invitations can only be sent to phone numbers")
+                : _TF("Invite a new user by email.", "One line description of the invite user page"));
+        await accountPage("IconAuthInviteUser", description, async page => {
             const me = await A.GetUser();
             if (!me) {
                 page.SetIcon("IconWarning");
                 new U.Status(page).Set(_TF("No user signed in!", "Error message displayed when a user action is performed while no user is signed in"), "warning");
+                return;
+            }
+            if (methods.length === 0) {
+                page.SetIcon("IconWarning");
+                new U.Status(page).Set(_TF("Invitations can't be sent: this site has no way to send emails or text messages.", "Message on the invite user page when the server has no email or text message service"), "warning");
                 return;
             }
             //  Enter walks the fields to Send invitation, as the old page: it never sends from a field (two Enters must not invite
@@ -1240,16 +1267,61 @@
             page.EnterWalks = true;
             //  A restored draft (the Draft option) calls the input handlers while the fields are made: they act once the form is built
             let built = false;
-            const email = new U.Field(page, {
-                Label: _TF("Email", "Label text for an input field where the user should supply an email address"),
-                Placeholder: _TF("Email address of the person to invite", "Placeholder text for an input field where the user should supply an email address"),
-                Type: "email", AutoComplete: "off", InputMode: "email", Name: "invite-email", Draft: { Context: "invite.email", Dirty: false }, OnInput: () => {
-                    if (built) {
-                        update();
-                        markDirty();
-                    }
-                },
+            const changed = () => {
+                if (built) {
+                    update();
+                    markDirty();
+                }
+            };
+            const seg = methods.length > 1 ? new U.Segments(page, {
+                Label: _TF("How the invitation is sent", "Accessible name of the tabs on the invite user page: by email or by text message"),
+                OnChange: i => show(i),
+            }) : null;
+            const fields = methods.map(m => {
+                if (m === "Email") {
+                    seg?.Add(_TF("Email", "Text of a tab header on the invite user page: the invitation is sent by email"), "IconAuthEmail",
+                        _TF("Send the invitation by email", "Tool tip of the email tab on the invite user page"));
+                    const f = new U.Field(page, {
+                        Label: _TF("Email", "Label text for an input field where the user should supply an email address"),
+                        Placeholder: _TF("Email address of the person to invite", "Placeholder text for an input field where the user should supply an email address"),
+                        Type: "email", AutoComplete: "off", InputMode: "email", Name: "invite-email", Draft: { Context: "invite.email", Dirty: false }, OnInput: changed,
+                    });
+                    f.Check = async v => Sw.Format.IsValidEmail(v) ? null : _TF("Enter a valid email", "Message to let users know that they should enter a valid email address in the input field");
+                    f.Empty = _TF("Enter the email address of the person to invite.", "Neutral hint on the invite user page before an email address was typed");
+                    return f;
+                }
+                seg?.Add(_TF("Phone", "Text of a tab header on the invite user page: the invitation is sent by text message to a phone number"), "IconAuthPhone",
+                    _TF("Send the invitation to a phone number", "Tool tip of the phone tab on the invite user page"));
+                const f = new U.PhoneField(page, {
+                    Label: _TF("Phone number", "Label text for an input field on the invite user page where the phone number of the person to invite is entered"),
+                    Placeholder: _TF("Phone number of the person to invite", "Placeholder text for an input field on the invite user page where the phone number of the person to invite is entered"),
+                    Hint: _TF("Enter a complete phone number including the country dialling code, prefixed by a + sign", "Tool tip description for an input field where the user should enter their phone number"),
+                    Name: "invite-tel", OnInput: changed,
+                });
+                f.Check = sequenced(A.PhoneError);
+                f.Empty = _TF("Enter the phone number of the person to invite.", "Neutral hint on the invite user page before a phone number was typed");
+                return f;
             });
+            let current = 0;
+            //  The field of the chosen way (the code below says "email" for it, as before phone numbers could be invited)
+            const email = {
+                Get: () => fields[current].Get(),
+                Focus: () => fields[current].Focus(),
+                SetDisabled: (d, why) => fields.forEach(f => f.SetDisabled?.(d, why)),
+            };
+            /**
+             * Show the field of a way to send.
+             * @param {number} i Index.
+             */
+            function show(i) {
+                current = i;
+                fields.forEach((f, j) => f.E.hidden = j !== i);
+                if (built) {
+                    update();
+                    markDirty();
+                }
+                fields[i].Focus();
+            }
             const nameTitle = _TF("An optional username that can be used to sign in, instead of the email address", "Tool tip description on an input field where the user can enter a username");
             const name = new U.Field(page, {
                 Label: _TF("Username", "Label text for an input field where the user can enter an optional username"),
@@ -1344,15 +1416,15 @@
                 OnClick: () => Sw.Page.Navigate("Users.html?tab=invitations", "_self"),
             });
             const update = liveValidation(status, button, async () => {
-                const v = A.Trim(email.Get());
-                return Sw.Format.IsValidEmail(v)
-                    ? { Error: null }
-                    : v
-                        ? { Error: _TF("Enter a valid email", "Message to let users know that they should enter a valid email address in the input field"), Field: email }
-                        : { Error: _TF("Enter the email address of the person to invite.", "Neutral hint on the invite user page before an email address was typed"), Field: email, Neutral: true };
-            }, [email]);
+                const f = fields[current];
+                const v = A.Trim(f.Get());
+                if (!v)
+                    return { Error: f.Empty, Field: f, Neutral: true };
+                const e = await f.Check(v);
+                return e ? { Error: e, Field: f } : { Error: null };
+            }, fields);
             page.OnSubmit = () => submit({
-                Status: status, Update: update, Focus: email,
+                Status: status, Update: update, Focus: fields[current],
                 Failed: _TF("Failed to send invitation.", "Error message displayed when an invitation to join the site failed to be sent"),
                 Run: async () => {
                     const h = U.UserHtml(email.Get());
@@ -1372,8 +1444,9 @@
                         markDirty();
                     }
                     sent = true;
-                    for (const f of [email, name])
-                        f.Box.ClearDraft?.();
+                    for (const f of [...fields, name])
+                        f.Box?.ClearDraft?.();
+                    seg?.SetDisabled?.(true, _TF("The invitation was sent: use Invite another person for a new one", "Reason shown on the locked fields of the invite user page after the invitation was sent"));
                     markDirty();
                     status.Set(_TH("Invitation sent to {0}.", h, "Message displayed when an invitation to join the site have been sent.{0} is replaced with the email address"), "ok", { Html: true });
                     //  Done: the form is locked (the values say what was sent), the next steps replace Send / Cancel
@@ -1390,6 +1463,8 @@
                 },
             });
             built = true;
+            if (seg)
+                show(0);
             markDirty();
             await update();
             email.Focus();

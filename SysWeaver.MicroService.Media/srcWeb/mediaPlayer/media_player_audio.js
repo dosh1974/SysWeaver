@@ -164,8 +164,12 @@ class MediaPlayerAudio {
         });
         if (res.type == "error")
             return false;
-        while (e.readyState < 3)
+        while (e.readyState < 3) {
+            //  (the caller gave up waiting, ex: the sound probe of MediaPlayerTools.CanUnMute)
+            if (e.SwCancelLoad)
+                return false;
             await MediaPlayerTools.delay(100);
+        }
         return true;
     }
 

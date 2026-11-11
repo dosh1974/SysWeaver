@@ -5015,6 +5015,23 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
         }
     }
 
+    /**
+     * The request header with the page language for a same origin url ({} for another origin: a custom header would need a CORS preflight).
+     * @param {string} url - The request url (relative or absolute).
+     * @returns {object} { "X-Sw-Lang": language } or {}.
+     */
+    function langHeader(url) {
+        try {
+            if (new URL(url, document.baseURI).origin !== location.origin)
+                return {};
+            const l = (Sw.I18n && Sw.I18n.Language) ? Sw.I18n.Language() : (document.documentElement.getAttribute("lang") || "");
+            return l ? { "X-Sw-Lang": l } : {};
+        }
+        catch {
+            return {};
+        }
+    }
+
     /** @type {Map<string, {Value:Promise<*>, Exp:number}>} Memoization cache. */
     const cache = new Map();
 
@@ -5721,21 +5738,24 @@ window.Sw.Sources["core/net.js"] = "sw/core.js";
                         getUrl = url + "?" + uri;
                 }
             }
+            //  (the page language: the server answers cacheable api calls with "Vary: X-Sw-Lang", so the browser keeps a copy per language
+            //  and a language change doesn't show cached texts of the old language; same origin only, another origin would need a preflight)
+            const lang = langHeader(url);
             /** @returns {Request} A fresh request for one attempt. */
             const make = () => {
                 let r;
                 if (getUrl) {
-                    r = new Request(getUrl, { method: "GET", mode: "cors", cache: cacheMode });
+                    r = new Request(getUrl, { method: "GET", mode: "cors", cache: cacheMode, headers: lang });
                 } else if (compData) {
                     r = new Request(url, {
                         method: "POST", mode: "cors", cache: cacheMode,
-                        headers: { "Content-Type": "application/json", "Content-Encoding": "deflate" },
+                        headers: Object.assign({ "Content-Type": "application/json", "Content-Encoding": "deflate" }, lang),
                         body: compData,
                     });
                 } else {
                     r = new Request(url, {
                         method: "POST", mode: "cors", cache: cacheMode,
-                        headers: { "Content-Type": "application/json" },
+                        headers: Object.assign({ "Content-Type": "application/json" }, lang),
                         body: json,
                     });
                 }
