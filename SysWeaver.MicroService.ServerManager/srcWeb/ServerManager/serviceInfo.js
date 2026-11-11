@@ -8,7 +8,8 @@
  * Design v2 page anatomy (Design v2, PORTING.md B11), built from the shared ui components (ui/page.js):
  *  - Sw.PageLayout: page header (the service name, its status badge, the seven control verbs as the page actions: always shown, the ones
  *    that don't apply to the current state disabled with the reason, as on the original page; Kill as a danger outline with a confirmation),
- *  - Sw.Facts: the facts strip (Process ID, Executable, Total CPU time) instead of the old state pills,
+ *  - Sw.Facts: the facts strip (Process ID, Executable, Total CPU time) instead of the old state pills; the executable opens a menu
+ *    to select it (ExeMenu: "Automatic" or one of the executables found in the active folder),
  *  - Sw.Kpi: CPU and memory tiles with meters (a click opens the metric page),
  *  - Sw.Card: the CPU / memory charts (SmShared.ChartTile of GetServiceCpuChart / GetServiceMemChart, as the original page),
  *  - Sw.Card: "Files" (folders, log; Explore / View log / Deleted files), "Active configuration" and "Master configuration" (row lists
@@ -19,6 +20,7 @@
  *
  * Server API (relative to ServerManager/): GetDetail(name) -> SmServiceDetail (polled every 5 s, a request cache of
  * 4 s on the server), the verbs Restart, Pause, Continue, Stop, Start, Uninstall, Kill (name -> SmServiceDetail),
+ * SelectExe ({ServiceName, ExeName}, an empty name = automatic -> SmServiceDetail),
  * ActivateConfig, UseMasterConfig, DeleteConfig ({ServiceName, Config, IsMaster} -> bool); upload repos
  * `Current_<svc>` and `Master_<svc>`; the chart tiles GetServiceCpuChart / GetServiceMemChart (?"<svc>"). The same requests as the original page.
  *
@@ -139,7 +141,10 @@ class SmServiceInfo {
 
         el.Facts = Sw.Facts({ Label: _TF("Service", "Accessible name of the service facts strip") });
         el.Pid = el.Facts.Add({ Label: _TF("Process ID", "Label of the service process id in the facts strip"), Value: "", Title: _TF("The operating system id of the running service process", "Tool tip of the service process id in the facts strip of the service info page") });
-        el.Exe = el.Facts.Add({ Label: _TF("Executable", "Label of the service executable in the facts strip"), Value: "" });
+        el.Exe = el.Facts.Add({
+            Label: _TF("Executable", "Label of the service executable in the facts strip"), Value: "",
+            OnClick: t.ViewOnly ? undefined : () => t.ExeMenu(el.Exe.ValueE),
+        });
         el.Tot = el.Facts.Add({ Label: _TF("Total CPU time", "Label of the service total cpu time in the facts strip"), Value: "", Title: _TF("The processor time the service process has used since it started (all cores added)", "Tool tip of the service total cpu time in the facts strip of the service info page") });
 
         //  The memory tile has no meter: the original page shows the memory use alone (no request for the server memory size)
@@ -343,6 +348,69 @@ class SmServiceInfo {
     }
 
     /**
+     * Show the executable selection menu: "Automatic" (the best guess, replaced if it doesn't respond as a service) and every executable
+     * found in the active folder (newest first within each kind); the one in use is checked.
+     * @param {Element} anchor - Anchor.
+     */
+    ExeMenu(anchor) {
+        const t = this;
+        const d = t.Data;
+        if (!d)
+            return;
+        const select = async (exeName, okText) => {
+            try {
+                const r = await Sw.Net.Send("SelectExe", { ServiceName: t.Service, ExeName: exeName });
+                if (r) {
+                    t.Data = r;
+                    t.Update(false);
+                }
+                Sw.Info(okText);
+            }
+            catch (e) {
+                Sw.Fail(_T("Failed to select the executable, error: {0}", e.message, "Error message when selecting the executable of a service failed.{0} is replaced with the error"));
+            }
+            t.WakeUp();
+        };
+        const exes = d.Executables || [];
+        const best = exes.find(x => x.IsBestGuess);
+        const items = [
+            {
+                Text: best
+                    ? _T("Automatic ({0})", best.Name, "Menu option that selects the service executable automatically.{0} is replaced with the best guess")
+                    : _TF("Automatic", "Menu option that selects the service executable automatically"),
+                Title: SmShared.Lines(
+                    _TF("Use the best guess: console executables first, known bundled tools last, then the newest.", "Tool tip of the menu option that selects the service executable automatically"),
+                    _TF("If it doesn't respond as a service, the next best executable that does is used.", "Tool tip of the menu option that selects the service executable automatically")),
+                Radio: true, Checked: !d.ExeManual,
+                OnClick: () => select("", _TF("The executable is selected automatically", "Message when the executable of a service is set to be selected automatically")),
+            },
+            "-",
+        ];
+        for (const x of exes) {
+            const facts = [x.Format];
+            if (x.IsDotNetHost)
+                facts.push(_TF(".NET app host", "Fact about a service executable candidate"));
+            if (x.IsKnownTool)
+                facts.push(_TF("known bundled tool", "Fact about a service executable candidate"));
+            if (!x.CanExecute)
+                facts.push(_TF("not executable", "Fact about a service executable candidate (it lacks the execute permission)"));
+            const ts = Sw.Format.TimeStamp(new Date(x.LastModified));
+            items.push({
+                Text: x.Name,
+                Title: SmShared.Lines(
+                    facts.join(", "),
+                    _TF("Last modified:", "Tool tip line before a time") + " " + ts[0],
+                    _TF("Size:", "Tool tip line before a file size") + " " + Sw.Format.Bytes(x.Size)),
+                Radio: true, Checked: d.ExeManual && x.IsCurrent,
+                OnClick: () => select(x.Name, _T("Using {0} as the executable", x.Name, "Message when the executable of a service was selected.{0} is replaced with the file name")),
+            });
+        }
+        if (!exes.length)
+            items.push({ Text: _TF("No executables found", "Menu text when there are no executables in the folder of a service"), Disabled: true });
+        Sw.Menu.Show(anchor, items, { Label: _TF("Executable", "Accessible name of the executable selection menu") });
+    }
+
+    /**
      * Show a config file menu.
      * @param {Element|{X:number, Y:number}} anchor - Anchor.
      * @param {{Name: string}} f - The file.
@@ -499,7 +567,15 @@ class SmServiceInfo {
         t.Page.Header.SetStatus({ Text: status, Kind: kind, Dot: true });
         const noProc = d.ProcId === 0;
         el.Pid.Set(noProc ? "-" : String(d.ProcId));
-        el.Exe.Set(d.ExeName || "-");
+        el.Exe.Set(d.ExeName ? (d.ExeManual ? d.ExeName : _T("{0} (auto)", d.ExeName, "Value of the executable fact when the executable was detected automatically.{0} is replaced with the file name")) : "-");
+        const exeLines = [
+            d.ExeManual
+                ? _TF("The executable was selected by a user.", "Tool tip line of the executable fact of a service")
+                : _TF("The executable was detected automatically (the newest console executable).", "Tool tip line of the executable fact of a service"),
+        ];
+        if (!t.ViewOnly)
+            exeLines.push("", _TF("Click to select the executable used for the service.", "Tool tip line of the executable fact of a service"));
+        el.Exe.SetTitle(SmShared.Lines(...exeLines));
         el.Tot.Set(noProc ? "-" : Sw.Format.TimeSpan(d.TotalProcessorTime));
         const cpu = +d.CpuUsage || 0;
         el.Cpu.Set({ Value: noProc ? "-" : cpu.toFixed(1), MeterValue: noProc ? 0 : cpu });

@@ -186,6 +186,54 @@ namespace SysWeaver
         /// calling it again for that directory or any directory inside it returns null without doing anything.</para>
         /// <para>Granting everyone write access makes the folder writable by any local user, only use it for data that isn't security sensitive.</para>
         /// </remarks>
+        /// <summary>
+        /// Find the files that are ELF executables or scripts ("#!"), any name (shared library names, *.so and *.so.[version], are skipped), see <see cref="ExecutableFinder"/>.
+        /// </summary>
+        /// <param name="folder">The folder (not recursive).</param>
+        /// <returns>The executables, the best guess for the main executable first.</returns>
+        public IReadOnlyList<ExecutableFile> FindExecutables(String folder)
+        {
+            try
+            {
+                return ExecutableFinder.Find(folder, false);
+            }
+            catch (Exception ex)
+            {
+                Exs.OnException(ex);
+                return Array.Empty<ExecutableFile>();
+            }
+        }
+
+        /// <summary>
+        /// Add the execute bit for every class (user, group, other) that has the read bit (like "chmod +x" but honoring the read bits).
+        /// Uploaded / created files get the mode 0666 &amp; ~umask, so executables never have the execute bits.
+        /// Only the owner of a file (or root) can change its mode.
+        /// </summary>
+        /// <param name="file">The file.</param>
+        /// <returns>null if successful (or the bits are already set, or not on Linux), else the exception that occurred (also tracked in the stats).</returns>
+        public Exception MakeExecutable(String file)
+        {
+            if (OperatingSystem.IsWindows())
+                return null;
+            try
+            {
+                var m = File.GetUnixFileMode(file);
+                var n = m | UnixFileMode.UserExecute;
+                if ((m & UnixFileMode.GroupRead) != 0)
+                    n |= UnixFileMode.GroupExecute;
+                if ((m & UnixFileMode.OtherRead) != 0)
+                    n |= UnixFileMode.OtherExecute;
+                if (n != m)
+                    File.SetUnixFileMode(file, n);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Exs.OnException(ex);
+                return ex;
+            }
+        }
+
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
             try

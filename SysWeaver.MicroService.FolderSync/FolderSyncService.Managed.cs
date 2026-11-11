@@ -37,6 +37,37 @@ namespace SysWeaver.MicroService
                 }
             }
             var destFolder = folder.DestPath;
+            var swap = folder.OnSwapAsync;
+            if (swap != null)
+            {
+                //  An external swap (ex: a self update), everything is done by the handler (no compression of the backup, that can be done later)
+                Task<Exception> ext;
+                try
+                {
+                    var t = Path.TrimEndingDirectorySeparator(target);
+                    ext = swap(folder.Name, t, FolderSyncer.GetBakName(t), Path.TrimEndingDirectorySeparator(from));
+                }
+                catch (Exception ex2)
+                {
+                    return ex2;
+                }
+                if (ext != null)
+                {
+                    Exception ex4;
+                    try
+                    {
+                        ex4 = await ext.ConfigureAwait(false);
+                    }
+                    catch (Exception ex2)
+                    {
+                        ex4 = ex2;
+                    }
+                    if (ex4 == null)
+                        Manager.AddMessage(MessageLevels.Info, $"{LogPrefix}The activation of \"{from}\" as \"{target}\" was handed over to an external swap");
+                    context?.Server.InvalidateCache();
+                    return ex4;
+                }
+            }
             var cmd = folder.OnDeactivate;
             if (cmd != null)
                 await RunCommands(cmd).ConfigureAwait(false);

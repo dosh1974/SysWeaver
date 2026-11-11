@@ -35,7 +35,7 @@ namespace SysWeaver.MicroService
         [
             nameof(GetServiceMemChart), nameof(GetServiceCpuChart), nameof(GetServiceMemHistoryChart), nameof(GetServiceCpuHistoryChart),
             nameof(GetServiceMemHistoryShortChart), nameof(GetServiceCpuHistoryShortChart), nameof(GetDetail),
-            nameof(Restart), nameof(Pause), nameof(Continue), nameof(Stop), nameof(Start), nameof(Uninstall), nameof(Kill),
+            nameof(Restart), nameof(Pause), nameof(Continue), nameof(Stop), nameof(Start), nameof(Uninstall), nameof(Kill), nameof(SelectExe),
             nameof(GetVersion), nameof(VersionActivate), nameof(VersionTouch), nameof(VersionVerify), nameof(VersionExpand), nameof(VersionCompress), nameof(VersionDelete),
             nameof(UseMasterConfig), nameof(ActivateConfig), nameof(DeleteConfig), nameof(DeleteLog), nameof(UpdateConfig), nameof(DeleteConfigFile), nameof(DeleteLogFile),
         ];
@@ -210,6 +210,7 @@ namespace SysWeaver.MicroService
             PathExt.EnsureFolderExist(BakKeysFolder);
 
             FileUploader = manager.Get<FileUploaderService>();
+            ReportSelfUpdates();
             try
             {
                 InitAsync().RunAsync();
@@ -255,6 +256,7 @@ namespace SysWeaver.MicroService
                 OnNewFolderAsync = OnNewFolder,
                 OnActivateAsync = OnServiceActivate,
                 OnDeactivateAsync = OnServiceDeactivate,
+                OnSwapAsync = OnServiceSwap,
             };
             var bak = new FileHttpServerModuleFolder
             {
@@ -366,17 +368,6 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<String, SmServiceInfo> Services = new ConcurrentDictionary<string, SmServiceInfo>(StringComparer.Ordinal);
         readonly ServiceManager Manager;
 
-        static String FindServiceExe(String path)
-        {
-            foreach (var x in Directory.GetFiles(path, "*.exe"))
-            {
-                var fn = Path.GetFileName(x).FastToLower();
-                if (!fn.FastEquals("createdump.exe"))
-                    return x;
-            }
-            return null;
-        }
-
         /// <summary>
         /// The chars that can't be in a file name (folder separators, drive / stream separators and the invalid chars of the platform)
         /// </summary>
@@ -442,10 +433,12 @@ namespace SysWeaver.MicroService
         {
             if (!Services.TryGetValue(name.FastToLower(), out var si))
                 return null;
+            //  Uploaded files never have the execute permission on Linux (the upload format has no file mode)
+            EnsureExecutables(path);
             var ss = si.Service;
             if (!ss.MasterConfig)
                 return null;
-            var exe = FindServiceExe(path);
+            var exe = FindExeIn(si, path);
             if (exe == null)
                 return null;
             var ename = Path.GetFileNameWithoutExtension(exe);
@@ -484,42 +477,6 @@ namespace SysWeaver.MicroService
 
         readonly ExceptionTracker StatusEx = new ExceptionTracker();
 
-        async Task<ServiceStatus> CheckStatus(String exe)
-        {
-            using var _ = PerfMon.Track(nameof(CheckStatus));
-            ServiceStatus status = ServiceStatus.Unknown;
-            try
-            {
-                await ExternalProcess.RunAsync(exe, "status", (text, err) =>
-                {
-                    foreach (var lx in text.Split('\n'))
-                    {
-                        try
-                        {
-                            var l = lx.Trim();
-                            if (!l.FastStartsWith("Checking status:"))
-                                continue;
-                            var s = l.LastIndexOf(' ') + 1;
-                            var e = l.LastIndexOf(']');
-                            var num = l.Substring(s, e - s);
-                            status = (ServiceStatus)int.Parse(num);
-                        }
-                        catch (Exception ex)
-                        {
-                            StatusEx.OnException(ex);
-                        }
-                    }
-                }).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                StatusEx.OnException(ex);
-            }
-            return status;
-
-
-        }
-
         async Task<int> RunCommand(String cmd, bool silent = false, Action<String> onStdOut = null)
         {
             if (silent)
@@ -555,25 +512,29 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Run a service host verb on a managed service, returns the exit code (0 = success).
+        /// Run a service host verb on a managed service, returns the exit code (0 = success, 124 = timed out, -42 = couldn't run, -43 = no executable).
         /// The result printed by the service host is used if found (see ServiceResponseHelper.TryParseOutput), so that services built with an older
         /// SysWeaver.OsServices (that exited with the ServiceResponse value, 1 = Ok) are handled correctly.
         /// </summary>
-        async Task<int> RunVerb(String exe, String verb)
+        async Task<int> RunVerb(SmServiceInfo info, String verb, TimeSpan timeout)
         {
-            String output = null;
-            var res = await RunCommand(exe.ToQuoted() + " " + verb, false, text => output = text).ConfigureAwait(false);
-            if (ServiceResponseHelper.TryParseOutput(output, out var response) && Enum.TryParse<ServiceVerbs>(verb, true, out var v))
-                return response.ToExitCode(v);
-            return res;
+            var r = await RunServiceVerb(info, verb, timeout).ConfigureAwait(false);
+            if (r == null)
+                return -43;
+            return SmServiceCli.GetExitCode(verb, r.Exited, r.TimedOut, r.ExitCode, r.Output);
         }
 
         async Task<Exception> OnServiceActivate(String name, String path, Func<String, Task<int>> commandRunner)
         {
-            var exe = FindServiceExe(path);
-            if (exe == null)
+            if (!Services.TryGetValue(name.FastToLower(), out var info))
                 return null;
-            var res = await RunVerb(exe, "start").ConfigureAwait(false);
+            //  The folder content changed (the persisted executable name is kept)
+            InvalidateExe(info);
+            //  Uploaded files never have the execute permission on Linux (versions uploaded before it was added on upload)
+            EnsureExecutables(path);
+            var res = await RunVerb(info, "start", VerbTimeout).ConfigureAwait(false);
+            if (res == -43)
+                return null;
             if (res != 0)
                 return new Exception("Failed to start service \"" + name + "\", error: " + res);
             return null;
@@ -582,10 +543,20 @@ namespace SysWeaver.MicroService
 
         async Task<Exception> OnServiceDeactivate(String name, String path, Func<String, Task<int>> commandRunner)
         {
-            var exe = FindServiceExe(path);
-            if (exe == null)
+            if (!Services.TryGetValue(name.FastToLower(), out var info))
                 return null;
-            var res = await RunVerb(exe, "uninstall").ConfigureAwait(false);
+            var timeout = SwapStopTimeout;
+            var r = await RunServiceVerb(info, "uninstall", timeout).ConfigureAwait(false);
+            if (r == null)
+                return null;
+            if (r.TimedOut)
+            {
+                //  A hanging service must not block the activation: kill it and continue (the swap retries the renames while the files are released)
+                Manager.AddMessage(MessageLevels.Warning, $"{LogPrefix}The uninstall of service \"{name}\" didn't finish within {timeout.TotalSeconds} seconds, killing the processes running from {path.ToQuoted()}");
+                await KillProcessesIn(path).ConfigureAwait(false);
+                return null;
+            }
+            var res = SmServiceCli.GetExitCode("uninstall", r.Exited, r.TimedOut, r.ExitCode, r.Output);
             if (res != 0)
                 return new Exception("Failed to uninstall service \"" + name + "\", error: " + res);
             return null;
@@ -772,12 +743,15 @@ namespace SysWeaver.MicroService
             await s.ProcessAsyncValue(async i =>
             {
                 using var _ = await l.Lock().ConfigureAwait(false);
-                var exe = FindServiceExe(i.Syncher.DiscFolder);
+                var exe = GetServiceExe(i);
                 if (exe != null)
                 {
+                    var status = await CheckServiceStatus(i).ConfigureAwait(false);
+                    //  The status may have switched to another executable
+                    exe = GetServiceExe(i) ?? exe;
                     if (procExes.TryGetValue(exe, out var p))
                         Interlocked.Exchange(ref i.Process, p);
-                    Interlocked.Exchange(ref i.Status, await CheckStatus(exe).ConfigureAwait(false));
+                    Interlocked.Exchange(ref i.Status, status);
                 }
                 else
                 {
@@ -1834,7 +1808,8 @@ namespace SysWeaver.MicroService
         {
             var data = Syncer.GetManagedFolders(info.Service.Name).ToList();
             var discFolder = info.Syncher.DiscFolder;
-            var exeName = FindServiceExe(discFolder);
+            var exe = GetServiceExe(info);
+            var exeName = exe;
             SmFileInfo[] configs = GetConfigs(discFolder, "*").Select(x => GetFileInfo(Path.Combine(discFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
 
             SmFileInfo logFile = null;
@@ -1848,7 +1823,7 @@ namespace SysWeaver.MicroService
             SmFileInfo[] masterConfigs = null;
             if (info.Service.MasterConfig)
                 masterConfigs = GetConfigs(masterFolder, "*").Select(x => GetFileInfo(Path.Combine(masterFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
-            return new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs);
+            return new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs, GetExecutables(info, exe), info.Exe?.Manual ?? false);
         }
 
         /// <summary>
@@ -1881,15 +1856,14 @@ namespace SysWeaver.MicroService
         async Task<SmServiceDetail> DoVerb(String serviceName, String verb, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            var exe = FindServiceExe(info.Syncher.DiscFolder);
-            if (exe == null)
+            var res = await RunVerb(info, verb, VerbTimeout).ConfigureAwait(false);
+            if (res == -43)
                 return null;
-            var res = await RunVerb(exe, verb).ConfigureAwait(false);
             if (res != 0)
-                throw new Exception("Failed to " + verb + " service \"" + serviceName + "\", exit code: " + res);
+                throw new Exception("Failed to " + verb + " service \"" + serviceName + "\", exit code: " + res + (res == 124 ? " (timed out)" : ""));
             //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
             context.Server.InvalidateCacheEverywhere();
-            Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
+            Interlocked.Exchange(ref info.Status, await CheckServiceStatus(info).ConfigureAwait(false));
             return InternalGetDetail(info);
         }
 
@@ -1990,14 +1964,12 @@ namespace SysWeaver.MicroService
             Process h = Process.GetProcessById((int)pid);
             if (h == null)
                 throw new Exception("Couldn't find a process with id " + pid);
-            var exe = FindServiceExe(info.Syncher.DiscFolder);
+            var exe = GetServiceExe(info);
             if (exe == null)
                 return null;
             try
             {
-                int timeout = 30000;
-                var task = RunCommand(exe.ToQuoted() + " stop");
-                await Task.WhenAny(task, Task.Delay(timeout));
+                await RunExeVerb(exe, "stop", TimeSpan.FromSeconds(30)).ConfigureAwait(false);
                 try
                 {
                     h = Process.GetProcessById((int)pid);
@@ -2017,7 +1989,7 @@ namespace SysWeaver.MicroService
             }
             //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
             context.Server.InvalidateCacheEverywhere();
-            Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
+            Interlocked.Exchange(ref info.Status, await CheckServiceStatus(info).ConfigureAwait(false));
             return InternalGetDetail(info);
 
         }
@@ -2171,9 +2143,7 @@ namespace SysWeaver.MicroService
             }, context).ConfigureAwait(false))
                 throw new Exception("Failed to activate \"" + version.DiscFolder + "\"");
             Syncer.GetManagedFolders(info.Syncher.Name);
-            var exe = FindServiceExe(info.Syncher.DiscFolder);
-            if (exe != null)
-                Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
+            Interlocked.Exchange(ref info.Status, await CheckServiceStatus(info).ConfigureAwait(false));
             //  Every session: the cached tables of the other users' sessions are stale too (AS7-12)
             context.Server.InvalidateCacheEverywhere();
             return true;
@@ -2435,7 +2405,7 @@ namespace SysWeaver.MicroService
         {
             var info = Validate(serviceName, context);
             var discFolder = info.Syncher.DiscFolder;
-            var exeName = FindServiceExe(discFolder);
+            var exeName = GetServiceExe(info);
             if ((exeName == null))
                 throw new Exception("No log found!");
             exeName = Path.GetFileName(exeName);

@@ -8,6 +8,44 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
     /// <summary>
+    /// The result of <see cref="ExternalProcess.RunWithTimeoutAsync"/>.
+    /// </summary>
+    public sealed class ExternalProcessResult
+    {
+        public override string ToString() => Exception != null ? ("Failed: " + Exception.Message) : (TimedOut ? "Timed out" : ("Exit code " + ExitCode));
+
+        /// <summary>
+        /// The exit code of the process, -1 if it couldn't be started or timed out.
+        /// </summary>
+        public int ExitCode;
+
+        /// <summary>
+        /// True if the process didn't exit in time and was killed (with all it's child processes).
+        /// </summary>
+        public bool TimedOut;
+
+        /// <summary>
+        /// The exception if the process couldn't be started (ex: the executable doesn't exist), else null.
+        /// </summary>
+        public Exception Exception;
+
+        /// <summary>
+        /// The output (stdout and stderr lines in the order they were received, trimmed).
+        /// </summary>
+        public String Output;
+
+        /// <summary>
+        /// The time it took.
+        /// </summary>
+        public TimeSpan Duration;
+
+        /// <summary>
+        /// True if the process ran and exited by itself (it may still have failed, see <see cref="ExitCode"/>).
+        /// </summary>
+        public bool Exited => (Exception == null) && !TimedOut;
+    }
+
+    /// <summary>
     /// Helpers for running an external process, waiting for it to exit and capturing its output.
     /// </summary>
     public sealed class ExternalProcess
@@ -126,6 +164,112 @@ namespace SysWeaver
                 onExit?.Invoke(-1, ex, DateTime.UtcNow - start, log);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Run an external command with a time limit, the process (and all it's child processes) is killed if it doesn't exit in time.
+        /// Never throws (a failure to start is returned in <see cref="ExternalProcessResult.Exception"/>).
+        /// </summary>
+        /// <param name="cmd">The executable to run</param>
+        /// <param name="args">The arguments (each one is quoted as needed), may be null</param>
+        /// <param name="timeout">The maximum time to wait for the process to exit</param>
+        /// <param name="workingFolder">The folder to use as the current, null to use the current folder of this process</param>
+        /// <param name="onMessage">Optional output callback, called once per non-empty line, second parameter is false for stdout and true for stderr (from a background thread, never concurrent, exceptions are ignored)</param>
+        /// <returns>The result</returns>
+        /// <remarks>
+        /// When the process has exited, the output is read for at most 2 more seconds: a child process that inherited the output (ex: a daemon started by the process) keeps it open.
+        /// </remarks>
+        public static async Task<ExternalProcessResult> RunWithTimeoutAsync(String cmd, IEnumerable<String> args, TimeSpan timeout, String workingFolder = null, Action<String, bool> onMessage = null)
+        {
+            var start = DateTime.UtcNow;
+            var output = new StringBuilder();
+            var res = new ExternalProcessResult
+            {
+                ExitCode = -1,
+            };
+            var outDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var errDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnLine(String line, bool isError, TaskCompletionSource done)
+            {
+                if (line == null)
+                {
+                    done.TrySetResult();
+                    return;
+                }
+                lock (output)
+                {
+                    output.AppendLine(line);
+                    if (onMessage == null || line.Length <= 0)
+                        return;
+                    try
+                    {
+                        onMessage(line, isError);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            try
+            {
+                using var p = new Process();
+                var si = p.StartInfo;
+                si.FileName = cmd;
+                if (args != null)
+                    foreach (var a in args)
+                        si.ArgumentList.Add(a);
+                si.WorkingDirectory = workingFolder;
+                si.UseShellExecute = false;
+                si.CreateNoWindow = true;
+                si.RedirectStandardOutput = true;
+                si.RedirectStandardError = true;
+                si.RedirectStandardInput = true;
+                p.EnableRaisingEvents = true;
+                p.OutputDataReceived += (s, e) => OnLine(e.Data, false, outDone);
+                p.ErrorDataReceived += (s, e) => OnLine(e.Data, true, errDone);
+                p.Exited += (s, e) => exited.TrySetResult();
+                p.Start();
+                try
+                {
+                    //  No input (a prompt would wait forever)
+                    p.StandardInput.Close();
+                }
+                catch
+                {
+                }
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                var ms = (long)timeout.TotalMilliseconds;
+                var wait = ms <= 0 ? Task.CompletedTask : Task.Delay(ms > int.MaxValue ? Timeout.InfiniteTimeSpan : timeout);
+                if (p.HasExited)
+                    exited.TrySetResult();
+                if (await Task.WhenAny(exited.Task, wait).ConfigureAwait(false) != exited.Task)
+                {
+                    res.TimedOut = true;
+                    try
+                    {
+                        p.Kill(true);
+                    }
+                    catch
+                    {
+                    }
+                    await Task.WhenAny(exited.Task, Task.Delay(5000)).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Task.WhenAny(Task.WhenAll(outDone.Task, errDone.Task), Task.Delay(2000)).ConfigureAwait(false);
+                    res.ExitCode = p.ExitCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                res.Exception = ex;
+            }
+            lock (output)
+                res.Output = output.ToString().Trim();
+            res.Duration = DateTime.UtcNow - start;
+            return res;
         }
 
         /// <summary>

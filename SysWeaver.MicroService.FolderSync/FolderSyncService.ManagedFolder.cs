@@ -34,6 +34,7 @@ namespace SysWeaver.MicroService
             public FsManagedFolder.ActivationHandler OnActivateAsync;
             public FsManagedFolder.ActivationHandler OnDeactivateAsync;
             public FsManagedFolder.ActivationHandler OnNewFolderAsync;
+            public FsManagedFolder.SwapHandler OnSwapAsync;
 
             public readonly String LockName;
             public readonly String Name;
@@ -95,6 +96,7 @@ namespace SysWeaver.MicroService
                 OnActivateAsync = fs.OnActivateAsync;
                 OnDeactivateAsync = fs.OnDeactivateAsync;
                 OnNewFolderAsync = fs.OnNewFolderAsync;
+                OnSwapAsync = fs.OnSwapAsync;
                 Compress = fs.Compress;
             }
 

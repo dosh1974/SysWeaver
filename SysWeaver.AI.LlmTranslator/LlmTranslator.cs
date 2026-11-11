@@ -22,7 +22,7 @@ namespace SysWeaver.AI
             p = p ?? new LlmTranslatorParams();
             QueryTrackers = new PerfTrackers(PerfMon, "Query.");
             RetryCount = Math.Max(0, p.RetryCount);
-            Llm = manager.Get<OpenAiService>(p.AiInstance);
+            Llm = manager.Get<IAiService>(p.AiInstance);
             CountTokensTasks[0] = CountTokens0;
             CountTokensTasks[1] = CountTokens1;
             CountTokensTasks[2] = CountTokens2;
@@ -56,7 +56,7 @@ namespace SysWeaver.AI
             }
         }
 
-        readonly OpenAiService Llm;
+        readonly IAiService Llm;
         readonly String[] Models = new string[3];
         readonly String[] ForcedLanguages;
 
@@ -73,41 +73,33 @@ namespace SysWeaver.AI
 
         #region Session cache
 
-        readonly ConcurrentStack<QuerySession>[] Sessions =
-            [
-                new ConcurrentStack<QuerySession>(),
-                new ConcurrentStack<QuerySession>(),
-                new ConcurrentStack<QuerySession>()
-            ];
 
-        sealed class QuerySession : OpenAiQuerySession, IDisposable
+        sealed class Session : IDisposable
         {
-            public QuerySession(ConcurrentStack<QuerySession> s, ChatClient c, String model, IAiToolCache toolCache = null, PerfMonitor monitor = null)
-                : base(c, new OpenAiSessionParams
-                {
-                    Model = model
-                }, toolCache, monitor)
+            public Session(IAiQuerySession s, ConcurrentStack<Session> from)
             {
                 S = s;
+                From = from;
             }
-
-            public QuerySession(ConcurrentStack<QuerySession> s, ChatClient c, OpenAiSessionParams p, IAiToolCache toolCache = null, PerfMonitor monitor = null)
-                : base(c, p, toolCache, monitor)
-            {
-                S = s;
-            }
-
-            ConcurrentStack<QuerySession> S;
+            readonly ConcurrentStack<Session> From;
+            public readonly IAiQuerySession S;
 
             public void Dispose()
             {
-                var s = Interlocked.Exchange(ref S, null);
-                if (s != null)
-                    s.Push(this);
+                From.Push(this);
             }
         }
 
-        QuerySession GetSession(TranslationEffort effort)
+        readonly ConcurrentStack<Session>[] Sessions =
+            [
+                new ConcurrentStack<Session>(),
+                new ConcurrentStack<Session>(),
+                new ConcurrentStack<Session>()
+            ];
+
+
+
+        Session GetSession(TranslationEffort effort)
         {
             var ei = (int)effort;
             var s = Sessions[ei];
@@ -115,7 +107,7 @@ namespace SysWeaver.AI
                 return session;
             var llm = Llm;
             var model = Models[ei];
-            session = new QuerySession(s, llm.CreateChatClient(model), model ?? llm.DefaultChatModel, llm, PerfMon);
+            session = new Session(llm.CreateQuerySession(model ?? llm.DefaultChatModel), s);
             return session;
         }
 
@@ -399,13 +391,14 @@ namespace SysWeaver.AI
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
                 return text.Substring(TranslationTools.NoTranslatePrefixLength);
             using var client = GetSession(effort);
-            client.SystemPrompt = GetSystemPrompt(from, to, context, text, contentType);
+            var session = client.S;
+            session.SystemPrompt = GetSystemPrompt(from, to, context, text, contentType);
             var retryCount = RetryCount;
             String res;
             for (int retry = 0; ; ++retry)
             {
                 using (var x = QueryTrackers.Track(effort.ToString()))
-                    res = await client.Query(text, null, CountTokensTasks[(int)effort]).ConfigureAwait(false);
+                    res = await session.Query(text, null, CountTokensTasks[(int)effort]).ConfigureAwait(false);
                 if (res != null)
                     return res.Trim();
                 if (retry >= retryCount)

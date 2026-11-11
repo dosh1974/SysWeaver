@@ -22,6 +22,16 @@ namespace SysWeaver.MicroService
         public String ExeName;
 
         /// <summary>
+        /// True if the executable was selected by a user, false if it was detected automatically
+        /// </summary>
+        public bool ExeManual;
+
+        /// <summary>
+        /// The executables found in the active folder (the candidates for the service executable), best guess first
+        /// </summary>
+        public SmExecutable[] Executables;
+
+        /// <summary>
         /// Information about the log (if log is at default location)
         /// </summary>
         public SmFileInfo Log;
@@ -55,8 +65,10 @@ namespace SysWeaver.MicroService
         {
         }
 
-        internal SmServiceDetail(SmServiceInfo info, IReadOnlyList<FolderSyncService.ManagedFolderData> data, String exeName, SmFileInfo log, SmFileInfo[] configs, SmFileInfo[] masterConfigs) : base(info, data)
+        internal SmServiceDetail(SmServiceInfo info, IReadOnlyList<FolderSyncService.ManagedFolderData> data, String exeName, SmFileInfo log, SmFileInfo[] configs, SmFileInfo[] masterConfigs, SmExecutable[] executables = null, bool exeManual = false) : base(info, data)
         {
+            Executables = executables;
+            ExeManual = exeManual;
             var p = info.Process;
             var m = p?.Metrics;
             var pid = p?.Id ?? 0;

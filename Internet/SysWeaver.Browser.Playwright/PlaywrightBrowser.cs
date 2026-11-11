@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -101,13 +102,31 @@ namespace SysWeaver.WebBrowser
         /// Maximum number of milliseconds to wait for a screenshot.
         /// </summary>
         public int CaptureTimeoutMs = 30000;
+
+        /// <summary>
+        /// Start a new browser after this many windows have been opened in one browser, 0 = never.
+        /// A long running browser (in particular one rendering WebGL in software) slowly builds up state until it can't open pages anymore.
+        /// New windows use the new browser at once, the old one is closed when its open windows are closed (or after RecycleWaitMs).
+        /// Not used with a UserDataFolder (a profile can only be used by one browser process at a time).
+        /// </summary>
+        public int RecycleAfterWindows = 500;
+
+        /// <summary>
+        /// Maximum number of milliseconds to wait for the windows that are open in a recycled browser to be closed, before closing it anyway.
+        /// </summary>
+        public int RecycleWaitMs = 120000;
+
+        /// <summary>
+        /// Closing a window that takes longer than this number of milliseconds is logged as a warning.
+        /// </summary>
+        public int SlowCloseMs = 5000;
     }
 
     /// <summary>
     /// A browser service using Playwright.
     /// The browser is started on first use, and started again if it has died.
     /// </summary>
-    public sealed class PlaywrightBrowser : IBrowserService, IDisposable
+    public sealed class PlaywrightBrowser : IBrowserService, IDisposable, IHaveStats
     {
         public PlaywrightBrowser(IMessageHost messageHost = null, PlaywrightBrowserParams p = null)
         {
@@ -124,9 +143,31 @@ namespace SysWeaver.WebBrowser
         Session Current;
         volatile bool Disposed;
 
+        /// <summary>
+        /// The last browser being closed, a new browser using a profile must wait for the old one to release it
+        /// </summary>
+        Task LastStop = Task.CompletedTask;
 
-        sealed class Session
+        /// <summary>
+        /// The browsers that are running, including recycled ones that still have open windows
+        /// </summary>
+        readonly ConcurrentDictionary<int, Session> Sessions = new ConcurrentDictionary<int, Session>();
+
+        static int SessionCounter;
+
+        long StatStarts;
+        long StatOpened;
+        long StatOpen;
+        long StatRecoveries;
+        long StatRecycles;
+        long StatCloseFails;
+        long StatSlowCloses;
+
+
+        internal sealed class Session
         {
+            public readonly int Id = Interlocked.Increment(ref SessionCounter);
+
             public IPlaywright Driver;
             /// <summary>
             /// Null if using a persistent profile
@@ -139,7 +180,114 @@ namespace SysWeaver.WebBrowser
 
             public volatile bool Dead;
 
-            public bool Alive => (!Dead) && ((Shared != null) || (Browser?.IsConnected ?? false));
+            /// <summary>
+            /// The number of windows opened in this browser
+            /// </summary>
+            public int Opened;
+
+            /// <summary>
+            /// The number of windows that are open (or being opened) in this browser
+            /// </summary>
+            public int Open;
+
+            /// <summary>
+            /// 1 when no new windows should be opened in this browser, it's closed when the open windows are closed
+            /// </summary>
+            public int Retiring;
+
+            /// <summary>
+            /// 1 when the browser is closed (or being closed)
+            /// </summary>
+            public int Stopped;
+
+            public bool Alive => (!Dead) && (Volatile.Read(ref Retiring) == 0) && ((Shared != null) || (Browser?.IsConnected ?? false));
+        }
+
+        /// <summary>
+        /// Gets told when a window (or a context it replaced) is closed
+        /// </summary>
+        internal sealed class WindowOwner
+        {
+            public WindowOwner(PlaywrightBrowser browser, Session session)
+            {
+                Browser = browser;
+                S = session;
+            }
+            readonly PlaywrightBrowser Browser;
+            readonly Session S;
+
+            /// <param name="ex">The exception if closing failed</param>
+            /// <param name="time">The time it took to close</param>
+            /// <param name="windowDone">True when the window itself is closed, false when it's a context that the window replaced</param>
+            public void Closed(Exception ex, TimeSpan time, bool windowDone)
+                => Browser.OnClosed(S, ex, time, windowDone);
+        }
+
+        void OnClosed(Session s, Exception ex, TimeSpan time, bool windowDone)
+        {
+            //  Failing to close a window of a browser that is gone is expected
+            if ((ex != null) && (!s.Dead) && (Volatile.Read(ref s.Stopped) == 0))
+            {
+                Interlocked.Increment(ref StatCloseFails);
+                M?.AddMessage(String.Concat(Prefix, "Failed to close a window in browser #", s.Id.ToString(CultureInfo.InvariantCulture)), ex, MessageLevels.Warning);
+            }
+            var ms = time.TotalMilliseconds;
+            var slow = Params.SlowCloseMs;
+            if ((slow > 0) && (ms > slow))
+            {
+                Interlocked.Increment(ref StatSlowCloses);
+                M?.AddMessage(String.Concat(Prefix, "Closing a window in browser #", s.Id.ToString(CultureInfo.InvariantCulture), " took ", ((long)ms).ToString(CultureInfo.InvariantCulture), " ms"), MessageLevels.Warning);
+            }
+            if (windowDone)
+            {
+                Interlocked.Decrement(ref StatOpen);
+                Release(s);
+            }
+        }
+
+        /// <summary>
+        /// A window of the browser is closed (or failed to open)
+        /// </summary>
+        void Release(Session s)
+        {
+            if ((Interlocked.Decrement(ref s.Open) == 0) && (Volatile.Read(ref s.Retiring) != 0))
+                StopLater(s, "recycled");
+        }
+
+        /// <summary>
+        /// Use a new browser for new windows, close this one when its windows are closed
+        /// </summary>
+        void Retire(Session s)
+        {
+            if (Interlocked.Exchange(ref s.Retiring, 1) != 0)
+                return;
+            Interlocked.CompareExchange(ref Current, null, s);
+            Interlocked.Increment(ref StatRecycles);
+            var open = Volatile.Read(ref s.Open);
+            M?.AddMessage(String.Concat(Prefix, "Browser #", s.Id.ToString(CultureInfo.InvariantCulture), " has opened ", Volatile.Read(ref s.Opened).ToString(CultureInfo.InvariantCulture), " windows, new windows use a new browser (", open.ToString(CultureInfo.InvariantCulture), " windows still open)"), MessageLevels.Debug);
+            if (open == 0)
+            {
+                StopLater(s, "recycled");
+                return;
+            }
+            var wait = Math.Max(1000, Params.RecycleWaitMs);
+            _ = Task.Delay(wait).ContinueWith(_ =>
+            {
+                if (Volatile.Read(ref s.Stopped) == 0)
+                    StopLater(s, String.Concat("recycled, ", Volatile.Read(ref s.Open).ToString(CultureInfo.InvariantCulture), " windows were still open after ", wait.ToString(CultureInfo.InvariantCulture), " ms"));
+            }, TaskScheduler.Default);
+        }
+
+        public IEnumerable<Stats> GetStats()
+        {
+            const String sys = "Playwright";
+            yield return new Stats(sys, "Browser starts", Interlocked.Read(ref StatStarts), "The number of times a browser has been started");
+            yield return new Stats(sys, "Windows opened", Interlocked.Read(ref StatOpened), "The number of windows that have been opened");
+            yield return new Stats(sys, "Windows open", Interlocked.Read(ref StatOpen), "The number of windows that are open right now");
+            yield return new Stats(sys, "Browser recoveries", Interlocked.Read(ref StatRecoveries), "The number of times the browser was restarted because it couldn't open a window (ex: \"Target crashed\")");
+            yield return new Stats(sys, "Browser recycles", Interlocked.Read(ref StatRecycles), "The number of times a new browser was started after opening RecycleAfterWindows windows");
+            yield return new Stats(sys, "Failed window closes", Interlocked.Read(ref StatCloseFails), "The number of times closing a window failed while the browser was running");
+            yield return new Stats(sys, "Slow window closes", Interlocked.Read(ref StatSlowCloses), "The number of times closing a window took longer than SlowCloseMs");
         }
 
 
@@ -283,7 +431,9 @@ namespace SysWeaver.WebBrowser
                     await InitContext(c).ConfigureAwait(false);
                     s.Shared = c;
                 }
-                M?.AddMessage(Prefix + "Browser started", MessageLevels.Debug);
+                Sessions[s.Id] = s;
+                Interlocked.Increment(ref StatStarts);
+                M?.AddMessage(String.Concat(Prefix, "Browser #", s.Id.ToString(CultureInfo.InvariantCulture), " started"), MessageLevels.Debug);
                 return s;
             }
             catch (Exception ex)
@@ -321,13 +471,38 @@ namespace SysWeaver.WebBrowser
                 return;
             if (Interlocked.CompareExchange(ref Current, null, s) == s)
             {
-                M?.AddMessage(Prefix + "The browser died, it will be started again when needed", MessageLevels.Warning);
-                Stop(s);
+                M?.AddMessage(String.Concat(Prefix, "Browser #", s.Id.ToString(CultureInfo.InvariantCulture), " died, it will be started again when needed"), MessageLevels.Warning);
             }
+            //  Nothing is done if we're the ones closing it
+            StopLater(s, "died");
         }
 
-        static void Stop(Session s)
+        /// <summary>
+        /// Close the browser and the driver in the background (once)
+        /// </summary>
+        Task StopLater(Session s, String reason)
         {
+            if (Interlocked.Exchange(ref s.Stopped, 1) != 0)
+                return Task.CompletedTask;
+            var t = Stop(s, reason);
+            Volatile.Write(ref LastStop, t);
+            return t;
+        }
+
+        async Task Stop(Session s, String reason)
+        {
+            s.Dead = true;
+            M?.AddMessage(String.Concat(Prefix, "Closing browser #", s.Id.ToString(CultureInfo.InvariantCulture), ": ", reason), MessageLevels.Debug);
+            try
+            {
+                var t = s.Shared != null ? s.Shared.CloseAsync() : s.Browser?.CloseAsync();
+                if (t != null)
+                    await t.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+            }
+            catch
+            {
+                //  Already gone, or hanging: disposing the driver below ends it
+            }
             try
             {
                 s.Driver?.Dispose();
@@ -335,6 +510,7 @@ namespace SysWeaver.WebBrowser
             catch
             {
             }
+            Sessions.TryRemove(s.Id, out _);
         }
 
         async Task<Session> GetSession()
@@ -349,7 +525,15 @@ namespace SysWeaver.WebBrowser
             if ((s != null) && s.Alive)
                 return s;
             if ((s != null) && (Interlocked.CompareExchange(ref Current, null, s) == s))
-                Stop(s);
+                StopLater(s, "not usable anymore");
+            //  A profile can only be used by one browser process, wait for the previous browser to release it
+            try
+            {
+                await Volatile.Read(ref LastStop).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
             s = await Start().ConfigureAwait(false);
             Volatile.Write(ref Current, s);
             return s;
@@ -383,14 +567,35 @@ namespace SysWeaver.WebBrowser
         async Task<IBrowserWindow> InternalOpen(Session s)
         {
             var p = Params;
-            var shared = s.Shared;
-            if (shared != null)
+            //  Counted as open while being opened, so that a recycled browser isn't closed under it
+            Interlocked.Increment(ref s.Open);
+            PlaywrightBrowserWindow w;
+            try
             {
-                var sp = await shared.NewPageAsync().ConfigureAwait(false);
-                return new PlaywrightBrowserWindow(sp, null, null, p, M);
+                var owner = new WindowOwner(this, s);
+                var shared = s.Shared;
+                if (shared != null)
+                {
+                    var sp = await shared.NewPageAsync().ConfigureAwait(false);
+                    w = new PlaywrightBrowserWindow(sp, null, null, p, M, owner);
+                }
+                else
+                {
+                    var (c, page) = await CreateWindow(s, 1).ConfigureAwait(false);
+                    w = new PlaywrightBrowserWindow(page, c, x => CreateWindow(s, x), p, M, owner);
+                }
             }
-            var (c, page) = await CreateWindow(s, 1).ConfigureAwait(false);
-            return new PlaywrightBrowserWindow(page, c, x => CreateWindow(s, x), p, M);
+            catch
+            {
+                Release(s);
+                throw;
+            }
+            Interlocked.Increment(ref StatOpen);
+            Interlocked.Increment(ref StatOpened);
+            var max = p.RecycleAfterWindows;
+            if ((max > 0) && (s.Shared == null) && (Interlocked.Increment(ref s.Opened) >= max))
+                Retire(s);
+            return w;
         }
 
         public async Task<IBrowserWindow> OpenWindow()
@@ -400,9 +605,17 @@ namespace SysWeaver.WebBrowser
             {
                 return await InternalOpen(s).ConfigureAwait(false);
             }
-            catch (PlaywrightException) when (!s.Alive)
+            catch (PlaywrightException ex) when (!Disposed)
             {
-                //  The browser died just now, one more try
+                //  Either the browser died just now, or it's still running but can't open a window (ex: "Target crashed"),
+                //  that won't get better by itself so close it and try once more with a new browser
+                if (Interlocked.CompareExchange(ref Current, null, s) == s)
+                {
+                    Interlocked.Increment(ref StatRecoveries);
+                    M?.AddMessage(String.Concat(Prefix, "Browser #", s.Id.ToString(CultureInfo.InvariantCulture), " failed to open a window, starting a new browser"), ex, MessageLevels.Warning);
+                }
+                s.Dead = true;
+                StopLater(s, "failed to open a window");
                 s = await GetSession().ConfigureAwait(false);
                 return await InternalOpen(s).ConfigureAwait(false);
             }
@@ -411,18 +624,15 @@ namespace SysWeaver.WebBrowser
         public void Dispose()
         {
             Disposed = true;
-            var s = Interlocked.Exchange(ref Current, null);
-            if (s == null)
-                return;
+            Interlocked.Exchange(ref Current, null);
+            var stops = Sessions.Values.Select(x => StopLater(x, "disposed")).ToArray();
             try
             {
-                var t = s.Shared != null ? s.Shared.CloseAsync() : s.Browser?.CloseAsync();
-                t?.Wait(5000);
+                Task.WhenAll(stops).Wait(5000);
             }
             catch
             {
             }
-            Stop(s);
         }
     }
 
@@ -447,14 +657,17 @@ namespace SysWeaver.WebBrowser
 
         public Task Press(String key) => Page.Keyboard.PressAsync(key);
 
-        public PlaywrightBrowserWindow(IPage page, IBrowserContext owned, Func<double, Task<(IBrowserContext, IPage)>> recreate, PlaywrightBrowserParams p, IMessageHost m)
+        public PlaywrightBrowserWindow(IPage page, IBrowserContext owned, Func<double, Task<(IBrowserContext, IPage)>> recreate, PlaywrightBrowserParams p, IMessageHost m, PlaywrightBrowser.WindowOwner owner)
         {
             Page = page;
             Owned = owned;
             Recreate = recreate;
             Params = p;
             M = m;
+            Owner = owner;
         }
+
+        readonly PlaywrightBrowser.WindowOwner Owner;
 
         const String Prefix = "[Playwright] ";
 
@@ -475,11 +688,19 @@ namespace SysWeaver.WebBrowser
         {
             if (Interlocked.Exchange(ref WasDisposed, 1) != 0)
                 return;
-            _ = Close(Owned, Page);
+            _ = Close(Owned, Page, true);
         }
 
-        static async Task Close(IBrowserContext owned, IPage page)
+        /// <summary>
+        /// Close a context (or the page if using a shared context) and tell the owner how it went
+        /// </summary>
+        /// <param name="owned">The context to close, null if the page is in a shared context</param>
+        /// <param name="page">The page to close if there is no owned context</param>
+        /// <param name="windowDone">True when this window is done, false when closing a context that was replaced</param>
+        async Task Close(IBrowserContext owned, IPage page, bool windowDone)
         {
+            var start = Stopwatch.GetTimestamp();
+            Exception error = null;
             try
             {
                 if (owned != null)
@@ -487,9 +708,16 @@ namespace SysWeaver.WebBrowser
                 else
                     await page.CloseAsync().ConfigureAwait(false);
             }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+            try
+            {
+                Owner?.Closed(error, Stopwatch.GetElapsedTime(start), windowDone);
+            }
             catch
             {
-                //  The browser is already gone
             }
         }
 
@@ -755,7 +983,7 @@ namespace SysWeaver.WebBrowser
             }
             catch
             {
-                _ = Close(c, page);
+                _ = Close(c, page, false);
                 throw;
             }
             var oldContext = Owned;
@@ -763,7 +991,7 @@ namespace SysWeaver.WebBrowser
             Owned = c;
             Page = page;
             Scale = scale;
-            _ = Close(oldContext, oldPage);
+            _ = Close(oldContext, oldPage, false);
         }
 
         public async Task<bool> Resize(int width, int height, double scale = 1)

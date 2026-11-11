@@ -95,6 +95,32 @@ namespace SysWeaver.MicroService
         /// If true, the hosts file may be edited
         /// </summary>
         public bool AllowHostsEdit = true;
+
+        /// <summary>
+        /// The maximum number of seconds that a service verb (start, stop, restart, ...) may take before it's process is killed (the service itself isn't killed)
+        /// </summary>
+        public int VerbTimeoutSeconds = 120;
+
+        /// <summary>
+        /// When activating a version: the maximum number of seconds to wait for the running service to uninstall (stop),
+        /// after that every process running from the active folder is killed and the activation continues
+        /// </summary>
+        public int SwapStopTimeoutSeconds = 10;
+
+        /// <summary>
+        /// When the server manager activates a version of itself (a self update, done by a detached script):
+        /// the number of seconds that the new version must keep running, else the previous version is restored and started
+        /// </summary>
+        public int SelfUpdateStableSeconds = 30;
+
+        /// <summary>
+        /// When the server manager activates a version of itself (a self update, done by a detached script):
+        /// an optional url that the new version must answer (any 2xx / 3xx response, the certificate isn't validated) within <see cref="SelfUpdateStableSeconds"/>,
+        /// else the previous version is restored and started.
+        /// Use a url that is only answered when the web server is up, ex: "https://localhost:443/ServerManager/".
+        /// The process status alone can't tell if the new version is usable (ex: running but the web server failed to bind the port).
+        /// </summary>
+        public String SelfUpdateHealthUrl;
     }
 
 

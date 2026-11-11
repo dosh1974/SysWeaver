@@ -134,6 +134,23 @@ namespace SysWeaver
         /// <returns>null if successful, else the exception that occurred</returns>
         Exception MakeDirectoryAccessableToEveryOne(String directoryName);
 
+        /// <summary>
+        /// Find the executables of this platform in a folder (not recursive), by inspecting the file content (not by trusting names), see <see cref="ExecutableFinder"/>.
+        /// Windows: *.exe files that are PE images (not dll's). Linux: any file that is an ELF executable or a script ("#!").
+        /// </summary>
+        /// <param name="folder">The folder</param>
+        /// <returns>The executables, the best guess for the main executable first (never null)</returns>
+        IReadOnlyList<ExecutableFile> FindExecutables(String folder);
+
+        /// <summary>
+        /// Make sure that a file can be executed.
+        /// Linux: adds the execute bit for every class (user, group, other) that can read the file (like "chmod +x" honoring the read bits).
+        /// Windows: nothing to do.
+        /// </summary>
+        /// <param name="file">The file</param>
+        /// <returns>null if successful (or nothing needed to be done), else the exception that occurred</returns>
+        Exception MakeExecutable(String file);
+
     }
 
     /// <summary>
@@ -206,6 +223,20 @@ namespace SysWeaver
         /// <param name="directoryName">Ignored.</param>
         /// <returns>Always null (reported as success).</returns>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName) => null;
+
+        /// <summary>
+        /// Uses <see cref="ExecutableFinder"/> for the OS that the process runs on (Windows executables on Windows, else Linux executables).
+        /// </summary>
+        /// <param name="folder">The folder.</param>
+        /// <returns>The executables, best guess first.</returns>
+        public IReadOnlyList<ExecutableFile> FindExecutables(String folder) => ExecutableFinder.Find(folder, OperatingSystem.IsWindows());
+
+        /// <summary>
+        /// Does nothing.
+        /// </summary>
+        /// <param name="file">Ignored.</param>
+        /// <returns>Always null (reported as success).</returns>
+        public Exception MakeExecutable(String file) => null;
 
         #region IHaveStats
 

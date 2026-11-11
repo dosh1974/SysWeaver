@@ -63,6 +63,23 @@ namespace SysWeaver.MicroService
         public ActivationHandler OnActivateAsync;
         public ActivationHandler OnDeactivateAsync;
         public ActivationHandler OnNewFolderAsync;
+
+        /// <summary>
+        /// Takes over the activation of a folder (ex: when the process doing the swap is running from the active folder and must be stopped by it).
+        /// </summary>
+        /// <param name="name">The name of the managed folder</param>
+        /// <param name="targetFolder">The active folder (no trailing separator)</param>
+        /// <param name="backupFolder">The name that the active folder should get (no trailing separator)</param>
+        /// <param name="newFolder">The folder that should replace the active folder (no trailing separator, already decompressed)</param>
+        /// <returns>null to let the folder sync service do the activation (in process), else the task of the external activation: it's result is null on success (ex: the swap was started) or the exception.
+        /// When a task is returned, <see cref="OnDeactivate"/>, <see cref="OnDeactivateAsync"/>, the folder swap, <see cref="OnActivate"/>, <see cref="OnActivateAsync"/> and the compression of the backup are skipped,
+        /// the handler is responsible for all of it.</returns>
+        public delegate Task<Exception> SwapHandler(String name, String targetFolder, String backupFolder, String newFolder);
+
+        /// <summary>
+        /// Optional, see <see cref="SwapHandler"/>.
+        /// </summary>
+        public SwapHandler OnSwapAsync;
     }
 
 

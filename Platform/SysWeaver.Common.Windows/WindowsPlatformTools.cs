@@ -173,6 +173,31 @@ namespace SysWeaver
         /// same as <see cref="PathExt.AllowAllAccess(string)"/>.
         /// This makes files and folders created by a service (ex: running as SYSTEM) modifiable by users (without an UAC prompt) and vice versa.
         /// </remarks>
+        /// <summary>
+        /// Find the *.exe files that are PE executable images (console or gui subsystem, not dll's), see <see cref="ExecutableFinder"/>.
+        /// </summary>
+        /// <param name="folder">The folder (not recursive).</param>
+        /// <returns>The executables, the best guess for the main executable first.</returns>
+        public IReadOnlyList<ExecutableFile> FindExecutables(String folder)
+        {
+            try
+            {
+                return ExecutableFinder.Find(folder, true);
+            }
+            catch (Exception ex)
+            {
+                Exs.OnException(ex);
+                return Array.Empty<ExecutableFile>();
+            }
+        }
+
+        /// <summary>
+        /// Nothing to do on Windows (execution isn't controlled by a file mode bit).
+        /// </summary>
+        /// <param name="file">Ignored.</param>
+        /// <returns>Always null.</returns>
+        public Exception MakeExecutable(String file) => null;
+
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
             try

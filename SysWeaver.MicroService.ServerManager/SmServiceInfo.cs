@@ -37,8 +37,60 @@ namespace SysWeaver.MicroService
         public volatile ServiceStatus Status;
 
         public volatile SmProcess Process;
+
+        /// <summary>
+        /// The service executable that is used (see ServerManagerService.GetServiceExe), null until detected.
+        /// </summary>
+        public volatile SmExeState Exe;
+
+        /// <summary>
+        /// The cached list of executables in the active folder.
+        /// </summary>
+        public volatile SmExeCandidates Candidates;
+
+        /// <summary>
+        /// Serializes the detection / selection of the executable.
+        /// </summary>
+        public readonly Object ExeLock = new Object();
+
+        /// <summary>
+        /// When a fallback to another executable was last tried (UTC ticks, rate limited).
+        /// </summary>
+        public long LastExeFallback;
         //public readonly BucketValueHistory<SmServiceData> History = new (TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), SmServiceData.Add);
         //public readonly BucketValueHistory<SmServiceData> HistoryShort = new(TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(3), SmServiceData.Add);
+    }
+
+    /// <summary>
+    /// The executable that is used for a service.
+    /// </summary>
+    sealed class SmExeState
+    {
+        /// <summary>
+        /// The full path of the executable, null if none was found.
+        /// </summary>
+        public String FullName;
+
+        /// <summary>
+        /// True if selected by a user.
+        /// </summary>
+        public bool Manual;
+
+        /// <summary>
+        /// When it was resolved (a missing executable is re-detected after a while, not on every status poll).
+        /// </summary>
+        public DateTime Resolved;
+    }
+
+    /// <summary>
+    /// The executables found in a folder (cached, the folder is re-scanned when it's last write time changes or after a while).
+    /// </summary>
+    sealed class SmExeCandidates
+    {
+        public String Folder;
+        public DateTime FolderTime;
+        public DateTime Scanned;
+        public IReadOnlyList<ExecutableFile> Files;
     }
 
     sealed class SmServiceData
