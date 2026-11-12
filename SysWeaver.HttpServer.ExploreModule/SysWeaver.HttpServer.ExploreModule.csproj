@@ -24,4 +24,10 @@
 	</Target>
 
 
+  <!-- The embedded web files are built from srcWeb by the EmbedLocal target: without these inputs the Visual Studio fast up to date
+       check skips the build when only web files changed (no C# change), and the old pages stay embedded -->
+  <ItemGroup>
+    <UpToDateCheckInput Include="srcWeb\**\*" />
+  </ItemGroup>
+
 </Project>

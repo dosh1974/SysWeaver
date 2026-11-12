@@ -377,6 +377,68 @@ html:has(> body > .sw-page-fill) {
     padding: 0;
 }
 
+/* A collapsible card (Sw.Card Collapsible): the chevron button before the title, turned to the right while collapsed; the free area of
+   the head toggles too (a pointer there); a collapsed card is only its head (no hairline under it) */
+.sw-card-toggle {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--sw-control-h-sm);
+    height: var(--sw-control-h-sm);
+    margin: 0 calc(-1 * var(--sw-space-2)) 0 calc(-1 * var(--sw-space-2));
+    padding: 0;
+    border: none;
+    border-radius: var(--sw-radius-sm);
+    background: transparent;
+    color: var(--sw-text-2);
+    font: inherit;
+    cursor: pointer;
+}
+
+    .sw-card-toggle svg {
+        width: 1rem;
+        height: 1rem;
+        transition: transform var(--sw-dur-2) var(--sw-ease);
+    }
+
+    .sw-card-collapsed .sw-card-toggle svg {
+        transform: rotate(-90deg);
+    }
+
+    .sw-card-toggle:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: 1px;
+    }
+
+@media (hover: hover) {
+    .sw-card-toggle:hover {
+        background: var(--sw-hover);
+        color: var(--sw-text);
+    }
+}
+
+.sw-card-collapsible:not(.sw-card-click) > .sw-card-head {
+    cursor: pointer;
+}
+
+    .sw-card-collapsible > .sw-card-head .sw-card-tools {
+        cursor: auto;
+    }
+
+.sw-card-collapsed > .sw-card-head {
+    border-bottom: none;
+}
+
+.sw-card-collapsed > .sw-card-body[hidden] {
+    display: none;
+}
+
+/* A collapsed card in a grid row keeps its own (head) height, not the height of the expanded cards beside it */
+.sw-grid > .sw-card-collapsed {
+    align-self: start;
+}
+
 /* ---------- Section title, link button ---------- */
 
 .sw-section-title {

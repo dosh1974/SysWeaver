@@ -130,7 +130,82 @@ Normally used indirectly through a server micro service. Modules with parameter-
 ]
 ```
 
-Calling an API: `GET /Api/<class url>/<method>?"value"` or POST the value as the body.
+Calling an API: `GET /Api/<class url>/<method>?"value"` or POST the value as the body, see [Calling APIs](#calling-apis).
+
+## Calling APIs
+
+A `[WebApi]` method takes at most one input value (plus an optional `HttpServerRequest`). That value can be sent in two ways, and both reach the method as the same deserialized object:
+
+- **POST**: the value is the request body.
+- **GET**: the value is the whole query string (everything after `?`). This "posts" the value in the url, so small arguments can be sent as GETs: one less round trip for preflight free requests, readable urls in logs and the browser, and responses that a browser can cache by url (`[WebApiClientCache]`; browsers never cache POST responses).
+
+A request without input (a GET without a query string, an empty POST body) calls the method with the default value of its parameter type (null for classes).
+
+### POST body
+
+- `Content-Type` picks the deserializer (`application/json`, `text/xml`, ... any registered `ISerializerType` whose input is enabled in `ApiIoParams`); without a `Content-Type` the default input serializer (json) is used. An unknown type is refused with **415**.
+- `Content-Encoding` (optional) decompresses the body first: any registered compression (`CompManager`: `br`, `gzip`, `deflate`, and `zstd` when registered). An unknown encoding is refused with **415**.
+- Size limits: `ApiHttpServerModuleParams.MaxRequestSize` (the body as received) and `MaxDecompressedSize` (after decompression), 64 MB each by default, **413** when exceeded.
+
+```http
+POST /Api/auth/ValidateEmailAddress HTTP/1.1
+Content-Type: application/json
+Content-Encoding: br
+
+<brotli compressed bytes of "someone@example.com">
+```
+
+### GET query string
+
+The query string is url decoded (`%XX` sequences only: a `+` stays a `+`, so encode spaces as `%20`) and its **first character** picks the format (`ApiIoParams.Get<T>`, `ApiIoParams.cs`):
+
+| First character | Format | Example |
+|---|---|---|
+| `{` `[` `"` `'` `-` `+` `.` `0`-`9` | JSON | `?"SysWeaver.MicroService.ChartJsService"` (encoded `?%22SysWeaver.MicroService.ChartJsService%22`), `?42`, `?{"Param":"1","MaxRowCount":20}` |
+| `<` | XML: needs an xml input serializer (`NetXmlSerializer`, SysWeaver.Serialization) registered and enabled (`ApiHttpServerModuleParams.InputSerializers`, default `"json, xml, proto, bson"`) | `?<TableDataRequest>...</TableDataRequest>` |
+| `null` `undefined` `true` `false` `nan` (the whole text, case sensitive) | JSON constants (`undefined` = `null`, `nan` = `0`) | `?true` (for a `bool` parameter) |
+| `_` | A base64url payload, optionally compressed, see below | `?_dUwquLA5PTSxLLdLzzUwuyg9OLSrLTE7Vc85ILCrxKoZylQA` |
+| any other letter | Form data (`application/x-www-form-urlencoded`): needs a deserializer with that mime type registered and enabled. SysWeaver has none, so such a query is refused ("No enabled uri deserializer") | `?Name=Anna&Age=42` |
+
+Anything else (ex: `?!x`) is refused with **400** "The data sent could not be read (...)", as is a value that doesn't match the parameter type (ex: `?true` for a `String` parameter).
+
+**Payloads (`_`)**: `_` + a type letter + [a serializer name + `,`] + the data as base64url (`-` and `_` instead of `+` and `/`; the `=` padding is optional):
+
+| Letter | Data |
+|---|---|
+| `u` | The serialized value as is (utf-8 bytes of the json) |
+| `d` | Compressed with raw deflate (`deflate`) |
+| `g` | Compressed with gzip |
+| `b` | Compressed with brotli (`br`) |
+| `z` | Compressed with zstd (only when a zstd implementation is registered in `CompManager`) |
+
+The lower case letter means the data is JSON. The **upper case letter** is the same compression with a named serializer: the serializer name (the extension of an enabled input serializer, ex: `json`, `xml`, `proto`, `bson`) and a comma come before the data, ex: `_Ujson,<base64url>` or `_Bxml,<base64url of brotli compressed xml>`; an unknown or disabled name is refused ("Can't find an enabled serializer named ..."). Binary serializers (`proto`, `bson`) can only be sent this way or as a POST. The decompressed size is limited by `MaxDecompressedSize` (as a POST body). `ApiIoParams.BinaryArgTypes` lists the letters a server accepts.
+
+Examples, all the same call (`Api/HaveService` with the string `"SysWeaver.MicroService.ChartJsService"`, answer `true`):
+
+```text
+GET /Api/HaveService?%22SysWeaver.MicroService.ChartJsService%22                         json, url encoded
+GET /Api/HaveService?_uIlN5c1dlYXZlci5NaWNyb1NlcnZpY2UuQ2hhcnRKc1NlcnZpY2Ui              base64url of the json
+GET /Api/HaveService?_Ujson,IlN5c1dlYXZlci5NaWNyb1NlcnZpY2UuQ2hhcnRKc1NlcnZpY2Ui         the same, with a named serializer
+GET /Api/HaveService?_dUwquLA5PTSxLLdLzzUwuyg9OLSrLTE7Vc85ILCrxKoZylQA                   raw deflate, base64url
+```
+
+An object, `{"Param":"1","MaxRowCount":20}`: `?%7B%22Param%22%3A%221%22%2C%22MaxRowCount%22%3A20%7D` (json), `?_ueyJQYXJhbSI6IjEiLCJNYXhSb3dDb3VudCI6MjB9` (base64url), `?_dq1YKSCxKzFWyUjJU0lHyTawIyi93zi_NK1GyMjKoBQA` (deflate).
+
+To build a payload: serialize the value as JSON (utf-8), optionally compress it (raw deflate: no zlib header), encode it as base64url, and prefix `_` and the letter. The query string must stay within the url length the listener allows (http.sys: 16 KB by default), so large values are POSTed.
+
+### What the web client sends
+
+`Sw.Net.Send(url, value)` (`srcWeb/core`, the legacy `sendRequest` of `common/common.js`) picks the shortest form for the value serialized with `Sw.Net.ToTypedJson` (`$type` first):
+
+1. A GET is only considered when the json is under 16 KB (and not in debug builds, which POST everything unless the web server Params have `"OptimizedSend": true`).
+2. `?<url encoded json>` when that is under 128 characters.
+3. Else the shorter of `?_d<base64url deflate>` and `?_u<base64url>` (deflate only when it is at least 1/8 smaller), as a GET when the query is under 4096 characters.
+4. Else a POST with `Content-Type: application/json`, the body deflated (`Content-Encoding: deflate`) when that was smaller.
+
+### The response
+
+The result is serialized by the serializer the `Accept` header asks for (the default output serializer, json, otherwise) and compressed by the server's response compression (`Accept-Encoding`, `[WebApiCompression]` per api). `[WebApiRaw]` methods return their bytes as they are, with their own mime type.
 
 ## Limitations and considerations
 

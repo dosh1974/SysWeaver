@@ -2036,7 +2036,9 @@
      * on every row, quiet at rest; UX guide LST-2), `CardTitle` (the column name of the card title and of the row in action messages; default: TitleCol), `MenuName` (a promise of the page header title, table.html: the menu item name; the
      * title stays hidden until it resolves, so it never changes after the first frame), `Scroll` (true: infinite scrolling instead of pages, the rows load on demand with half a
      * screen ready below the view; "Current view" of an export is the rows in view), `Card` ("name@path": a card template, explore/README "Card templates"; default TableData.Card; false: none), `AutoHideEmpty` (true: a grid wider than its area hides
-     * the columns that are empty on the shown rows; default false: every column is shown, like the original table).
+     * the columns that are empty on the shown rows; default false: every column is shown, like the original table), `HostFit` (embedded
+     * tables in a host with a fixed height: default on when the frame overflows the host; true: the host has a fixed height, keep the
+     * table in it from the first fit, so "Auto" rows fill the host also when the table sits far down a long page; false: never).
      *
      * Members: `E` (root element), `State`, `Data` (last TableData), `Cols`, `UpdateNow()`, `SetRows(rows)` (local data), `Destroy()`.
      * A reply with more rows than the page (an api that ignores MaxRowCount) shows the page only, with one console warning.
@@ -5808,6 +5810,9 @@
          * it) and Fit sizes the page from the free height of its rows area, like a page table, instead of the window height below the
          * table (which gave a page that painted over the next card, and another size to each of two identical hosts). One way only, so
          * it can't flip.
+         * `HostFit: true` (set by the page, not the default) says that the host has a fixed height: the table is kept in it from the first
+         * fit, also while its rows don't fill it (else a short table far down a long page measured the window height below its document
+         * position, nothing, and paged at 5 rows).
          * @returns {boolean} The table is kept in its host.
          */
         HostFit() {
@@ -5820,10 +5825,12 @@
             const hr = h.getBoundingClientRect();
             if (!(hr.height > 0) || !t.E.getClientRects().length)
                 return false;
-            const cs = getComputedStyle(h);
-            const inner = hr.bottom - (parseFloat(cs.borderBottomWidth) || 0) - (parseFloat(cs.paddingBottom) || 0);
-            if (t.E.getBoundingClientRect().bottom <= inner + 1)
-                return false;
+            if (t.O.HostFit !== true) {
+                const cs = getComputedStyle(h);
+                const inner = hr.bottom - (parseFloat(cs.borderBottomWidth) || 0) - (parseFloat(cs.paddingBottom) || 0);
+                if (t.E.getBoundingClientRect().bottom <= inner + 1)
+                    return false;
+            }
             /** @type {boolean} The table is kept inside its fixed height host for good (HostFit). */
             t.HostFixed = true;
             t.E.classList.add("sw-table-fill", "sw-table-hostfit");

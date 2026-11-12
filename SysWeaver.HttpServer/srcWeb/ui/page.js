@@ -75,6 +75,7 @@
     const CardOpts = {
         Title: S, Sub: S, Count: "number|boolean", Tools: Any, Actions: Any, Body: Any, Flush: "boolean", Span: "number|string", Tag: S,
         Level: "number", Class: S, Label: S, OnClick: "function", Href: S,
+        Collapsible: "boolean", Collapsed: "boolean", StateKey: S, OnCollapse: "function",
     };
     /**
      * The option schemas of the page parts (option checks by mechanism, not by list: Sw.Card({ Titel }), Sw.PageLayout({ Titel }),
@@ -409,7 +410,13 @@
      * name when there is no title), OnClick(event, { Signal }) / Href (a clickable card: its title becomes the button that opens it, a pure
      * click on the card's free area clicks it, a modifier click only focuses it (INP-2), work makes it busy (Sw.OnClick)). No title and no
      * tools: no head row.
-     * Members: E, HeadE, TitleE, SubE, CountE, ToolsE, BodyE; SetTitle(t), SetSub(t), SetCount(n|null), SetTools(items), SetBody(content).
+     * Collapsible (true: a chevron button before the title folds the body away; a pure click on the free area of the head does the same),
+     * Collapsed (the state when the user never changed it, default false: expanded), StateKey (the name the user's choice is stored
+     * under in localStorage, "SysWeaver.Card.<page path>|<key>"; default the title: give cards with a changing title a key),
+     * OnCollapse(collapsed, card) (after a change by the user or Collapse()).
+     * Members: E, HeadE, TitleE, SubE, CountE, ToolsE, BodyE, ToggleE (the chevron button, null when not collapsible); SetTitle(t), SetSub(t),
+     * SetCount(n|null), SetTools(items), SetBody(content), Collapse(collapsed, silent) (silent: no OnCollapse; a call from code is not stored),
+     * IsCollapsed().
      * @param {object} [o] Options.
      * @returns {object} The card.
      */
@@ -442,11 +449,79 @@
                 openB.click();
             });
         }
+        //  A collapsible card: the chevron button before the title folds the body away (aria-expanded, aria-controls); the user's
+        //  choice is kept in localStorage per page and key
+        const collapsible = !!o.Collapsible;
+        let collapsed = false;
+        const toggleB = collapsible ? el("button.sw-card-toggle", { type: "button", attrs: { "aria-controls": id + "-body" } }, Sw.Icon("down")) : null;
+        if (toggleB) {
+            e.classList.add("sw-card-collapsible");
+            bodyE.id = id + "-body";
+            headE.prepend(toggleB);
+            toggleB.addEventListener("click", ev => {
+                if (Sw.ModifierClick(ev, toggleB))
+                    return;
+                c.Collapse(!collapsed, false, true);
+            });
+            //  A pure click on the free area of the head (the title, the sub line) toggles too; not on the tools or other controls,
+            //  not when the title opens the card (OnClick / Href), not after a text selection by drag
+            if (!openB) {
+                headE.addEventListener("click", ev => {
+                    const t = ev.target instanceof Element ? ev.target : null;
+                    if (!t || toggleB.contains(t) || toolsE.contains(t) || t.closest("a[href], button, input, select, textarea, label, [role=button], [role=link], [contenteditable]"))
+                        return;
+                    if (Sw.ModifierClick(ev, toggleB))
+                        return;
+                    const sel = window.getSelection && window.getSelection();
+                    if (sel && !sel.isCollapsed && headE.contains(sel.anchorNode))
+                        return;
+                    toggleB.click();
+                });
+            }
+        }
+        /** @returns {string} The localStorage key of the collapsed state ("" when nothing names the card). */
+        const stateKey = () => {
+            const k = o.StateKey || titleE.textContent || o.Label || "";
+            return k ? "SysWeaver.Card." + window.location.pathname + "|" + k : "";
+        };
         const c = {
-            E: e, HeadE: headE, TitleE: titleE, SubE: subE, CountE: countE, ToolsE: toolsE, BodyE: bodyE,
-            /** Show / hide the head row (shown with a title or tools) and name the card by its title. */
+            E: e, HeadE: headE, TitleE: titleE, SubE: subE, CountE: countE, ToolsE: toolsE, BodyE: bodyE, ToggleE: toggleB,
+            /**
+             * Collapse or expand a collapsible card (nothing for other cards).
+             * @param {boolean} on True to collapse (hide the body).
+             * @param {boolean} [silent] True: no OnCollapse.
+             * @param {boolean} [store] True: keep the state for the next visit (the user's choice; a call from code is not stored).
+             */
+            Collapse(on, silent, store) {
+                if (!toggleB)
+                    return;
+                on = !!on;
+                const changed = on !== collapsed;
+                collapsed = on;
+                e.classList.toggle("sw-card-collapsed", on);
+                bodyE.hidden = on;
+                toggleB.setAttribute("aria-expanded", on ? "false" : "true");
+                const name = titleE.textContent || o.Label || "";
+                const label = on
+                    ? (name ? _T("Expand {0}", name, "Accessible name and tool tip of the button that shows the content of a collapsed card, {0} is the card title") : _TF("Expand", "Tool tip of the button that shows the content of a collapsed card"))
+                    : (name ? _T("Collapse {0}", name, "Accessible name and tool tip of the button that hides the content of a card, {0} is the card title") : _TF("Collapse", "Tool tip of the button that hides the content of a card"));
+                toggleB.setAttribute("aria-label", label);
+                toggleB.title = label;
+                if (store) {
+                    const k = stateKey();
+                    if (k)
+                        Sw.Storage.Local.Set(k, on ? "1" : "0");
+                }
+                if (changed && !silent && o.OnCollapse)
+                    o.OnCollapse(on, c);
+            },
+            /** @returns {boolean} True if the card is collapsed. */
+            IsCollapsed() {
+                return collapsed;
+            },
+            /** Show / hide the head row (shown with a title or tools, always for a collapsible card) and name the card by its title. */
             Sync() {
-                headE.hidden = !titleE.textContent && !toolsE.childNodes.length;
+                headE.hidden = !toggleB && !titleE.textContent && !toolsE.childNodes.length;
                 if (titleE.textContent)
                     e.setAttribute("aria-labelledby", id);
                 else {
@@ -464,6 +539,9 @@
                 else
                     titleE.textContent = t || "";
                 c.Sync();
+                //  (the toggle is named after the title)
+                if (toggleB)
+                    c.Collapse(collapsed, true);
             },
             /** @param {string} t The sub line (empty hides it). */
             SetSub(t) {
@@ -491,6 +569,12 @@
         //  Actions (the name Sw.PageHeader, Sw.StateView and the dialogs use) = Tools: buttons in the card head, never dropped
         c.SetTools(o.Tools !== undefined && o.Tools !== null ? o.Tools : o.Actions);
         c.SetBody(o.Body);
+        if (toggleB) {
+            //  The stored choice of the user wins over the default
+            const k = stateKey();
+            const v = k ? Sw.Storage.Local.Get(k, null) : null;
+            c.Collapse(v === "1" ? true : v === "0" ? false : !!o.Collapsed, true);
+        }
         return c;
     }
 
