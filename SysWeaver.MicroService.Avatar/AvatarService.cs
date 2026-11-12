@@ -15,7 +15,7 @@ namespace SysWeaver.MicroService
 {
 
 
-    public sealed class AvatarService : IDefaultUserImageHandler, IPerfMonitored, IHaveStats, IHttpServerModule
+    public sealed class AvatarService : IAvatarService, IPerfMonitored, IHaveStats, IHttpServerModule
     {
         public AvatarService(AvatarParams p)
         {

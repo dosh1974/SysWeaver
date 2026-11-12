@@ -3830,6 +3830,24 @@ html.SwMobile .sw-card-rich :is(.sw-facts dt, .sw-facts dd, .sw-card-figure > dt
 .sw-card-rich:has(> .sw-card-lead > [data-sw-match] > .sw-badge.sw-warning) { --sw-card-tone: var(--sw-warning); }
 .sw-card-rich:has(> .sw-card-lead > [data-sw-match] > .sw-badge.sw-error) { --sw-card-tone: var(--sw-danger); }
 
+/* The focus outline inside a container that clips (a scrolling tab strip, a segmented control, the left pane of the media picker, or any
+   element with the class sw-clip-focus): drawn inside the element, so the container never cuts it. Inputs get an inset ring. */
+.sw-tabs-strip :focus-visible,
+.sw-seg :focus-visible,
+.sw-mpick-left :focus-visible,
+.sw-clip-focus :focus-visible {
+    outline-offset: -2px !important;
+}
+
+.sw-mpick-left .sw-input:focus-visible,
+.sw-mpick-left input:focus-visible,
+.sw-clip-focus .sw-input:focus-visible,
+.sw-clip-focus input:focus-visible,
+.sw-clip-focus textarea:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--sw-focus) !important;
+    outline-offset: -2px !important;
+}
+
 /* ---- ui/overlays.css ---- */
 /*
  * ui/overlays.css - SysWeaver UI library (Sw) styles, part 3 of 6: everything that floats above the page (Design v2).

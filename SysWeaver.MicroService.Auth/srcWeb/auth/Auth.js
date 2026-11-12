@@ -876,10 +876,50 @@
         location.replace(start);
     }
 
+    /** @type {Promise<{Email:boolean, Phone:boolean}>|null} The kinds of user ids the server can reach (UserIdKinds, asked once). */
+    let idKinds = null;
+
+    /**
+     * The kinds of user ids besides the user name: e-mail when the user manager can send e-mails, phone numbers when it can send text
+     * or WhatsApp messages (its coms, Api/auth/UserManagerProps). Without a user manager (built-in users only): neither.
+     * @returns {Promise<{Email:boolean, Phone:boolean}>} The kinds (asked once per page).
+     */
+    function UserIdKinds() {
+        if (!idKinds)
+            idKinds = (async () => {
+                try {
+                    const p = await Sw.Net.Get(api() + "UserManagerProps", { NoNavigate: true });
+                    const c = (p && Array.isArray(p.Coms)) ? p.Coms : [];
+                    return { Email: c.includes("Email"), Phone: c.some(x => (x === "Sms") || (x === "WhatsApp") || (x === "Phone")) };
+                }
+                catch {
+                    return { Email: false, Phone: false };
+                }
+            })();
+        return idKinds;
+    }
+
+    /**
+     * The hint of a user id field (sign in, forgot password): what a user id can be on this server (UserIdKinds).
+     * @returns {Promise<string>} "Your user id is your email address, phone number or username" or a shorter one.
+     */
+    async function UserIdHint() {
+        const k = await UserIdKinds();
+        if (k.Email && k.Phone)
+            return _TF("Your user id is your email address, phone number or username", "Tool tip description for an input field where the user should enter their user id (username, email, phone)");
+        if (k.Email)
+            return _TF("Your user id is your email address or username", "Tool tip description for an input field where the user should enter their user id, on a site where it can be a username or an email address (no phone numbers)");
+        if (k.Phone)
+            return _TF("Your user id is your phone number or username", "Tool tip description for an input field where the user should enter their user id, on a site where it can be a username or a phone number (no email addresses)");
+        return _TF("Your user id is your username", "Tool tip description for an input field where the user should enter their user id, on a site where only usernames can be used");
+    }
+
     /**
      * @namespace Sw.Auth - UI-less authentication helpers (see the file header).
      */
     Sw.Auth = {
+        UserIdKinds,
+        UserIdHint,
         Trim,
         SetUser,
         NoteSignedIn,

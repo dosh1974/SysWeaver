@@ -54,4 +54,15 @@ namespace SysWeaver.Net
     }
 
 
+    public interface IAvatarService : IDefaultUserImageHandler
+    {
+        /// <summary>
+        /// Get a request handler to some icon
+        /// </summary>
+        /// <param name="seed">The seed of the icon to get</param>
+        /// <returns>null if no files are found</returns>
+        Task<IHttpRequestHandler> Get(int seed);
+    }
+
+
 }

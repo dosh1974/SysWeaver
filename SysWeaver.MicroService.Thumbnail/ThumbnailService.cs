@@ -105,6 +105,21 @@ namespace SysWeaver.MicroService
         static readonly Task<MediaInfo> NoInfoTask = Task.FromResult((MediaInfo)null);
 
         /// <summary>
+        /// Forget the cached media information and thumbnails of a file (of every thumbnail size), ex: after the file was replaced by an upload,
+        /// so that the next request reads the new file
+        /// </summary>
+        /// <param name="filename">The full path of the file</param>
+        public void Invalidate(String filename)
+        {
+            foreach (var x in MapRes)
+            {
+                var c = x.Value.Item4;
+                c.Remove(filename);
+                c.Remove(filename + ":f");
+            }
+        }
+
+        /// <summary>
         /// Perf trackers: key + ".Icon", key + ".Icon.Build", key + ".All"
         /// </summary>
         readonly PerfTrackers IconTrackers, IconBuildTrackers, AllTrackers;

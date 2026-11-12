@@ -10,7 +10,7 @@
     width: 6rem;
     height: 6rem;
     flex: none;
-    border-radius: var(--sw-radius-md);
+    border-radius: 50%;
     border: 1px solid var(--sw-border);
     background: var(--sw-surface-sunken);
     object-fit: cover;
@@ -31,7 +31,7 @@
     aspect-ratio: 1;
     padding: var(--sw-space-1);
     border: 2px solid transparent;
-    border-radius: var(--sw-radius-md);
+    border-radius: 50%;
     background: var(--sw-surface-sunken);
     cursor: pointer;
 }
@@ -64,3 +64,28 @@
     justify-content: flex-end;
     margin-top: var(--sw-space-3);
 }
+
+.sw-userpic-pick img {
+    border-radius: 50%;
+}
+
+/* the pages of generated pictures: - Page 2 + (every page is kept, back finds the pictures again) */
+.sw-userpic-pager {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-2);
+    margin-right: auto;
+}
+
+.sw-userpic-page {
+    min-width: 5.5rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--sw-text-2, inherit);
+}
+
+    .sw-userpic-pager button {
+        min-width: 2.75rem;
+        font-size: var(--sw-text-lg, 1.15rem);
+        font-weight: 600;
+    }

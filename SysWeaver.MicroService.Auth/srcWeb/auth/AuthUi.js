@@ -1709,6 +1709,8 @@
             Name: "username",
             OnInput: () => update(),
         });
+        //  What a user id can be here: the user name, and e-mail / phone only when the server can reach them (Sw.Auth.UserIdHint)
+        A.UserIdHint().then(h => user.Input.title = h, () => { });
         const policyBtn = InfoButton(A.PolicyText(null));
         const pwd = new Field(page, {
             Label: _TF("Password", "Label for an input box where a user should enter their password"),

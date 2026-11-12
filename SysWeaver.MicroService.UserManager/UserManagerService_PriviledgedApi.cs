@@ -107,7 +107,7 @@ namespace SysWeaver.MicroService
             var target = r.Email?.Trim();
             var com = GetComs(ref target);
             if (com == null)
-                throw new HttpResponseException(400, "Enter a valid e-mail address or phone number (" + (target ?? "").ToQuoted() + " is neither)");
+                throw InvalidTargetError(target);
             //  The domain: empty = the inviter's own, another one only for Debug / Admin (an inviter can't create accounts in a domain it doesn't manage)
             var inviter = context?.Session?.Auth;
             var domain = ValidateInviteDomain(r.Domain, inviter?.Domain, inviter?.Tokens);
@@ -116,7 +116,9 @@ namespace SysWeaver.MicroService
             var nameOrTarget = String.IsNullOrEmpty(name) ? target : name;
             var expires = DateTime.UtcNow + InviteUserTimeout;
             String salt = AuthTools.GetRandomSalt();
-            var tokens = await GetNewUserToken("invite", name, target, null, salt, authTokens, domain, r.Language, expires, null, context?.Session?.Auth?.Username).ConfigureAwait(false);
+            //  Every com but Email sends to a phone number (Sms and WhatsApp): the new account gets it as its phone, not as its e-mail
+            var isEmail = com.Name == "Email";
+            var tokens = await GetNewUserToken("invite", name, isEmail ? target : null, isEmail ? null : target, salt, authTokens, domain, r.Language, expires, null, context?.Session?.Auth?.Username).ConfigureAwait(false);
             String link = String.Concat(LinkRoot(context), "auth/ChoosePassword.html?user=",
                 HttpUtility.UrlEncode(nameOrTarget),
                 "&salt=",
