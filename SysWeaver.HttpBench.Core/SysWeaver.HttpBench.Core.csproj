@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The test engine of the HTTP bench: the end point catalog, the workers, the metrics, the report rows and the markdown report.
+       No web server / service manager dependencies, so the HttpBench console tool can use it on its own. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <RootNamespace>SysWeaver.HttpBench</RootNamespace>
+    <NoWarn>1701;1702;1591</NoWarn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
+  </ItemGroup>
+
+</Project>

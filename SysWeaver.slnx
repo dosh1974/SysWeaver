@@ -73,6 +73,8 @@
   <Project Path="SysWeaver.FileDatabase/SysWeaver.FileDatabase.csproj" />
   <Project Path="SysWeaver.FileTranslation/SysWeaver.FileTranslation.csproj" />
   <Project Path="SysWeaver.FolderSync/SysWeaver.FolderSync.csproj" />
+  <Project Path="SysWeaver.HttpBench.Core/SysWeaver.HttpBench.Core.csproj" />
+  <Project Path="SysWeaver.HttpBench/SysWeaver.HttpBench.csproj" />
   <Project Path="SysWeaver.HttpServer.ExploreModule/SysWeaver.HttpServer.ExploreModule.csproj" />
   <Project Path="SysWeaver.HttpServer.IconModule/SysWeaver.HttpServer.IconModule.csproj" />
   <Project Path="SysWeaver.HttpServer.IsoDataModule/SysWeaver.HttpServer.IsoDataModule.csproj" />

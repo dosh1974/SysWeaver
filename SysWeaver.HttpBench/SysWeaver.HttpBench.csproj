@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The HTTP bench service: the web apis, the charts, the menu item and the page (httpbench/bench.html).
+       The tests themselves run in SysWeaver.HttpBench.Core. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <RootNamespace>SysWeaver.HttpBench</RootNamespace>
+    <NoWarn>1701;1702;1591</NoWarn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.HttpBench.Core\SysWeaver.HttpBench.Core.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroService.ChartJs\SysWeaver.MicroService.ChartJs.csproj" />
+  </ItemGroup>
+
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\httpbench\* .\web\httpbench" />
+    <ItemGroup>
+      <EmbeddedResource Include="web\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The embedded web files are built from srcWeb by the EmbedLocal target: without these inputs the Visual Studio fast up to date
+       check skips the build when only web files changed (no C# change), and the old pages stay embedded -->
+  <ItemGroup>
+    <UpToDateCheckInput Include="srcWeb\**\*" />
+  </ItemGroup>
+
+</Project>

@@ -433,6 +433,7 @@ FodyWeavers.xsd
 /SysWeaver.AI.Anthropic/web
 /SysWeaver.Auth.Core/web
 /SysWeaver.Chat/web
+/SysWeaver.HttpBench/web
 /SysWeaver.HttpServer.ExploreModule/data
 /SysWeaver.HttpServer.ExploreModule/web
 /SysWeaver.HttpServer.IconModule/data

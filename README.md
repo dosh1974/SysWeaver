@@ -434,6 +434,8 @@ flowchart LR
 | [SysWeaver.HttpTransformer.Svg](SysWeaver.HttpTransformer.Svg/README.md) | File transformer for the SysWeaver web server that minifies served SVG files with SysWeaver.Minifier.Svg, caching the results on disc. |
 | [SysWeaver.HttpTransformer.Translate](SysWeaver.HttpTransformer.Translate/README.md) | File transformer for the SysWeaver web server that translates served text files (e.g. HTML, JavaScript) into the session language with SysWeaver.FileTranslation, caching the results on disc. |
 | [SysWeaver.ReverseProxy](SysWeaver.ReverseProxy/README.md) | Expose web services on machines that are not reachable from the internet: a client on the private machine keeps outbound connections to a public SysWeaver server, which forwards incoming requests through them. |
+| [SysWeaver.HttpBench](SysWeaver.HttpBench/README.md) | Performance tests a SysWeaver web server from a web page (Debug / HTTP bench): many workers call a selection of public end points, then a report with tables and charts; the form can be exported and imported as a json parameter file. |
+| [SysWeaver.HttpBench.Core](SysWeaver.HttpBench.Core/README.md) | The HTTP bench test engine (end points, workers, metrics, report rows and a markdown report) without web server dependencies, used by the bench service and the HttpBench console tool. |
 
 ### Remote APIs and networking
 
