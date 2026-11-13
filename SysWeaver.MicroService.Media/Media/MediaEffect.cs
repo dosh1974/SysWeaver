@@ -47,10 +47,10 @@ namespace SysWeaver.MicroService.Media
         public bool LimitSize = false;
 
         /// <summary>
-        /// If true the density (DPI) is adjusted dynamically according to performance
+        /// If true the density (DPI) is adjusted dynamically according to performance (off by default, as the player and the media editor have it)
         /// </summary>
-        [EditDefault(true)]
-        public bool DpiAdjust = true;
+        [EditDefault(false)]
+        public bool DpiAdjust = false;
 
         /// <summary>
         /// Adjust the DPI of this effect
@@ -94,8 +94,9 @@ namespace SysWeaver.MicroService.Media
         public String Texture = null;
 
         /// <summary>
-        /// If true, use WebGL2 
+        /// Obsolete, not used: the player always uses WebGL2 when the browser has it (kept so stored settings still read)
         /// </summary>
+        [EditHide]
         public bool WebGL2 = false;
 
         /// <summary>
