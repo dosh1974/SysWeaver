@@ -124,6 +124,25 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// SemaphoreSlim.Wait, but a timeout less than -1 succeeds if a slot is free (else throws), the same as WaitAsync and as SemaphoreSlim before .NET 11 (it validates the timeout first since .NET 11)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool Wait(SemaphoreSlim s, int waitMilliSeconds)
+        {
+            if (waitMilliSeconds >= -1)
+                return s.Wait(waitMilliSeconds);
+            return InvalidWait(s, waitMilliSeconds);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static bool InvalidWait(SemaphoreSlim s, int waitMilliSeconds)
+        {
+            if (s.Wait(0))
+                return true;
+            throw new ArgumentOutOfRangeException(nameof(waitMilliSeconds), waitMilliSeconds, "The timeout must be -1 (infinite) or greater");
+        }
+
+        /// <summary>
         /// Wait for a lock to be taken
         /// </summary>
         /// <returns>An IDisposable that releases the lock</returns>
@@ -142,7 +161,7 @@ namespace SysWeaver
         public IDisposable LockSync(int waitMilliSeconds)
         {
             var d = D;
-            if (!d.S.Wait(waitMilliSeconds))
+            if (!Wait(d.S, waitMilliSeconds))
                 return null;
             return d;
         }
@@ -344,10 +363,10 @@ namespace SysWeaver
             var c = d.MaxConcurrentAccess;
             var s = d.S;
             if (c == 1)
-                return s.Wait(waitMilliSeconds) ? d : null;
+                return Wait(s, waitMilliSeconds) ? d : null;
             var start = Environment.TickCount64;
             var g = AllGate;
-            if (!g.Wait(waitMilliSeconds))
+            if (!Wait(g, waitMilliSeconds))
                 return null;
             try
             {
@@ -355,7 +374,7 @@ namespace SysWeaver
                 {
                     try
                     {
-                        if (!s.Wait(Remaining(waitMilliSeconds, start)))
+                        if (!Wait(s, Remaining(waitMilliSeconds, start)))
                         {
                             Release(s, i);
                             return null;

@@ -1326,7 +1326,21 @@ namespace SysWeaver.Net
         /// An invoker that completes synchronously (a synchronous API method, no translation) doesn't need an async state machine:
         /// the measurement is ended and the result is returned without a task.
         /// Anything else (pending, faulted, canceled or a synchronous throw) is completed by an async method with a pooled box, so the states are the same as before (the server awaits the value task once).
+        /// With runtime async (.NET 11+) the plain async method is used: a runtime async method that completes synchronously doesn't allocate,
+        /// and the split (a non-async method that awaits a pending value task in another async method) allocates more when the call is pending.
         /// </remarks>
+#if NET11_0_OR_GREATER
+        async ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
+        {
+            if (request.HttpMethod == HttpServerMethods.GET)
+            {
+                using (GetTracker.Track())
+                    return new HttpRequestData(await GetAsync.Run(this, request).ConfigureAwait(false));
+            }
+            using (PostTracker.Track())
+                return new HttpRequestData(await PostAsync.Run(this, request).ConfigureAwait(false));
+        }
+#else
         ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
             PerfMesurement m = default;
@@ -1371,6 +1385,7 @@ namespace SysWeaver.Net
             return null;
         }
 #pragma warning restore CS1998
+#endif//NET11_0_OR_GREATER
 
 
         /// <summary>
@@ -1508,7 +1523,36 @@ namespace SysWeaver.Net
         /// <remarks>If reading or deserializing fails for an audited API, the failure is audited (see <see cref="AuditInputFailed"/>).
         /// A body that is already read (by <see cref="GetCacheKey(HttpServerRequest)"/>) or read synchronously is deserialized without a state machine,
         /// only a pending read is awaited by an async method (a pooled box).
-        /// Exceptions may be thrown synchronously: every caller is an async invoker that awaits this immediately, so that is the same as a faulted task.</remarks>
+        /// Exceptions may be thrown synchronously: every caller is an async invoker that awaits this immediately, so that is the same as a faulted task.
+        /// With runtime async (.NET 11+) a plain async method is used (see <see cref="IHttpRequestHandler.GetAsync(HttpServerRequest)"/>).</remarks>
+#if NET11_0_OR_GREATER
+        static async ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
+        {
+            try
+            {
+                IUnmanagedReadOnlyMemory<Byte> dataMem;
+                var c = request.Custom;
+                if (c != null)
+                {
+                    dataMem = (IUnmanagedReadOnlyMemory<Byte>)c;
+                    request.Custom = null;
+                }
+                else
+                {
+                    dataMem = await Input_POST_Read(api, request).ConfigureAwait(false);
+                }
+                return Input_POST_Deserialize<T>(api, request, dataMem);
+            }
+            catch (Exception ex)
+            {
+                AuditInputFailed(api, request, ex);
+                var bad = BadInput(ex);
+                if (!ReferenceEquals(bad, ex))
+                    throw bad;
+                throw;
+            }
+        }
+#else
         static ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             try
@@ -1558,6 +1602,7 @@ namespace SysWeaver.Net
                 throw;
             }
         }
+#endif//NET11_0_OR_GREATER
 
         /// <summary>
         /// Decompress and deserialize a request body (disposed).

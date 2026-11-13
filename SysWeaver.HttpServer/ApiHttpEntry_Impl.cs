@@ -171,7 +171,15 @@ namespace SysWeaver.Net
         /// <summary>
         /// Run a synchronous POST invoker: an input that is read and deserialized synchronously (the usual case) is passed on without a state machine,
         /// a pending input is awaited by <see cref="RunPostAwait{T, I}"/>, an input exception is returned as a faulted / canceled value task (the same as the async invoker).
+        /// With runtime async (.NET 11+) a plain async method is used (see <see cref="IHttpRequestHandler.GetAsync(HttpServerRequest)"/>).
         /// </summary>
+#if NET11_0_OR_GREATER
+        static async ValueTask<ReadOnlyMemory<Byte>> RunPost<T, I>(I invoker, ApiHttpEntry api, HttpServerRequest request) where I : class, IInvokePostRest<T>
+        {
+            var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+            return await invoker.RunRest(api, request, io).ConfigureAwait(false);
+        }
+#else
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static ValueTask<ReadOnlyMemory<Byte>> RunPost<T, I>(I invoker, ApiHttpEntry api, HttpServerRequest request) where I : class, IInvokePostRest<T>
         {
@@ -198,6 +206,7 @@ namespace SysWeaver.Net
             var io = await input.ConfigureAwait(false);
             return await invoker.RunRest(api, request, io).ConfigureAwait(false);
         }
+#endif//NET11_0_OR_GREATER
 
         #endregion//Synchronous invoker helpers
 

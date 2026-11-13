@@ -7,12 +7,16 @@
     loads the same way everywhere. The code keeps Effect Weaver's namespace (EffectWeaver.Shaders) and style (it was EffectWeaver.Common\Shaders).
   -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>EffectWeaver.Shaders</RootNamespace>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>1701;1702;1591;1573</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Features>runtime-async=on</Features>
   </PropertyGroup>
 
   <!--

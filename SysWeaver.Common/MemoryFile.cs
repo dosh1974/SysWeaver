@@ -39,7 +39,7 @@ namespace SysWeaver
     /// Use to represent a "file" (a name, a mime type and the data in memory), ex: as an api argument or return value.
     /// If mime = null and data = null, Name is a link to the "file".
     /// </summary>
-    public sealed class MemoryFile
+    public class MemoryFile
     {
         /// <summary>
         /// Get a summary of this file (without the data)

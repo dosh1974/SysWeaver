@@ -107,10 +107,29 @@ namespace SysWeaver.Net
             r.ContentLength64 = data.Length;
             r.OutputStream.Write(data);
         }
+#if NET11_0_OR_GREATER
+        /// <summary>
+        /// Bodies up to this size are written synchronously (see <see cref="SetResBodyAsync(ReadOnlyMemory{byte})"/>).
+        /// </summary>
+        const int SyncWriteMaxSize = 64 << 10;
+#endif//NET11_0_OR_GREATER
+
+        /// <remarks>
+        /// .NET 11+: a body up to <see cref="SyncWriteMaxSize"/> is written synchronously (http.sys copies it, the write doesn't wait for the client).
+        /// An async HttpListener write allocates and frees a native overlapped, and freeing it (ThreadPoolBoundHandle.FreeNativeOverlapped) is contended on .NET 11:
+        /// under load, requests waited for whole timer ticks (15.6 ms) and the throughput dropped to a third of .NET 10.
+        /// </remarks>
         public override async Task SetResBodyAsync(ReadOnlyMemory<Byte> data)
         {
             var r = Res;
             r.ContentLength64 = data.Length;
+#if NET11_0_OR_GREATER
+            if (data.Length <= SyncWriteMaxSize)
+            {
+                r.OutputStream.Write(data.Span);
+                return;
+            }
+#endif//NET11_0_OR_GREATER
             await r.OutputStream.WriteAsync(data).ConfigureAwait(false);
         }
 
@@ -120,10 +139,25 @@ namespace SysWeaver.Net
             r.ContentLength64 = length;
             r.OutputStream.Write(data, offset, length);
         }
+        /// <remarks>.NET 11+: a body up to <see cref="SyncWriteMaxSize"/> is written synchronously, see <see cref="SetResBodyAsync(ReadOnlyMemory{byte})"/></remarks>
         public override Task SetResBodyAsync(Byte[] data, int offset, int length)
         {
             var r = Res;
             r.ContentLength64 = length;
+#if NET11_0_OR_GREATER
+            if (length <= SyncWriteMaxSize)
+            {
+                try
+                {
+                    r.OutputStream.Write(data, offset, length);
+                    return Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    return Task.FromException(ex);
+                }
+            }
+#endif//NET11_0_OR_GREATER
             return r.OutputStream.WriteAsync(data, offset, length);
         }
 

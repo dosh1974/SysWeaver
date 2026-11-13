@@ -3,11 +3,15 @@
   <!-- The HTTP bench service: the web apis, the charts, the menu item and the page (httpbench/bench.html).
        The tests themselves run in SysWeaver.HttpBench.Core. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <RootNamespace>SysWeaver.HttpBench</RootNamespace>
     <NoWarn>1701;1702;1591</NoWarn>
     <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Features>runtime-async=on</Features>
   </PropertyGroup>
 
   <ItemGroup>
