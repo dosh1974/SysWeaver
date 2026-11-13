@@ -459,10 +459,6 @@
                         Desc: _TF("Anti aliasing (MSAA): smoother edges, a bit slower", "Description of a setting in the media editor"),
                     },
                     {
-                        Key: "WebGL2", Label: _TF("WebGL 2", "Setting in the media editor"), Type: "bool", Default: false, Group: G.Quality(),
-                        Desc: _TF("Runs the effect with WebGL 2 (some effects need it)", "Description of a setting in the media editor"),
-                    },
-                    {
                         Key: "Texture", Label: _TF("Picture", "Setting in the media editor: the texture of an effect"), Type: "string", Default: "", Group: G.Texture(),
                         Hint: _TF("an image file · empty = none", "Hint of a setting in the media editor; the parts are separated by ' · '"),
                         Desc: _TF("A picture the effect can use (its texture)", "Description of a setting in the media editor"),

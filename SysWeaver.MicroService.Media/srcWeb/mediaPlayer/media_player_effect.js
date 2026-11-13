@@ -56,7 +56,7 @@ class MediaPlayerParamsEffect {
     WrapY = false;
     /** @type {string|null} Declared (texture URL in C#); not read in this folder. Default null. */
     Texture = null;
-    /** @type {boolean} Request a "webgl2" context instead of "webgl". Default false. */
+    /** @type {boolean} Obsolete, not read: WebGL 2 is always used when available (kept so stored params still load). */
     WebGL2 = false;
     /** @type {boolean} Generate mipmaps for the texture (read by the texture providers via EffectParams.MipMap). Default false. */
     MipMap = false;
@@ -365,12 +365,13 @@ class MediaPlayerEffect {
     }
 
     /**
-     * Creates the WebGL context on the canvas ("webgl" or "webgl2" per Params.WebGL2; antialias = AntiAlias,
+     * Creates the WebGL context on the canvas ("webgl2" when available, else "webgl"; antialias = AntiAlias,
      * alpha = Transparent, no depth/stencil, no preserveDrawingBuffer; retries without antialias), enables
      * OES_standard_derivatives and EXT_shader_texture_lod, creates the fullscreen-triangle vertex buffer Pos
      * ([-1,1, 3,1, -1,-3]), creates Texture via CreateTextureFn(gl) and a timer Query
      * ({E: ext, Q: query, IsQ: false}) when EXT_disjoint_timer_query exists.
-     * @param {boolean} [preferGl2] - Use "webgl2" when available (an Effect Weaver effect, built for GLSL ES 3.00 like Effect Weaver does), else "webgl".
+     * Params.WebGL2 is no longer read (WebGL 2 is always used when the browser has it).
+     * @param {boolean} [preferGl2] - Use "webgl2" when available, else "webgl" (false only for a raw GLSL ES 1.00 shader that needs WebGL 1 extensions).
      * @throws {Error} "Can't initiate WebGL!" when no context can be created.
      * @returns {void}
      */
@@ -385,7 +386,7 @@ class MediaPlayerEffect {
             alpha: params.Transparent,
             preserveDrawingBuffer: false,
         };
-        let glver = (params.WebGL2 || preferGl2) ? "webgl2" : "webgl";
+        let glver = preferGl2 ? "webgl2" : "webgl";
         let gl = e.getContext(glver, glp);
         if (!gl) {
             if (glp.antialias) {
@@ -393,7 +394,7 @@ class MediaPlayerEffect {
                 gl = e.getContext(glver, glp);
             }
         }
-        if ((!gl) && preferGl2 && (!params.WebGL2))
+        if ((!gl) && preferGl2)
             gl = e.getContext("webgl", glp);
         if (!gl)
             throw new Error(typeof _TF === "function" ? _TF("Can't initiate WebGL!", "Reason on the error state of the media viewer: the browser can't draw the effect, WebGL is not available") : "Can't initiate WebGL!"); // (the player also runs on lean pages without the core)
@@ -1105,7 +1106,11 @@ class MediaPlayerEffect {
         //  An Effect Weaver effect (Ew snippets, a vertex stage, iMouse controls) is built by the server the way Effect Weaver builds it,
         //  for WebGL2 (GLSL ES 3.00) when available; without the server api it is compiled as is (as before)
         const ew = EffectProgramData.NeedsBuild(t.Src);
-        t.InitGL(ew);
+        //  WebGL 2 whenever the browser has it; a raw GLSL ES 1.00 shader that uses WebGL 1 extensions (derivatives, texture lod)
+        //  keeps WebGL 1, those extension directives don't compile in WebGL 2
+        const src = typeof t.Src === "string" ? t.Src : "";
+        const gl1Only = (!ew) && (!/^\s*#version\s+300/m.test(src)) && /#extension|\b(dFdx|dFdy|fwidth|texture2DLod(EXT)?)\b/.test(src);
+        t.InitGL(!gl1Only);
 
         const gl = t.GL;
 
