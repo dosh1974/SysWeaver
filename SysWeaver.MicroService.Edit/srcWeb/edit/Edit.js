@@ -41,7 +41,7 @@
      */
     const Flags = Object.freeze({
         Multiline: 1, Password: 2, AcceptNull: 4, Slider: 8, ReadOnly: 16, Collection: 32, Indexed: 64, IsEnum: 128,
-        IsPrimitive: 256, IsObject: 512, Hide: 1024, IsFlags: 2048, DateUnspecified: 4096,
+        IsPrimitive: 256, IsObject: 512, Hide: 1024, IsFlags: 2048, DateUnspecified: 4096, Random: 8192,
     });
 
     /**
@@ -67,6 +67,7 @@
         editTop: '<path d="M5 4h14M12 20V8M7 13l5-5 5 5"/>',
         editBottom: '<path d="M5 20h14M12 4v12M7 11l5 5 5-5"/>',
         editClear: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+        editRandom: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01" stroke-width="2.75" stroke-linecap="round"/>',
     };
     for (const n in EditIcons)
         if (!Sw.Icons.Has(n))
@@ -183,6 +184,8 @@
             this.UndoStackValue = options.UndoStack || (parentEditor ? parentEditor.UndoStack : null);
             const e = el("div.sw-edit", { attrs: { role: "group", "aria-label": options.KeyName || type.DisplayName || null } });
             e.classList.add(parentEditor ? "sw-edit-child" : "sw-edit-root");
+            if (!parentEditor)
+                Edit.ApplyLabelWidth(e);
             if (!options.Border)
                 e.classList.add("NoBorder", "sw-edit-noborder");
             if (options.ReadOnly)
@@ -1925,6 +1928,17 @@
                 open(ev);
             });
             Sw.LongPress(c, open);
+            //  A right click on the background of the value cell (not on its controls) opens the member menu too (a left click there
+            //  does nothing: it is easily made by mistake next to a control)
+            if (cell) {
+                cell.addEventListener("contextmenu", ev => {
+                    //  With a modifier key the browser's menu shows (like Sw.LongPress)
+                    if (ev.target !== cell || !Sw.IsPureContextMenu(ev) || Sw.HasSelectionIn(cell))
+                        return;
+                    ev.preventDefault();
+                    open(ev);
+                });
+            }
             const row = editContext.Row || editContext.PrevRow;
             if (row) {
                 row.addEventListener("keydown", ev => {
@@ -1962,7 +1976,157 @@
                 b.E.setAttribute("aria-haspopup", "menu");
                 iconCell.append(b.E);
             }
+            Edit.AddResetButton(res, editor, member, cell);
             return res;
+        }
+
+        /**
+         * A reset button (the member menu's Set default) at the right end of the value cell (Edit.css: the same place for every type)
+         * of an editable member with a simple default (a string, number, boolean or date, or null; not passwords, not objects and lists:
+         * their cell holds a nested editor). It is only visible while the value differs from the default; its place is kept while
+         * it is invisible (class sw-edit-reset-off), so the field next to it keeps its size.
+         * @param {object} item - The member item (DefValue, DefValueText, ReadOnly, TypeHandler).
+         * @param {Edit} editor - The editor.
+         * @param {object} member - The member.
+         * @param {?HTMLElement} cell - The value cell.
+         */
+        static AddResetButton(item, editor, member, cell) {
+            const def = item.DefValue;
+            const dt = typeof def;
+            if (!cell || item.ReadOnly || (def !== null && !(def instanceof Date) && dt !== "string" && dt !== "number" && dt !== "boolean") || (member.Flags & Flags.Password) !== 0)
+                return;
+            const H = Edit.Handlers;
+            const th = item.TypeHandler;
+            if (def === null && th && ((H.Object && th instanceof H.Object) || (H.Collection && th instanceof H.Collection)))
+                return;
+            const defText = item.DefValueText ?? String(def);
+            const b = new Sw.Button({
+                Icon: "reset", Kind: "ghost", Small: true, Class: "sw-edit-reset",
+                Title: _T("Reset the value to the default: {0}", defText, "Tool tip description for a menu item that if selected resets a property to the default value.{0} is replaced with the default value of the property."),
+                OnClick: () => editor.ResetMember(item, member),
+            });
+            b.E.setAttribute("aria-label", _TF("Set default", "Text for a menu item that if selected resets a property to the default value"));
+            cell.append(b.E);
+            const mn = member.Name;
+            const update = () => {
+                let v = editor.Object[mn];
+                //  A null string shows as an empty box: no reset to "" (looks like nothing to reset)
+                if (v === null && item.DefValue === "")
+                    v = "";
+                b.E.classList.toggle("sw-edit-reset-off", !Edit.IsDifferent(v, item.DefValue));
+            };
+            update();
+            //  Every change of the member (typing, undo, redo, paste, drop) dispatches an EditChange on the editor
+            editor.Element.addEventListener("EditChange", update);
+            editor.RemoveListerners.push(update);
+            const upd = item.UpdateValue;
+            item.UpdateValue = async isFirst => {
+                await upd(isFirst);
+                update();
+            };
+        }
+
+        /**
+         * The stored label column width of the desktop layout (px), 0 when not set (automatic: as wide as the longest label up to 13rem).
+         * @returns {number} The width.
+         */
+        static GetLabelWidth() {
+            let w = 0;
+            try {
+                w = parseFloat(localStorage.getItem(Edit.LabelWidthKey) || "") || 0;
+            }
+            catch {
+            }
+            return w > 0 ? w : 0;
+        }
+
+        /**
+         * Apply a label column width to a root editor element (class sw-edit-labelw and --sw-edit-label-w; EditDesktop.css limits it
+         * to 4em .. 70% of the editor).
+         * @param {HTMLElement} e - The root editor element.
+         * @param {number} [w] - The width in px (default: the stored width), 0 = automatic.
+         */
+        static ApplyLabelWidth(e, w) {
+            if (w === undefined)
+                w = Edit.GetLabelWidth();
+            e.classList.toggle("sw-edit-labelw", w > 0);
+            if (w > 0)
+                e.style.setProperty("--sw-edit-label-w", Math.round(w) + "px");
+            else
+                e.style.removeProperty("--sw-edit-label-w");
+        }
+
+        /**
+         * Store the label column width (local storage).
+         * @param {number} w - The width in px, 0 = automatic (removes the key).
+         */
+        static StoreLabelWidth(w) {
+            try {
+                if (w > 0)
+                    localStorage.setItem(Edit.LabelWidthKey, "" + Math.round(w));
+                else
+                    localStorage.removeItem(Edit.LabelWidthKey);
+            }
+            catch {
+            }
+        }
+
+        /**
+         * Apply a label column width to every root editor of the page.
+         * @param {number} w - The width in px, 0 = automatic.
+         */
+        static SetLabelWidthAll(w) {
+            document.querySelectorAll(".sw-edit-root").forEach(x => Edit.ApplyLabelWidth(x, w));
+        }
+
+        /**
+         * Make the split between the label and the value of a desktop row draggable: a handle on the start edge of the value cell sets
+         * the label column width of every editor on the page (stored in local storage); a double click restores the automatic width.
+         * @param {HTMLElement} label - The label cell of the row.
+         * @param {HTMLElement} value - The value cell of the row (gets the handle).
+         */
+        static AddSplit(label, value) {
+            const h = el("div.sw-edit-split", { attrs: { "aria-hidden": "true" }, title: _TF("Drag to change the width of the names, double click for the automatic width", "Tool tip of the split between the property names and values of an editor") });
+            const all = Edit.SetLabelWidthAll;
+            const store = Edit.StoreLabelWidth;
+            h.addEventListener("pointerdown", ev => {
+                if (ev.button !== 0)
+                    return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                const start = ev.clientX;
+                const w0 = label.getBoundingClientRect().width;
+                const root = label.closest(".sw-edit-root");
+                const max = root ? root.getBoundingClientRect().width * 0.7 : 1e6;
+                const rtl = getComputedStyle(label).direction === "rtl";
+                let w = w0;
+                h.setPointerCapture(ev.pointerId);
+                h.classList.add("sw-edit-split-drag");
+                const move = e => {
+                    const dx = rtl ? start - e.clientX : e.clientX - start;
+                    w = Math.max(48, Math.min(max, w0 + dx));
+                    all(w);
+                };
+                const up = () => {
+                    h.removeEventListener("pointermove", move);
+                    h.removeEventListener("pointerup", up);
+                    h.removeEventListener("pointercancel", up);
+                    h.classList.remove("sw-edit-split-drag");
+                    if (w !== w0)
+                        store(w);
+                };
+                h.addEventListener("pointermove", move);
+                h.addEventListener("pointerup", up);
+                h.addEventListener("pointercancel", up);
+            });
+            h.addEventListener("click", ev => ev.stopPropagation());
+            /* SwWeb:allow ux-inp-6 (a shortcut: the member menu has "Automatic name width" while a width is set) */
+            h.addEventListener("dblclick", ev => {
+                ev.stopPropagation();
+                store(0);
+                all(0);
+            });
+            value.append(h);
         }
 
         /**
@@ -2016,6 +2180,38 @@
         }
 
         /**
+         * Set a member to its default value (the member menu's Set default, the reset button of a number), as an undo step.
+         * Does nothing when the member has no default or already has it.
+         * @param {object} item - The member item (DefValue, DefValueText).
+         * @param {object} member - The member.
+         * @returns {Promise<void>}
+         */
+        async ResetMember(item, member) {
+            const def = item.DefValue;
+            const old = this.Object[member.Name];
+            if (def === undefined || !Edit.IsDifferent(old, def))
+                return;
+            const defText = item.DefValueText ?? (typeof def === "object" ? JSON.stringify(def) : String(def));
+            await this.SetMemberValue(member, await this.KeepMemberReadOnly(member, def), old, _T("Set default: {0}", defText, "Command text stored in a log when a property value was reset to it's default.{0} is replaced with the default value of the property."));
+        }
+
+        /**
+         * Set a member to a random value (item.Random(): the member menu's Random, the dice button of a number), as an undo step.
+         * @param {object} item - The member item.
+         * @param {object} member - The member.
+         * @returns {Promise<void>}
+         */
+        async RandomMember(item, member) {
+            if (typeof item.Random !== "function")
+                return;
+            const old = this.Object[member.Name];
+            const v = item.Random();
+            if (!Edit.IsDifferent(old, v))
+                return;
+            await this.SetMemberValue(member, v, old, _T("Random: {0}", v, "Command text stored in a log when a property value was set to a random value.{0} is replaced with the new value."));
+        }
+
+        /**
          * Show the member menu: Set default, Copy, Paste (with a preview of the clipboard), handler items, Copy name
          * (Dev: Copy member name, Copy type name).
          * @param {object} item - The member item.
@@ -2048,8 +2244,16 @@
             items.push({
                 Text: _TF("Set default", "Text for a menu item that if selected resets a property to the default value"), Icon: "reset", Title: title, Disabled: !enabled,
                 Hint: enabled ? Edit.Short(defText) : null,
-                OnClick: async () => editor.SetMemberValue(member, await editor.KeepMemberReadOnly(member, def), obj[mn], _T("Set default: {0}", defText, "Command text stored in a log when a property value was reset to it's default.{0} is replaced with the default value of the property.")),
+                OnClick: () => editor.ResetMember(item, member),
             });
+            //  Random (members with the Random flag whose handler can make a random value, see EditRandomAttribute)
+            if (typeof item.Random === "function")
+                items.push({
+                    Text: _TF("Random", "Text for a menu item that if selected sets a property (ex: a seed) to a random value"), Icon: "editRandom",
+                    Title: readOnly ? _TF("Value is read only", "Tool tip description on a property value that can't be edited") : item.RandomTitle,
+                    Disabled: readOnly,
+                    OnClick: () => editor.RandomMember(item, member),
+                });
             //  Copy
             const val = editor.GetCopyMember(member);
             items.push(isPassword ? {
@@ -2102,6 +2306,17 @@
                 Title: _T("Copy the name \"{0}\" to the clipboard.", dn, "Tool tip description on a menu item that when clicked will copy the display name of a property to the clip board.{0} is replaced with the display name of the property"),
                 OnClick: () => Sw.Clipboard.Copy(dn),
             });
+            //  The names have a dragged width: back to the automatic width (also a double click on the split)
+            const root = item.TitleElement && item.TitleElement.closest(".sw-edit-root.sw-edit-labelw.sw-edit-desktop");
+            if (root)
+                items.push({
+                    Text: _TF("Automatic name width", "Text of a menu item of a property editor that restores the automatic width of the property names (after the user dragged the split between names and values)"), Icon: "reset",
+                    Title: _TF("Make the column of the names as wide as the longest name again", "Tool tip of a menu item of a property editor that restores the automatic width of the property names"),
+                    OnClick: () => {
+                        Edit.StoreLabelWidth(0);
+                        Edit.SetLabelWidthAll(0);
+                    },
+                });
             if (options.Dev) {
                 items.push({
                     Text: _TF("Copy member name", "Text of a menu item that when clicked will copy the member name of a property to the clip board"), Icon: "copy",
@@ -3270,6 +3485,8 @@
     Edit.BuiltInPlugins = ["Language"];
     /** @type {number} Root editors narrower than this (px) use the mobile layout (automatic style). */
     Edit.MobileWidth = 520;
+    /** @type {string} Local storage key of the label column width (px) of the desktop layout, set by dragging the split. */
+    Edit.LabelWidthKey = "SysWeaver.Edit.LabelWidth";
     /** @type {object} The type member flags. */
     Edit.Flags = Flags;
     /** @type {object} Default option values. */
@@ -3722,7 +3939,10 @@
                 cell.classList.add("EditSlider", "sw-edit-hasslider");
                 cell.append(slider.E);
             }
-            return Handler.Item(obj, editor, member, {
+            //  Random members (EditRandomAttribute, ex: a seed): a dice button (random value); the reset button is added for every
+            //  member with a default (Sw.Edit.AddResetButton)
+            const random = (member.Flags & Flags.Random) !== 0;
+            const item = Handler.Item(obj, editor, member, {
                 Focus: text, Title: r.Title, DefValue: r.ParsedDef, DefValueText: r.ParsedDef === undefined ? undefined : fmt(r.ParsedDef),
                 Update: () => {
                     text.UpdateValue();
@@ -3730,6 +3950,44 @@
                         slider.Set(obj[mn], true, true);
                 },
             });
+            if (random) {
+                item.Random = () => t.RandomValue(r, step, decimals);
+                item.RandomTitle = _T("Set a random value from {0} to {1}", fmt(r.Min), fmt(r.Max), "Tool tip of a button / menu item that sets a property (ex: a seed) to a random value.{0} is replaced with the smallest and {1} with the largest possible value.");
+                if (!readOnly) {
+                    const dice = new Sw.Button({
+                        Icon: "editRandom", Kind: "ghost", Small: true, Class: "sw-edit-random",
+                        Title: item.RandomTitle, OnClick: () => editor.RandomMember(item, member),
+                    });
+                    dice.E.setAttribute("aria-label", _TF("Random", "Text for a menu item that if selected sets a property (ex: a seed) to a random value"));
+                    cell.append(dice.E);
+                }
+            }
+            return item;
+        }
+
+        /**
+         * A random value of a member range: integers uniformly from Min to Max (inclusive), floats uniformly from Min to Max, on the
+         * slider step and with its decimals when the member has a slider.
+         * @param {{Min: number, Max: number}} r - The range (see Range).
+         * @param {number} [step] - The slider step (0 = none).
+         * @param {number} [decimals] - Decimals of the slider text (-1 = none).
+         * @returns {number} The value.
+         */
+        RandomValue(r, step, decimals) {
+            const lo = r.Min, hi = r.Max;
+            const u = Math.random();
+            let v;
+            if (this.IsInteger)
+                v = Math.floor(lo + u * (hi - lo + 1));
+            else {
+                //  (1 - u) * lo + u * hi: no overflow for the full double range
+                v = (1 - u) * lo + u * hi;
+                if (step > 0)
+                    v = lo + Math.round((v - lo) / step) * step;
+                if (decimals >= 0)
+                    v = parseFloat(v.toFixed(decimals));
+            }
+            return Math.min(Math.max(v, lo), hi);
         }
     }
 

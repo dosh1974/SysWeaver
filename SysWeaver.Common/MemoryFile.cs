@@ -76,6 +76,13 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Create an empty file (all members are null), used when deserializing (ex: a file as an api argument)
+        /// </summary>
+        public MemoryFile()
+        {
+        }
+
+        /// <summary>
         /// Create a link to a file (<see cref="Mime"/> and <see cref="Data"/> are null)
         /// </summary>
         /// <param name="url">The url of the file</param>

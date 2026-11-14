@@ -19,7 +19,7 @@ namespace SysWeaver.AI
     /// See: https://github.com/Good-Dream-Studio/ComfyUI-Connect
     /// Workflows are loaded from a local folder (API format json files) and uploaded to the server on first use (optional).
     /// </summary>
-    public sealed class ComfyUiService
+    public sealed partial class ComfyUiService
     {
         public override string ToString() => String.Concat("End point: ", EndPoint.ToString().ToQuoted(), ", Workflow folder: ", WorkflowFolder.ToFilename());
 
@@ -58,6 +58,12 @@ namespace SysWeaver.AI
             var uiFolder = p.UiWorkflowFolder;
             if (!String.IsNullOrEmpty(uiFolder))
                 UiWorkflowFolder = Path.GetFullPath(EnvInfo.MakeAbsoulte(PathTemplate.Resolve(uiFolder)));
+            //  Workflows for the task methods
+            var taskFolders = p.TaskWorkflowFolders;
+            if (taskFolders != null)
+                foreach (var f in taskFolders)
+                    if (!String.IsNullOrWhiteSpace(f))
+                        AddWorkflows(f);
         }
 
         readonly bool AnnotateSubgraphInputs;
@@ -124,9 +130,22 @@ namespace SysWeaver.AI
         /// <summary>
         /// Called by the compiled workflow delegates
         /// </summary>
-        internal async Task<R> Execute<T, R>(CancellationToken cancel, ComfyUiWorkflow wf, T p, Action<T, Utf8JsonWriter> write, Func<JsonElement, R> read)
+        internal Task<R> Execute<T, R>(CancellationToken cancel, ComfyUiWorkflow wf, T p, Action<T, Utf8JsonWriter> write, Func<JsonElement, R> read)
+            => ExecuteCore(cancel, wf, p, write, read, UploadWorkflows);
+
+        /// <summary>
+        /// Run a workflow
+        /// </summary>
+        /// <param name="cancel">Cancellation token</param>
+        /// <param name="wf">The workflow</param>
+        /// <param name="p">The input</param>
+        /// <param name="write">Writes the input values (tag objects)</param>
+        /// <param name="read">Reads the output from the "result" object</param>
+        /// <param name="upload">If true the workflow is uploaded (once per version)</param>
+        internal async Task<R> ExecuteCore<T, R>(CancellationToken cancel, ComfyUiWorkflow wf, T p, Action<T, Utf8JsonWriter> write, Func<JsonElement, R> read, bool upload)
         {
-            await EnsureUploaded(wf).ConfigureAwait(false);
+            if (upload)
+                await EnsureUploaded(wf).ConfigureAwait(false);
             var buf = new ArrayBufferWriter<byte>(4096);
             using (var w = new Utf8JsonWriter(buf))
             {
@@ -291,8 +310,6 @@ namespace SysWeaver.AI
 
         Task EnsureUploaded(ComfyUiWorkflow wf)
         {
-            if (!UploadWorkflows)
-                return Task.CompletedTask;
             var u = Uploads;
             var key = wf.CacheKey;
             if (u.TryGetValue(key, out var t) && !(t.IsFaulted || t.IsCanceled))

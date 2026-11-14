@@ -3036,7 +3036,9 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
  *  - numbers: Number (thousands grouping + fixed decimals), Amount (currency, CurrencyOptions), Suffix
  *    (k/M/G/T/E), Bytes, ByteSpeed;
  *  - time: DurationMs (elapsed ms as one translated unit), TimeSpan (.NET TimeSpan text or seconds), TimeStamp
- *    ([tooltip, "yyyy-MM-dd HH:mm:ss"]), LocalToUtc / UtcToLocal, ParseDate (zone-less ISO = UTC, "yyyy-MM-dd" = local day), Uptime (elapsed since a date);
+ *    ([tooltip, text as the format locale writes it]), Locale / LocaleChoice / AutoLocale / SetLocale / LocalText (the locale of dates and
+ *    times: the user's choice in localStorage "SysWeaver.FormatLocale", else detected from the time zone by core/region.js, loaded once),
+ *    LocalToUtc / UtcToLocal, ParseDate (zone-less ISO = UTC, "yyyy-MM-dd" = local day), Uptime (elapsed since a date);
  *    zones (the time rule in core/README "Times"): OffsetText, ZoneText, ZoneHint, ServerZone / SetServerZone / ServerZoneFrom /
  *    ServerZoneText, ServerToDate, ServerText, ServerToLocalText;
  *  - text: StringFormat / StringFormatArgs (same as Sw.I18n.Format), CountSuffix, RemoveCamelCase,
@@ -3335,6 +3337,264 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         return new Date(v);
     }
 
+    // ------------------------------------------------------------------ the format locale (dates and times as the user's region writes them)
+
+    /** localStorage key of the user's choice (a locale, ex: "sv-SE"; missing or "" = automatic). */
+    const localeKey = "SysWeaver.FormatLocale";
+    /** localStorage key of the detected locale: "time zone|locale" (detected again when the time zone changes). */
+    const localeAutoKey = "SysWeaver.FormatLocaleAuto";
+
+    /** @returns {string} The viewer's time zone, ex: "Europe/Stockholm" ("" if not known). */
+    function tzName() {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        }
+        catch {
+            return "";
+        }
+    }
+
+    /** @param {?string} l A locale. @returns {boolean} True when the browser can format with it. */
+    function validLocale(l) {
+        try {
+            return !!l && Intl.DateTimeFormat.supportedLocalesOf([l]).length > 0;
+        }
+        catch {
+            return false;
+        }
+    }
+
+    /** @returns {?string} The detected locale for the current time zone (null when not detected yet). */
+    function autoLocale() {
+        const a = String(Sw.Storage ? Sw.Storage.Get(localeAutoKey, "") || "" : "").split("|");
+        return a.length === 2 && a[0] === tzName() && validLocale(a[1]) ? a[1] : null;
+    }
+
+    /** @returns {string|undefined} The locale to format with: the user's choice, else the detected one, else undefined (the browser's). */
+    function readLocale() {
+        const c = Sw.Storage ? Sw.Storage.Get(localeKey, "") : "";
+        return validLocale(c) ? c : (autoLocale() || undefined);
+    }
+
+    let fmtLocale = readLocale();
+
+    /** Use the changed choice / detection (another page of the site changed it, or this one). */
+    function localeChanged() {
+        const l = readLocale();
+        if (l === fmtLocale)
+            return;
+        fmtLocale = l;
+        if (Sw.Events)
+            Sw.Events.Emit("format.locale", { Locale: l });
+    }
+
+    window.addEventListener("storage", e => {
+        if (e.key === localeKey || e.key === localeAutoKey)
+            localeChanged();
+    });
+
+    //  Not detected for this time zone yet: detect it (core/region.js, loaded only then) and remember it. The page formats with the
+    //  browser's locale until it's done (only the first page of a browser, or after a time zone change).
+    if (!autoLocale())
+        setTimeout(() => {
+            if (!Sw.Net || !Sw.Url || autoLocale())
+                return;
+            Sw.Net.IncludeJs(null, Sw.Url.Root + "core/region.js").then(() => {
+                const l = Sw.FormatRegion && Sw.FormatRegion.Detect();
+                if (validLocale(l) && Sw.Storage) {
+                    Sw.Storage.Set(localeAutoKey, tzName() + "|" + l);
+                    localeChanged();
+                }
+            }).catch(e => console.warn("Sw.Format: the format locale could not be detected: " + e));
+        }, 0);
+
+    /**
+     * A date (and time) as the format locale writes it with numbers, ex: "2018-01-30 07:30:40" (sv-SE), "01/30/2018, 07:30:40 AM" (en-US).
+     * @param {Date} d - The date, its UTC fields are the wall clock to show.
+     * @param {boolean} [onlyDate] - Only the date.
+     * @returns {string} The text.
+     */
+    function localText(d, onlyDate) {
+        const o = { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" };
+        if (!onlyDate) {
+            o.hour = "2-digit";
+            o.minute = "2-digit";
+            o.second = "2-digit";
+        }
+        try {
+            return new Intl.DateTimeFormat(fmtLocale, o).format(d);
+        }
+        catch {
+            return isoText(d, onlyDate);
+        }
+    }
+
+    // ------------------------------------------------------------------ date / time fields typed by the user (Sw.Edit, Sw.DatePicker)
+
+    /**
+     * A Date whose UTC fields are a calendar day / wall clock (years 1 - 9999, no 1900 shift for years below 100).
+     * @param {number} y Year.
+     * @param {number} m Month (1-12; overflows into the next / previous year).
+     * @param {number} d Day (overflows into the next / previous month).
+     * @param {number} [h] Hours.
+     * @param {number} [mi] Minutes.
+     * @param {number} [s] Seconds.
+     * @returns {Date} The Date.
+     */
+    function utcFields(y, m, d, h, mi, s) {
+        const t = new Date(0);
+        t.setUTCFullYear(y, m - 1, d);
+        t.setUTCHours(h || 0, mi || 0, s || 0, 0);
+        return t;
+    }
+
+    /**
+     * The order of the date fields of the format locale and a hint of its form: { Order: "ymd", Hint: "yyyy-mm-dd" } (sv-SE),
+     * { Order: "mdy", Hint: "mm/dd/yyyy" } (en-US), { Order: "dmy", Hint: "dd/mm/yyyy" } (en-GB).
+     * @returns {{Order: string, Hint: string}} The pattern.
+     */
+    function datePattern() {
+        try {
+            const parts = new Intl.DateTimeFormat(fmtLocale, { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(utcFields(2033, 11, 22));
+            let order = "", hint = "";
+            for (const p of parts) {
+                if (p.type === "year") {
+                    order += "y";
+                    hint += "yyyy";
+                }
+                else if (p.type === "month") {
+                    order += "m";
+                    hint += "mm";
+                }
+                else if (p.type === "day") {
+                    order += "d";
+                    hint += "dd";
+                }
+                else if (p.type === "literal")
+                    hint += p.value;
+            }
+            if (order.length === 3)
+                return { Order: order, Hint: hint };
+        }
+        catch {
+        }
+        return { Order: "ymd", Hint: "yyyy-mm-dd" };
+    }
+
+    /**
+     * Read a date typed by the user: three numbers in the order of the format locale ("2026-01-30", "1/30/2026", "30.1.26"), a
+     * first number of 3 or 4 digits is the year (ISO order in every locale), a 2 digit year is in 2000 - 2099.
+     * @param {string} text The text.
+     * @returns {?{Y: number, M: number, D: number}|undefined} The day, null for an empty text, undefined when it is no valid date.
+     */
+    function parseLocalDate(text) {
+        const s = String(text ?? "").trim();
+        if (!s)
+            return null;
+        const g = s.match(/\d+/g);
+        if (!g || g.length !== 3)
+            return undefined;
+        const order = g[0].length >= 3 ? "ymd" : datePattern().Order;
+        const v = {};
+        for (let i = 0; i < 3; ++i)
+            v[order[i]] = +g[i];
+        if (g[order.indexOf("y")].length <= 2)
+            v.y += 2000;
+        if (v.y < 1 || v.y > 9999 || v.m < 1 || v.m > 12 || v.d < 1)
+            return undefined;
+        const t = utcFields(v.y, v.m, v.d);
+        if (t.getUTCMonth() !== v.m - 1 || t.getUTCDate() !== v.d)
+            return undefined;
+        return { Y: v.y, M: v.m, D: v.d };
+    }
+
+    /**
+     * The day period of a typed time in the format locale ("PM", "em", "p.m."), also "am" / "pm" / "a" / "p" in every locale.
+     * @param {string} s The text.
+     * @returns {?string} "am", "pm" or null.
+     */
+    function dayPeriod(s) {
+        const norm = x => String(x).toLowerCase().replace(/[\s.  ]/g, "");
+        const letters = norm(s.replace(/[\d:.,]/g, " "));
+        if (!letters)
+            return null;
+        try {
+            const f = new Intl.DateTimeFormat(fmtLocale, { timeZone: "UTC", hour: "numeric", hour12: true });
+            const am = f.formatToParts(utcFields(2000, 1, 1, 1)).find(p => p.type === "dayPeriod");
+            const pm = f.formatToParts(utcFields(2000, 1, 1, 13)).find(p => p.type === "dayPeriod");
+            if (am && letters === norm(am.value))
+                return "am";
+            if (pm && letters === norm(pm.value))
+                return "pm";
+        }
+        catch {
+        }
+        if (letters === "am" || letters === "a")
+            return "am";
+        if (letters === "pm" || letters === "p")
+            return "pm";
+        return undefined;
+    }
+
+    /**
+     * Read a time of day typed by the user: "14:05", "14.05.09", "1405", "2:05 PM" (the day period of the format locale or am / pm).
+     * @param {string} text The text.
+     * @returns {?{H: number, M: number, S: number}|undefined} The time, null for an empty text, undefined when it is no valid time.
+     */
+    function parseLocalTime(text) {
+        const s = String(text ?? "").trim();
+        if (!s)
+            return null;
+        const g = s.match(/\d+/g);
+        if (!g || g.length > 3)
+            return undefined;
+        let h, m, sec;
+        if (g.length === 1 && g[0].length > 2) {
+            const x = g[0];
+            if (x.length !== 4 && x.length !== 6)
+                return undefined;
+            h = +x.substring(0, 2);
+            m = +x.substring(2, 4);
+            sec = x.length === 6 ? +x.substring(4, 6) : 0;
+        }
+        else {
+            h = +g[0];
+            m = +(g[1] || 0);
+            sec = +(g[2] || 0);
+        }
+        const p = dayPeriod(s);
+        if (p === undefined)
+            return undefined;
+        if (p) {
+            if (h < 1 || h > 12)
+                return undefined;
+            h = h % 12 + (p === "pm" ? 12 : 0);
+        }
+        if (h > 23 || m > 59 || sec > 59)
+            return undefined;
+        return { H: h, M: m, S: sec };
+    }
+
+    /**
+     * A hint of the time form of the format locale: "hh:mm:ss" (sv-SE), "hh:mm:ss AM" (en-US).
+     * @param {boolean} [seconds] With seconds (default true).
+     * @returns {string} The hint.
+     */
+    function timePattern(seconds) {
+        try {
+            const o = { timeZone: "UTC", hour: "2-digit", minute: "2-digit" };
+            if (seconds !== false)
+                o.second = "2-digit";
+            let hint = "";
+            for (const p of new Intl.DateTimeFormat(fmtLocale, o).formatToParts(utcFields(2000, 1, 1, 13, 14, 15)))
+                hint += p.type === "hour" ? "hh" : p.type === "minute" ? "mm" : p.type === "second" ? "ss" : p.type === "dayPeriod" ? p.value : p.value;
+            return hint;
+        }
+        catch {
+            return seconds !== false ? "hh:mm:ss" : "hh:mm";
+        }
+    }
+
     /**
      * Format a Date as "yyyy-MM-dd HH:mm:ss" from its UTC fields.
      * @param {Date} d - Date.
@@ -3360,9 +3620,12 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
     function timeStamp(dd, onlyDate, prefix, tab, fmt) {
         if (!prefix)
             prefix = _TF("At", 'Tool tip row prefix to some time stamp, ex: "At: 1997-04-12 15:32:30"') + ": ";
-        //  a date-only value is a calendar day in every zone and every mode (no shift)
-        if ((typeof dd === "string") && dateOnlyRx.test(dd.trim()))
-            return [prefix + dd.trim(), dd.trim()];
+        //  a date-only value is a calendar day in every zone and every mode (no shift), written as the format locale writes dates
+        if ((typeof dd === "string") && dateOnlyRx.test(dd.trim())) {
+            const day = new Date(dd.trim() + "T00:00:00Z");
+            const text = isNaN(day.getTime()) ? dd.trim() : localText(day, true);
+            return [prefix + text + "\n" + _TF("ISO", "Tool tip row prefix to some time stamp written using js Date.toISOString() syntax") + ": " + dd.trim(), text];
+        }
         const raw = dd;
         if ((typeof dd === "string") || (typeof dd === "number"))
             dd = parseDate(dd);
@@ -3385,14 +3648,15 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         if (!prefix)
             prefix = _TF("At", 'Tool tip row prefix to some time stamp, ex: "At: 1997-04-12 15:32:30"') + ": ";
         tab = "\n" + tab;
-        const c = isoText(dd, onlyDate);
+        //  As the format locale writes it (the user's region, see Locale); the ISO text is in the tool tip
+        const c = localText(dd, onlyDate);
         let title = prefix + c;
         //  The time rule (core/README "Times"): the tool tip says which clock the text is ("At: ... (WEST, UTC+1)")
         if (!isLocal && !onlyDate)
             title += " (" + (fmt === "utc" ? "UTC" : zoneText(utc)) + ")";
         if (!isLocal) {
             title += tab +
-                _TF("Local", "Tool tip row prefix to some time stamp written using js Date.toLocaleString() syntax") + ": " + loc.toLocaleString() + tab +
+                _TF("Local", "Tool tip row prefix to some time stamp written using js Date.toLocaleString() syntax") + ": " + loc.toLocaleString(fmtLocale) + tab +
                 _TF("Full", "Tool tip row prefix to some time stamp written using js Date.toString() syntax") + ": " + utc.toString() + tab +
                 _TF("UTC", "Tool tip row prefix to some time stamp written using js Date.toUTCString() syntax") + ": " + utc.toUTCString() + tab +
                 _TF("ISO", "Tool tip row prefix to some time stamp written using js Date.toISOString() syntax") + ": " + utc.toISOString();
@@ -3430,7 +3694,7 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
         const off = offsetText(-t.getTimezoneOffset());
         let name = "";
         try {
-            const p = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(t).find(x => x.type === "timeZoneName");
+            const p = new Intl.DateTimeFormat(fmtLocale, { timeZoneName: "short" }).formatToParts(t).find(x => x.type === "timeZoneName");
             name = p ? p.value : "";
         }
         catch {
@@ -3709,8 +3973,112 @@ window.Sw.Sources["core/format.js"] = "sw/core.js";
             return durationMs(((now ?? Date.now()) - dd.getTime()) * (invert ? -1 : 1), blankIfNeg);
         },
 
-        /** Time stamp [tooltip, text] (date, onlyDate, prefix, tab, fmt). */
+        /** Time stamp [tooltip, text] (date, onlyDate, prefix, tab, fmt): the text as the format locale writes it. */
         TimeStamp: timeStamp,
+
+        /**
+         * The locale used for dates and times (pass it to toLocaleString / Intl.DateTimeFormat): the user's choice (SetLocale), else the
+         * locale detected for the time zone (core/region.js: the region's formats, as the operating system has them), else undefined (the
+         * browser's language).
+         * @returns {string|undefined} The locale.
+         */
+        Locale: () => fmtLocale,
+
+        /** @returns {string} The user's choice of the format locale, "" = automatic (see Locale). */
+        LocaleChoice: () => {
+            const c = Sw.Storage ? Sw.Storage.Get(localeKey, "") : "";
+            return validLocale(c) ? c : "";
+        },
+
+        /** @returns {?string} The locale detected for the time zone (null when not detected yet). */
+        AutoLocale: autoLocale,
+
+        /**
+         * Choose the locale of dates and times (localStorage "SysWeaver.FormatLocale": every page of the site in this browser; the open
+         * pages get the event "format.locale", pages already showing dates should reload).
+         * @param {?string} l The locale, ex: "sv-SE"; "" or null = automatic.
+         */
+        SetLocale(l) {
+            if (Sw.Storage) {
+                if (validLocale(l))
+                    Sw.Storage.Set(localeKey, l);
+                else
+                    Sw.Storage.Remove(localeKey);
+            }
+            localeChanged();
+        },
+
+        /** A date (and time) with numbers as the format locale writes it (date, onlyDate; the UTC fields are shown). */
+        LocalText: localText,
+
+        /**
+         * The time of day of an instant in the viewer's zone, as the format locale writes it, ex: "14:05:09" (sv-SE), "02:05:09 PM" (en-US).
+         * Use this (or DateTime / DateText) instead of toLocaleTimeString(), which ignores the user's format choice.
+         * @param {Date|number|string} d - The instant.
+         * @param {boolean} [seconds] - Include the seconds (default true).
+         * @param {boolean} [wall] - The UTC fields are the wall clock to show (ex: a server's clock), not an instant.
+         * @returns {string} The text.
+         */
+        Time(d, seconds, wall) {
+            const t = d instanceof Date ? d : parseDate(d);
+            const o = { hour: "2-digit", minute: "2-digit" };
+            if (seconds !== false)
+                o.second = "2-digit";
+            if (wall)
+                o.timeZone = "UTC";
+            return t.toLocaleTimeString(fmtLocale, o);
+        },
+
+        /**
+         * A date and time of an instant in the viewer's zone, as the format locale writes it (toLocaleString with the format locale).
+         * @param {Date|number|string} d - The instant.
+         * @param {object} [options] - Intl.DateTimeFormat options (default { dateStyle: "medium", timeStyle: "medium" }).
+         * @returns {string} The text.
+         */
+        DateTime(d, options) {
+            const t = d instanceof Date ? d : parseDate(d);
+            return t.toLocaleString(fmtLocale, options || { dateStyle: "medium", timeStyle: "medium" });
+        },
+
+        /**
+         * The date of an instant in the viewer's zone, as the format locale writes it (toLocaleDateString with the format locale).
+         * @param {Date|number|string} d - The instant.
+         * @param {object} [options] - Intl.DateTimeFormat options (default { dateStyle: "medium" }).
+         * @returns {string} The text.
+         */
+        DateText(d, options) {
+            const t = d instanceof Date ? d : parseDate(d);
+            return t.toLocaleDateString(fmtLocale, options || { dateStyle: "medium" });
+        },
+
+        /**
+         * A calendar day as the format locale writes it with numbers, for a field the user can type in ("2026-01-30", "01/30/2026").
+         * @param {{Y: number, M: number, D: number}} v The day.
+         * @returns {string} The text ("" for null).
+         */
+        DayText: v => v ? localText(utcFields(v.Y, v.M, v.D), true) : "",
+
+        /**
+         * A wall clock time as the format locale writes it, for a field the user can type in ("14:05:09", "02:05:09 PM").
+         * @param {{H: number, M: number, S: number}} v The time.
+         * @param {boolean} [seconds] With seconds (default true).
+         * @returns {string} The text ("" for null).
+         */
+        ClockText(v, seconds) {
+            return v ? Sw.Format.Time(utcFields(1970, 1, 1, v.H, v.M, v.S), seconds, true) : "";
+        },
+
+        /** Read a typed date (see DayText): {Y, M, D}, null for "", undefined when invalid. */
+        ParseDay: parseLocalDate,
+
+        /** Read a typed time (see ClockText): {H, M, S}, null for "", undefined when invalid. */
+        ParseClock: parseLocalTime,
+
+        /** @returns {string} The form of a typed date in the format locale ("yyyy-mm-dd", "mm/dd/yyyy"): a placeholder. */
+        DayHint: () => datePattern().Hint,
+
+        /** The form of a typed time in the format locale ("hh:mm:ss", "hh:mm:ss PM"): a placeholder (seconds, default true). */
+        ClockHint: timePattern,
 
         /** "yyyy-MM-dd HH:mm:ss" from the UTC fields of a Date (date, onlyDate). */
         IsoText: isoText,
@@ -11866,7 +12234,7 @@ window.Sw.Sources["core/activity.js"] = "sw/core.js";
             if (!same.length)
                 return t;
             const d = this.Ended || this.Started;
-            const fmt = x => x.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            const fmt = x => x.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
             //  (two in the same second: a counter)
             const n = same.filter(j => fmt(j.Ended || j.Started) === fmt(d) && j.Id < this.Id).length;
             return t + " (" + fmt(d) + (n ? " #" + (n + 1) : "") + ")";
@@ -14222,10 +14590,10 @@ window.Sw.Sources["core/draft.js"] = "sw/core.js";
      */
     function whenText(d) {
         const now = new Date();
-        const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const time = d.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
         if (d.toDateString() === now.toDateString())
             return time;
-        return d.toLocaleDateString([], { day: "numeric", month: "short" }) + ", " + time;
+        return d.toLocaleDateString(Sw.Format.Locale(), { day: "numeric", month: "short" }) + ", " + time;
     }
 
     /**
@@ -14235,10 +14603,10 @@ window.Sw.Sources["core/draft.js"] = "sw/core.js";
      */
     function savedText(d) {
         const now = new Date();
-        const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const time = d.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
         if (d.toDateString() === now.toDateString())
             return _T("Draft restored (saved {0})", time, "Line under a text field after the page restored text that was typed before a reload but not sent.{0} is replaced with the time it was saved, ex: 10:42");
-        const date = d.toLocaleDateString([], { day: "numeric", month: "short" });
+        const date = d.toLocaleDateString(Sw.Format.Locale(), { day: "numeric", month: "short" });
         return _T("Draft restored (saved {0}, {1})", date, time, "Line under a text field after the page restored text that was typed before a reload but not sent.{0} is replaced with the date, {1} with the time it was saved");
     }
 

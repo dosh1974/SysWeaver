@@ -2,8 +2,10 @@
  * @file Type handler for DateTime, DateOnly and TimeOnly members (and their nullable variants) (`Sw.Edit.Handlers.DateTime`,
  * legacy global `EditTypeDateTime`).
  *
- * Loaded by Edit.js. Native date and time inputs (time with seconds), side by side on wide editors and stacked on narrow
- * ones. The inputs show local time; DateTime values are stored as ISO strings (or Date objects when the value was a Date),
+ * Loaded by Edit.js. Our own date and time text fields (not the browser's date / time inputs, which follow the browser language):
+ * the date and the time as the format locale writes them (Sw.Format.Locale, DayText / ClockText; typed in that form or ISO), a
+ * calendar button (Sw.DatePicker, also Alt+Down) for the date; side by side on wide editors and stacked on narrow ones. The fields
+ * show local time; DateTime values are stored as ISO strings (or Date objects when the value was a Date),
  * with the DateUnspecified flag as `yyyy-mm-ddThh:mm:ss` without time zone conversion; DateOnly as `yyyy-mm-dd`, TimeOnly
  * as `hh:mm:ss`. Nullable types (and AcceptNull members) accept an empty input as null.
  */
@@ -346,20 +348,81 @@
                 await editor.SetMemberValue(member, v, old, _T("Set value: \"{0}\"", t.ToString(v, member), "Command text stored in a log when a property value was changed.{0} is replaced with the new value."));
             };
             const wrap = Sw.el("div.sw-edit-datetime");
-            let dateInp = null, timeInp = null;
+            const SF = Sw.Format;
+            let dateInp = null, timeInp = null, calB = null;
+            //  Our own text fields (not the browser's date / time inputs, which follow the browser language): the date and the time as
+            //  the format locale writes them (Sw.Format.Locale, the user's choice), typed in that form (or ISO), a calendar popup
+            //  (Sw.DatePicker) for the date. An invalid text is not stored: leaving the field shows the value again
             if (!this.OnlyTime) {
-                dateInp = E.CreateGenericInput("date", () => obj[mn], commit, v => t.SetLocalDateString(obj[mn], v, unspecified), v => t.GetLocalDateString(v, unspecified), null, readOnly);
-                if (r.HaveMin)
-                    dateInp.min = this.GetLocalDateString(r.Min);
-                if (r.HaveMax)
-                    dateInp.max = this.GetLocalDateString(r.Max);
+                const dayOf = v => {
+                    const s = t.GetLocalDateString(v, unspecified);
+                    if (!s)
+                        return null;
+                    const p = s.split("-").map(Number);
+                    return { Y: p[0], M: p[1], D: p[2] };
+                };
+                const fromDay = d => t.SetLocalDateString(obj[mn], EditTypeDateTime.GetDateString(d.Y, d.M, d.D), unspecified);
+                dateInp = E.CreateGenericInput("text", () => obj[mn], commit, text => {
+                    const d = SF.ParseDay(text);
+                    if (d === null)
+                        return nullOk ? null : undefined;
+                    return d ? fromDay(d) : undefined;
+                }, v => SF.DayText(dayOf(v === undefined ? obj[mn] : v)), null, readOnly);
                 dateInp.setAttribute("aria-label", (member.DisplayName || mn) + " (" + _TF("date", "Accessible name suffix of a date input") + ")");
                 wrap.append(dateInp);
+                if (!readOnly) {
+                    dateInp.placeholder = SF.DayHint();
+                    dateInp.spellcheck = false;
+                    dateInp.autocomplete = "off";
+                    dateInp.classList.add("sw-edit-date");
+                    const local = d => d ? { Y: d.getFullYear(), M: d.getMonth() + 1, D: d.getDate() } : null;
+                    const open = () => Sw.DatePicker(calB.E, {
+                        Value: dayOf(obj[mn]), Min: r.HaveMin ? local(r.Min) : null, Max: r.HaveMax ? local(r.Max) : null,
+                        Label: member.DisplayName || mn,
+                        OnPick: async d => {
+                            await commit(fromDay(d));
+                            dateInp.UpdateValue();
+                            dateInp.focus();
+                        },
+                    });
+                    calB = new Sw.Button({
+                        Icon: "calendar", Kind: "ghost", Small: true, Class: "sw-edit-calbtn",
+                        Title: _TF("Choose a date in a calendar (Alt+Down in the date field)", "Tool tip of the calendar button next to a date field of a property editor"),
+                        OnClick: open,
+                    });
+                    calB.E.setAttribute("aria-haspopup", "dialog");
+                    calB.E.setAttribute("aria-label", _TF("Choose a date", "Accessible name of the calendar button next to a date field"));
+                    //  Alt+Down opens the calendar (as a select opens its list)
+                    dateInp.addEventListener("keydown", ev => {
+                        if (ev.key === "ArrowDown" && ev.altKey && !ev.ctrlKey && !ev.shiftKey && !ev.metaKey) {
+                            ev.preventDefault();
+                            open();
+                        }
+                    });
+                    wrap.append(calB.E);
+                }
             }
             if (!this.OnlyDate) {
-                timeInp = E.CreateGenericInput("time", () => obj[mn], commit, v => t.SetLocalTimeString(obj[mn], v, unspecified), v => t.GetLocalTimeString(v, unspecified), null, readOnly);
-                timeInp.step = 1;
+                const clockOf = v => {
+                    const s = t.GetLocalTimeString(v, unspecified);
+                    if (!s)
+                        return null;
+                    const p = s.split(":").map(Number);
+                    return { H: p[0], M: p[1], S: p[2] || 0 };
+                };
+                timeInp = E.CreateGenericInput("text", () => obj[mn], commit, text => {
+                    const c = SF.ParseClock(text);
+                    if (c === null)
+                        return nullOk ? null : undefined;
+                    return c ? t.SetLocalTimeString(obj[mn], EditTypeDateTime.GetTimeString(c.H, c.M, c.S), unspecified) : undefined;
+                }, v => SF.ClockText(clockOf(v === undefined ? obj[mn] : v)), null, readOnly);
                 timeInp.setAttribute("aria-label", (member.DisplayName || mn) + " (" + _TF("time", "Accessible name suffix of a time input") + ")");
+                if (!readOnly) {
+                    timeInp.placeholder = SF.ClockHint();
+                    timeInp.spellcheck = false;
+                    timeInp.autocomplete = "off";
+                    timeInp.classList.add("sw-edit-time");
+                }
                 wrap.append(timeInp);
             }
             if (dateInp && timeInp)

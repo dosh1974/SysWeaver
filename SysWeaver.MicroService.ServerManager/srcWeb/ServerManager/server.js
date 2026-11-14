@@ -68,12 +68,22 @@ class SmServerClock {
     }
 
     /**
+     * The current server wall clock as [date, time] texts as the format locale writes them (Sw.Format.Locale, the user's choice).
+     * @returns {string[]} The parts.
+     */
+    Shown() {
+        const d = new Date(this.ServerStart + (Date.now() - this.AtTime));
+        const F = Sw.Format;
+        return [F.LocalText(d, true), F.Time(d, true, true)];
+    }
+
+    /**
      * Redraw (only touches the DOM when a text changed).
      */
     Draw() {
         if (!this.TextEl)
             return;
-        const n = this.Now();
+        const n = this.Shown();
         if (this.TextEl.textContent !== n[1])
             this.TextEl.textContent = n[1];
         //  The shared time rule (core/README "Times"): the server's wall clock is labelled with its zone; when the viewer
@@ -88,7 +98,7 @@ class SmServerClock {
             _TF("This is the local server time and date.", "Tool tip line of the server clock"),
         ];
         if (differs)
-            lines.push(_T("Your time: {0} ({1})", local.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), F.ZoneText ? F.ZoneText(local) : "", "Tool tip line of the server clock when the viewer is in another time zone.{0} is replaced with the viewer's time, {1} with the viewer's zone (ex: WEST, UTC+1)"));
+            lines.push(_T("Your time: {0} ({1})", F.Time(local), F.ZoneText ? F.ZoneText(local) : "", "Tool tip line of the server clock when the viewer is in another time zone.{0} is replaced with the viewer's time, {1} with the viewer's zone (ex: WEST, UTC+1)"));
         lines.push("", _TF("Copy this to the clipboard", "Tool tip line of the server clock"));
         const t = SmShared.Lines(...lines);
         if (this.TitleEl && this.TitleEl.title !== t)

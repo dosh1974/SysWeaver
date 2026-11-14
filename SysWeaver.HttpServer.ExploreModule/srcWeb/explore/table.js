@@ -5100,6 +5100,7 @@
         ColsMenu() {
             const t = this;
             const p = t.ColPrefs();
+            const custom = p.Hide.length > 0 || p.Show.length > 0 || p.Wrap.length > 0 || !p.RowNums;
             const items = [{ Title: _TF("Columns", "Heading of the column chooser menu of a data table (a list of the columns follows)") }];
             t.Vis.forEach((v, vi) => {
                 const c = v.Col;
@@ -5140,6 +5141,14 @@
                     p.Show = t.Vis.filter(v => t.AutoHidden.includes(v.Col.Name) || srvHidden(v.Col)).map(v => v.Col.Name);
                     t.SaveColPrefs();
                 },
+            }, {
+                Text: _TF("Restore default columns", "Menu item of the column chooser of a data table that forgets the viewer's column choices (the table's default columns)"),
+                Icon: "reset",
+                Title: custom
+                    ? _TF("Forget your column choices (hidden and shown columns, wrapped texts, row numbers) and show the table's default columns", "Tool tip of the Restore default columns item of the column chooser of a data table")
+                    : _TF("The table already shows its default columns", "Tool tip of the Restore default columns item of the column chooser of a data table, when it is disabled because nothing was changed"),
+                Disabled: !custom,
+                OnClick: () => t.RestoreColumns(),
             });
             Sw.Menu.Show(t.ColsB.E, items, { Align: "end", Label: _TF("Columns", "Heading of the column chooser menu of a data table (a list of the columns follows)") });
         }
@@ -5740,7 +5749,7 @@
                 t.UpdateNote(!!t.NoteRun);
             }
             if (t.StaleE.hidden) {
-                const at = t.LastOk ? Sw.Format.Time ? Sw.Format.Time(t.LastOk) : t.LastOk.toLocaleTimeString() : "";
+                const at = t.LastOk ? Sw.Format.Time(t.LastOk) : "";
                 const long = at
                     ? _T("Not updated since {0}", at, "Chip below a data table while the connection to the server is lost (the last rows stay), {0} is the time of the last update, ex: 12:40")
                     : _TF("Not updated (offline)", "Chip below a data table while the connection to the server is lost (the last rows stay)");
@@ -7762,17 +7771,17 @@
                     : (a.Done || _T("{0}: done", a.Text, "Message after a row action of a data table succeeded, {0} is the action (ex: End session)"));
             //  (one verdict: a neutral result's tool tip is its sentence and the time, never "did not work")
             const tip = neutral
-                ? _T("{0} ({1})", full, a.At.toLocaleTimeString(), "Tool tip of the result note on a data table row after a row action whose goal was met already or whose item is gone, {0} is the result sentence (ex: Kill: not needed. The process has already ended.), {1} the time")
+                ? _T("{0} ({1})", full, Sw.Format.Time(a.At), "Tool tip of the result note on a data table row after a row action whose goal was met already or whose item is gone, {0} is the result sentence (ex: Kill: not needed. The process has already ended.), {1} the time")
                 : failed
-                    ? _T("{0} did not work at {1}: {2}", a.Text, a.At.toLocaleTimeString(), a.Failed, "Tool tip of the failure note on a data table row after a row action failed, {0} is the action (ex: Kill), {1} the time, {2} the reason")
+                    ? _T("{0} did not work at {1}: {2}", a.Text, Sw.Format.Time(a.At), a.Failed, "Tool tip of the failure note on a data table row after a row action failed, {0} is the action (ex: Kill), {1} the time, {2} the reason")
                     : a.Gone
-                        ? _T("The service stopped listing this row at {0}: it may have ended, or someone else changed or removed it.", a.At.toLocaleTimeString(), "Tool tip of the note 'No longer listed' on a data table row, {0} the time")
+                        ? _T("The service stopped listing this row at {0}: it may have ended, or someone else changed or removed it.", Sw.Format.Time(a.At), "Tool tip of the note 'No longer listed' on a data table row, {0} the time")
                         //  (only a final action's row may still be listed until it goes, ex: an ended session; a row whose action changed
                         //  its state, ex: Disable, stays with its new actions: Admin N47)
                         : a.Final
-                            ? _T("You used {0} on this row at {1}. The service may still list the row until it is removed or expires.", a.Text, a.At.toLocaleTimeString(),
+                            ? _T("You used {0} on this row at {1}. The service may still list the row until it is removed or expires.", a.Text, Sw.Format.Time(a.At),
                                 "Tool tip of the done note on a data table row after a row action (ex: End session), {0} is the action, {1} the time")
-                            : _T("You used {0} on this row at {1}.", a.Text, a.At.toLocaleTimeString(),
+                            : _T("You used {0} on this row at {1}.", a.Text, Sw.Format.Time(a.At),
                                 "Tool tip of the done note on a data table row after a row action that changed the row (ex: Disable a user account), {0} is the action, {1} the time");
             //  (a row that is no longer listed, or whose action found it gone already: information, not a success; ✓ only for "done")
             const info = !failed && (!!a.Gone || !!a.Neutral);
@@ -9042,7 +9051,40 @@
                     },
                 });
             }
+            //  Hide column (the grid layouts, like the column chooser; the "Columns" button shows it again): never the last shown column
+            if (!t.E.classList.contains("sw-table-cards") && !t.CardsOn() && t.Vis.length > 1) {
+                const shown = t.Vis.filter((x, i) => !t.HiddenIdx.has(i + 1)).length;
+                items.push("-", {
+                    Text: _TF("Hide column", "The text of a menu item on a table column header that hides the column (the column chooser shows it again)"),
+                    Icon: "eyeOff",
+                    Title: shown > 1
+                        ? _T("Hide the column {0} (the Columns button below the table shows it again)", title, "Tool tip of the Hide column menu item on a table column header, {0} is the column title")
+                        : _TF("The last shown column can't be hidden", "Tool tip of the Hide column menu item on a table column header, when it is disabled because no other column is shown"),
+                    Disabled: shown <= 1,
+                    OnClick: () => t.HideColumn(c.Name),
+                });
+            }
             return items;
+        }
+
+        /**
+         * Hide a column with the viewer's column choices (ColPrefs, as unchecking it in the column chooser).
+         * @param {string} name The column name.
+         */
+        HideColumn(name) {
+            const t = this;
+            const p = t.ColPrefs();
+            p.Show = p.Show.filter(x => x !== name);
+            if (!p.Hide.includes(name))
+                p.Hide.push(name);
+            t.SaveColPrefs();
+        }
+
+        /** Forget the viewer's column choices (ColPrefs: hidden / shown columns, wrapped texts, row numbers): the table's default columns. */
+        RestoreColumns() {
+            const t = this;
+            t.ColPref = { Hide: [], Show: [], Wrap: [], RowNums: true };
+            t.SaveColPrefs();
         }
 
         /**

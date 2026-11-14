@@ -58,6 +58,10 @@ namespace SysWeaver.MicroService
         /// Has its own bit (it used to share 2048 with <see cref="IsFlags"/>).
         /// </summary>
         DateUnspecified = 4096,
+        /// <summary>
+        /// A number that can be set to a random value (within its min and max), see <see cref="EditRandomAttribute"/>
+        /// </summary>
+        Random = 8192,
 
 
     }

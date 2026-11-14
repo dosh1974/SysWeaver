@@ -719,10 +719,10 @@
      */
     function whenText(d) {
         const now = new Date();
-        const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const time = d.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
         if (d.toDateString() === now.toDateString())
             return time;
-        return d.toLocaleDateString([], { day: "numeric", month: "short" }) + ", " + time;
+        return d.toLocaleDateString(Sw.Format.Locale(), { day: "numeric", month: "short" }) + ", " + time;
     }
 
     /**
@@ -732,10 +732,10 @@
      */
     function savedText(d) {
         const now = new Date();
-        const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const time = d.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
         if (d.toDateString() === now.toDateString())
             return _T("Draft restored (saved {0})", time, "Line under a text field after the page restored text that was typed before a reload but not sent.{0} is replaced with the time it was saved, ex: 10:42");
-        const date = d.toLocaleDateString([], { day: "numeric", month: "short" });
+        const date = d.toLocaleDateString(Sw.Format.Locale(), { day: "numeric", month: "short" });
         return _T("Draft restored (saved {0}, {1})", date, time, "Line under a text field after the page restored text that was typed before a reload but not sent.{0} is replaced with the date, {1} with the time it was saved");
     }
 

@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.AI\SysWeaver.AI.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
   </ItemGroup>
 

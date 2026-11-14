@@ -1668,7 +1668,7 @@
                 if (this.Editor && !this.Gone)
                     facts.push({ Label: _TF("Lines", "Label of the number of lines in the confirmation that deletes the log file"), Value: String(this.Editor.session.getLength()) });
                 if (info.LastWrite)
-                    facts.push({ Label: _TF("Last written", "Label of the time of the last write in the confirmation that deletes the log file"), Value: new Date(info.LastWrite).toLocaleString() });
+                    facts.push({ Label: _TF("Last written", "Label of the time of the last write in the confirmation that deletes the log file"), Value: Sw.Format.DateTime(info.LastWrite) });
                 return { Token: info.Token, Item: info.Name || this.Name, Facts: facts, Text: info.Warning || undefined };
             } : null;
             //  The shared confirmation of destructive actions (same look and wording as Kill in the tables)

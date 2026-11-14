@@ -877,6 +877,22 @@
         }
     }
 
+    //  A framed page that loses the focus (a click outside the frame: on the page that frames it, another frame, another window) closes
+    //  its menus and pop-ups, as an outside press would (POP-2); dialogs and modal pop-ups stay. The top window isn't affected (switching
+    //  to another application keeps them), and neither is a focus that moves into a frame of this page (document.hasFocus() is still true).
+    if (inFrameWindow())
+        window.addEventListener("blur", () => setTimeout(() => {
+            if (document.hasFocus())
+                return;
+            for (let i = stack.length - 1; i >= 0; --i) {
+                const p = stack[i];
+                if (p.IsDialog)
+                    break;
+                if (!p.Closed && p.OutsideAct)
+                    p.OutsideAct();
+            }
+        }, 0));
+
     /** @type {Map<Window, {Frame: HTMLIFrameElement, Host: HTMLElement, Place: function():void}>} Top window: catchers of framed pages' pop-ups. */
     const frameCatches = new Map();
 

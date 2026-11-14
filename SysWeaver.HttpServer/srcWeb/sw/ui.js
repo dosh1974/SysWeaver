@@ -7690,6 +7690,171 @@ window.Sw.Sources["ui/controls.js"] = "sw/ui.js";
         return popup;
     }
 
+    // ------------------------------------------------------------------ date picker
+
+    /**
+     * Show a month calendar popup to pick a day (the date fields of Sw.Edit). Days are {Y, M, D} (M 1-12). The month and weekday
+     * names and the first day of the week follow the format locale (Sw.Format.Locale). Keys: arrows move a day / a week,
+     * Page Up / Down a month (with Shift a year), Home / End the start / end of the week, Enter or Space picks, Escape closes.
+     * @param {HTMLElement} anchor The element to show it at.
+     * @param {object} [o] Options: Value (the current day, marked; null = none), Min / Max (the first / last day that can be
+     *   picked), OnPick(day), OnClose(), Label (the accessible name of the popup).
+     * @returns {{Close: function():void}} The popup.
+     */
+    function DatePicker(anchor, o) {
+        o = o || {};
+        const F = Sw.Format;
+        const loc = F && F.Locale ? F.Locale() : undefined;
+        const key = v => v ? v.Y * 10000 + v.M * 100 + v.D : 0;
+        const utc = (y, m, d) => {
+            const t = new Date(0);
+            t.setUTCFullYear(y, m - 1, d);
+            return t;
+        };
+        const fields = t => ({ Y: t.getUTCFullYear(), M: t.getUTCMonth() + 1, D: t.getUTCDate() });
+        const now = new Date();
+        const today = { Y: now.getFullYear(), M: now.getMonth() + 1, D: now.getDate() };
+        const minK = key(o.Min) || 10101, maxK = key(o.Max) || 99991231;
+        const inRange = v => key(v) >= minK && key(v) <= maxK;
+        let focus = o.Value ? Object.assign({}, o.Value) : inRange(today) ? Object.assign({}, today) : Object.assign({}, key(today) < minK ? o.Min : o.Max);
+        //  The first day of the week of the locale (Intl.Locale week info; Monday when the browser doesn't know)
+        let firstDay = 1;
+        try {
+            const l = new Intl.Locale(loc || navigator.language);
+            const wi = typeof l.getWeekInfo === "function" ? l.getWeekInfo() : l.weekInfo;
+            if (wi && wi.firstDay)
+                firstDay = wi.firstDay % 7;
+        }
+        catch {
+        }
+        const fmtMonth = new Intl.DateTimeFormat(loc, { timeZone: "UTC", month: "long", year: "numeric" });
+        const fmtWd = new Intl.DateTimeFormat(loc, { timeZone: "UTC", weekday: "short" });
+        const fmtWdLong = new Intl.DateTimeFormat(loc, { timeZone: "UTC", weekday: "long" });
+        const fmtFull = new Intl.DateTimeFormat(loc, { timeZone: "UTC", dateStyle: "full" });
+        let popup = null;
+        /** Pick a day: close and report it. */
+        const pick = v => {
+            if (!inRange(v))
+                return;
+            popup.Close();
+            if (o.OnPick)
+                o.OnPick(v);
+        };
+        const title = el("div.sw-cal-title", { attrs: { "aria-live": "polite" } });
+        const grid = el("div.sw-cal-grid", { attrs: { role: "grid", "aria-label": _TF("Days", "Accessible name of the day grid of a date picker (a month calendar)") } });
+        /**
+         * Move the focused day (and the shown month).
+         * @param {number} days Days to add.
+         * @param {number} [months] Months to add instead (the day is kept, or the last day of a shorter month).
+         */
+        const move = (days, months) => {
+            let t;
+            if (months) {
+                const last = utc(focus.Y, focus.M + months + 1, 0).getUTCDate();
+                t = utc(focus.Y, focus.M + months, Math.min(focus.D, last));
+            }
+            else
+                t = utc(focus.Y, focus.M, focus.D + days);
+            const v = fields(t);
+            if (v.Y < 1 || v.Y > 9999)
+                return;
+            focus = v;
+            render(grid.contains(document.activeElement));
+        };
+        const prev = new Button({
+            Icon: "left", Kind: "ghost", Small: true, Title: _TF("Previous month", "Tool tip of the button of a date picker that shows the previous month"),
+            OnClick: () => move(0, -1),
+        });
+        const next = new Button({
+            Icon: "right", Kind: "ghost", Small: true, Title: _TF("Next month", "Tool tip of the button of a date picker that shows the next month"),
+            OnClick: () => move(0, 1),
+        });
+        const todayB = new Button({
+            Text: _TF("Today", "Button of a date picker that picks the current day"), Kind: "ghost", Small: true,
+            OnClick: () => pick(today),
+        });
+        if (!inRange(today))
+            todayB.SetDisabled(true, _TF("Today can't be picked here", "Tool tip of the Today button of a date picker when the current day is outside the allowed range"));
+        /**
+         * Render the month of the focused day.
+         * @param {boolean} focusIt Move the keyboard focus to the focused day.
+         */
+        function render(focusIt) {
+            title.textContent = fmtMonth.format(utc(focus.Y, focus.M, 1));
+            grid.replaceChildren();
+            const head = el("div.sw-cal-row", { attrs: { role: "row" } });
+            for (let i = 0; i < 7; ++i) {
+                //  (2023-01-01 is a Sunday: day 0)
+                const wd = utc(2023, 1, 1 + (firstDay + i) % 7);
+                head.append(el("div.sw-cal-wd", { text: fmtWd.format(wd), attrs: { role: "columnheader", "aria-label": fmtWdLong.format(wd) } }));
+            }
+            grid.append(head);
+            const lead = (utc(focus.Y, focus.M, 1).getUTCDay() - firstDay + 7) % 7;
+            let focusB = null;
+            for (let r = 0; r < 6; ++r) {
+                const row = el("div.sw-cal-row", { attrs: { role: "row" } });
+                for (let c = 0; c < 7; ++c) {
+                    const day = utc(focus.Y, focus.M, 1 - lead + r * 7 + c);
+                    const v = fields(day);
+                    const ok = inRange(v);
+                    const isFocus = key(v) === key(focus);
+                    const b = el("button.sw-cal-day", {
+                        type: "button", text: String(v.D), tabIndex: isFocus ? 0 : -1,
+                        attrs: {
+                            role: "gridcell", "aria-label": fmtFull.format(day), "aria-selected": o.Value && key(v) === key(o.Value) ? "true" : "false",
+                            "aria-current": key(v) === key(today) ? "date" : null,
+                        },
+                    });
+                    if (v.M !== focus.M || v.Y !== focus.Y)
+                        b.classList.add("sw-cal-other");
+                    if (!ok)
+                        Sw.Disabled.Set(b, true, _TF("This day can't be picked here", "Tool tip of a day of a date picker outside the allowed range"));
+                    b.addEventListener("click", ev => {
+                        //  A modifier click only moves the focus (INP-2); a disabled day is stopped by its guard (INP-12)
+                        focus = v;
+                        if (Sw.ModifierClick(ev) || !ok)
+                            return;
+                        pick(v);
+                    });
+                    row.append(b);
+                    if (isFocus)
+                        focusB = b;
+                }
+                grid.append(row);
+            }
+            if (focusIt && focusB)
+                focusB.focus({ preventScroll: true });
+        }
+        grid.addEventListener("keydown", ev => {
+            if (ev.ctrlKey || ev.altKey || ev.metaKey)
+                return;
+            const dow = (utc(focus.Y, focus.M, focus.D).getUTCDay() - firstDay + 7) % 7;
+            switch (ev.key) {
+                case "ArrowLeft": move(-1); break;
+                case "ArrowRight": move(1); break;
+                case "ArrowUp": move(-7); break;
+                case "ArrowDown": move(7); break;
+                case "PageUp": move(0, ev.shiftKey ? -12 : -1); break;
+                case "PageDown": move(0, ev.shiftKey ? 12 : 1); break;
+                case "Home": move(-dow); break;
+                case "End": move(6 - dow); break;
+                default: return;
+            }
+            ev.preventDefault();
+        });
+        const box = el("div.sw-cal", null,
+            el("div.sw-cal-head", null, prev.E, title, next.E),
+            grid,
+            el("div.sw-cal-foot", null, todayB.E));
+        popup = Sw.Popup.Show(anchor, box, {
+            Class: "sw-cal-popup", Label: o.Label || _TF("Choose a date", "Accessible name of a date picker popup (a month calendar)"),
+            OnClose: o.OnClose,
+        });
+        render(true);
+        popup.Place();
+        return popup;
+    }
+
     // ------------------------------------------------------------------ color picker
 
     const { HsvToRgb: hsvToRgb, RgbToHsv: rgbToHsv, ToHex: toHex, FromHex: fromHex } = Sw.Color;
@@ -8716,6 +8881,7 @@ window.Sw.Sources["ui/controls.js"] = "sw/ui.js";
         TextBox,
         Select,
         ListPicker,
+        DatePicker,
         ColorPicker,
         Badge,
         Chip,
@@ -9630,6 +9796,22 @@ window.Sw.Sources["ui/overlay.js"] = "sw/ui.js";
             });
         }
     }
+
+    //  A framed page that loses the focus (a click outside the frame: on the page that frames it, another frame, another window) closes
+    //  its menus and pop-ups, as an outside press would (POP-2); dialogs and modal pop-ups stay. The top window isn't affected (switching
+    //  to another application keeps them), and neither is a focus that moves into a frame of this page (document.hasFocus() is still true).
+    if (inFrameWindow())
+        window.addEventListener("blur", () => setTimeout(() => {
+            if (document.hasFocus())
+                return;
+            for (let i = stack.length - 1; i >= 0; --i) {
+                const p = stack[i];
+                if (p.IsDialog)
+                    break;
+                if (!p.Closed && p.OutsideAct)
+                    p.OutsideAct();
+            }
+        }, 0));
 
     /** @type {Map<Window, {Frame: HTMLIFrameElement, Host: HTMLElement, Place: function():void}>} Top window: catchers of framed pages' pop-ups. */
     const frameCatches = new Map();
@@ -20411,10 +20593,9 @@ window.Sw.Sources["ui/cells.js"] = "sw/ui.js";
     async function confirmAction(cell, d, btn) {
         //  The item names the row by its key values, which are raw: a server time ("2026-10-20T03:01:10Z") is shown in the viewer's
         //  time like the cells (the time rule, core/README "Times")
-        const p2 = n => String(n).padStart(2, "0");
         let item = ItemName(cell).replace(/\b\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:?\d\d)\b/g, s => {
             const t = new Date(s);
-            return isNaN(t) ? s : t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()) + " " + p2(t.getHours()) + ":" + p2(t.getMinutes()) + ":" + p2(t.getSeconds());
+            return isNaN(t) ? s : Sw.Format.LocalText(Sw.Format.UtcToLocal(t));
         });
         const q = typeof d.Confirm === "string" && d.Confirm ? d.Confirm : "";
         const verb = d.Text || Sw.ActionName(d.Title);

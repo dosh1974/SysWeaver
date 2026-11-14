@@ -704,11 +704,14 @@ textarea.sw-edit-multiline {
     font-weight: 400;
     line-height: 1.25;
     overflow-wrap: anywhere;
+    /* Dimmed: the type and constraints are secondary to the name (full strength while the label is hovered) */
+    opacity: 0.5;
 }
 
 @media (hover: hover) {
     .sw-edit-label:hover .sw-edit-typehint {
         color: var(--sw-text-2, var(--sw-text-2));
+        opacity: 1;
     }
 }
 
@@ -838,6 +841,17 @@ textarea.sw-edit-multiline {
     display: none;
 }
 
+/* The reset button of a member (Sw.Edit.AddResetButton): at the right end of the value cell (the same place for every type), invisible
+   while the value is the default (its place is kept: the field next to it keeps its size; not focusable and not read while invisible) */
+.sw-edit-value > .sw-edit-reset {
+    margin-left: auto;
+    flex: none;
+}
+
+    .sw-edit-value > .sw-edit-reset.sw-edit-reset-off {
+        visibility: hidden;
+    }
+
 /* A read only color: the swatch shows the true color (not dimmed like a disabled button) and has no button look */
 .sw-edit-color > .sw-edit-colorswatch:disabled {
     opacity: 1;
@@ -923,6 +937,13 @@ textarea.sw-edit-multiline {
         flex: 0 1 11rem;
         width: 11rem;
         max-width: 100%;
+    }
+
+    /* the calendar button of the date field (Sw.DatePicker), right after it */
+    .sw-edit-datetime > .sw-edit-calbtn {
+        flex: none;
+        align-self: center;
+        margin-left: -2px;
     }
 
 .sw-edit-color {

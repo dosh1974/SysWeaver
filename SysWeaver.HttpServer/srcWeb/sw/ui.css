@@ -2002,6 +2002,92 @@ html.SwMobile .sw-number {
     box-shadow: var(--sw-focus-ring);
 }
 
+/* Date picker (Sw.DatePicker): a month calendar in a popup */
+.sw-cal {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sw-space-1);
+    padding: var(--sw-space-2);
+}
+
+.sw-cal-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sw-space-1);
+}
+
+.sw-cal-title {
+    flex: 1 1 auto;
+    text-align: center;
+    font-weight: var(--sw-weight-medium);
+}
+
+.sw-cal-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sw-cal-row {
+    display: grid;
+    grid-template-columns: repeat(7, var(--sw-control-h));
+    gap: 2px;
+}
+
+.sw-cal-wd {
+    text-align: center;
+    font-size: var(--sw-text-sm);
+    color: var(--sw-text-3);
+}
+
+.sw-cal-day {
+    height: var(--sw-control-h);
+    padding: 0;
+    border: none;
+    border-radius: var(--sw-radius-sm);
+    background: transparent;
+    color: var(--sw-text);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+    .sw-cal-day.sw-cal-other {
+        color: var(--sw-text-3);
+    }
+
+    .sw-cal-day[aria-current="date"] {
+        box-shadow: inset 0 0 0 1px var(--sw-border-strong);
+    }
+
+    .sw-cal-day[aria-selected="true"] {
+        background: var(--sw-accent1);
+        color: var(--sw-on-accent);
+        font-weight: var(--sw-weight-medium);
+    }
+
+    .sw-cal-day[aria-disabled="true"] {
+        color: var(--sw-text-3);
+        text-decoration: line-through;
+        cursor: not-allowed;
+    }
+
+    .sw-cal-day:focus-visible {
+        outline: 2px solid var(--sw-focus);
+        outline-offset: -2px;
+    }
+
+@media (hover: hover) {
+    .sw-cal-day:not([aria-disabled="true"]):not([aria-selected="true"]):hover {
+        background: var(--sw-hover);
+    }
+}
+
+.sw-cal-foot {
+    display: flex;
+    justify-content: center;
+}
+
 .sw-listpicker {
     display: flex;
     flex-direction: column;

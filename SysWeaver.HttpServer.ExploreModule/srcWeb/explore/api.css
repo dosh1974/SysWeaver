@@ -8,7 +8,8 @@
  * api-cache / api-comp, api-url; the auth tags span.sw-tag; api-howto: the link to apihelp.html), api-signature (the C# signature), api-grid (the two cards),
  * api-card (api-input, api-output; api-card-head / api-card-title for cards without tabs), api-tabs (Sw.Tabs), api-changes (the change
  * count in the tab bar), api-params, api-json (api-json-editor, api-json-plain, api-json-error: the writable JSON tab), api-formfoot,
- * api-noargs, api-results (api-busy while a call runs, api-stale after the input changed), api-time, api-result-foot (api-stalenote),
+ * api-noargs, api-results (api-busy while a call runs), api-loading (the spinner of the first call), api-history (the result history bar: api-fresh
+ * with api-fresh-ok / api-fresh-old, api-history-busy), api-time, api-filename (the file name of a raw result), api-result-foot,
  * api-null (api-nulltoken), api-void, api-error (api-errorstate, api-errortext), api-code, api-preview, api-jsonview (the read only result json), api-codebar (the Copy tool row above a json / curl text), api-ace (an Ace
  * editor, Sw.AceEditor), api-curl (the Curl tab: api-curl-opts, api-curl-text, api-curl-note), api-denied (the note next to a
  * Send button the user lacks the role for), api-message (no q / no api info), api-locked (api-locked-facts, api-locked-denied: the api
@@ -223,6 +224,16 @@ body {
     display: none;
 }
 
+/* The file name of a raw result (from the Content-Disposition header, else made up) next to its Download button */
+.api-filename {
+    max-width: 24ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--sw-text-2);
+    font-size: var(--sw-text-sm);
+}
+
 .api-time {
     color: var(--sw-text-2);
     font-size: var(--sw-text-sm);
@@ -259,13 +270,64 @@ body {
     transition: opacity var(--sw-dur-2, 160ms) var(--sw-ease, ease);
 }
 
-    /* (while a call runs the last result stays readable and selectable; the Send button shows the busy state, UX guide FBK-2) */
+    /* (while a call runs the shown result stays readable and selectable; the Send button and the history bar show the busy state, UX guide FBK-2) */
     .api-results.api-busy {
         cursor: progress;
     }
 
-    .api-results.api-stale .api-tabs .sw-tabs-body {
-        opacity: 0.6;
+/* The spinner of the first call (no result yet) */
+.api-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--sw-space-8) var(--sw-space-4);
+    color: var(--sw-accent1);
+}
+
+/* The result history bar: the freshness marker, the list of the results of this page, "Use these parameters" and the busy spinner */
+.api-history {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sw-space-2);
+    padding: var(--sw-space-2) var(--sw-space-3);
+    border-bottom: 1px solid var(--sw-border);
+}
+
+    .api-history .sw-select {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+/* Green: the shown result is from the current parameters; amber: the parameters changed since that call */
+.api-fresh {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--sw-text-3);
+}
+
+    .api-fresh.api-fresh-ok {
+        background: var(--sw-ok);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--sw-ok) 25%, transparent);
+    }
+
+    .api-fresh.api-fresh-old {
+        background: var(--sw-warning);
+    }
+
+.api-history-busy {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    color: var(--sw-accent1);
+    /* SwWeb:allow ux-fbk-2 (a status spinner next to the history list, not a busy control: it keeps its place while hidden, the Send button shows the busy state) */
+    visibility: hidden;
+}
+
+    .api-history-busy.api-busy-on {
+        visibility: visible;
     }
 
 .api-result-foot {
@@ -279,13 +341,9 @@ body {
     font-size: var(--sw-text-sm);
 }
 
-    .api-result-foot[hidden], .api-stalenote[hidden] {
+    .api-result-foot[hidden] {
         display: none;
     }
-
-.api-stalenote {
-    color: var(--sw-warning);
-}
 
 /* A null API result: the null token as the title of the empty state, then the sentence */
 .api-nulltoken {

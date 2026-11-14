@@ -20,7 +20,7 @@
      */
     const TypeFlags = (Sw.Edit && Sw.Edit.Flags) || Object.freeze({
         Multiline: 1, Password: 2, AcceptNull: 4, Slider: 8, ReadOnly: 16, Collection: 32, Indexed: 64, IsEnum: 128,
-        IsPrimitive: 256, IsObject: 512, Hide: 1024, IsFlags: 2048, DateUnspecified: 4096,
+        IsPrimitive: 256, IsObject: 512, Hide: 1024, IsFlags: 2048, DateUnspecified: 4096, Random: 8192,
     });
 
     /**

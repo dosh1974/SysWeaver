@@ -4,7 +4,7 @@
  * "<page>?r={0}"), so Sw.Page.View, the explore listing and the View action of the text editor (edit/text.html) open them.
  *
  * `Sw.FileView.Start(o)` reads the url parameters, checks them, loads the file and builds the page:
- * - `r` read url (required, this site only: relative or the same origin), fetched with GET (unless `Fetch: false`).
+ * - `r` read url (required, this site only: relative or the same origin, or a blob: url of this site), fetched with GET (unless `Fetch: false`).
  * - `n` display / download name (default: the last path segment of r, uri decoded, quotes dropped); sets the document title.
  * - `download=false` hides Download.
  * The page (Design v2): Sw.PageLayout (o.Type: "read" or "fill") = the page header (the file name, o.Kind as description; actions: the
@@ -22,6 +22,25 @@
     "use strict";
 
     const el = Sw.el;
+
+    /**
+     * Test if a read url may be shown: a http(s) url of this site (Sw.Url.SafeSameOrigin), or a blob: url created by a page of this site
+     * (ex: an api result handed over by explore/api.html; a blob url can only be created by a script of the same origin, so it can't point to
+     * content of another site).
+     * @param {string} url - The read url.
+     * @returns {boolean} True when allowed.
+     */
+    function IsAllowed(url) {
+        if (Sw.Url.SafeSameOrigin(url))
+            return true;
+        try {
+            const u = new URL(url, window.location.href);
+            return (u.protocol === "blob:") && (u.origin === window.location.origin);
+        }
+        catch {
+            return false;
+        }
+    }
 
     /**
      * The display name of a read url: its last path segment, uri decoded, quotes dropped (ex: ReadTextFile?"x.md" has none).
@@ -125,9 +144,10 @@
                 });
                 return;
             }
-            //  Security: the read url must be on this site (relative or the same origin, http(s)); a crafted link must not make the page show
-            //  another site's content as ours. Nothing is requested.
-            if (!U.SafeSameOrigin(url)) {
+            //  Security: the read url must be on this site (relative or the same origin, http(s), or a blob: url created by a page of this
+            //  site, ex: an api result shown by explore/api.html); a crafted link must not make the page show another site's content as
+            //  ours. Nothing is requested.
+            if (!IsAllowed(url)) {
                 ctx.State({
                     Kind: "error", Title: _TF("This file cannot be shown", "Title of the error state of a file viewer when the r url parameter points to another web site"),
                     Text: _TF("This file cannot be shown: its address (the r parameter) must be on this site.", "Error message of a file viewer when the r url parameter points to another web site (not allowed)"),

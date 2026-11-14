@@ -1729,6 +1729,8 @@
             attrs: { "aria-label": _TF("Password rules", "Accessible name of a checklist of password rules below a password input on the sign in page") },
         });
         const rulesSlot = Sw.Reserve.Stack({ Class: "auth-rules-slot" });
+        //  At least three lines of rules (Auth.css): another user id's policy (another authorizer) fits without moving the buttons
+        rulesSlot.classList.add("auth-login-rules");
         rulesSlot.append(rules);
         page.Box.append(rulesSlot);
         //  The hint next to Sign in (also the reason of a blocked Sign in, Designer N4) and the quiet leaked password line share one

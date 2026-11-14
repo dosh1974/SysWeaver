@@ -2314,8 +2314,17 @@ namespace SysWeaver.MicroService
         /// {2} is the delete url, argument should be EditFile
         /// </param>
         /// <returns>True if extension was added</returns>
+        /// <remarks>The viewer is also registered for all mime types of the extension (unless a viewer is already registered for the mime type), see <see cref="GetMimeViewerFormat(string)"/></remarks>
         public bool TryAddExtensionViewer(String extension, String url)
-            => Viewers.TryAdd(extension.FastTrimStartToLower('.'), url);
+        {
+            var ext = extension.FastTrimStartToLower('.');
+            if (!Viewers.TryAdd(ext, url))
+                return false;
+            lock (MimeViewers)
+                foreach (var mime in GetExtensionMimes(ext))
+                    MimeViewers.TryAdd(mime, Tuple.Create(url, ext));
+            return true;
+        }
 
 
         /// <summary>
@@ -2328,8 +2337,104 @@ namespace SysWeaver.MicroService
         /// {2} is the delete url, argument should be EditFile
         /// </param>
         /// <returns>True if extension was removed</returns>
+        /// <remarks>The mime types that was registered by the extension are removed (and re-registered by another extension with the same mime type if one exists)</remarks>
         public bool TryRemoveExtensionViewer(String extension, out String url)
-            => Viewers.TryRemove(extension.FastTrimStartToLower('.'), out url);
+        {
+            var ext = extension.FastTrimStartToLower('.');
+            if (!Viewers.TryRemove(ext, out url))
+                return false;
+            lock (MimeViewers)
+            {
+                foreach (var mime in GetExtensionMimes(ext))
+                {
+                    if (!MimeViewers.TryGetValue(mime, out var v) || (v.Item2 != ext))
+                        continue;
+                    MimeViewers.TryRemove(mime, out _);
+                    //  Another extension of the same mime type (ex: "jpeg" when "jpg" is removed)
+                    foreach (var kv in Viewers)
+                        if (GetExtensionMimes(kv.Key).Contains(mime, StringComparer.Ordinal) && MimeViewers.TryAdd(mime, Tuple.Create(kv.Value, kv.Key)))
+                            break;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Get all mime types (lower case, without any parameters) of a file extension: the mime type of the extension and any other mime type that lists the extension
+        /// </summary>
+        /// <param name="ext">The extension (lower case without the leading dot)</param>
+        /// <returns>The mime types</returns>
+        static List<String> GetExtensionMimes(String ext)
+        {
+            var res = new List<String>();
+            if (MimeTypeMap.TryGetMimeType(ext, out var m, false) && !String.IsNullOrEmpty(m.Item1))
+                res.Add(NormalizeMime(m.Item1));
+            var dotExt = "." + ext;
+            foreach (var e in MimeTypeMap.AllMimeEntries)
+            {
+                var exts = e.Extensions;
+                if (String.IsNullOrEmpty(exts) || String.IsNullOrEmpty(e.Mime))
+                    continue;
+                foreach (var x in exts.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (!String.Equals(x, dotExt, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var mime = NormalizeMime(e.Mime);
+                    if (!res.Contains(mime))
+                        res.Add(mime);
+                    break;
+                }
+            }
+            return res;
+        }
+
+        /// <summary>
+        /// The mime type without parameters, in lower case, ex: "Text/Plain; charset=UTF-8" => "text/plain"
+        /// </summary>
+        static String NormalizeMime(String mime)
+        {
+            var i = mime.IndexOf(';');
+            if (i >= 0)
+                mime = mime.Substring(0, i);
+            return mime.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Get a viewer url for a mime type (the viewers are registered by file extension, see <see cref="TryAddExtensionViewer(string, string)"/>)
+        /// </summary>
+        /// <param name="mime">The mime type, ex: "image/png" or "text/markdown; charset=UTF-8" (case and parameters are ignored)</param>
+        /// <returns>
+        /// null if the mime type doesn't have a viewer, else the url format to use (from site root).
+        /// {0} is the read url (the caller is responsible for any url encoding).
+        /// </returns>
+        [WebApi]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public String GetMimeViewerFormat(String mime)
+        {
+            if (String.IsNullOrWhiteSpace(mime))
+                return null;
+            return MimeViewers.TryGetValue(NormalizeMime(mime), out var v) ? v.Item1 : null;
+        }
+
+        /// <summary>
+        /// Get the viewer url for some data of a mime type
+        /// </summary>
+        /// <param name="mime">The mime type, ex: "image/png" (case and parameters are ignored)</param>
+        /// <param name="read">The url to use for reading (inserted as is, the caller is responsible for any url encoding)</param>
+        /// <returns>The viewer url or null if the mime type doesn't have a viewer</returns>
+        public String GetMimeViewer(String mime, String read)
+        {
+            var fmt = GetMimeViewerFormat(mime);
+            if (fmt == null)
+                return null;
+            return String.Format(fmt, read ?? "");
+        }
+
+        /// <summary>
+        /// Key is the mime type (lower case without parameters), value is the viewer url format and the extension that registered it
+        /// </summary>
+        readonly SemiFrozenDictionary<String, Tuple<String, String>> MimeViewers = new SemiFrozenDictionary<String, Tuple<String, String>>(StringComparer.Ordinal);
 
         /// <summary>
         /// Get an viewer url fro a file extension

@@ -2348,7 +2348,7 @@ namespace SysWeaver.Net
                     //  Determine compression
                     var acc = data.AcceptEncoding;
                     //  The accepted encoders are only parsed / looked up when needed (the encoder choice is cached per Accept-Encoding value)
-                    var comp = t.Compression?.GetEncoder(acc, data);
+                    var comp = data.DisableResCompression ? null : t.Compression?.GetEncoder(acc, data);
                     data.CompEncoder = comp;
                     //  Handle pre-compressed data (use directly or decompress)
                     if (dec != null)

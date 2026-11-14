@@ -26,6 +26,7 @@ Put these attributes on fields and properties of a type to control the editor th
 | [`EditMinAttribute.cs`](EditMinAttribute.cs) | Minimum value (or minimum number of chars), and `EditDateUnspecifiedAttribute` for dates edited as unspecified |
 | [`EditRangeAttribute.cs`](EditRangeAttribute.cs) | Minimum and maximum in one attribute |
 | [`EditSliderAttribute.cs`](EditSliderAttribute.cs) | Use a slider (requires a range), optionally with a step size |
+| [`EditRandomAttribute.cs`](EditRandomAttribute.cs) | A number (ex: a seed) that can be set to a random value within its min and max (or the type range): a dice button and a "Random" menu item |
 | [`EditMultilineAttribute.cs`](EditMultilineAttribute.cs) | Allows multiple lines of text |
 | [`EditOrderAttribute.cs`](EditOrderAttribute.cs) | Member order in the editor (low to high) |
 | [`EditPasswordAttribute.cs`](EditPasswordAttribute.cs) | Masked input, plus `EditHideAttribute` and `EditReadOnlyAttribute` |

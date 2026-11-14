@@ -30,9 +30,10 @@ namespace SysWeaver.AI
         public String ComfyUiToken;
 
         /// <summary>
-        /// The network time out in seconds (a workflow request doesn't return until the workflow has completed)
+        /// The network time out in seconds (a workflow request doesn't return until the workflow has completed, so this is the longest time a workflow may run, including the time it waits in the ComfyUI queue).
+        /// Default 12 hours (heavy workloads, ex: long videos).
         /// </summary>
-        public int NetworkTimeoutSeconds = 10 * 60;
+        public int NetworkTimeoutSeconds = 12 * 60 * 60;
 
         #endregion// API setup
 
@@ -50,6 +51,15 @@ namespace SysWeaver.AI
         /// If false, the workflow must already exist on the server (with the same name).
         /// </summary>
         public bool UploadWorkflows = true;
+
+        /// <summary>
+        /// Folders with workflows for the task methods (TextToImage, ImagesToImage, TextToVideo, ImagesToVideo, TextToMusic, TextToSpeech and TextToSound).
+        /// All "*.json" files (API format workflows) in each folder are loaded, analyzed and added when the service is created, see ComfyUiService.AddWorkflows.
+        /// The workflow name is the file name without the ".json" extension, a workflow in a later folder replaces one with the same name in an earlier folder.
+        /// Variables can be used and with "$(" and ends with ")", ex: "$(ExecutableDir)/ComfyUi".
+        /// A folder can also be a file mask, ex: "$(ExecutableDir)/ComfyUi/image_*.json".
+        /// </summary>
+        public String[] TaskWorkflowFolders;
 
         #endregion// Workflows
 

@@ -33,7 +33,7 @@
      */
     function log(text) {
         const d = new Date();
-        lines.push(d.toLocaleTimeString() + "." + ("00" + d.getMilliseconds()).slice(-3) + " " + text);
+        lines.push(Sw.Format.Time(d) + "." + ("00" + d.getMilliseconds()).slice(-3) + " " + text);
         if (lines.length > 400)
             lines.splice(0, lines.length - 400);
         const e = document.getElementById("stLog");

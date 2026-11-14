@@ -222,7 +222,7 @@
     function timeTitle(d) {
         if (!d)
             return "";
-        return d.toLocaleString([], { dateStyle: "full", timeStyle: "medium" }) + "\n" +
+        return Sw.Format.DateTime(d, { dateStyle: "full", timeStyle: "medium" }) + "\n" +
             _TF("UTC", "Tool tip row prefix to some time stamp written using js Date.toUTCString() syntax") + ": " + d.toISOString().replace("T", " ").substring(0, 19);
     }
 

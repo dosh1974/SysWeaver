@@ -202,8 +202,8 @@
     function shortTime(d) {
         const now = new Date();
         if (d.toDateString() === now.toDateString())
-            return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        return d.toLocaleDateString([], d.getFullYear() === now.getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
+            return Sw.Format.Time(d, false);
+        return Sw.Format.DateText(d, d.getFullYear() === now.getFullYear() ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" });
     }
 
     /**
@@ -212,7 +212,7 @@
      * @returns {string} Text.
      */
     function longTime(d) {
-        return d.toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
+        return Sw.Format.DateTime(d);
     }
 
     /**

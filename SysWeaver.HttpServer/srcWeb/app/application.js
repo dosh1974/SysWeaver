@@ -2079,6 +2079,8 @@ window.Sw.Sources["shell/shell.js"] = "app/application.js";
         SettingsTextSize = true;
         /** Add the "Language" section to the settings menu when the service translates its texts (Api/application/GetSelectableLanguages). @type {boolean} */
         SettingsLanguage = true;
+        /** Add the "Date and time" section (how dates and times are written: automatic for the region, or a chosen format) to the settings menu. @type {boolean} */
+        SettingsFormat = true;
         /** Show the connection line (connected, server time) at the bottom of the menu. @type {boolean} */
         MenuStatus = true;
         /** Show the settings button. @type {boolean} */
@@ -2618,6 +2620,94 @@ window.Sw.Sources["shell/shell.js"] = "app/application.js";
         }
 
         /**
+         * The "Date and time" section of the settings menu: how dates and times are written (Sw.Format.SetLocale). Automatic is the
+         * locale detected for the time zone (core/region.js: the region's formats, as the operating system has them); the others are the
+         * browser's languages and common formats. Each item shows a date and time as it would be written. A choice reloads the page (and
+         * its frames), so every date is written again.
+         * @returns {?object} The folder item (a section), null without Sw.Format.SetLocale.
+         */
+        FormatMenu() {
+            const F = Sw.Format;
+            if (!F || !F.SetLocale)
+                return null;
+            const sample = new Date(Date.UTC(2018, 0, 30, 7, 30, 40));
+            const text = l => {
+                try {
+                    return new Intl.DateTimeFormat(l, { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(sample);
+                }
+                catch {
+                    return l;
+                }
+            };
+            let names = null;
+            try {
+                names = new Intl.DisplayNames([Sw.I18n && Sw.I18n.Language ? Sw.I18n.Language() : "en"], { type: "language" });
+            }
+            catch {
+                names = null;
+            }
+            const nameOf = l => {
+                try {
+                    return (names && names.of(l)) || l;
+                }
+                catch {
+                    return l;
+                }
+            };
+            const choice = F.LocaleChoice();
+            const browser = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]).filter(x => x);
+            const auto = F.AutoLocale() || browser[0] || "en-US";
+            const list = [];
+            const add = l => {
+                if (!l || list.some(x => x.toLowerCase() === l.toLowerCase()))
+                    return;
+                try {
+                    if (Intl.DateTimeFormat.supportedLocalesOf([l]).length)
+                        list.push(l);
+                }
+                catch {
+                }
+            };
+            add(choice);
+            add(auto);
+            browser.forEach(add);
+            ["en-US", "en-GB", "de-DE", "fr-FR", "es-ES", "it-IT", "nl-NL", "sv-SE", "da-DK", "nb-NO", "fi-FI", "pl-PL", "pt-BR", "ja-JP", "zh-CN", "ko-KR", "en-CA", "en-AU", "en-IN"].forEach(add);
+            const pick = async l => {
+                F.SetLocale(l);
+                setTimeout(() => Sw.Page.Reload ? Sw.Page.Reload() : location.reload(), 0);
+                return true;
+            };
+            const autoText = _T("Automatic: {0}", text(auto), "Settings menu item: dates and times are written as the user's region writes them (detected from the time zone). {0} is an example date and time, ex: 2018-01-30 07:30:40");
+            const items = [{
+                Id: "format-auto",
+                Name: autoText,
+                Title: _T("As your region writes dates and times: {0}", nameOf(auto), "Tool tip of the automatic item of the date and time format in the settings menu. {0} is the name of the detected format, ex: Swedish (Sweden)"),
+                IconClass: "clock",
+                Radio: true,
+                Flags: choice ? 0 : 2,
+                Data: () => pick(""),
+            }].concat(list.map(l => ({
+                Id: "format-" + l,
+                Name: nameOf(l) + ": " + text(l),
+                Title: _T("Write dates and times as {0} does ({1})", nameOf(l), l, "Tool tip of a date and time format item of the settings menu. {0} is the name of the format, ex: Swedish (Sweden), {1} its code, ex: sv-SE"),
+                Radio: true,
+                Flags: choice && choice.toLowerCase() === l.toLowerCase() ? 2 : 0,
+                Data: () => pick(l),
+            })));
+            return {
+                Id: "FormatSection",
+                Name: _TF("Date and time", "Title of the section of the settings menu that chooses how dates and times are written"),
+                Children: [{
+                    Id: "Format",
+                    Name: choice ? nameOf(choice) + ": " + text(choice) : autoText,
+                    Title: _TF("How dates and times are written", "Tool tip of the date and time format submenu of the settings menu"),
+                    IconClass: "calendar",
+                    Children: items,
+                }],
+            };
+        }
+
+        /**
          * The languages the user can switch to (Api/application/GetSelectableLanguages: null when the service doesn't translate), asked
          * once per page, when the settings button is first pointed at, focused or pressed (no request on page load).
          * @returns {Promise<?Array<{Iso: string, Name: string, LocalName: string, EnName: string}>>} The languages, null for none.
@@ -2786,6 +2876,12 @@ window.Sw.Sources["shell/shell.js"] = "app/application.js";
                 //  Language: when the service translates its texts
                 if (p.SettingsLanguage && langs)
                     menu.Items.push(t.LanguageMenu(langs));
+                //  Date and time: how dates and times are written
+                if (p.SettingsFormat) {
+                    const fm = t.FormatMenu();
+                    if (fm)
+                        menu.Items.push(fm);
+                }
                 if (p.SettingsNewTab && p.Content) {
                     menu.Items.push({ Id: "-", Name: "" });
                     menu.Items.push({
@@ -3451,7 +3547,7 @@ window.Sw.Sources["shell/shell.js"] = "app/application.js";
             const jobs = A.List();
             const ae = document.activeElement;
             const keepFocus = ae && listE.contains(ae) && ae !== listE ? (ae.dataset.swAct || (ae.dataset.swJob ? "job:" + ae.dataset.swJob : null)) : null;
-            const fmtTime = d => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const fmtTime = d => d.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
             const btn = (key, j, o) => {
                 const b = new Sw.Button(Object.assign({ Small: true }, o));
                 b.E.dataset.swAct = key + ":" + j.Id;
@@ -4214,7 +4310,7 @@ window.Sw.Sources["shell/shell.js"] = "app/application.js";
                 //  zone when it differs from the viewer's; otherwise the line shows the viewer's time and says so ("your time")
                 const zone = typeof clock === "number" ? clock : undefined;
                 const mine = -srv.getTimezoneOffset();
-                const local = srv.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                const local = srv.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit" });
                 let s;
                 if (!on)
                     s = t.OfflineText(false);
@@ -4262,7 +4358,7 @@ window.Sw.Sources["shell/shell.js"] = "app/application.js";
         ShowSession(on, srv) {
             const el = Sw.el;
             const row = (k, v) => el("div.sw-shell-keyrow", null, el("dt", { text: k }), el("dd", { text: v }));
-            const fmt = d => d.toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
+            const fmt = d => d.toLocaleString(Sw.Format.Locale(), { dateStyle: "medium", timeStyle: "medium" });
             const F = Sw.Format;
             //  each clock says its zone; the server's clock only when its zone is known
             const zone = F && F.ServerZone ? F.ServerZone() : undefined;

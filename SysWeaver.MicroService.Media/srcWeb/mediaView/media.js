@@ -201,8 +201,8 @@
     /**
      * Security check of the `link` parameter (it comes from the url, so a crafted same-origin deep link could show any
      * media under the application's header). For the url types (image, video, audio, effect):
-     *  - a http(s) url of this site (Sw.Url.SafeSameOrigin) is always shown;
-     *  - any other scheme ("javascript:", "data:", "blob:", ...) is refused;
+     *  - a http(s) url of this site (Sw.Url.SafeSameOrigin), or a blob: url created by a page of this site, is always shown;
+     *  - any other scheme ("javascript:", "data:", a blob: url of another origin, ...) is refused;
      *  - a url of another site is refused inside the app shell (a same-origin top window with SysWeaverApp), where it would
      *    look like content of this site; it is shown in a window of its own (a new tab, the editor's "New window", the
      *    screenshot host) or when framed by another host.
@@ -277,6 +277,15 @@
         const U = Sw.Url;
         if (U.SafeSameOrigin(url))
             return null;
+        //  A blob: url created by a page of this site (data handed over by a page of this site, ex: an api result shown by explore/api.html);
+        //  only a script of the same origin can create one, so it can't point to content of another site
+        try {
+            const b = new URL(url, window.location.href);
+            if ((b.protocol === "blob:") && (b.origin === window.location.origin))
+                return null;
+        }
+        catch {
+        }
         if (!U.IsHttp(url))
             return "Scheme";
         return InApp() ? "Site" : null;
@@ -1545,13 +1554,21 @@
             //  Use the file name as title (like edit/text.js and upstream; the link passed MediaLinkProblem): the last path segment of
             //  the link without its query. Also for a text media, like upstream (the link is the text itself; its length limited
             //  version inside the app shell, ReadMediaParams)
+            //  The `name` | `n` url parameter names the media (ex: a blob: link of an api result has no name of its own, explore/api.html
+            //  passes the file name the service sent): it's the title and the file name of a download (limited inside the app shell)
+            const givenName = (U.Get("name") ?? U.Get("n") ?? "").trim();
+            const linkName = Sw.Url.FileName(String(U.Get("link") ?? U.Get("d") ?? "").split("?")[0].split("#")[0]);
             {
                 const path = String(type === MediaTypes.Text ? data : (U.Get("link") ?? U.Get("d") ?? "")).split("?")[0];
                 //  (a YouTube link: "watch", "embed" ... is no name: the video code)
-                const fname = type === MediaTypes.YouTube ? _T("YouTube {0}", data, "Title of the media viewer showing a YouTube video, {0} is the video code") : Sw.Url.FileName(path);
+                const fname = givenName ? TextFromUrl(givenName, MaxAppText)
+                    : type === MediaTypes.YouTube ? _T("YouTube {0}", data, "Title of the media viewer showing a YouTube video, {0} is the video code") : Sw.Url.FileName(path);
                 if (fname)
                     document.title = fname;
             }
+            //  A file media (an image, a video, a sound) can be downloaded: as the given name, else the file name of the link
+            const canDownload = type === MediaTypes.Image || type === MediaTypes.Video || type === MediaTypes.Audio;
+            const downloadName = (givenName || linkName || "media").replace(/[\\/:*?"<>|]/g, "_");
             const messagePrefix = U.Get("ctrl");
             if (messagePrefix) {
                 const np = await AskEditorProps(messagePrefix);
@@ -1598,6 +1615,8 @@
                 CreateChrome(mview, () => player, {
                     Stats: stats,
                     StartHidden: true,
+                    //  ?endhud (or endhud=true): show the controls when the media ends (default: nothing over the last picture)
+                    EndHud: U.Has("endhud") && !/^(false|0|no)$/i.test(U.Get("endhud") ?? ""),
                     Transparent: () => !!(mediaProps && mediaProps.Transparent),
                     FullPage: () => showFull(player),
                     Info: () => ({
@@ -1606,6 +1625,7 @@
                             : type === MediaTypes.Text ? null : new URL(data, window.location.href).href,
                     }),
                     Load: m => ShowLink(m),
+                    Download: canDownload ? () => Sw.Net.Download(player.Source || data, downloadName) : null,
                     //  "Edit": this media with its settings in MediaEdit.html (edit=false hides it; not for a player linked to an editor)
                     Edit: messagePrefix || /^(false|0|no)$/i.test(U.Get("edit") ?? "") ? null : () => {
                         const q = new URLSearchParams();
@@ -1756,11 +1776,14 @@
      * @param {boolean} o.Stats True: a Stats button and panel (the player's `Stats` element is moved into it).
      * @param {function():void} o.FullPage Called when the browser has no full screen for the element (opens the full page preview).
      * @param {?function():void} [o.Edit] Opens the media in the editor: an "Edit" menu item and the E key (none: no edit).
+     * @param {?function():void} [o.Download] Saves the media file: a "Download" menu item (none: the media is no file, ex: a YouTube video or a text).
      * @param {function():boolean} [o.Transparent] True when the media is transparent (its settings; the player's own Params.Transparent
      *   counts too, an image / text with an effect has the effect's params): class MediaTransparent, the theme background as the stage.
      * @param {function():string} [o.Title] The name in the title bar (default: the page title).
      * @param {boolean} [o.StartHidden] True: no controls and no title at the start (until a pointer move, a tap, a key or the focus;
      *   shown when the media still doesn't play after 1.5 s; never for audio only media).
+     * @param {boolean} [o.EndHud] True: the controls and the big Play button show when the media reaches its end (not looped). Default
+     *   false: nothing over the last picture until a pointer move, a tap, a key or the focus (never for audio only media).
      */
     function CreateChrome(view, getPlayer, o) {
         const el = Sw.el;
@@ -2011,6 +2034,8 @@
                 { Text: _TF("Show url...", "Menu item of the media viewer that asks for a media address and shows it"), Icon: "link", Hint: "U", OnClick: askLink },
                 { Text: _TF("Copy information to clipboard", "Menu item of the media viewer that copies the address, the state, the statistics and the settings of the media"), Icon: "copy", OnClick: copyInfo },
                 { Text: _TF("Open the original file", "Menu item of the media viewer that opens the original file in a new tab (or its editor)"), Icon: "external", OnClick: () => Sw.Page.EditOrOpen(p.Source) });
+            if (o.Download)
+                items.push({ Text: _TF("Download", "Menu item of the media viewer that saves the media file (an image, a video, a sound) to the computer"), Icon: "download", OnClick: o.Download });
             if (o.Edit)
                 items.push({ Text: _TF("Edit", "Menu item of the media viewer that opens the media with its settings in the media editor"), Icon: "edit", Hint: "E", OnClick: o.Edit });
             return items;
@@ -2351,6 +2376,12 @@
                 const paused = !!p.Paused;
                 put("paused", paused, v => {
                     view.classList.toggle("MediaPaused", v);
+                    //  The end of a media (not looped): nothing over the picture (as at the start) until the next activity, unless EndHud
+                    if (v && !o.EndHud && p.HaveVisual && !p.Looping && p.Duration > 0 && isFinite(p.Duration) && (p.AtEnd || (p.GetPos() || 0) >= p.Duration - 0.1)) {
+                        clearTimeout(hideTimer);
+                        view.classList.remove("MediaChromeOn");
+                        view.classList.add("MediaChromeFresh");
+                    }
                     playB.SetIcon(v ? "play" : "pause");
                     playB.SetTitle(v ? _TF("Play", "Tool tip of the play button of the media viewer") : _TF("Pause", "Tool tip of the pause button of the media viewer"));
                     //  Playing again: the bars hide after a moment (not at the start: they are not shown yet)

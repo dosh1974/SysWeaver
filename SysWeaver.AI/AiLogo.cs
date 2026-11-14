@@ -34,6 +34,7 @@ namespace SysWeaver.AI
         /// A random seed, different seed gives different appearances
         /// </summary>
         [AiOptional]
+        [EditRandom]
         public int Seed;
 
         /// <summary>

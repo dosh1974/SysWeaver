@@ -169,6 +169,12 @@ namespace SysWeaver.Net
         public Tuple<ICompEncoder, CompEncoderLevels> CompEncoder;
 
         /// <summary>
+        /// Set by a handler (before the server reads the handler data) to send the response uncompressed, even if the handler has compression.
+        /// Used by raw API's that return a MemoryFile, when the mime type of the file isn't compressible.
+        /// </summary>
+        public bool DisableResCompression;
+
+        /// <summary>
         /// The session, set by the server (see <see cref="Init"/>) before any module handler is called. May be null for raw modules and manually created requests.
         /// </summary>
         public HttpSession Session { get; private set; }

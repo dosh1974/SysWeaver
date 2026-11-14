@@ -13,7 +13,11 @@
  * APIs), a meta line (url, roles, cache, compression, the "How to call" link to explore/apihelp.html), the C# signature, then two cards side
  * by side (one column below 1100 px): Input (Parameters / JSON / Curl tabs with the change count, the form footer Reset ... Send; an API
  * without an argument: Parameters (the "No parameters" state) / Curl) and Result (Result / JSON tabs with the status and the time, an empty
- * state before the first call, a null state, the error state, the "Called at ... by ..." footer).
+ * state before the first call, a spinner while the first call runs, a null state, the error state, the "Called at ..." footer).
+ * Result history: every result of this page is kept in memory (newest first, at most MaxHistory; leaving the page drops them) and a history
+ * bar above the result lists them (a new result is shown when it's ready, a call in progress shows a spinner in the bar). A green dot marks
+ * that the shown result is from the current parameters, an amber dot that they changed since; "Use these parameters" copies the parameters
+ * of the shown result to the form (one undo step). Changing the parameters keeps the result.
  * The JSON tabs (the editable argument, the read only result) are Ace editors (Sw.AceEditor, edit/AceEditor.js, loaded on demand; the
  * Sw.CodeEditor of ui/code.js, else a text area, when Ace is not available) with a Copy button.
  * The Curl tab: one curl command (POSIX shell, one line, no pipes) that makes the call with the current argument; options: GET / POST,
@@ -96,6 +100,108 @@
             Icon: "copy", Kind: "ghost", Small: true, Title: title,
             OnClick: () => Sw.Clipboard.Copy(get(), { Generic: true }),
         });
+    }
+
+    /** @type {number} The maximum number of results kept in the result history of the page. */
+    const MaxHistory = 25;
+
+    /**
+     * A json text of a value with the object members sorted and the `$type` markers of the editor removed, so two values compare equal
+     * when they have the same content (used to tell if a result is due to the current parameters).
+     * @param {*} v The value.
+     * @returns {string} The text.
+     */
+    function stableJson(v) {
+        const norm = x => {
+            if (Array.isArray(x))
+                return x.map(norm);
+            if (x && typeof x === "object") {
+                const o = {};
+                for (const k of Object.keys(x).sort())
+                    if (k !== "$type" && x[k] !== undefined)
+                        o[k] = norm(x[k]);
+                return o;
+            }
+            return x;
+        };
+        return JSON.stringify(norm(v)) ?? "null";
+    }
+
+    /** @type {Object<string, string>} File extensions of mime sub types that differ from the sub type (the rest use the sub type, "png" => "png"). */
+    const MimeExts = {
+        "jpeg": "jpg", "svg+xml": "svg", "mpeg": "mp3", "x-wav": "wav", "wave": "wav", "vnd.wave": "wav", "quicktime": "mov", "x-matroska": "mkv",
+        "plain": "txt", "markdown": "md", "x-markdown": "md", "x-icon": "ico", "vnd.microsoft.icon": "ico", "x-flac": "flac",
+    };
+
+    /**
+     * A file extension for a mime type (for the name hint of a blob url, viewers such as the media viewer find the media type by the extension).
+     * @param {string} mime Mime type without parameters, ex: "image/png".
+     * @returns {string} The extension without the dot, ex: "png".
+     */
+    function mimeExt(mime) {
+        const sub = mime.split("/")[1] || "bin";
+        return MimeExts[sub] || sub.split("+")[0];
+    }
+
+    /**
+     * The file name of a Content-Disposition header: the RFC 5987 `filename*` (UTF-8) if present, else `filename` (quoted or not).
+     * @param {?string} h The header value, ex: `inline; filename="cat.png"; filename*=UTF-8''cat.png`.
+     * @returns {?string} The file name (without any path), null when the header has none.
+     */
+    function fileNameOf(h) {
+        if (!h)
+            return null;
+        let name = null;
+        const ext = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(h);
+        if (ext) {
+            try {
+                name = decodeURIComponent(ext[2].trim());
+            }
+            catch {
+                name = null;
+            }
+        }
+        if (!name) {
+            const m = /filename\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]+))/i.exec(h);
+            if (m)
+                name = (m[1] !== undefined ? m[1].replace(/\\(.)/g, "$1") : m[2]).trim();
+        }
+        if (!name)
+            return null;
+        name = name.split(/[\\/]/).pop();
+        return name || null;
+    }
+
+    /**
+     * The url of the registered viewer of a mime type (the server's extension viewers, by mime type: Api/GetMimeViewerFormat) for some data.
+     * @param {string} mime Mime type without parameters, ex: "image/png".
+     * @param {string} read The url of the data (a blob: url of this page), a name hint with the extension is added ("#cat.png").
+     * @param {string} [name] The file name to use as the name hint (default "result." and the extension of the mime type).
+     * @returns {Promise<string|null>} The absolute viewer url, null when the mime type has no viewer (or the lookup failed).
+     */
+    async function mimeViewer(mime, read, name) {
+        if (!mime)
+            return null;
+        let fmt = null;
+        try {
+            fmt = await Sw.Net.Send(Sw.Url.Root + "Api/GetMimeViewerFormat", mime);
+        }
+        /* SwWeb:allow ux-fbk-5 (no viewer: the data is shown directly) */
+        catch {
+            return null;
+        }
+        if (!fmt)
+            return null;
+        //  (the viewers find the media type by the extension: a name without the right extension gets it added)
+        const ext = mimeExt(mime);
+        let hint = (name || "result").replace(/[#?\/\\]/g, "_");
+        if (!hint.toLowerCase().endsWith("." + ext))
+            hint += "." + ext;
+        let u = fmt.split("{0}").join(encodeURIComponent(read + "#" + hint));
+        //  The name to show (and to download as): the `n` url parameter of the viewers (the file viewers of view/ and the media viewer)
+        if (name)
+            u += (u.indexOf("?") >= 0 ? "&" : "?") + "n=" + encodeURIComponent(name);
+        return Sw.Url.IsAbsolute(u) ? u : Sw.Url.Root + u;
     }
 
     /**
@@ -185,6 +291,14 @@
             this.E = el("main.api-page.sw-page-dash.sw-root");
             /** @type {HTMLElement} The body of the result card. */
             this.Results = el("div.api-results", { attrs: { "aria-live": "polite" } });
+            /** @type {Array<object>} The results of the calls made on this page, newest first (in memory only, see Send / HistoryEntry). */
+            this.History = [];
+            /** @type {?object} The history entry that is shown. */
+            this.Shown = null;
+            /** @type {number} The number of calls made (the call number of the next entry - 1). */
+            this.Calls = 0;
+            /** @type {number} The number of calls in progress. */
+            this.Running = 0;
             /** @type {string} The method name (the last part of the url). */
             const parts = url.split("/");
             this.Name = parts[parts.length - 1].split(".")[0] || url;
@@ -424,7 +538,7 @@
             }
             t.Input = new E(d.Arg);
             await t.Input.SetObject(obj);
-            t.Input.Element.addEventListener("EditChange", () => t.MarkStale());
+            t.Input.Element.addEventListener("EditChange", () => t.UpdateFresh());
             //  The JSON tab: a writable json editor (Sw.CodeEditor, ui/code.js, loaded on demand). Switching tabs converts: form -> text
             //  when the JSON tab opens, text -> form when the Parameters tab opens (an invalid text keeps the JSON tab open and says why).
             const json = el("div.api-json");
@@ -519,7 +633,7 @@
             const t = this;
             if (!t.JsonEditor) {
                 const onChange = () => {
-                    t.MarkStale();
+                    t.UpdateFresh();
                     t.CheckJsonSoon();
                 };
                 //  The Ace editor of edit/text.html (Sw.AceEditor); without it the Sw code editor (ui/code.js), else a text area
@@ -699,24 +813,161 @@
             return { Ok: true, Value: t.Input.GetObject() };
         }
 
-        /** The input changed after the last call: the result is removed (like the original page: any parameter change removes it). */
-        MarkStale() {
+        /**
+         * The current parameters as a comparable text (stableJson): the json text when the JSON tab is open and the text is valid json,
+         * else the form's value; "" for an API without an argument.
+         * @returns {string} The text.
+         */
+        CurrentArgText() {
             const t = this;
-            if (!t.Results.querySelector(".api-tabs"))
-                return;
-            t.Results.classList.remove("api-stale");
-            t.ResultFoot.hidden = true;
-            t.ResultFoot.replaceChildren();
-            t.ShowNoResult();
+            if (!t.HaveArg)
+                return "";
+            if (t.ArgTabs && t.ArgTabs.Active === t.JsonTab && t.JsonEditor) {
+                try {
+                    return stableJson(JSON.parse(t.JsonEditor.Get()));
+                }
+                catch {
+                    //  (an unfinished text: compare the form)
+                }
+            }
+            return stableJson(stripType(t.Input.GetObject()));
         }
 
-        /** The result card before a call (and after a parameter change): "No result yet". */
+        /**
+         * The parameters (or the JSON text) changed: mark if the shown result is due to the current parameters (the green / amber dot of the
+         * history bar) and offer "Use these parameters" when it isn't. The result itself is kept (any earlier result can be shown).
+         */
+        UpdateFresh() {
+            const t = this;
+            const s = t.Shown;
+            if (!s || !t.FreshE)
+                return;
+            const same = s.ArgText === t.CurrentArgText();
+            t.FreshE.classList.toggle("api-fresh-ok", same);
+            t.FreshE.classList.toggle("api-fresh-old", !same);
+            const text = same
+                ? _TF("This result is from the current parameters.", "Tool tip of the marker in the result history of the API inspector when the shown result was made with the current parameters")
+                : _TF("The parameters changed since this call.", "Note in the result card of the API inspector when the input was changed after the call");
+            t.FreshE.title = text;
+            t.FreshE.setAttribute("aria-label", text);
+            t.UseB.E.hidden = same || !t.HaveArg;
+        }
+
+        /**
+         * The history bar above the result (created once): the freshness marker, the list of the results of this page (newest first),
+         * "Use these parameters" and the spinner of a call in progress.
+         * @returns {HTMLElement} The bar.
+         */
+        HistoryBar() {
+            const t = this;
+            if (t.HistoryE)
+                return t.HistoryE;
+            t.FreshE = el("span.api-fresh", { attrs: { role: "img" } });
+            t.HistorySel = new Sw.Select({
+                Small: true,
+                Title: _TF("The results of the calls made on this page (newest first), choose one to show it", "Tool tip of the result history list of the API inspector"),
+                OnChange: v => {
+                    const e = t.History.find(x => x.N === v);
+                    if (e)
+                        t.ShowEntry(e);
+                },
+            });
+            t.UseB = new Sw.Button({
+                Text: _TF("Use these parameters", "Text of a button of the API inspector that copies the parameters of the shown (earlier) result to the parameter form"),
+                Icon: "undo", Kind: "ghost", Small: true,
+                Title: _TF("Copy the parameters that made this result to the parameters (undo restores the current ones)", "Tool tip of the Use these parameters button of the API inspector"),
+                OnClick: () => t.UseParams(t.Shown),
+            });
+            t.BusyE = el("span.api-history-busy", { title: _TF("A call is in progress, its result is shown when it's ready", "Tool tip of the spinner in the result history bar of the API inspector") },
+                new Sw.Spinner({ Size: 16 }).E);
+            t.HistoryE = el("div.api-history", null, t.FreshE, t.HistorySel.E, t.UseB.E, t.BusyE);
+            return t.HistoryE;
+        }
+
+        /**
+         * Show a result of the history.
+         * @param {object} e The history entry.
+         */
+        ShowEntry(e) {
+            const t = this;
+            t.Shown = e;
+            const bar = t.HistoryBar();
+            const total = t.History.length;
+            t.HistorySel.SetOptions(t.History.map(x => ({
+                Value: x.N,
+                Label: _T("#{0}  {1}  {2}  {3}", x.N, x.TimeText, x.StatusText, x.MsText, "An item of the result history list of the API inspector.{0} is the call number, {1} the time of the call, {2} the status (OK, Error) and {3} the duration"),
+            })), e.N);
+            t.HistorySel.SetDisabled(total < 2, _TF("There is only one result, send the call again to compare results", "Reason shown on the result history list of the API inspector when there is only one result"));
+            t.Results.replaceChildren(bar, e.E);
+            t.ResultFoot.replaceChildren(el("span", {
+                text: _T("Called {0}", e.TimeText, "Footer of the result card of the API inspector.{0} is the time of the call"),
+            }));
+            t.ResultFoot.hidden = false;
+            t.UpdateFresh();
+        }
+
+        /**
+         * Copy the parameters of a history entry to the parameter form (one undo step; the JSON tab shows them too when it's open).
+         * @param {?object} e The history entry.
+         * @returns {Promise<void>}
+         */
+        async UseParams(e) {
+            const t = this;
+            if (!e || !t.HaveArg)
+                return;
+            const E = Sw.Edit;
+            let v = JSON.parse(e.ArgJson);
+            if (!E.IsPrimitive(t.Info.Arg)) {
+                v = Object.assign(await E.CreateDefault(t.Info.Arg, null, false), v);
+                delete v.$type;
+            }
+            await t.Input.ReplaceObject(v, _T("Use the parameters of call #{0}", e.N, "Command text stored in the undo log when the parameters of an earlier API call were copied to the parameter form.{0} is the call number"));
+            if (t.ArgTabs && t.ArgTabs.Active === t.JsonTab)
+                await t.ShowJson();
+            t.UpdateFresh();
+        }
+
+        /**
+         * Mark that a call is in progress (or not): before the first result the card shows a spinner, after it the shown result stays and
+         * the history bar shows a spinner.
+         * @param {boolean} busy True while a call runs.
+         */
+        SetBusy(busy) {
+            const t = this;
+            t.Running = Math.max(0, t.Running + (busy ? 1 : -1));
+            const on = t.Running > 0;
+            t.Results.classList.toggle("api-busy", on);
+            if (on)
+                t.Results.setAttribute("aria-busy", "true");
+            else
+                t.Results.removeAttribute("aria-busy");
+            if (t.BusyE)
+                t.BusyE.classList.toggle("api-busy-on", on);
+            if (on && !t.History.length)
+                t.ShowResultState(el("div.api-loading", { attrs: { role: "status", "aria-label": _TF("Calling the API", "Accessible name of the spinner of the API inspector while a call is in progress") } },
+                    new Sw.Spinner({ Size: 40 }).E));
+        }
+
+        /** The result card before the first call: "No result yet" (a call in progress shows a spinner instead, SetBusy). */
         ShowNoResult() {
             this.ShowResultState(Sw.EmptyState({
                 Icon: "send",
                 Title: _TF("No result yet", "Title of the result card of the API inspector before the first call"),
                 Text: _T("Send the call to see the result here ({0}).", Sw.Keys.Format("Mod+Enter"), "Text of the result card of the API inspector before the first call.{0} is the keyboard shortcut, ex: Ctrl+Enter"),
             }).E);
+        }
+
+        /**
+         * The options of the call: a raw result is read as { Blob, Name } (the file name of a Content-Disposition header, null if none).
+         * @returns {object} The Sw.Net options.
+         */
+        CallOptions() {
+            if (!this.IsRaw)
+                return { Reload: true };
+            return {
+                Reload: true,
+                Read: async r => ({ Blob: await r.blob(), Name: fileNameOf(r.headers ? r.headers.get("Content-Disposition") : null) }),
+            };
         }
 
         /**
@@ -738,8 +989,11 @@
             }
             //  (Send runs from the Send button's OnClick, also for Mod+Enter: the button is busy until this promise settles and absorbs
             //  repeats, UX guide FBK-2; it is not disabled meanwhile)
-            t.Results.classList.add("api-busy");
-            t.Results.setAttribute("aria-busy", "true");
+            //  The parameters of this call (kept with the result, for the freshness marker and "Use these parameters")
+            const argJson = t.HaveArg ? JSON.stringify(stripType(obj)) ?? "null" : "";
+            const argText = t.HaveArg ? stableJson(JSON.parse(argJson)) : "";
+            const callTime = new Date();
+            t.SetBusy(true);
             try {
                 if (t.HaveArg) {
                     const copy = Object.assign({}, obj);
@@ -749,11 +1003,11 @@
                     if (t.Footer)
                         t.Footer.SetBaseline();
                     started = performance.now();
-                    res = await Sw.Net.Send(t.Full, obj, { Reload: true, Blob: t.IsRaw });
+                    res = await Sw.Net.Send(t.Full, obj, t.CallOptions());
                 }
                 else {
                     started = performance.now();
-                    res = await Sw.Net.Get(t.Full, { Reload: true, Blob: t.IsRaw });
+                    res = await Sw.Net.Get(t.Full, t.CallOptions());
                 }
             }
             /* SwWeb:allow ux-fbk-5 (the error is shown below: the result card gets the error badge and its text) */
@@ -761,12 +1015,13 @@
                 error = e;
             }
             finally {
-                t.Results.classList.remove("api-busy", "api-stale");
-                t.Results.removeAttribute("aria-busy");
+                t.SetBusy(false);
             }
             const ms = Math.max(0, Math.round(performance.now() - started));
             const tabs = savedTabs("Api.Results");
             let status;
+            let blobUrl = null;
+            let statusText = _TF("OK", "Status badge of a successful API call");
             if (error) {
                 //  Refused (403): say why (the role) instead of the bare status
                 const denied = Sw.Access && Sw.Access.IsDenied(error);
@@ -779,20 +1034,45 @@
                 });
                 const c = el("div.api-error", null, st.E, el("pre.api-code.api-errortext", { text: msg }));
                 tabs.Add({ Title: _TF("Error", "The text of a tab header that will display the server error as a result of an API call"), Content: c });
-                status = Sw.Badge(denied ? _TF("Refused", "Status badge of an API call that the server refused") : _TF("Error", "Status badge of a failed API call"), "error", msg);
+                statusText = denied ? _TF("Refused", "Status badge of an API call that the server refused") : _TF("Error", "Status badge of a failed API call");
+                status = Sw.Badge(statusText, "error", msg);
             }
             else if (t.IsRaw) {
-                const url = URL.createObjectURL(res);
+                //  The mime type of the response (an api that returns a file decides it per call), else the declared one
+                const blob = res && res.Blob ? res.Blob : new Blob([]);
+                const mime = (blob.type || d.Mime || "").split(";")[0].trim().toLowerCase();
+                const url = URL.createObjectURL(blob);
+                blobUrl = url;
+                //  The file name: from the Content-Disposition header (an api that returns a file names it), else the method name and the extension of the mime type
+                const named = res && res.Name;
+                const fileName = named || (t.Name + "." + mimeExt(mime || "application/octet-stream"));
+                tabs.Tools.append(
+                    el("span.api-filename", {
+                        text: fileName,
+                        title: named
+                            ? _TF("The file name sent by the service", "Tool tip of the file name of a raw result in the API inspector when the service sent a name")
+                            : _TF("A file name made from the API name and the type of the result (the service sent no name)", "Tool tip of the file name of a raw result in the API inspector when the service sent no name"),
+                    }),
+                    new Sw.Button({
+                        Text: _TF("Download", "Text of a button of the API inspector that saves a raw result (an image, a file) to the computer"),
+                        Icon: "download", Kind: "ghost", Small: true,
+                        Title: _T("Save the result as {0}", fileName, "Tool tip of the Download button of a raw result in the API inspector.{0} is the file name"),
+                        OnClick: () => Sw.Net.Download(url, fileName),
+                    }).E);
+                //  The registered viewer of the mime type (ex: the media viewer for images, videos and audio), else the data itself
+                const viewer = await mimeViewer(mime, url, fileName);
+                const show = viewer || url;
                 const c = el("div.api-preview", { title: _TF("Open in a new tab.", "A tool tip description on an HTML element, that when clicked will open the data on a new browser tab") });
-                const frm = d.Mime.indexOf("image/") === 0 ? Sw.CreateImg() : Sw.CreateIFrame();
-                frm.src = url;
+                const frm = (!viewer && mime.indexOf("image/") === 0) ? Sw.CreateImg() : Sw.CreateIFrame();
+                frm.src = show;
                 c.append(frm);
                 c.addEventListener("click", ev => {
                     if (Sw.IsPureEvent(ev))
-                        Sw.Page.Navigate(url, "_blank");
+                        Sw.Page.Navigate(show, "_blank");
                 });
                 tabs.Add({ Title: _TF("Preview", "The text of a tab header that will display the API result of a specific MIME type (as an embedded iframe)"), Content: c });
-                status = Sw.Badge(d.Mime.split(";")[0], "ok");
+                statusText = mime || d.Mime.split(";")[0];
+                status = Sw.Badge(statusText, "ok");
             }
             else if ((res === null || res === undefined) && !d.Return) {
                 tabs.Add({
@@ -819,16 +1099,21 @@
                 tabs.Add({ Title: _TF("JSON", "The text of a tab header that will display the result of an API call as formatted JSON text"), Content: await jsonView(res), Select: false });
                 status = Sw.Badge(_TF("OK", "Status badge of a successful API call"), "ok");
             }
-            tabs.Tools.append(status, el("span.api-time", { text: Sw.Format.DurationMs(ms), title: _TF("Time from sending the call to the complete answer", "Tool tip of the time of an API call in the result card of the API inspector") }));
+            const msText = Sw.Format.DurationMs(ms);
+            tabs.Tools.append(status, el("span.api-time", { text: msText, title: _TF("Time from sending the call to the complete answer", "Tool tip of the time of an API call in the result card of the API inspector") }));
             tabs.Restore();
-            t.Results.replaceChildren(tabs.E);
-            //  "Called 20:10:53" (no user lookup: no request the original page did not make), and a note when the input changes afterwards
-            const time = new Date().toLocaleTimeString();
-            t.StaleNote = el("span.api-stalenote", { hidden: true, text: _TF("The parameters changed since this call.", "Note in the result card of the API inspector when the input was changed after the call") });
-            t.ResultFoot.replaceChildren(el("span", {
-                text: _T("Called {0}", time, "Footer of the result card of the API inspector.{0} is the time of the call"),
-            }), t.StaleNote);
-            t.ResultFoot.hidden = false;
+            //  The result goes first in the history of this page (in memory only: leaving the page drops it) and is shown at once
+            const entry = {
+                N: ++t.Calls, E: tabs.E, ArgJson: argJson, ArgText: argText, BlobUrl: blobUrl,
+                TimeText: Sw.Format.Time(callTime), StatusText: statusText, MsText: msText,
+            };
+            t.History.unshift(entry);
+            while (t.History.length > MaxHistory) {
+                const old = t.History.pop();
+                if (old.BlobUrl)
+                    URL.revokeObjectURL(old.BlobUrl);
+            }
+            t.ShowEntry(entry);
             const card = t.Results.closest(".api-card");
             if (card && card.getBoundingClientRect().top > window.innerHeight * 0.6)
                 card.scrollIntoView({ block: "nearest", behavior: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });

@@ -7,11 +7,11 @@ uniform sampler2D tex;
 
 //#define texture texture2D
 
-const float DropSize = 1; //var:{}
+const float DropSize = 1.0; //var:{}
 const float MaxBlur = 0.; //var:{}
 const float MinBlur = 0.;//var:{}
-const float RainAmount = 1;//var:{}
-const float RefractionAmount = 1;//var:{}
+const float RainAmount = 1.0;//var:{}
+const float RefractionAmount = 1.0;//var:{}
 
 // Rain, image filter
 

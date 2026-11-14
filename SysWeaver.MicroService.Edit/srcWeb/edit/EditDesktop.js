@@ -11,7 +11,8 @@
  * div.sw-edit-row[data-member]          (one per member; class sw-edit-ro when read only, sw-hide when hidden)
  *   div.sw-edit-label > span.sw-edit-name   (title: click / long press / right click = member menu, drag source, drop target)
  *   div.sw-edit-icon                        (menu button when Options.MenuIcon, item buttons)
- *   div.sw-edit-value                       (the handler's editor)
+ *   div.sw-edit-value                       (the handler's editor; click / right click on its background = member menu;
+ *                                            div.sw-edit-split: the draggable split, see Sw.Edit.AddSplit)
  * div.sw-edit-data                       (optional full width row for nested editors: objects, collections)
  * ```
  */
@@ -66,6 +67,8 @@
             const icon = el("div.sw-edit-icon");
             const value = el("div.sw-edit-value");
             const row = el("div.sw-edit-row", { dataset: { member: member.Name } }, label, icon, value);
+            //  The draggable split between the names and the values (shown by EditDesktop.css in the desktop layout only)
+            Sw.Edit.AddSplit(label, value);
             const readOnly = Sw.Edit.IsReadOnly(member, options);
             if (readOnly) {
                 row.classList.add("sw-edit-ro");

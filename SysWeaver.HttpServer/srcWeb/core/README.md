@@ -263,6 +263,7 @@ so the shell and every framed page share it.
 | `ServerZone()`, `SetServerZone(min)`, `ServerZoneFrom(wall, utc)`, `ServerZoneText()` | The server's offset: read, set (null = unknown), compute from a wall clock + UTC pair, as text |
 | `ServerToDate(text, zone, near)` | A server wall clock text ("2026-10-20 02:15:19", or "02:15:19" = the latest such time at or before `near`) as a Date; null when the zone is unknown |
 | `ServerToLocalText(text, zone)` | The same text in the viewer's time, keeping its form ("02:15:19" → "01:15:19" in Lisbon); null when the zone is unknown or the text is not a time |
+| `Time(d, seconds, wall)`, `DateTime(d, options)`, `DateText(d, options)` | An instant as the format locale writes it (`Locale()`: the user's choice in the settings menu, else the region detected for the time zone): the time of day ("14:05:09"; `wall`: the UTC fields are a wall clock, ex: the server clock), date and time (default medium), the date. Use these instead of `toLocaleTimeString()` / `toLocaleString([])`, which use the browser language |
 | `ServerText(at, part, zone)` | An instant on the server's clock: "2026-10-20 02:15:19", `"time"` "02:15:19", `"hm"` "02:15" ("" while unknown) |
 
 ### Sw.Net (net.js; IncludeJs, IncludeCss and FlushCache: include.js)

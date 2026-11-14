@@ -273,7 +273,7 @@
             if (!same.length)
                 return t;
             const d = this.Ended || this.Started;
-            const fmt = x => x.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            const fmt = x => x.toLocaleTimeString(Sw.Format.Locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
             //  (two in the same second: a counter)
             const n = same.filter(j => fmt(j.Ended || j.Started) === fmt(d) && j.Id < this.Id).length;
             return t + " (" + fmt(d) + (n ? " #" + (n + 1) : "") + ")";

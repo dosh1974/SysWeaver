@@ -75,3 +75,18 @@
         width: auto;
         flex: 1 1 100%;
     }
+
+    /* the slider (its own line) goes after the reset button, which stays on the line of the number box */
+    .sw-edit-mobile .sw-edit-hasslider > .sw-slider {
+        order: 1;
+    }
+
+    /* a full width control keeps the reset button (Sw.Edit.AddResetButton) on its line */
+    .sw-edit-mobile .sw-edit-value:has(> .sw-edit-reset) > :is(.sw-edit-select, .sw-edit-color, .sw-edit-datetime) {
+        flex-basis: calc(100% - var(--sw-control-h) - 6px);
+    }
+
+    /* the date field keeps its calendar button on its line */
+    .sw-edit-mobile .sw-edit-datetime > .sw-edit-input.sw-edit-date {
+        flex-basis: calc(100% - var(--sw-control-h) - 6px);
+    }

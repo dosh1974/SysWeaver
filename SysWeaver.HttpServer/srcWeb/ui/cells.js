@@ -1983,10 +1983,9 @@
     async function confirmAction(cell, d, btn) {
         //  The item names the row by its key values, which are raw: a server time ("2026-10-20T03:01:10Z") is shown in the viewer's
         //  time like the cells (the time rule, core/README "Times")
-        const p2 = n => String(n).padStart(2, "0");
         let item = ItemName(cell).replace(/\b\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:?\d\d)\b/g, s => {
             const t = new Date(s);
-            return isNaN(t) ? s : t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()) + " " + p2(t.getHours()) + ":" + p2(t.getMinutes()) + ":" + p2(t.getSeconds());
+            return isNaN(t) ? s : Sw.Format.LocalText(Sw.Format.UtcToLocal(t));
         });
         const q = typeof d.Confirm === "string" && d.Confirm ? d.Confirm : "";
         const verb = d.Text || Sw.ActionName(d.Title);

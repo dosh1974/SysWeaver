@@ -142,11 +142,11 @@ namespace SysWeaver.MicroService
         {
             if (inst == null)
                 return null;
-            foreach (var m in inst.GetType().GetMembers(BindingFlags.Public | BindingFlags.Instance))
+            foreach (var m in GetVisibleMembers(inst.GetType()))
             {
                 try
                 {
-                    var a = m.GetCustomAttribute<EditDefaultAttribute>(true);
+                    var a = EditAttributeLookup.Get<EditDefaultAttribute>(m);
                     if (a == null)
                         continue;
                     if (m is FieldInfo f)
@@ -170,6 +170,41 @@ namespace SysWeaver.MicroService
                 }
             }
             return inst;
+        }
+
+        /// <summary>
+        /// Get the public instance members of a type, excluding base type members that are hidden by a member with the same name in a derived type (ex: declared with "new").
+        /// </summary>
+        /// <param name="type">The type</param>
+        /// <returns>The visible members (in reflection order)</returns>
+        static List<MemberInfo> GetVisibleMembers(Type type)
+        {
+            var all = type.GetMembers(BindingFlags.Public | BindingFlags.Instance);
+            var res = new List<MemberInfo>(all.Length);
+            foreach (var x in all)
+            {
+                if ((x.MemberType != MemberTypes.Field) && (x.MemberType != MemberTypes.Property))
+                {
+                    res.Add(x);
+                    continue;
+                }
+                var dt = x.DeclaringType;
+                var hidden = false;
+                foreach (var y in all)
+                {
+                    if (ReferenceEquals(x, y) || ((y.MemberType != MemberTypes.Field) && (y.MemberType != MemberTypes.Property)) || !String.Equals(x.Name, y.Name, StringComparison.Ordinal))
+                        continue;
+                    //  A member with the same name declared by a more derived type hides this one
+                    if ((dt != null) && (y.DeclaringType != null) && y.DeclaringType.IsSubclassOf(dt))
+                    {
+                        hidden = true;
+                        break;
+                    }
+                }
+                if (!hidden)
+                    res.Add(x);
+            }
+            return res;
         }
 
         /// <summary>
@@ -497,6 +532,8 @@ namespace SysWeaver.MicroService
                 desc.Flags |= TypeMemberFlags.Hide;
             if (p.GetAttribute<EditReadOnlyAttribute>()?.ReadOnly ?? false)
                 desc.Flags |= TypeMemberFlags.ReadOnly;
+            if (p.GetAttribute<EditRandomAttribute>()?.Random ?? false)
+                desc.Flags |= TypeMemberFlags.Random;
             var sattr = p.GetAttribute<EditSliderAttribute>();
             if (sattr?.UseSlider ?? false)
             {
@@ -622,7 +659,7 @@ namespace SysWeaver.MicroService
                 return desc;
             }
             var members = new List<Tuple<float, TypeMemberDesc>>();
-            foreach (var x in type.GetMembers(BindingFlags.Public | BindingFlags.Instance))
+            foreach (var x in GetVisibleMembers(type))
             {
                 switch (x.MemberType)
                 {

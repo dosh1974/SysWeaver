@@ -356,6 +356,14 @@ body.auth-body.sw-weave form.auth-box {
     margin: calc(var(--auth-gap) * -0.6) 0 0 0;
 }
 
+/* The sign in reminder: the policy changes with the user id (another authorizer), so the cell is at least three lines of rules high
+   from the start; a policy with more rules then never pushes the buttons down while the user id is typed (LAY-9). Same font size and
+   gap as the list. */
+.auth-rules-slot.auth-login-rules {
+    font-size: max(var(--sw-text-md), 0.95em);
+    min-height: calc(3lh + 4px);
+}
+
     .auth-rules-slot > .auth-rules {
         margin: 0;
     }

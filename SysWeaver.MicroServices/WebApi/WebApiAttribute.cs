@@ -29,13 +29,16 @@ namespace SysWeaver.MicroService
 
 
     /// <summary>
-    /// The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+    /// The method returns raw data (i.e no serialization will happen):
+    ///   With a mime type the method must return some readonly memory (ReadOnlyMemory&lt;Byte&gt;, Task or ValueTask of it).
+    ///   Without a mime type (null, the default) the method must return a MemoryFile (MemoryFile, Task or ValueTask of it), the mime type of the file is used per call (derived from the file name if the mime is missing) and the data is the response.
+    /// A non-null mime on a method that doesn't return readonly memory, a null mime on a method that doesn't return a MemoryFile, or an empty mime, throws when the API is created.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
     public class WebApiRawAttribute : Attribute
     {
         /// <summary>
-        /// The mimetype of the raw output data
+        /// The mimetype of the raw output data, null if the method returns a MemoryFile (the mime type is taken from the file per call)
         /// </summary>
         public readonly String Mime;
         /// <summary>
@@ -54,12 +57,12 @@ namespace SysWeaver.MicroService
         public readonly String PreCompressedWith;
 
         /// <summary>
-        /// The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+        /// The method returns raw data (i.e no serialization will happen).
         /// </summary>
-        /// <param name="mime">The mimetype of the raw output data</param>
-        /// <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+        /// <param name="mime">The mimetype of the raw output data (the method must return readonly memory), null if the method returns a MemoryFile (the mime type of the file is used per call)</param>
+        /// <param name="disableCompression">True to disable compression, else compression is used if the mime type is compressible (for a MemoryFile it's determined per call)</param>
         /// <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
-        public WebApiRawAttribute(String mime, bool disableCompression = false, bool isTranslated = false)
+        public WebApiRawAttribute(String mime = null, bool disableCompression = false, bool isTranslated = false)
         {
             Mime = mime;
             DisableCompression = disableCompression;

@@ -228,11 +228,42 @@ namespace SysWeaver.Net
             String rawMime = null;
             bool rawCompress = false;
             bool rawIsTranslated = false;
+            bool fileMime = false;
             ICompDecoder decoder = null;
-            if (typeof(ReadOnlyMemory<byte>).IsAssignableFrom(retSerType))
             {
                 var raw = method.GetCustomAttribute<WebApiRawAttribute>(true);
                 if (raw != null)
+                {
+                    //  [WebApiRaw("mime")] requires readonly memory, [WebApiRaw] (null) requires a MemoryFile (the mime type is taken from the file per call)
+                    var isMem = (retSerType != null) && typeof(ReadOnlyMemory<byte>).IsAssignableFrom(retSerType);
+                    var isFile = retSerType == typeof(MemoryFile);
+                    String RawError(String what) => String.Concat("[", nameof(WebApiRawAttribute), "] ", what, ", when generating API for \"", method.Name, "\" in \"", method.DeclaringType?.FullName, "\"");
+                    var m = raw.Mime;
+                    if (m == null)
+                    {
+                        if (!isFile)
+                            throw new Exception(RawError("without a mime type requires that the method returns a " + nameof(MemoryFile) + " (or a Task / ValueTask of it)"));
+                        if (!String.IsNullOrEmpty(raw.PreCompressedWith))
+                            throw new Exception(RawError("without a mime type can't be used with pre-compressed data"));
+                        fileMime = true;
+                    }
+                    else
+                    {
+                        if (m.Length == 0)
+                            throw new Exception(RawError("may not have an empty mime type"));
+                        if (!isMem)
+                            throw new Exception(RawError("with a mime type requires that the method returns a ReadOnlyMemory<Byte> (or a Task / ValueTask of it)"));
+                    }
+                }
+                if (fileMime)
+                {
+                    //  The real mime type (and compression) is set per call, the entry gets a generic binary mime type
+                    rawMime = MimeTypeMap.Data;
+                    rawCompress = !raw.DisableCompression;
+                    rawIsTranslated = raw.IsTranslated;
+                    retSerType = typeof(ReadOnlyMemory<byte>);
+                }
+                else if (raw != null)
                 {
                     rawMime = raw.Mime;
                     var dec = raw.PreCompressedWith;
@@ -332,7 +363,30 @@ namespace SysWeaver.Net
                 }
                 else
                 {
-                    if (rawMime != null)
+                    if (fileMime)
+                    {
+                        //  Return a MemoryFile as raw data, the call is wrapped so that the mime type is set per call (always uses the context invokers since the request is needed)
+                        var body = ApiMemoryFile.Wrap(hasContext ? Expression.Call(objExp, method, arg, contextParam) : Expression.Call(objExp, method, arg), contextParam, rawCompress);
+                        var lambda = Expression.Lambda(typeof(Func<,,>).MakeGenericType(serType, contextType, body.Type), body, arg, contextParam).Compile();
+                        switch (callType)
+                        {
+                            case CallTypes.AsyncTask:
+                                getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                break;
+                            case CallTypes.AsyncValueTask:
+                                getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                break;
+                            case CallTypes.Sync:
+                                get = Activator.CreateInstance(typeof(RawContextRetGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                break;
+                            default:
+                                throw new Exception("Invalid call type!");
+                        }
+                    }
+                    else if (rawMime != null)
                     {
                         //  Return raw data
                         switch (callType)
@@ -527,7 +581,30 @@ namespace SysWeaver.Net
                 }
                 else
                 {
-                    if (rawMime != null)
+                    if (fileMime)
+                    {
+                        //  Return a MemoryFile as raw data, the call is wrapped so that the mime type is set per call (always uses the context invokers since the request is needed)
+                        var body = ApiMemoryFile.Wrap(hasContext ? Expression.Call(objExp, method, contextParam) : Expression.Call(objExp, method), contextParam, rawCompress);
+                        var lambda = Expression.Lambda(typeof(Func<,>).MakeGenericType(contextType, body.Type), body, contextParam).Compile();
+                        switch (callType)
+                        {
+                            case CallTypes.AsyncTask:
+                                getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncTaskA0), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncTaskA0), lambda) as IInvokeApi;
+                                break;
+                            case CallTypes.AsyncValueTask:
+                                getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncValueTaskA0), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncValueTaskA0), lambda) as IInvokeApi;
+                                break;
+                            case CallTypes.Sync:
+                                get = Activator.CreateInstance(typeof(RawContextRetGetA0), lambda) as IInvokeApi;
+                                post = Activator.CreateInstance(typeof(RawContextRetPostA0), lambda) as IInvokeApi;
+                                break;
+                            default:
+                                throw new Exception("Invalid call type!");
+                        }
+                    }
+                    else if (rawMime != null)
                     {
                         //  Return raw data
                         switch (callType)

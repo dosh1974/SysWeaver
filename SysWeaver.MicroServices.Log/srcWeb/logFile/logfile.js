@@ -135,7 +135,7 @@ async function logFileViewer(api) {
                 if (info.Size >= 0 && Sw.Format.Bytes)
                     facts.push({ Label: _TF("Size", "Label of the file size in the confirmation that deletes the log file"), Value: Sw.Format.Bytes(info.Size) });
                 if (info.LastWrite)
-                    facts.push({ Label: _TF("Last written", "Label of the time of the last write in the confirmation that deletes the log file"), Value: new Date(info.LastWrite).toLocaleString() });
+                    facts.push({ Label: _TF("Last written", "Label of the time of the last write in the confirmation that deletes the log file"), Value: Sw.Format.DateTime(info.LastWrite) });
                 return { Token: info.Token, Item: info.Name || "", Facts: facts, Text: info.Warning || undefined };
             },
             Run: async (signal, prep) => {

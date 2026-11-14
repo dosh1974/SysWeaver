@@ -11,7 +11,7 @@ namespace SysWeaver.MicroService.EditInternal
         }
         readonly FieldInfo P;
 
-        public override T GetAttribute<T>() => P.GetCustomAttribute<T>(true) ?? P.DeclaringType?.GetCustomAttribute<T>(false);
+        public override T GetAttribute<T>() => EditAttributeLookup.Get<T>(P) ?? P.DeclaringType?.GetCustomAttribute<T>(false);
     }
 
 
