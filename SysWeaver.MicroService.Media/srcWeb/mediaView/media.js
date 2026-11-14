@@ -2143,9 +2143,24 @@
         //  mouse or a pointer resting on the media doesn't bring them back. While shown any move keeps them
         const RevealPx = 24;
         let anchor = null;
+        //  The mouse outside the player (or the window): nothing over the picture, also while paused (MediaPointerOut, media.css); the
+        //  controls show again when the mouse is back over it, on a tap or a key
+        const pointerOut = () => {
+            anchor = null;
+            if (timeS.Dragging || volS.Dragging)
+                return;
+            clearTimeout(hideTimer);
+            view.classList.remove("MediaChromeOn");
+            view.classList.add("MediaPointerOut");
+        };
+        document.addEventListener("mouseout", ev => {
+            if (!ev.relatedTarget)
+                pointerOut();
+        });
         view.addEventListener("pointermove", ev => {
             if (ev.pointerType !== "mouse")
                 return;
+            view.classList.remove("MediaPointerOut");
             if (view.classList.contains("MediaChromeOn")) {
                 anchor = null;
                 show();
@@ -2162,15 +2177,15 @@
         });
         view.addEventListener("pointerleave", ev => {
             anchor = null;
-            if (ev.pointerType === "mouse" && !timeS.Dragging && !volS.Dragging) {
-                clearTimeout(hideTimer);
-                view.classList.remove("MediaChromeOn");
-            }
+            if (ev.pointerType === "mouse")
+                pointerOut();
         });
         view.addEventListener("pointerdown", ev => {
+            view.classList.remove("MediaPointerOut");
             if (ev.pointerType !== "mouse")
                 lastTouch = Date.now();
         });
+        view.addEventListener("keydown", () => view.classList.remove("MediaPointerOut"));
         view.addEventListener("focusin", () => show());
 
         //  The media itself: a click plays / pauses (a tap shows / hides the controls); a double click / tap on the left or right third

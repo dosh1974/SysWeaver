@@ -335,7 +335,8 @@ Media-View {
  * Media-View.MediaChrome: the media fills a dark stage; the controls are on top of it (like a video player).
  * Classes on the view: MediaChromeOn (the bars are shown), MediaPaused (paused: the bars and the big Play button stay),
  * MediaAudioOnly (no picture: a speaker in the middle, the bars stay), MediaChromeFresh (the start of MediaView.html: nothing over
- * the picture, also while paused, until the first activity).
+ * the picture, also while paused, until the first activity), MediaPointerOut (the mouse left the player or the window: nothing over
+ * the picture, also while paused, until the mouse is back; touch and keys still show the bars).
  */
 Media-View.MediaChrome,
 .SwMobile Media-View.MediaChrome {
@@ -403,7 +404,7 @@ Media-View.MediaChrome,
 }
 
     .MediaChromeOn .media-chrome-part,
-    .MediaPaused:not(.MediaChromeFresh) .media-chrome-part,
+    .MediaPaused:not(.MediaChromeFresh):not(.MediaPointerOut) .media-chrome-part,
     .MediaAudioOnly .media-chrome-part,
     .media-chrome-part:focus-within {
         opacity: 1;
@@ -531,7 +532,8 @@ Media-View.MediaChrome,
     }
 
     Media-View.MediaChrome:not(.MediaPaused) .media-bigplay,
-    Media-View.MediaChrome.MediaChromeFresh .media-bigplay {
+    Media-View.MediaChrome.MediaChromeFresh .media-bigplay,
+    Media-View.MediaChrome.MediaPointerOut:not(.MediaAudioOnly) .media-bigplay {
         display: none;
     }
 
